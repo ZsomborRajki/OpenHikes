@@ -4,7 +4,7 @@
 //
 //  XCTest's element gestures can resolve the Duo's inactive cover display.
 //  Its event records also accept an explicit display ID. Keep that private
-//  API in screenshot automation, guarded by selector checks, like duo-pose's
+//  API in screenshot automation, guarded by selector checks, like hinge's
 //  guarded simulator interfaces. No app target compiles this file.
 //
 

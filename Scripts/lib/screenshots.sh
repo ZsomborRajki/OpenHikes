@@ -16,7 +16,9 @@
 # 1398 × 2034 from the cover, 2007 × 2853 from the inner one, either way up.
 # `--device-type "iPhone Duo"` shoots the set on one, and `--pose open` opens
 # it first, through Scripts/duo-pose.sh — a simulator boots closed, and only
-# Device Hub can open it by hand. The open Duo is turned upright unless
+# Device Hub can open it by hand. Opening needs hinge, an optional tool
+# (Scripts/lib/hinge.sh): on a machine without it an open set is skipped, and
+# said to be, before a device is touched. The open Duo is turned upright unless
 # `--orientation landscape` keeps it the way it opens, which is where the map
 # screen puts its panel beside the map. XCTest captures the inner display a
 # pixel short each way, and a landscape frame stored on its side, so every
@@ -84,6 +86,8 @@ source "$screenshots_lib_dir/simulator.sh"
 source "$screenshots_lib_dir/simulator-templates.sh"
 # shellcheck source=xcodebuild-output.sh
 source "$screenshots_lib_dir/xcodebuild-output.sh"
+# shellcheck source=hinge.sh
+source "$screenshots_lib_dir/hinge.sh"
 
 readonly screenshot_project="$repository_root/OpenHikes.xcodeproj"
 readonly screenshot_scheme="OpenHikesUI"
@@ -175,6 +179,7 @@ Options:
   --device-type <t>  iPhone 18 Pro Max (default) or iPhone Duo
   --pose <p>         For an iPhone Duo: closed (its inner display folded away,
                      as it boots) or open (unfolded). See Scripts/duo-pose.sh.
+                     open needs hinge, and is skipped on a machine without it.
   --orientation <o>  With --pose open: portrait (default, the inner display
                      turned upright, 2007 x 2853) or landscape (the way it
                      opens, 2853 x 2007). A closed Duo is shot upright: the
@@ -593,6 +598,13 @@ screenshots_main() {
         'iPhone 18 Pro Max'|'iPhone Duo') ;;
         *) echo "Unsupported screenshot device type: $device_type (iPhone 18 Pro Max or iPhone Duo)." >&2; exit 2 ;;
     esac
+    # Before any device is touched: an open Duo needs hinge, and a machine
+    # without it skips the set rather than failing the run or shooting it closed.
+    local without_hinge
+    if [[ "$pose" == open ]] && ! without_hinge="$(hinge_command)"; then
+        echo "[$screenshot_appearance] skipped, the open iPhone Duo needs hinge: $without_hinge"
+        return 0
+    fi
 
     local frames=() frame entry
     if [[ ${#requested[@]} -eq 0 ]]; then
