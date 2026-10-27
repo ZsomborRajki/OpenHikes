@@ -162,7 +162,7 @@ struct HikePlaceAdder: View {
     }
 
     private var actions: some View {
-        HStack(spacing: 8) {
+        TrailPlaceActions {
             TrailPlacePhotoButtons(
                 cameraIdentifier: "hike-place-adder-camera",
                 libraryIdentifier: "hike-place-adder-library",
@@ -173,8 +173,6 @@ struct HikePlaceAdder: View {
                 }
             )
         }
-        .buttonBorderShape(.roundedRectangle(radius: TrailPlaceActionLabelStyle.cornerRadius))
-        .fixedSize(horizontal: false, vertical: true)
     }
 
     /// Opens this screen's own camera — see the header for why not the pill's.

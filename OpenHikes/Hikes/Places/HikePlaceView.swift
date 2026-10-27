@@ -35,10 +35,6 @@ import SwiftData
 import SwiftUI
 
 struct HikePlaceView: View {
-    // Four 90-point actions and their gaps. Below this, two rows leave whole
-    // words readable rather than hyphenating a German verb over four lines.
-    private static let minimumActionRowWidth: CGFloat = 384
-
     let hike: Hike
     let placeID: UUID
     let mapController: MapController
@@ -152,21 +148,10 @@ struct HikePlaceView: View {
     }
 
     private func actions(_ card: HikePlaceCard) -> some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 8) {
-                photoActions
-                mapAndShareActions(card)
-            }
-            .frame(minWidth: Self.minimumActionRowWidth)
-            Grid(horizontalSpacing: 8, verticalSpacing: 8) {
-                GridRow { photoActions }
-                GridRow { mapAndShareActions(card) }
-            }
+        TrailPlaceActions {
+            photoActions
+            mapAndShareActions(card)
         }
-        .buttonBorderShape(.roundedRectangle(radius: TrailPlaceActionLabelStyle.cornerRadius))
-        // One height for the row, whichever button's word needs the most room
-        // at the hiker's type size.
-        .fixedSize(horizontal: false, vertical: true)
     }
 
     private var photoActions: some View {

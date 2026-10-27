@@ -70,7 +70,9 @@ struct TrailPlaceSheet: View {
                    droppedPin: maker.droppedPin,
                    photos: maker.photos.photos
                ) {
-                TrailPlaceCardView(maker: maker, card: card, mapController: mapController)
+                TrailPlaceCardView(
+                    maker: maker, card: card, mapController: mapController, allowsScrolling: detent == .large
+                )
             } else {
                 // What the card was about has gone — a stop deleted from the
                 // list under it — so there is nothing left to say about it.
@@ -96,6 +98,7 @@ private struct TrailPlaceCardView: View {
     let maker: TrailDraftController
     let card: TrailPlaceCard
     let mapController: MapController
+    let allowsScrolling: Bool
 
     /// The address MapKit found, `nil` until it answers and for a spot it
     /// cannot place. Asked once per coordinate.
@@ -105,30 +108,28 @@ private struct TrailPlaceCardView: View {
     /// its search field.
     private static let topPadding: CGFloat = 20
 
-    /// Not in a scroll view: the card is short enough to fit at the tallest
-    /// detent, and a scroll view is what let the smallest one slide its
-    /// contents about under the grabber instead of resizing the sheet.
+    /// Short detents still resize on a drag. At the tallest one, wrapped
+    /// actions and accessibility text can scroll to their location rows.
     var body: some View {
-        VStack(alignment: .leading, spacing: StatCardMetrics.sectionSpacing) {
-            if let photo = card.photo {
-                TrailDraftPhotoHeader(photo: photo, gallery: { maker.photos.photos }, mapController: mapController)
+        ScrollView {
+            VStack(alignment: .leading, spacing: StatCardMetrics.sectionSpacing) {
+                if let photo = card.photo {
+                    TrailDraftPhotoHeader(photo: photo, gallery: { maker.photos.photos }, mapController: mapController)
+                }
+                header
+                actions
+                TrailPlaceFactsAndLocation(
+                    facts: card.facts,
+                    address: address,
+                    coordinate: card.coordinate,
+                    openStreetMapURL: card.openStreetMapURL
+                )
             }
-            header
-            actions
-            TrailPlaceFactsAndLocation(
-                facts: card.facts,
-                address: address,
-                coordinate: card.coordinate,
-                openStreetMapURL: card.openStreetMapURL
-            )
+            .padding(.horizontal)
+            .padding(.top, Self.topPadding)
         }
-        .padding(.horizontal)
-        .padding(.top, Self.topPadding)
-        // Laid out at its own height and hung from the top of whatever the
-        // detent offers. Without the `minHeight`, a card taller than the
-        // smallest detent sized its frame to itself and the sheet centred it —
-        // the buttons in view and the title above the top edge.
-        .fixedSize(horizontal: false, vertical: true)
+        .scrollDisabled(!allowsScrolling)
+        .scrollBounceBehavior(.basedOnSize)
         .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("trail-place-sheet")
@@ -161,7 +162,7 @@ private struct TrailPlaceCardView: View {
     }
 
     private var actions: some View {
-        HStack(spacing: 8) {
+        TrailPlaceActions {
             switch card.primary {
             case let .addStop(name, leg):
                 action(
@@ -197,9 +198,6 @@ private struct TrailPlaceCardView: View {
             // is what takes them off the map.
             if case .addStop = card.primary, card.photo == nil { removeButton }
         }
-        // One height for the row, whichever button's word needs the most room
-        // at the hiker's type size.
-        .fixedSize(horizontal: false, vertical: true)
     }
 
     /// *Remove Pin* for the dropped pin, which takes it off the map, and

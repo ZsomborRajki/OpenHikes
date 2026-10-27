@@ -149,7 +149,7 @@ struct CommonsPhotoView: View {
     }
 
     private func actions(at camera: CLLocationCoordinate2D) -> some View {
-        HStack(spacing: 8) {
+        TrailPlaceActions {
             Button {
                 maker.plan(to: current)
                 HapticMoment.targetHit.play()
@@ -183,10 +183,6 @@ struct CommonsPhotoView: View {
             .buttonStyle(.bordered)
             .accessibilityIdentifier("commons-photo-share")
         }
-        .buttonBorderShape(.roundedRectangle(radius: TrailPlaceActionLabelStyle.cornerRadius))
-        // One height for the row, whichever word needs the most room at the
-        // hiker's type size.
-        .fixedSize(horizontal: false, vertical: true)
     }
 }
 

@@ -108,9 +108,8 @@ struct TrailPlaceActionLabelStyle: LabelStyle {
                 .imageScale(.medium)
             configuration.title
                 .font(.caption.weight(.semibold))
-                // Four actions share the Duo's narrow side panel. Let the
-                // caption take the height it needs rather than ellipsize a
-                // verb a hiker needs to distinguish from the other buttons.
+                // TrailPlaceActions measures this wrapped height before it
+                // chooses how many buttons share a row.
                 .fixedSize(horizontal: false, vertical: true)
                 .multilineTextAlignment(.center)
         }
