@@ -1344,60 +1344,31 @@ if expect_status 2 && expect_contains "$output" "unknown option '--strict'" "the
     pass
 fi
 
-# The version comes out of Package.resolved, from SwiftLintPlugins' pin
-# wherever it sits among the others, and CI's install step asks for it this
-# way before any SwiftLint is installed.
-cat > "$work/resolved-with-swiftlint.json" <<'FIXTURE'
-{
-  "originHash" : "0",
-  "pins" : [
-    {
-      "identity" : "swift-algorithms",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/apple/swift-algorithms",
-      "state" : {
-        "revision" : "0000000000000000000000000000000000000001",
-        "version" : "1.2.1"
-      }
-    },
-    {
-      "identity" : "swiftlintplugins",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/SimplyDanny/SwiftLintPlugins",
-      "state" : {
-        "revision" : "0000000000000000000000000000000000000002",
-        "version" : "9.8.7"
-      }
-    }
-  ],
-  "version" : 3
-}
-FIXTURE
-OPENHIKES_SWIFTLINT_RESOLVED="$work/resolved-with-swiftlint.json" \
-    run_script "lint --pinned-version prints SwiftLintPlugins' pin without linting" \
+# The version comes out of Package.resolved, from SwiftLintPlugins' pin among
+# the others, and CI's install step asks for it this way before any SwiftLint
+# is installed. The project's own file is the fixture: it is the one Dependabot
+# edits, and it pins four packages besides the plugin. The answer expected of
+# it is read here by a second route, a text scan rather than a key path, so the
+# case holds whichever versions the file pins today.
+swiftlint_resolved="$repository_root/OpenHikes.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+expected_pin="$(awk '/"identity" *: *"swiftlintplugins"/ { found = 1 }
+    found && /"version" *:/ { gsub(/[^0-9.]/, ""); print; exit }' "$swiftlint_resolved")"
+run_script "lint --pinned-version reads SwiftLintPlugins' pin out of Package.resolved" \
     "$lint" --pinned-version
-if expect_status 0 \
-    && expect_contains "$output" "9.8.7" "the output" \
-    && expect_absent "$output" "1.2.1" "the output" \
-    && expect_absent "$calls" "swiftlint" "the recorded calls"; then
-    pass
+if expect_status 0 && expect_absent "$calls" "swiftlint" "the recorded calls"; then
+    if [[ -n "$expected_pin" && "$output" == "$expected_pin" ]]; then
+        pass
+    else
+        fail "expected SwiftLintPlugins' pin, ${expected_pin:-which Package.resolved does not name}" \
+            "$output"
+    fi
 fi
 
-# No SwiftLintPlugins pin leaves no version to lint at, and that is a lint that
-# could not run rather than a clean one.
-cat > "$work/resolved-without-swiftlint.json" <<'FIXTURE'
-{
-  "pins" : [
-    {
-      "identity" : "swift-algorithms",
-      "state" : {
-        "version" : "1.2.1"
-      }
-    }
-  ],
-  "version" : 3
-}
-FIXTURE
+# Without a SwiftLintPlugins pin there is no version to lint at, and that is a
+# lint that could not run rather than a clean one. The fixture is the same file
+# with the plugin's identity renamed, so every other pin is still in it.
+sed 's/"swiftlintplugins"/"renamed-plugin"/' "$swiftlint_resolved" \
+    > "$work/resolved-without-swiftlint.json"
 OPENHIKES_SWIFTLINT_RESOLVED="$work/resolved-without-swiftlint.json" \
     run_script "lint refuses to run without a SwiftLintPlugins pin" "$lint"
 if expect_status 1 \
@@ -1409,17 +1380,6 @@ fi
 run_script "lint --pinned-version takes no --fix" "$lint" --pinned-version --fix
 if expect_status 2 && expect_absent "$calls" "swiftlint" "the recorded calls"; then
     pass
-fi
-
-# The project's own Package.resolved has to give a version that the release
-# URL in ci.yml can be built from.
-run_script "lint --pinned-version reads the project's own Package.resolved" "$lint" --pinned-version
-if expect_status 0; then
-    if [[ "$output" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        pass
-    else
-        fail "expected a release version such as 0.65.1" "$output"
-    fi
 fi
 
 # The verdict has to name the version that ran. Crediting it to the pin tells a
