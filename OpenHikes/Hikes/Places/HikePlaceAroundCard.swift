@@ -171,7 +171,7 @@ private struct HikePlaceAroundCardContent: View {
     }
 
     private func actions(title: String) -> some View {
-        HStack(spacing: 8) {
+        TrailPlaceActions {
             if content.isOnHike {
                 TrailPlacePhotoButtons(
                     cameraIdentifier: "places-around-card-camera",
@@ -201,8 +201,6 @@ private struct HikePlaceAroundCardContent: View {
             .buttonStyle(.bordered)
             .accessibilityIdentifier("places-around-card-share")
         }
-        .buttonBorderShape(.roundedRectangle(radius: TrailPlaceActionLabelStyle.cornerRadius))
-        .fixedSize(horizontal: false, vertical: true)
     }
 
     /// Opens the card's own camera — see the header for why not the pill's.
