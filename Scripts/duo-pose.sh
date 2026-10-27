@@ -204,10 +204,15 @@ set_hinge() {
     local said
     if said="$("$hinge" -d "$udid" -t "$settle_seconds" set "$1" 2>&1)"; then
         angle_reached=true
-    else
-        angle_reached=false
-        hinge_said="$said"
+        return
     fi
+    angle_reached=false
+    hinge_said="$said"
+    # hinge starts listening to CoreMotion before it posts, and where CoreMotion
+    # has no angle to report it posts nothing at all. So the event goes out once
+    # more unconfirmed, the way every post went before anything read the angle
+    # back, and the display state decides.
+    "$hinge" -d "$udid" -t 0 set "$1" >/dev/null 2>&1 || true
 }
 
 if [[ "$pose" == open ]]; then screen="inner"; degrees=180; else screen="cover"; degrees=0; fi
