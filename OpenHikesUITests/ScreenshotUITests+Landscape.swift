@@ -11,7 +11,7 @@ import XCTest
 
 extension ScreenshotUITests {
     private static let landscapeContentMargin: CGFloat = 12
-    private static let landscapeMinimumDrag: CGFloat = 24
+    private static let mapQuietInterval: TimeInterval = 3
 
     /// Importing photos leaves the panel scrolled to Find Photos. For the
     /// map-first frames, start the card at its full title rather than leave
@@ -23,27 +23,7 @@ extension ScreenshotUITests {
             XCTFail("the hike should have its full title in the side panel")
             return
         }
-        let container = scrollContainer(in: app)
-        let display = screenshotDisplay(in: app)
-        for _ in 0..<12 {
-            let viewport = container.frame.intersection(windowFrame(of: app))
-                .insetBy(dx: 0, dy: Self.landscapeContentMargin)
-            let delta = viewport.minY - title.frame.minY
-            if delta <= 0, delta > -Self.landscapeMinimumDrag, title.frame.maxY < viewport.maxY { return }
-            let reach = viewport.height / 2
-            let requested = min(max(delta, -reach), reach)
-            let distance = abs(requested) < Self.landscapeMinimumDrag
-                ? (requested < 0 ? -Self.landscapeMinimumDrag : Self.landscapeMinimumDrag) : requested
-            let start = CGPoint(x: viewport.midX, y: viewport.midY)
-            XCTAssertTrue(ScreenshotDisplayGesture.drag(
-                from: start, to: CGPoint(x: start.x, y: start.y + distance), on: display
-            ))
-        }
-        let evidence = XCTAttachment(screenshot: display.screen.screenshot())
-        evidence.name = "Landscape title did not settle"
-        evidence.lifetime = .keepAlways
-        add(evidence)
-        XCTFail("the full hike title should sit below the panel’s pinned controls")
+        alignInScreenshotViewport(title, edge: .top, tolerance: 24, in: app, named: "Landscape title")
     }
 
     @MainActor
@@ -132,21 +112,21 @@ extension ScreenshotUITests {
     func settleScreenshotMapTiles(in app: XCUIApplication, rejectSmallLoadingPatches: Bool = false) {
         let display = screenshotDisplay(in: app)
         var previousSignature: Int?
+        var stableSince = ProcessInfo.processInfo.systemUptime
         let ready = waitUntil(timeout: UITestTimeout.trace) {
-            guard screenshotMapHasTiles(
-                in: app, on: display, requireTerrain: false, rejectSmallLoadingPatches: rejectSmallLoadingPatches
-            ), let signature = screenshotMapSignature(in: app, on: display) else {
+            guard let sample = screenshotMapSample(
+                in: app, on: display, rejectSmallLoadingPatches: rejectSmallLoadingPatches
+            ), sample.hasTiles else {
                 previousSignature = nil
                 return false
             }
-            defer { previousSignature = signature }
-            return previousSignature == signature
+            let now = ProcessInfo.processInfo.systemUptime
+            if previousSignature != sample.signature { stableSince = now }
+            previousSignature = sample.signature
+            return now - stableSince >= Self.mapQuietInterval
         }
         if !ready {
-            let evidence = XCTAttachment(screenshot: display.screen.screenshot())
-            evidence.name = "Map still loading"
-            evidence.lifetime = .keepAlways
-            add(evidence)
+            attachScreenshotEvidence(named: "Map still loading", in: app)
         }
         XCTAssertTrue(ready, "map tiles should replace the placeholder grid and finish redrawing after framing")
     }

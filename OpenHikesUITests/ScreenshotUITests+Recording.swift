@@ -134,10 +134,7 @@ extension ScreenshotUITests {
                 panRecordedLine(in: app, from: bounds, into: target, within: visible.insetBy(dx: margin, dy: margin))
             }
         }
-        let evidence = XCTAttachment(screenshot: display.screen.screenshot())
-        evidence.name = "Recording line did not fit"
-        evidence.lifetime = .keepAlways
-        add(evidence)
+        attachScreenshotEvidence(named: "Recording line did not fit", in: app)
         XCTFail("the recording’s line should fit above the sheet before capture")
     }
 

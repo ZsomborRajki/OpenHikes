@@ -638,7 +638,7 @@ extension ScreenshotUITests {
     private func zoomMapInOneStep(in app: XCUIApplication) {
         mapElement(in: app).coordinate(withNormalizedOffset: Self.zoomTapPoint).doubleTap()
         XCTAssertFalse(
-            app.buttons["Compass"].waitForExistence(timeout: UITestTimeout.brief),
+            screenshotCompass(in: app).waitForExistence(timeout: UITestTimeout.brief),
             "zooming should leave the map north-up — MapKit shows its compass only when it is not"
         )
     }

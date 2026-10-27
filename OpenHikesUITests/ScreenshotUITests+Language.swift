@@ -8,6 +8,7 @@
 //
 
 import Foundation
+import MapKit
 import UIKit
 import XCTest
 
@@ -31,14 +32,24 @@ extension ScreenshotUITests {
     /// language, rather than copying its translations into these tests.
     @MainActor
     func screenshotSheetGrabber(in app: XCUIApplication) -> XCUIElement {
+        app.buttons[screenshotSystemText("sheet.grabber", bundle: "UIKit", framework: UIView.self)]
+    }
+
+    @MainActor
+    func screenshotCompass(in app: XCUIApplication) -> XCUIElement {
+        app.buttons[screenshotSystemText("COMPASS_BUTTON", bundle: "MapKitFramework", framework: MKMapView.self)]
+    }
+
+    @MainActor
+    private func screenshotSystemText(_ key: String, bundle: String, framework: AnyClass) -> String {
         let language = Self.screenshotIsGerman ? "de" : "en"
-        let resources = Bundle(for: UIView.self).bundleURL
+        let resources = Bundle(for: framework).bundleURL
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("AccessibilityBundles/UIKit.axbundle/\(language).lproj")
-        let label = Bundle(url: resources)?.localizedString(
-            forKey: "sheet.grabber", value: "Sheet Grabber", table: "Accessibility"
-        ) ?? "Sheet Grabber"
-        return app.buttons[label]
+            .appendingPathComponent("AccessibilityBundles/\(bundle).axbundle/\(language).lproj")
+        let label = Bundle(url: resources)?.localizedString(forKey: key, value: nil, table: "Accessibility")
+        XCTAssertNotNil(label, "the system accessibility bundle should supply \(key) in \(language)")
+        XCTAssertNotEqual(label, key, "the system accessibility key should have a translation")
+        return label ?? key
     }
 }
