@@ -8,8 +8,8 @@
 # produces — a declaration nothing references any more — is otherwise found only
 # by a person noticing, one at a time.
 #
-# The version is pinned in `.periphery-version`, and Scripts/periphery.sh
-# refuses to scan below it. Periphery 2.x cannot read this file: `--targets`
+# The version is pinned in Scripts/periphery.sh, which refuses to scan below
+# it. Periphery 2.x cannot read this file: `--targets`
 # was still required for an .xcodeproj, the two `retain_*_properties` keys
 # below did not exist and are reported as `invalid key`, and — because every
 # target here is an Xcode synchronized folder group rather than a list of file
@@ -55,8 +55,8 @@ retain_objc_annotated: true
 # TrailMatchAmbiguity are compared with `==`, and Traversal and NodePair are
 # used as dictionary keys.
 #
-# Both options landed in Periphery 3.8.0, which is what `.periphery-version`
-# names.
+# Both options landed in Periphery 3.8.0, which is what Scripts/periphery.sh
+# pins.
 retain_equatable_properties: true
 retain_hashable_properties: true
 
