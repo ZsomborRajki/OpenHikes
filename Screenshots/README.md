@@ -337,6 +337,10 @@ returned to its original height, with the detent checked before capturing.
 This replaces the fixed upward pan that left the line running off the top of
 the frame.
 
+Frames 03 and 06 check the rendered map for loading grids, then compare map
+pixels across polls until its redraw settles. A filled map alone is not ready:
+an enlarged lower-zoom tile can still be waiting for its final detail.
+
 **Zoom with a double tap, never `XCUIElement.pinch`.** A pinch rotates the map
 a little, and that cost the most time here by far: a few degrees off north
 turns a walk that is six kilometres north-to-south and under two wide into a
