@@ -387,10 +387,10 @@ a change to recording, the map, the sheet or the render path; the PR template,
     `Scripts/lib/xcodebuild-output.sh`. It prints nothing for output it cannot
     parse (crashes, hangs, TSan reports), so the UI scripts keep a raw log. In
     CI, every piped `run:` needs `set -o pipefail`.
-  - `Scripts/periphery.sh` requires the version in `.periphery-version`,
-    because an older Periphery ignores `.periphery.yml` and reports a clean
-    scan. It indexes into `.build/periphery`, and what it lists are candidates,
-    not verdicts.
+  - `Scripts/periphery.sh` requires the version it pins, or newer, because an
+    older Periphery ignores `.periphery.yml` and reports a clean scan. It
+    indexes into `.build/periphery`, and what it lists are candidates, not
+    verdicts.
   - `xcode-build-server config -project OpenHikes.xcodeproj -scheme OpenHikes`
     writes the gitignored `buildServer.json` that `sourcekit-lsp` uses.
   - `hinge` opens an iPhone Duo simulator; see *The iPhone Duo*.

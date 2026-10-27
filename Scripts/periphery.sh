@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Runs Periphery's unused-code scan against .periphery.yml, at the version
-# pinned in .periphery-version, and fails when the scan did not read that file.
+# pinned below, and fails when the scan did not read that file.
 #
 # The scan itself is not a pass/fail signal — .periphery.yml says why, and this
 # script exits 0 whether or not it found anything. What it does decide is
@@ -56,8 +56,8 @@ usage() {
 Usage: Scripts/periphery.sh [--exclude-tests] [--derived-data <path>]
 
 Scans for unreferenced declarations with the configuration in .periphery.yml,
-at the version pinned in .periphery-version. Findings are candidates to read,
-not a verdict — see the comments in .periphery.yml before acting on one.
+at the version this script pins. Findings are candidates to read, not a
+verdict — see the comments in .periphery.yml before acting on one.
 
 Options:
   --derived-data <path>
@@ -116,7 +116,10 @@ if [[ "$show_help" == true ]]; then
     exit 0
 fi
 
-pinned="$(cat .periphery-version)"
+# The version .periphery.yml is written for. An older Periphery is refused,
+# for the reasons in the header; a newer one scans, with a warning. It lives
+# here, beside the one check that reads it, rather than in a file of its own.
+pinned="3.8.0"
 
 if ! command -v periphery >/dev/null 2>&1; then
     echo "error: periphery is not installed. Expected version $pinned or newer." >&2
@@ -136,7 +139,7 @@ if [[ "$installed" != "$pinned" ]]; then
     fi
     # Newer than the pin is only a warning: a release can add findings, and the
     # report is read rather than enforced.
-    echo "warning: periphery $installed installed, .periphery-version names $pinned." >&2
+    echo "warning: periphery $installed installed, Scripts/periphery.sh pins $pinned." >&2
 fi
 
 index_store="$derived_data/Index.noindex/DataStore"

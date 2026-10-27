@@ -1374,7 +1374,9 @@ export STUB_SWIFTLINT_VERSION="$pinned_version"
 echo "Periphery configuration"
 
 periphery="$repository_root/Scripts/periphery.sh"
-export STUB_PERIPHERY_VERSION="$(cat "$repository_root/.periphery-version")"
+# The pin, read out of the script that holds it.
+periphery_pin="$(sed -n 's/^pinned="\(.*\)"$/\1/p' "$periphery")"
+export STUB_PERIPHERY_VERSION="$periphery_pin"
 unset STUB_PERIPHERY_STATUS STUB_PERIPHERY_OUTPUT STUB_XCODEBUILD_STATUS || true
 # Every case that reaches the build names a folder under the suite's own
 # scratch directory, because the script writes its build log into the folder
@@ -1485,7 +1487,7 @@ if expect_status 0 \
     && expect_contains "$calls" "periphery scan" "the recorded calls"; then
     pass
 fi
-export STUB_PERIPHERY_VERSION="$(cat "$repository_root/.periphery-version")"
+export STUB_PERIPHERY_VERSION="$periphery_pin"
 
 run_script "periphery --help prints the options without scanning" "$periphery" --help
 if expect_status 0 \
