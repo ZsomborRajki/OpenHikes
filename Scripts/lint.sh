@@ -9,9 +9,12 @@
 # it runs `swiftlint lint --quiet --force-exclude` with no `--strict`, so it
 # only stops a build on a violation the configuration marks `error`. Every
 # warning-severity rule is invisible there and would otherwise show up for the
-# first time in CI, ten minutes after the push. Both this script and
-# `.github/workflows/ci.yml` read the version from `.swiftlint-version`, so the
-# two cannot drift.
+# first time in CI, ten minutes after the push. The version is the
+# SwiftLintPlugins pin in the project's Package.resolved, which is the
+# SwiftLint that plugin runs. This script reads it, and
+# `.github/workflows/ci.yml` asks this script for it (`--pinned-version`), so
+# the three cannot drift, and the bump Dependabot opens for the plugin moves
+# all of them.
 #
 # Exit status:
 #   0  clean
@@ -26,15 +29,16 @@ cd "$(dirname "$0")/.."
 
 usage() {
     cat <<'EOF'
-Usage: Scripts/lint.sh [--fix]
+Usage: Scripts/lint.sh [--fix | --pinned-version]
 
 Runs strict SwiftLint over the roots .swiftlint.yml includes, at the
-version pinned in .swiftlint-version. The CI `quality` job runs this same
-script, so a clean run here is a clean run there.
+version Package.resolved pins for SwiftLintPlugins. The CI `quality` job runs
+this same script, so a clean run here is a clean run there.
 
 Options:
-  --fix           Apply the violations SwiftLint can correct, then re-lint
-  -h, --help      Show this help
+  --fix              Apply the violations SwiftLint can correct, then re-lint
+  --pinned-version   Print the pinned version and exit, without linting
+  -h, --help         Show this help
 
 Exit status:
   0   clean
@@ -49,6 +53,7 @@ EOF
 
 fix=false
 show_help=false
+print_pinned=false
 # Every argument, not just the first. Reading one and ignoring the rest let a
 # typo ride along with a valid option: `--fix --not-a-real-option` linted
 # without fixing and still exited 0, which reads exactly like a clean --fix run
@@ -58,6 +63,10 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --fix)
             fix=true
+            shift
+            ;;
+        --pinned-version)
+            print_pinned=true
             shift
             ;;
         -h|--help)
@@ -78,8 +87,36 @@ if [[ "$show_help" == true ]]; then
     usage
     exit 0
 fi
+if [[ "$print_pinned" == true && "$fix" == true ]]; then
+    echo "error: --pinned-version prints the version and lints nothing; it takes no --fix." >&2
+    exit 2
+fi
 
-pinned="$(cat .swiftlint-version)"
+# The SwiftLint the project pins: the version of SwiftLintPlugins, whose
+# releases carry SwiftLint's own numbers, in the app's Package.resolved.
+# OPENHIKES_SWIFTLINT_RESOLVED names another Package.resolved: the seam
+# Scripts/run-script-tests.sh reads a fixture through, which nothing else sets.
+resolved="OpenHikes.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+resolved="${OPENHIKES_SWIFTLINT_RESOLVED:-$resolved}"
+pinned=""
+index=0
+while identity="$(/usr/bin/plutil -extract "pins.$index.identity" raw -o - -- "$resolved" 2>/dev/null)"; do
+    if [[ "$identity" == swiftlintplugins ]]; then
+        pinned="$(/usr/bin/plutil -extract "pins.$index.state.version" raw -o - -- "$resolved" 2>/dev/null || true)"
+        break
+    fi
+    index=$((index + 1))
+done
+if [[ -z "$pinned" ]]; then
+    echo "error: $resolved pins no version of SwiftLintPlugins, and that pin is" >&2
+    echo "       the SwiftLint version this lints with." >&2
+    exit 1
+fi
+
+if [[ "$print_pinned" == true ]]; then
+    printf '%s\n' "$pinned"
+    exit 0
+fi
 
 if ! command -v swiftlint >/dev/null 2>&1; then
     echo "error: swiftlint is not installed. Expected version $pinned." >&2
