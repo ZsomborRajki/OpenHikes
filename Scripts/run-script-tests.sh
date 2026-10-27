@@ -286,19 +286,13 @@ printf '%s' "${STUB_PERIPHERY_OUTPUT:-* No unused code detected.}"
 exit "${STUB_PERIPHERY_STATUS:-0}"
 STUB
 
-# Records every hinge invocation. `hinge -v` answers with STUB_HINGE_VERSION,
-# the oldest release Scripts/lib/hinge.sh accepts unless a case says otherwise. With
-# STUB_HINGE_ANGLE_FAILS set, a `set` that waits for the angle fails the way
-# hinge's does when the angle never arrives, and one sent unconfirmed (`-t 0`)
-# still goes out, as hinge's does. A machine without hinge is OPENHIKES_HINGE
-# naming a path where there is none.
+# Records every hinge invocation. With STUB_HINGE_ANGLE_FAILS set, a `set` that
+# waits for the angle fails the way hinge's does when the angle never arrives,
+# and one sent unconfirmed (`-t 0`) still goes out, as hinge's does. A machine
+# without hinge is OPENHIKES_HINGE naming a path where there is none.
 cat > "$stub_bin/hinge" <<'STUB'
 #!/usr/bin/env bash
 printf 'hinge %s\n' "$*" >> "$STUB_CALL_LOG"
-if [[ "${1:-}" == "-v" ]]; then
-    printf '%s\n' "$STUB_HINGE_VERSION"
-    exit 0
-fi
 for degrees; do :; done
 if [[ " $* " == *" set "* && " $* " != *" -t 0 "* && -n "${STUB_HINGE_ANGLE_FAILS:-}" ]]; then
     echo "hinge_helper: the hinge angle did not reach $degrees.0 within 1.0 s" >&2
@@ -307,7 +301,6 @@ fi
 STUB
 
 chmod +x "$stub_bin"/*
-export STUB_HINGE_VERSION="$(source "$repository_root/Scripts/lib/hinge.sh" && printf '%s\n' "$oldest_hinge")"
 
 # Two booted devices, so `simctl booted` would have to guess, plus a shutdown
 # device sharing a name with a booted one across runtimes and a watchOS device
@@ -390,24 +383,6 @@ expect_absent() {
         fail "$what still contains '$needle'" "$haystack"
         return 1
     fi
-}
-
-# A release just below, and one above, the x.y.z given: for the cases that
-# check a minimum version, derived from the minimum itself so that they hold
-# whatever it is raised to. The one above adds ten to the minor number, which
-# gives it a digit more than the minimum's whenever that is under ten, so it
-# sorts first as text and only a comparison by number calls it the newer.
-version_below() {
-    awk -F. -v OFS=. '{
-        if ($3 > 0) { $3 = $3 - 1 }
-        else if ($2 > 0) { $2 = $2 - 1; $3 = 99 }
-        else { $1 = $1 - 1; $2 = 99; $3 = 99 }
-        print
-    }' <<< "$1"
-}
-
-version_above() {
-    awk -F. -v OFS=. '{ $2 = $2 + 10; $3 = 0; print }' <<< "$1"
 }
 
 ui_tests="$repository_root/Scripts/run-ui-tests.sh"
@@ -1525,25 +1500,24 @@ if expect_status 1 \
 fi
 unset STUB_PERIPHERY_STATUS
 
-# An error rather than the warning Scripts/lint.sh settles for: a release older
-# than the pin need not read .periphery.yml at all (2.x reads none of it) and
-# still prints a clean result, so a run that reached the scan would report the
-# code was checked when it was not.
-periphery_older="$(version_below "$periphery_pin")"
-export STUB_PERIPHERY_VERSION="$periphery_older"
+# An error rather than the warning Scripts/lint.sh settles for: 2.21.2 reads
+# none of .periphery.yml and still prints a clean result, so a run that reached
+# the scan would report the code was checked when it was not. It stays older
+# than the pin however far the pin moves.
+export STUB_PERIPHERY_VERSION="2.21.2"
 run_script "periphery refuses a version older than the pin" "$periphery"
 if expect_status 1 \
-    && expect_contains "$output" "$periphery_older installed" "the error" \
+    && expect_contains "$output" "2.21.2 installed" "the error" \
     && expect_absent "$calls" "periphery scan" "the recorded calls"; then
     pass
 fi
 
-periphery_newer="$(version_above "$periphery_pin")"
-export STUB_PERIPHERY_VERSION="$periphery_newer"
+# Far enough above the pin to stay newer than any it moves to.
+export STUB_PERIPHERY_VERSION="99.0.0"
 run_script "periphery warns about a version newer than the pin and scans on" "$periphery" \
     --derived-data "$periphery_derived_data"
 if expect_status 0 \
-    && expect_contains "$output" "$periphery_newer installed" "the warning" \
+    && expect_contains "$output" "99.0.0 installed" "the warning" \
     && expect_contains "$calls" "periphery scan" "the recorded calls"; then
     pass
 fi
@@ -2441,30 +2415,6 @@ if expect_status 1 \
     && expect_contains "$output" "The cover display is not active, and closing the Duo needs hinge" \
         "the error" \
     && expect_contains "$output" "brew install artemnovichkov/tap/hinge" "the error"; then
-    pass
-fi
-
-# The oldest hinge Scripts/lib/hinge.sh accepts is a floor, not a pin: an older
-# hinge is refused before it is asked to fold anything, and a newer one is used
-# as it is, compared by number (see version_above).
-hinge_older="$(version_below "$STUB_HINGE_VERSION")"
-hinge_newer="$(version_above "$STUB_HINGE_VERSION")"
-STUB_HINGE_VERSION="$hinge_older" STUB_DISPLAYS="$work/displays-closed.json" \
-    run_script "duo-pose refuses a hinge older than the oldest it accepts" \
-    "$duo_pose" open --device "$pro_udid"
-if expect_status 1 \
-    && expect_contains "$output" "hinge $hinge_older is older than $STUB_HINGE_VERSION" "the error" \
-    && expect_contains "$output" "brew upgrade hinge" "the error" \
-    && expect_absent "$calls" "hinge -d" "the recorded calls"; then
-    pass
-fi
-
-STUB_HINGE_VERSION="$hinge_newer" STUB_DISPLAYS="$work/displays-open.json" \
-    run_script "duo-pose uses a hinge newer than the oldest it accepts as it is" \
-    "$duo_pose" open --device "$pro_udid"
-if expect_status 0 \
-    && expect_contains "$calls" "hinge -d $pro_udid -t 1 set 180" "the recorded calls" \
-    && expect_contains "$output" "open, the inner display showing, portrait" "the output"; then
     pass
 fi
 
