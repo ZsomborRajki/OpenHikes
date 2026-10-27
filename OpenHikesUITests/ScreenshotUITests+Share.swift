@@ -37,14 +37,15 @@ extension ScreenshotUITests {
 
         // The full GPX title is longer than the card's single title line.
         // Rename this in-memory hike through the same editor a hiker uses.
-        scrollToTap(app.buttons["Rename hike"], in: app, attempts: 12)
+        scrollToTap(app.buttons[screenshotText("Rename hike")], in: app, attempts: 12)
         let name = element("hike-title-field", in: app)
         XCTAssertTrue(name.waitForExistence(timeout: UITestTimeout.navigation))
-        XCTAssertTrue(replaceText(of: name, with: "Königssee via Kühroint"))
+        let title = Self.screenshotIsGerman ? "Königssee über Kühroint" : "Königssee via Kühroint"
+        XCTAssertTrue(replaceText(of: name, with: title))
         submitKeyboardEdit(in: app)
         XCTAssertTrue(name.waitForNonExistence(timeout: UITestTimeout.navigation))
 
-        app.segmentedControls["walk-segment"].buttons["History"].tap()
+        app.segmentedControls["walk-segment"].buttons[screenshotText("History")].tap()
         let row = app.descendants(matching: .any).matching(identifier: "walk-row").firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: UITestTimeout.existence), "the seeded walk should be listed")
         row.tap()

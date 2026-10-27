@@ -88,6 +88,8 @@ source "$screenshots_lib_dir/simulator-templates.sh"
 source "$screenshots_lib_dir/xcodebuild-output.sh"
 # shellcheck source=hinge.sh
 source "$screenshots_lib_dir/hinge.sh"
+# shellcheck source=screenshot-output.sh
+source "$screenshots_lib_dir/screenshot-output.sh"
 
 readonly screenshot_project="$repository_root/OpenHikes.xcodeproj"
 readonly screenshot_scheme="OpenHikesUI"
@@ -163,9 +165,11 @@ Captures the App Store screenshot set in $screenshot_appearance appearance on a
 dedicated 6.9" simulator.
 
 Options:
-  --frame <nn>       Shoot only this frame (01-10); repeat for more. Existing
-                     PNGs of the other frames are left alone.
-  --output <dir>     Where the PNGs land (default: Screenshots/Output)
+  --frame <nn>       Shoot only this frame (01-10); repeat for more.
+  --output <dir>     Clean output root (default: Screenshots/Output). Raw PNGs
+                     go in device/layout/locale/date and appearance folders.
+  --append           Keep other capture sets in the output root. This set's
+                     appearance directory is still cleaned before capturing.
   --photos <dir>     JPEGs to put in the simulator's photo library first
                      (default: Screenshots/Stamped; skipped when empty).
                      Stamp them with Scripts/stamp-hike-photos.swift so the
@@ -284,6 +288,7 @@ prepare_screenshot_device() {
     xcrun simctl spawn "$udid" defaults write -g AppleLocale -string "$locale_id"
     xcrun simctl spawn "$udid" defaults write -g AppleLanguages \
         -array "${locale_id//_/-}"
+    export TEST_RUNNER_OPENHIKES_SCREENSHOT_LOCALE="$locale_id"
 
     xcrun simctl ui "$udid" appearance "$screenshot_appearance"
 
@@ -340,6 +345,14 @@ install_app() {
     app="$(find "$derived_data/Build/Products" -maxdepth 2 -name OpenHikes.app -path '*-iphonesimulator/*' | head -1)"
     [[ -n "$app" ]] || { echo "No OpenHikes.app under $derived_data/Build/Products." >&2; exit 1; }
     xcrun simctl install "$udid" "$app"
+    # Read the shipping translations instead of keeping German UI wording in
+    # the tests too. The runner receives these; the app uses its own bundle.
+    local language="${locale_id%%[_-]*}"
+    export TEST_RUNNER_OPENHIKES_SCREENSHOT_STRINGS='{}'
+    if [[ -f "$app/$language.lproj/Localizable.strings" ]]; then
+        TEST_RUNNER_OPENHIKES_SCREENSHOT_STRINGS="$(/usr/bin/plutil -convert json -o - \
+            "$app/$language.lproj/Localizable.strings")"
+    fi
     if [[ "$TEST_RUNNER_OPENHIKES_STAMPED_LIBRARY" == 1 ]]; then
         xcrun simctl privacy "$udid" grant photos "$screenshot_bundle_id"
     fi
@@ -466,6 +479,8 @@ run_screenshot_group() {
         -skipPackagePluginValidation \
         -destination "platform=iOS Simulator,id=$udid" \
         -derivedDataPath "$derived_data" \
+        -testLanguage "${locale_id%%[_-]*}" \
+        -testRegion "${locale_id##*[_-]}" \
         -resultBundlePath "$result_bundle" \
         -collect-test-diagnostics never \
         -test-timeouts-enabled YES \
@@ -526,7 +541,8 @@ screenshots_main() {
     device_name="${OPENHIKES_SCREENSHOT_DEVICE:-$screenshot_default_device}"
     screenshot_run_id="$(date -u +%Y%m%dT%H%M%SZ)-$$"
     device_type="${OPENHIKES_SCREENSHOT_DEVICE_TYPE:-iPhone 18 Pro Max}"
-    output_dir="$repository_root/Screenshots/Output"
+    output_root="$repository_root/Screenshots/Output"
+    append_output=false
     photo_dir="$repository_root/Screenshots/Stamped"
     derived_data="$repository_root/DerivedData/Screenshots-$screenshot_appearance"
     keep_device=false
@@ -550,7 +566,8 @@ screenshots_main() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --frame) requested+=("${2:?--frame needs a number}"); shift 2 ;;
-            --output) output_dir="${2:?--output needs a directory}"; shift 2 ;;
+            --output) output_root="${2:?--output needs a directory}"; shift 2 ;;
+            --append) append_output=true; shift ;;
             --photos) photo_dir="${2:?--photos needs a directory}"; shift 2 ;;
             --device) device_name="${2:?--device needs a name}"; prepared_device=false; shift 2 ;;
             --prepared-device)
@@ -630,6 +647,11 @@ screenshots_main() {
         OPENHIKES_SIM_POOL_DEVICE_TYPE="$device_type" "$repository_root/Scripts/sim-pool.sh" \
             validate "$udid" ${pool_owner:+--owner "$pool_owner"} || exit 2
     fi
+    local layout="${pose:+$pose${orientation:+_$orientation}}"
+    if [[ "$device_type" == 'iPhone Duo' && -z "$pose" ]]; then layout="closed"; fi
+    if [[ "$pose" == open && -z "$orientation" ]]; then layout="open_portrait"; fi
+    output_dir="$(screenshot_output_directory "$output_root" "$device_type" "$locale_id" \
+        "$layout" "$screenshot_appearance" "$append_output")" || exit $?
     device_pinned=false
     if [[ "$device_name" =~ ^[0-9A-Fa-f]{8}(-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$ ]]; then
         device_pinned=true
@@ -680,19 +702,6 @@ screenshots_main() {
     trap finish_screenshot_run EXIT
     build_screenshot_tests
     install_app
-    # Only this appearance's copies of only the frames being shot: the other
-    # script, or an earlier `--frame` run, owns the rest of the folder.
-    for frame in "${frames[@]}"; do
-        for entry in "$output_dir/$frame"-*.png; do
-            [[ -f "$entry" ]] || continue
-            if [[ -n "$screenshot_suffix" ]]; then
-                if [[ "$entry" == *"$screenshot_suffix.png" ]]; then rm -f "$entry"; fi
-            elif [[ "$entry" != *-dark.png ]]; then
-                rm -f "$entry"
-            fi
-        done
-    done
-
     # Retried once, and only the frames that did not come out. The community
     # frame waits on a seeded browse answering, and that wait can lose to a
     # busy machine rather than to a bug; re-running every frame that

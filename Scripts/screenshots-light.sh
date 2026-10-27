@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
 # The App Store screenshot set in light appearance, on a simulator of its own.
-# Writes `Screenshots/Output/NN-name.png`. `--frame 03` re-shoots one frame;
+# Writes raw PNGs in a device/locale/date folder under Screenshots/Output.
+# `--frame 03` shoots one frame into a clean appearance directory;
 # `--help` lists the rest. Everything this shares with the dark set, and the
 # reasons for it, is in Scripts/lib/screenshots.sh.
 

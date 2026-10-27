@@ -46,7 +46,7 @@ extension ScreenshotUITests {
 
         openHikeDetail(in: app, titled: Self.routeTitle)
         try importDiscoveredPhotos(in: app, selecting: Self.pinnedPhotoIndexes)
-        let zoom = app.buttons["Zoom"]
+        let zoom = app.buttons[screenshotText("Zoom")]
         XCTAssertTrue(scrollIntoView(zoom, in: app), "the detail screen should offer to frame the whole route")
         zoom.tap()
         collapseSheet(in: app)
@@ -55,6 +55,7 @@ extension ScreenshotUITests {
             "the photographs should stand on the map where they were taken"
         )
         expandRouteIntoTheFreedSpace(in: app)
+        settleScreenshotMapTiles(in: app)
         capture(as: .maps, of: app)
     }
 }

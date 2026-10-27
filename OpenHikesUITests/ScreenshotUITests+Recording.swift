@@ -68,12 +68,12 @@ extension ScreenshotUITests {
         launch(app)
         let recordButton = element("record-hike-button", in: app)
         XCTAssertTrue(
-            waitUntil(timeout: UITestTimeout.trace) { recordButton.label == "Open hike recording" },
+            waitUntil(timeout: UITestTimeout.trace) { recordButton.label == screenshotText("Open hike recording") },
             "the seeded recording should have been recovered and resumed"
         )
         recordButton.tap()
         XCTAssertTrue(
-            app.navigationBars["Record Hike"].waitForExistence(timeout: UITestTimeout.navigation),
+            app.navigationBars[screenshotText("Record Hike")].waitForExistence(timeout: UITestTimeout.navigation),
             "the record button should open the recording under way"
         )
         let points = element("recording-point-count", in: app)
@@ -106,7 +106,7 @@ extension ScreenshotUITests {
         let window = windowFrame(of: app)
         let original = openMapArea(in: app)
         let panel = element("map-side-panel", in: app).exists
-        let margin = original.width * Self.recordingFrameMargin
+        let margin = min(original.width, original.height) * Self.recordingFrameMargin
         let weather = element("weather-badge", in: app)
         let top = max(original.minY + margin, weather.exists ? weather.frame.maxY + margin : original.minY)
         let target = CGRect(
@@ -134,6 +134,10 @@ extension ScreenshotUITests {
                 panRecordedLine(in: app, from: bounds, into: target, within: visible.insetBy(dx: margin, dy: margin))
             }
         }
+        let evidence = XCTAttachment(screenshot: display.screen.screenshot())
+        evidence.name = "Recording line did not fit"
+        evidence.lifetime = .keepAlways
+        add(evidence)
         XCTFail("the recording’s line should fit above the sheet before capture")
     }
 
@@ -168,7 +172,7 @@ extension ScreenshotUITests {
 
     @MainActor
     private func restoreRecordingSheet(in app: XCUIApplication, top: CGFloat, window: CGRect) {
-        let grabber = app.buttons["Sheet Grabber"]
+        let grabber = screenshotSheetGrabber(in: app)
         grabber.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(
             forDuration: Self.recordingPanPress,
             thenDragTo: coordinate(at: CGPoint(x: window.midX, y: top), on: app.windows.firstMatch),

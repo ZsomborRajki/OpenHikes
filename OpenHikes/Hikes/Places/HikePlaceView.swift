@@ -35,6 +35,10 @@ import SwiftData
 import SwiftUI
 
 struct HikePlaceView: View {
+    // Four 90-point actions and their gaps. Below this, two rows leave whole
+    // words readable rather than hyphenating a German verb over four lines.
+    private static let minimumActionRowWidth: CGFloat = 384
+
     let hike: Hike
     let placeID: UUID
     let mapController: MapController
@@ -148,37 +152,53 @@ struct HikePlaceView: View {
     }
 
     private func actions(_ card: HikePlaceCard) -> some View {
-        HStack(spacing: 8) {
-            TrailPlacePhotoButtons(
-                cameraIdentifier: "hike-place-camera",
-                libraryIdentifier: "hike-place-library",
-                onCamera: { photoCapture?.requestCamera() },
-                onLibrary: { photoCapture?.requestLibrary() }
-            )
-            Button {
-                onShowOnMap()
-                mapController.showPhotoSpot(card.coordinate)
-            } label: {
-                Label("Show on Map", systemImage: "map")
-                    .labelStyle(TrailPlaceActionLabelStyle())
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                photoActions
+                mapAndShareActions(card)
             }
-            .buttonStyle(.bordered)
-            .accessibilityIdentifier("hike-place-show-on-map")
-            ShareLink(
-                item: TrailPlaceCoordinates.mapsURL(card.coordinate, named: card.title),
-                subject: Text(card.title),
-                message: Text([card.title, TrailPlaceCoordinates.text(card.coordinate)].joined(separator: "\n"))
-            ) {
-                Label("Share", systemImage: "square.and.arrow.up")
-                    .labelStyle(TrailPlaceActionLabelStyle())
+            .frame(minWidth: Self.minimumActionRowWidth)
+            Grid(horizontalSpacing: 8, verticalSpacing: 8) {
+                GridRow { photoActions }
+                GridRow { mapAndShareActions(card) }
             }
-            .buttonStyle(.bordered)
-            .accessibilityIdentifier("hike-place-share")
         }
         .buttonBorderShape(.roundedRectangle(radius: TrailPlaceActionLabelStyle.cornerRadius))
         // One height for the row, whichever button's word needs the most room
         // at the hiker's type size.
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var photoActions: some View {
+        TrailPlacePhotoButtons(
+            cameraIdentifier: "hike-place-camera",
+            libraryIdentifier: "hike-place-library",
+            onCamera: { photoCapture?.requestCamera() },
+            onLibrary: { photoCapture?.requestLibrary() }
+        )
+    }
+
+    @ViewBuilder
+    private func mapAndShareActions(_ card: HikePlaceCard) -> some View {
+        Button {
+            onShowOnMap()
+            mapController.showPhotoSpot(card.coordinate)
+        } label: {
+            Label("Show on Map", systemImage: "map")
+                .labelStyle(TrailPlaceActionLabelStyle())
+        }
+        .buttonStyle(.bordered)
+        .accessibilityIdentifier("hike-place-show-on-map")
+        ShareLink(
+            item: TrailPlaceCoordinates.mapsURL(card.coordinate, named: card.title),
+            subject: Text(card.title),
+            message: Text([card.title, TrailPlaceCoordinates.text(card.coordinate)].joined(separator: "\n"))
+        ) {
+            Label("Share", systemImage: "square.and.arrow.up")
+                .labelStyle(TrailPlaceActionLabelStyle())
+        }
+        .buttonStyle(.bordered)
+        .accessibilityIdentifier("hike-place-share")
     }
 
     private var removeButton: some View {

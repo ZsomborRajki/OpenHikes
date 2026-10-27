@@ -8543,7 +8543,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Halte die Karte gedrückt, um einen Stopp hinzuzufügen, oder tippe auf eine graue Route, um stattdessen sie zu nehmen. Halte einen Stopp gedrückt, um ihn an eine andere Stelle zu ziehen."
+            "value" : "Halte die Karte gedrückt, um einen Stopp hinzuzufügen, oder tippe auf eine graue Route. Halte einen Stopp gedrückt und ziehe ihn, um ihn zu verschieben."
           }
         }
       }
@@ -10194,7 +10194,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Auf der Karte anzeigen"
+            "value" : "Auf Karte zeigen"
           }
         }
       }

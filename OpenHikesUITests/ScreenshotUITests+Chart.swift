@@ -32,7 +32,7 @@ extension ScreenshotUITests {
         chart.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertTrue(waitUntilValueChanges(from: before, on: chart))
         let value = chart.value as? String ?? ""
-        let match = try XCTUnwrap(value.firstMatch(of: /([0-9]+)% along the trail/))
+        let match = try XCTUnwrap(value.firstMatch(of: /([0-9]+)\s*%/))
         // The helper's first probe now selects exactly the existing value.
         selectChartProgress(try XCTUnwrap(Int(match.1)), in: app)
         for percent in Self.chartRegressionProgress {
@@ -53,7 +53,7 @@ extension ScreenshotUITests {
             chart.coordinate(withNormalizedOffset: CGVector(dx: position, dy: 0.5)).tap()
             let changed = waitUntilValueChanges(from: before, on: chart, timeout: UITestTimeout.brief)
             let value = chart.value as? String ?? ""
-            guard let match = value.firstMatch(of: /([0-9]+)% along the trail/),
+            guard let match = value.firstMatch(of: /([0-9]+)\s*%/),
                   let percent = Int(match.1) else {
                 XCTFail("the chart should report progress along the trail: \(value)")
                 return

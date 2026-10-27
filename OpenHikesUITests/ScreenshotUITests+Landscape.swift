@@ -11,9 +11,44 @@ import XCTest
 
 extension ScreenshotUITests {
     private static let landscapeContentMargin: CGFloat = 12
+    private static let landscapeMinimumDrag: CGFloat = 24
+
+    /// Importing photos leaves the panel scrolled to Find Photos. For the
+    /// map-first frames, start the card at its full title rather than leave
+    /// half that title hidden behind the pinned navigation controls.
+    @MainActor
+    func positionLandscapeHikeHeader(in app: XCUIApplication) {
+        let titles = app.staticTexts.matching(NSPredicate(format: "label == %@", Self.routeTitle))
+        guard let title = titles.allElementsBoundByIndex.max(by: { $0.frame.height < $1.frame.height }) else {
+            XCTFail("the hike should have its full title in the side panel")
+            return
+        }
+        let container = scrollContainer(in: app)
+        let display = screenshotDisplay(in: app)
+        for _ in 0..<12 {
+            let viewport = container.frame.intersection(windowFrame(of: app))
+                .insetBy(dx: 0, dy: Self.landscapeContentMargin)
+            let delta = viewport.minY - title.frame.minY
+            if delta <= 0, delta > -Self.landscapeMinimumDrag, title.frame.maxY < viewport.maxY { return }
+            let reach = viewport.height / 2
+            let requested = min(max(delta, -reach), reach)
+            let distance = abs(requested) < Self.landscapeMinimumDrag
+                ? (requested < 0 ? -Self.landscapeMinimumDrag : Self.landscapeMinimumDrag) : requested
+            let start = CGPoint(x: viewport.midX, y: viewport.midY)
+            XCTAssertTrue(ScreenshotDisplayGesture.drag(
+                from: start, to: CGPoint(x: start.x, y: start.y + distance), on: display
+            ))
+        }
+        let evidence = XCTAttachment(screenshot: display.screen.screenshot())
+        evidence.name = "Landscape title did not settle"
+        evidence.lifetime = .keepAlways
+        add(evidence)
+        XCTFail("the full hike title should sit below the panel’s pinned controls")
+    }
 
     @MainActor
     func positionScreenshotGallery(in app: XCUIApplication) {
+        if positionCompactScreenshotGallery(in: app) { return }
         let strip = element("hike-photo-strip", in: app)
         guard element("map-side-panel", in: app).exists else {
             XCTAssertTrue(scrollIntoView(strip, in: app))
@@ -44,7 +79,7 @@ extension ScreenshotUITests {
         let route = walkShareBox(.route, in: app)
         let before = stats.frame
         let margin = Self.landscapeContentMargin
-        let title = app.staticTexts["Share Hike"]
+        let title = app.staticTexts[screenshotText("Share Hike")]
         let titleBottom = title.exists ? title.frame.maxY : window.minY
         let target = CGPoint(
             x: window.minX + margin + before.width / 2,
@@ -62,13 +97,14 @@ extension ScreenshotUITests {
         XCTAssertLessThan(stats.frame.maxX, route.frame.midX, "the figures should sit beside the route")
     }
 
-    /// An explicit display ID avoids XCTest's two-finger calculation
-    /// against the inactive cover display.
+    /// Element gestures can miss either Duo display: even on its closed
+    /// cover, ten zooms left the measured stroke unchanged. Target the
+    /// capture's display explicitly whenever the device has two screens.
     @MainActor
     func zoomRecordingMapOut(in app: XCUIApplication) {
         let map = mapElement(in: app)
         let display = screenshotDisplay(in: app)
-        guard display.screen != XCUIScreen.main else {
+        guard XCUIScreen.screens.count > 1 else {
             map.twoFingerTap()
             return
         }
@@ -92,17 +128,19 @@ extension ScreenshotUITests {
 
     /// Observe rendered tiles rather than capture a placeholder grid.
     @MainActor
-    func settleNearbyMapTiles(in app: XCUIApplication) {
+    func settleScreenshotMapTiles(in app: XCUIApplication, rejectSmallLoadingPatches: Bool = false) {
         let display = screenshotDisplay(in: app)
         let ready = waitUntil(timeout: UITestTimeout.trace) {
-            screenshotMapHasTiles(in: app, on: display, requireTerrain: false)
+            screenshotMapHasTiles(
+                in: app, on: display, requireTerrain: false, rejectSmallLoadingPatches: rejectSmallLoadingPatches
+            )
         }
         if !ready {
             let evidence = XCTAttachment(screenshot: display.screen.screenshot())
-            evidence.name = "Nearby map still loading"
+            evidence.name = "Map still loading"
             evidence.lifetime = .keepAlways
             add(evidence)
         }
-        XCTAssertTrue(ready, "nearby map tiles should replace the placeholder grid after framing")
+        XCTAssertTrue(ready, "map tiles should replace the placeholder grid after framing")
     }
 }

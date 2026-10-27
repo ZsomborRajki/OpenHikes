@@ -86,12 +86,15 @@ source "$repository_root/Scripts/lib/simulator.sh"
 # so its first boot does not download 1.4 GB — see the file's header.
 # shellcheck source=lib/simulator-templates.sh
 source "$repository_root/Scripts/lib/simulator-templates.sh"
+# shellcheck source=lib/screenshot-output.sh
+source "$repository_root/Scripts/lib/screenshot-output.sh"
 project="$repository_root/OpenHikes.xcodeproj"
 scheme="OpenHikesWatch"
 
 device_name="${OPENHIKES_WATCH_SCREENSHOT_DEVICE:-OpenHikes Watch Screenshots}"
 device_type="${OPENHIKES_WATCH_SCREENSHOT_DEVICE_TYPE:-Apple Watch Ultra 4 (49mm)}"
-output_dir="$repository_root/Screenshots/WatchOutput"
+output_root="$repository_root/Screenshots/Output"
+append_output=false
 derived_data="$repository_root/DerivedData/WatchScreenshots"
 app_bundle_id="tappium.com.OpenHikes.watchkitapp"
 companion_name="${OPENHIKES_WATCH_COMPANION_DEVICE:-OpenHikes Watch Companion}"
@@ -115,7 +118,7 @@ skip_erase=false
 # window, so the pair state is no use as a signal for it and a wait is what
 # there is.
 settle_seconds="${OPENHIKES_WATCH_SETTLE:-15}"
-# What a frame with a map on it gets instead.
+# The deadline for a frame with a map on it.
 #
 # The watch fetches its own tiles, and until they land the map is the green
 # route on MapKit's grey placeholder grid — which is also what this app
@@ -123,9 +126,10 @@ settle_seconds="${OPENHIKES_WATCH_SETTLE:-15}"
 # deliberate rather than as unfinished. The device is erased at the start of
 # every run, so this is always paid from a cold cache.
 #
-# Measured on an erased device: at 25 seconds the basemap had still not
-# arrived; at 60 it is Berchtesgaden, the lake and the labels, every time.
-map_settle_seconds="${OPENHIKES_WATCH_MAP_SETTLE:-60}"
+# A German capture still had the loading grid after the old fixed 60-second
+# wait. Poll the actual pixels instead, retaining the last failed frame beside
+# the build log if the deadline expires.
+map_settle_seconds="${OPENHIKES_WATCH_MAP_SETTLE:-120}"
 # How long a frame waits for the pair to report `connected` before going ahead
 # without it. Generous, because the cost of being wrong is the unpaired glyph
 # in a store frame and the cost of waiting is seconds on a run done rarely.
@@ -141,7 +145,9 @@ Usage: Scripts/watch-screenshots.sh [options]
 Captures the Apple Watch App Store screenshot set on a dedicated simulator.
 
 Options:
-  --output <dir>     Where the PNGs land (default: Screenshots/WatchOutput)
+  --output <dir>     Clean output root (default: Screenshots/Output). Raw PNGs
+                     go in a device/locale/date folder.
+  --append           Keep the other capture sets in the output root.
   --device <name>    Simulator name to create and reuse
   --device-type <t>  Simulator device type
                      (default: Apple Watch Ultra 4 (49mm))
@@ -149,9 +155,8 @@ Options:
                      what the figures are formatted in; without it the frames
                      inherit whatever region the Mac is set to.
   --settle <n>       Seconds to let a text-only frame settle (default: 15).
-                     A frame with a map on it waits 60 instead; lower that
-                     with OPENHIKES_WATCH_MAP_SETTLE and it comes out as
-                     MapKit's grey placeholder grid.
+                     Map frames wait for rendered tiles instead, up to 120
+                     seconds (OPENHIKES_WATCH_MAP_SETTLE).
   --no-build         Reuse the last build in DerivedData/WatchScreenshots
   --no-pair          Do not pair a companion iPhone. Quicker — it builds the
                      watch scheme alone rather than the whole app — but every
@@ -172,7 +177,8 @@ EOF
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --output) output_dir="${2:?--output needs a directory}"; shift 2 ;;
+        --output) output_root="${2:?--output needs a directory}"; shift 2 ;;
+        --append) append_output=true; shift ;;
         --device) device_name="${2:?--device needs a name}"; shift 2 ;;
         --device-type) device_type="${2:?--device-type needs a type}"; shift 2 ;;
         --locale) locale_id="${2:?--locale needs an identifier}"; shift 2 ;;
@@ -186,13 +192,20 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+if [[ ! "$map_settle_seconds" =~ ^[0-9]+$ ]]; then
+    echo "OPENHIKES_WATCH_MAP_SETTLE must be a whole number of seconds." >&2
+    exit 2
+fi
+
+output_dir="$(screenshot_output_directory "$output_root" "$device_type" "$locale_id" \
+    '' '' "$append_output")" || exit $?
+
 # The frames, in upload order: "<name>|<settle seconds>|<launch arguments>".
 #
-# The settle is per frame because only one frame needs the long one. See
-# `settle_seconds` for what it buys; the two map frames pay it and the three
-# that draw nothing but text do not.
+# The map's value is a readiness deadline. The other frames draw text and use
+# `settle_seconds` for the status bar; none waits out the map deadline.
 #
-# Five rather than the iPhone set's seven, because a watch listing is looked at
+# Five rather than the iPhone set's ten, because a watch listing is looked at
 # on a phone and the app has fewer screens worth the room. The order is the
 # order they appear in on the listing, and the first two carry it: a trail on
 # the wrist, and the map that is the reason to raise it.
@@ -202,7 +215,7 @@ done
 frames=(
     "01-your-trails|$settle_seconds|--ui-testing --ui-test-screen=trails --ui-test-queued-walks=1"
     "02-the-trail-on-your-wrist|$map_settle_seconds|--ui-testing --ui-test-screen=map --ui-test-follow=0.38"
-    "03-how-much-is-left|$map_settle_seconds|--ui-testing --ui-test-screen=figures --ui-test-follow=0.38"
+    "03-how-much-is-left|$settle_seconds|--ui-testing --ui-test-screen=figures --ui-test-follow=0.38"
     "04-recording-from-the-wrist|$settle_seconds|--ui-testing --ui-test-screen=record --ui-test-recording=running"
     "05-your-iphone-s-hike|$settle_seconds|--ui-testing --ui-test-screen=record --ui-test-phone-recording=running"
 )
@@ -439,9 +452,6 @@ xcrun simctl install "$udid" "$app"
 # one appear would photograph five pictures of it.
 xcrun simctl privacy "$udid" grant location-always "$app_bundle_id"
 
-mkdir -p "$output_dir"
-rm -f "${output_dir:?}"/*.png
-
 # Launches one frame, retrying a refusal.
 #
 # `simctl launch` answers `FBSOpenApplicationServiceErrorDomain` code 4 when
@@ -481,6 +491,26 @@ wait_for_pair() {
     return 0
 }
 
+# No watch test bundle can inspect this map, and a connected pair says nothing
+# about its tiles. A gray grid must fail the run rather than become an export.
+wait_for_map() {
+    local shot="$derived_data/watch-map-readiness.png" deadline=$((SECONDS + 10#$map_settle_seconds)) status
+    mkdir -p "$derived_data"
+    while true; do
+        xcrun simctl io "$udid" screenshot "$shot" >/dev/null 2>&1
+        status=0
+        swift "$repository_root/Scripts/lib/watch-map-readiness.swift" "$shot" || status=$?
+        if (( status == 0 )); then
+            return 0
+        fi
+        if (( status != 1 || SECONDS >= deadline )); then
+            echo "Watch map tiles did not become ready; last frame: $shot" >&2
+            return 1
+        fi
+        sleep 2
+    done
+}
+
 # One launch whose picture is thrown away.
 #
 # MapKit has no tiles for this route until something has asked for them, so
@@ -504,7 +534,7 @@ warm_up() {
                 echo "Warming the map…"
                 xcrun simctl terminate "$udid" "$app_bundle_id" 2>/dev/null || true
                 launch_frame "${entry#*|*|}"
-                sleep "$map_settle_seconds"
+                wait_for_map
                 xcrun simctl terminate "$udid" "$app_bundle_id" 2>/dev/null || true
                 return 0
                 ;;
@@ -527,9 +557,14 @@ capture() {
         xcrun simctl terminate "$udid" "$app_bundle_id" 2>/dev/null || true
         wait_for_pair
         launch_frame "$arguments"
-        sleep "$settle"
         shot="$output_dir/$name.png"
-        xcrun simctl io "$udid" screenshot "$shot" >/dev/null 2>&1
+        if [[ "$name" == *trail-on-your-wrist* ]]; then
+            wait_for_map
+            cp "$derived_data/watch-map-readiness.png" "$shot"
+        else
+            sleep "$settle"
+            xcrun simctl io "$udid" screenshot "$shot" >/dev/null 2>&1
+        fi
         printf '  %s\n' "$(basename "$shot")"
     done
     xcrun simctl terminate "$udid" "$app_bundle_id" 2>/dev/null || true

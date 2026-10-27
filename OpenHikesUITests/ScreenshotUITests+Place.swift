@@ -14,8 +14,12 @@ extension ScreenshotUITests {
     /// The place, as the hiker would keep it: a viewpoint of their own, named
     /// for what it looks at rather than after the Archenkanzel a little way
     /// off the line, which the map labels where it really stands.
-    private static let placeName = "Above the Königssee"
-    private static let placeNote = "The whole lake below, and the boats in to St. Bartholomä."
+    private static var placeName: String { screenshotIsGerman ? "Über dem Königssee" : "Above the Königssee" }
+    private static var placeNote: String {
+        screenshotIsGerman
+            ? "Der ganze See liegt unter dir, die Boote fahren nach St. Bartholomä."
+            : "The whole lake below, and the boats in to St. Bartholomä."
+    }
 
     /// Which of the stamped photographs the place is given, by where the
     /// system picker lists them: newest first, so the second and the third
@@ -142,12 +146,20 @@ extension ScreenshotUITests {
     @MainActor
     private func pickLibraryPhotos(_ indexes: [Int], in app: XCUIApplication) {
         element("hike-place-adder-library", in: app).tap()
-        let photos = app.images.matching(NSPredicate(format: "label BEGINSWITH 'Photo, '"))
-        XCTAssertTrue(
-            photos.firstMatch.waitForExistence(timeout: UITestTimeout.navigation),
-            "the photo picker should list the stamped library — check that "
-                + "Scripts/screenshots.sh added it"
+        let photos = app.images.matching(
+            NSPredicate(format: "label BEGINSWITH %@", Self.screenshotIsGerman ? "Foto, " : "Photo, ")
         )
+        // The out-of-process picker can show its toolbar while its grid is
+        // still empty. Wait for every tile we need, not just its first image.
+        let lastIndex = indexes.max() ?? 0
+        guard waitUntil(timeout: UITestTimeout.trace, { photos.count > lastIndex }) else {
+            let evidence = XCTAttachment(screenshot: screenshotDisplay(in: app).screen.screenshot())
+            evidence.name = "Photo picker did not load its library"
+            evidence.lifetime = .keepAlways
+            add(evidence)
+            XCTFail("the photo picker should list the stamped library — check that Scripts/screenshots.sh added it")
+            return
+        }
         let tiles = photos.allElementsBoundByIndex
         let labels = indexes.compactMap { index -> String? in
             XCTAssertTrue(tiles.indices.contains(index), "the library should hold photo \(index)")
