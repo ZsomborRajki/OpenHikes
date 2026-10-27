@@ -12,6 +12,22 @@
 //  they are constants: two spellings of the same page are two pages to keep
 //  current, and the one nobody edits is the one somebody opens.
 //
+//  ## In the language the app speaks
+//
+//  Those two are published in English and in German, and the app opens the
+//  copy in its own language (``PageLanguage``). A German screen that says
+//  *Datenschutzerklärung* and opens an English page fails the reader the
+//  policy is written for: the GDPR asks for information its audience can
+//  understand, and the transparency guidelines the EDPB endorsed ask for a
+//  translation wherever a service addresses speakers of another language. The
+//  terms have a sharper reason. German consumers are not bound by terms in a
+//  language they cannot be expected to read — the Kammergericht held
+//  WhatsApp's English-only terms void for exactly that (KG Berlin,
+//  5 U 156/14) — and the licence a hiker grants by tapping Share is in them.
+//
+//  Apple's EULA stays one URL, because it is Apple's text and not this app's
+//  to translate.
+//
 
 import Foundation
 
@@ -20,6 +36,50 @@ enum MapPurchaseLinks {
     // are compile-time constants, and a typo should fail the tests here rather
     // than quietly remove a link App Review requires.
     // swiftlint:disable force_unwrapping
+
+    /// The languages the privacy policy and the terms are published in, and
+    /// the one the app opens them in.
+    ///
+    /// English is the site's root and German is `docs/de/`, page for page:
+    /// `docs/de/privacy/index.html` translates `docs/privacy/index.html`, and
+    /// `docs/de/terms/index.html` translates `docs/terms/index.html`. Each
+    /// translation carries its original's effective date, so an English
+    /// change that bumps the date fails `MapPurchaseLinksTests` until the
+    /// German says the same. A language the app ships has to be a case here
+    /// with a folder there; the same suite fails on one that is not.
+    nonisolated enum PageLanguage: String, CaseIterable, Sendable {
+        case english = "en"
+        case german = "de"
+
+        /// The language the app is running in: the localization the bundle
+        /// chose from the hiker's preferred languages, which is the one every
+        /// string on the screen linking a page was looked up in. Read once, as
+        /// those strings are — iOS relaunches an app whose language changes.
+        static let app = Self(localization: Bundle.main.preferredLocalizations.first)
+
+        /// English unless the localization's language has pages of its own,
+        /// because English is the development language and the pages at the
+        /// site's root are English. A regional variant reads its language's
+        /// pages, so `de-AT` and `de-CH` open the German ones.
+        init(localization: String?) {
+            let code = localization.flatMap { Locale.Language(identifier: $0).languageCode?.identifier }
+            self = code.flatMap(Self.init(rawValue:)) ?? .english
+        }
+
+        var privacyPolicy: URL {
+            switch self {
+            case .english: URL(string: "https://zsomborrajki.github.io/OpenHikes/privacy/")!
+            case .german: URL(string: "https://zsomborrajki.github.io/OpenHikes/de/privacy/")!
+            }
+        }
+
+        var termsAndConditions: URL {
+            switch self {
+            case .english: URL(string: "https://zsomborrajki.github.io/OpenHikes/terms/")!
+            case .german: URL(string: "https://zsomborrajki.github.io/OpenHikes/de/terms/")!
+            }
+        }
+    }
 
     /// Apple's standard EULA, which is what governs the subscription unless
     /// OpenHikes publishes its own. Linking it is explicitly allowed, and is
@@ -36,13 +96,15 @@ enum MapPurchaseLinks {
     ///   app is submitted. App Review opens it, and a 404 here fails the
     ///   review for the whole binary rather than just the purchase. It is also
     ///   the URL that goes in the App Privacy section of App Store Connect,
-    ///   and the two are expected to match.
+    ///   and the two are expected to match — the English page for the English
+    ///   localization there, the German page for the German one.
     ///
     ///   The page is served from this repository: `docs/privacy/index.html`,
-    ///   published by GitHub Pages from `main`. Edit the policy there rather
-    ///   than pointing this somewhere else, so the text a reviewer opens and
-    ///   the text in the repository cannot drift apart.
-    static let privacyPolicy = URL(string: "https://zsomborrajki.github.io/OpenHikes/privacy/")!
+    ///   or `docs/de/privacy/index.html` in German, published by GitHub Pages
+    ///   from `main`. Edit the policy there rather than pointing this somewhere
+    ///   else, so the text a reviewer opens and the text in the repository
+    ///   cannot drift apart.
+    static let privacyPolicy = PageLanguage.app.privacyPolicy
 
     /// This app's own terms — **not** ``termsOfUse``, which is Apple's EULA
     /// for the subscription and governs the purchase alone.
@@ -55,11 +117,12 @@ enum MapPurchaseLinks {
     /// tapping Share were a page they had no way to reach from the screen
     /// they tapped it on.
     ///
-    /// Served from this repository — `docs/terms/index.html`, published by
-    /// GitHub Pages from `main` — for the reason ``privacyPolicy`` is: edit
-    /// the page there rather than pointing this somewhere else, so the text a
-    /// reviewer opens and the text in the repository cannot drift.
-    static let termsAndConditions = URL(string: "https://zsomborrajki.github.io/OpenHikes/terms/")!
+    /// Served from this repository — `docs/terms/index.html`, or
+    /// `docs/de/terms/index.html` in German, published by GitHub Pages from
+    /// `main` — for the reason ``privacyPolicy`` is: edit the page there
+    /// rather than pointing this somewhere else, so the text a reviewer opens
+    /// and the text in the repository cannot drift.
+    static let termsAndConditions = PageLanguage.app.termsAndConditions
 
     // swiftlint:enable force_unwrapping
 }

@@ -876,6 +876,13 @@ a change to recording, the map, the sheet or the render path; the PR template,
     `OpenHikesShortcuts.swift`. The IDE also extracts the bundle's name and
     the GPX type's into `InfoPlist.xcstrings`: a name gets German, or
     `"shouldTranslate" : false` when it stays as it is, as *OpenHikes* does.
+  - **The privacy policy and the terms are published in German too.**
+    `docs/de/privacy/` and `docs/de/terms/` translate the English pages, and
+    the app opens the copy in its own language (`MapPurchaseLinks.PageLanguage`
+    argues why). An edit to an English page edits its German copy in the same
+    change, and the two move their `<time datetime>` together, which
+    `MapPurchaseLinksTests` holds them to. The same suite fails on an app
+    language that has no pages of its own.
   - The hosted tests and the UI suites assert English copy, so they assume a
     simulator whose language is English, as CI's is.
 - **OpenHikes Pro is one monthly subscription.**
@@ -886,8 +893,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
     lists**, because App Review checks both directions. Today that is the paid
     map styles (Stadia Outdoors, Stamen Terrain, Thunderforest Outdoors), offline
     Stadia maps, and Stadia elevation where a trail has none. A change updates
-    the paywall, `OpenHikes.storekit`, `docs/terms/`, the README and App Store
-    Connect together.
+    the paywall, `OpenHikes.storekit`, `docs/terms/` in both languages, the
+    README and App Store Connect together.
   - Everything else is free, the community included.
   - The paywall stays reachable from About even when no keys are bundled.
 - **Remember only the negative entitlement answer.** `MapEntitlementStore` starts
@@ -1196,11 +1203,12 @@ is world-readable, because browsing needs no account.
     contribution form, and one tap puts it back: a default, not a filter.
 - **What is sent is stated, and the statements move together.**
   `CommunityShareDisclosureTests` holds the share footer to the payload. The
-  privacy manifest, `docs/privacy/` and `docs/terms/` change whenever what is
-  sent changes, what a reviewer may do changes, the removal, *Check Whether
-  It's Still Live*, reset or *Finish Sending* flows change, what the Commons
-  requests ask for or keep changes, or `CommunityPublisher.maximumPhotos` (36)
-  changes. That limit is the first number to lower if storage costs bite.
+  privacy manifest, `docs/privacy/` and `docs/terms/`, with their German copies
+  under `docs/de/`, change whenever what is sent changes, what a reviewer may
+  do changes, the removal, *Check Whether It's Still Live*, reset or *Finish
+  Sending* flows change, what the Commons requests ask for or keep changes, or
+  `CommunityPublisher.maximumPhotos` (36) changes. That limit is the first
+  number to lower if storage costs bite.
   App Store Connect's own privacy answers are separate, and the manifest does
   not update them.
 
