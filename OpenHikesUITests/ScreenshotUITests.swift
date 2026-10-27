@@ -109,7 +109,7 @@ nonisolated final class ScreenshotUITests: XCTestCase {
         openHikeDetail(in: app, titled: Self.routeTitle)
         try importDiscoveredPhotos(in: app, selecting: Self.pinnedPhotoIndexes)
 
-        let zoom = app.buttons["Zoom"]
+        let zoom = app.buttons[screenshotText("Zoom")]
         XCTAssertTrue(
             scrollIntoView(zoom, in: app),
             "the detail screen should offer to frame the whole route"
@@ -214,7 +214,7 @@ nonisolated final class ScreenshotUITests: XCTestCase {
         )
         frameCommunityPins(in: app)
         revealCommunityPins(in: app, atLeast: Self.minimumVisiblePins)
-        settleNearbyMapTiles(in: app)
+        settleScreenshotMapTiles(in: app, rejectSmallLoadingPatches: true)
         capture(as: .nearby, of: app)
     }
 
@@ -235,7 +235,7 @@ nonisolated final class ScreenshotUITests: XCTestCase {
             Self.routeHueArgument,
         ])
         openHikeDetail(in: app, titled: Self.routeTitle)
-        app.segmentedControls["walk-segment"].buttons["History"].tap()
+        app.segmentedControls["walk-segment"].buttons[screenshotText("History")].tap()
         let row = app.descendants(matching: .any)
             .matching(identifier: "walk-row")
             .firstMatch
@@ -245,7 +245,7 @@ nonisolated final class ScreenshotUITests: XCTestCase {
         )
         row.tap()
         XCTAssertTrue(
-            app.navigationBars["Hike Summary"].waitForExistence(
+            app.navigationBars[screenshotText("Hike Summary")].waitForExistence(
                 timeout: UITestTimeout.navigation
             ),
             "tapping a walk row should push its summary"
@@ -666,7 +666,10 @@ extension ScreenshotUITests {
     /// one more step would push its ends off it.
     @MainActor
     func expandRouteIntoTheFreedSpace(in app: XCUIApplication) {
-        if isPanelBesideTheMap(in: app) { return }
+        if isPanelBesideTheMap(in: app) {
+            positionLandscapeHikeHeader(in: app)
+            return
+        }
         centerPhotoPins(in: app)
         zoomMapInOneStep(in: app)
         // Up to twice, because a drag lands short of the vector it is given,
@@ -730,7 +733,7 @@ extension ScreenshotUITests {
     /// selects the whole class.
     @MainActor
     func dragSheet(in app: XCUIApplication, to target: CGFloat) {
-        let grabber = app.buttons["Sheet Grabber"]
+        let grabber = screenshotSheetGrabber(in: app)
         XCTAssertTrue(
             grabber.waitForExistence(timeout: UITestTimeout.navigation),
             "the sheet should offer a grabber to drag"

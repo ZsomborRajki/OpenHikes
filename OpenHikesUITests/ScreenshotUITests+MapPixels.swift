@@ -21,7 +21,11 @@ extension ScreenshotUITests {
     private static let placeholderGreen = 245
     private static let placeholderBlue = 237
     private static let placeholderTolerance = 2
+    // Stadia Outdoors has pale terrain near the loading-grid color. The
+    // nearby frame's OSM/Apple palette does not, so it can reject the 2%
+    // missing corner tile that passed the general 4% limit on the Duo cover.
     private static let maximumPlaceholderFraction = 0.04
+    private static let maximumSmallPatchFraction = 0.01
     private static let mapSampleInset: CGFloat = 12
 
     @MainActor
@@ -55,7 +59,10 @@ extension ScreenshotUITests {
 
     @MainActor
     func screenshotMapHasTiles(
-        in app: XCUIApplication, on display: ScreenshotDisplay, requireTerrain: Bool = true
+        in app: XCUIApplication,
+        on display: ScreenshotDisplay,
+        requireTerrain: Bool = true,
+        rejectSmallLoadingPatches: Bool = false
     ) -> Bool {
         guard let image = screenshotPixels(on: display) else { return false }
         let area = openMapArea(in: app)
@@ -86,9 +93,10 @@ extension ScreenshotUITests {
                 samples += 1
             }
         }
+        let maximum = rejectSmallLoadingPatches ? Self.maximumSmallPatchFraction : Self.maximumPlaceholderFraction
         return samples > 0
             && (!requireTerrain || Double(terrain) / Double(samples) >= Self.minimumTerrainFraction)
-            && Double(placeholder) / Double(samples) < Self.maximumPlaceholderFraction
+            && Double(placeholder) / Double(samples) < maximum
     }
 
     @MainActor

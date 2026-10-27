@@ -139,6 +139,7 @@ Scripts/screenshots-light.sh             # the light set
 Scripts/screenshots-dark.sh              # the dark set, files suffixed -dark
 Scripts/screenshots.sh                   # both, one after the other
 Scripts/screenshots-dark.sh --frame 03   # one frame, while debugging it
+Scripts/screenshots.sh --append --locale de_DE  # add the German set
 ```
 
 To use a simulator claimed from the pool, acquire a fresh owner for each batch
@@ -181,8 +182,18 @@ and full bars — *discharging*, since `charged` is a phone on a cable and draws
 a green battery with a bolt through it — pins the locale, grants location and
 photo access, adds the
 stamped photographs, runs `ScreenshotUITests`, and writes the PNGs to
-`Screenshots/Output/`. It only replaces its own appearance's files, and with
-`--frame` only that frame's. The raw `xcodebuild` log and result bundle of
+`Screenshots/Output/`. A new run cleans that output root, including old
+subfolders and summary images. Only raw PNGs are exported, organized as
+`iphone_18_pro_max_en_ie_YYYY_MM_DD/light/` and `…/dark/`; a Duo directory also
+names its pose and orientation, such as
+`iphone_duo_open_landscape_de_de_YYYY_MM_DD/`. The date is UTC.
+
+`--append` preserves the other capture sets while cleaning the selected
+appearance directory. Use it to add another language, device, or the watch to
+one batch. `screenshots.sh` passes it to the dark script so both appearances
+survive. A targeted `--frame` run contains only the frames requested in that
+appearance directory; it never leaves older frames looking current.
+The raw `xcodebuild` log and result bundle of
 the last five completed runs stay under
 `DerivedData/Screenshots-<appearance>/ScreenshotRuns-<appearance>/`, and the run
 prints the path. Active runs are never pruned. A failing group still exports
@@ -236,6 +247,9 @@ world reads: `en_US` is imperial and `en_GB` prints road distances in miles,
 which this app honours, so an `en_GB` frame reads "6.6 mi" beside a German place
 name. `--locale en_US` is the right call for a US listing and will print miles.
 The watch script has pinned its own for the same reason since it was written.
+`--locale de_DE` captures German, including the app's language and the system
+photo picker. The screenshot tests read their lookup strings from the app's
+compiled catalog, and parse the chart's percentage without English wording.
 
 `ScreenshotUITests` is deliberately **not** in `suites` in
 `Scripts/run-ui-tests.sh`: it asserts almost nothing and exists to produce
@@ -353,21 +367,22 @@ a gesture known to disturb the screen and correct afterwards.
 ```sh
 # Closed: the cover display, 1398 × 2034
 Scripts/screenshots.sh --device "OpenHikes Screenshots Duo" --device-type "iPhone Duo" \
-    --pose closed --output Screenshots/Output/Duo-closed
+    --pose closed --append
 # Open: the inner display, upright, 2007 × 2853
 Scripts/screenshots.sh --device "OpenHikes Screenshots Duo" --device-type "iPhone Duo" \
-    --pose open --output Screenshots/Output/Duo-open
+    --pose open --append
 # Open the way it unfolds: the inner display in landscape, 2853 × 2007
 Scripts/screenshots.sh --device "OpenHikes Screenshots Duo" --device-type "iPhone Duo" \
-    --pose open --orientation landscape --output Screenshots/Output/Duo-open-landscape
+    --pose open --orientation landscape --append
 ```
 
 App Store Connect takes an iPhone Duo frame of either display, either way up:
 1398 × 2034 or 2034 × 1398 from the cover, 2007 × 2853 or 2853 × 2007 from the
 inner one. The same ten frames are shot on each, from the same test class, so a
 frame that breaks on the Duo is a frame that breaks — the Duo is the same app
-in a window of another shape, which is the point of shooting it. A separate
-`--output` keeps them out of the 6.9" set, whose file names they share.
+in a window of another shape, which is the point of shooting it. Their named
+output directories keep them separate from the 6.9" set, whose file names they
+share. Add `--locale de_DE` for German.
 
 The device type needs the iOS 27.1 runtime — which, as Xcode 27.1 installs
 it, runs no other device — and its template, `OpenHikes Template (iPhone Duo,
@@ -417,8 +432,8 @@ class or the export rather than worked around in a frame:
   it as reachable where the hit test is wrong — see
   `OpenHikesUITests/WindowSupport.swift`.
 
-Two-finger element gestures can also resolve against the inactive cover.
-The recording’s zoom and the landscape gallery/card drags use
+Two-finger element gestures can resolve against the inactive display even
+when the cover is showing. The recording’s zoom and the gallery/card drags use
 `ScreenshotDisplayGesture`, which sends touch paths to the screenshot’s
 explicit display ID and converts points using its image orientation. These
 private XCTest selectors are checked before use and live only in the UI
@@ -429,18 +444,23 @@ replace the placeholder grid before capture.
 swipe flings content further than that screen shows: *Find Photos* went from
 below the hike screen's fold to under its pinned header in one swipe. The
 shared `scrollIntoView` draws a target that has gone past back down with a
-drag that does not fling.
+drag that does not fling. The gallery frame aligns its footer with the bottom
+of the cover’s viewport, keeping the photo strip and action row whole. The
+maker returns to its middle detent after searching so its route stays visible.
 
 ## The Apple Watch set
 
 ```sh
-Scripts/watch-screenshots.sh
+Scripts/watch-screenshots.sh --append
 ```
 
 That creates a dedicated `Apple Watch Ultra 4 (49mm)` simulator and a companion
 iPhone, erases the watch, pairs the two, pins the locale, builds, installs, and
-writes five PNGs at 422 × 514 to `Screenshots/WatchOutput/`. About four and a
-half minutes, most of it deliberate waiting.
+writes five PNGs at 422 × 514 under
+`Screenshots/Output/apple_watch_ultra_4_49mm_en_ie_YYYY_MM_DD/`. The duration
+depends on pairing and map-tile availability. `--locale de_DE` adds the German
+set; `--append` preserves the phone sets already captured. Without `--append`,
+the watch script starts a fresh, empty output root like the phone scripts.
 
 | # | Frame | What it has to say |
 |---|-------|--------------------|
@@ -497,12 +517,12 @@ reads as deliberate. There are two causes and both are handled:
   says `[GeoServices:TileLoading] [Companion] … com.apple.nanomaps.xpc.
   GeoServices was invalidated`, with each request timing out after exactly
   60 seconds. The script launches `com.apple.Maps` on the companion to start
-  that stack. Without it every map frame is grey; with it none are. This is
-  the one to suspect first if the frames regress.
+  that stack. This is the one to suspect first if the frames regress.
 - **A cold cache is slow.** The device is erased every run, so the tiles are
-  always fetched fresh. Map frames wait 60 seconds
-  (`OPENHIKES_WATCH_MAP_SETTLE`) where a text frame waits 15 (`--settle`,
-  which does not move the map wait).
+  always fetched fresh. The map frame polls its rendered pixels, up to 120
+  seconds (`OPENHIKES_WATCH_MAP_SETTLE`), and fails if the loading grid remains.
+  The last readiness image stays in `DerivedData/WatchScreenshots/` for diagnosis.
+  A text frame waits 15 seconds (`--settle`, which does not move the map deadline).
 
 `--no-pair` is the fallback: an unpaired watch uses its own network and always
 draws its map, at the cost of a red crossed-out iPhone in every status bar.

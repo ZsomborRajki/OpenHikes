@@ -95,10 +95,9 @@ struct TrailPlaceBadge: View {
 
 /// Apple Maps' action buttons: the glyph over one short word.
 ///
-/// Three of them share the card's width, which at the default type size is a
-/// little over a hundred points each — too narrow for a glyph *beside* "Remove
-/// Pin", which is how they wrapped onto two lines when they were drawn that
-/// way. Stacked, each word has its button's whole width to itself.
+/// The actions share the card's width, so a narrow side panel has too little
+/// room for a glyph beside its caption. Stacked, the words have their
+/// button's whole width, and the row grows to fit the longest caption.
 struct TrailPlaceActionLabelStyle: LabelStyle {
     static let cornerRadius: CGFloat = 14
 
@@ -109,7 +108,10 @@ struct TrailPlaceActionLabelStyle: LabelStyle {
                 .imageScale(.medium)
             configuration.title
                 .font(.caption.weight(.semibold))
-                .lineLimit(2)
+                // Four actions share the Duo's narrow side panel. Let the
+                // caption take the height it needs rather than ellipsize a
+                // verb a hiker needs to distinguish from the other buttons.
+                .fixedSize(horizontal: false, vertical: true)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

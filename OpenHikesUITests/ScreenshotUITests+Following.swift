@@ -51,7 +51,7 @@ extension ScreenshotUITests {
         openHikeDetail(in: app, titled: Self.routeTitle)
         let progress = element("trail-progress", in: app)
         XCTAssertTrue(
-            waitUntil(timeout: UITestTimeout.trace) { progress.label == "Live Progress" },
+            waitUntil(timeout: UITestTimeout.trace) { progress.label == screenshotText("Live Progress") },
             "following should match the hiker onto the line — the card said \"\(progress.label)\""
         )
         XCTAssertTrue(

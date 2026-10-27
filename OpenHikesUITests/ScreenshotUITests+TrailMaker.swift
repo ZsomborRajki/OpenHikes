@@ -62,6 +62,7 @@ extension ScreenshotUITests {
         for (index, stop) in Self.searchedStops.enumerated() {
             // Scrolled to rather than tapped where it stands: on the closed
             // iPhone Duo, two stops push *Add Stop* below the middle detent.
+            expandCompactMakerForSearch(in: app)
             scrollToTap(element(stop.row, in: app), in: app)
             pickSearchResult(stop, in: app)
             XCTAssertTrue(
@@ -71,6 +72,7 @@ extension ScreenshotUITests {
             )
         }
         waitForTheWalkedRoute(in: app)
+        restoreCompactMakerDetent(in: app)
         capture(as: .trailMaker, of: app)
     }
 
@@ -131,7 +133,7 @@ extension ScreenshotUITests {
     /// the run now, and the dark pass still lost the tap on both attempts.
     @MainActor
     private func chooseWalking(in app: XCUIApplication) {
-        let walking = app.segmentedControls["trail-draft-mode"].buttons["Walking"]
+        let walking = app.segmentedControls["trail-draft-mode"].buttons[screenshotText("Walking")]
         XCTAssertTrue(walking.waitForExistence(timeout: UITestTimeout.navigation))
         XCTAssertTrue(tapUntilSelected(walking), "the maker should switch to Walking")
     }
@@ -178,7 +180,7 @@ extension ScreenshotUITests {
     /// that is usually absent, which is what ``UITestTimeout/brief`` is for.
     @MainActor
     private func dismissKeyboardTip(in app: XCUIApplication) {
-        let tip = app.buttons["Continue"]
+        let tip = app.buttons[Self.screenshotIsGerman ? "Fortfahren" : "Continue"]
         if tip.waitForExistence(timeout: UITestTimeout.brief) {
             tip.tap()
         }
@@ -196,14 +198,17 @@ extension ScreenshotUITests {
         let header = app.descendants(matching: .any)
             .matching(NSPredicate(format: "label == 'Route'"))
             .firstMatch
+        let climbSuffix = screenshotText("%@ of climb")
+            .replacingOccurrences(of: "%@", with: "").trimmingCharacters(in: .whitespaces)
         let legs = (2...Self.searchedStops.count).map { element("trail-draft-point-\($0)", in: app) }
         let arrived = waitUntil(timeout: Self.walkedRouteTimeout) {
             let routed = legs.allSatisfy { leg in
                 let value = leg.value as? String ?? ""
-                return !value.contains("Finding a path") && !value.contains("No route found")
+                return !value.contains(screenshotText("Finding a path…"))
+                    && !value.contains(screenshotText("No route found for this travel mode"))
             }
             let climb = header.value as? String ?? ""
-            return routed && climb.contains("of climb") && !climb.contains("measuring")
+            return routed && climb.contains(climbSuffix) && !climb.contains(screenshotText("measuring the climb"))
         }
         XCTAssertTrue(
             arrived,

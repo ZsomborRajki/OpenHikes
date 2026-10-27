@@ -242,6 +242,10 @@ cat > "$stub_bin/xcodebuild" <<'STUB'
 printf 'xcodebuild %s\n' "$*" >> "$STUB_CALL_LOG"
 printf '%s\n' "${STUB_XCODEBUILD_OUTPUT:-Test Suite 'All tests' passed at 2026-08-30 12:00:00.000.}"
 if [[ "${1:-}" == test-without-building ]]; then
+    if [[ -n "${TEST_RUNNER_OPENHIKES_SCREENSHOT_LOCALE:-}" ]]; then
+        printf 'screenshot locale %s\n' "$TEST_RUNNER_OPENHIKES_SCREENSHOT_LOCALE" >> "$STUB_CALL_LOG"
+        printf 'screenshot strings %s\n' "${TEST_RUNNER_OPENHIKES_SCREENSHOT_STRINGS:-}" >> "$STUB_CALL_LOG"
+    fi
     if [[ -n "${STUB_SCREENSHOT_RESULTS:-}" ]]; then
         while [[ $# -gt 0 ]]; do
             if [[ "$1" == -resultBundlePath ]]; then mkdir -p "$2"; break; fi
@@ -2116,6 +2120,20 @@ if expect_status 2 \
     && expect_contains "$output" "is not a device in the" "the error" \
     && expect_absent "$calls" "simctl bootstatus" "the recorded calls"; then pass; fi
 
+screens_german="$screens_dd/Build/Products/Debug-iphonesimulator/OpenHikes.app/de.lproj"
+mkdir -p "$screens_german"
+printf '{"Zoom":"Test translation"}' > "$screens_german/Localizable.strings"
+/usr/bin/plutil -convert binary1 "$screens_german/Localizable.strings"
+run_script "screenshots pins German and forwards the built app's translations to its runner" \
+    "$screenshots_light" --frame 7 --no-photos --no-retry --prepared-device "$pro_udid" \
+    --pool-owner screenshot-tests --locale de_DE --derived-data "$screens_dd" --output "$work/screens-out"
+if expect_status 1 \
+    && expect_contains "$calls" "AppleLocale -string de_DE" "the recorded calls" \
+    && expect_contains "$calls" "AppleLanguages -array de-DE" "the recorded calls" \
+    && expect_contains "$calls" "-testLanguage de -testRegion DE" "the recorded calls" \
+    && expect_contains "$calls" "screenshot locale de_DE" "the runner environment" \
+    && expect_contains "$calls" '"Zoom":"Test translation"' "the runner translations"; then pass; fi
+
 run_script "screenshots refuses another owner's prepared device" \
     "$screenshots_light" --prepared-device "$pro_udid" --pool-owner another-session
 if expect_status 2 \
@@ -2586,6 +2604,52 @@ run_script "screenshots accepts a fitted App Store frame" \
     "$repository_root/Scripts/lib/screenshots.sh" "$fit_work/inner-portrait.png"
 if expect_status 0; then pass; fi
 
+# A green route on a loading grid is not a ready watch map. Make three maps
+# with the same route: loaded terrain, no terrain, and a substantial missing
+# tile band. None includes the watch's title or buttons in the sampled area.
+cat > "$fit_work/watch-map.swift" <<'SWIFT'
+import CoreGraphics
+import Foundation
+import ImageIO
+import UniformTypeIdentifiers
+
+let directory = URL(fileURLWithPath: CommandLine.arguments[1])
+for name in ["loaded", "grid", "partial"] {
+    let context = CGContext(
+        data: nil, width: 422, height: 514, bitsPerComponent: 8, bytesPerRow: 0,
+        space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+    )!
+    let grid = CGColor(red: 0.16, green: 0.18, blue: 0.19, alpha: 1)
+    let terrain = CGColor(red: 0.12, green: 0.2, blue: 0.3, alpha: 1)
+    context.setFillColor(name == "grid" ? grid : terrain)
+    context.fill(CGRect(x: 0, y: 0, width: 422, height: 514))
+    if name == "partial" {
+        context.setFillColor(grid)
+        context.fill(CGRect(x: 0, y: 200, width: 422, height: 80))
+    }
+    context.setStrokeColor(CGColor(red: 0, green: 0.6, blue: 0.2, alpha: 1))
+    context.setLineWidth(8)
+    context.move(to: CGPoint(x: 200, y: 100))
+    context.addLine(to: CGPoint(x: 240, y: 400))
+    context.strokePath()
+    let url = directory.appendingPathComponent("watch-\(name).png")
+    let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil)!
+    CGImageDestinationAddImage(destination, context.makeImage()!, nil)
+    guard CGImageDestinationFinalize(destination) else { fatalError("cannot write map fixture") }
+}
+SWIFT
+swift "$fit_work/watch-map.swift" "$fit_work"
+watch_map_check="$repository_root/Scripts/lib/watch-map-readiness.swift"
+run_script "watch map readiness accepts loaded terrain" swift "$watch_map_check" "$fit_work/watch-loaded.png"
+if expect_status 0; then pass; fi
+for incomplete in grid partial; do
+    run_script "watch map readiness rejects $incomplete tiles despite the visible route" \
+        swift "$watch_map_check" "$fit_work/watch-$incomplete.png"
+    if expect_status 1; then pass; fi
+done
+run_script "watch map readiness rejects an unreadable capture" swift "$watch_map_check" "$fit_work/missing.png"
+if expect_status 2; then pass; fi
+
 run_script "screenshots rejects a capture from a device with the wrong dimensions" \
     bash -c 'source "$1"; fit_screenshot_frame "$2"' _ \
     "$repository_root/Scripts/lib/screenshots.sh" "$fit_work/phone.png"
@@ -2632,12 +2696,84 @@ if expect_status 1 \
     && expect_contains "$output" "FAILED — not shot: 05" "the output" \
     && expect_absent "$output" "not shot: 03" "the output"; then
     if [[ "$passed_selections" == 1 && "$failed_selections" == 2 \
-        && -f "$work/screens-out/03-nearby-trails.png" && ! -f "$work/screens-out/05-recording-a-hike.png" ]]; then
+        && -f "$work/screens-out/iphone_18_pro_max_en_ie_$(date -u +%Y_%m_%d)/light/03-nearby-trails.png" \
+        && ! -f "$work/screens-out/iphone_18_pro_max_en_ie_$(date -u +%Y_%m_%d)/light/05-recording-a-hike.png" ]]; then
         pass
     else
         fail "expected one passing-frame selection and two failed-frame selections; got $passed_selections/$failed_selections" \
             "$output"
     fi
+fi
+
+STUB_SCREENSHOT_RESULTS="$work/screens-results.json" STUB_SCREENSHOT_ATTACHMENTS="$screens_attachments" \
+    run_script "screenshots keeps both appearances in separate directories of one clean run" \
+    "$repository_root/Scripts/screenshots.sh" --frame 3 --no-photos --no-retry --device "$pro_udid" \
+    --derived-data "$screens_dd" --output "$work/screens-out"
+screens_set="$work/screens-out/iphone_18_pro_max_en_ie_$(date -u +%Y_%m_%d)"
+if expect_status 0; then
+    if [[ -f "$screens_set/light/03-nearby-trails.png" \
+        && -f "$screens_set/dark/03-nearby-trails-dark.png" ]]; then
+        pass
+    else
+        fail "expected separate light and dark PNGs from the combined capture" "$output"
+    fi
+fi
+
+# A new capture removes every stale artifact, including old subdirectories
+# and contact sheets. Appending keeps other sets and cleans only this one.
+screens_output="$work/raw-captures"
+mkdir -p "$screens_output/old-set"
+screens_output="$(cd "$screens_output" && pwd -P)"
+touch "$screens_output/summary.png" "$screens_output/old-set/old.png"
+run_script "screenshot output starts clean and includes device, pose, locale and date" \
+    bash -c 'source "$1"; repository_root="$2"; screenshot_output_directory "$3" "iPhone Duo" de_DE open_landscape light false' _ \
+    "$repository_root/Scripts/lib/screenshot-output.sh" "$repository_root" "$screens_output"
+german_set="$screens_output/iphone_duo_open_landscape_de_de_$(date -u +%Y_%m_%d)"
+if expect_status 0; then
+    if [[ "$output" == "$german_set/light" && -d "$output" \
+        && ! -e "$screens_output/summary.png" && ! -e "$screens_output/old-set" ]]; then
+        pass
+    else
+        fail "expected an empty named capture directory and no old output" "$output"
+    fi
+fi
+touch "$german_set/light/01-current.png"
+mkdir -p "$german_set/dark"
+touch "$german_set/dark/stale.png"
+run_script "screenshot append preserves other appearances and replaces the selected one" \
+    bash -c 'source "$1"; repository_root="$2"; screenshot_output_directory "$3" "iPhone Duo" de_DE open_landscape dark true' _ \
+    "$repository_root/Scripts/lib/screenshot-output.sh" "$repository_root" "$screens_output"
+if expect_status 0; then
+    if [[ -f "$german_set/light/01-current.png" && ! -e "$german_set/dark/stale.png" ]]; then pass
+    else fail "expected the light frame to survive and the stale dark frame to be removed"; fi
+fi
+run_script "screenshot append keeps English and German in different directories" \
+    bash -c 'source "$1"; repository_root="$2"; screenshot_output_directory "$3" "iPhone Duo" en_IE open_landscape light true' _ \
+    "$repository_root/Scripts/lib/screenshot-output.sh" "$repository_root" "$screens_output"
+if expect_status 0; then
+    if [[ "$output" == "$screens_output/iphone_duo_open_landscape_en_ie_$(date -u +%Y_%m_%d)/light" \
+        && -f "$german_set/light/01-current.png" ]]; then pass
+    else fail "expected a separate English directory with the German frame preserved" "$output"; fi
+fi
+fake_checkout="$work/output-safety-checkout"
+mkdir -p "$fake_checkout/Screenshots/Photos"
+touch "$fake_checkout/keep" "$fake_checkout/Screenshots/Photos/keep.jpg"
+for unsafe in "$fake_checkout" "$fake_checkout/Screenshots/Photos" "$work"; do
+    run_script "screenshot output refuses a checkout, its inputs and its parent" \
+        bash -c 'source "$1"; repository_root="$2"; screenshot_output_directory "$3" iPhone en_IE "" light false' _ \
+        "$repository_root/Scripts/lib/screenshot-output.sh" "$fake_checkout" "$unsafe"
+    if expect_status 2; then
+        if [[ -f "$fake_checkout/keep" && -f "$fake_checkout/Screenshots/Photos/keep.jpg" ]]; then pass
+        else fail "unsafe output cleanup removed an input"; fi
+    fi
+done
+ln -s "$german_set" "$work/capture-link"
+run_script "screenshot output refuses a symbolic link before cleaning it" \
+    bash -c 'source "$1"; repository_root="$2"; screenshot_output_directory "$3" iPhone en_IE "" light false' _ \
+    "$repository_root/Scripts/lib/screenshot-output.sh" "$repository_root" "$work/capture-link"
+if expect_status 2; then
+    if [[ -f "$german_set/light/01-current.png" ]]; then pass
+    else fail "a linked capture was cleaned"; fi
 fi
 
 # A frame attached before a test fails or crashes is never an upload frame,
