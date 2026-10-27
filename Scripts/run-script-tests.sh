@@ -37,8 +37,8 @@
 # view ran its body in which step of which test, and why, and a table misread
 # is a confident wrong answer about the render path rather than an error.
 #
-# `xcrun`, `xcodebuild`, `swiftlint` and `periphery` are replaced with
-# recording stubs on PATH and the scripts are run for real against them.
+# `xcrun`, `xcodebuild`, `swiftlint`, `periphery` and `hinge` are replaced
+# with recording stubs on PATH and the scripts are run for real against them.
 # Nothing is built, nothing is booted, no simulator on this machine is touched,
 # and no file in the working tree is rewritten.
 #
@@ -55,7 +55,7 @@ usage() {
 Usage: Scripts/run-script-tests.sh [--verbose]
 
 Runs the repository's shell scripts against stubbed
-xcrun/xcodebuild/swiftlint/periphery and asserts what they sent where.
+xcrun/xcodebuild/swiftlint/periphery/hinge and asserts what they sent where.
 
 Options:
   --verbose       Print each script's own output as it runs
@@ -286,7 +286,27 @@ printf '%s' "${STUB_PERIPHERY_OUTPUT:-* No unused code detected.}"
 exit "${STUB_PERIPHERY_STATUS:-0}"
 STUB
 
+# Records every hinge invocation. `hinge -v` answers with STUB_HINGE_VERSION,
+# the oldest release .hinge-version accepts unless a case says otherwise, and
+# `set` fails the way hinge does when the angle never arrives if a case sets
+# STUB_HINGE_ANGLE_FAILS. A machine without hinge is OPENHIKES_HINGE naming a
+# path where there is none.
+cat > "$stub_bin/hinge" <<'STUB'
+#!/usr/bin/env bash
+printf 'hinge %s\n' "$*" >> "$STUB_CALL_LOG"
+if [[ "${1:-}" == "-v" ]]; then
+    printf '%s\n' "$STUB_HINGE_VERSION"
+    exit 0
+fi
+for degrees; do :; done
+if [[ " $* " == *" set "* && -n "${STUB_HINGE_ANGLE_FAILS:-}" ]]; then
+    echo "hinge_helper: the hinge angle did not reach $degrees.0 within 1.0 s" >&2
+    exit 1
+fi
+STUB
+
 chmod +x "$stub_bin"/*
+export STUB_HINGE_VERSION="$(cat "$repository_root/.hinge-version")"
 
 # Two booted devices, so `simctl booted` would have to guess, plus a shutdown
 # device sharing a name with a booted one across runtimes and a watchOS device
@@ -2233,12 +2253,12 @@ fi
 echo
 echo "iPhone Duo pose"
 
-# Scripts/duo-pose.sh posts a private HID event from inside the simulator and
-# reads the display state back, and the second half is what these pin: a fold
-# that did not happen must be an error. A prebuilt "helper" path stands in for
-# the one it would compile, so nothing here builds or spawns anything real.
+# Scripts/duo-pose.sh has hinge post a private HID event from inside the
+# simulator and reads the display state back, and the second half is what
+# these pin: a fold that did not happen must be an error, and the error must
+# say whether the angle or the display is what failed. The stubbed hinge
+# records what it is asked, so nothing here builds or spawns anything real.
 duo_pose="$repository_root/Scripts/duo-pose.sh"
-export OPENHIKES_DUO_POSE_HELPER="$work/duo-pose-helper"
 export OPENHIKES_DUO_POSE_SETTLE_SECONDS=1
 export OPENHIKES_DUO_POSE_TURN_SECONDS=1
 export STUB_DEVICES="$work/devices-two-booted.txt"
@@ -2257,14 +2277,14 @@ run_script "duo-pose refuses an orientation it does not know" \
     "$duo_pose" open --device "$pro_udid" --orientation sideways
 if expect_status 2 \
     && expect_contains "$output" "Unknown orientation: sideways" "the error" \
-    && expect_absent "$calls" "simctl spawn" "the recorded calls"; then
+    && expect_absent "$calls" "hinge -d" "the recorded calls"; then
     pass
 fi
 
 run_script "duo-pose refuses a device with one display" "$duo_pose" open --device "$pro_udid"
 if expect_status 1 \
     && expect_contains "$output" "it is not an iPhone Duo" "the error" \
-    && expect_absent "$calls" "simctl spawn" "the recorded calls"; then
+    && expect_absent "$calls" "hinge -d" "the recorded calls"; then
     pass
 fi
 
@@ -2273,26 +2293,112 @@ STUB_DISPLAYS="$work/displays-open.json" \
     run_script "duo-pose opens the hinge to 180° and reads the inner display back" \
     "$duo_pose" open --device "$pro_udid"
 if expect_status 0 \
-    && expect_contains "$calls" "simctl spawn $pro_udid $work/duo-pose-helper hinge 180" "the recorded calls" \
-    && expect_absent "$calls" "orientation" "the recorded calls" \
+    && expect_contains "$calls" "hinge -d $pro_udid -t 1 set 180" "the recorded calls" \
+    && expect_absent "$calls" " orient " "the recorded calls" \
+    && expect_absent "$output" "could not confirm" "the output" \
     && expect_contains "$output" "open, the inner display showing, portrait" "the output"; then
     pass
 fi
 
 # A post that does not take is tried again by way of half-open, which is a
 # change from any angle; only when that does not take either is it an error.
+# hinge confirmed every angle, so the error blames the display, not the event.
 duo_displays true false rot0 > "$work/displays-closed.json"
 STUB_DISPLAYS="$work/displays-closed.json" \
-    run_script "duo-pose tries half-open, then fails when the inner display never becomes active" \
+    run_script "duo-pose tries half-open, then says the simulator stopped following the hinge" \
     "$duo_pose" open --device "$pro_udid"
-unfolds="$(printf '%s\n' "$calls" | grep -c "duo-pose-helper hinge 180" || true)"
+unfolds="$(printf '%s\n' "$calls" | grep -c "set 180" || true)"
 if expect_status 1 \
-    && expect_contains "$output" "The inner display did not become active" "the error"; then
-    if [[ "$unfolds" == 2 && "$(call_line "hinge 90")" -gt "$(call_line "hinge 180")" ]]; then
+    && expect_contains "$output" "The hinge reached 180°, but the inner display did not become active" \
+        "the error" \
+    && expect_contains "$output" "stopped following the hinge" "the error"; then
+    if [[ "$unfolds" == 2 && "$(call_line "set 90")" -gt "$(call_line "set 180")" ]]; then
         pass
     else
         fail "expected 180°, then 90°, then 180° again" "$calls"
     fi
+fi
+
+# An angle hinge could not set, and a display that never changed: the event is
+# what failed, so the error carries hinge's own word and says where a newer
+# hinge would come from, rather than blaming the simulator.
+STUB_HINGE_ANGLE_FAILS=1 STUB_DISPLAYS="$work/displays-closed.json" \
+    run_script "duo-pose blames the event when the angle never arrives" \
+    "$duo_pose" open --device "$pro_udid"
+if expect_status 1 \
+    && expect_contains "$output" "hinge failed to set the angle to 180°" "the error" \
+    && expect_contains "$output" "did not reach 180.0" "the error" \
+    && expect_contains "$output" "brew upgrade hinge" "the error" \
+    && expect_absent "$output" "stopped following" "the error"; then
+    pass
+fi
+
+# The other way round, as when only hinge's reading of the angle breaks: the
+# display took over, and a frame is shot on the display, so the pose stands —
+# with a word about the angle.
+STUB_HINGE_ANGLE_FAILS=1 STUB_DISPLAYS="$work/displays-open.json" \
+    run_script "duo-pose takes a fold the display shows, warning that the angle went unconfirmed" \
+    "$duo_pose" open --device "$pro_udid"
+if expect_status 0 \
+    && expect_contains "$output" "could not confirm the angle" "the warning" \
+    && expect_contains "$output" "did not reach 180.0" "the warning" \
+    && expect_contains "$output" "open, the inner display showing, portrait" "the output"; then
+    pass
+fi
+
+# hinge is installed rather than kept here, and only opening needs it. Without
+# it a Duo cannot be opened, and the error says what to install rather than
+# posting nothing and waiting.
+OPENHIKES_HINGE="$work/no-hinge" STUB_DISPLAYS="$work/displays-closed.json" \
+    run_script "duo-pose says what to install when it has to open a Duo without hinge" \
+    "$duo_pose" open --device "$pro_udid"
+if expect_status 1 \
+    && expect_contains "$output" "cannot be opened: hinge is not installed" "the error" \
+    && expect_contains "$output" "brew install artemnovichkov/tap/hinge" "the error" \
+    && expect_absent "$calls" "hinge -" "the recorded calls"; then
+    pass
+fi
+
+# A simulator boots closed, so a closed pose needs no fold: without hinge it is
+# read back, and holds when the cover is already showing, upright.
+OPENHIKES_HINGE="$work/no-hinge" STUB_DISPLAYS="$work/displays-closed.json" \
+    run_script "duo-pose reads a closed Duo back without hinge" \
+    "$duo_pose" closed --device "$pro_udid"
+if expect_status 0 \
+    && expect_contains "$output" "closed, the cover display showing, portrait" "the output"; then
+    pass
+fi
+
+OPENHIKES_HINGE="$work/no-hinge" STUB_DISPLAYS="$work/displays-open.json" \
+    run_script "duo-pose says what to install when a closed pose needs a fold after all" \
+    "$duo_pose" closed --device "$pro_udid"
+if expect_status 1 \
+    && expect_contains "$output" "The cover display is not active, and closing the Duo needs hinge" \
+        "the error" \
+    && expect_contains "$output" "brew install artemnovichkov/tap/hinge" "the error"; then
+    pass
+fi
+
+# .hinge-version is a floor, not a pin: an older hinge is refused before it is
+# asked to fold anything, and a newer one is used as it is — compared as
+# versions, so 0.10.0 is the newer of it and 0.3.0.
+STUB_HINGE_VERSION=0.2.0 STUB_DISPLAYS="$work/displays-closed.json" \
+    run_script "duo-pose refuses a hinge older than .hinge-version" \
+    "$duo_pose" open --device "$pro_udid"
+if expect_status 1 \
+    && expect_contains "$output" "hinge 0.2.0 is older than $STUB_HINGE_VERSION" "the error" \
+    && expect_contains "$output" "brew upgrade hinge" "the error" \
+    && expect_absent "$calls" "hinge -d" "the recorded calls"; then
+    pass
+fi
+
+STUB_HINGE_VERSION=0.10.0 STUB_DISPLAYS="$work/displays-open.json" \
+    run_script "duo-pose uses a hinge newer than .hinge-version as it is" \
+    "$duo_pose" open --device "$pro_udid"
+if expect_status 0 \
+    && expect_contains "$calls" "hinge -d $pro_udid -t 1 set 180" "the recorded calls" \
+    && expect_contains "$output" "open, the inner display showing, portrait" "the output"; then
+    pass
 fi
 
 # Open, but on its side: every device orientation is tried, and the run fails
@@ -2302,7 +2408,7 @@ duo_displays false true rot90 > "$work/displays-sideways.json"
 STUB_DISPLAYS="$work/displays-sideways.json" \
     run_script "duo-pose fails when the display never turns the way it was asked" \
     "$duo_pose" open --device "$pro_udid"
-turns="$(printf '%s\n' "$calls" | grep -c "duo-pose-helper orientation" || true)"
+turns="$(printf '%s\n' "$calls" | grep -c " orient " || true)"
 if expect_status 1 \
     && expect_contains "$output" "The inner display did not turn to portrait" "the error"; then
     if [[ "$turns" == 4 ]]; then
@@ -2318,7 +2424,7 @@ STUB_DISPLAYS="$work/displays-sideways.json" \
     run_script "duo-pose takes the inner display in landscape the way it opens" \
     "$duo_pose" open --device "$pro_udid" --orientation landscape
 if expect_status 0 \
-    && expect_absent "$calls" "duo-pose-helper orientation" "the recorded calls" \
+    && expect_absent "$calls" " orient " "the recorded calls" \
     && expect_contains "$output" "open, the inner display showing, landscape" "the output"; then
     pass
 fi
@@ -2335,7 +2441,22 @@ if expect_status 1 \
     && expect_absent "$calls" "xcodebuild" "the recorded calls"; then
     pass
 fi
-unset OPENHIKES_DUO_POSE_HELPER OPENHIKES_DUO_POSE_SETTLE_SECONDS OPENHIKES_DUO_POSE_TURN_SECONDS
+
+# Opening needs hinge, and a machine without it skips an open set: saying so,
+# and before a device is erased or anything is built.
+OPENHIKES_HINGE="$work/no-hinge" \
+    run_script "screenshots skips an open Duo set without hinge, before touching a device" \
+    "$screenshots_light" --frame 7 --pose open --no-photos --device "$pro_udid" \
+    --derived-data "$screens_dd" --output "$work/screens-out"
+if expect_status 0 \
+    && expect_contains "$output" "skipped, the open iPhone Duo needs hinge: hinge is not installed" \
+        "the output" \
+    && expect_absent "$calls" "simctl erase" "the recorded calls" \
+    && expect_absent "$calls" "simctl create" "the recorded calls" \
+    && expect_absent "$calls" "xcodebuild" "the recorded calls"; then
+    pass
+fi
+unset OPENHIKES_DUO_POSE_SETTLE_SECONDS OPENHIKES_DUO_POSE_TURN_SECONDS
 
 echo
 echo "App Store frame fitting"

@@ -4,17 +4,24 @@
 # then showing the app to portrait or landscape.
 #
 # Xcode 27.1 can fold the Duo only by hand, in Device Hub; neither simctl nor
-# devicectl has a hinge command. This posts the event Device Hub's own hinge
-# slider posts, from inside the simulator — see Scripts/lib/duo-pose.m — and
-# that is the whole of why a screenshot run or a UI test can reach the inner
-# display at all. Scripts/lib/screenshots.sh calls it for `--pose`.
+# devicectl has a hinge command. hinge (https://github.com/artemnovichkov/hinge)
+# posts the event Device Hub's own hinge slider posts, from inside the
+# simulator, and that is the whole of why a screenshot run or a UI test can
+# reach the inner display at all. It is an optional tool, found the way
+# Scripts/lib/hinge.sh says, and only opening needs it: a simulator boots
+# closed, so without hinge a closed pose is read back rather than posted.
+# Scripts/lib/screenshots.sh calls this for `--pose`.
 #
 # **Every change is read back.** The event goes through undocumented
 # interfaces, and the failure they have when a release moves them is the silent
-# kind: the post succeeds and nothing folds. So the display devicectl reports
-# as active is waited for after the hinge moves, and the orientation it reports
-# after every turn, and a pose that did not happen is an error rather than a
-# run of frames shot on the wrong screen.
+# kind: the post succeeds and nothing folds. hinge returns once CoreMotion
+# reports the new angle, and this then waits for the display devicectl reports
+# as active, and for the orientation it reports after every turn. The two
+# readings fail apart, and the error says which: an angle that never arrives
+# means the event has changed, and an angle that arrives with no display behind
+# it means the simulator has stopped following the hinge. Either way a pose
+# that did not happen is an error rather than a run of frames shot on the wrong
+# screen.
 #
 # **One fold from a fresh boot is the move to rely on.** A simulator boots
 # closed, and a screenshot run starts from a fresh clone, so `--pose open` is
@@ -27,20 +34,25 @@
 # the displays, swept or not. The read-back reports it; `xcrun simctl
 # shutdown` and `boot` bring the device back closed.
 #
-# The helper is built once per Xcode, with Xcode's own clang, and kept in
-# ~/Library/Caches/OpenHikes/duo-pose.
+# **The device is always named.** Given none, hinge folds the only booted
+# iPhone Duo and refuses to choose between several; this passes it the one it
+# was given, so the pose lands there whatever else is booted.
+#
+# hinge builds its in-simulator helper once per Xcode, with Xcode's own clang,
+# and keeps it in ~/.cache/hinge.
 
 set -euo pipefail
 
 scripts="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/simulator.sh
 source "$scripts/lib/simulator.sh"
+# shellcheck source=lib/hinge.sh
+source "$scripts/lib/hinge.sh"
 
-helper_source="$scripts/lib/duo-pose.m"
-cache_dir="${OPENHIKES_DUO_POSE_CACHE:-${HOME:-/tmp}/Library/Caches/OpenHikes/duo-pose}"
-# How long a fold may take to show in the display state. It is instant in the
-# simulator; this is the time a loaded machine gets before it is called a
-# failure.
+# How long each half of a fold may take: hinge's wait for CoreMotion to report
+# the angle, then the wait for the display state to show it. Both are instant
+# in the simulator; this is the time a loaded machine gets before it is called
+# a failure.
 settle_seconds="${OPENHIKES_DUO_POSE_SETTLE_SECONDS:-10}"
 # How long one device orientation is given to turn the display. A turn
 # animates for about half a second, and an orientation that turns this display
@@ -137,26 +149,20 @@ if (( $(displays | wc -l) < 2 )); then
     exit 1
 fi
 
-# Builds the helper for this Xcode, once: keyed on its source and on the
-# developer directory, so a new Xcode or a changed helper builds afresh.
-helper_binary() {
-    local key binary
-    key="$( { cat "$helper_source"; xcode-select -p; } | shasum -a 256 | cut -c1-12)"
-    binary="$cache_dir/duo-pose-$key"
-    if [[ ! -x "$binary" ]]; then
-        mkdir -p "$cache_dir"
-        xcrun -sdk iphonesimulator clang -fobjc-arc -O2 -arch "$(uname -m)" \
-            -mios-simulator-version-min=17.0 -framework Foundation -framework IOKit \
-            "$helper_source" -o "$binary.partial"
-        codesign -f -s - "$binary.partial" >/dev/null
-        mv -f "$binary.partial" "$binary"
+# Only opening needs hinge. Without it, a closed pose is read back rather than
+# posted, and `without_hinge` says what to install should it need a fold or a
+# turn after all.
+hinge=""
+without_hinge=""
+if found="$(hinge_command)"; then
+    hinge="$found"
+else
+    without_hinge="$found"
+    if [[ "$pose" == open ]]; then
+        echo "$device cannot be opened: $without_hinge" >&2
+        exit 1
     fi
-    printf '%s\n' "$binary"
-}
-# A helper already built, used as it is: Scripts/run-script-tests.sh's seam,
-# so that no case compiles anything. Nothing else sets it.
-helper="${OPENHIKES_DUO_POSE_HELPER:-}"
-[[ -n "$helper" ]] || helper="$(helper_binary)"
+fi
 
 # Whether a display rotation is the orientation asked for. Landscape is
 # either way round; portrait is the right way up.
@@ -185,19 +191,59 @@ wait_for_display() {
     return 1
 }
 
+# What hinge said when it last failed, kept for the report.
+hinge_said=""
+quote_hinge() {
+    printf '%s\n' "$hinge_said" | sed 's/^/  /' >&2
+}
+
+# Sets the hinge to $1 degrees. hinge returns once CoreMotion reports the
+# angle, so `angle_reached` says whether the event moved the hinge at all.
+angle_reached=false
+set_hinge() {
+    local said
+    if said="$("$hinge" -d "$udid" -t "$settle_seconds" set "$1" 2>&1)"; then
+        angle_reached=true
+    else
+        angle_reached=false
+        hinge_said="$said"
+    fi
+}
+
 if [[ "$pose" == open ]]; then screen="inner"; degrees=180; else screen="cover"; degrees=0; fi
 # Half-open, which shows the inner display: the way round a post that did not
 # take (see the header).
 half_open_degrees=90
-xcrun simctl spawn "$udid" "$helper" hinge "$degrees"
-if ! wait_for_display "$settle_seconds" "$screen" any; then
-    xcrun simctl spawn "$udid" "$helper" hinge "$half_open_degrees"
-    wait_for_display "$settle_seconds" inner any || true
-    xcrun simctl spawn "$udid" "$helper" hinge "$degrees"
+if [[ -n "$hinge" ]]; then
+    set_hinge "$degrees"
     if ! wait_for_display "$settle_seconds" "$screen" any; then
-        echo "The $screen display did not become active after setting the hinge to ${degrees}°." >&2
-        exit 1
+        set_hinge "$half_open_degrees"
+        wait_for_display "$settle_seconds" inner any || true
+        set_hinge "$degrees"
+        if ! wait_for_display "$settle_seconds" "$screen" any; then
+            if [[ "$angle_reached" == true ]]; then
+                echo "The hinge reached ${degrees}°, but the $screen display did not become active:" \
+                    "the simulator has stopped following the hinge. \`xcrun simctl shutdown\` and" \
+                    "\`boot\` bring it back closed." >&2
+            else
+                echo "The $screen display did not become active, and hinge failed to set the angle" \
+                    "to ${degrees}°:" >&2
+                quote_hinge
+                echo "If the angle never arrived, the event Device Hub posts has likely changed in" \
+                    "this Xcode; \`brew upgrade hinge\` brings a newer hinge, if there is one." >&2
+            fi
+            exit 1
+        fi
     fi
+    # The display is what a frame is shot on, so a fold that shows there
+    # stands; an angle hinge could not confirm is still worth a word.
+    if [[ "$angle_reached" == false ]]; then
+        echo "warning: the $screen display is active, but hinge could not confirm the angle:" >&2
+        quote_hinge
+    fi
+elif ! wait_for_display "$settle_seconds" "$screen" any; then
+    echo "The $screen display is not active, and closing the Duo needs hinge: $without_hinge" >&2
+    exit 1
 fi
 
 # The device orientation that turns a display's interface a given way differs
@@ -207,13 +253,23 @@ fi
 # rotation is read back each time. The cover's home screen does not turn at
 # all, like any iPhone's: a landscape cover needs an app in front that does.
 case "$screen:$orientation" in
-    inner:portrait|cover:landscape) device_orientations="landscape-left landscape-right portrait pud" ;;
-    *) device_orientations="portrait pud landscape-left landscape-right" ;;
+    inner:portrait|cover:landscape)
+        device_orientations="landscape-left landscape-right portrait portrait-upside-down" ;;
+    *) device_orientations="portrait portrait-upside-down landscape-left landscape-right" ;;
 esac
 if ! is_wanted_rotation "$(active_display | cut -f2)"; then
+    if [[ -z "$hinge" ]]; then
+        echo "The $screen display is not $orientation, and turning it needs hinge:" \
+            "$without_hinge" >&2
+        exit 1
+    fi
     turned=false
+    hinge_said=""
     for device_orientation in $device_orientations; do
-        xcrun simctl spawn "$udid" "$helper" orientation "$device_orientation"
+        # hinge fails when the device orientation it reads back did not
+        # change, but the display's rotation is what decides here: its word
+        # is kept for the report, and the rotation is read either way.
+        said="$("$hinge" -d "$udid" orient "$device_orientation" 2>&1)" || hinge_said="$said"
         if wait_for_display "$turn_seconds" "$screen" wanted; then
             turned=true
             break
@@ -221,6 +277,9 @@ if ! is_wanted_rotation "$(active_display | cut -f2)"; then
     done
     if [[ "$turned" == false ]]; then
         echo "The $screen display did not turn to $orientation." >&2
+        if [[ -n "$hinge_said" ]]; then
+            quote_hinge
+        fi
         exit 1
     fi
 fi

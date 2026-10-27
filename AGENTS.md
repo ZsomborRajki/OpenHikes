@@ -235,6 +235,20 @@ either: the second run waits silently on the first run's build lock.
   state back; one unfold from cold is the move to rely on.
   `--orientation landscape` leaves it the way it unfolds, 951 × 669: a window
   wider than tall, so the map screen draws its side panel.
+- **Opening it takes hinge**
+  ([artemnovichkov/hinge](https://github.com/artemnovichkov/hinge)), an
+  optional tool that posts the event Device Hub's hinge slider posts. It is
+  installed rather than kept here, so a release reaches the scripts with
+  `brew upgrade`, and `.hinge-version` is the oldest one they accept
+  (`Scripts/lib/hinge.sh`).
+  - Only opening needs it. Without hinge, `Scripts/duo-pose.sh closed` reads
+    the cover back, and an open screenshot set is skipped with a message
+    saying so.
+  - Give hinge the pool device every time (`-d "$udid"`). Without `-d` it
+    folds the only booted iPhone Duo, which on a shared machine can be
+    another session's. Its Claude Code plugin
+    (`/plugin marketplace add artemnovichkov/hinge`) teaches an agent the
+    same commands.
 - **XCTest sees it through the cover.** `XCUIScreen.main` is the cover display
   open or closed (the inner one is the other `XCUIScreen.screens` entry), and
   on the inner display turned sideways `app.frame` stays portrait while
@@ -367,8 +381,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
   occurrence.
 - **SwiftLint walks dot-directories.** `excluded: "**/.*"` keeps a worktree or
   a scratch copy inside the checkout out of the lint.
-- **Optional tools** run if installed
-  (`brew install xcbeautify periphery xcode-build-server`):
+- **Optional tools** run if installed (`brew install xcbeautify periphery
+  xcode-build-server artemnovichkov/tap/hinge`):
   - `xcbeautify` formats `xcodebuild` output through
     `Scripts/lib/xcodebuild-output.sh`. It prints nothing for output it cannot
     parse (crashes, hangs, TSan reports), so the UI scripts keep a raw log. In
@@ -379,6 +393,7 @@ a change to recording, the map, the sheet or the render path; the PR template,
     not verdicts.
   - `xcode-build-server config -project OpenHikes.xcodeproj -scheme OpenHikes`
     writes the gitignored `buildServer.json` that `sourcekit-lsp` uses.
+  - `hinge` opens an iPhone Duo simulator; see *The iPhone Duo*.
 - **Hooks and formatting.** `Scripts/install-git-hooks.sh` installs an opt-in
   pre-push lint hook. There is no formatter.
 

@@ -376,11 +376,14 @@ system's models, then clones.
 
 **Opening it.** A simulator boots closed, and Xcode 27.1 opens a Duo only by
 hand, in Device Hub. `--pose open` runs `Scripts/duo-pose.sh` on the clean
-device, which posts the event Device Hub's hinge slider posts and reads the
-display state back: open, with the inner display upright — or on its side
-with `--orientation landscape`, the way it unfolds — or the run stops. One
-unfold from cold is what that script can be relied on for; see its header for
-the one that did not take, and what folding back and forth did.
+device, which has hinge post the event Device Hub's hinge slider posts and
+reads the display state back: open, with the inner display upright — or on
+its side with `--orientation landscape`, the way it unfolds — or the run
+stops. hinge is an optional tool (*The iPhone Duo* in `AGENTS.md`), and on a
+machine without it an open set is skipped, with a message saying so, before a
+simulator is touched. One unfold from cold is what that script can be relied
+on for; see its header for the one that did not take, and what folding back
+and forth did.
 
 **Landscape is the side panel.** The inner display on its side is a window
 wider than tall, so the map screen draws the sheet's contents as a panel
