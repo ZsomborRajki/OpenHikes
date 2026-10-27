@@ -49,6 +49,9 @@
 set -euo pipefail
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Pin fixture paths once; the suite may itself cross UTC midnight.
+export OPENHIKES_SCREENSHOT_DATE=2026-10-27
+screenshot_test_date="${OPENHIKES_SCREENSHOT_DATE//-/_}"
 
 usage() {
     cat <<'EOF'
@@ -2639,16 +2642,95 @@ for name in ["loaded", "grid", "partial"] {
 }
 SWIFT
 swift "$fit_work/watch-map.swift" "$fit_work"
-watch_map_check="$repository_root/Scripts/lib/watch-map-readiness.swift"
-run_script "watch map readiness accepts loaded terrain" swift "$watch_map_check" "$fit_work/watch-loaded.png"
+watch_map_check="$fit_work/watch-map-readiness"
+swiftc -O -o "$watch_map_check" "$repository_root/Scripts/lib/watch-map-readiness.swift"
+run_script "watch map readiness accepts loaded terrain" "$watch_map_check" "$fit_work/watch-loaded.png"
 if expect_status 0; then pass; fi
 for incomplete in grid partial; do
     run_script "watch map readiness rejects $incomplete tiles despite the visible route" \
-        swift "$watch_map_check" "$fit_work/watch-$incomplete.png"
+        "$watch_map_check" "$fit_work/watch-$incomplete.png"
     if expect_status 1; then pass; fi
 done
-run_script "watch map readiness rejects an unreadable capture" swift "$watch_map_check" "$fit_work/missing.png"
+run_script "watch map readiness rejects an unreadable capture" "$watch_map_check" "$fit_work/missing.png"
 if expect_status 2; then pass; fi
+
+# Exercise camera/status-bar changes with a simulated poll clock; no watch
+# simulator or wall-clock sleep belongs in a script gate.
+cat > "$work/watch-poll-fixture.sh" <<'BASH'
+#!/usr/bin/env bash
+set -euo pipefail
+source "$1"
+derived_data="$2"
+mode="$3"
+mkdir -p "$derived_data"
+map_checker="$derived_data/checker"
+cat > "$map_checker" <<'CHECKER'
+#!/bin/bash
+if [[ "$(cat "$1")" == grid ]]; then exit 1; fi
+cat "$1"
+CHECKER
+chmod +x "$map_checker"
+udid=stub-watch
+map_settle_seconds=12
+settle_seconds=4
+polls=0
+SECONDS=0
+xcrun() {
+    polls=$((polls + 1))
+    local pixels=ready-a
+    if [[ "$mode" == timeout || $polls -le 2 ]]; then pixels=grid
+    elif (( polls >= 5 )); then pixels=ready-b
+    fi
+    printf '%s\n' "$pixels" > "${!#}"
+}
+sleep() { SECONDS=$((SECONDS + $1)); }
+status=0
+wait_for_map || status=$?
+printf 'polls=%s\n' "$polls"
+cat "$derived_data/watch-map-readiness.png"
+exit "$status"
+BASH
+run_script "watch map capture waits through loading and a later camera or status-bar change" \
+    bash "$work/watch-poll-fixture.sh" "$repository_root/Scripts/lib/watch-screenshot-map.sh" \
+    "$work/watch-poll" ready
+if expect_status 0 && expect_contains "$output" "polls=7" "the poll count" \
+    && expect_contains "$output" "ready-b" "the final verified frame"; then pass; fi
+run_script "watch map timeout retains the last loading frame as evidence" \
+    bash "$work/watch-poll-fixture.sh" "$repository_root/Scripts/lib/watch-screenshot-map.sh" \
+    "$work/watch-poll" timeout
+if expect_status 1 && expect_contains "$output" "last frame:" "the error" \
+    && expect_contains "$output" "grid" "the retained frame"; then pass; fi
+
+# Renaming or adding a map frame must preserve both warm-up and verification.
+cat > "$work/watch-frame-fixture.sh" <<'BASH'
+#!/usr/bin/env bash
+set -euo pipefail
+source "$1"
+derived_data="$2"
+output_dir="$2/output"
+mkdir -p "$output_dir"
+frames=('01-renamed-map|map|first-map' '02-another-map|map|second-map' '03-figures|0|figures')
+just_paired=false
+udid=stub-watch
+app_bundle_id=stub-bundle
+launch_frame() { printf 'launch %s\n' "$1"; }
+wait_for_pair() { :; }
+wait_for_map() { echo verified; echo verified-map > "$derived_data/watch-map-readiness.png"; }
+xcrun() { if [[ "$*" == *screenshot* ]]; then echo text-frame > "${!#}"; fi; }
+sleep() { if [[ "$1" != 0 ]]; then echo "unexpected blind delay: $1"; return 1; fi; }
+warm_up
+capture
+for shot in "$output_dir"/*.png; do printf '%s: %s\n' "${shot##*/}" "$(cat "$shot")"; done
+BASH
+run_script "watch warm-up and capture verify renamed and additional map frames by metadata" \
+    bash "$work/watch-frame-fixture.sh" "$repository_root/Scripts/lib/watch-screenshot-map.sh" "$work/watch-frames"
+if expect_status 0 \
+    && expect_contains "$output" "01-renamed-map.png: verified-map" "the renamed map" \
+    && expect_contains "$output" "02-another-map.png: verified-map" "the additional map" \
+    && expect_contains "$output" "03-figures.png: text-frame" "the text frame"; then
+    if [[ "$(printf '%s\n' "$output" | grep -c '^verified$')" == 4 ]]; then pass
+    else fail "each map should be verified in warm-up and capture" "$output"; fi
+fi
 
 run_script "screenshots rejects a capture from a device with the wrong dimensions" \
     bash -c 'source "$1"; fit_screenshot_frame "$2"' _ \
@@ -2696,8 +2778,8 @@ if expect_status 1 \
     && expect_contains "$output" "FAILED — not shot: 05" "the output" \
     && expect_absent "$output" "not shot: 03" "the output"; then
     if [[ "$passed_selections" == 1 && "$failed_selections" == 2 \
-        && -f "$work/screens-out/iphone_18_pro_max_en_ie_$(date -u +%Y_%m_%d)/light/03-nearby-trails.png" \
-        && ! -f "$work/screens-out/iphone_18_pro_max_en_ie_$(date -u +%Y_%m_%d)/light/05-recording-a-hike.png" ]]; then
+        && -f "$work/screens-out/iphone_18_pro_max_en_ie_${screenshot_test_date}/light/03-nearby-trails.png" \
+        && ! -f "$work/screens-out/iphone_18_pro_max_en_ie_${screenshot_test_date}/light/05-recording-a-hike.png" ]]; then
         pass
     else
         fail "expected one passing-frame selection and two failed-frame selections; got $passed_selections/$failed_selections" \
@@ -2709,7 +2791,7 @@ STUB_SCREENSHOT_RESULTS="$work/screens-results.json" STUB_SCREENSHOT_ATTACHMENTS
     run_script "screenshots keeps both appearances in separate directories of one clean run" \
     "$repository_root/Scripts/screenshots.sh" --frame 3 --no-photos --no-retry --device "$pro_udid" \
     --derived-data "$screens_dd" --output "$work/screens-out"
-screens_set="$work/screens-out/iphone_18_pro_max_en_ie_$(date -u +%Y_%m_%d)"
+screens_set="$work/screens-out/iphone_18_pro_max_en_ie_${screenshot_test_date}"
 if expect_status 0; then
     if [[ -f "$screens_set/light/03-nearby-trails.png" \
         && -f "$screens_set/dark/03-nearby-trails-dark.png" ]]; then
@@ -2719,48 +2801,82 @@ if expect_status 0; then
     fi
 fi
 
-# A new capture removes every stale artifact, including old subdirectories
-# and contact sheets. Appending keeps other sets and cleans only this one.
+# The first date query is before midnight; a second would be the next day.
+cat > "$stub_bin/date" <<'STUB'
+#!/usr/bin/env bash
+if [[ -n "${STUB_SCREENSHOT_DATE_COUNTER:-}" && "$*" == '-u +%F' ]]; then
+    count=0
+    [[ ! -f "$STUB_SCREENSHOT_DATE_COUNTER" ]] || count="$(cat "$STUB_SCREENSHOT_DATE_COUNTER")"
+    printf '%s\n' "$((count + 1))" > "$STUB_SCREENSHOT_DATE_COUNTER"
+    if (( count == 0 )); then echo 2026-10-27; else echo 2026-10-28; fi
+else
+    exec /bin/date "$@"
+fi
+STUB
+chmod +x "$stub_bin/date"
+OPENHIKES_SCREENSHOT_DATE='' STUB_SCREENSHOT_DATE_COUNTER="$work/date-count" \
+STUB_SCREENSHOT_RESULTS="$work/screens-results.json" STUB_SCREENSHOT_ATTACHMENTS="$screens_attachments" \
+    run_script "both screenshot appearances share the batch date across UTC midnight" \
+    "$repository_root/Scripts/screenshots.sh" --frame 3 --no-photos --no-retry --device "$pro_udid" \
+    --derived-data "$screens_dd" --output "$work/midnight-out"
+midnight_set="$work/midnight-out/iphone_18_pro_max_en_ie_2026_10_27"
+if expect_status 0; then
+    if [[ "$(cat "$work/date-count")" == 1 && -f "$midnight_set/light/03-nearby-trails.png" \
+        && -f "$midnight_set/dark/03-nearby-trails-dark.png" ]]; then pass
+    else fail "expected one UTC date query and both appearances under that date" "$output"; fi
+fi
+
+# Capture destinations may also hold photographs and other personal files.
+# Planning is read-only; preparation removes only the requested frame numbers.
 screens_output="$work/raw-captures"
 mkdir -p "$screens_output/old-set"
 screens_output="$(cd "$screens_output" && pwd -P)"
 touch "$screens_output/summary.png" "$screens_output/old-set/old.png"
-run_script "screenshot output starts clean and includes device, pose, locale and date" \
-    bash -c 'source "$1"; repository_root="$2"; screenshot_output_directory "$3" "iPhone Duo" de_DE open_landscape light false' _ \
+run_script "screenshot path planning preserves unrelated files and creates no capture directory" \
+    bash -c 'source "$1"; repository_root="$2"; screenshot_output_directory "$3" "iPhone Duo" de_DE open_landscape light' _ \
     "$repository_root/Scripts/lib/screenshot-output.sh" "$repository_root" "$screens_output"
-german_set="$screens_output/iphone_duo_open_landscape_de_de_$(date -u +%Y_%m_%d)"
+german_set="$screens_output/iphone_duo_open_landscape_de_de_${screenshot_test_date}"
 if expect_status 0; then
-    if [[ "$output" == "$german_set/light" && -d "$output" \
-        && ! -e "$screens_output/summary.png" && ! -e "$screens_output/old-set" ]]; then
-        pass
-    else
-        fail "expected an empty named capture directory and no old output" "$output"
-    fi
+    if [[ "$output" == "$german_set/light" && ! -e "$output" \
+        && -f "$screens_output/summary.png" && -f "$screens_output/old-set/old.png" ]]; then pass
+    else fail "path planning changed existing output" "$output"; fi
 fi
-touch "$german_set/light/01-current.png"
-mkdir -p "$german_set/dark"
-touch "$german_set/dark/stale.png"
-run_script "screenshot append preserves other appearances and replaces the selected one" \
-    bash -c 'source "$1"; repository_root="$2"; screenshot_output_directory "$3" "iPhone Duo" de_DE open_landscape dark true' _ \
-    "$repository_root/Scripts/lib/screenshot-output.sh" "$repository_root" "$screens_output"
+mkdir -p "$german_set/light" "$german_set/dark"
+touch "$german_set/light/01-current.png" "$german_set/dark/02-current.png" \
+    "$german_set/dark/03-stale.png" "$german_set/dark/notes.txt"
+run_script "targeted screenshot preparation replaces its frame and keeps the rest of the batch" \
+    bash -c 'source "$1"; screenshot_prepare_output "$2" "$3" false 03' _ \
+    "$repository_root/Scripts/lib/screenshot-output.sh" "$screens_output" "$german_set/dark"
 if expect_status 0; then
-    if [[ -f "$german_set/light/01-current.png" && ! -e "$german_set/dark/stale.png" ]]; then pass
-    else fail "expected the light frame to survive and the stale dark frame to be removed"; fi
+    if [[ -f "$german_set/light/01-current.png" && -f "$german_set/dark/02-current.png" \
+        && -f "$german_set/dark/notes.txt" && ! -e "$german_set/dark/03-stale.png" ]]; then pass
+    else fail "targeted preparation changed other frames or personal files"; fi
 fi
-run_script "screenshot append keeps English and German in different directories" \
-    bash -c 'source "$1"; repository_root="$2"; screenshot_output_directory "$3" "iPhone Duo" en_IE open_landscape light true' _ \
+run_script "screenshot paths keep English and German in different directories" \
+    bash -c 'source "$1"; repository_root="$2"; screenshot_output_directory "$3" "iPhone Duo" en_IE open_landscape light' _ \
     "$repository_root/Scripts/lib/screenshot-output.sh" "$repository_root" "$screens_output"
 if expect_status 0; then
-    if [[ "$output" == "$screens_output/iphone_duo_open_landscape_en_ie_$(date -u +%Y_%m_%d)/light" \
+    if [[ "$output" == "$screens_output/iphone_duo_open_landscape_en_ie_${screenshot_test_date}/light" \
         && -f "$german_set/light/01-current.png" ]]; then pass
     else fail "expected a separate English directory with the German frame preserved" "$output"; fi
 fi
+run_script "explicit screenshot cleanup removes marked sets and preserves unowned output" \
+    bash -c 'source "$1"; screenshot_prepare_output "$2" "$2/iphone_en_ie_2026_10_28/light" true 01' _ \
+    "$repository_root/Scripts/lib/screenshot-output.sh" "$screens_output"
+if expect_status 0; then
+    if [[ ! -e "$german_set" && -f "$screens_output/summary.png" \
+        && -f "$screens_output/old-set/old.png" ]]; then pass
+    else fail "explicit cleanup removed unowned output or left a marked set"; fi
+fi
+# Recreate an input for the following refusal checks.
+mkdir -p "$german_set/light"
+touch "$german_set/light/01-current.png"
 fake_checkout="$work/output-safety-checkout"
 mkdir -p "$fake_checkout/Screenshots/Photos"
 touch "$fake_checkout/keep" "$fake_checkout/Screenshots/Photos/keep.jpg"
-for unsafe in "$fake_checkout" "$fake_checkout/Screenshots/Photos" "$work"; do
-    run_script "screenshot output refuses a checkout, its inputs and its parent" \
-        bash -c 'source "$1"; repository_root="$2"; screenshot_output_directory "$3" iPhone en_IE "" light false' _ \
+for unsafe in / // "$HOME" "$fake_checkout" "$fake_checkout/Screenshots/Photos" "$work"; do
+    run_script "screenshot output refuses root, home, a checkout, its inputs and its parent" \
+        bash -c 'source "$1"; repository_root="$2"; screenshot_output_directory "$3" iPhone en_IE "" light' _ \
         "$repository_root/Scripts/lib/screenshot-output.sh" "$fake_checkout" "$unsafe"
     if expect_status 2; then
         if [[ -f "$fake_checkout/keep" && -f "$fake_checkout/Screenshots/Photos/keep.jpg" ]]; then pass
@@ -2769,11 +2885,31 @@ for unsafe in "$fake_checkout" "$fake_checkout/Screenshots/Photos" "$work"; do
 done
 ln -s "$german_set" "$work/capture-link"
 run_script "screenshot output refuses a symbolic link before cleaning it" \
-    bash -c 'source "$1"; repository_root="$2"; screenshot_output_directory "$3" iPhone en_IE "" light false' _ \
+    bash -c 'source "$1"; repository_root="$2"; screenshot_output_directory "$3" iPhone en_IE "" light' _ \
     "$repository_root/Scripts/lib/screenshot-output.sh" "$repository_root" "$work/capture-link"
 if expect_status 2; then
     if [[ -f "$german_set/light/01-current.png" ]]; then pass
     else fail "a linked capture was cleaned"; fi
+fi
+
+preserved_set="$work/screens-out/iphone_18_pro_max_en_ie_${screenshot_test_date}/light"
+mkdir -p "$preserved_set"
+touch "$preserved_set/03-prior.png"
+STUB_DEVICES="$screens_prepared" STUB_XCODEBUILD_STATUS=65 \
+    run_script "a failed screenshot build preserves earlier captures even with --clean" \
+    "$screenshots_light" --frame 3 --clean --no-photos --no-retry --prepared-device "$pro_udid" \
+    --pool-owner screenshot-tests --derived-data "$screens_dd" --output "$work/screens-out"
+if expect_status 1; then
+    if [[ -f "$preserved_set/03-prior.png" ]]; then pass
+    else fail "the failed build erased an earlier capture"; fi
+fi
+STUB_DEVICES="$screens_prepared" \
+    run_script "a screenshot run with nothing to shoot preserves earlier output" \
+    "$screenshots_light" --frame 1 --clean --no-photos --prepared-device "$pro_udid" \
+    --pool-owner screenshot-tests --derived-data "$screens_dd" --output "$work/screens-out"
+if expect_status 0 && expect_contains "$output" "nothing left to shoot" "the skip"; then
+    if [[ -f "$preserved_set/03-prior.png" ]]; then pass
+    else fail "the empty selection erased an earlier capture"; fi
 fi
 
 # A frame attached before a test fails or crashes is never an upload frame,

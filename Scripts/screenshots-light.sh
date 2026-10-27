@@ -2,7 +2,7 @@
 #
 # The App Store screenshot set in light appearance, on a simulator of its own.
 # Writes raw PNGs in a device/locale/date folder under Screenshots/Output.
-# `--frame 03` shoots one frame into a clean appearance directory;
+# `--frame 03` replaces that frame while keeping the rest of the set;
 # `--help` lists the rest. Everything this shares with the dark set, and the
 # reasons for it, is in Scripts/lib/screenshots.sh.
 

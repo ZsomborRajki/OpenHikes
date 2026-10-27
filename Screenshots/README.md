@@ -139,7 +139,8 @@ Scripts/screenshots-light.sh             # the light set
 Scripts/screenshots-dark.sh              # the dark set, files suffixed -dark
 Scripts/screenshots.sh                   # both, one after the other
 Scripts/screenshots-dark.sh --frame 03   # one frame, while debugging it
-Scripts/screenshots.sh --append --locale de_DE  # add the German set
+Scripts/screenshots.sh --locale de_DE     # add the German set
+Scripts/screenshots.sh --clean            # replace previously marked sets
 ```
 
 To use a simulator claimed from the pool, acquire a fresh owner for each batch
@@ -182,17 +183,21 @@ and full bars — *discharging*, since `charged` is a phone on a cable and draws
 a green battery with a bolt through it — pins the locale, grants location and
 photo access, adds the
 stamped photographs, runs `ScreenshotUITests`, and writes the PNGs to
-`Screenshots/Output/`. A new run cleans that output root, including old
-subfolders and summary images. Only raw PNGs are exported, organized as
+`Screenshots/Output/`. Only raw PNGs are exported, organized as
 `iphone_18_pro_max_en_ie_YYYY_MM_DD/light/` and `…/dark/`; a Duo directory also
 names its pose and orientation, such as
-`iphone_duo_open_landscape_de_de_YYYY_MM_DD/`. The date is UTC.
+`iphone_duo_open_landscape_de_de_YYYY_MM_DD/`. The date is UTC, pinned once for
+both appearances. Set `OPENHIKES_SCREENSHOT_DATE=YYYY-MM-DD` to keep a longer
+batch of separate device or language runs under one date.
 
-`--append` preserves the other capture sets while cleaning the selected
-appearance directory. Use it to add another language, device, or the watch to
-one batch. `screenshots.sh` passes it to the dark script so both appearances
-survive. A targeted `--frame` run contains only the frames requested in that
-appearance directory; it never leaves older frames looking current.
+Other sets and unrequested frames are preserved by default. `--frame 03`
+replaces only frame 03 in that appearance. Cleanup happens after the build and
+installation succeed; a skipped set or a failed preparation keeps prior
+captures. `--append` remains an alias for this default and cancels `--clean`.
+Use `--clean` to remove prior sets marked by these scripts. Unmarked folders,
+summary images and other personal files are left alone, including with a
+custom `--output`. Filesystem root, home, the checkout and its input directories
+are refused as output roots. Older unmarked capture sets can be removed by hand.
 The raw `xcodebuild` log and result bundle of
 the last five completed runs stay under
 `DerivedData/Screenshots-<appearance>/ScreenshotRuns-<appearance>/`, and the run
@@ -463,8 +468,8 @@ iPhone, erases the watch, pairs the two, pins the locale, builds, installs, and
 writes five PNGs at 422 × 514 under
 `Screenshots/Output/apple_watch_ultra_4_49mm_en_ie_YYYY_MM_DD/`. The duration
 depends on pairing and map-tile availability. `--locale de_DE` adds the German
-set; `--append` preserves the phone sets already captured. Without `--append`,
-the watch script starts a fresh, empty output root like the phone scripts.
+set. The watch preserves the phone sets already captured. `--clean` removes
+previously marked capture sets only after build, install and map warm-up succeed.
 
 | # | Frame | What it has to say |
 |---|-------|--------------------|
@@ -525,8 +530,10 @@ reads as deliberate. There are two causes and both are handled:
 - **A cold cache is slow.** The device is erased every run, so the tiles are
   always fetched fresh. The map frame polls its rendered pixels, up to 120
   seconds (`OPENHIKES_WATCH_MAP_SETTLE`), and fails if the loading grid remains.
+  The checker is compiled once per run. Loaded pixels, camera and status bar
+  must remain unchanged for the `--settle` interval before export.
   The last readiness image stays in `DerivedData/WatchScreenshots/` for diagnosis.
-  A text frame waits 15 seconds (`--settle`, which does not move the map deadline).
+  The default `--settle` interval is 15 seconds and does not move the map deadline.
 
 `--no-pair` is the fallback: an unpaired watch uses its own network and always
 draws its map, at the cost of a red crossed-out iPhone in every status bar.

@@ -88,13 +88,16 @@ source "$repository_root/Scripts/lib/simulator.sh"
 source "$repository_root/Scripts/lib/simulator-templates.sh"
 # shellcheck source=lib/screenshot-output.sh
 source "$repository_root/Scripts/lib/screenshot-output.sh"
+# shellcheck source=lib/watch-screenshot-map.sh
+source "$repository_root/Scripts/lib/watch-screenshot-map.sh"
 project="$repository_root/OpenHikes.xcodeproj"
 scheme="OpenHikesWatch"
 
 device_name="${OPENHIKES_WATCH_SCREENSHOT_DEVICE:-OpenHikes Watch Screenshots}"
 device_type="${OPENHIKES_WATCH_SCREENSHOT_DEVICE_TYPE:-Apple Watch Ultra 4 (49mm)}"
 output_root="$repository_root/Screenshots/Output"
-append_output=false
+clean_output=false
+export OPENHIKES_SCREENSHOT_DATE="${OPENHIKES_SCREENSHOT_DATE:-$(date -u +%F)}"
 derived_data="$repository_root/DerivedData/WatchScreenshots"
 app_bundle_id="tappium.com.OpenHikes.watchkitapp"
 companion_name="${OPENHIKES_WATCH_COMPANION_DEVICE:-OpenHikes Watch Companion}"
@@ -145,9 +148,10 @@ Usage: Scripts/watch-screenshots.sh [options]
 Captures the Apple Watch App Store screenshot set on a dedicated simulator.
 
 Options:
-  --output <dir>     Clean output root (default: Screenshots/Output). Raw PNGs
+  --output <dir>     Output root (default: Screenshots/Output). Raw PNGs
                      go in a device/locale/date folder.
-  --append           Keep the other capture sets in the output root.
+  --clean            Remove previously marked capture sets after warm-up.
+  --append           Keep other capture sets (the default; cancels --clean).
   --device <name>    Simulator name to create and reuse
   --device-type <t>  Simulator device type
                      (default: Apple Watch Ultra 4 (49mm))
@@ -155,8 +159,8 @@ Options:
                      what the figures are formatted in; without it the frames
                      inherit whatever region the Mac is set to.
   --settle <n>       Seconds to let a text-only frame settle (default: 15).
-                     Map frames wait for rendered tiles instead, up to 120
-                     seconds (OPENHIKES_WATCH_MAP_SETTLE).
+                     Map frames require loaded pixels to stay unchanged for
+                     this interval, up to OPENHIKES_WATCH_MAP_SETTLE (120 s).
   --no-build         Reuse the last build in DerivedData/WatchScreenshots
   --no-pair          Do not pair a companion iPhone. Quicker — it builds the
                      watch scheme alone rather than the whole app — but every
@@ -178,7 +182,8 @@ EOF
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --output) output_root="${2:?--output needs a directory}"; shift 2 ;;
-        --append) append_output=true; shift ;;
+        --append) clean_output=false; shift ;;
+        --clean) clean_output=true; shift ;;
         --device) device_name="${2:?--device needs a name}"; shift 2 ;;
         --device-type) device_type="${2:?--device-type needs a type}"; shift 2 ;;
         --locale) locale_id="${2:?--locale needs an identifier}"; shift 2 ;;
@@ -192,17 +197,18 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ ! "$map_settle_seconds" =~ ^[0-9]+$ ]]; then
-    echo "OPENHIKES_WATCH_MAP_SETTLE must be a whole number of seconds." >&2
+if [[ ! "$map_settle_seconds" =~ ^[0-9]+$ || ! "$settle_seconds" =~ ^[0-9]+$ ]]; then
+    echo "Watch settling intervals must be whole numbers of seconds." >&2
     exit 2
 fi
 
 output_dir="$(screenshot_output_directory "$output_root" "$device_type" "$locale_id" \
-    '' '' "$append_output")" || exit $?
+    '' '')" || exit $?
 
-# The frames, in upload order: "<name>|<settle seconds>|<launch arguments>".
+# The frames, in upload order: "<name>|<settle seconds or map>|<launch arguments>".
 #
-# The map's value is a readiness deadline. The other frames draw text and use
+# The map token selects pixel readiness in both warm-up and capture, independent
+# of the frame's name. The other frames draw text and use
 # `settle_seconds` for the status bar; none waits out the map deadline.
 #
 # Five rather than the iPhone set's ten, because a watch listing is looked at
@@ -214,7 +220,7 @@ output_dir="$(screenshot_output_directory "$output_root" "$device_type" "$locale
 # is on every line here.
 frames=(
     "01-your-trails|$settle_seconds|--ui-testing --ui-test-screen=trails --ui-test-queued-walks=1"
-    "02-the-trail-on-your-wrist|$map_settle_seconds|--ui-testing --ui-test-screen=map --ui-test-follow=0.38"
+    "02-the-trail-on-your-wrist|map|--ui-testing --ui-test-screen=map --ui-test-follow=0.38"
     "03-how-much-is-left|$settle_seconds|--ui-testing --ui-test-screen=figures --ui-test-follow=0.38"
     "04-recording-from-the-wrist|$settle_seconds|--ui-testing --ui-test-screen=record --ui-test-recording=running"
     "05-your-iphone-s-hike|$settle_seconds|--ui-testing --ui-test-screen=record --ui-test-phone-recording=running"
@@ -491,86 +497,11 @@ wait_for_pair() {
     return 0
 }
 
-# No watch test bundle can inspect this map, and a connected pair says nothing
-# about its tiles. A gray grid must fail the run rather than become an export.
-wait_for_map() {
-    local shot="$derived_data/watch-map-readiness.png" deadline=$((SECONDS + 10#$map_settle_seconds)) status
-    mkdir -p "$derived_data"
-    while true; do
-        xcrun simctl io "$udid" screenshot "$shot" >/dev/null 2>&1
-        status=0
-        swift "$repository_root/Scripts/lib/watch-map-readiness.swift" "$shot" || status=$?
-        if (( status == 0 )); then
-            return 0
-        fi
-        if (( status != 1 || SECONDS >= deadline )); then
-            echo "Watch map tiles did not become ready; last frame: $shot" >&2
-            return 1
-        fi
-        sleep 2
-    done
-}
-
-# One launch whose picture is thrown away.
-#
-# MapKit has no tiles for this route until something has asked for them, so
-# without this the map frame is a green line on an empty grid — the offline
-# state, which is a real one this app has and not the one the frame is for. The
-# map frame is the one warmed because it is the only one that fetches anything.
-#
-# On a run that had to pair, this also absorbs the pairing sync. That sync is
-# the one thing here that takes minutes rather than seconds, and it is paid
-# once ever: the pair outlives both the erase and the devices being shut down,
-# so every later run finds it already correct and skips it.
-warm_up() {
-    local entry
-    if [[ "$just_paired" == true ]]; then
-        echo "Waiting out the pairing sync (once, on a first run)…"
-        sleep "$sync_wait_seconds"
-    fi
-    for entry in "${frames[@]}"; do
-        case "${entry%%|*}" in
-            *trail-on-your-wrist*)
-                echo "Warming the map…"
-                xcrun simctl terminate "$udid" "$app_bundle_id" 2>/dev/null || true
-                launch_frame "${entry#*|*|}"
-                wait_for_map
-                xcrun simctl terminate "$udid" "$app_bundle_id" 2>/dev/null || true
-                return 0
-                ;;
-        esac
-    done
-}
-
-capture() {
-    local entry name settle arguments rest shot
-    echo "Capturing…"
-    for entry in "${frames[@]}"; do
-        name="${entry%%|*}"
-        rest="${entry#*|}"
-        settle="${rest%%|*}"
-        arguments="${rest#*|}"
-        # Terminated rather than relaunched over the top: a watch app already
-        # running is brought to the front with the arguments it was launched
-        # with the first time, so every frame after the first would be the
-        # first one again.
-        xcrun simctl terminate "$udid" "$app_bundle_id" 2>/dev/null || true
-        wait_for_pair
-        launch_frame "$arguments"
-        shot="$output_dir/$name.png"
-        if [[ "$name" == *trail-on-your-wrist* ]]; then
-            wait_for_map
-            cp "$derived_data/watch-map-readiness.png" "$shot"
-        else
-            sleep "$settle"
-            xcrun simctl io "$udid" screenshot "$shot" >/dev/null 2>&1
-        fi
-        printf '  %s\n' "$(basename "$shot")"
-    done
-    xcrun simctl terminate "$udid" "$app_bundle_id" 2>/dev/null || true
-}
-
+prepare_watch_map_checker
 warm_up
+frame_numbers=()
+for entry in "${frames[@]}"; do frame_numbers+=("${entry:0:2}"); done
+screenshot_prepare_output "$output_root" "$output_dir" "$clean_output" "${frame_numbers[@]}"
 capture
 
 shopt -s nullglob
