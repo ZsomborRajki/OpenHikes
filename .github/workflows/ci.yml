@@ -148,34 +148,26 @@ jobs:
       - name: Check user-visible string extraction
         run: Scripts/check-string-extraction.sh
 
-      # SwiftLint sees no shell. Nothing else in this repository executes
-      # ci_scripts/ci_post_clone.sh either — Xcode Cloud runs it by name, and a
-      # syntax error in it would surface as a failed cloud archive rather than
-      # as a failed pull request. A parse check is cheap and is the only thing
-      # standing between an edit to that file and finding out in the cloud.
+      # SwiftLint sees no shell, and the smoke tests below run only the
+      # scripts on their list, along the paths their cases take. Parsing
+      # reaches every line of every script, so a syntax error fails the pull
+      # request rather than the next person to run that script.
       #
-      # Each script is parsed by the interpreter its own shebang names.
-      # ci_post_clone.sh is `#!/bin/sh` and the rest are bash; checking them all
-      # with `sh -n` would reject bash process substitution that is legal where
-      # it is written (the `done < <(list_tests)` in Scripts/run-ui-tests.sh,
-      # verified).
+      # Every script here is bash, so `bash -n` parses them all; `sh -n` would
+      # reject the process substitution they use (the `done < <(list_tests)`
+      # in Scripts/run-ui-tests.sh, verified).
       - name: Check shell scripts parse
         run: |
           set -euo pipefail
           status=0
           while IFS= read -r script; do
-            interpreter="$(head -1 "$script" | sed -E 's|^#!(/usr/bin/env )?||; s| .*||')"
-            case "$interpreter" in
-              sh|bash|zsh) ;;
-              *) interpreter=bash ;;
-            esac
-            if "$interpreter" -n "$script"; then
+            if bash -n "$script"; then
               echo "  ok   $script"
             else
-              echo "::error file=$script::$script is not valid $interpreter syntax."
+              echo "::error file=$script::$script is not valid bash syntax."
               status=1
             fi
-          done < <(find Scripts ci_scripts -name '*.sh' | sort)
+          done < <(find Scripts -name '*.sh' | sort)
           exit "$status"
 
       # Parsing is not behaviour. Scripts/run-ui-tests.sh decides which
@@ -431,19 +423,15 @@ jobs:
   # (dSYM generation is *not* unique to it — Release already sets
   # `dwarf-with-dsym`, and the simulator build emits them too.)
   #
-  # Two things it deliberately does *not* prove, both easy to assume it does:
-  #
-  #   1. Entitlement substitution. `CODE_SIGN_STYLE` is `Automatic`, so Xcode
-  #      replaces `aps-environment = development` with `production` on archive
-  #      — but only while signing. `CODE_SIGNING_ALLOWED=NO` skips
-  #      `ProcessProductPackaging` entirely, and the archive this job produces
-  #      carries no entitlements at all (verified: `codesign -d --entitlements`
-  #      reports the app is not signed, and `aps-environment` appears nowhere
-  #      in the bundle). Closing that would need a signing team and a
-  #      provisioning profile in secrets, which is a different decision.
-  #   2. `ci_scripts/ci_post_clone.sh`. Xcode Cloud runs that script by name;
-  #      `xcodebuild archive` on a hosted runner never does. The `quality` job
-  #      parse-checks it instead, which is as far as CI can honestly go.
+  # One thing it deliberately does *not* prove, easy to assume it does:
+  # entitlement substitution. `CODE_SIGN_STYLE` is `Automatic`, so Xcode
+  # replaces `aps-environment = development` with `production` on archive —
+  # but only while signing. `CODE_SIGNING_ALLOWED=NO` skips
+  # `ProcessProductPackaging` entirely, and the archive this job produces
+  # carries no entitlements at all (verified: `codesign -d --entitlements`
+  # reports the app is not signed, and `aps-environment` appears nowhere in
+  # the bundle). Closing that would need a signing team and a provisioning
+  # profile in secrets, which is a different decision.
   #
   # No artifact: an unsigned archive cannot be exported, and its dSYMs (32 MB)
   # match no shipped binary, so keeping them would be storage spent on

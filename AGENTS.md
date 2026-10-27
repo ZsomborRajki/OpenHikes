@@ -162,8 +162,7 @@ same device.
   it, and the floor is never lowered. A stale path in the list fails the gate.
 - **Every `xcodebuild` in `ci.yml` passes `-skipPackagePluginValidation`.** Add
   it to any new call too: SwiftLint plugin trust is stored per user, and a
-  fresh runner has none. Xcode Cloud cannot take the flag, so
-  `ci_scripts/ci_post_clone.sh` sets the equivalent defaults.
+  fresh runner has none.
 - **A program inside YAML is a program nothing checks.** Logic beyond a shell
   conditional goes in a script under `Scripts/`. The thresholds it enforces stay
   in the workflow as environment variables, beside the comments that argue for
