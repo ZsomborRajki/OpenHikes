@@ -239,8 +239,8 @@ either: the second run waits silently on the first run's build lock.
   ([artemnovichkov/hinge](https://github.com/artemnovichkov/hinge)), an
   optional tool that posts the event Device Hub's hinge slider posts. It is
   installed rather than kept here, so a release reaches the scripts with
-  `brew upgrade`, and `.hinge-version` is the oldest one they accept
-  (`Scripts/lib/hinge.sh`).
+  `brew upgrade`, and `Scripts/lib/hinge.sh` names the oldest one they
+  accept.
   - Only opening needs it. Without hinge, `Scripts/duo-pose.sh closed` reads
     the cover back, and an open screenshot set is skipped with a message
     saying so.

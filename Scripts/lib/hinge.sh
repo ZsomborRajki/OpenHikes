@@ -10,27 +10,28 @@
 # scripts with `brew upgrade` and nothing in this repository has to move. Only
 # opening a Duo needs it: a simulator boots closed.
 #
-# .hinge-version names the oldest release these scripts are written against,
-# and an older one is refused before it is asked to fold anything. A newer one
-# is used as it is: Scripts/duo-pose.sh reads every fold back, and that is what
-# notices a release that changed what it does.
+# The oldest release these scripts are written against. An older one is
+# refused before it is asked to fold anything; a newer one is used as it is,
+# because Scripts/duo-pose.sh reads every fold back, and that is what notices a
+# release that changed what it does. It lives here, beside the one check that
+# reads it, rather than in a file of its own.
+oldest_hinge="0.3.0"
 
 # Prints the hinge to run. When there is none to run, prints what to do about
 # it instead and returns 1. OPENHIKES_HINGE names one in place of the one on
 # PATH: Scripts/run-script-tests.sh's seam for a machine without it, which
 # nothing else sets.
 hinge_command() {
-    local hinge floor installed oldest
-    floor="$(cat "$(dirname "${BASH_SOURCE[0]}")/../../.hinge-version")"
+    local hinge installed older
     hinge="${OPENHIKES_HINGE:-$(command -v hinge || true)}"
     if [[ -z "$hinge" || ! -x "$hinge" ]]; then
         echo "hinge is not installed (brew install artemnovichkov/tap/hinge)."
         return 1
     fi
     installed="$("$hinge" -v 2>/dev/null || true)"
-    oldest="$(printf '%s\n%s\n' "$installed" "$floor" | sort -V | head -1)"
-    if [[ "$oldest" != "$floor" ]]; then
-        echo "hinge ${installed:-of no known version} is older than $floor (brew upgrade hinge)."
+    older="$(printf '%s\n%s\n' "$installed" "$oldest_hinge" | sort -V | head -1)"
+    if [[ "$older" != "$oldest_hinge" ]]; then
+        echo "hinge ${installed:-of no known version} is older than $oldest_hinge (brew upgrade hinge)."
         return 1
     fi
     printf '%s\n' "$hinge"
