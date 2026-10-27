@@ -126,14 +126,21 @@ extension ScreenshotUITests {
         app.buttons["settings-close"].tap()
     }
 
-    /// Observe rendered tiles rather than capture a placeholder grid.
+    /// Observe rendered tiles and their final redraw, including replacement
+    /// of lower-resolution fallback tiles after the camera move.
     @MainActor
     func settleScreenshotMapTiles(in app: XCUIApplication, rejectSmallLoadingPatches: Bool = false) {
         let display = screenshotDisplay(in: app)
+        var previousSignature: Int?
         let ready = waitUntil(timeout: UITestTimeout.trace) {
-            screenshotMapHasTiles(
+            guard screenshotMapHasTiles(
                 in: app, on: display, requireTerrain: false, rejectSmallLoadingPatches: rejectSmallLoadingPatches
-            )
+            ), let signature = screenshotMapSignature(in: app, on: display) else {
+                previousSignature = nil
+                return false
+            }
+            defer { previousSignature = signature }
+            return previousSignature == signature
         }
         if !ready {
             let evidence = XCTAttachment(screenshot: display.screen.screenshot())
@@ -141,6 +148,6 @@ extension ScreenshotUITests {
             evidence.lifetime = .keepAlways
             add(evidence)
         }
-        XCTAssertTrue(ready, "map tiles should replace the placeholder grid after framing")
+        XCTAssertTrue(ready, "map tiles should replace the placeholder grid and finish redrawing after framing")
     }
 }

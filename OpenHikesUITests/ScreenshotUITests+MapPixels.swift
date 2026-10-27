@@ -99,6 +99,25 @@ extension ScreenshotUITests {
             && Double(placeholder) / Double(samples) < maximum
     }
 
+    /// A nonblank map can still be replacing an enlarged ancestor tile with
+    /// its final detail. Compare the rendered map across polls as well as
+    /// checking its palette, so that intermediate frame is not exported.
+    @MainActor
+    func screenshotMapSignature(in app: XCUIApplication, on display: ScreenshotDisplay) -> Int? {
+        guard let image = screenshotPixels(on: display) else { return nil }
+        let region = openMapArea(in: app).insetBy(dx: Self.mapSampleInset, dy: Self.mapSampleInset)
+            .intersection(CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        guard !region.isEmpty else { return nil }
+        var signature = Hasher()
+        for row in stride(from: Int(region.minY), to: Int(region.maxY), by: Self.terrainSampleStride) {
+            for column in stride(from: Int(region.minX), to: Int(region.maxX), by: Self.terrainSampleStride) {
+                let offset = (row * image.width + column) * 4
+                for channel in image.bytes[offset..<(offset + 3)] { signature.combine(channel) }
+            }
+        }
+        return signature.finalize()
+    }
+
     @MainActor
     func recordedLineBounds(within area: CGRect, on display: ScreenshotDisplay) -> CGRect? {
         guard let image = screenshotPixels(on: display) else { return nil }
