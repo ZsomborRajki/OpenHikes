@@ -16,6 +16,8 @@
 set -uo pipefail
 
 scripts="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# One UTC date for both appearances, even if the light pass crosses midnight.
+export OPENHIKES_SCREENSHOT_DATE="${OPENHIKES_SCREENSHOT_DATE:-$(date -u +%F)}"
 for option in "$@"; do
     if [[ "$option" == --prepared-device ]]; then
         echo "Use screenshots-light.sh and screenshots-dark.sh on separate fresh pool claims with --prepared-device." >&2

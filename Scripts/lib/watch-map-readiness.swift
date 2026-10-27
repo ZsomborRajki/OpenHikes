@@ -9,6 +9,7 @@
 //
 
 import CoreGraphics
+import CryptoKit
 import Foundation
 import ImageIO
 
@@ -55,4 +56,9 @@ let terrainFraction = Double(terrain) / Double(max(samples, 1))
 let placeholderFraction = Double(placeholder) / Double(max(samples, 1))
 let ready = samples > 0 && terrainFraction >= 0.25 && placeholderFraction < 0.1
 print(String(format: "watch map: %.1f%% terrain, %.1f%% loading grid", terrainFraction * 100, placeholderFraction * 100))
+// Include the whole frame so a launch zoom or status-bar change resets the
+// quiet interval even when the map's palette already looks loaded.
+if ready {
+    print(SHA256.hash(data: Data(pixels)).map { String(format: "%02x", $0) }.joined())
+}
 exit(ready ? 0 : 1)

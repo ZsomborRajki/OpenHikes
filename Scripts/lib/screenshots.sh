@@ -166,10 +166,10 @@ dedicated 6.9" simulator.
 
 Options:
   --frame <nn>       Shoot only this frame (01-10); repeat for more.
-  --output <dir>     Clean output root (default: Screenshots/Output). Raw PNGs
+  --output <dir>     Output root (default: Screenshots/Output). Raw PNGs
                      go in device/layout/locale/date and appearance folders.
-  --append           Keep other capture sets in the output root. This set's
-                     appearance directory is still cleaned before capturing.
+  --clean            Remove previously marked capture sets after installation.
+  --append           Keep other capture sets (the default; cancels --clean).
   --photos <dir>     JPEGs to put in the simulator's photo library first
                      (default: Screenshots/Stamped; skipped when empty).
                      Stamp them with Scripts/stamp-hike-photos.swift so the
@@ -542,7 +542,8 @@ screenshots_main() {
     screenshot_run_id="$(date -u +%Y%m%dT%H%M%SZ)-$$"
     device_type="${OPENHIKES_SCREENSHOT_DEVICE_TYPE:-iPhone 18 Pro Max}"
     output_root="$repository_root/Screenshots/Output"
-    append_output=false
+    clean_output=false
+    export OPENHIKES_SCREENSHOT_DATE="${OPENHIKES_SCREENSHOT_DATE:-$(date -u +%F)}"
     photo_dir="$repository_root/Screenshots/Stamped"
     derived_data="$repository_root/DerivedData/Screenshots-$screenshot_appearance"
     keep_device=false
@@ -567,7 +568,8 @@ screenshots_main() {
         case "$1" in
             --frame) requested+=("${2:?--frame needs a number}"); shift 2 ;;
             --output) output_root="${2:?--output needs a directory}"; shift 2 ;;
-            --append) append_output=true; shift ;;
+            --append) clean_output=false; shift ;;
+            --clean) clean_output=true; shift ;;
             --photos) photo_dir="${2:?--photos needs a directory}"; shift 2 ;;
             --device) device_name="${2:?--device needs a name}"; prepared_device=false; shift 2 ;;
             --prepared-device)
@@ -651,7 +653,7 @@ screenshots_main() {
     if [[ "$device_type" == 'iPhone Duo' && -z "$pose" ]]; then layout="closed"; fi
     if [[ "$pose" == open && -z "$orientation" ]]; then layout="open_portrait"; fi
     output_dir="$(screenshot_output_directory "$output_root" "$device_type" "$locale_id" \
-        "$layout" "$screenshot_appearance" "$append_output")" || exit $?
+        "$layout" "$screenshot_appearance")" || exit $?
     device_pinned=false
     if [[ "$device_name" =~ ^[0-9A-Fa-f]{8}(-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$ ]]; then
         device_pinned=true
@@ -695,13 +697,14 @@ screenshots_main() {
         return 0
     fi
 
-    mkdir -p "$output_dir" "$derived_data"
+    mkdir -p "$derived_data"
     screenshot_runs_dir="$derived_data/ScreenshotRuns-$screenshot_appearance"
     screenshot_log_dir="$screenshot_runs_dir/$screenshot_run_id"
     mkdir -p "$screenshot_log_dir"
     trap finish_screenshot_run EXIT
     build_screenshot_tests
     install_app
+    screenshot_prepare_output "$output_root" "$output_dir" "$clean_output" "${frames[@]}"
     # Retried once, and only the frames that did not come out. The community
     # frame waits on a seeded browse answering, and that wait can lose to a
     # busy machine rather than to a bug; re-running every frame that
