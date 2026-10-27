@@ -287,10 +287,11 @@ exit "${STUB_PERIPHERY_STATUS:-0}"
 STUB
 
 # Records every hinge invocation. `hinge -v` answers with STUB_HINGE_VERSION,
-# the oldest release .hinge-version accepts unless a case says otherwise, and
-# `set` fails the way hinge does when the angle never arrives if a case sets
-# STUB_HINGE_ANGLE_FAILS. A machine without hinge is OPENHIKES_HINGE naming a
-# path where there is none.
+# the oldest release .hinge-version accepts unless a case says otherwise. With
+# STUB_HINGE_ANGLE_FAILS set, a `set` that waits for the angle fails the way
+# hinge's does when the angle never arrives, and one sent unconfirmed (`-t 0`)
+# still goes out, as hinge's does. A machine without hinge is OPENHIKES_HINGE
+# naming a path where there is none.
 cat > "$stub_bin/hinge" <<'STUB'
 #!/usr/bin/env bash
 printf 'hinge %s\n' "$*" >> "$STUB_CALL_LOG"
@@ -299,7 +300,7 @@ if [[ "${1:-}" == "-v" ]]; then
     exit 0
 fi
 for degrees; do :; done
-if [[ " $* " == *" set "* && -n "${STUB_HINGE_ANGLE_FAILS:-}" ]]; then
+if [[ " $* " == *" set "* && " $* " != *" -t 0 "* && -n "${STUB_HINGE_ANGLE_FAILS:-}" ]]; then
     echo "hinge_helper: the hinge angle did not reach $degrees.0 within 1.0 s" >&2
     exit 1
 fi
@@ -2333,13 +2334,15 @@ if expect_status 1 \
     pass
 fi
 
-# The other way round, as when only hinge's reading of the angle breaks: the
-# display took over, and a frame is shot on the display, so the pose stands —
-# with a word about the angle.
+# The other way round, as when only hinge's reading of the angle breaks. hinge
+# posts nothing where CoreMotion cannot report, so the angle goes out once more
+# unconfirmed; the display took over, and a frame is shot on the display, so
+# the pose stands — with a word about the angle.
 STUB_HINGE_ANGLE_FAILS=1 STUB_DISPLAYS="$work/displays-open.json" \
     run_script "duo-pose takes a fold the display shows, warning that the angle went unconfirmed" \
     "$duo_pose" open --device "$pro_udid"
 if expect_status 0 \
+    && expect_contains "$calls" "hinge -d $pro_udid -t 0 set 180" "the recorded calls" \
     && expect_contains "$output" "could not confirm the angle" "the warning" \
     && expect_contains "$output" "did not reach 180.0" "the warning" \
     && expect_contains "$output" "open, the inner display showing, portrait" "the output"; then
