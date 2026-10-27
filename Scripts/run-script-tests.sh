@@ -287,7 +287,7 @@ exit "${STUB_PERIPHERY_STATUS:-0}"
 STUB
 
 # Records every hinge invocation. `hinge -v` answers with STUB_HINGE_VERSION,
-# the oldest release .hinge-version accepts unless a case says otherwise. With
+# the oldest release Scripts/lib/hinge.sh accepts unless a case says otherwise. With
 # STUB_HINGE_ANGLE_FAILS set, a `set` that waits for the angle fails the way
 # hinge's does when the angle never arrives, and one sent unconfirmed (`-t 0`)
 # still goes out, as hinge's does. A machine without hinge is OPENHIKES_HINGE
@@ -307,7 +307,7 @@ fi
 STUB
 
 chmod +x "$stub_bin"/*
-export STUB_HINGE_VERSION="$(cat "$repository_root/.hinge-version")"
+export STUB_HINGE_VERSION="$(source "$repository_root/Scripts/lib/hinge.sh" && printf '%s\n' "$oldest_hinge")"
 
 # Two booted devices, so `simctl booted` would have to guess, plus a shutdown
 # device sharing a name with a booted one across runtimes and a watchOS device
@@ -2382,11 +2382,11 @@ if expect_status 1 \
     pass
 fi
 
-# .hinge-version is a floor, not a pin: an older hinge is refused before it is
-# asked to fold anything, and a newer one is used as it is — compared as
-# versions, so 0.10.0 is the newer of it and 0.3.0.
+# The oldest hinge Scripts/lib/hinge.sh accepts is a floor, not a pin: an older
+# hinge is refused before it is asked to fold anything, and a newer one is used
+# as it is — compared as versions, so 0.10.0 is the newer of it and 0.3.0.
 STUB_HINGE_VERSION=0.2.0 STUB_DISPLAYS="$work/displays-closed.json" \
-    run_script "duo-pose refuses a hinge older than .hinge-version" \
+    run_script "duo-pose refuses a hinge older than the oldest it accepts" \
     "$duo_pose" open --device "$pro_udid"
 if expect_status 1 \
     && expect_contains "$output" "hinge 0.2.0 is older than $STUB_HINGE_VERSION" "the error" \
@@ -2396,7 +2396,7 @@ if expect_status 1 \
 fi
 
 STUB_HINGE_VERSION=0.10.0 STUB_DISPLAYS="$work/displays-open.json" \
-    run_script "duo-pose uses a hinge newer than .hinge-version as it is" \
+    run_script "duo-pose uses a hinge newer than the oldest it accepts as it is" \
     "$duo_pose" open --device "$pro_udid"
 if expect_status 0 \
     && expect_contains "$calls" "hinge -d $pro_udid -t 1 set 180" "the recorded calls" \
