@@ -3,9 +3,11 @@
 //  OpenHikesTests
 //
 //  The gate is the only thing standing between this app and the stall it was
-//  written to prevent: every tile pipeline blocks a thread in Swift's small
-//  cooperative pool, MapKit's own tile rendering competes for the same
-//  threads, and the pool doesn't grow to absorb either.
+//  written to prevent: without it, a zoom-to-fit over an uncached route queues
+//  every missed tile's synchronous disk work for Swift's small cooperative
+//  pool, and asks the tile server for every one of them, all at once. An
+//  admitted load holds a thread only while that disk work runs, not while its
+//  request waits; see `TileLoadGate` for what the budgets bound.
 //
 //  It replaced two independent caps (the renderer's 4, the downloader's 5)
 //  that between them allowed 9. What matters now is that the total really is

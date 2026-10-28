@@ -364,10 +364,13 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
         }
         guard isNew else { return }
 
-        // Deliberately *not* @MainActor: `cacheTile` does network I/O, disk
-        // reads/writes, and (via AutoSaveTileStore) a file move into durable
-        // storage — all synchronous once awaited. Keeping this Task unisolated
-        // runs that work off the main thread instead of stalling it every
+        // Deliberately *not* @MainActor: `cacheTile` runs on its caller's
+        // executor, and once the load returns it moves the tile into durable
+        // storage (via AutoSaveTileStore) synchronously. The load's own disk
+        // reads and writes leave the main thread by themselves
+        // (`loadTileResult` is `@concurrent`), and its request is an `await`
+        // that holds no thread at all. Keeping this Task unisolated keeps the
+        // move off the main thread too, instead of stalling it every
         // scroll/zoom.
         Task { [weak self] in
             await TileLoadGate.shared.acquire(.interactive)
