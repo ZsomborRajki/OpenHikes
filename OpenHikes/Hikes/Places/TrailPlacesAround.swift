@@ -100,6 +100,7 @@ final class TrailPlacesAround {
         activeToken = nil
         handlers = nil
         finder.clear()
+        finder.onFound(nil)
         if !candidates.isEmpty { candidates = [] }
         if isActive { isActive = false }
     }
