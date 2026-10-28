@@ -158,4 +158,36 @@ struct HikeElevationFillTests {
         #expect(restored.title == "Renamed target")
         #expect(restored.route == route)
     }
+
+    /// The line is read again once the answer is back, and that is the line a
+    /// refusal puts back. A point the request asked about, moved meanwhile,
+    /// means the answer no longer describes the line and nothing is written; a
+    /// point between two it asked about still lets the heights go on, so it is
+    /// the refusal's restore that must keep the move.
+    @Test("a line edited while the request was in flight keeps the edit", arguments: [true, false])
+    func refusedSaveKeepsALineEditedMeanwhile(movesAnAskedPoint: Bool) async throws {
+        let route = Self.route(count: 500)
+        let (context, hike) = try Self.library(route: route)
+        let asked = Set(CuratedElevationRequest.sampleIndexes(of: route))
+        let moved = try #require(route.indices.dropFirst().first { asked.contains($0) == movesAnAskedPoint })
+        let gate = TestGate()
+        defer { gate.open() }
+        let saver = ScriptedModelContextSaver(failedSaveNumbers: [1])
+        let filling = Task {
+            await HikeElevationFill.fill(hike, from: RisingSource(gate: gate), in: context, save: saver.save)
+        }
+        await settleDelegateHop(until: "the elevation request to be in flight") { gate.isHolding }
+
+        var edited = route
+        edited[moved].longitude += 0.0001
+        hike.replaceRoute(with: edited)
+        gate.open()
+
+        #expect(await filling.value == false)
+        #expect(saver.saveCount == (movesAnAskedPoint ? 0 : 1))
+        #expect(hike.route == edited)
+        try context.save()
+        let stored = try #require(try ModelContext(context.container).fetch(FetchDescriptor<Hike>()).first)
+        #expect(stored.route == edited)
+    }
 }
