@@ -63,8 +63,8 @@ struct HikeListSortTests {
         #expect(arranged.dropFirst().map(\.title) == ["Middling", "Long"])
     }
 
-    @Test("only the elevation orders ask for anything to be measured")
-    func onlyElevationOrdersNeedAFill() throws {
+    @Test("only Hilliest asks for elevation figures to be validated")
+    func onlyHilliestNeedsValidation() throws {
         let context = try Fixture.modelContext()
         let hikes = try makeHikes(in: context)
 

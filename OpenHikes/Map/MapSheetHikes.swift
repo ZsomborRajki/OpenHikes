@@ -346,7 +346,7 @@ private extension MapSheetHikes {
     ///
     /// Always there, unlike the control it replaces, which appeared only once
     /// the hiker had dragged something. An order a hiker cannot see is an order
-    /// they cannot change on purpose — and *Most Climb* is not a thing anybody
+    /// they cannot change on purpose — and *Hilliest* is not a thing anybody
     /// discovers by dragging a row.
     ///
     /// It states the current order rather than showing a bare glyph, because
