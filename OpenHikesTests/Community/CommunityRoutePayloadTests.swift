@@ -129,9 +129,11 @@ struct CommunityRoutePayloadTests {
         #expect(!read.contains { $0.latitude == 89 })
     }
 
-    /// A non-finite position, which is the shape a number no JSON writer
-    /// should have produced arrives in. A range does not contain a `NaN`, so
-    /// the same check settles it.
+    /// A non-finite position handed to the value seam directly. The default
+    /// decoder refuses a raw `NaN` or an out-of-range number before the seam
+    /// runs, so this is what an in-memory caller or another decoding strategy
+    /// supplies. A range does not contain a `NaN`, so the same check settles
+    /// it.
     @Test("a point with no real position is dropped")
     func aNonFinitePointIsDropped() {
         var published = route(4)
@@ -155,10 +157,9 @@ struct CommunityRoutePayloadTests {
     /// `GPXImport`'s distinction: a position is what the line is made of, and
     /// an elevation is a field the route can do without.
     ///
-    /// It has to go somewhere, because a `NaN` loses every comparison it is in
-    /// and therefore survives `min` and `max` as the answer — so one of these
-    /// in a stranger's file is every elevation figure the hiker reads about
-    /// that hike afterwards, and the saved hike keeps it.
+    /// It has to go somewhere: a `NaN` fails every ordered comparison, so a
+    /// reader that forgets to skip one can hand it back from `min` or `max`,
+    /// and the saved hike would keep it.
     @Test("an impossible height is emptied and its point is kept")
     func aNonFiniteElevationIsEmptied() {
         var published = route(3)
