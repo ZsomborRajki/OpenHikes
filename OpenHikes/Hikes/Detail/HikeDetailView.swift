@@ -100,9 +100,7 @@ struct HikeDetailView: View {
     /// Each carries the measurement generation current when it was requested,
     /// which is what lets a refresh that has already happened for another
     /// reason retire the trailing one instead of paying for it twice.
-    @State var storedBytesRefreshes = AsyncStream<Int>.makeStream(
-        bufferingPolicy: .bufferingNewest(1)
-    )
+    @State var storedBytesRefreshes = EventFeed<Int>()
     @State var storedBytesMeasurementTask: Task<Void, Never>?
     @State var storedBytesMeasurementGeneration = 0
     /// Why the last attempt to delete this hike's offline tiles did not
@@ -319,7 +317,7 @@ struct HikeDetailView: View {
             // A trailing measurement, once the auto-save drain settles. The
             // task's own lifetime retires it when the view goes away, so
             // there's no timer to cancel by hand.
-            for await generation in storedBytesRefreshes.stream
+            for await generation in storedBytesRefreshEvents()
                 .debounce(for: Self.storedBytesRefreshDebounce) {
                 guard generation == storedBytesMeasurementGeneration else { continue }
                 refreshStoredBytes()

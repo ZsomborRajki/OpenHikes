@@ -5,7 +5,9 @@
 //  The three things ``EventFeed`` promises its readers — every reader hears
 //  every message, a reader that goes away leaves the next one working, and
 //  nothing is replayed to a reader that arrives late — and the one it
-//  promises its senders: a send never waits for anybody.
+//  promises its senders: a send never waits for anybody. The first holds by
+//  default: a reader that asks for only its newest unread message, as the
+//  hike detail's byte refresh does, gets that and nothing older.
 //
 
 import Foundation
@@ -94,5 +96,17 @@ struct EventFeedTests {
 
         let reader = FeedReader(feed.events())
         #expect(reader.received.isEmpty)
+    }
+
+    @Test("a reader can retain only its newest unread notification")
+    func newestNotificationBuffer() async {
+        let feed = EventFeed<Int>()
+        var reader = feed.events(bufferingPolicy: .bufferingNewest(1)).makeAsyncIterator()
+
+        feed.send(1)
+        feed.send(2)
+        feed.send(3)
+
+        #expect(await reader.next() == 3)
     }
 }
