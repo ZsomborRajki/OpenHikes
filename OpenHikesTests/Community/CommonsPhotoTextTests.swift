@@ -186,6 +186,7 @@ struct CommonsPhotoTextTests {
             "2026-02-28T12:34:56Z",
             "2026-02-28T14:34:56+02:00",
             "2026-02-28T07:04:56-05:30",
+            "2026-03-01T02:34:56+14:00",
             "<time datetime=\"2026-02-28T14:34:56+02:00\">28 February 2026</time>",
         ]
     )
@@ -197,9 +198,27 @@ struct CommonsPhotoTextTests {
         )
     }
 
+    /// Nine hours east, so a reading taken as UTC — or as anything but the
+    /// zone it is asked to be read in — lands on another hour, or another day.
+    @Test(
+        "a reading with no offset is read in the zone it is asked to be read in",
+        arguments: [
+            ("2013-08-03 12:34:56", DateComponents(year: 2013, month: 8, day: 3, hour: 3, minute: 34, second: 56)),
+            ("2013-08-03T12:34:56", DateComponents(year: 2013, month: 8, day: 3, hour: 3, minute: 34, second: 56)),
+            ("2013-08-03", DateComponents(year: 2013, month: 8, day: 2, hour: 15, minute: 0, second: 0)),
+        ]
+    )
+    func noOffsetReadsInTheGivenZone(text: String, utcReading: DateComponents) throws {
+        let east = try #require(TimeZone(secondsFromGMT: 9 * 60 * 60))
+        #expect(Self.components(CommonsDate.date(from: text, in: east)) == utcReading)
+    }
+
     @Test(
         "an unsupported or malformed zone-bearing shape uses the upload time",
         arguments: [
+            "2026-02-28T12:34:56+15:00",
+            "2026-02-28T12:34:56+18:00",
+            "2026-02-28T12:34:56-18:00",
             "2026-02-28T12:34:56+25:00",
             "2026-02-28T12:34:56+02:60",
             "2026-02-28T12:34:56+02",

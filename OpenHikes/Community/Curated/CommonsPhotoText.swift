@@ -110,11 +110,9 @@ nonisolated enum CommonsText {
 
 /// When a Commons photograph was taken.
 nonisolated enum CommonsDate {
-    /// Nothing before the first photographs. Calendar and clock validity are
-    /// shared with the camera through ``PhotoCaptureDate``.
+    /// Nothing before the first photographs. Calendar, clock and offset
+    /// validity are shared with the camera through ``PhotoCaptureDate``.
     private static let earliestYear = 1826
-    private static let offsetHours = 0...23
-    private static let offsetMinutes = 0...59
 
     /// The capture time `DateTimeOriginal` gives, or the upload time when it
     /// gives none this can read.
@@ -136,8 +134,12 @@ nonisolated enum CommonsDate {
 
     /// One of the shapes `DateTimeOriginal` takes: `2013-08-03 12:34:56`, its
     /// EXIF spelling with colons in the date, `2013-08-03T12:34:56`, a date
-    /// alone, or any of those inside `<time datetime="…">`. The ISO form also
-    /// accepts `Z` or a `±HH:mm` offset; any other suffix is left unread.
+    /// alone, or any of those inside `<time datetime="…">`. The ISO form may
+    /// also end in `Z` or a `±HH:mm` offset, and is then read in that zone.
+    /// Anything else — another suffix, a fraction of a second, a missing or
+    /// broken field, a day the calendar does not have — refuses the whole
+    /// reading, and ``capturedAt(_:uploaded:timeZone:)`` falls back to the
+    /// upload.
     static func date(from text: String, in timeZone: TimeZone) -> Date? {
         let reading = text.firstMatch(of: #/datetime="([^"]+)"/#).map { String($0.1) }
             ?? CommonsText.plain(text)
@@ -168,12 +170,6 @@ nonisolated enum CommonsDate {
     }
 
     private static func zone(from offset: Substring) -> TimeZone? {
-        if offset == "Z" { return .gmt }
-        guard let fields = offset.wholeMatch(of: #/([+-])([0-9]{2}):([0-9]{2})/#),
-              let hours = Int(fields.2), offsetHours.contains(hours),
-              let minutes = Int(fields.3), offsetMinutes.contains(minutes)
-        else { return nil }
-        let sign = fields.1 == "+" ? 1 : -1
-        return TimeZone(secondsFromGMT: sign * (hours * 60 + minutes) * 60)
+        offset == "Z" ? .gmt : PhotoCaptureDate.zone(fromOffset: String(offset))
     }
 }

@@ -127,6 +127,31 @@ struct PickedPhotoMetadataTests {
         #expect(metadata.capturedAt == expected)
     }
 
+    /// EXIF spells an offset `±HH:MM` and nothing else. A broken one used to
+    /// lose its bad field and be read from the rest — `+02:xx:30` as two and
+    /// a half hours. Like one wider than any zone's, it now leaves the wall
+    /// clock in the zone given.
+    @Test(
+        "an offset that is not a real ±HH:MM leaves the wall clock in the zone given",
+        arguments: ["+02:xx:30", "+2:30", "+0230", "+15:00", "-18:00"]
+    )
+    func unreadableOffsetIsIgnored(offset: String) throws {
+        let utc = try #require(TimeZone(secondsFromGMT: 0))
+        let properties: [String: Any] = [
+            kCGImagePropertyExifDictionary as String: [
+                kCGImagePropertyExifDateTimeOriginal as String: "2025:06:15 10:00:00",
+                kCGImagePropertyExifOffsetTimeOriginal as String: offset,
+            ],
+        ]
+
+        let metadata = PickedPhotoMetadata(properties: properties, timeZone: utc)
+
+        let expected = try #require(
+            ISO8601DateFormatter().date(from: "2025-06-15T10:00:00Z")
+        )
+        #expect(metadata.capturedAt == expected)
+    }
+
     /// A JPEG rather than the PNG the other photo suites use: JPEG is what a
     /// camera writes, and EXIF is native to it.
     nonisolated private static func sampleJPEG() -> Data {
