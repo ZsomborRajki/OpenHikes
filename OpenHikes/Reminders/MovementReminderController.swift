@@ -534,8 +534,9 @@ extension MovementReminderController {
     /// - Parameter prompting: whether the hiker may be asked. True at a
     ///   pause, which is a question about something they are doing right now;
     ///   false on the way back into the foreground, where the only new
-    ///   information is a permission revoked in iOS Settings and a prompt
-    ///   would be the app asking again about a pause taken half an hour ago.
+    ///   information is a permission revoked or given in iOS Settings, and a
+    ///   prompt would be the app asking again about a pause taken half an
+    ///   hour ago.
     ///   The foreground observer in ``observePreferences()`` is what passes
     ///   `false`; a suite drives both halves — this call for the policy, and
     ///   a post on the controller's own `lifecycleCenter` for the observer
