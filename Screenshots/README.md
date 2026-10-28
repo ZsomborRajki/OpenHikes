@@ -190,11 +190,20 @@ names its pose and orientation, such as
 both appearances. Set `OPENHIKES_SCREENSHOT_DATE=YYYY-MM-DD` to keep a longer
 batch of separate device or language runs under one date.
 
+Map captures wait for loaded tiles to stay unchanged for three seconds. The
+animated location marker is excluded from that pixel comparison; moving its
+center still restarts the wait.
+
 Other sets and unrequested frames are preserved by default. `--frame 03`
-replaces only frame 03 in that appearance. Cleanup happens after the build and
+replaces only frame 03 in that appearance's selected UTC date. To repair a set
+on a later day, pin its original date, for example
+`OPENHIKES_SCREENSHOT_DATE=2026-10-27 Scripts/screenshots-dark.sh --frame 03`.
+Without that date, the capture starts a set for today. Cleanup happens after the build and
 installation succeed; a skipped set or a failed preparation keeps prior
 captures. `--append` remains an alias for this default and cancels `--clean`.
-Use `--clean` to remove prior sets marked by these scripts. Unmarked folders,
+Use `--clean` to remove prior sets marked by these scripts. If requested frames
+are skipped because the stamped library is missing, earlier sets are kept.
+Unmarked folders,
 summary images and other personal files are left alone, including with a
 custom `--output`. Filesystem root, home, the checkout and its input directories
 are refused as output roots. Older unmarked capture sets can be removed by hand.

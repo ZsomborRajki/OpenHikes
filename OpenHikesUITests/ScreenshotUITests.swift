@@ -776,11 +776,13 @@ extension ScreenshotUITests {
     /// there. The app is asked only which screen that is.
     @MainActor
     func capture(as frame: Frame, of app: XCUIApplication) {
-        let shot = screenshotDisplay(in: app).screen.screenshot()
-        let attachment = XCTAttachment(screenshot: shot)
-        attachment.name = frame.rawValue
-        attachment.lifetime = .keepAlways
-        add(attachment)
+        switch frame {
+        case .route, .nearby, .following, .recording, .maps, .trailMaker:
+            settleScreenshotMapTiles(in: app)
+        case .photos, .walkHistory, .place, .share:
+            break
+        }
+        attachScreenshotEvidence(named: frame.rawValue, in: app)
     }
 
     /// The screen whose size is the app's window's.

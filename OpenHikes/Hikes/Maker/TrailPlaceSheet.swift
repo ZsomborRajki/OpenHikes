@@ -111,7 +111,7 @@ private struct TrailPlaceCardView: View {
     /// Short detents still resize on a drag. At the tallest one, wrapped
     /// actions and accessibility text can scroll to their location rows.
     var body: some View {
-        ScrollView {
+        PlaceCardScroll(selection: card, allowsScrolling: allowsScrolling) {
             VStack(alignment: .leading, spacing: StatCardMetrics.sectionSpacing) {
                 if let photo = card.photo {
                     TrailDraftPhotoHeader(photo: photo, gallery: { maker.photos.photos }, mapController: mapController)
@@ -128,8 +128,6 @@ private struct TrailPlaceCardView: View {
             .padding(.horizontal)
             .padding(.top, Self.topPadding)
         }
-        .scrollDisabled(!allowsScrolling)
-        .scrollBounceBehavior(.basedOnSize)
         .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("trail-place-sheet")
@@ -229,7 +227,6 @@ private struct TrailPlaceCardView: View {
                 .labelStyle(TrailPlaceActionLabelStyle())
         }
         .buttonStyle(.bordered)
-        .buttonBorderShape(.roundedRectangle(radius: TrailPlaceActionLabelStyle.cornerRadius))
         .accessibilityIdentifier("trail-place-share")
     }
 
@@ -259,7 +256,6 @@ private struct TrailPlaceCardView: View {
                 Button(role: role, action: perform) { label }.buttonStyle(.bordered)
             }
         }
-        .buttonBorderShape(.roundedRectangle(radius: TrailPlaceActionLabelStyle.cornerRadius))
         .accessibilityIdentifier(identifier)
     }
 }

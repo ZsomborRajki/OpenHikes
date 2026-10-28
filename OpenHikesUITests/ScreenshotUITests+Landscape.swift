@@ -34,21 +34,9 @@ extension ScreenshotUITests {
             XCTAssertTrue(scrollIntoView(strip, in: app))
             return
         }
-        let container = scrollContainer(in: app)
-        let display = screenshotDisplay(in: app)
-        for _ in 0..<12 {
-            let viewport = container.frame.insetBy(dx: 0, dy: Self.landscapeContentMargin)
-            let delta = viewport.maxY - Self.landscapeContentMargin - strip.frame.maxY
-            if abs(delta) < Self.landscapeContentMargin,
-               strip.frame.minY >= viewport.minY, strip.frame.maxY <= viewport.maxY { return }
-            let reach = viewport.height / 2
-            let distance = min(max(delta, -reach), reach)
-            let start = CGPoint(x: container.frame.minX + 8, y: container.frame.midY)
-            XCTAssertTrue(ScreenshotDisplayGesture.drag(
-                from: start, to: CGPoint(x: start.x, y: start.y + distance), on: display
-            ))
-        }
-        XCTFail("the photo gallery should be fully visible inside the side panel")
+        alignInScreenshotViewport(
+            strip, edge: .bottom, tolerance: 24, in: app, named: "Landscape gallery", leadingDrag: true
+        )
     }
 
     @MainActor

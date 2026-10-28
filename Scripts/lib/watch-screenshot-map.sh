@@ -12,9 +12,19 @@ prepare_watch_map_checker() {
 
 wait_for_map() {
     local shot="$derived_data/watch-map-readiness.png" deadline=$((SECONDS + 10#$map_settle_seconds))
+    local capture_error="$derived_data/watch-map-capture-error.log"
     local status signature previous="" stable_since=$SECONDS
     while true; do
-        xcrun simctl io "$udid" screenshot "$shot" >/dev/null 2>&1 || return 1
+        if ! xcrun simctl io "$udid" screenshot "$shot" >/dev/null 2>"$capture_error"; then
+            previous=""
+            if (( SECONDS >= deadline )); then
+                echo "Could not capture the watch map; last frame: $shot; capture error:" >&2
+                cat "$capture_error" >&2
+                return 1
+            fi
+            sleep 2
+            continue
+        fi
         status=0
         signature="$("$map_checker" "$shot")" || status=$?
         if (( status == 0 )); then

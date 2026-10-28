@@ -459,6 +459,10 @@ run_screenshot_group() {
     local attempt="$1"
     shift
     local frames=("$@") only_testing=() frame
+    local locale_options=(-testLanguage "${locale_id%%[_-]*}") region="${locale_id##*[_-]}"
+    if [[ "$locale_id" == *[_-]* && "$region" =~ ^([A-Za-z]{2}|[0-9]{3})$ ]]; then
+        locale_options+=(-testRegion "$region")
+    fi
     for frame in "${frames[@]}"; do
         only_testing+=("-only-testing:$screenshot_suite/$(screenshot_test_for_frame "$frame")")
     done
@@ -479,8 +483,7 @@ run_screenshot_group() {
         -skipPackagePluginValidation \
         -destination "platform=iOS Simulator,id=$udid" \
         -derivedDataPath "$derived_data" \
-        -testLanguage "${locale_id%%[_-]*}" \
-        -testRegion "${locale_id##*[_-]}" \
+        "${locale_options[@]}" \
         -resultBundlePath "$result_bundle" \
         -collect-test-diagnostics never \
         -test-timeouts-enabled YES \
@@ -695,6 +698,10 @@ screenshots_main() {
     if [[ ${#frames[@]} -eq 0 ]]; then
         echo "[$screenshot_appearance] skipped, no stamped library: ${skipped[*]} — nothing left to shoot."
         return 0
+    fi
+    if [[ ${#skipped[@]} -gt 0 && "$clean_output" == true ]]; then
+        echo "Keeping earlier captures because some requested frames need the stamped library." >&2
+        clean_output=false
     fi
 
     mkdir -p "$derived_data"

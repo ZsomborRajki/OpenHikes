@@ -274,6 +274,7 @@ OpenHikes/Hikes/Places/PlacesAroundScreen.swift
 OpenHikes/Hikes/Places/TrailPlaceKindChips.swift
 OpenHikes/Hikes/Places/HikePlaceAroundCard.swift
 OpenHikes/Hikes/Places/TrailPlaceCardParts.swift
+OpenHikes/Hikes/Places/PlaceCardScroll.swift
 OpenHikes/Recording/RecordingPlaceSheet.swift
 OpenHikes/Map/MapSheet+Places.swift
 OpenHikes/Community/Publishing/CommunityFinishSendingSection.swift
