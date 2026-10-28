@@ -128,6 +128,29 @@ nonisolated struct HikePhotoSearchPlan: Sendable {
     }
 }
 
+nonisolated extension HikePhotoSearchPlan {
+    /// What a plan is built from, read off a hike: plain values and no model,
+    /// so the route-sized work of indexing them can be handed off the main
+    /// actor — see ``PhotoDiscoveryWork``.
+    struct Source: Sendable {
+        let route: [RouteCoordinate]
+        /// Already narrowed to the walks along `route` — see
+        /// ``Hike/walkPhotoTimelines``.
+        let walks: [HikeWalkPhotoTimeline]
+    }
+
+    /// The plan `source` supports: the route's timeline, its legs and its
+    /// profile, each built here.
+    init(source: Source, profilesRoute: Bool = false) {
+        self.init(
+            timeline: HikePhotoTimeline(route: source.route),
+            walks: source.walks,
+            route: source.route,
+            profilesRoute: profilesRoute
+        )
+    }
+}
+
 extension Hike {
     /// What a library scan of this hike has to work with.
     ///
@@ -142,11 +165,15 @@ extension Hike {
     /// The same, with ``HikePhotoSearchPlan/profile`` built whatever the
     /// walks when `profilesRoute` is set — what the picker places with.
     func photoSearchPlan(profilesRoute: Bool) -> HikePhotoSearchPlan {
-        HikePhotoSearchPlan(
-            timeline: photoTimeline,
-            walks: walkPhotoTimelines,
-            route: route,
-            profilesRoute: profilesRoute
-        )
+        HikePhotoSearchPlan(source: photoSearchSource, profilesRoute: profilesRoute)
+    }
+
+    /// The values ``photoSearchPlan`` is built from, read on this row's actor.
+    ///
+    /// The route is decoded and the walks narrowed to the ones along it here;
+    /// the indexes are left to whoever builds the plan, which for a library
+    /// scan is somewhere off the main actor.
+    var photoSearchSource: HikePhotoSearchPlan.Source {
+        HikePhotoSearchPlan.Source(route: route, walks: walkPhotoTimelines)
     }
 }

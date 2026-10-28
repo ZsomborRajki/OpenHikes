@@ -33,6 +33,13 @@
 //  library; ``libraryAccess`` is kept for the sheet to say so, and
 //  ``selectMorePhotos(in:from:)`` is the way out.
 //
+//  The route-sized work — indexing the route, matching the library's answer
+//  against it — runs off the main actor, through ``PhotoDiscoveryWork``. Only
+//  the hike is read here, before the hop, and only the newest search writes
+//  what comes back: the sheet starts one per presentation, and the picker for
+//  the shared subset starts another, so an older one still matching must not
+//  land its answer on top of the newer one's.
+//
 
 import Foundation
 import Observation
@@ -96,12 +103,22 @@ final class PhotoDiscoveryController {
     private(set) var importFailed = false
 
     private let reader: any PhotoLibraryReading
+    private let work: PhotoDiscoveryWork
+    /// Counts searches, so one that a newer search has overtaken can tell and
+    /// write nothing — see ``search(in:)``.
+    @ObservationIgnored private var searchGeneration = 0
     /// The one import in flight, held so the sheet can cancel it — see
     /// ``runImport(into:store:)``.
     @ObservationIgnored private var importTask: Task<Int, Never>?
 
-    init(reader: some PhotoLibraryReading = PhotosLibraryReader()) {
+    /// - Parameter work: Replaced only by a suite that watches where the
+    ///   search's work runs.
+    init(
+        reader: some PhotoLibraryReading = PhotosLibraryReader(),
+        work: PhotoDiscoveryWork = .standard
+    ) {
         self.reader = reader
+        self.work = work
     }
 
     var selectedCount: Int { selection.count }
@@ -118,19 +135,27 @@ final class PhotoDiscoveryController {
     ///
     /// Safe to call again on the same controller: a second run re-reads the
     /// hike's imported identifiers, so anything already attached is skipped
-    /// rather than offered twice.
+    /// rather than offered twice — and a second run started before the first
+    /// has finished is the only one that writes, so a search overtaken while
+    /// it was matching drops its answer rather than replacing the newer one.
     func search(in hike: Hike) async {
-        let plan = hike.photoSearchPlan
-        guard !plan.isEmpty else {
-            phase = .unsupported
-            return
-        }
+        searchGeneration += 1
+        let generation = searchGeneration
+        // This controller outlives its sheet. Withdraw its previous results
+        // before indexing suspends, so reopening cannot import an old
+        // selection while the new search is being prepared.
         phase = .searching
         matches = []
         selection = []
         importFailed = false
-
+        let plan = await work.plan(from: hike.photoSearchSource)
+        guard isCurrent(generation), hike.isAttached else { return }
+        guard !plan.isEmpty else {
+            phase = .unsupported
+            return
+        }
         let access = await reader.requestAccess()
+        guard generation == searchGeneration else { return }
         libraryAccess = access
         guard access.allowsReading else {
             phase = access == .restricted ? .accessRestricted : .accessDenied
@@ -139,7 +164,7 @@ final class PhotoDiscoveryController {
         guard !Task.isCancelled else { return }
 
         let assets = await libraryAssets(in: plan.searchWindows)
-        guard !Task.isCancelled, hike.isAttached else { return }
+        guard isCurrent(generation), hike.isAttached else { return }
 
         // Asked again after the fetch, not only before it. The fetch is a
         // cross-process query that can take seconds, and what a library the
@@ -154,13 +179,21 @@ final class PhotoDiscoveryController {
             return
         }
 
-        let found = plan.matches(
-            assets: assets,
+        let found = await work.matches(
+            in: plan,
+            of: assets,
             alreadyImported: hike.importedPhotoAssetIdentifiers
         )
+        guard isCurrent(generation), hike.isAttached else { return }
         matches = found
         selection = Set(found.map(\.id))
         phase = found.isEmpty ? .empty : .results
+    }
+
+    /// Whether the search numbered `generation` may still write: it has not
+    /// been cancelled, and no newer search has started since.
+    private func isCurrent(_ generation: Int) -> Bool {
+        !Task.isCancelled && generation == searchGeneration
     }
 
     /// Everything the library holds in any of `windows`, each asset once.
