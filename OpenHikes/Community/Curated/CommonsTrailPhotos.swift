@@ -178,21 +178,8 @@ nonisolated enum CommonsTrailPhotos {
         limit: Int,
         over length: Double
     ) -> [Placed] {
-        var taken: [String: Int] = [:]
-        var preferred: [Placed] = []
-        var heldBack: [Placed] = []
-        for photo in placed.sorted(by: closerToTheLine) {
-            guard let author = authors[photo.pageID] else {
-                preferred.append(photo)
-                continue
-            }
-            let count = taken[author, default: 0]
-            if count < perAuthorLimit {
-                taken[author] = count + 1
-                preferred.append(photo)
-            } else {
-                heldBack.append(photo)
-            }
+        let (preferred, heldBack) = CommonsAuthorBudget.partition(placed.sorted(by: closerToTheLine)) { photo in
+            authors[photo.pageID]
         }
         let first = spread(preferred, limit: limit, over: length)
         guard first.count < limit else { return first }
