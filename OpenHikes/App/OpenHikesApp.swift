@@ -86,6 +86,7 @@ struct OpenHikesApp: App {
             SharedHikeCatalogPublisher.publish(
                 from: coordinator,
                 container: appModel.container,
+                writer: appModel.backgroundTracker.snapshotWriter,
                 watch: appModel.watchLink
             )
             // The watch's own link, started here rather than in a `.task` for
