@@ -86,6 +86,11 @@ final class WatchModel {
     /// resumes after a later one cannot put the count back — see
     /// ``WatchQueuedWalks/isNewer(than:)``.
     @ObservationIgnored private var queuedWalks: WatchQueuedWalks?
+    /// The press waiting on the phone, by identity, so an answer to an
+    /// earlier one cannot end its wait — see ``WatchCommandWait``. Its two
+    /// halves are copied to ``pendingCommand`` and ``commandRefusal``, which
+    /// the screen reads, by ``applyCommandWait()``.
+    @ObservationIgnored private var commandWait = WatchCommandWait()
 
     init(store: WatchStore = WatchStore()) {
         self.store = store
@@ -280,14 +285,23 @@ final class WatchModel {
 
     /// Sends a button to the phone's recorder.
     func command(_ action: WatchRecordingCommand.Action) {
-        guard pendingCommand == nil else { return }
-        commandRefusal = nil
-        pendingCommand = action
-        link.send(WatchRecordingCommand(action: action))
+        guard let command = commandWait.press(action) else { return }
+        applyCommandWait()
+        link.send(command)
     }
 
     /// Clears a refusal the hiker has read.
-    func acknowledgeRefusal() { commandRefusal = nil }
+    func acknowledgeRefusal() {
+        commandWait.acknowledgeRefusal()
+        applyCommandWait()
+    }
+
+    /// Copies the wait to the two properties the screen reads. Each is
+    /// `Equatable`, so a write of the value already held invalidates nothing.
+    private func applyCommandWait() {
+        pendingCommand = commandWait.pendingAction
+        commandRefusal = commandWait.refusal
+    }
 
     // MARK: Recording on this watch
 
@@ -451,11 +465,14 @@ final class WatchModel {
         case .phoneRecording(let recording):
             apply(recording)
         case .commandAnswer(let answer):
-            pendingCommand = nil
-            commandRefusal = answer.refusal
-            // Only the phone's own answer moves the reading. A command the
-            // watch could not deliver says nothing about the phone's
-            // recorder, so a running hike stays on screen and keeps
+            // Only the answer to the press still waiting frees the buttons or
+            // says anything to the hiker. One for an earlier press, or a
+            // second copy, is late — see ``WatchCommandWait``.
+            if commandWait.receive(answer) { applyCommandWait() }
+            // The reading follows its own freshness rule whichever press it
+            // answers, like any push. Only the phone's own answer moves it: a
+            // command the watch could not deliver says nothing about the
+            // phone's recorder, so a running hike stays on screen and keeps
             // ``isPhoneRecording`` guarding against a second one.
             phoneRecording = answer.reading(holding: phoneRecording)
         case .reachabilityChanged(let isReachable):
@@ -471,7 +488,8 @@ final class WatchModel {
                 // screen whose phone might have stopped ten minutes ago; the
                 // screen says "out of range" from the link instead.
                 phoneRecording = nil
-                pendingCommand = nil
+                commandWait.phoneLost()
+                applyCommandWait()
             }
         }
     }
