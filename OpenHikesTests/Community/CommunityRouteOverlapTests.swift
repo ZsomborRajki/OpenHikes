@@ -235,4 +235,69 @@ struct CommunityRouteOverlapTests {
         #expect(CommunityRouteOverlap.coverage(of: along, by: sparse) == 1)
         #expect(CommunityRouteOverlap.coverage(of: beside, by: sparse) == 0)
     }
+
+    // MARK: - A pause is not trail
+
+    /// Two walked pieces with a four-kilometre transfer between them, a drive
+    /// or a lift the recording was paused across (see *The app* in AGENTS.md).
+    private static let pausedTransfer = [
+        RouteCoordinate(latitude: 47, longitude: 19),
+        RouteCoordinate(latitude: 47.01, longitude: 19),
+        RouteCoordinate(latitude: 47.05, longitude: 19, boundary: .paused),
+        RouteCoordinate(latitude: 47.06, longitude: 19),
+    ]
+
+    /// A straight line north along longitude 19, `count` points from one
+    /// latitude to another.
+    private static func meridian(from start: Double, to end: Double, count: Int = 60) -> [RouteCoordinate] {
+        (0..<count).map { step in
+            RouteCoordinate(
+                latitude: start + (end - start) * Double(step) / Double(count - 1),
+                longitude: 19
+            )
+        }
+    }
+
+    /// The ground a recording was paused across was never walked, so a hike
+    /// along it is a different walk, however neatly it fits between the two
+    /// pieces. Densifying the paused leg indexed it as trail and refused this.
+    @Test("a walk through another hike's paused transfer is not a retread of it")
+    func pausedTransferIsNotTrail() {
+        let between = Self.meridian(from: 47.02, to: 47.04)
+
+        #expect(CommunityRouteOverlap.coverage(of: between, by: Self.pausedTransfer) == 0)
+        #expect(!CommunityRouteOverlap.isDuplicate(between, of: Self.pausedTransfer))
+    }
+
+    /// The control: each walked piece is still trail, densified as before, so
+    /// a walk along either one is a retread.
+    @Test("a walk along either walked piece is still a retread", arguments: [47.0, 47.05])
+    func walkedPieceIsTrail(_ start: Double) {
+        let along = Self.meridian(from: start, to: start + 0.01)
+
+        #expect(CommunityRouteOverlap.coverage(of: along, by: Self.pausedTransfer) == 1)
+        #expect(CommunityRouteOverlap.isDuplicate(along, of: Self.pausedTransfer))
+    }
+
+    /// A fix with a pause on both sides — a GPX `<trkseg>` of one point — is
+    /// still somewhere the hiker was, so it stays in the index; only the legs
+    /// to and from it are left out.
+    @Test("a lone fix between two pauses is kept, and the legs to it are not")
+    func loneFixIsKept() {
+        let route = [
+            RouteCoordinate(latitude: 47, longitude: 19),
+            RouteCoordinate(latitude: 47.01, longitude: 19),
+            RouteCoordinate(latitude: 47.03, longitude: 19, boundary: .paused),
+            RouteCoordinate(latitude: 47.05, longitude: 19, boundary: .paused),
+            RouteCoordinate(latitude: 47.06, longitude: 19),
+        ]
+        let atFix = [RouteCoordinate(latitude: 47.03, longitude: 19)]
+        let onPausedLegs = [
+            RouteCoordinate(latitude: 47.02, longitude: 19),
+            RouteCoordinate(latitude: 47.04, longitude: 19),
+        ]
+
+        #expect(CommunityRouteOverlap.coverage(of: atFix, by: route) == 1)
+        #expect(CommunityRouteOverlap.coverage(of: onPausedLegs, by: route) == 0)
+    }
 }
