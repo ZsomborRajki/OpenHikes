@@ -5,8 +5,9 @@
 //  A rejected coordinate must not turn a paused transfer into walked trail.
 //  The boundary describes the leg arriving at its point, so losing the first
 //  fix after a pause still leaves the next surviving fix in a separate piece.
-//  These decode local bytes and inspect the same distance and run splitting
-//  that a saved route and its map use; no transport or store is involved.
+//  These decode local bytes and inspect the same distance, run splitting and
+//  height filtering that a saved route and its map use; no transport or store
+//  is involved.
 //
 
 import Foundation
@@ -65,6 +66,28 @@ struct CommunityRoutePauseSanitizationTests {
         #expect(read.lengthMeters.isApproximatelyEqual(
             to: before.lengthMeters + after.lengthMeters, absoluteTolerance: 0.001
         ))
+    }
+
+    /// The pause is restored before heights are judged. Judged across the
+    /// dropped resume, the first height after it would sit between two lower
+    /// ones a few meters away and be emptied as a placeholder.
+    @Test("a height after a rejected resume is not judged against the walk before the pause")
+    func rejectedResumeKeepsHeightNeighborsApart() throws {
+        let valley = [
+            RouteCoordinate(latitude: 47.0000, longitude: 19, elevation: 800),
+            RouteCoordinate(latitude: 47.0001, longitude: 19, elevation: 800),
+        ]
+        let summit = [
+            RouteCoordinate(latitude: 47.0002, longitude: 19, elevation: 1300),
+            RouteCoordinate(latitude: 47.0003, longitude: 19, elevation: 800),
+            RouteCoordinate(latitude: 47.0004, longitude: 19, elevation: 800),
+        ]
+
+        let read = try decoded(valley + rejected(1, paused: true) + summit)
+
+        var expected = valley + summit
+        expected[2].boundary = .paused
+        #expect(read == expected)
     }
 
     @Test("a pause on rejected leading points does not cut the first walked leg", arguments: [false, true])
