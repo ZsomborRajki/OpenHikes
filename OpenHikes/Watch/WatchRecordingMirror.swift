@@ -27,6 +27,10 @@
 //  publishes at the rate a hiker reads rather than at the rate a receiver
 //  reports, and the *state changes* that must not wait for it do not: they
 //  arrive as the reply to the command that caused them.
+//  A reply can be lost while the watch stays reachable, so every command
+//  also forgets the publisher's baseline. The next tick then corrects the
+//  watch even when its reply failed, before unchanged readings are deduped
+//  again. A reply is not evidence that the watch received its state.
 //
 //  The loop runs only while the watch app is **reachable**, which on iOS means
 //  it is in the foreground — in other words, only while somebody is looking at
@@ -145,7 +149,11 @@ final class WatchRecordingMirror {
             )
         }
         let reading = await currentState()
-        lastPublished = reading
+        // Do not count the reply as a delivered push: a successful Stop can
+        // lose its reply while the watch retains a running reading. Forget
+        // even an identical pre-command push, because Start and Stop can
+        // both happen between publisher ticks.
+        lastPublished = nil
         return WatchCommandOutcome(
             commandID: command.id,
             recording: reading,
