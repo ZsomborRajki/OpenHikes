@@ -83,7 +83,9 @@ enum HikeElevationFill {
         do {
             try save(context)
         } catch {
-            context.rollback()
+            // Restore only our change. This is the shared UI context, whose
+            // other pending edits may have arrived while the source was
+            // suspended; rolling it back would discard those too.
             hike.replaceRoute(with: route)
             logger.error("Heights for a hike could not be saved: \(error.localizedDescription, privacy: .public)")
             return false
