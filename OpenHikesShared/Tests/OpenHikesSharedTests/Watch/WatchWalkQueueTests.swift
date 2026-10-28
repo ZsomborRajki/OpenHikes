@@ -137,6 +137,36 @@ struct WatchWalkQueueTests {
         }
     }
 
+    @Test(
+        "A walk in a format this build does not read is refused, and its file stays",
+        arguments: [WatchRecordedWalk.currentSchemaVersion - 1, 999]
+    )
+    func unsupportedVersionIsRefusedAndKept(version: Int) async throws {
+        try await withQueue { queue in
+            let other = Fixture.walk(endingAfter: 100)
+            let fine = Fixture.walk(endingAfter: 200)
+            _ = await queue.enqueue(other)
+            _ = await queue.enqueue(fine)
+            let written = try fileNames(in: queue.directory)
+            let otherName = try #require(written.first { $0.contains(other.sessionID.uuidString) })
+            let otherURL = queue.directory.appending(path: otherName)
+            // Every field intact and only the version changed: the walk a
+            // build on the other side of a format change would have queued.
+            let original = try Data(contentsOf: otherURL)
+            var object = try #require(try JSONSerialization.jsonObject(with: original) as? [String: Any])
+            object["schemaVersion"] = version
+            let rewritten = try JSONSerialization.data(withJSONObject: object)
+            try rewritten.write(to: otherURL)
+
+            let relaunched = WatchWalkQueue(directory: queue.directory)
+            #expect(await relaunched.walk(other.sessionID) == nil)
+            #expect(await relaunched.walk(fine.sessionID) == fine)
+            #expect(await relaunched.pending().sessionIDs == [fine.sessionID])
+            // Possibly the only copy of a recording, so it is never deleted.
+            #expect(try Data(contentsOf: otherURL) == rewritten)
+        }
+    }
+
     @Test("A fresh copy of a walk that would not decode replaces its file", arguments: [false, true])
     func undecodableWalkIsReplaced(namedBeforeTheIndex: Bool) async throws {
         try await withQueue { queue in

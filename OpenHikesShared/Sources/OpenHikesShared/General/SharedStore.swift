@@ -376,18 +376,19 @@ public enum SharedStore {
         from data: Data,
         named file: String
     ) -> Payload? {
-        let announced = (try? JSONDecoder().decode(SharedPayloadVersionPeek.self, from: data))?.schemaVersion
-        if let announced, announced != Payload.currentSchemaVersion {
-            SharedStoreDiagnostics.report(
-                .unsupportedSchemaVersion(
-                    file: file,
-                    found: announced,
-                    supported: Payload.currentSchemaVersion
+        do throws(SharedPayloadReadFailure) {
+            return try Payload.decodeCurrentFormat(from: data)
+        } catch {
+            switch error {
+            case let .unsupportedVersion(found, supported):
+                SharedStoreDiagnostics.report(
+                    .unsupportedSchemaVersion(file: file, found: found, supported: supported)
                 )
-            )
+            case let .malformed(detail):
+                SharedStoreDiagnostics.report(.decodeFailed(file: file, detail: detail))
+            }
             return nil
         }
-        return decodeUnversioned(type, from: data, named: file)
     }
 
     /// The decode half on its own, for payloads that carry no version.

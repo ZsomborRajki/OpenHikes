@@ -75,7 +75,7 @@ struct WatchStore: Sendable {
     /// first launch, an unreadable file and a watch that has never been in
     /// range all look like, and all three draw the same empty state.
     func loadLibrary() -> WatchLibraryDigest {
-        read(WatchLibraryDigest.self, from: digestURL) ?? .empty
+        read(from: digestURL, WatchStoredFile.libraryDigest(from:)) ?? .empty
     }
 
     func save(_ digest: WatchLibraryDigest) {
@@ -97,7 +97,7 @@ struct WatchStore: Sendable {
     /// wholesale by the next that arrives, and a watch holding one stale route
     /// costs a file rather than a decision.
     func loadTrail() -> WatchTrailPackage? {
-        read(WatchTrailPackage.self, from: trailURL)
+        read(from: trailURL, WatchStoredFile.trailPackage(from:))
     }
 
     func save(_ package: WatchTrailPackage) {
@@ -117,10 +117,16 @@ struct WatchStore: Sendable {
 
     // MARK: Files
 
-    private func read<Value: Decodable>(_ type: Value.Type, from url: URL) -> Value? {
+    /// Through the same version check the link applies — see
+    /// ``WatchStoredFile`` — so a file another build of this app wrote in
+    /// another format reads as none, rather than reaching the screen.
+    private func read<Value>(
+        from url: URL,
+        _ decode: (Data) throws(SharedPayloadReadFailure) -> Value
+    ) -> Value? {
         guard let data = try? Data(contentsOf: url) else { return nil }
-        do {
-            return try JSONDecoder().decode(type, from: data)
+        do throws(SharedPayloadReadFailure) {
+            return try decode(data)
         } catch {
             // Said rather than swallowed: a file that can never be decoded is
             // read again on every launch forever, and a cost that presents as
@@ -129,7 +135,7 @@ struct WatchStore: Sendable {
             Self.logger.error(
                 """
                 \(url.lastPathComponent, privacy: .public) could not be read: \
-                \(error.localizedDescription, privacy: .public)
+                \(String(describing: error), privacy: .public)
                 """
             )
             return nil
