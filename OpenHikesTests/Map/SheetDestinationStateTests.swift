@@ -141,9 +141,10 @@ struct SheetDestinationStateTests {
 
     /// #1170: a turn of the phone replaces *Places Around Trail*, which
     /// closed the card open over it, put *Within* back and asked the line
-    /// again, so what it has found lives here until the screen is popped.
-    @Test("Places Around Trail's search and its open card outlive rotation, and go with the screen")
-    func placesAroundSearchFollowsTheNavigationLifetime() throws {
+    /// again, so what it has found lives here until the screen is popped —
+    /// and so does a request still out, which only Back withdraws.
+    @Test("Places Around Trail's search, card and request out outlive rotation, and go with the screen")
+    func placesAroundSearchFollowsTheNavigationLifetime() async throws {
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context)
         let route = SheetRoute.placesAround(hike)
@@ -153,18 +154,30 @@ struct SheetDestinationStateTests {
         let card = UUID()
         search.reach = .onTrail
         search.selection = card
+        let line = [
+            RouteCoordinate(latitude: 47.60, longitude: 12.98),
+            RouteCoordinate(latitude: 47.61, longitude: 12.98),
+        ]
+        let spring = TrailPlace(latitude: 47.605, longitude: 12.98, name: "Spring", symbol: .water)
+        // Out until this test awaits: the suite holds the main actor.
+        let out = search.search(along: line, from: AnsweringSource(answer: [spring]), showing: [.water])
 
         for layout in [SheetLayout.sidePanel, .bottomSheet] {
             presentation.layout = layout
             #expect(presentation.placesAroundSearch(for: route) === search)
             #expect(search.selection == card, "the card open over the screen is presented again")
             #expect(search.reach == .onTrail)
+            #expect(!search.needsSearch(showing: [.water]), "and the request out is waited for")
         }
 
         let spot = HikePlaceSpot(CLLocationCoordinate2D(latitude: 47.6, longitude: 12.9))
         presentation.path.append(.newPlace(hike, spot))
         #expect(presentation.placesAroundSearch(for: route) === search, "a screen pushed over it keeps it")
+        #expect(!search.needsSearch(showing: [.water]), "request and all")
         presentation.path = [.hike(hike)]
+        #expect(search.needsSearch(showing: [.water]), "Back withdraws the request")
+        await out.value
+        #expect(search.found.isEmpty, "so its answer lands nowhere")
         presentation.path.append(route)
         #expect(presentation.placesAroundSearch(for: route) !== search, "Back leaves nothing for the next visit")
         #expect(presentation.placesAroundSearch(for: route).selection == nil)
@@ -198,5 +211,15 @@ struct SheetDestinationStateTests {
         #expect(presentation.placesNearby(for: route) !== session)
         #expect(presentation.placesNearby(for: route).origin == nil)
         #expect(!presentation.placesNearby(for: route).asked.hasAsked)
+    }
+}
+
+/// Answers as soon as it is asked — which, in a suite holding the main actor,
+/// is not before the suite awaits.
+private struct AnsweringSource: TrailPointSourcing {
+    let answer: [TrailPlace]
+
+    func places(near _: CommunitySearchArea, showing _: Set<TrailPlaceSymbol>) -> [TrailPlace] {
+        answer
     }
 }

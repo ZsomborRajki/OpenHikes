@@ -58,7 +58,7 @@ struct TrailPlacesAroundTests {
         let token = around.attach(Self.handlers(calls))
         around.show([Self.row], token: token)
 
-        #expect(around.detach(token: token), "the claim was this screen's")
+        around.detach(token: token)
 
         #expect(!around.isActive)
         #expect(around.candidates.isEmpty)
@@ -67,10 +67,25 @@ struct TrailPlacesAroundTests {
         #expect(calls.selected.isEmpty && calls.drops.isEmpty)
     }
 
+    /// A screen popped off the stack lived on in the finder, in the closure
+    /// its answers went to, until the next screen claimed the map.
+    @Test("once the screen goes, the finder lets go of where its answers went")
+    func detachedScreenIsLetGo() {
+        let around = TrailPlacesAround()
+        weak var screen: Calls?
+        do {
+            let calls = Calls()
+            screen = calls
+            let token = around.attach(Self.handlers(Calls()))
+            around.finder.onFound { _ in calls.searches += 1 }
+            around.detach(token: token)
+        }
+
+        #expect(screen == nil)
+    }
+
     /// The screen that replaces this one appears before this one disappears,
-    /// so the release has to be checked against the claim it was given. It
-    /// says so, because a turn of the phone replaces the screen with a copy
-    /// on the same search, and only the claim's holder may cancel it.
+    /// so the release has to be checked against the claim it was given.
     @Test("a stale screen's release leaves the newer claim standing")
     func staleReleaseIsIgnored() {
         let around = TrailPlacesAround()
@@ -78,7 +93,7 @@ struct TrailPlacesAroundTests {
         let second = around.attach(Self.handlers(Calls()))
         around.show([Self.row], token: second)
 
-        #expect(!around.detach(token: first), "the claim had moved on")
+        around.detach(token: first)
         around.show([], token: first)
 
         #expect(around.isActive)
