@@ -16,17 +16,17 @@
 //  is the answer to the question a hiker actually has — *where is this
 //  forecast from* — and the one a weather app would give.
 //
-//  ## And what day it is there
+//  ## And what day and time it is there
 //
 //  The same answer carries the place's time zone, which WeatherKit does not:
-//  a `DayWeather` is dated at midnight *there*, and the week's weekday names
-//  are only right when they are read in that zone — Tokyo's Friday, formatted
-//  in Berlin, is a Thursday afternoon. So a searched place is looked up too,
+//  a `DayWeather` is dated at midnight *there*, and its weekday names, hourly
+//  labels and daylight clock times belong to that zone — Tokyo's Friday,
+//  formatted in Berlin, begins on Thursday afternoon. So a searched place is looked up too,
 //  for its zone alone, while keeping the name the hiker searched for; and
 //  `me` is not, because *here* is the reader's own zone. Which day is today,
 //  and which day's sun ends a walk, need no zone at all — see
-//  ``WeatherForecastDay`` — so a launch with no geocoder loses only the
-//  weekday names abroad, and draws them as it always did.
+//  ``WeatherForecastDay`` — so a launch with no geocoder draws the weekday
+//  names and clock times in the reader's zone, as it always did.
 //
 //  ## Why this is a seam
 //
@@ -59,7 +59,7 @@ import os
 nonisolated struct WeatherPlaceDescription: Equatable, Sendable {
     /// The city the coordinate falls in, `nil` on open hillside.
     var cityName: String?
-    /// The zone the forecast's days begin at midnight in.
+    /// The zone the forecast's clock times and calendar days belong to.
     var timeZone: TimeZone?
 }
 
