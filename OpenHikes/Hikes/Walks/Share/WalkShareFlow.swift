@@ -143,9 +143,12 @@ struct WalkShareFlow: View {
     /// link on anything made from it — none of which the card carries. See
     /// ``HikePhoto/license``.
     static func offered(_ photos: [HikePhoto], walkedFrom start: Date, to end: Date) -> [HikePhoto] {
-        let pictures = photos.filter { !$0.recordsPlaceOnly && $0.license == nil }
-        let walked = pictures.filter { (start...max(start, end)).contains($0.capturedAt) }
-        let others = pictures.filter { !(start...max(start, end)).contains($0.capturedAt) }
+        let walkedSpan = start...max(start, end)
+        // `partitioned(by:)` answers (does not satisfy, satisfies), and each
+        // half keeps the hike's order.
+        let (others, walked) = photos.lazy
+            .filter { !$0.recordsPlaceOnly && $0.license == nil }
+            .partitioned { walkedSpan.contains($0.capturedAt) }
         return walked + others
     }
 
@@ -200,18 +203,19 @@ struct WalkShareFlow: View {
         return LoadedPhotoImage(image: PhotoImage(cgImage: image))
     }
 
-    /// The trail's outline with the walk's stretches over it, fitted once.
+    /// The trail's outline with the walk's stretches over it, fitted once,
+    /// both cut at the trail's pauses.
     ///
     /// Off the main actor: a recorded trail is twenty thousand points, and
     /// the stretches walk the covered part of them again.
     @concurrent
-    private static func shape(
+    static func shape(
         of ranges: [ClosedRange<Double>],
         along trail: RouteProfile?,
         walked: Bool
     ) async -> WalkShareRouteShape {
         guard let trail else { return .empty }
         let stretches = walked ? await WalkHighlight.segments(covering: ranges, along: trail) : []
-        return WalkShareRouteShape(fitting: trail.coordinates, walked: stretches)
+        return WalkShareRouteShape(fitting: trail.coordinates, walked: stretches, cutAt: trail.trailRuns)
     }
 }

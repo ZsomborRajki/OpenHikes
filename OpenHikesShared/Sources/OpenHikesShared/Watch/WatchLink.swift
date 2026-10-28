@@ -116,20 +116,15 @@ public enum WatchLink {
         from message: [String: Any]
     ) throws(WatchLinkFailure) -> Payload {
         guard let data = message[bodyKey] as? Data else { throw .missingBody(kind) }
-        let announced = (
-            try? JSONDecoder().decode(SharedPayloadVersionPeek.self, from: data)
-        )?.schemaVersion
-        if let announced, announced != Payload.currentSchemaVersion {
-            throw .unsupportedVersion(
-                kind,
-                found: announced,
-                supported: Payload.currentSchemaVersion
-            )
-        }
-        do {
-            return try JSONDecoder().decode(Payload.self, from: data)
+        do throws(SharedPayloadReadFailure) {
+            return try Payload.decodeCurrentFormat(from: data)
         } catch {
-            throw .malformed(kind, detail: SharedStoreDiagnostics.describe(error))
+            switch error {
+            case let .unsupportedVersion(found, supported):
+                throw .unsupportedVersion(kind, found: found, supported: supported)
+            case let .malformed(detail):
+                throw .malformed(kind, detail: detail)
+            }
         }
     }
 

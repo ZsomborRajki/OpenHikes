@@ -16,16 +16,25 @@
 //  longitudes, so a trail across the antimeridian is fitted as the few
 //  kilometres it covers rather than the rest of the globe.
 //
+//  The trail is drawn as the runs that were walked (#1122): a pause, or a GPX
+//  `<trkseg>` break, is not trail (see *The app* in AGENTS.md), so the leg
+//  across one is left out rather than drawn as the solid line across a drive
+//  that the map, the widget and the watch never draw either. The runs share
+//  one frame, fitted around all of them, so the covered stretches still land
+//  on the line they were walked along.
+//
 
 import CoreGraphics
 import CoreLocation
 import Foundation
 import OpenHikesData
+import OpenHikesShared
 
 nonisolated struct WalkShareRouteShape: Equatable, Sendable {
     /// The whole trail, in a unit square: centred, the longer side spanning
-    /// 0…1, y growing southwards as a screen's does.
-    let trail: [CGPoint]
+    /// 0…1, y growing southwards as a screen's does. One line per walked
+    /// run, each of two points or more, in order; nothing across a pause.
+    let trail: [[CGPoint]]
     /// The covered stretches, in the trail's square.
     let walked: [[CGPoint]]
 
@@ -37,13 +46,22 @@ nonisolated struct WalkShareRouteShape: Equatable, Sendable {
     static let minimumStep: CGFloat = 0.002
     private static let minimumCosLatitude = 0.15
 
-    /// Fits `trail` and `walked` into one unit square.
+    /// Fits `trail`'s walked runs and `walked` into one unit square.
     ///
     /// Equirectangular around the trail's middle latitude, which is the right
     /// projection exactly because nothing has to line up with it: there is no
     /// map under this line, only a photograph.
-    init(fitting trail: [CLLocationCoordinate2D], walked: [[CLLocationCoordinate2D]]) {
-        guard let bounds = TileBoundingBox(route: trail) else {
+    ///
+    /// - Parameter runs: `trail` cut at its pauses, or `nil` for a line that
+    ///   was never paused. A lone fix between two pauses is in no run, so it
+    ///   is neither drawn nor fitted (see ``TrailRuns/walkedRuns``).
+    init(fitting trail: [CLLocationCoordinate2D], walked: [[CLLocationCoordinate2D]], cutAt runs: TrailRuns? = nil) {
+        // Runs counted on another line would cut this one in the wrong
+        // places, so they are only read when they are this line's.
+        let cut = runs.flatMap { $0.pointCount == trail.count ? $0 : nil }
+            ?? TrailRuns(pointCount: trail.count, pauseIndices: [])
+        let lines = cut.walkedRuns.map { trail[$0] }
+        guard let bounds = TileBoundingBox(route: Array(lines.joined())) else {
             self = .empty
             return
         }
@@ -71,12 +89,12 @@ nonisolated struct WalkShareRouteShape: Equatable, Sendable {
         }
 
         self.init(
-            trail: Self.thinned(trail.map(fit)),
+            trail: lines.map { Self.thinned($0.map(fit)) },
             walked: walked.map { Self.thinned($0.map(fit)) }.filter { $0.count > 1 }
         )
     }
 
-    init(trail: [CGPoint], walked: [[CGPoint]]) {
+    init(trail: [[CGPoint]], walked: [[CGPoint]]) {
         self.trail = trail
         self.walked = walked
     }

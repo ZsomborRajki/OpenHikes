@@ -27,8 +27,9 @@ struct WalkShareRouteShapeTests {
     @Test("the longer side spans the square and the other keeps its share")
     func keepsTheShape() throws {
         let shape = WalkShareRouteShape(fitting: Self.tall, walked: [])
-        let start = try #require(shape.trail.first)
-        let end = try #require(shape.trail.last)
+        let line = try #require(shape.trail.first)
+        let start = try #require(line.first)
+        let end = try #require(line.last)
 
         // South to north is the full height, measured downwards.
         #expect((start.y - end.y).isApproximatelyEqual(to: 1, absoluteTolerance: 1e-9))
@@ -39,8 +40,9 @@ struct WalkShareRouteShapeTests {
     @Test("north is up and the narrow side is centred")
     func northIsUpAndCentered() throws {
         let shape = WalkShareRouteShape(fitting: Self.tall, walked: [])
-        let south = try #require(shape.trail.first)
-        let north = try #require(shape.trail.last)
+        let line = try #require(shape.trail.first)
+        let south = try #require(line.first)
+        let north = try #require(line.last)
 
         #expect(north.y < south.y)
         #expect(((south.x + north.x) / 2).isApproximatelyEqual(to: 0.5, absoluteTolerance: 1e-9))
@@ -88,8 +90,9 @@ struct WalkShareRouteShapeTests {
                     && actual.y.isApproximatelyEqual(to: expected.y, absoluteTolerance: 1e-9)
             }
         }
-        #expect(greenwich.trail.count == 4)
-        #expect(matches(dateLine.trail, greenwich.trail))
+        #expect(greenwich.trail.count == 1)
+        #expect(greenwich.trail.first?.count == 4)
+        #expect(matches(dateLine.trail.first ?? [], greenwich.trail.first ?? []))
         #expect(dateLine.walked.count == 1)
         #expect(matches(dateLine.walked.first ?? [], greenwich.walked.first ?? []))
     }
@@ -109,7 +112,7 @@ struct WalkShareRouteShapeTests {
         #expect(WalkShareRouteShape(fitting: [], walked: []) == .empty)
 
         let still = CLLocationCoordinate2D(latitude: 47, longitude: 12)
-        let point = try #require(WalkShareRouteShape(fitting: [still, still], walked: []).trail.first)
+        let point = try #require(WalkShareRouteShape(fitting: [still, still], walked: []).trail.first?.first)
         #expect(point == CGPoint(x: 0.5, y: 0.5))
     }
 }

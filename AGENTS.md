@@ -660,8 +660,10 @@ a change to recording, the map, the sheet or the render path; the PR template,
   gives up four things, deliberately:
   - photo pixels on other devices (see *Settled decisions*)
   - small updates (a rename re-uploads the whole row)
-  - hiding unfinished work (a recording in progress is an ordinary row, so
-    another device can show a line still being drawn)
+  - hiding unfinished work (a recording's draft is an ordinary row, so
+    another device shows it, with its places and photos, as a hike with no
+    line; the route stays in the device-local `TrackJournal` until Stop
+    writes it)
   - any preference for unsent local edits
 
   The Simulator gets no CloudKit pushes, so two simulators cannot test sync.

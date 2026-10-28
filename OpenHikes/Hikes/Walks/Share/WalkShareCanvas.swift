@@ -276,9 +276,17 @@ struct WalkShareRouteBox: View {
         // square is not cut in half.
         let inset = line * 2
         let box = CGRect(origin: .zero, size: size).insetBy(dx: inset, dy: inset)
-        func path(_ points: [CGPoint]) -> Path {
+        // Each line its own subpath, so a paused transfer between two runs
+        // is not drawn, and the faint outline is one stroke that does not
+        // darken where its runs overlap.
+        func drawn(_ point: CGPoint) -> CGPoint {
+            CGPoint(x: box.minX + point.x * box.width, y: box.minY + point.y * box.height)
+        }
+        func path(_ lines: [[CGPoint]]) -> Path {
             Path { path in
-                path.addLines(points.map { CGPoint(x: box.minX + $0.x * box.width, y: box.minY + $0.y * box.height) })
+                for points in lines {
+                    path.addLines(points.map(drawn))
+                }
             }
         }
         let round = StrokeStyle(lineWidth: line, lineCap: .round, lineJoin: .round)
@@ -291,10 +299,10 @@ struct WalkShareRouteBox: View {
                 : round
         )
         for stretch in shape.walked {
-            context.stroke(path(stretch), with: .color(color), style: round)
+            context.stroke(path([stretch]), with: .color(color), style: round)
         }
-        if let start = shape.trail.first {
-            let center = CGPoint(x: box.minX + start.x * box.width, y: box.minY + start.y * box.height)
+        if let start = shape.trail.first?.first {
+            let center = drawn(start)
             let radius = line * Self.startDotShare
             let dot = CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)
             context.fill(Path(ellipseIn: dot), with: .color(color))
