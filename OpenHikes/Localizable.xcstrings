@@ -11335,17 +11335,6 @@
         }
       }
     },
-    "The photograph is deleted from this device for good." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das Foto wird endgültig von diesem Gerät gelöscht."
-          }
-        }
-      }
-    },
     "The photos are deleted for good. The hiker is not told, and their app goes on reading “waiting for review”. The trail itself is not touched." : {
       "localizations" : {
         "de" : {
