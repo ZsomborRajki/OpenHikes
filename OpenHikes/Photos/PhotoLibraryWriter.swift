@@ -31,9 +31,10 @@
 //  the capture time and the trail coordinate go onto the asset *and* into the
 //  file's own EXIF — see ``PhotoMetadataStamp`` for why both.
 //
-//  Importing *from* the library needs no authorization at all, which is why
-//  there is no counterpart to this file on that side — `PhotosPicker` runs out
-//  of process and hands back only what the user picked.
+//  Choosing individual photos through `PhotosPicker` needs no photo-library
+//  authorization: it runs out of process and hands back only what the user
+//  picked. *Find Photos* scans the library through ``PhotosLibraryReader``,
+//  which owns its separate read/write request.
 //
 //  None of it runs on the main actor, and the `@concurrent` below is what says
 //  so — see the protocol requirement for why it is stated there. Getting that
