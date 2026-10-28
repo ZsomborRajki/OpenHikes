@@ -2,9 +2,15 @@
 //  HikeListMetrics+Observation.swift
 //  OpenHikes
 //
-//  A Hilliest list keeps observing its routes for the lifetime of its task.
-//  A count/sort key cannot notice an incoming edit to the same hike, and the
-//  sending device's editor cannot invalidate this device's local sidecar.
+//  A Hilliest list keeps observing its routes for the lifetime of its task,
+//  so a route written through the main context while the list is up (heights
+//  filled in, a recording finished, an edit that overtook a measurement) is
+//  validated at once. A key of the sort and the hike IDs cannot notice that.
+//
+//  A write through another context is not caught here. A sibling context's
+//  save was measured not to notify the main context's hike, even after a
+//  fetch had refreshed its route, so an edit received from another device is
+//  validated the next time the list's task starts.
 //
 //  The dependency is registered through the model's generated access method,
 //  without asking for its externally stored route value. The worker reads,
