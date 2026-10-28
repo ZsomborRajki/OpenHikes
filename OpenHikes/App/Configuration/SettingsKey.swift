@@ -118,8 +118,9 @@ nonisolated enum SettingsKey {
     /// business writing to it because they recorded a walk.
     ///
     /// Deliberately not synced through ``SyncedSettingsMirror``: authorization
-    /// is per-device, and a second phone that has never been granted Health
-    /// access would show the switch on and write nothing.
+    /// is per-device. A synced switch would raise Health's prompt at the first
+    /// export on a phone where the hiker never turned it on, and on one where
+    /// Health was refused it would show on and write nothing.
     static let savesHikesToHealth = "settings.savesHikesToHealth"
     /// The name a hiker's shared hikes are published under, as they last
     /// typed it.

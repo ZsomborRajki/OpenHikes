@@ -144,10 +144,10 @@ struct OpenHikesView: View {
     /// Whether the hiking-route layer is drawn over that map, set in Settings.
     private var showsHikingRoutes: Bool { appModel.storedSettings.showsHikingRoutes }
 
-    /// Opt-in second copy of every photo in the system photo library. Off by
-    /// default, and the only reason the app ever asks for photo-library
-    /// access — see ``PhotoLibraryWriter``. Read when a photo is filed, so
-    /// nothing in this body depends on it.
+    /// Opt-in second copy, in the system photo library, of every photo taken
+    /// in OpenHikes. Off by default; ``SettingsKey/savePhotosToLibrary`` says
+    /// which access it needs and when that is asked for. Read when a photo is
+    /// filed, so nothing in this body depends on it.
     var savePhotosToLibrary: Bool { appModel.storedSettings.savesPhotosToLibrary }
 
     /// The route drawn on the map — always the currently selected hike, if any.

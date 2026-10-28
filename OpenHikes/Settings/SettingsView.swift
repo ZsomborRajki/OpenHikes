@@ -354,7 +354,9 @@ struct SettingsView: View {
 /// The photo-library switch. Out of the view's own body for length, and
 /// otherwise a section like any other.
 private extension SettingsView {
-    /// The one switch behind photo-library access.
+    /// The switch behind the photo-library mirror: the add-only access a
+    /// camera photo's copy needs, not the read/write access *Find Photos*
+    /// asks for on its own (see ``SettingsKey/savePhotosToLibrary``).
     ///
     /// Off by default, and flipping it on asks for nothing: the prompt comes
     /// with the first photo actually saved, where the request is about
