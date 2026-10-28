@@ -107,12 +107,16 @@ public final class Hike {
     /// travels the same way.
     @Attribute(.externalStorage) public var rawRoute: [RouteCoordinate] = []
     /// True while this row is the durable draft owned by an active recording.
-    /// The route stays empty until Stop finalizes the draft in place.
+    /// The route stays empty until Stop finalizes the draft in place: the
+    /// fixes live in this device's `TrackJournal` and the recorder's memory,
+    /// and the only recording write to ``route`` is the one that finalizes.
     ///
-    /// Mirrored along with everything else, which means a walk in progress is
-    /// uploaded fix by fix and a second device shows a hike whose line is
-    /// still being drawn. That is the price of letting SwiftData own sync:
-    /// there is no hook to hold a row back.
+    /// Mirrored along with everything else, so a second device sees the draft
+    /// itself — a hike with no line yet, carrying this flag and whatever
+    /// places and photographs were added to it on the way — but never a line
+    /// being drawn. That is the price of letting SwiftData own sync: there is
+    /// no hook to hold a row back. The mirrored flag proves nothing about
+    /// ownership, which is why cleanup asks ``ownsRecordingDraft``.
     public var isRecording: Bool = false
 
     /// Whether Follow This Trail shows the live position while browsing and
