@@ -17,6 +17,7 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikesData
+import OpenHikesShared
 import RealModule
 import Testing
 
@@ -190,6 +191,18 @@ struct RouteProfilePausedTransferTests {
         #expect(pieces[0].last?.longitude.isApproximatelyEqual(to: 0.001, absoluteTolerance: 1e-9) == true)
         #expect(pieces[1].first?.longitude.isApproximatelyEqual(to: 0.010, absoluteTolerance: 1e-9) == true)
         #expect(pieces[1].last?.longitude.isApproximatelyEqual(to: 0.0105, absoluteTolerance: 1e-6) == true)
+    }
+
+    /// What the share card cuts the whole trail at (#1122), down to the
+    /// edges: a pause on the first leg, a lone fix between two pauses, and a
+    /// pause on the last leg.
+    @Test("the profile cuts the trail where the stored route does", arguments: [
+        Set<Int>(), [2], [1, 3, 4, 6],
+    ])
+    func trailRunsAreTheRoutes(resumed: Set<Int>) {
+        let route = Self.route([0, 0.001, 0.010, 0.011, 0.020, 0.021, 0.030], resumingAt: resumed)
+
+        #expect(RouteProfile(route: route).trailRuns == route.trailRuns)
     }
 
     @Test("a covered stretch that starts at the join starts on the piece after it")

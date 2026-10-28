@@ -34,7 +34,7 @@ struct WalkShareImageTests {
                 completion: 1,
                 startedAt: Date(timeIntervalSince1970: 1_750_000_000)
             ),
-            shape: WalkShareRouteShape(trail: [.zero, CGPoint(x: 1, y: 1)], walked: []),
+            shape: WalkShareRouteShape(trail: [[.zero, CGPoint(x: 1, y: 1)]], walked: []),
             tint: .green
         )
     }
