@@ -51,20 +51,24 @@ nonisolated enum NearbyPlaceSuggestions {
     /// other searches use: two different things a few metres apart — the hut
     /// and its spring — are exactly what a hiker standing between them wants
     /// to choose from.
+    ///
+    /// One of each is the first copy of an element in `found`, picked before
+    /// anything is measured: a later copy is no second chance for an element
+    /// whose first was out of reach.
     static func suggestions(
         from found: [TrailPlace],
         around coordinate: CLLocationCoordinate2D,
         excluding held: [TrailPlace]
     ) -> [TrailPlace] {
         let heldElements = Set(held.compactMap(\.osm).map(key))
-        var seen: Set<String> = []
-        return found
-            .compactMap { place -> (place: TrailPlace, distance: Double)? in
-                guard let osm = place.osm, !heldElements.contains(key(osm)),
-                      seen.insert(key(osm)).inserted else { return nil }
-                let distance = RouteGeometry.distanceMeters(from: coordinate, to: place.clCoordinate)
+        return found.lazy
+            .compactMap { place in place.osm.map { (place: place, element: key($0)) } }
+            .filter { !heldElements.contains($0.element) }
+            .uniqued(on: \.element)
+            .compactMap { candidate -> (place: TrailPlace, distance: Double)? in
+                let distance = RouteGeometry.distanceMeters(from: coordinate, to: candidate.place.clCoordinate)
                 guard distance <= matchRadiusMeters else { return nil }
-                return (place, distance)
+                return (candidate.place, distance)
             }
             .min(count: maximumSuggestions) { $0.distance < $1.distance }
             .map(\.place)
