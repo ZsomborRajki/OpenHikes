@@ -149,41 +149,32 @@ struct HikePlaceView: View {
 
     private func actions(_ card: HikePlaceCard) -> some View {
         TrailPlaceActions {
-            photoActions
-            mapAndShareActions(card)
+            TrailPlacePhotoButtons(
+                cameraIdentifier: "hike-place-camera",
+                libraryIdentifier: "hike-place-library",
+                onCamera: { photoCapture?.requestCamera() },
+                onLibrary: { photoCapture?.requestLibrary() }
+            )
+            Button {
+                onShowOnMap()
+                mapController.showPhotoSpot(card.coordinate)
+            } label: {
+                Label("Show on Map", systemImage: "map")
+                    .labelStyle(TrailPlaceActionLabelStyle())
+            }
+            .buttonStyle(.bordered)
+            .accessibilityIdentifier("hike-place-show-on-map")
+            ShareLink(
+                item: TrailPlaceCoordinates.mapsURL(card.coordinate, named: card.title),
+                subject: Text(card.title),
+                message: Text([card.title, TrailPlaceCoordinates.text(card.coordinate)].joined(separator: "\n"))
+            ) {
+                Label("Share", systemImage: "square.and.arrow.up")
+                    .labelStyle(TrailPlaceActionLabelStyle())
+            }
+            .buttonStyle(.bordered)
+            .accessibilityIdentifier("hike-place-share")
         }
-    }
-
-    private var photoActions: some View {
-        TrailPlacePhotoButtons(
-            cameraIdentifier: "hike-place-camera",
-            libraryIdentifier: "hike-place-library",
-            onCamera: { photoCapture?.requestCamera() },
-            onLibrary: { photoCapture?.requestLibrary() }
-        )
-    }
-
-    @ViewBuilder
-    private func mapAndShareActions(_ card: HikePlaceCard) -> some View {
-        Button {
-            onShowOnMap()
-            mapController.showPhotoSpot(card.coordinate)
-        } label: {
-            Label("Show on Map", systemImage: "map")
-                .labelStyle(TrailPlaceActionLabelStyle())
-        }
-        .buttonStyle(.bordered)
-        .accessibilityIdentifier("hike-place-show-on-map")
-        ShareLink(
-            item: TrailPlaceCoordinates.mapsURL(card.coordinate, named: card.title),
-            subject: Text(card.title),
-            message: Text([card.title, TrailPlaceCoordinates.text(card.coordinate)].joined(separator: "\n"))
-        ) {
-            Label("Share", systemImage: "square.and.arrow.up")
-                .labelStyle(TrailPlaceActionLabelStyle())
-        }
-        .buttonStyle(.bordered)
-        .accessibilityIdentifier("hike-place-share")
     }
 
     private var removeButton: some View {

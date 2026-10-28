@@ -53,8 +53,6 @@ struct TrailPlaceSheet: View {
     let maker: TrailDraftController
     let mapController: MapController
 
-    // periphery:ignore - read only as `$detent`, the binding
-    // `.presentationDetents(_:selection:)` takes.
     /// Where the card rests. It opens at the middle height, where the buttons
     /// and the address are in view, and a new selection leaves it wherever the
     /// hiker put it. State of this view rather than of the presenter, so every
@@ -71,7 +69,11 @@ struct TrailPlaceSheet: View {
                    photos: maker.photos.photos
                ) {
                 TrailPlaceCardView(
-                    maker: maker, card: card, mapController: mapController, allowsScrolling: detent == .large
+                    maker: maker,
+                    selection: selection,
+                    card: card,
+                    mapController: mapController,
+                    allowsScrolling: detent == .large
                 )
             } else {
                 // What the card was about has gone — a stop deleted from the
@@ -96,6 +98,10 @@ struct TrailPlaceSheet: View {
 
 private struct TrailPlaceCardView: View {
     let maker: TrailDraftController
+    /// What brings the card back to its top when it changes. Not the card,
+    /// which is rebuilt from the live drawing: how far along the route a
+    /// place or stop is gets measured again every time a leg is routed.
+    let selection: TrailDraftSelection
     let card: TrailPlaceCard
     let mapController: MapController
     let allowsScrolling: Bool
@@ -111,7 +117,7 @@ private struct TrailPlaceCardView: View {
     /// Short detents still resize on a drag. At the tallest one, wrapped
     /// actions and accessibility text can scroll to their location rows.
     var body: some View {
-        PlaceCardScroll(selection: card, allowsScrolling: allowsScrolling) {
+        PlaceCardScroll(selection: selection, allowsScrolling: allowsScrolling) {
             VStack(alignment: .leading, spacing: StatCardMetrics.sectionSpacing) {
                 if let photo = card.photo {
                     TrailDraftPhotoHeader(photo: photo, gallery: { maker.photos.photos }, mapController: mapController)

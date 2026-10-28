@@ -100,6 +100,9 @@ struct TrailPlaceBadge: View {
 /// button's whole width, and the row grows to fit the longest caption.
 struct TrailPlaceActionLabelStyle: LabelStyle {
     static let cornerRadius: CGFloat = 14
+    /// The caption's text style, which ``TrailPlaceActions`` also scales its
+    /// line allowance by.
+    static let captionStyle: Font.TextStyle = .caption
 
     func makeBody(configuration: Configuration) -> some View {
         VStack(spacing: 4) {
@@ -107,7 +110,7 @@ struct TrailPlaceActionLabelStyle: LabelStyle {
                 .font(.body.weight(.semibold))
                 .imageScale(.medium)
             configuration.title
-                .font(.caption.weight(.semibold))
+                .font(.system(Self.captionStyle, weight: .semibold))
                 // TrailPlaceActions measures this wrapped height before it
                 // chooses how many buttons share a row.
                 .fixedSize(horizontal: false, vertical: true)
