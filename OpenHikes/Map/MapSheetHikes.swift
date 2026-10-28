@@ -542,13 +542,10 @@ private extension MapSheetHikes {
         .task(id: TaskKey(sort: sort, count: hikes.count)) {
             let missing = HikeListOrder.hikesMissingElevation(in: hikes, for: sort)
             guard !missing.isEmpty else { return }
-            // Off this actor deliberately: the sweep opens its own context and
-            // may walk every route in the library, which is the one thing that
-            // must not happen where a list is drawn.
+            // Route work runs off this actor; publication returns to this
+            // context so the sweep sees a sidecar the UI has not saved yet.
             let container = modelContext.container
-            let filled = await Task.detached(priority: .utility) {
-                HikeListMetrics.fillElevation(for: missing, in: container)
-            }.value
+            let filled = await HikeListMetrics.fillElevation(for: missing, in: container)
             if filled { orderRevision += 1 }
         }
     }
