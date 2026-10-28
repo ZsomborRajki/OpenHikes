@@ -1,7 +1,7 @@
 name: TestFlight
 
-# Archives the chosen commit, uploads it to App Store Connect for TestFlight,
-# and tags it `v<version>-<build>` (*Releasing* in AGENTS.md). Run it from the
+# Archives `main`, uploads it to App Store Connect for TestFlight, and tags
+# the commit `v<version>-<build>` (*Releasing* in AGENTS.md). Run it from the
 # Actions tab, or with
 #
 #   gh workflow run testflight.yml -f version=1.5 -f cloudkit_promoted=true
@@ -15,8 +15,18 @@ name: TestFlight
 # what shipped, and Scripts/release-version.sh counts builds from the tags.
 #
 # Every secret lives in the `testflight` environment, never at the repository
-# level, so `ci.yml`, which runs on every pull request, cannot read one. Set
-# them once, from a checkout that has the keys:
+# level, and only protected branches may deploy to it. `main` is the only one,
+# and that rule is what keeps the secrets here. A job reads an environment's
+# secrets just by naming it, and a branch can name this one in any workflow
+# it edits, `ci.yml` included: its pull request runs the edit. The same rule
+# refuses a dispatch from any branch but `main`. Give the environment the rule
+# before it holds a secret:
+#
+#   gh api -X PUT repos/ZsomborRajki/OpenHikes/environments/testflight \
+#     -F 'deployment_branch_policy[protected_branches]=true' \
+#     -F 'deployment_branch_policy[custom_branch_policies]=false'
+#
+# Then set the secrets once, from a checkout that has the keys:
 #
 #   plutil -extract StadiaAPIKey raw -o - OpenHikes/Secrets.plist \
 #     | gh secret set STADIA_API_KEY --env testflight

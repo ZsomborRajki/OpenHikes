@@ -403,17 +403,20 @@ a change to recording, the map, the sheet or the render path; the PR template,
 
 - **Upload with the TestFlight workflow.** `.github/workflows/testflight.yml`
   runs on demand with the version to ship (`gh workflow run testflight.yml -f
-  version=<version> -f cloudkit_promoted=true`). It archives the chosen
-  commit, uploads it and pushes its tag. Its header lists the `testflight`
-  environment's secrets and how to set them.
+  version=<version> -f cloudkit_promoted=true`). It archives `main`, uploads
+  it and pushes its tag. It runs only from `main`, the one branch its
+  `testflight` environment admits, and its header lists that environment's
+  secrets and how to set them.
   - It stamps the version at build time and commits nothing, because `main`
     takes no pushes. So the tags, not `project.pbxproj`, record what shipped.
   - The build number is one past the highest tagged or committed build
     (`Scripts/release-version.sh`). An untagged upload from Xcode is invisible
     to it; pass `build` past that one.
-- **An archive from Xcode bumps all four shipping targets together.** The app,
+- **Before an archive from Xcode, bump all four shipping targets together**, to
+  the build `Scripts/release-version.sh --version <version>` prints. The app,
   the widget, the watch app and the watch widgets each carry
-  `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in `project.pbxproj`.
+  `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in `project.pbxproj`, and
+  the number committed there falls behind every build the workflow tags.
 - **Run `Scripts/check-release-secrets.sh` before pressing Archive.** The
   gitignored `OpenHikes/Secrets.plist` holds the Stadia and Thunderforest keys,
   and an archive succeeds without it, shipping paid map styles that draw
