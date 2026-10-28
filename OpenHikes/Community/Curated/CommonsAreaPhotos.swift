@@ -117,21 +117,8 @@ nonisolated enum CommonsAreaPhotos {
         let nearer = { (lhs: CommonsPhotoCandidate, rhs: CommonsPhotoCandidate) in
             nearerTheMiddle(lhs, rhs, of: area)
         }
-        var taken: [String: Int] = [:]
-        var preferred: [CommonsPhotoCandidate] = []
-        var heldBack: [CommonsPhotoCandidate] = []
-        for photo in candidates.sorted(by: nearer) {
-            guard let author = authors[photo.pageID] else {
-                preferred.append(photo)
-                continue
-            }
-            let count = taken[author, default: 0]
-            if count < CommonsTrailPhotos.perAuthorLimit {
-                taken[author] = count + 1
-                preferred.append(photo)
-            } else {
-                heldBack.append(photo)
-            }
+        let (preferred, heldBack) = CommonsAuthorBudget.partition(candidates.sorted(by: nearer)) { photo in
+            authors[photo.pageID]
         }
         let first = spread(preferred, in: area, limit: limit)
         guard first.count < limit else { return first }
