@@ -10,10 +10,32 @@
 //
 //  ## A post-hoc write, not a session
 //
-//  There is no `HKWorkoutSession` on iOS, so nothing here runs while the hike
-//  does. `HKWorkoutBuilder` is handed a finished walk at save time, which is
-//  also the cheap one: the recording already owns its own clock, its own
-//  distance and its own barometric ascent, and none of it is measured twice.
+//  Nothing here runs while the hike does. `HKWorkoutBuilder` is handed a
+//  finished walk once the hike is saved, and that is a choice, not a limit of
+//  the platform.
+//
+//  An iPhone can run a workout session of its own only from iOS 26, which is
+//  where `HKWorkoutSession(healthStore:configuration:)`, its
+//  `associatedWorkoutBuilder()` and `HKLiveWorkoutBuilder` arrive; before that
+//  the class reaches a phone only as a session mirrored from a watch. That is
+//  above the deployment floor, so a session would mean a second writer behind
+//  `#available`, with this one still beside it as the fallback (see
+//  *Deployment floor* in `AGENTS.md`). And it would buy the recording nothing:
+//
+//  - The recording needs no session to stay alive. The `location` background
+//    mode keeps it running here; on the watch a session is the only thing
+//    that does, which is why `WatchRecorder` starts one.
+//  - The figures already exist. The recording owns its own clock, its own
+//    distance and its own barometric ascent, and a live builder would collect
+//    a second set that could only disagree with the hike's. A write
+//    afterwards measures none of it twice.
+//  - Health must never hold a walk this app does not, so the write waits for
+//    a successful save. A builder started at Start would have to be thrown
+//    away on every path that saves nothing — a discard, a refused save — the
+//    way the watch throws its own away.
+//  - The same write takes the watch's walks (``WatchWalkHealthExport``),
+//    which no session on this phone ever saw, so one writer serves both
+//    devices.
 //
 //  ## What a failure means
 //
