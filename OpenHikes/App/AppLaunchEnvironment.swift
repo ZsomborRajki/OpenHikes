@@ -34,6 +34,7 @@ nonisolated enum AppLaunchEnvironment {
         let trailPointScenarioName: String?
         let simulatesOffline: Bool
         let seededPhotoCount: Int
+        let omitsSeededPhotoFiles: Bool
         /// How many bare hikes a launch asked for — see
         /// ``AppLaunchEnvironment/seededLibraryHikeCount``.
         let seededLibraryHikeCount: Int
@@ -94,6 +95,7 @@ nonisolated enum AppLaunchEnvironment {
             trailPointScenarioName = nil
             simulatesOffline = false
             seededPhotoCount = 0
+            omitsSeededPhotoFiles = false
             seededLibraryHikeCount = 0
             seededWalkFixtureName = nil
             seededRecordingFixtureName = nil
@@ -120,6 +122,7 @@ nonisolated enum AppLaunchEnvironment {
         private static let trailPointsPrefix = "--ui-test-trail-points="
         private static let offlineArgument = "--ui-test-offline"
         private static let seedPhotosPrefix = "--ui-test-seed-photos="
+        private static let omitPhotoFilesArgument = "--ui-test-omit-photo-files"
         private static let seedHikesPrefix = "--ui-test-seed-hikes="
         private static let seedWalksPrefix = "--ui-test-seed-walks="
         private static let seedRecordingPrefix = "--ui-test-seed-recording="
@@ -185,6 +188,8 @@ nonisolated enum AppLaunchEnvironment {
                 isUITesting: isUITesting,
                 limit: Self.maximumSeededPhotos
             )
+            omitsSeededPhotoFiles = isUITesting
+                && arguments.contains(Self.omitPhotoFilesArgument)
             seededLibraryHikeCount = Self.count(
                 in: arguments,
                 prefix: Self.seedHikesPrefix,
@@ -394,6 +399,9 @@ nonisolated enum AppLaunchEnvironment {
     /// is the real store, the real files on disk and the real decode path;
     /// only the pixels are invented.
     static let seededPhotoCount = configuration.seededPhotoCount
+    /// Leaves the seeded gallery's metadata in place without its files, as
+    /// it appears on another device after the hike syncs.
+    static let omitsSeededPhotoFiles = configuration.omitsSeededPhotoFiles
     /// How many plain hikes to put in the library before anything else runs.
     ///
     /// A list scenario needs *several* hikes and does not care what is in

@@ -80,10 +80,9 @@ struct HikePhotoViewer: View {
 
     @State private var currentID: UUID?
     @State private var didRestoreStart = false
-    /// Up while the trash button is waiting for an answer. The same question
-    /// the swipe in *My Hikes* now asks, for the same reason: the file goes
-    /// with the row, and photo pixels stay on the device the photo was added
-    /// on — so this device is the only place they were.
+    /// Up while the trash button is waiting for an answer. The gallery entry
+    /// belongs to the synced hike, so deleting it affects every synced device
+    /// even when this one has no file. Any local OpenHikes copy goes with it.
     @State private var showDeleteConfirmation = false
 
     /// The photographs whose files are on this device, as the pages that drew
@@ -188,7 +187,12 @@ struct HikePhotoViewer: View {
             Button("Delete Photo", role: .destructive) { delete(photo) }
             Button("Cancel", role: .cancel) { /* intentionally empty */ }
         } message: { _ in
-            Text("The photograph is deleted from this device for good.")
+            Text(
+                """
+                The photo is removed from this hike on all your synced devices. \
+                Any copy in OpenHikes on this device is deleted for good.
+                """
+            )
         }
     }
 

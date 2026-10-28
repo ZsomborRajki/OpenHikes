@@ -11325,12 +11325,12 @@
         }
       }
     },
-    "The photograph is deleted from this device for good." : {
+    "The photo is removed from this hike on all your synced devices. Any copy in OpenHikes on this device is deleted for good." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Das Foto wird endgültig von diesem Gerät gelöscht."
+            "value" : "Das Foto wird auf all deinen synchronisierten Geräten aus dieser Wanderung entfernt. Jede Kopie in OpenHikes auf diesem Gerät wird endgültig gelöscht."
           }
         }
       }
