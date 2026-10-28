@@ -91,7 +91,11 @@
 //  Not in a body. Every route in the library is walked once, off the main
 //  actor, in a context of its own — the shape ``HikeListMetrics`` takes — and
 //  what comes back is values: ``LibraryOuting``s, arithmetic over which is
-//  ordinary to assert.
+//  ordinary to assert. The counting stays off the main actor too, and comes
+//  back finished (``LibraryTotalsSweep/totals(from:asOf:calendar:using:)``):
+//  it weighs every walk against the recordings' clocks, which are merged
+//  once (``RecordedClocks``) rather than scanned again for each walk, a
+//  scan that grew with the square of the library (#1118).
 //
 
 import Algorithms
@@ -340,7 +344,7 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
     /// Every outing in the library, by the rules the file header gives.
     static func outings(hikes: [LibraryHikeFacts], walks: [LibraryWalkFacts]) -> [LibraryOuting] {
         let counted = hikes.filter { $0.hasClock && !$0.isFromCommunity }
-        let clocks = counted.compactMap(\.clock)
+        let clocks = RecordedClocks(counted.compactMap(\.clock))
         let clocked = counted.map { hike in
             LibraryOuting(
                 hikeID: hike.hikeID,
@@ -370,23 +374,10 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
     }
 
     /// The fraction of `walk`'s time no clock in `clocks` covers, from 0 to 1.
-    /// Overlapping clocks are merged first, so two recordings over the same
-    /// minutes take those minutes out once.
-    private static func unrecordedShare(of walk: LibraryWalkFacts, clocks: [DateInterval]) -> Double {
+    private static func unrecordedShare(of walk: LibraryWalkFacts, clocks: RecordedClocks) -> Double {
         let length = walk.endedAt.timeIntervalSince(walk.startedAt)
         guard length > 0 else { return 1 }
-        let overlaps = clocks.compactMap { clock -> (start: Date, end: Date)? in
-            let start = max(clock.start, walk.startedAt)
-            let end = min(clock.end, walk.endedAt)
-            return start < end ? (start, end) : nil
-        }
-        .sorted { $0.start < $1.start }
-        var recorded: TimeInterval = 0
-        var reach = walk.startedAt
-        for overlap in overlaps where overlap.end > reach {
-            recorded += overlap.end.timeIntervalSince(max(overlap.start, reach))
-            reach = overlap.end
-        }
+        let recorded = clocks.seconds(from: walk.startedAt, to: walk.endedAt)
         return max(0, 1 - recorded / length)
     }
 
@@ -421,6 +412,42 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
     private static func month(of date: Date, in calendar: Calendar) -> Month {
         let parts = calendar.dateComponents([.month, .isLeapMonth], from: date)
         return Month(number: parts.month ?? 0, isLeap: parts.isLeapMonth ?? false)
+    }
+}
+
+/// Every counted hike's clock, merged once into the spans of time something
+/// recorded, so that each walk's share is a search and the few spans it meets
+/// rather than a scan of every clock in the library (#1118).
+///
+/// Overlapping clocks merge, so two recordings over the same minutes take
+/// those minutes out of a walk once; so do clocks that only touch, which
+/// changes no sum.
+nonisolated struct RecordedClocks: Sendable {
+    /// In order, apart, and each longer than an instant.
+    private let spans: [DateInterval]
+
+    init(_ clocks: [DateInterval]) {
+        var merged: [DateInterval] = []
+        for clock in clocks.sorted(by: { $0.start < $1.start }) where clock.end > clock.start {
+            if let last = merged.last, clock.start <= last.end {
+                merged[merged.count - 1] = DateInterval(start: last.start, end: max(last.end, clock.end))
+            } else {
+                merged.append(clock)
+            }
+        }
+        spans = merged
+    }
+
+    /// How much of `start` to `end` some clock covers.
+    func seconds(from start: Date, to end: Date) -> TimeInterval {
+        // The spans are apart and in order, so their ends are in order too.
+        var index = spans.partitioningIndex { $0.end > start }
+        var seconds: TimeInterval = 0
+        while index < spans.endIndex, spans[index].start < end {
+            seconds += min(end, spans[index].end).timeIntervalSince(max(start, spans[index].start))
+            index += 1
+        }
+        return seconds
     }
 }
 
@@ -496,6 +523,36 @@ nonisolated enum LibraryTotalsSweep {
             )
         }
         return (hikeFacts, walkFacts(walks, revisions: revisions, routes: routes))
+    }
+
+    /// The *Totals* screen's figures: the library read, then counted, both
+    /// off the main actor. The counting weighs every walk against every
+    /// recording's clock, which grows with the library as the read does, so
+    /// it does not come back to its caller's actor to do it (#1118).
+    @concurrent
+    static func totals(
+        from container: ModelContainer,
+        asOf date: Date,
+        calendar: Calendar,
+        using reads: Reads = .store
+    ) async throws -> LibraryTotals {
+        let library = try await read(from: container, using: reads)
+        assertOffMainThread("Counting the library weighs every walk against every clock")
+        return LibraryTotals(hikes: library.hikes, walks: library.walks, asOf: date, calendar: calendar)
+    }
+
+    /// Every outing ``LibraryTotals/outings(hikes:walks:)`` counts, with the
+    /// hikes they were counted from, read and counted off the main actor for
+    /// the same reason as ``totals(from:asOf:calendar:using:)``: Siri's
+    /// questions about what has been walked.
+    @concurrent
+    static func outings(
+        from container: ModelContainer,
+        using reads: Reads = .store
+    ) async throws -> (hikes: [LibraryHikeFacts], outings: [LibraryOuting]) {
+        let library = try await read(from: container, using: reads)
+        assertOffMainThread("Counting the library weighs every walk against every clock")
+        return (library.hikes, LibraryTotals.outings(hikes: library.hikes, walks: library.walks))
     }
 
     /// `walks` as values, each climbed along the line its trail draws now

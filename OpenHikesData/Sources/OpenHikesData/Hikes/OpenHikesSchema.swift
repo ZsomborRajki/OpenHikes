@@ -14,8 +14,9 @@ nonisolated public enum OpenHikesSchema: VersionedSchema {
     /// ``Hike`` because a half-drawn trail is one device's unfinished work —
     /// see that type for the argument, and note what it buys: no `CD_` record
     /// type, no Console index and no entry in ``MirroredCloudKitSchema``.
+    /// ``DeletedWatchWalk`` is here for the same reason.
     public static var localStateModels: [any PersistentModel.Type] {
-        [HikeLocalState.self, TrailDraftRecord.self]
+        [HikeLocalState.self, TrailDraftRecord.self, DeletedWatchWalk.self]
     }
     public static var models: [any PersistentModel.Type] { hikeModels + localStateModels }
 }

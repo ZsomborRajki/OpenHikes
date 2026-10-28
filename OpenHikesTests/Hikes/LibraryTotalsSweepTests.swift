@@ -102,6 +102,36 @@ struct LibraryTotalsSweepTests {
         #expect(changed == [false, true, true, false])
     }
 
+    /// The screen's figures and Siri's outings are counted off the main
+    /// actor now (#1118), and are the same figures counting the read gives.
+    @Test("the totals and outings counted off the main actor are the read's")
+    func countedTotalsAreTheReads() async throws {
+        let container = try Self.library()
+        let date = Date.now.addingTimeInterval(7200)
+        let read = try await LibraryTotalsSweep.read(from: container)
+
+        let totals = try await LibraryTotalsSweep.totals(from: container, asOf: date, calendar: .current)
+        let outings = try await LibraryTotalsSweep.outings(from: container)
+
+        #expect(totals == LibraryTotals(hikes: read.hikes, walks: read.walks, asOf: date, calendar: .current))
+        #expect(totals.allTime.outings == 1)
+        #expect(outings.hikes == read.hikes)
+        #expect(outings.outings == LibraryTotals.outings(hikes: read.hikes, walks: read.walks))
+    }
+
+    @Test("a failed fetch fails the totals rather than counting half a library")
+    func countedTotalsFail() async throws {
+        let container = try Self.library()
+        let reads = LibraryTotalsSweep.Reads(hikes: LibraryTotalsSweep.Reads.store.hikes, walks: Self.failingWalks)
+
+        await #expect(throws: ReadFailure.self) {
+            try await LibraryTotalsSweep.totals(from: container, asOf: .now, calendar: .current, using: reads)
+        }
+        await #expect(throws: ReadFailure.self) {
+            try await LibraryTotalsSweep.outings(from: container, using: reads)
+        }
+    }
+
     @Test("a failed hike fetch fails the read")
     func hikeFetchFails() async throws {
         let container = try Self.library()

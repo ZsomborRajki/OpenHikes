@@ -41,6 +41,16 @@
 //  second store co-operates; the alternative is refusing to delete a hike
 //  because HealthKit would not answer.
 //
+//  ## The walk from the watch
+//
+//  The watch keeps a walk until a receipt comes back, so a hike imported from
+//  it can be offered again after it is gone, and the sidecar that recognised
+//  the repeat — ``HikeLocalState/watchSessionID`` — goes with the hike. So the
+//  identifier is read while the sidecar is still here, the way the workout's
+//  is, and a ``DeletedWatchWalk`` is written in the *same* save as the
+//  deletion: on disk exactly when the deletion is, and taken back with it by a
+//  refusal. Without it, a retry made the deleted hike again.
+//
 //  Which is why every whole-hike deletion goes through here: the swipe in
 //  `MapSheet`, the discarded recording draft, and the orphan sweep at launch.
 //  All three used to erase the files first and hope the save that followed
@@ -180,6 +190,9 @@ nonisolated enum HikeDeletion {
         // ``HikeWorkoutExport/write(_:with:filingInto:)`` finds its hike gone
         // when Health answers, and takes that one back itself.
         let workoutIDs = hikes.compactMap { $0.localState?.healthWorkoutID }
+        // The same, for the watch walks these hikes were imported from — see
+        // this file's header.
+        let watchSessionIDs = hikes.compactMap { $0.localState?.watchSessionID }
         // Read here for the reason the file names are: a deleted `@Model` has
         // nothing left to ask.
         let deletedIDs = hikes.map(\.id)
@@ -189,6 +202,9 @@ nonisolated enum HikeDeletion {
             hike.modelContext?.delete(hike)
         }
         if let context {
+            for sessionID in watchSessionIDs {
+                context.insert(DeletedWatchWalk(sessionID: sessionID))
+            }
             do {
                 try save(context)
             } catch {

@@ -218,15 +218,19 @@ nonisolated enum LibraryPhotoMatcher {
             // second half is the test a bare route cannot make: a picture
             // taken at the summit on the day the hiker turned back at the col
             // is a picture of the trail and not of this walk.
-            guard let nearest = profile.nearestPoint(to: camera),
+            //
+            // Where the route passes the same ground twice — an out-and-back's
+            // two legs, a junction crossed twice — the camera's position is
+            // equally near both, and the walk decides which: a hiker who
+            // covered only the way home photographed the way home (#1114).
+            guard let nearest = profile.nearestPoint(to: camera, preferring: walk.covers),
                   nearest.offRouteMeters <= Self.maximumOffRouteMeters,
-                  walk.covers(nearest.distanceAlongRoute),
-                  let snapped = profile.coordinate(atDistance: nearest.distanceAlongRoute)
+                  walk.covers(nearest.distanceAlongRoute)
             else { return nil }
             return LibraryPhotoMatch(
                 asset: asset,
-                latitude: snapped.latitude,
-                longitude: snapped.longitude,
+                latitude: nearest.coordinate.latitude,
+                longitude: nearest.coordinate.longitude,
                 evidence: .place,
                 // Placed by position, so there is no fix it is an offset from
                 // — reported as zero for the reason the other `.place` match

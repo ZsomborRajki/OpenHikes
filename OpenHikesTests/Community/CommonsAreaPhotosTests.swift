@@ -119,6 +119,28 @@ struct CommonsAreaPhotosTests {
         #expect(chosen.filter { authors[$0.pageID] == "Uploader" }.count == CommonsTrailPhotos.perAuthorLimit)
     }
 
+    /// Four cells, three of one person's photographs in one of them, and a
+    /// held-back picture in each of the other three: room is left for one,
+    /// and it is the one nearest the middle.
+    @Test("held-back photographs fill the open cells nearest the middle first, when there is room for fewer")
+    func heldBackFillsTheNearestOpenCells() {
+        let run = [
+            Self.candidate(0, north: 100, east: 100),
+            Self.candidate(1, north: 200, east: 100),
+            Self.candidate(2, north: 300, east: 100),
+        ]
+        let heldBack = [
+            Self.candidate(3, north: 900, east: -900),
+            Self.candidate(4, north: -400, east: -300),
+            Self.candidate(5, north: -1000, east: 1000),
+        ]
+        let authors = Dictionary(uniqueKeysWithValues: (run + heldBack).map { ($0.pageID, "Uploader") })
+
+        let chosen = CommonsAreaPhotos.chosen(heldBack + run, authors: authors, limit: 4, in: Self.area)
+
+        #expect(chosen.map(\.pageID) == [0, 1, 2, 4])
+    }
+
     @Test("an area wider than a geosearch may ask about is asked at the ceiling")
     func aWideAreaIsClamped() {
         let wide = CommunitySearchArea(coordinate: Self.middle, radiusMeters: 25_000)

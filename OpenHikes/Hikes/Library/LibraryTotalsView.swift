@@ -81,9 +81,13 @@ struct LibraryTotalsView: View {
         couldNotRead = false
         let date = Date.now
         do {
-            let read = try await LibraryTotalsSweep.read(from: modelContext.container)
+            let sum = try await LibraryTotalsSweep.totals(
+                from: modelContext.container,
+                asOf: date,
+                calendar: calendar
+            )
             try Task.checkCancellation()
-            totals = LibraryTotals(hikes: read.hikes, walks: read.walks, asOf: date, calendar: calendar)
+            totals = sum
         } catch {
             guard !Task.isCancelled else { return }
             Self.logger.error(

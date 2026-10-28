@@ -296,7 +296,7 @@ extension HikeIntentCoordinator {
         )
         // A walk whose trail the sweep did not return — its row not synced
         // down yet — has no name to be reported by, and is passed over.
-        let latest = LibraryTotals.outings(hikes: library.hikes, walks: library.walks)
+        let latest = library.outings
             .compactMap { outing in trails[outing.hikeID].map { (outing: outing, trail: $0) } }
             .max { $0.outing.date < $1.outing.date }
         guard let latest else {
@@ -336,8 +336,7 @@ extension HikeIntentCoordinator {
     /// counting twice.
     func totals(from start: Date, to end: Date) async throws(HikeIntentFailure) -> HikeTotalsReport {
         let library = try await readLibrary()
-        let outings = LibraryTotals.outings(hikes: library.hikes, walks: library.walks)
-            .filter { $0.date >= start && $0.date < end }
+        let outings = library.outings.filter { $0.date >= start && $0.date < end }
         return HikeTotalsReport(
             hikeCount: outings.count,
             distance: Measurement(
@@ -352,13 +351,13 @@ extension HikeIntentCoordinator {
         try await totals(forDayContaining: clock())
     }
 
-    /// The whole library as ``LibraryTotalsSweep`` reads it, off the main
-    /// actor, for the two questions about what has been walked.
+    /// The whole library as ``LibraryTotalsSweep`` reads and counts it, off
+    /// the main actor, for the two questions about what has been walked.
     private func readLibrary() async throws(HikeIntentFailure) -> (
-        hikes: [LibraryHikeFacts], walks: [LibraryWalkFacts]
+        hikes: [LibraryHikeFacts], outings: [LibraryOuting]
     ) {
         do {
-            return try await LibraryTotalsSweep.read(from: container, using: libraryReads)
+            return try await LibraryTotalsSweep.outings(from: container, using: libraryReads)
         } catch {
             // As in `fetch(_:)`: logged, not carried, because the failure is
             // read out loud.

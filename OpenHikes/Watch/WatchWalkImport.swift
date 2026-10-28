@@ -25,9 +25,18 @@
 //  it will offer again on the next connection, which is the behaviour that
 //  makes the queue safe — so this has to recognise the second arrival rather
 //  than merely hope for one. ``HikeLocalState/watchSessionID`` is the ledger,
-//  and ``existingHike(for:in:ledger:)`` is the check; a repeat costs one
+//  and ``earlierArrival(of:in:ledger:)`` is the check; a repeat costs one
 //  fetch and sends another receipt. A check that could not be made is not a
 //  check that found nothing: the walk is refused, and stays on the watch.
+//
+//  ## Arriving after a deletion
+//
+//  The sidecar goes with its hike, so a hike the hiker deleted leaves nothing
+//  for that ledger to find — and the watch, still waiting for a receipt, may
+//  offer the walk again. ``DeletedWatchWalk`` is what `HikeDeletion` leaves
+//  instead, and an arrival it names is answered ``WatchWalkImportOutcome/deleted``:
+//  a receipt, so the watch lets go, and no hike, so a deletion stays one. It
+//  is not `.imported`, so Health is not written to a second time either.
 //
 //  ## Whose figures win
 //
@@ -66,18 +75,22 @@ enum WatchWalkImportFailure: LocalizedError, Equatable, Sendable {
 enum WatchWalkImportOutcome: Equatable, Sendable {
     /// Already here, from an earlier arrival of the same recording.
     case alreadyImported(UUID)
+    /// An earlier arrival became a hike that the hiker has since deleted.
+    /// Nothing is saved — see ``DeletedWatchWalk``.
+    case deleted
     /// Saved now.
     case imported(UUID)
     case refused(WatchWalkImportFailure)
 
     /// Whether the watch should be told it can let this walk go.
     ///
-    /// True for both of the first two, which is the point: a walk this phone
-    /// already has is a walk the watch is done with, and withholding the
-    /// receipt would leave it offering the same transfer forever.
+    /// True for the first three, which is the point: a walk this phone
+    /// already has, or has had and let go of, is a walk the watch is done
+    /// with, and withholding the receipt would leave it offering the same
+    /// transfer forever.
     var deservesReceipt: Bool {
         switch self {
-        case .alreadyImported, .imported: true
+        case .alreadyImported, .deleted, .imported: true
         case .refused: false
         }
     }
@@ -106,9 +119,9 @@ nonisolated enum WatchWalkImport {
         guard walk.isWorthKeeping else { return .refused(.tooShort) }
 
         let context = ModelContext(container)
-        let existing: UUID?
+        let earlier: WatchWalkImportOutcome?
         do {
-            existing = try existingHike(for: walk.sessionID, in: context, ledger: ledger)
+            earlier = try earlierArrival(of: walk.sessionID, in: context, ledger: ledger)
         } catch {
             // Not the same answer as "no match": a read that failed says
             // nothing about whether this walk is already a hike, and saving it
@@ -122,9 +135,11 @@ nonisolated enum WatchWalkImport {
             )
             return .refused(.notSaved)
         }
-        if let existing {
-            logger.debug("A walk from the watch arrived again and is already saved")
-            return .alreadyImported(existing)
+        if let earlier {
+            logger.debug(
+                "A walk from the watch arrived again: \(String(describing: earlier), privacy: .public)"
+            )
+            return earlier
         }
 
         let route = walk.fixes.map { fix in
@@ -175,22 +190,26 @@ nonisolated enum WatchWalkImport {
         return .imported(hike.id)
     }
 
-    /// The hike an earlier arrival of this recording became, if there was one.
+    /// What an earlier arrival of this recording left: the hike it became,
+    /// a deletion of that hike, or `nil` when there was no earlier arrival.
     ///
-    /// Throws rather than answering `nil` when either read fails, because the
+    /// Throws rather than answering `nil` when any read fails, because the
     /// caller does something irreversible with `nil`: it inserts a new hike.
     /// The sidecar can outlive its hike for as long as a delete is in flight,
     /// so the row is resolved back to a real hike rather than trusted.
-    private static func existingHike(
-        for sessionID: UUID,
+    private static func earlierArrival(
+        of sessionID: UUID,
         in context: ModelContext,
         ledger: Ledger
-    ) throws -> UUID? {
-        guard let hikeID = try ledger.recordedHikeID(sessionID, context) else { return nil }
-        return try ledger.hikeExists(hikeID, context) ? hikeID : nil
+    ) throws -> WatchWalkImportOutcome? {
+        if let hikeID = try ledger.recordedHikeID(sessionID, context),
+           try ledger.hikeExists(hikeID, context) {
+            return .alreadyImported(hikeID)
+        }
+        return try ledger.wasDeleted(sessionID, context) ? .deleted : nil
     }
 
-    /// The two reads behind ``existingHike(for:in:ledger:)``.
+    /// The three reads behind ``earlierArrival(of:in:ledger:)``.
     ///
     /// A seam for the reason `save` is one: nothing makes a `ModelContext`
     /// throw on demand, and the failing read is the branch whose whole point
@@ -204,6 +223,9 @@ nonisolated enum WatchWalkImport {
         var recordedHikeID: @Sendable (_ sessionID: UUID, ModelContext) throws -> UUID?
         /// Whether a hike with this id is still in the store.
         var hikeExists: @Sendable (_ hikeID: UUID, ModelContext) throws -> Bool
+        /// Whether the hiker deleted the hike this session became — see
+        /// ``DeletedWatchWalk``.
+        var wasDeleted: @Sendable (_ sessionID: UUID, ModelContext) throws -> Bool
 
         static let store = Self(
             recordedHikeID: { sessionID, context in
@@ -215,6 +237,13 @@ nonisolated enum WatchWalkImport {
             },
             hikeExists: { hikeID, context in
                 var descriptor = FetchDescriptor<Hike>(predicate: #Predicate { $0.id == hikeID })
+                descriptor.fetchLimit = 1
+                return try context.fetchCount(descriptor) > 0
+            },
+            wasDeleted: { sessionID, context in
+                var descriptor = FetchDescriptor<DeletedWatchWalk>(
+                    predicate: #Predicate { $0.sessionID == sessionID }
+                )
                 descriptor.fetchLimit = 1
                 return try context.fetchCount(descriptor) > 0
             }
