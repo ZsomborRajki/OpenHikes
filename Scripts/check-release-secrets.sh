@@ -2,8 +2,10 @@
 #
 # Decides whether this tree is fit to archive, as far as bundled keys go.
 #
-# `OpenHikes/Secrets.plist` is gitignored, is the only place the Stadia and
-# Thunderforest keys live, and exists on exactly one laptop. A Release archive
+# `OpenHikes/Secrets.plist` is gitignored and is the only place an archive
+# finds the Stadia and Thunderforest keys. It exists on exactly one laptop, and
+# on the TestFlight workflow's runner, which writes it from the `testflight`
+# environment's secrets (Scripts/write-release-secrets.sh). A Release archive
 # cut without it builds, signs, uploads and passes CI's archive job, and ships
 # an app whose two paid map styles cannot draw a tile: `Secrets.canLoadTiles`
 # is false for both paid sources, so both provider rows are drawn at
@@ -19,7 +21,9 @@
 #
 # So it is a thing a person runs before pressing Archive, and it is named in
 # *Build and test* beside the tag convention for the same reason — the archive
-# checklist was one step long and this is the second.
+# checklist was one step long and this is the second. The TestFlight workflow
+# is that person on a runner: it runs this on the file it wrote, and again on
+# the copy inside the archived app.
 #
 # The placeholder case is the likelier mistake than the missing file: copying
 # `Secrets.example.plist` into place and not filling it in leaves a file that

@@ -24,7 +24,11 @@
 # Scripts/check-release-secrets.sh is the archive checklist's second step, and
 # the mistake it catches is the silent one: a template copied into place and
 # not filled in parses, resolves to nothing, and reads exactly like a working
-# file. They run against fixtures written here rather than against a stub.
+# file. Scripts/write-release-secrets.sh and Scripts/release-version.sh are the
+# TestFlight workflow's two decisions: the keys its archive bundles, and the
+# build number App Store Connect will accept. Both are made once per upload,
+# on a runner nobody watches.
+# They run against fixtures written here rather than against a stub.
 # So does Scripts/lib/sort-string-catalogs.swift, which rewrites every String
 # Catalog in the repository on each sync and must only ever reorder one, and
 # Scripts/lib/fit-screenshot.swift, which rewrites every App Store frame and
@@ -1261,6 +1265,143 @@ FIXTURE
 run_script "check-release-secrets refuses a plist that is not a dictionary" \
     "$secrets_gate" --plist "$gate_work/array.plist"
 if expect_status 1 && expect_contains "$output" "not a dictionary" "the error"; then
+    pass
+fi
+
+echo "TestFlight release"
+
+# The workflow's runner has no Secrets.plist, so it writes one from two
+# secrets and hands it to the gate above. What it writes is read back with
+# the gate itself, so the writer and the gate are held to the same key names.
+secrets_writer="$repository_root/Scripts/write-release-secrets.sh"
+release_work="$work/release"
+mkdir -p "$release_work"
+
+STADIA_API_KEY="8f2b1c" THUNDERFOREST_API_KEY="4d9e7a" \
+    run_script "write-release-secrets writes a file the gate accepts" \
+        "$secrets_writer" --plist "$release_work/written.plist"
+written_status="$status"
+written_output="$output"
+run_script "write-release-secrets writes a file the gate accepts" \
+    "$secrets_gate" --plist "$release_work/written.plist"
+if [[ "$written_status" != 0 ]]; then
+    fail "the writer exited $written_status" "$written_output"
+elif expect_status 0 && expect_contains "$output" "2 keys resolve" "the gate's output"; then
+    pass
+fi
+
+# What `plutil -extract … raw` hands `gh secret set` ends in a newline, and a
+# key carrying one resolves, is bundled and is refused by the tile server.
+STADIA_API_KEY=$'8f2b1c\n' THUNDERFOREST_API_KEY=$'  4d9e7a \t' \
+    run_script "write-release-secrets strips the whitespace a pasted secret carries" \
+        "$secrets_writer" --plist "$release_work/padded.plist"
+# Read back as JSON, because `$(…)` would strip a trailing newline itself and
+# pass a writer that kept one.
+padded_written="$(plutil -convert json -o - "$release_work/padded.plist" 2>&1 | jq -cS . 2>&1 || true)"
+if expect_status 0; then
+    if [[ "$padded_written" != '{"StadiaAPIKey":"8f2b1c","ThunderforestAPIKey":"4d9e7a"}' ]]; then
+        fail "wrote $padded_written"
+    else
+        pass
+    fi
+fi
+
+STADIA_API_KEY=" " \
+    run_script "write-release-secrets names every blank secret and writes nothing" \
+        env -u THUNDERFOREST_API_KEY "$secrets_writer" --plist "$release_work/blank.plist"
+if expect_status 1 \
+    && expect_contains "$output" "STADIA_API_KEY" "the error" \
+    && expect_contains "$output" "THUNDERFOREST_API_KEY" "the error" \
+    && expect_contains "$output" "testflight environment" "the error"; then
+    if [[ -e "$release_work/blank.plist" ]]; then
+        fail "wrote $release_work/blank.plist anyway"
+    else
+        pass
+    fi
+fi
+
+# On a laptop the existing file is the only copy of the keys.
+write_secrets "$release_work/existing.plist" \
+    StadiaAPIKey "kept" ThunderforestAPIKey "kept"
+STADIA_API_KEY="8f2b1c" THUNDERFOREST_API_KEY="4d9e7a" \
+    run_script "write-release-secrets never overwrites a file" \
+        "$secrets_writer" --plist "$release_work/existing.plist"
+kept="$(plutil -extract StadiaAPIKey raw -o - "$release_work/existing.plist" 2>&1 || true)"
+if expect_status 1 && expect_contains "$output" "already exists" "the error"; then
+    if [[ "$kept" != "kept" ]]; then
+        fail "the existing file now holds '$kept'"
+    else
+        pass
+    fi
+fi
+
+# A repository of its own, so the tags read are the fixture's and never this
+# checkout's: a project at build 2, as the four targets are committed today.
+release_version="$repository_root/Scripts/release-version.sh"
+release_repository="$release_work/repository"
+release_project="$release_repository/OpenHikes.xcodeproj/project.pbxproj"
+mkdir -p "$(dirname "$release_project")"
+cat > "$release_project" <<'FIXTURE'
+				CURRENT_PROJECT_VERSION = 2;
+				MARKETING_VERSION = 1.4;
+				CURRENT_PROJECT_VERSION = 2;
+				MARKETING_VERSION = 1.4;
+FIXTURE
+git -C "$release_repository" init -q
+git -C "$release_repository" add .
+git -C "$release_repository" -c user.name=Fixture -c user.email=fixture@example.com \
+    -c commit.gpgsign=false -c core.hooksPath=/dev/null commit -q -m "Fixture"
+
+run_script "release-version counts on from the committed build when nothing is tagged" \
+    "$release_version" --version 1.5 --project "$release_project"
+if expect_status 0 \
+    && expect_contains "$output" "version=1.5" "the output" \
+    && expect_contains "$output" $'build=3\ntag=v1.5-3' "the output"; then
+    pass
+fi
+
+# Compared as numbers: as text, 9 sorts above 10. The tags that are not of
+# the shape the workflow makes name no build at all.
+for fixture_tag in v1.4-9 v1.4-10 v1.4-rc1 vacation; do
+    git -C "$release_repository" tag "$fixture_tag"
+done
+run_script "release-version counts on from the highest tagged build" \
+    "$release_version" --version 1.5 --project "$release_project"
+if expect_status 0 && expect_contains "$output" $'build=11\ntag=v1.5-11' "the output"; then
+    pass
+fi
+
+run_script "release-version takes the build it is given" \
+    "$release_version" --version 1.5.1 --build 40 --project "$release_project"
+if expect_status 0 && expect_contains "$output" $'version=1.5.1\nbuild=40\ntag=v1.5.1-40' "the output"; then
+    pass
+fi
+
+run_script "release-version refuses a build that was already uploaded" \
+    "$release_version" --version 1.4 --build 10 --project "$release_project"
+if expect_status 1 \
+    && expect_contains "$output" "v1.4-10 already exists" "the error" \
+    && expect_absent "$output" "tag=" "the output"; then
+    pass
+fi
+
+for malformed in 1.5beta 1.2.3.4 1.05 v1.5; do
+    run_script "release-version refuses the version '$malformed'" \
+        "$release_version" --version "$malformed" --project "$release_project"
+    if expect_status 2 && expect_contains "$output" "is not a version" "the error"; then
+        pass
+    fi
+done
+
+run_script "release-version refuses a build that is not a whole number" \
+    "$release_version" --version 1.5 --build 3a --project "$release_project"
+if expect_status 2 && expect_contains "$output" "is not a build number" "the error"; then
+    pass
+fi
+
+run_script "release-version requires a version" \
+    "$release_version" --project "$release_project"
+if expect_status 2 && expect_contains "$output" "--version is required" "the error"; then
     pass
 fi
 
