@@ -144,7 +144,9 @@ final class BackgroundTrailTracker: NSObject {
     private var selectionRevision: UInt64 = 0
     private var selectionPublishTask: Task<Void, Never>?
     private let selectionGeneration: SelectionGeneration
-    private let snapshotWriter: SnapshotWriter
+    /// Shared with the launch sweep so static pinned-trail commits use this
+    /// feed's ordering boundary, rather than an independent writer.
+    let snapshotWriter: SnapshotWriter
 
     /// The background fix currently being matched against the route, and the
     /// counter that bounds a wait on it.

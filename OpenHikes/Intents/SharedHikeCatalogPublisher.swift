@@ -75,11 +75,12 @@ nonisolated enum SharedHikeCatalogPublisher {
     static func publish(
         from coordinator: HikeIntentCoordinator,
         container: ModelContainer,
+        writer: BackgroundTrailTracker.SnapshotWriter,
         watch: WatchSessionCoordinator? = nil
     ) {
         Task.detached(priority: .utility) {
             await publishLibrary(from: coordinator, to: .live(watch: watch))
-            await publishPinnedTrails(.live(container: container))
+            await publishPinnedTrails(.live(container: container, writer: writer))
         }
     }
 
@@ -186,25 +187,23 @@ nonisolated enum SharedHikeCatalogPublisher {
 
     /// One hike's snapshot, built the same way the tracker builds the selected
     /// one so the two cannot describe the same trail differently.
-    private static func publishTrail(_ hikeID: UUID, container: ModelContainer) async {
-        guard let input = await routeInput(for: hikeID, in: container),
-              let snapshot = await BackgroundTrailTracker.buildSnapshotOffMain(
-                  from: input,
-                  liveFix: nil
-              )
-        else { return }
+    static func publishTrail(
+        _ hikeID: UUID,
+        writer: BackgroundTrailTracker.SnapshotWriter,
+        publication: PinnedTrailPublication
+    ) async {
+        guard let snapshot = await publication.build(hikeID) else { return }
         // No live fix, and that is the shape rather than an omission.
         // `BackgroundTrailTracker` publishes a fix for the *tracked* hike only
         // — one hike is being walked — so a widget pinned to a different trail
         // has no live position to draw and renders the static route. That case
         // did not exist before this change and is the one worth a test.
-        SharedStore.saveTrailSnapshot(snapshot)
+        // Ownership is decided after the build, through the live feed's own
+        // writer. A selection or a pause can have arrived while it suspended.
+        await writer.savePinned(snapshot)
         // Framed from the same decimated polyline the widget draws, as the
         // selection's map is. A no-op when the set on disk already frames it.
-        await TrailBasemapRenderer.shared.refreshPinned(
-            hikeID: hikeID,
-            polyline: snapshot.polyline
-        )
+        await publication.refreshBasemap(hikeID, snapshot.polyline)
     }
 
     /// One hike read into values, in a context of its own off the main actor:
@@ -299,9 +298,30 @@ nonisolated enum SharedHikeCatalogPublisher {
         }
     }
 
+    /// The expensive build and map render, injectable so a suite can hold a
+    /// static build open while the live writer publishes a fix or a pause.
+    /// The snapshot commit stays in ``publishTrail(_:writer:publication:)``.
+    nonisolated struct PinnedTrailPublication: Sendable {
+        let build: @Sendable (UUID) async -> SharedTrailSnapshot?
+        let refreshBasemap: @Sendable (UUID, [SharedTrailSnapshot.CodableCoordinate]) async -> Void
+
+        static func live(container: ModelContainer) -> Self {
+            Self(
+                build: { hikeID in
+                    guard let input = await SharedHikeCatalogPublisher.routeInput(for: hikeID, in: container)
+                    else { return nil }
+                    return await BackgroundTrailTracker.buildSnapshotOffMain(from: input, liveFix: nil)
+                },
+                refreshBasemap: { hikeID, polyline in
+                    await TrailBasemapRenderer.shared.refreshPinned(hikeID: hikeID, polyline: polyline)
+                }
+            )
+        }
+    }
+
     /// Everything the pinned-trail sweep reads and writes, so a suite can hand
     /// it an answer WidgetKit never gives the test host and see what it does
-    /// with it. ``live(container:)`` is the app's.
+    /// with it. ``live(container:writer:)`` is the app's.
     ///
     /// A seam for the reason `TrailBasemapRenderer.PinnedHikes` is one, and
     /// wider: the sweep's writes land in the App Group the renderer's own
@@ -320,12 +340,16 @@ nonisolated enum SharedHikeCatalogPublisher {
         let pruneBasemaps: @Sendable (Set<UUID>) async -> Void
 
         /// WidgetKit, the app's own defaults, `container` and the App Group.
-        static func live(container: ModelContainer) -> Self {
+        static func live(container: ModelContainer, writer: BackgroundTrailTracker.SnapshotWriter) -> Self {
             Self(
                 pinnedTrails: SharedHikeCatalogPublisher.pinnedTrails,
                 selectedHikeIDs: SharedHikeCatalogPublisher.selectedHikeIDs,
                 publishTrail: { hikeID in
-                    await SharedHikeCatalogPublisher.publishTrail(hikeID, container: container)
+                    await SharedHikeCatalogPublisher.publishTrail(
+                        hikeID,
+                        writer: writer,
+                        publication: .live(container: container)
+                    )
                 },
                 pruneTrailSnapshots: { SharedStore.pruneTrailSnapshots(keeping: $0) },
                 pruneBasemaps: { await TrailBasemapRenderer.shared.prune(keeping: $0) }

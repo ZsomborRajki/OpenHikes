@@ -74,6 +74,21 @@ extension BackgroundTrailTracker {
             return generation.matches(revision)
         }
 
+        /// A launch sweep's static route, only when this feed does not own
+        /// the trail. Checked here after the build, because ownership can
+        /// change while that work suspends.
+        ///
+        /// The check and write have no suspension, and use the same actor as
+        /// every selected save. In particular, `SharedStore.save` mirrors the
+        /// per-hike file *before* writing the selected file: checking that
+        /// file outside this actor can still see the former selection and
+        /// overwrite the live mirror in between those writes (#1160).
+        func savePinned(_ snapshot: SharedTrailSnapshot) {
+            assertOffMainThread("Pinned widget snapshot writes must stay off the main thread")
+            guard SharedStore.load()?.hikeID != snapshot.hikeID else { return }
+            SharedStore.saveTrailSnapshot(snapshot)
+        }
+
         func clear(ifCurrent revision: UInt64) -> Bool {
             assertOffMainThread("Widget snapshot deletion must stay off the main thread")
             guard generation.matches(revision) else { return false }
