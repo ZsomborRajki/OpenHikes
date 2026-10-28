@@ -130,6 +130,20 @@ struct CameraCaptureMetadataTests {
             "2025:06:32 14:30:05",
             "2025:06:15 24:30:05",
             "2025:06:15 14:60:05",
+            "2025:02:29 14:30:05",
+            "1900:02:29 14:30:05",
+            "2025:02:30 14:30:05",
+            "2025:02:31 14:30:05",
+            "2025:04:31 14:30:05",
+            "2025::06:15 14:30:05",
+            "2025:broken:06:15 14:30:05",
+            "2025:06:15 14:broken:30:05",
+            "2025:06:15 14::05",
+            "2025:06:15 :30:05",
+            "2025:06:15 14:30:",
+            "2025:06:15 14:30",
+            "2025:06:15 14:30:05Z",
+            "2025:06:15 14:30:05+02:00",
             "2025:06:15",
             "2025-06-15 14:30:05",
             "not a timestamp at all",
@@ -144,6 +158,30 @@ struct CameraCaptureMetadataTests {
         #expect(
             CameraCaptureMetadata.capturedAt(in: properties, timeZone: Self.utc) == nil
         )
+    }
+
+    @Test("an impossible original date falls back to the next readable metadata field")
+    func invalidOriginalFallsBackToDigitized() {
+        let properties = Self.properties(
+            exif: [
+                kCGImagePropertyExifDateTimeOriginal as String: "2025:02:29 14:30:05",
+                kCGImagePropertyExifDateTimeDigitized as String: Self.shutterText,
+            ]
+        )
+        #expect(CameraCaptureMetadata.capturedAt(in: properties, timeZone: Self.utc) == Self.shutter)
+    }
+
+    @Test(
+        "a real leap day and the deliberate leap-second rollover remain readable",
+        arguments: [
+            ("2000:02:29 12:34:56", "2000-02-29T12:34:56Z"),
+            ("2016:12:31 23:59:60", "2017-01-01T00:00:00Z"),
+        ]
+    )
+    func calendarExceptions(text: String, expected: String) throws {
+        let properties = Self.properties(exif: [kCGImagePropertyExifDateTimeOriginal as String: text])
+        let instant = try Date.ISO8601FormatStyle().parse(expected)
+        #expect(CameraCaptureMetadata.capturedAt(in: properties, timeZone: Self.utc) == instant)
     }
 
     @Test("metadata with no timestamp in it reports nothing")

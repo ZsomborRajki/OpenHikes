@@ -20,10 +20,10 @@
 //  a comment here used to give: it said `DateFormatter` is not `Sendable`,
 //  which the SDK contradicts — `NSDateFormatter.h` declares
 //  `NS_SWIFT_SENDABLE`. The real reason is the validation directly below.
-//  Every parser Foundation offers resolves EXIF's all-zero placeholder into a
-//  real date in the year zero, and a photograph two millennia before the walk
-//  is worse than one with no time at all; the field ranges here are what
-//  refuse it, and they need the six numbers rather than a `Date`.
+//  A calendar can resolve EXIF's all-zero placeholder or an impossible day
+//  into a real date, and an invented capture time is worse than none. Keep
+//  all six numeric fields intact and validate them through PhotoCaptureDate
+//  before accepting the reading.
 //
 
 import Algorithms
@@ -56,22 +56,6 @@ nonisolated enum CameraCaptureMetadata {
         ),
     ]
 
-    /// Three colon-separated numbers each side of the space, and the range
-    /// each of them has to fall in.
-    ///
-    /// Checked here because the calendar checks none of it: it resolves the
-    /// all-zero placeholder some cameras write into a date in the year zero,
-    /// and a photograph two millennia before the walk is worse than one with
-    /// no time at all.
-    private static let fields = 3
-    private static let months = 1...12
-    private static let days = 1...31
-    private static let hours = 0...23
-    private static let minutes = 0...59
-    /// 60 rather than 59: a leap second is a legal reading, and the calendar
-    /// rolls it into the next minute rather than refusing it.
-    private static let seconds = 0...60
-
     /// When the picture was taken, or `nil` when the camera reported no
     /// timestamp this can read.
     ///
@@ -94,27 +78,20 @@ nonisolated enum CameraCaptureMetadata {
     /// `yyyy:MM:dd HH:mm:ss` — the only shape EXIF has for a time.
     private static func date(from text: String, in timeZone: TimeZone) -> Date? {
         let halves = text.split(separator: " ")
-        guard halves.count == 2 else { return nil }
-        let day = halves[0].split(separator: ":").compactMap { Int($0) }
-        let time = halves[1].split(separator: ":").compactMap { Int($0) }
-        guard day.count == fields, time.count == fields,
-              day[0] > 0,
-              months.contains(day[1]), days.contains(day[2]),
-              hours.contains(time[0]), minutes.contains(time[1]),
-              seconds.contains(time[2])
+        guard halves.count == 2,
+              let day = halves[0].wholeMatch(of: #/([0-9]{4}):([0-9]{2}):([0-9]{2})/#),
+              let clock = halves[1].wholeMatch(of: #/([0-9]{2}):([0-9]{2}):([0-9]{2})/#)
         else { return nil }
-
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = timeZone
-        return calendar.date(
+        return PhotoCaptureDate.date(
             from: DateComponents(
-                year: day[0],
-                month: day[1],
-                day: day[2],
-                hour: time[0],
-                minute: time[1],
-                second: time[2]
-            )
+                year: Int(day.1),
+                month: Int(day.2),
+                day: Int(day.3),
+                hour: Int(clock.1),
+                minute: Int(clock.2),
+                second: Int(clock.3)
+            ),
+            in: timeZone
         )
     }
 }

@@ -87,34 +87,13 @@ nonisolated struct PickedPhotoMetadata: Equatable, Sendable {
     init(properties: [String: Any], timeZone: TimeZone = .current) {
         let exif = properties[kCGImagePropertyExifDictionary as String] as? [String: Any]
         let zone = (exif?[kCGImagePropertyExifOffsetTimeOriginal as String] as? String)
-            .flatMap(Self.timeZone(fromOffset:)) ?? timeZone
+            .flatMap(PhotoCaptureDate.zone(fromOffset:)) ?? timeZone
         self.init(
             capturedAt: CameraCaptureMetadata.capturedAt(in: properties, timeZone: zone),
             coordinate: Self.coordinate(
                 in: properties[kCGImagePropertyGPSDictionary as String] as? [String: Any] ?? [:]
             )
         )
-    }
-
-    /// The widest UTC offsets in use, and the shape of the minutes beside them.
-    private static let offsetHours = 0...14
-    private static let offsetMinutes = 0...59
-    private static let secondsPerHour = 3600
-    private static let secondsPerMinute = 60
-
-    /// EXIF's `±HH:MM`, as a zone.
-    private static func timeZone(fromOffset text: String) -> TimeZone? {
-        let sign: Int
-        switch text.first {
-        case "+": sign = 1
-        case "-": sign = -1
-        default: return nil
-        }
-        let parts = text.dropFirst().split(separator: ":").compactMap { Int($0) }
-        guard let hours = parts.first, let minutes = parts.last, parts.count == 2,
-              offsetHours.contains(hours), offsetMinutes.contains(minutes)
-        else { return nil }
-        return TimeZone(secondsFromGMT: sign * (hours * secondsPerHour + minutes * secondsPerMinute))
     }
 
     /// Unsigned magnitudes and a hemisphere beside each — the only form EXIF
