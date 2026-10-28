@@ -150,6 +150,28 @@ struct HikeLocalStateTests {
         #expect(refetched.autoSavedTileKeys == ["osm/16/9/9@2.0"])
     }
 
+    /// Any rollback that abandons a first local write detaches the inserted
+    /// row. The hike survives, so its next write must resolve an attached row.
+    @Test("a rolled-back sidecar insertion does not keep serving the cached row")
+    func rolledBackSidecarCanBeWrittenAgain() throws {
+        let context = try context()
+        let hike = Fixture.hike(in: context)
+        try context.save()
+        hike.autoSavedTileKeys = ["abandoned"]
+        let abandoned = try #require(hike.localState)
+
+        context.rollback()
+        #expect(abandoned.modelContext == nil)
+        #expect(hike.autoSavedTileKeys.isEmpty)
+        hike.autoSavedTileKeys = ["retried"]
+        try context.save()
+
+        let fresh = ModelContext(context.container)
+        let rows = try fresh.fetch(FetchDescriptor<HikeLocalState>())
+        #expect(rows.count == 1)
+        #expect(rows.first?.autoSavedTileKeys == ["retried"])
+    }
+
     /// The walk in progress lives beside the tile claims: device-local, so a
     /// second device never shows it half-drawn.
     @Test("the walk in progress round-trips through the sidecar")

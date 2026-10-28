@@ -347,7 +347,7 @@ public final class Hike {
     /// `@Transient` because it is a pointer into the *other* store: persisting
     /// it would be persisting a cross-store reference, which is the thing that
     /// cannot exist. Invalidated by ``Hike/deleteLocalState()`` and by the
-    /// `isDeleted` check in ``Hike/localState``.
+    /// context-attachment and deletion checks in ``Hike/resolveLocalState()``.
     @Transient public var cachedLocalState: HikeLocalState?
 
     public init(
@@ -434,8 +434,18 @@ extension Hike {
     /// claim set taken this way cannot be contradicted a line later by a
     /// second fetch that happens to fail.
     public func resolveLocalState() throws -> HikeLocalState? {
-        if let cachedLocalState, !cachedLocalState.isDeleted { return cachedLocalState }
-        guard let modelContext else { return nil }
+        guard let modelContext else {
+            cachedLocalState = nil
+            return nil
+        }
+        if let cachedLocalState, !cachedLocalState.isDeleted,
+           cachedLocalState.modelContext === modelContext {
+            return cachedLocalState
+        }
+        // Rolling back an insertion detaches its model without leaving it
+        // marked deleted. Reusing that row would make a later write succeed
+        // only in memory, outside the context whose save reports success.
+        cachedLocalState = nil
         let found = try HikeLocalState.fetchExisting(for: id, in: modelContext)
         cachedLocalState = found
         return found
