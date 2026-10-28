@@ -12,12 +12,26 @@
 //  pieces, which nobody walked and the walk never matched (#962). This splits
 //  the line where the route does.
 //
+//  The whole trail is cut the same way through ``RouteProfile/trailRuns``, for
+//  the walk's share card, which draws the outline under the covered stretches
+//  and has only the profile to draw it from (#1122).
+//
 
 import Algorithms
 import CoreLocation
 import Foundation
+import OpenHikesShared
 
 nonisolated public extension RouteProfile {
+    /// The line cut at its pauses: the same ``TrailRuns`` the stored route's
+    /// `trailRuns` reads, for a reader that holds only the profile and draws
+    /// the whole trail (#1122).
+    var trailRuns: TrailRuns {
+        // A paused leg leaves point `i`; the pause is named on the point it
+        // arrives at, `i + 1`.
+        TrailRuns(pointCount: coordinates.count, pauseIndices: pausedSegments.map { $0 + 1 })
+    }
+
     /// The route between two distances, as one line per recorded piece: every
     /// route point inside the range, with the range's own ends interpolated
     /// onto the route so a stretch starts and stops where the coverage did
