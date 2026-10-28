@@ -46,7 +46,7 @@ nonisolated enum OfflineDownloadClaim {
         /// rather than discovered by a manifest that stayed empty.
         case hikeIsGone
         /// The store refused the commit, or would not say what the hike's
-        /// sidecar already holds. The merge is restored with the former and
+        /// sidecar already holds. The merge is undone with the former and
         /// never attempted on the latter, so the manifest still describes what
         /// the store really holds either way.
         case notSaved
