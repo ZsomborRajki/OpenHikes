@@ -210,10 +210,12 @@ struct TrailDraftEditTests {
         let hike = try savedTrail(in: context)
         hike.climbMeters = 120
         hike.descentMeters = 80
+        hike.elevationRouteRevision = "measured-route"
 
         _ = TrailDraftSave.update(hike, from: Self.draft([Line.south, Line.further]), openedWith: [], into: context)
         #expect(hike.climbMeters == nil)
         #expect(hike.descentMeters == nil)
+        #expect(hike.elevationRouteRevision == nil)
     }
 
     /// An edit's heights go on every point of the new line, the ones between
@@ -266,6 +268,8 @@ struct TrailDraftEditTests {
         let route = hike.route
         let drawn = hike.drawnRouteData
         hike.climbMeters = 120
+        hike.elevationRouteRevision = "measured-route"
+        try context.save()
 
         struct Refused: Error {}
         let outcome = TrailDraftSave.update(
@@ -283,6 +287,15 @@ struct TrailDraftEditTests {
         #expect(hike.route == route)
         #expect(hike.drawnRouteData == drawn)
         #expect(hike.climbMeters == 120)
+        #expect(hike.elevationRouteRevision == "measured-route")
+        try context.save()
+        let id = hike.id
+        let descriptor = FetchDescriptor<Hike>(predicate: #Predicate { $0.id == id })
+        let fresh = try #require(
+            try ModelContext(context.container).fetch(descriptor).first
+        )
+        #expect(fresh.route == route)
+        #expect(fresh.elevationRouteRevision == "measured-route")
     }
 
     @Test("one point is not a trail, edit or not")

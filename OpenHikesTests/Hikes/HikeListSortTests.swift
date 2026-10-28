@@ -69,13 +69,13 @@ struct HikeListSortTests {
         let context = try Fixture.modelContext()
         let hikes = try makeHikes(in: context)
 
-        #expect(HikeListOrder.hikesMissingElevation(in: hikes, for: .newest).isEmpty)
-        #expect(HikeListOrder.hikesMissingElevation(in: hikes, for: .longest).isEmpty)
-        #expect(HikeListOrder.hikesMissingElevation(in: hikes, for: .hilliest).count == hikes.count)
+        #expect(HikeListOrder.hikesForElevationValidation(in: hikes, for: .newest).isEmpty)
+        #expect(HikeListOrder.hikesForElevationValidation(in: hikes, for: .longest).isEmpty)
+        #expect(HikeListOrder.hikesForElevationValidation(in: hikes, for: .hilliest).count == hikes.count)
     }
 
-    @Test("a measured hike is not asked to be measured again")
-    func measuredHikesAreNotRefilled() throws {
+    @Test("a non-nil figure still needs its route identity validated")
+    func measuredHikesAreValidated() throws {
         let context = try Fixture.modelContext()
         let hikes = try makeHikes(in: context)
         for hike in hikes {
@@ -83,7 +83,7 @@ struct HikeListSortTests {
             hike.descentMeters = 100
         }
 
-        #expect(HikeListOrder.hikesMissingElevation(in: hikes, for: .hilliest).isEmpty)
+        #expect(HikeListOrder.hikesForElevationValidation(in: hikes, for: .hilliest) == hikes.map(\.id))
     }
 
     @Test("a hand-made order outranks whatever sort is chosen")

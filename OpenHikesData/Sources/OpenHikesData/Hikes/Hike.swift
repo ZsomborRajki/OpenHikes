@@ -397,6 +397,13 @@ public final class Hike {
 // MARK: - The route
 
 public extension Hike {
+    /// Registers this route as an observation dependency without decoding
+    /// its externally stored value. A list's task can watch for incoming
+    /// edits while its worker reads and measures the route off-main.
+    func trackRouteChanges() {
+        access(keyPath: \.route)
+    }
+
     /// Replaces the route, and the duration stored from it.
     ///
     /// The one way to write ``route`` once the hike exists, and here, in the
@@ -520,6 +527,13 @@ extension Hike {
     public var descentMeters: Double? {
         get { localState?.descentMeters }
         set { mutableLocalState?.descentMeters = newValue }
+    }
+
+    /// The route identity of the cached relief — see
+    /// ``HikeLocalState/elevationRouteRevision``.
+    public var elevationRouteRevision: String? {
+        get { localState?.elevationRouteRevision }
+        set { mutableLocalState?.elevationRouteRevision = newValue }
     }
 
     /// The submission this device still owes a review-queue entry for — see

@@ -147,6 +147,13 @@ public final class HikeLocalState {
     public var climbMeters: Double?
     public var descentMeters: Double?
 
+    /// The route those cached figures measure, including heights and pauses.
+    /// A local cache is not invalidated by the editor on another device, so
+    /// ``HikeListMetrics`` compares this with the received route before
+    /// reusing its figures. The walk's geometry-only revision deliberately
+    /// ignores height changes and cannot stand in for this identity.
+    public var elevationRouteRevision: String?
+
     /// The community submission this device has uploaded and still owes a
     /// review-queue entry for, or `nil` when there is nothing to finish.
     ///
