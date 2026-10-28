@@ -221,7 +221,6 @@ final class SheetPresentation {
         }
         set {
             guard newValue != storedLayout else { return }
-            for session in placeSearches.values { session.willReplaceHost() }
             withMutation(keyPath: \.layout) { storedLayout = newValue }
             recomputeDetentFlags()
         }
@@ -241,8 +240,11 @@ final class SheetPresentation {
     /// The same, for *Add Place*'s form and the camera it has open — see
     /// ``HikePlaceAdderSession``.
     @ObservationIgnored private var placeAdders: [SheetRoute: HikePlaceAdderSession] = [:]
-    /// The two place searches, their open cards and Nearby's original frame.
-    @ObservationIgnored private var placeSearches: [SheetRoute: HikePlacesSession] = [:]
+    /// The same, for what *Places Around Trail* has found and the card open
+    /// on it — see ``HikePlacesAroundSearch``.
+    @ObservationIgnored private var placesAroundSearches: [SheetRoute: HikePlacesAroundSearch] = [:]
+    /// The same, for *Places Nearby* — see ``HikePlacesNearbySession``.
+    @ObservationIgnored private var placesNearbySessions: [SheetRoute: HikePlacesNearbySession] = [:]
     /// The screens that have brought what they are about into view — see
     /// ``claimsFirstFraming(of:)``.
     @ObservationIgnored private var framedRoutes: Set<SheetRoute> = []
@@ -455,10 +457,17 @@ final class SheetPresentation {
         return session
     }
 
-    func placeSearch(for route: SheetRoute) -> HikePlacesSession {
-        if let existing = placeSearches[route] { return existing }
-        let session = HikePlacesSession()
-        placeSearches[route] = session
+    func placesAroundSearch(for route: SheetRoute) -> HikePlacesAroundSearch {
+        if let existing = placesAroundSearches[route] { return existing }
+        let search = HikePlacesAroundSearch()
+        placesAroundSearches[route] = search
+        return search
+    }
+
+    func placesNearby(for route: SheetRoute) -> HikePlacesNearbySession {
+        if let existing = placesNearbySessions[route] { return existing }
+        let session = HikePlacesNearbySession()
+        placesNearbySessions[route] = session
         return session
     }
 
@@ -653,13 +662,8 @@ final class SheetPresentation {
         communityPhotoSelections = communityPhotoSelections.filter { storedPath.contains($0.key) }
         walkShares = walkShares.filter { storedPath.contains($0.key) }
         placeAdders = placeAdders.filter { storedPath.contains($0.key) }
-        placeSearches = placeSearches.filter { route, session in
-            guard storedPath.contains(route) else {
-                session.end()
-                return false
-            }
-            return true
-        }
+        placesAroundSearches = placesAroundSearches.filter { storedPath.contains($0.key) }
+        placesNearbySessions = placesNearbySessions.filter { storedPath.contains($0.key) }
         framedRoutes = framedRoutes.filter { storedPath.contains($0) }
         let recording = storedPath.last == .recording
         if isRecordingPresented != recording { isRecordingPresented = recording }

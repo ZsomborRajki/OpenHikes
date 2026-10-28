@@ -26,6 +26,16 @@
 //  a guide: each goes through ``HikePlaceChange``, which saves before it
 //  answers. There is no *Add* for a batch and no *Cancel* to lose it with.
 //
+//  ## Kept for as long as the screen is on the stack
+//
+//  The screen is drawn in the sheet in portrait and in the side panel in
+//  landscape, so a turn of the phone builds it again. While this was the
+//  screen's own state, the screen built in the new host started from nothing:
+//  the open card closed, the *Within* chosen and what *Search This Area* added
+//  were gone, and the line was asked about again (#1170). ``SheetPresentation``
+//  keeps one of these for each such screen on the stack, as it keeps *Add
+//  Place*'s form, and lets it go when the screen is popped.
+//
 
 import CoreLocation
 import Foundation
@@ -130,7 +140,8 @@ final class HikePlacesAroundSearch {
     private(set) var askedAbout: Set<UUID> = []
     /// How far off the line the list reaches.
     var reach = TrailPlaceReach.around
-    /// The place whose card is open.
+    /// The place whose card is open. The screen in the new host presents the
+    /// card again from it after a turn.
     var selection: UUID?
 
     /// Where each row of ``found`` sits, by id and by element; told about
@@ -138,27 +149,24 @@ final class HikePlacesAroundSearch {
     @ObservationIgnored private var foundIndex = TrailPlaceFoundIndex()
     @ObservationIgnored private var searchedReach: Double?
     @ObservationIgnored private var searchedSymbols: Set<TrailPlaceSymbol> = []
+    /// How far out and for which kinds the request that is out asks, while
+    /// one is — see ``needsSearch(showing:)``.
+    @ObservationIgnored private var asking: (reach: Double, symbols: Set<TrailPlaceSymbol>)?
     @ObservationIgnored private var task: Task<Void, Never>?
-    /// A replacement host joins work already out instead of asking it again.
-    @ObservationIgnored private var pending: Request?
-    /// Area ordering is independent work, invalidated when this search ends too.
-    @ObservationIgnored private var lifetime = UUID()
-
-    private struct Request {
-        let id = UUID()
-        let reach: Double
-        let symbols: Set<TrailPlaceSymbol>
-    }
 
     nonisolated deinit { /* intentionally empty */ }
 
     /// Whether the line has to be asked about again to show what is chosen: a
     /// wider reach than was asked for, or a kind the last request left out.
+    ///
+    /// A request still out counts as asked, so it is waited for rather than
+    /// asked again. A turn of the phone builds the screen again while one can
+    /// be out, and the new screen asks this as it comes up. The rule also
+    /// holds for a reach narrowed, or a kind switched off, while one is out.
     func needsSearch(showing symbols: Set<TrailPlaceSymbol>) -> Bool {
-        let current = task?.isCancelled == false ? pending : nil
-        guard let coveredReach = current?.reach ?? searchedReach else { return true }
-        let coveredSymbols = current?.symbols ?? searchedSymbols
-        return reach.meters > coveredReach || !symbols.isSubset(of: coveredSymbols)
+        if let asking, reach.meters <= asking.reach, symbols.isSubset(of: asking.symbols) { return false }
+        guard let searchedReach else { return true }
+        return reach.meters > searchedReach || !symbols.isSubset(of: searchedSymbols)
     }
 
     /// Asks about `route`, as far out as ``reach``. Answers the search, which
@@ -175,12 +183,8 @@ final class HikePlacesAroundSearch {
         task?.cancel()
         phase = .searching
         let asked = max(reach.meters, searchedReach ?? 0)
-        let request = Request(reach: asked, symbols: symbols)
-        pending = request
+        asking = (asked, symbols)
         let search = Task { [weak self] in
-            defer {
-                if self?.pending?.id == request.id { self?.pending = nil }
-            }
             let outcome: TrailPlaceCorridorSearch.Outcome
             do {
                 outcome = try await TrailPlaceCorridorSearch.search(
@@ -193,7 +197,7 @@ final class HikePlacesAroundSearch {
             } catch {
                 return
             }
-            guard let self, !Task.isCancelled, pending?.id == request.id else { return }
+            guard let self, !Task.isCancelled else { return }
             receive(outcome, reach: asked, symbols: symbols)
         }
         task = search
@@ -201,6 +205,7 @@ final class HikePlacesAroundSearch {
     }
 
     func receive(_ outcome: TrailPlaceCorridorSearch.Outcome, reach: Double, symbols: Set<TrailPlaceSymbol>) {
+        asking = nil
         merge(outcome.rows)
         outage = outcome.outage
         if let refusal = outcome.outage, found.isEmpty {
@@ -220,10 +225,9 @@ final class HikePlacesAroundSearch {
     /// Takes what *Search This Area* found, measured against `route` off the
     /// main actor. Answers the work, which a test awaits.
     @discardableResult func receiveArea(_ places: [TrailPlace], along route: [RouteCoordinate]) -> Task<Void, Never> {
-        let generation = lifetime
-        return Task { [weak self] in
+        Task { [weak self] in
             let rows = await Self.ordered(places, along: route)
-            guard let self, !Task.isCancelled, lifetime == generation else { return }
+            guard let self else { return }
             let ids = merge(rows)
             askedAbout.formUnion(ids)
             if phase != .found, !found.isEmpty { phase = .found }
@@ -264,8 +268,7 @@ final class HikePlacesAroundSearch {
     func cancel() {
         task?.cancel()
         task = nil
-        pending = nil
-        lifetime = UUID()
+        asking = nil
     }
 
     /// Adds the rows not already found — one of each OpenStreetMap element,

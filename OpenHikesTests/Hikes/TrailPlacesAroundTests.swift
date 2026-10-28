@@ -58,7 +58,7 @@ struct TrailPlacesAroundTests {
         let token = around.attach(Self.handlers(calls))
         around.show([Self.row], token: token)
 
-        around.detach(token: token)
+        #expect(around.detach(token: token), "the claim was this screen's")
 
         #expect(!around.isActive)
         #expect(around.candidates.isEmpty)
@@ -68,7 +68,9 @@ struct TrailPlacesAroundTests {
     }
 
     /// The screen that replaces this one appears before this one disappears,
-    /// so the release has to be checked against the claim it was given.
+    /// so the release has to be checked against the claim it was given. It
+    /// says so, because a turn of the phone replaces the screen with a copy
+    /// on the same search, and only the claim's holder may cancel it.
     @Test("a stale screen's release leaves the newer claim standing")
     func staleReleaseIsIgnored() {
         let around = TrailPlacesAround()
@@ -76,7 +78,7 @@ struct TrailPlacesAroundTests {
         let second = around.attach(Self.handlers(Calls()))
         around.show([Self.row], token: second)
 
-        around.detach(token: first)
+        #expect(!around.detach(token: first), "the claim had moved on")
         around.show([], token: first)
 
         #expect(around.isActive)

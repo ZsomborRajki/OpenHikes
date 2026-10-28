@@ -31,16 +31,16 @@ struct HikePlacesAroundView: View {
     let hike: Hike
     let around: TrailPlacesAround
     let mapController: MapController
-    let session: HikePlacesSession
     var placePins: TrailPlacePinController?
+    /// What the screen has found and the card open on it, kept for it so a
+    /// turn of the phone keeps them — see ``HikePlacesAroundSearch``.
+    let search: HikePlacesAroundSearch
     /// Brings the sheet down to its middle, so the map is in view.
     var onShowMap: () -> Void = { /* no-op default */ }
     /// Opens one of the hike's photographs, from a place's card.
     var onOpenPhoto: (HikePhoto) -> Void = { _ in /* no-op default */ }
     /// Opens *Add Place* at a spot the hiker pressed on the map.
     var onAddPlace: (HikePlaceSpot) -> Void = { _ in /* no-op default */ }
-
-    private var search: HikePlacesAroundSearch { session.search }
 
     private var filter: TrailPlaceFilter { around.finder.filter }
 
@@ -55,7 +55,7 @@ struct HikePlacesAroundView: View {
             around: around,
             mapController: mapController,
             placePins: placePins,
-            session: session,
+            search: search,
             candidates: candidates,
             onShowMap: onShowMap,
             onOpenPhoto: onOpenPhoto,
@@ -177,13 +177,13 @@ struct HikePlacesAroundView: View {
     // MARK: - What the screen does
 
     private func searchIfNeeded() {
-        guard hike.isAttached else { return }
-        session.searchAlongIfNeeded(hike.route, from: around.finder.source, showing: filter.shown)
+        guard search.needsSearch(showing: filter.shown) else { return }
+        searchNow()
     }
 
     private func searchNow() {
-        guard hike.isAttached else { return }
-        session.searchAlong(hike.route, from: around.finder.source, showing: filter.shown)
+        guard let source = around.finder.source, hike.isAttached, !filter.shown.isEmpty else { return }
+        search.search(along: hike.route, from: source, showing: filter.shown)
     }
 }
 
