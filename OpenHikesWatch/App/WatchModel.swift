@@ -450,10 +450,14 @@ final class WatchModel {
             }
         case .phoneRecording(let recording):
             apply(recording)
-        case .commandOutcome(let outcome):
+        case .commandAnswer(let answer):
             pendingCommand = nil
-            commandRefusal = outcome.refusal
-            apply(outcome.recording)
+            commandRefusal = answer.refusal
+            // Only the phone's own answer moves the reading. A command the
+            // watch could not deliver says nothing about the phone's
+            // recorder, so a running hike stays on screen and keeps
+            // ``isPhoneRecording`` guarding against a second one.
+            phoneRecording = answer.reading(holding: phoneRecording)
         case .reachabilityChanged(let isReachable):
             // The phone is back. If this watch still has no trails, this is
             // the moment to ask again rather than to keep waiting for a push
@@ -477,8 +481,7 @@ final class WatchModel {
     /// A push and a command's reply can cross, and the reply is the one that
     /// matters — it describes the state the hiker's own button produced.
     private func apply(_ recording: WatchPhoneRecording) {
-        if let current = phoneRecording, recording.updatedAt < current.updatedAt { return }
-        phoneRecording = recording
+        phoneRecording = recording.reading(holding: phoneRecording)
     }
 
     /// Offers every queued walk again, bar the ones ``PhoneLink`` holds back
