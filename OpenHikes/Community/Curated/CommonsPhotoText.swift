@@ -110,18 +110,11 @@ nonisolated enum CommonsText {
 
 /// When a Commons photograph was taken.
 nonisolated enum CommonsDate {
-    /// The parts of a date and the ranges each must fall in — checked by hand
-    /// for the reason ``CameraCaptureMetadata`` gives: every parser Foundation
-    /// offers turns an impossible reading into a real date rather than
-    /// refusing it.
-    private static let dateFields = 3
+    /// Nothing before the first photographs. Calendar and clock validity are
+    /// shared with the camera through ``PhotoCaptureDate``.
     private static let earliestYear = 1826
-    private static let months = 1...12
-    private static let days = 1...31
-    private static let hours = 0...23
-    private static let minutes = 0...59
-    /// 60 for a leap second, as ``CameraCaptureMetadata`` allows.
-    private static let seconds = 0...60
+    private static let offsetHours = 0...23
+    private static let offsetMinutes = 0...59
 
     /// The capture time `DateTimeOriginal` gives, or the upload time when it
     /// gives none this can read.
@@ -143,33 +136,44 @@ nonisolated enum CommonsDate {
 
     /// One of the shapes `DateTimeOriginal` takes: `2013-08-03 12:34:56`, its
     /// EXIF spelling with colons in the date, `2013-08-03T12:34:56`, a date
-    /// alone, or any of those inside `<time datetime="…">`.
+    /// alone, or any of those inside `<time datetime="…">`. The ISO form also
+    /// accepts `Z` or a `±HH:mm` offset; any other suffix is left unread.
     static func date(from text: String, in timeZone: TimeZone) -> Date? {
         let reading = text.firstMatch(of: #/datetime="([^"]+)"/#).map { String($0.1) }
             ?? CommonsText.plain(text)
-        let halves = reading.split(whereSeparator: { $0 == " " || $0 == "T" }).prefix(2)
-        guard let day = halves.first.map(numbers), day.count == dateFields,
-              day[0] >= earliestYear, months.contains(day[1]), days.contains(day[2])
-        else { return nil }
-        let time = halves.dropFirst().first.map(numbers) ?? []
-        let clock = (time + [0, 0, 0]).prefix(dateFields)
-        guard hours.contains(clock[0]), minutes.contains(clock[1]), seconds.contains(clock[2]) else { return nil }
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = timeZone
-        return calendar.date(
-            from: DateComponents(
-                year: day[0],
-                month: day[1],
-                day: day[2],
-                hour: clock[0],
-                minute: clock[1],
-                second: clock[2]
-            )
+        let halves = reading.split(
+            omittingEmptySubsequences: false, whereSeparator: { $0 == " " || $0 == "T" }
         )
+        guard halves.count == 1 || halves.count == 2,
+              let day = halves[0].wholeMatch(of: #/([0-9]{4})([-:])([0-9]{2})\2([0-9]{2})/#),
+              let year = Int(day.1), year >= earliestYear
+        else { return nil }
+        var components = DateComponents(
+            year: year, month: Int(day.3), day: Int(day.4), hour: 0, minute: 0, second: 0
+        )
+        var zone = timeZone
+        if halves.count == 2 {
+            let shape = #/([0-9]{2}):([0-9]{2}):([0-9]{2})(Z|[+-][0-9]{2}:[0-9]{2})?/#
+            guard let clock = halves[1].wholeMatch(of: shape) else { return nil }
+            components.hour = Int(clock.1)
+            components.minute = Int(clock.2)
+            components.second = Int(clock.3)
+            if let offset = clock.4 {
+                guard day.2 == "-", reading.contains("T"), let explicitZone = Self.zone(from: offset)
+                else { return nil }
+                zone = explicitZone
+            }
+        }
+        return PhotoCaptureDate.date(from: components, in: zone)
     }
 
-    /// The numbers in one half of a reading, split on its separators.
-    private static func numbers(_ part: Substring) -> [Int] {
-        part.split(whereSeparator: { $0 == "-" || $0 == ":" }).compactMap { Int($0) }
+    private static func zone(from offset: Substring) -> TimeZone? {
+        if offset == "Z" { return .gmt }
+        guard let fields = offset.wholeMatch(of: #/([+-])([0-9]{2}):([0-9]{2})/#),
+              let hours = Int(fields.2), offsetHours.contains(hours),
+              let minutes = Int(fields.3), offsetMinutes.contains(minutes)
+        else { return nil }
+        let sign = fields.1 == "+" ? 1 : -1
+        return TimeZone(secondsFromGMT: sign * (hours * 60 + minutes) * 60)
     }
 }

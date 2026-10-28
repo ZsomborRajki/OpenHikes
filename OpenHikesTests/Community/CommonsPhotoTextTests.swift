@@ -146,6 +146,88 @@ struct CommonsPhotoTextTests {
         #expect(CommonsDate.date(from: text, in: Self.utc) == nil)
     }
 
+    @Test(
+        "impossible days and incomplete fields use the upload time rather than a manufactured capture time",
+        arguments: [
+            "2026-02-29",
+            "1900-02-29 12:34:56",
+            "2026-02-30 12:34:56",
+            "2026-02-31 12:34:56",
+            "2026-04-31 12:34:56",
+            "2026-02-30T12:34:56Z",
+            "2026-02-broken-28 12:34:56",
+            "2026--02-28 12:34:56",
+            "2026:02-28 12:34:56",
+            "2026-02-28 12:broken:56",
+            "2026-02-28 broken:34:56",
+            "2026-02-28 12:34:broken",
+            "2026-02-28 12::56",
+            "2026-02-28 :34:56",
+            "2026-02-28 12:34:",
+            "2026-02-28 12:34",
+            "2026-02-28 12",
+            "2026-02-28T",
+            "2026-02-28 broken",
+            "2026-02-28 12:34:56:78",
+            "2026-02-28 12:34:56 UTC",
+        ]
+    )
+    func invalidCaptureUsesUpload(text: String) {
+        #expect(CommonsDate.date(from: text, in: Self.utc) == nil)
+        #expect(
+            Self.components(CommonsDate.capturedAt(text, uploaded: "2006-12-27T09:44:05Z", timeZone: Self.utc))
+                == DateComponents(year: 2006, month: 12, day: 27, hour: 9, minute: 44, second: 5)
+        )
+    }
+
+    @Test(
+        "an ISO offset dates the complete clock independently of the fallback zone",
+        arguments: [
+            "2026-02-28T12:34:56Z",
+            "2026-02-28T14:34:56+02:00",
+            "2026-02-28T07:04:56-05:30",
+            "<time datetime=\"2026-02-28T14:34:56+02:00\">28 February 2026</time>",
+        ]
+    )
+    func explicitOffset(text: String) throws {
+        let elsewhere = try #require(TimeZone(secondsFromGMT: 9 * 60 * 60))
+        #expect(
+            Self.components(CommonsDate.date(from: text, in: elsewhere))
+                == DateComponents(year: 2026, month: 2, day: 28, hour: 12, minute: 34, second: 56)
+        )
+    }
+
+    @Test(
+        "an unsupported or malformed zone-bearing shape uses the upload time",
+        arguments: [
+            "2026-02-28T12:34:56+25:00",
+            "2026-02-28T12:34:56+02:60",
+            "2026-02-28T12:34:56+02",
+            "2026-02-28T12:34:56+02:",
+            "2026-02-28T12:34:56.123Z",
+            "2026-02-28T12:34:56UTC",
+        ]
+    )
+    func unsupportedOffsetUsesUpload(text: String) {
+        #expect(CommonsDate.date(from: text, in: Self.utc) == nil)
+        #expect(
+            Self.components(CommonsDate.capturedAt(text, uploaded: "2006-12-27T09:44:05Z", timeZone: Self.utc))
+                == DateComponents(year: 2006, month: 12, day: 27, hour: 9, minute: 44, second: 5)
+        )
+    }
+
+    @Test("a real leap day and the deliberate leap-second rollover remain readable")
+    func calendarExceptions() {
+        #expect(
+            Self.components(CommonsDate.date(from: "2000-02-29", in: Self.utc))
+                == DateComponents(year: 2000, month: 2, day: 29, hour: 0, minute: 0, second: 0)
+        )
+        #expect(
+            Self.components(CommonsDate.date(from: "2016-12-31T23:59:60Z", in: Self.utc))
+                == DateComponents(year: 2017, month: 1, day: 1, hour: 0, minute: 0, second: 0)
+        )
+    }
+
     @Test("with no readable capture time, the upload dates the photograph")
     func uploadIsTheFallback() {
         let date = CommonsDate.capturedAt("1930s", uploaded: "2006-12-27T09:44:05Z", timeZone: Self.utc)
