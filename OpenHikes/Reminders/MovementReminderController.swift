@@ -82,6 +82,8 @@ final class MovementReminderController {
 
     private let notifier: any MovementReminderNotifying
     private let defaults: UserDefaults
+    /// Re-read after permission, because dusk may pass while a prompt is up.
+    private let clock: @MainActor () -> Date
 
     /// Where the app becoming active is observed. A seam and
     /// nothing more: the app never passes anything but `.default`, and it
@@ -107,14 +109,9 @@ final class MovementReminderController {
 
     private var pausedRecording: PausedRecording?
     private var pausedWalk: PausedWalk?
-    private var stillness = StillnessWatch()
-    /// Whether the followed trail is currently being walked away from — see
-    /// ``OffTrailWatch``. Not per-subject the way the pauses above are:
-    /// exactly one trail is followed at a time.
-    private var offTrail = OffTrailWatch()
-    /// Whether the followed trail has been said to end after dark — see
-    /// ``DuskWatch``. One per walk, like ``offTrail``.
-    private var dusk = DuskWatch()
+    /// Eligibility and delivery are separate: permission can be refused, or
+    /// arrive after the condition has changed. See ``MovementWarningState``.
+    private var warnings = MovementWarningState()
 
     /// What to do when a pause stops being watched for a reason the recorder
     /// has not heard about — today, the hiker turning the switch off with a
@@ -140,11 +137,13 @@ final class MovementReminderController {
     init(
         notifier: any MovementReminderNotifying,
         defaults: UserDefaults = .standard,
-        lifecycleCenter: NotificationCenter = .default
+        lifecycleCenter: NotificationCenter = .default,
+        clock: @escaping @MainActor () -> Date = Date.init
     ) {
         self.notifier = notifier
         self.defaults = defaults
         self.lifecycleCenter = lifecycleCenter
+        self.clock = clock
         observePreferences()
     }
 
@@ -184,7 +183,7 @@ extension MovementReminderController {
         at coordinate: CLLocationCoordinate2D?,
         on date: Date
     ) -> Bool {
-        stillness = StillnessWatch()
+        warnings.resetRecording()
         withdraw(.pauseRecording)
         guard isEnabled, let coordinate, CLLocationCoordinate2DIsValid(coordinate) else {
             pausedRecording = nil
@@ -229,13 +228,13 @@ extension MovementReminderController {
     /// The running recording's own answer to whether the hiker is moving.
     func recordingObserved(isStationary: Bool, at date: Date) {
         guard isEnabled else { return }
-        guard stillness.observe(isStationary: isStationary, at: date) else {
+        guard warnings.observeStillness(isStationary: isStationary, at: date) else {
             // Moving again takes the suggestion back down: it asked a question
             // the hiker has now answered with their feet.
             if !isStationary { withdraw(.pauseRecording) }
             return
         }
-        post(MovementReminderWording.pauseRecording(stillFor: MovementReminderPolicy.stillFor))
+        postWarning(.pauseRecording)
     }
 
     /// The recording is running again — by the hiker's hand, by the button on
@@ -248,7 +247,7 @@ extension MovementReminderController {
     /// The recording is over, has failed, or was discarded.
     func recordingDidEnd() {
         pausedRecording = nil
-        stillness = StillnessWatch()
+        warnings.resetRecording()
         withdraw(.resumeRecording)
         withdraw(.pauseRecording)
     }
@@ -296,6 +295,7 @@ extension MovementReminderController {
     ///   rather than from the clock so a pause restored at launch is measured
     ///   from the moment the hiker tapped it.
     func walkDidPause(trailTitle: String, atDistance distance: Double, on date: Date) {
+        warnings.cancelWalkWarnings()
         guard isEnabled, distance.isFinite else {
             pausedWalk = nil
             return
@@ -369,19 +369,18 @@ extension MovementReminderController {
         // the reason its header gives: two banners about one walk is the app
         // arguing with itself in a pocket.
         guard !hasActiveRecording() else { return }
-        let wasOffTrail = offTrail.isOffTrail
-        let shouldRemind = offTrail.observed(offRouteMeters: offRouteMeters, at: date)
+        let wasOffTrail = warnings.isOffTrail
+        let shouldRemind = warnings.observeOffTrail(
+            offRouteMeters: offRouteMeters,
+            trailTitle: trailTitle,
+            at: date
+        )
         // Rejoining takes the banner back down. A standing "Off the trail" is
         // a claim about *now*, and a hiker who has walked back onto the route
         // should not find it on the Lock Screen when they next look.
-        if wasOffTrail, !offTrail.isOffTrail { withdraw(.leftTheTrail) }
-        guard shouldRemind, let offRouteMeters else { return }
-        post(
-            MovementReminderWording.leftTheTrail(
-                trailTitle: trailTitle,
-                offRouteMeters: offRouteMeters
-            )
-        )
+        if wasOffTrail, !warnings.isOffTrail { withdraw(.leftTheTrail) }
+        guard shouldRemind else { return }
+        postWarning(.leftTheTrail)
     }
 
     /// The walk is over, or the hiker is no longer following anything.
@@ -390,8 +389,7 @@ extension MovementReminderController {
     /// different walks: that one ends a *pause*, and a pause ending is when
     /// this watch starts mattering rather than when it stops.
     func walkDidStopFollowing() {
-        offTrail.reset()
-        dusk.reset()
+        warnings.stopFollowing()
         withdraw(.leftTheTrail)
         withdraw(.afterDark)
     }
@@ -409,15 +407,13 @@ extension MovementReminderController {
         at date: Date
     ) {
         guard isEnabled, !hasActiveRecording() else { return }
-        guard dusk.observed(finishAt: finishAt, civilDusk: civilDusk, now: date),
-              let civilDusk else { return }
-        post(
-            MovementReminderWording.afterDark(
-                trailTitle: trailTitle,
-                finishAt: finishAt,
-                civilDusk: civilDusk
-            )
-        )
+        guard warnings.estimateFinish(
+            finishAt: finishAt,
+            civilDusk: civilDusk,
+            trailTitle: trailTitle,
+            at: date
+        ) else { return }
+        postWarning(.afterDark)
     }
 }
 
@@ -451,7 +447,8 @@ extension MovementReminderController {
         let wasWatching = pausedRecording != nil
         pausedRecording = nil
         pausedWalk = nil
-        stillness = StillnessWatch()
+        warnings.resetRecording()
+        warnings.cancelWalkWarnings()
         for kind in MovementReminderKind.allCases { withdraw(kind) }
         if wasWatching { watchingDidEnd() }
     }
@@ -481,6 +478,32 @@ extension MovementReminderController {
         }
     }
 
+    /// Permission does not spend a once-only warning. Revalidate its current
+    /// condition and subject after the ask, then commit immediately before
+    /// posting so another queued attempt finds no allowance left to spend.
+    private func postWarning(_ kind: MovementReminderKind) {
+        guard let id = warnings.pendingID(for: kind) else { return }
+        enqueue { [weak self] in
+            guard let self, mayPostWarning(kind), warnings.pendingID(for: kind) == id,
+                  await notifier.authorize() else { return }
+            await postAuthorizedWarning(kind, id: id)
+        }
+    }
+
+    private func postAuthorizedWarning(_ kind: MovementReminderKind, id: UUID) async {
+        guard mayPostWarning(kind), let reminder = warnings.take(kind, id: id, at: clock()) else { return }
+        await notifier.post(reminder)
+    }
+
+    private func mayPostWarning(_ kind: MovementReminderKind) -> Bool {
+        guard isEnabled else { return false }
+        switch kind {
+        case .leftTheTrail, .afterDark: return pausedWalk == nil && !hasActiveRecording()
+        case .pauseRecording: return pausedRecording == nil
+        default: return false
+        }
+    }
+
     private func withdraw(_ kind: MovementReminderKind) {
         enqueue { [weak self] in self?.notifier.withdraw(kind) }
     }
@@ -503,6 +526,10 @@ extension MovementReminderController {
     /// sensor of its own — it reads fixes the app was producing anyway — so
     /// there is nothing to reclaim, and dropping its anchor would only lose a
     /// reminder the hiker could still enable permission for from Settings.
+    /// Undelivered once-only warnings also keep their condition, so returning
+    /// from Settings with permission enabled can post one that still applies.
+    /// Its identity, current eligibility and dusk deadline are checked after
+    /// the silent permission request, just as they are after a prompt.
     ///
     /// - Parameter prompting: whether the hiker may be asked. True at a
     ///   pause, which is a question about something they are doing right now;
@@ -528,15 +555,24 @@ extension MovementReminderController {
     /// nobody refused.
     func reconcileWithAuthorization(prompting: Bool) {
         let watched = pausedRecording?.id
-        guard prompting || watched != nil else { return }
+        let pendingWarnings = warnings.pending
+        guard prompting || watched != nil || !pendingWarnings.isEmpty else { return }
         enqueue { [weak self] in
             guard let self else { return }
             let mayPost = prompting
                 ? await notifier.authorize()
                 : await notifier.canPost()
-            guard !mayPost, let watched, pausedRecording?.id == watched else { return }
-            pausedRecording = nil
-            watchingDidEnd()
+            if mayPost {
+                // Initial warning attempts registered their categories even
+                // when denied. This retry needs only the silent permission
+                // check above; returning from Settings must never prompt.
+                for warning in pendingWarnings {
+                    await postAuthorizedWarning(warning.kind, id: warning.id)
+                }
+            } else if let watched, pausedRecording?.id == watched {
+                pausedRecording = nil
+                watchingDidEnd()
+            }
         }
     }
 

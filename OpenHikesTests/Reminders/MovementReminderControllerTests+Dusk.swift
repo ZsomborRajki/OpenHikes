@@ -58,6 +58,7 @@ extension MovementReminderControllerTests {
     func stoppingRearmsAndWithdraws() async {
         let harness = MovementReminderHarness.harness()
         estimate(harness, finishingAfterDusk: 20)
+        await harness.controller.settle()
         harness.controller.walkDidStopFollowing()
         estimate(harness, finishingAfterDusk: 20)
         await harness.controller.settle()

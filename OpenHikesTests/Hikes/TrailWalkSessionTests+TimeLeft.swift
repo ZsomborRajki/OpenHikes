@@ -113,10 +113,13 @@ extension TrailWalkSessionTests {
     /// that was ended, and the next walk is owed its own warning.
     @Test("deleting the walked hike takes the warning down and re-arms it")
     func deletingTheHikeRearmsTheWarning() async {
-        let harness = MovementReminderHarness.harness()
-        let session = daylightSession(harness, dusk: clock.read().addingTimeInterval(8 * 60))
+        let harness = MovementReminderHarness.harness(clock: clock)
+        // Both four-minute observation sequences finish before dusk. This
+        // tests a delivered warning rearming, rather than one expiring.
+        let session = daylightSession(harness, dusk: clock.read().addingTimeInterval(9 * 60))
         let first = hike()
         walk(session, hike: first, profile: RouteProfile(route: first.route), from: 0, through: 3)
+        await harness.controller.settle()
         session.discardWalk(forDeletedHike: first.id)
 
         let second = hike(title: "Valley Path")

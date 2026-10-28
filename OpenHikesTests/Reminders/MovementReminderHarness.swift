@@ -5,8 +5,8 @@
 //  The fixtures the reminder suites share: a notifier that records what it was
 //  told instead of talking to `UserNotifications`, a fixed instant the suites
 //  hand to the controller's own `at:` and `on:` parameters, and a controller
-//  wired to the first of those. The controller reads no clock of its own -
-//  every moment it is asked about arrives as an argument.
+//  wired to the first of those. A clock moved by hand also lets a suite cross
+//  dusk while a permission prompt is waiting for its answer.
 //
 //  Its own type rather than static members on one suite, for the reason
 //  ``LiveActivityHarness`` is: the suites are split by subject — the policy,
@@ -165,6 +165,7 @@ enum MovementReminderHarness {
         /// is what the app uses, but posting it here would reach every other
         /// controller alive in the test host — and the host is a running app.
         let lifecycleCenter: NotificationCenter
+        let clock: TestClock
 
         /// Posts the app-lifecycle notification the controller's typed
         /// observer is built on.
@@ -186,21 +187,24 @@ enum MovementReminderHarness {
     /// A defaults suite of its own, never the developer's: the controller
     /// reads its switch on every decision, so a test writing to `.standard`
     /// would change the host app's behaviour for every suite after it.
-    static func harness(remindersEnabled: Bool = true) -> Harness {
+    static func harness(remindersEnabled: Bool = true, clock: TestClock? = nil) -> Harness {
         let notifier = StubMovementReminderNotifier()
         let suite = UserDefaults(suiteName: "movement-reminders-\(UUID().uuidString)")
             ?? .standard
         suite.set(remindersEnabled, forKey: SettingsKey.movementRemindersEnabled)
         let center = NotificationCenter()
+        let reminderClock = clock ?? TestClock(start)
         return Harness(
             controller: MovementReminderController(
                 notifier: notifier,
                 defaults: suite,
-                lifecycleCenter: center
+                lifecycleCenter: center,
+                clock: reminderClock.read
             ),
             notifier: notifier,
             defaults: suite,
-            lifecycleCenter: center
+            lifecycleCenter: center,
+            clock: reminderClock
         )
     }
 }
