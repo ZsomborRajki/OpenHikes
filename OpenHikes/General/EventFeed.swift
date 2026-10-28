@@ -54,10 +54,13 @@ nonisolated final class EventFeed<Element: Sendable>: Sendable {
     }
 
     /// The messages sent from now on, for one reader. Nothing sent before
-    /// the call is replayed.
-    func events() -> AsyncStream<Element> {
+    /// the call is replayed. A reader coalescing notifications can bound its
+    /// unread buffer; other readers keep every message by default.
+    func events(
+        bufferingPolicy: AsyncStream<Element>.Continuation.BufferingPolicy = .unbounded
+    ) -> AsyncStream<Element> {
         let id = UUID()
-        let (stream, continuation) = AsyncStream<Element>.makeStream()
+        let (stream, continuation) = AsyncStream<Element>.makeStream(bufferingPolicy: bufferingPolicy)
         continuation.onTermination = { [weak self] _ in
             self?.readers.withLock { readers in readers[id] = nil }
         }

@@ -95,4 +95,16 @@ struct EventFeedTests {
         let reader = FeedReader(feed.events())
         #expect(reader.received.isEmpty)
     }
+
+    @Test("a reader can retain only its newest unread notification")
+    func newestNotificationBuffer() async {
+        let feed = EventFeed<Int>()
+        var reader = feed.events(bufferingPolicy: .bufferingNewest(1)).makeAsyncIterator()
+
+        feed.send(1)
+        feed.send(2)
+        feed.send(3)
+
+        #expect(await reader.next() == 3)
+    }
 }

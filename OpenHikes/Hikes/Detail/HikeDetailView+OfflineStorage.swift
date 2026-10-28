@@ -90,13 +90,19 @@ extension HikeDetailView {
         return { record in try OfflineDownloadClaim.commit(record, for: target) }
     }
 
+    /// A fresh reader for each task lifetime. A stream cancelled by a push
+    /// stays terminated, while the detail's state survives for Back.
+    func storedBytesRefreshEvents() -> AsyncStream<Int> {
+        storedBytesRefreshes.events(bufferingPolicy: .bufferingNewest(1))
+    }
+
     func scheduleStoredBytesRefresh() {
         guard !hike.offlineDownloads.isEmpty || !hike.autoSavedTileKeys.isEmpty else {
             invalidateStoredBytesMeasurement()
             storedBytes = 0
             return
         }
-        storedBytesRefreshes.continuation.yield(storedBytesMeasurementGeneration)
+        storedBytesRefreshes.send(storedBytesMeasurementGeneration)
     }
 
     func invalidateStoredBytesMeasurement() {
