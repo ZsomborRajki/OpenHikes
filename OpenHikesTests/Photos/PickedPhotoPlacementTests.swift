@@ -28,7 +28,7 @@ import UIKit
 struct PickedPhotoPlacementTests {
     /// Where the graph's selection stands: well clear of anywhere a match
     /// could land, so a test can tell the two apart by position alone.
-    private static let graphSelection = CLLocationCoordinate2D(latitude: 47.6000, longitude: 12.8000)
+    static let graphSelection = CLLocationCoordinate2D(latitude: 47.6000, longitude: 12.8000)
     private static let now = Date(timeIntervalSince1970: 1_760_000_000)
 
     private static var recordedPlan: HikePhotoSearchPlan {
@@ -39,7 +39,7 @@ struct PickedPhotoPlacementTests {
         )
     }
 
-    private static func meters(_ from: CLLocationCoordinate2D?, _ to: CLLocationCoordinate2D) -> Double {
+    static func meters(_ from: CLLocationCoordinate2D?, _ to: CLLocationCoordinate2D) -> Double {
         guard let from else { return .infinity }
         return RouteGeometry.distanceMeters(from: from, to: to)
     }
@@ -274,12 +274,13 @@ struct PickedPhotoPlacementTests {
                 )
             )
         }
+        let plan = await PickedPhotoWork.standard.plan(from: hike.photoSearchSource)
 
         let photo = try #require(
             await HikePhotoImport.addPicked(
                 data,
                 to: hike,
-                plan: hike.photoSearchPlan(profilesRoute: true),
+                plan: plan,
                 fallback: Self.graphSelection,
                 assetLocalIdentifier: "picked-asset",
                 store: sandbox.store
@@ -298,12 +299,13 @@ struct PickedPhotoPlacementTests {
         let sandbox = PhotoStoreSandbox()
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context, route: PhotoDiscoveryFixture.route)
+        let plan = await PickedPhotoWork.standard.plan(from: hike.photoSearchSource)
 
         let photo = try #require(
             await HikePhotoImport.addPicked(
                 PhotoDiscoveryFixture.sampleImageData(),
                 to: hike,
-                plan: hike.photoSearchPlan(profilesRoute: true),
+                plan: plan,
                 fallback: Self.graphSelection,
                 assetLocalIdentifier: "bare-asset",
                 store: sandbox.store
@@ -314,7 +316,7 @@ struct PickedPhotoPlacementTests {
         #expect(Self.meters(photo.coordinate, Self.graphSelection) < 1)
     }
 
-    nonisolated private static func sampleJPEG() -> Data {
+    nonisolated static func sampleJPEG() -> Data {
         #if canImport(UIKit)
         let size = CGSize(width: 8, height: 8)
         let image = UIGraphicsImageRenderer(size: size).image { context in

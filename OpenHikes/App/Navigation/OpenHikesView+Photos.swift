@@ -91,9 +91,12 @@ extension OpenHikesView {
     /// still never opens.
     func attachPickedPhotos(_ items: [PhotosPickerItem]) {
         guard let subject = photoCapture.currentSubject() else { return }
-        // Once for the whole selection: building it is route-sized work.
-        let plan = subject.placeID == nil ? subject.hike.photoSearchPlan(profilesRoute: true) : nil
+        // Read off the hike here, on its actor, and indexed off it, once for
+        // the whole selection — see ``PickedPhotoWork``. A selection filed
+        // under a place is never matched, so it reads nothing.
+        let source = subject.placeID == nil ? subject.hike.photoSearchSource : nil
         photoCapture.runLibraryImport {
+            let plan = await PickedPhotoWork.standard.plan(from: source)
             for item in items {
                 guard !Task.isCancelled else { return }
                 // The user can pop back and delete the hike while the loader
