@@ -66,20 +66,30 @@ nonisolated enum SeededPhotoFixture {
     static func attach(
         count: Int,
         to hike: Hike,
+        keepsFiles: Bool = true,
         store: HikePhotoStore = .shared
     ) async {
         guard count > 0 else { return }
         let coordinates = anchors(count: count, along: hike.route)
         for index in 0..<count {
             guard let data = await encodedImage(index: index) else { continue }
-            await HikePhotoImport.add(
+            guard let photo = await HikePhotoImport.add(
                 data,
                 to: hike,
                 coordinate: coordinates[index],
                 savesToPhotoLibrary: false,
                 store: store
-            )
+            ) else { continue }
+            if !keepsFiles { await removeFiles(for: photo, from: store) }
         }
+    }
+
+    /// Keeps the actual imported row, then removes only the files. The real
+    /// loader consequently reaches the same state as a synced photo whose
+    /// pixels stayed on the device where it was added.
+    @concurrent
+    private static func removeFiles(for photo: HikePhoto, from store: HikePhotoStore) async {
+        store.remove([HikePhotoStore.PhotoFiles(photo)])
     }
 
     /// Evenly spaced points along the route, or `nil`s when there is no route

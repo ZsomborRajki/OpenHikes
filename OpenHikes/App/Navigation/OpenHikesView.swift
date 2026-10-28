@@ -761,7 +761,11 @@ extension OpenHikesView {
         #if DEBUG
         let count = AppLaunchEnvironment.seededPhotoCount
         guard count > 0, let hike else { return }
-        await SeededPhotoFixture.attach(count: count, to: hike)
+        await SeededPhotoFixture.attach(
+            count: count,
+            to: hike,
+            keepsFiles: !AppLaunchEnvironment.omitsSeededPhotoFiles
+        )
         #endif
     }
 
