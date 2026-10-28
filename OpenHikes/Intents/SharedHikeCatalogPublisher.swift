@@ -332,7 +332,8 @@ nonisolated enum SharedHikeCatalogPublisher {
         let pinnedTrails: @Sendable () async -> PinnedTrails
         /// The selected trail, which every unconfigured widget follows.
         let selectedHikeIDs: @Sendable () -> Set<UUID>
-        /// Writes one pinned trail's snapshot and map.
+        /// Writes one pinned trail's map, and its static snapshot unless the
+        /// live feed owns that trail: the feed's own writes keep that one.
         let publishTrail: @Sendable (UUID) async -> Void
         /// Deletes every per-hike snapshot but these.
         let pruneTrailSnapshots: @Sendable (Set<UUID>) -> Void
