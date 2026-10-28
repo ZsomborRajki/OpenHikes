@@ -236,18 +236,19 @@ nonisolated enum CommunityRoutePayload {
     /// ``Mercator/isRepresentable(latitude:longitude:)`` rather than
     /// `CLLocationCoordinate2DIsValid`, because it is the stricter of the two
     /// and it is the question actually being asked: everything here ends up on
-    /// a Web Mercator map. It also settles `NaN` on the way — a range does not
-    /// contain one — which `CLLocationCoordinate2DIsValid` does not.
+    /// a Web Mercator map. Its latitude and longitude ranges also reject
+    /// non-finite values.
     ///
     /// The height and the time are emptied rather than costing the point,
     /// which is ``GPXImport``'s distinction and the same one: a position is
     /// what the line is made of, while an elevation and a timestamp are fields
-    /// the route can do without. `1e400` decodes to an infinity and `nan`
-    /// decodes to a `NaN` — both are ordinary JSON numbers — and either one
-    /// poisons every figure walked out of the route afterwards, because a
-    /// `NaN` loses every comparison it is in and so survives `min` and `max`
-    /// as the answer. A finite placeholder such as `-9999` is emptied by the
-    /// same ``PlausibleElevation`` rule an imported GPX gets.
+    /// the route can do without. RFC 8259, section 6 excludes raw `NaN` and
+    /// `nan`; `1e400` has valid JSON number syntax but exceeds `Double`'s
+    /// finite range. The default `JSONDecoder` used above rejects all three
+    /// before this sanitizer runs. The value seam still needs its checks:
+    /// callers can supply non-finite values directly, and other decoding
+    /// configurations can admit them. A finite placeholder such as `-9999`
+    /// is emptied by the same ``PlausibleElevation`` rule an imported GPX gets.
     private static func usable(_ point: RouteCoordinate) -> RouteCoordinate? {
         guard Mercator.isRepresentable(latitude: point.latitude, longitude: point.longitude)
         else { return nil }
