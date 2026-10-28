@@ -142,6 +142,26 @@ struct WatchWalkHealthExportTests {
         #expect(harness.writer.written.count == 1)
     }
 
+    /// The deletion took the workout out of Health too, so writing it again
+    /// on the retry would put back a walk the hiker removed (#1115).
+    @Test("a walk arriving again after its hike was deleted is not written again")
+    func aRedeliveryAfterADeletionIsNotWritten() async throws {
+        let harness = try Harness(savesToHealth: .on)
+        let walk = Fixture.walk()
+        let first = await harness.arrive(walk)
+        guard case .imported(let hikeID) = first else {
+            Issue.record("Expected the first arrival to be imported, got \(first)")
+            return
+        }
+        let hike = try #require(try Fixture.hike(hikeID, in: harness.container.mainContext))
+        try HikeDeletion.delete([hike])
+
+        let second = await harness.arrive(walk)
+
+        #expect(second == .deleted)
+        #expect(harness.writer.written.count == 1)
+    }
+
     @Test("a failed write keeps the hike and files no identifier")
     func aFailedWriteCostsNothing() async throws {
         let harness = try Harness(savesToHealth: .on)

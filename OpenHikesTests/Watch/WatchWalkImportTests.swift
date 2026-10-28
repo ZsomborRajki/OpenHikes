@@ -259,7 +259,7 @@ private extension WatchWalkImportOutcome {
     var importedHikeID: UUID? {
         switch self {
         case .imported(let id), .alreadyImported(let id): id
-        case .refused: nil
+        case .deleted, .refused: nil
         }
     }
 }

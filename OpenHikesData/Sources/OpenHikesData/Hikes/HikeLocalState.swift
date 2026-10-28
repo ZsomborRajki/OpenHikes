@@ -112,7 +112,9 @@ public final class HikeLocalState {
     /// it can do nothing with, and, unlike the tile arrays, there is no sweep
     /// that could notice.
     ///
-    /// See `WatchWalkImport`, which is the only writer and the only reader.
+    /// See `WatchWalkImport`, which is the only writer and the only reader
+    /// besides `HikeDeletion`: a deletion takes this row with it, so it copies
+    /// the identifier into a ``DeletedWatchWalk`` first.
     public var watchSessionID: UUID?
 
     /// This hike's place in a hand-ordered list, or `nil` while the list is
