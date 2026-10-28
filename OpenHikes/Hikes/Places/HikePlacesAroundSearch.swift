@@ -139,14 +139,26 @@ final class HikePlacesAroundSearch {
     @ObservationIgnored private var searchedReach: Double?
     @ObservationIgnored private var searchedSymbols: Set<TrailPlaceSymbol> = []
     @ObservationIgnored private var task: Task<Void, Never>?
+    /// A replacement host joins work already out instead of asking it again.
+    @ObservationIgnored private var pending: Request?
+    /// Area ordering is independent work, invalidated when this search ends too.
+    @ObservationIgnored private var lifetime = UUID()
+
+    private struct Request {
+        let id = UUID()
+        let reach: Double
+        let symbols: Set<TrailPlaceSymbol>
+    }
 
     nonisolated deinit { /* intentionally empty */ }
 
     /// Whether the line has to be asked about again to show what is chosen: a
     /// wider reach than was asked for, or a kind the last request left out.
     func needsSearch(showing symbols: Set<TrailPlaceSymbol>) -> Bool {
-        guard let searchedReach else { return true }
-        return reach.meters > searchedReach || !symbols.isSubset(of: searchedSymbols)
+        let current = task?.isCancelled == false ? pending : nil
+        guard let coveredReach = current?.reach ?? searchedReach else { return true }
+        let coveredSymbols = current?.symbols ?? searchedSymbols
+        return reach.meters > coveredReach || !symbols.isSubset(of: coveredSymbols)
     }
 
     /// Asks about `route`, as far out as ``reach``. Answers the search, which
@@ -163,7 +175,12 @@ final class HikePlacesAroundSearch {
         task?.cancel()
         phase = .searching
         let asked = max(reach.meters, searchedReach ?? 0)
+        let request = Request(reach: asked, symbols: symbols)
+        pending = request
         let search = Task { [weak self] in
+            defer {
+                if self?.pending?.id == request.id { self?.pending = nil }
+            }
             let outcome: TrailPlaceCorridorSearch.Outcome
             do {
                 outcome = try await TrailPlaceCorridorSearch.search(
@@ -176,7 +193,7 @@ final class HikePlacesAroundSearch {
             } catch {
                 return
             }
-            guard let self, !Task.isCancelled else { return }
+            guard let self, !Task.isCancelled, pending?.id == request.id else { return }
             receive(outcome, reach: asked, symbols: symbols)
         }
         task = search
@@ -203,9 +220,10 @@ final class HikePlacesAroundSearch {
     /// Takes what *Search This Area* found, measured against `route` off the
     /// main actor. Answers the work, which a test awaits.
     @discardableResult func receiveArea(_ places: [TrailPlace], along route: [RouteCoordinate]) -> Task<Void, Never> {
-        Task { [weak self] in
+        let generation = lifetime
+        return Task { [weak self] in
             let rows = await Self.ordered(places, along: route)
-            guard let self else { return }
+            guard let self, !Task.isCancelled, lifetime == generation else { return }
             let ids = merge(rows)
             askedAbout.formUnion(ids)
             if phase != .found, !found.isEmpty { phase = .found }
@@ -246,6 +264,8 @@ final class HikePlacesAroundSearch {
     func cancel() {
         task?.cancel()
         task = nil
+        pending = nil
+        lifetime = UUID()
     }
 
     /// Adds the rows not already found — one of each OpenStreetMap element,

@@ -25,9 +25,9 @@ extension MapSheet {
         case let .newPlace(hike, spot):
             placeAdderDestination(at: spot, on: hike, session: presentation.placeAdder(for: route))
         case let .placesAround(hike):
-            placesAroundDestination(of: hike)
+            placesAroundDestination(of: hike, session: presentation.placeSearch(for: route))
         case let .placesNearby(hike):
-            placesNearbyDestination(of: hike)
+            placesNearbyDestination(of: hike, session: presentation.placeSearch(for: route))
         case .commonsGallery, .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto, .hike, .pendingPhotos,
             .pendingSubmission, .photo, .recording, .routeStyle, .totals, .trailDraft, .walk:
             EmptyView()
@@ -36,11 +36,12 @@ extension MapSheet {
 
     /// *Places Around Trail*. A press on the map opens *Add Place* at that
     /// spot, over this screen, so back from the new place returns here.
-    func placesAroundDestination(of hike: Hike) -> some View {
+    func placesAroundDestination(of hike: Hike, session: HikePlacesSession) -> some View {
         HikePlacesAroundView(
             hike: hike,
             around: placePins.around,
             mapController: mapController,
+            session: session,
             placePins: placePins,
             onShowMap: presentation.makeRoomForTheMap,
             onOpenPhoto: { photo in presentation.path.append(.photo(hike, photo.id)) },
@@ -56,11 +57,12 @@ extension MapSheet {
     /// *Places Nearby*, over the recording screen: the walk so far and where
     /// the hiker is, read as it opens. A press on the map opens *Add Place*,
     /// as it does on *Places Around Trail*.
-    func placesNearbyDestination(of hike: Hike) -> some View {
+    func placesNearbyDestination(of hike: Hike, session: HikePlacesSession) -> some View {
         HikePlacesNearbyView(
             hike: hike,
             around: placePins.around,
             mapController: mapController,
+            session: session,
             placePins: placePins,
             line: { [recorder = hikeRecorder] in recorder.trace.recordedCoordinates },
             position: { [recorder = hikeRecorder] in
