@@ -34,7 +34,10 @@
 //  the open card closed, the *Within* chosen and what *Search This Area* added
 //  were gone, and the line was asked about again (#1170). ``SheetPresentation``
 //  keeps one of these for each such screen on the stack, as it keeps *Add
-//  Place*'s form, and lets it go when the screen is popped.
+//  Place*'s form, and lets it go when the screen is popped, withdrawing a
+//  request still out. Until then a request goes on through a turn, or a screen
+//  pushed over this one, and the screen that comes up waits for its answer
+//  rather than asking again.
 //
 
 import CoreLocation

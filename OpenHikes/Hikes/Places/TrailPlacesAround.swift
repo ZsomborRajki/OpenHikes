@@ -94,15 +94,16 @@ final class TrailPlacesAround {
     }
 
     /// Withdraws the pins, the pill and the press, unless another screen has
-    /// already claimed them. Answers whether the claim was still this one's.
-    @discardableResult func detach(token: Int) -> Bool {
-        guard activeToken == token else { return false }
+    /// already claimed them, and where the finder's answers went: a screen
+    /// popped off the stack lived on there until the next one claimed the map.
+    func detach(token: Int) {
+        guard activeToken == token else { return }
         activeToken = nil
         handlers = nil
         finder.clear()
+        finder.onFound(nil)
         if !candidates.isEmpty { candidates = [] }
         if isActive { isActive = false }
-        return true
     }
 
     /// Opens a pale pin's card. Answers whether it was one of the screen's.

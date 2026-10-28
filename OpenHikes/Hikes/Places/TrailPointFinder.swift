@@ -149,8 +149,10 @@ final class TrailPointFinder {
 
     nonisolated deinit { /* intentionally empty */ }
 
-    /// Where an answer goes. Set once, by the controller.
-    func onFound(_ deliver: @escaping ([TrailPlace]) -> Void) {
+    /// Where an answer goes: set once by the maker's controller, and by each
+    /// places screen as it claims the map, which takes it back with `nil` —
+    /// see ``TrailPlacesAround/detach(token:)``.
+    func onFound(_ deliver: (([TrailPlace]) -> Void)?) {
         self.deliver = deliver
     }
 

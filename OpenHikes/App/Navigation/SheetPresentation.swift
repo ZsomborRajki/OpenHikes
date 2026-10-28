@@ -662,6 +662,11 @@ final class SheetPresentation {
         communityPhotoSelections = communityPhotoSelections.filter { storedPath.contains($0.key) }
         walkShares = walkShares.filter { storedPath.contains($0.key) }
         placeAdders = placeAdders.filter { storedPath.contains($0.key) }
+        // Back withdraws what *Places Around Trail* still has out, which its
+        // screen going does not — see ``PlacesAroundScreen``. *Places Nearby*
+        // asks through the map's finder, which its screen withdraws as it
+        // lets the map go.
+        for (route, search) in placesAroundSearches where !storedPath.contains(route) { search.cancel() }
         placesAroundSearches = placesAroundSearches.filter { storedPath.contains($0.key) }
         placesNearbySessions = placesNearbySessions.filter { storedPath.contains($0.key) }
         framedRoutes = framedRoutes.filter { storedPath.contains($0) }

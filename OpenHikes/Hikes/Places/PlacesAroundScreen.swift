@@ -99,17 +99,17 @@ struct PlacesAroundScreen<Content: View>: View {
         onAttach()
     }
 
-    /// Gives the map back and cancels the search that is out, unless another
-    /// screen has claimed the map since. A turn of the phone builds this
-    /// screen again in the other host, on the same search — see
-    /// ``SheetPresentation``. Turning to landscape, measured, brings the new
-    /// copy up before this one goes, so the search out is the new copy's
-    /// too. Turning back takes this one down first: a search that had not
-    /// answered is cancelled, and the new copy asks it again.
+    /// Gives the map back, unless another screen has claimed it since, and
+    /// leaves the search to answer. This screen also goes when a turn of the
+    /// phone builds it again in the other host, on the same search, and when
+    /// a screen is pushed over it. Measured, turning back to portrait takes
+    /// this copy down before the new one comes up, so going cannot tell a
+    /// turn from Back. ``SheetPresentation`` withdraws what is out when the
+    /// screen is popped.
     private func detach() {
         guard let token else { return }
         self.token = nil
-        if around.detach(token: token) { search.cancel() }
+        around.detach(token: token)
     }
 
     private func open(_ entry: TrailPlaceAroundEntry) {
