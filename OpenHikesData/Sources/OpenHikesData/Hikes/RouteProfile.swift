@@ -572,6 +572,36 @@ nonisolated extension RouteProfile {
         return routeWide.match
     }
 
+    /// Projects a coordinate onto the whole route as
+    /// ``nearestPoint(to:near:heading:headingOverridesReference:scope:)``
+    /// does with no reference, except that among the projections tied with
+    /// the closest one, the closest that `isPreferred` accepts wins.
+    ///
+    /// For a caller that knows which stretches of the route count, as a
+    /// finished walk knows what it covered. An out-and-back's return leg lies
+    /// on its outbound one, and a junction a route crosses twice is two
+    /// distances along it; the start-of-route tie-break answers the first,
+    /// which is the wrong one for a walk that covered only the second. Only a
+    /// tie is decided this way: a preferred projection farther off than
+    /// ``tieBreakToleranceMeters`` beyond the closest is another piece of
+    /// trail, and the answer is then the one the plain search gives.
+    public func nearestPoint(
+        to coordinate: CLLocationCoordinate2D,
+        preferring isPreferred: (Double) -> Bool
+    ) -> (distanceAlongRoute: Double, offRouteMeters: Double)? {
+        guard coordinates.count > 1 else { return nearestPoint(to: coordinate) }
+        var candidates: [NearestCandidate] = []
+        candidates.reserveCapacity(coordinates.count - 1)
+        var best: NearestCandidate?
+        appendCandidates(to: coordinate, in: 0..<(coordinates.count - 1), candidates: &candidates, best: &best)
+        guard let best else { return nil }
+        let preferred = candidates
+            .filter { $0.offRouteMeters <= best.offRouteMeters + Self.tieBreakToleranceMeters }
+            .filter { isPreferred($0.distanceAlongRoute) }
+            .min { $0.offRouteMeters < $1.offRouteMeters }
+        return (preferred ?? breakTie(among: candidates, best: best, anchor: 0, course: nil)).match
+    }
+
     /// The search both matchers share, on a route of at least two points,
     /// returning the winning projection whole so a caller can ask which way
     /// its segment runs. `course` is the one the tie-break consults, already
