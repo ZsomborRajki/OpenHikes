@@ -21,6 +21,7 @@
 //  fixture with the tests next door.
 //
 
+import Dispatch
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
@@ -117,5 +118,48 @@ extension PhotoDiscoveryControllerTests {
         #expect(controller.phase == .results)
         #expect(controller.matches.map(\.id) == ["second"])
         #expect(controller.selection == ["second"])
+    }
+
+    @Test("a reopened search withdraws old results before indexing suspends")
+    func reopenedSearchWithdrawsOldResults() async throws {
+        let builds = Mutex(0)
+        let isIndexing = Mutex(false)
+        let indexing = DispatchSemaphore(value: 0)
+        defer { indexing.signal() }
+        let work = PhotoDiscoveryWork(
+            buildPlan: { source in
+                let count = builds.withLock { total in
+                    total += 1
+                    return total
+                }
+                if count == 2 {
+                    isIndexing.withLock { $0 = true }
+                    indexing.wait()
+                }
+                return PhotoDiscoveryWork.standard.buildPlan(source)
+            },
+            matchAssets: PhotoDiscoveryWork.standard.matchAssets
+        )
+        let library = StubPhotoLibraryFixture(assets: [PhotoDiscoveryFixture.asset("a", atStep: 2)])
+        let controller = PhotoDiscoveryController(reader: library, work: work)
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context, route: PhotoDiscoveryFixture.route)
+        await controller.search(in: hike)
+        #expect(controller.canImport)
+
+        let reopened = Task { @MainActor in await controller.search(in: hike) }
+        await settleDelegateHop(until: "the reopened search to begin indexing") {
+            isIndexing.withLock { $0 }
+        }
+
+        #expect(controller.phase == .searching)
+        #expect(controller.matches.isEmpty)
+        #expect(controller.selection.isEmpty)
+        #expect(!controller.canImport)
+
+        indexing.signal()
+        await reopened.value
+        #expect(controller.phase == .results)
+        #expect(controller.selection == ["a"])
     }
 }

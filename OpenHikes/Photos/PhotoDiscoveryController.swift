@@ -141,17 +141,19 @@ final class PhotoDiscoveryController {
     func search(in hike: Hike) async {
         searchGeneration += 1
         let generation = searchGeneration
+        // This controller outlives its sheet. Withdraw its previous results
+        // before indexing suspends, so reopening cannot import an old
+        // selection while the new search is being prepared.
+        phase = .searching
+        matches = []
+        selection = []
+        importFailed = false
         let plan = await work.plan(from: hike.photoSearchSource)
         guard isCurrent(generation), hike.isAttached else { return }
         guard !plan.isEmpty else {
             phase = .unsupported
             return
         }
-        phase = .searching
-        matches = []
-        selection = []
-        importFailed = false
-
         let access = await reader.requestAccess()
         guard generation == searchGeneration else { return }
         libraryAccess = access
