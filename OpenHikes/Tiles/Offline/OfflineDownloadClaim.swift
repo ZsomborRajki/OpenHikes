@@ -46,7 +46,7 @@ nonisolated enum OfflineDownloadClaim {
         /// rather than discovered by a manifest that stayed empty.
         case hikeIsGone
         /// The store refused the commit, or would not say what the hike's
-        /// sidecar already holds. The merge is rolled back with the former and
+        /// sidecar already holds. The merge is restored with the former and
         /// never attempted on the latter, so the manifest still describes what
         /// the store really holds either way.
         case notSaved
@@ -54,12 +54,12 @@ nonisolated enum OfflineDownloadClaim {
 
     /// Merges `record` into the hike's manifest and commits it.
     ///
-    /// The rollback is what keeps a refusal honest: a merge left pending in
+    /// Restoring the manifest keeps a refusal honest: a merge left pending in
     /// the context is a claim the hiker was told they don't have, waiting for
-    /// whichever autosave lands next to make it true without a word. It also
-    /// drops any other unsaved edit in the context, which is the price of not
-    /// committing a claim that was refused — a context whose save has just
-    /// failed has nothing that is going to be persisted anyway.
+    /// whichever autosave lands next to make it true without a word. Restore
+    /// only this operation's changes: the shared context also holds unrelated
+    /// edits, and rolling it back would discard those and detach any newly
+    /// inserted sidecars their hikes still remember.
     ///
     /// - Parameter save: The seam the commit goes through, so a suite can
     ///   refuse one, the way ``HikeDeletion`` and ``HikeImport`` take theirs.
@@ -80,8 +80,9 @@ nonisolated enum OfflineDownloadClaim {
         // download it still claims is a trim away from being deleted.
         // Resolving here also warms the cache the merge reads, so the two
         // cannot disagree a line apart.
+        let previousState: HikeLocalState?
         do {
-            _ = try hike.resolveLocalState()
+            previousState = try hike.resolveLocalState()
         } catch {
             logger.error(
                 """
@@ -91,11 +92,16 @@ nonisolated enum OfflineDownloadClaim {
             )
             throw .notSaved
         }
+        let previousDownloads = previousState?.offlineDownloads ?? []
         hike.mergeOfflineDownload(record)
         do {
             try save(context)
         } catch {
-            context.rollback()
+            if let previousState {
+                previousState.offlineDownloads = previousDownloads
+            } else {
+                hike.deleteLocalState()
+            }
             logger.error(
                 """
                 Offline download coverage could not be committed for hike \

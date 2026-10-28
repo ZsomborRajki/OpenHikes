@@ -229,7 +229,7 @@ struct OfflineDownloadClaimTests {
 
             #expect(downloader.isFailed)
             #expect(downloader.phase != .finished, "a map that was not recorded is not a saved map")
-            // The quiet second chance the rollback exists to close: the app
+            // The quiet second chance the restoration exists to close: the app
             // saves this context on every autosave tick, and again when the
             // scene leaves the foreground.
             try context.save()
