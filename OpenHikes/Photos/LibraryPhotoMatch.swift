@@ -225,13 +225,12 @@ nonisolated enum LibraryPhotoMatcher {
             // covered only the way home photographed the way home (#1114).
             guard let nearest = profile.nearestPoint(to: camera, preferring: walk.covers),
                   nearest.offRouteMeters <= Self.maximumOffRouteMeters,
-                  walk.covers(nearest.distanceAlongRoute),
-                  let snapped = profile.coordinate(atDistance: nearest.distanceAlongRoute)
+                  walk.covers(nearest.distanceAlongRoute)
             else { return nil }
             return LibraryPhotoMatch(
                 asset: asset,
-                latitude: snapped.latitude,
-                longitude: snapped.longitude,
+                latitude: nearest.coordinate.latitude,
+                longitude: nearest.coordinate.longitude,
                 evidence: .place,
                 // Placed by position, so there is no fix it is an offset from
                 // — reported as zero for the reason the other `.place` match

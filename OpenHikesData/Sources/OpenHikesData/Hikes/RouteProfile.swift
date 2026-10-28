@@ -585,11 +585,18 @@ nonisolated extension RouteProfile {
     /// tie is decided this way: a preferred projection farther off than
     /// ``tieBreakToleranceMeters`` beyond the closest is another piece of
     /// trail, and the answer is then the one the plain search gives.
+    ///
+    /// The projected coordinate travels with its distance: a stationary
+    /// piece after a pause shares its distance with another piece, so
+    /// ``coordinate(atDistance:)`` cannot always recover the chosen place.
     public func nearestPoint(
         to coordinate: CLLocationCoordinate2D,
         preferring isPreferred: (Double) -> Bool
-    ) -> (distanceAlongRoute: Double, offRouteMeters: Double)? {
-        guard coordinates.count > 1 else { return nearestPoint(to: coordinate) }
+    ) -> (distanceAlongRoute: Double, offRouteMeters: Double, coordinate: CLLocationCoordinate2D)? {
+        guard coordinates.count > 1 else {
+            guard let only = coordinates.first, let match = nearestPoint(to: coordinate) else { return nil }
+            return (match.distanceAlongRoute, match.offRouteMeters, only)
+        }
         var candidates: [NearestCandidate] = []
         candidates.reserveCapacity(coordinates.count - 1)
         var best: NearestCandidate?
@@ -599,7 +606,13 @@ nonisolated extension RouteProfile {
             .filter { $0.offRouteMeters <= best.offRouteMeters + Self.tieBreakToleranceMeters }
             .filter { isPreferred($0.distanceAlongRoute) }
             .min { $0.offRouteMeters < $1.offRouteMeters }
-        return (preferred ?? breakTie(among: candidates, best: best, anchor: 0, course: nil)).match
+        let chosen = preferred ?? breakTie(among: candidates, best: best, anchor: 0, course: nil)
+        let projected = RouteGeometry.interpolate(
+            from: coordinates[chosen.segmentIndex],
+            to: coordinates[chosen.segmentIndex + 1],
+            fraction: chosen.fraction
+        )
+        return (chosen.distanceAlongRoute, chosen.offRouteMeters, projected)
     }
 
     /// The search both matchers share, on a route of at least two points,
@@ -708,6 +721,8 @@ nonisolated extension RouteProfile {
     private struct NearestCandidate {
         let distanceAlongRoute: Double
         let offRouteMeters: Double
+        let segmentIndex: Int
+        let fraction: Double
         let dx: Double
         let dy: Double
         var bearingDegrees: Double { atan2(dx, dy) * 180 / .pi }
@@ -744,6 +759,8 @@ nonisolated extension RouteProfile {
             let candidate = NearestCandidate(
                 distanceAlongRoute: along,
                 offRouteMeters: projection.offRouteMeters,
+                segmentIndex: index,
+                fraction: projection.fraction,
                 dx: projection.dx,
                 dy: projection.dy
             )

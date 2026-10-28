@@ -52,4 +52,28 @@ struct RouteProfilePreferredTieTests {
         #expect(preferred.distanceAlongRoute == plain.distanceAlongRoute)
         #expect(preferred.offRouteMeters == plain.offRouteMeters)
     }
+
+    @Test("the chosen coordinate stays on a stationary piece after a pause", arguments: [false, true])
+    func stationaryPieceKeepsItsProjection(continuesAfterAnotherPause: Bool) throws {
+        var route = [
+            RouteCoordinate(latitude: 47.00005, longitude: 19),
+            RouteCoordinate(latitude: 47.00005, longitude: 19.02),
+            RouteCoordinate(latitude: 47, longitude: 19, boundary: .paused),
+            RouteCoordinate(latitude: 47, longitude: 19),
+        ]
+        if continuesAfterAnotherPause {
+            route += [
+                RouteCoordinate(latitude: 48, longitude: 20, boundary: .paused),
+                RouteCoordinate(latitude: 48, longitude: 20.02),
+            ]
+        }
+        let profile = RouteProfile(route: route)
+        let camera = CLLocationCoordinate2D(latitude: 47, longitude: 19)
+
+        let preferred = try #require(profile.nearestPoint(to: camera, preferring: { _ in true }))
+
+        #expect(preferred.coordinate.latitude == camera.latitude)
+        #expect(preferred.coordinate.longitude == camera.longitude)
+        #expect(preferred.offRouteMeters.isApproximatelyEqual(to: 0, absoluteTolerance: 1e-6))
+    }
 }

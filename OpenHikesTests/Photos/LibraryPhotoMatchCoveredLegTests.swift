@@ -136,4 +136,34 @@ struct LibraryPhotoMatchCoveredLegTests {
             profile: profile
         ) == nil)
     }
+
+    /// A stationary GPX piece after a pause shares its distance with the
+    /// previous piece. Resolving that distance again can return the other
+    /// end of the transfer, even though the chosen projection is on-camera.
+    @Test("a duplicate-fix piece after a pause keeps its own projected position", arguments: [false, true])
+    func duplicateFixesAfterPause(continuesAfterAnotherPause: Bool) throws {
+        var route = [
+            Self.point(47.00005, 19), Self.point(47.00005, 19.02),
+            RouteCoordinate(latitude: 47, longitude: 19, boundary: .paused),
+            Self.point(47, 19),
+        ]
+        if continuesAfterAnotherPause {
+            route += [
+                RouteCoordinate(latitude: 48, longitude: 20, boundary: .paused),
+                Self.point(48, 20.02),
+            ]
+        }
+        let profile = RouteProfile(route: route)
+        let walk = try Self.walk(covering: 0...profile.totalDistanceMeters)
+        let asset = Self.photo(at: 47, 19)
+
+        let match = try #require(LibraryPhotoMatcher.match(asset, walk: walk, profile: profile))
+
+        #expect(match.evidence == .place)
+        #expect(Self.isAt(match, 47, 19))
+        #expect(RouteGeometry.distanceMeters(
+            from: try #require(asset.coordinate),
+            to: match.coordinate
+        ) <= LibraryPhotoMatcher.maximumOffRouteMeters)
+    }
 }
