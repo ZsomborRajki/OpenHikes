@@ -48,35 +48,6 @@ struct HikeListMetricsSidecarTests {
         #expect(descent.isApproximatelyEqual(to: expectedDescent, absoluteTolerance: 1e-6))
     }
 
-    @Test("a height edit that overtakes measurement cannot publish old totals")
-    func changedRouteDiscardsMeasurement() async throws {
-        let container = try Fixture.modelContainer()
-        let context = container.mainContext
-        context.autosaveEnabled = false
-        let hike = Fixture.hike(in: context)
-        try context.save()
-        let measured = await HikeListMetrics.measureElevation(for: [hike.id], in: container)
-        #expect(measured.count == 1)
-
-        hike.replaceRoute(with: hike.route.map { point in
-            var changed = point
-            changed.elevation = point.elevation.map { $0 * 2 }
-            return changed
-        })
-        try context.save()
-
-        #expect(!HikeListMetrics.cacheElevation(measured, in: container))
-        let reader = ModelContext(container)
-        #expect(try reader.fetch(FetchDescriptor<HikeLocalState>()).isEmpty)
-        #expect(await HikeListMetrics.fillElevation(for: [hike.id], in: container))
-        let state = try #require(
-            try ModelContext(container).fetch(FetchDescriptor<HikeLocalState>()).first
-        )
-        let climb = try #require(state.climbMeters)
-        let expectedClimb = try #require(hike.routeStatistics.elevationGain?.value)
-        #expect(climb.isApproximatelyEqual(to: expectedClimb, absoluteTolerance: 1e-6))
-    }
-
     @Test("a failed publication preserves pending claims and unrelated edits")
     func failedSaveRestoresOnlyElevationFields() async throws {
         let container = try Fixture.modelContainer()

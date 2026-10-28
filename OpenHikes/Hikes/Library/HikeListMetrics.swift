@@ -32,7 +32,6 @@ nonisolated enum HikeListMetrics {
 
     struct ElevationMeasurement: Sendable {
         let hikeID: UUID
-        let route: [RouteCoordinate]
         let climbMeters: Double
         let descentMeters: Double
     }
@@ -60,8 +59,8 @@ nonisolated enum HikeListMetrics {
     }
 
     /// Reads and walks routes away from the UI, without creating or writing
-    /// any sidecar. The measured route travels with its answer so publication
-    /// can reject an edit that overtook this work.
+    /// any sidecar. Only the figures travel back: publication must not read a
+    /// route on the main actor.
     @concurrent
     static func measureElevation(
         for hikeIDs: [UUID],
@@ -72,8 +71,7 @@ nonisolated enum HikeListMetrics {
         var measurements: [ElevationMeasurement] = []
         for hikeID in hikeIDs {
             guard let hike = hike(hikeID, in: context) else { continue }
-            let route = hike.route
-            let totals = elevationTotals(of: route)
+            let totals = elevationTotals(of: hike.route)
             // A route carrying no heights, or one, is left unmeasured rather
             // than filed as flat — see ``ElevationAccumulator/hasChange``.
             // The accumulator's zero is the absence of a reading, and
@@ -83,7 +81,6 @@ nonisolated enum HikeListMetrics {
             guard totals.hasChange else { continue }
             measurements.append(ElevationMeasurement(
                 hikeID: hikeID,
-                route: route,
                 climbMeters: totals.gainMeters,
                 descentMeters: totals.lossMeters
             ))
@@ -92,9 +89,13 @@ nonisolated enum HikeListMetrics {
     }
 
     /// The one publication boundary, on the same context as pending tile
-    /// claims and the rest of the UI's local state. The source comparison is
-    /// outside a body and includes heights; a geometry-only walk revision
-    /// cannot detect a newly enriched elevation profile.
+    /// claims and the rest of the UI's local state.
+    ///
+    /// It reads no route. Comparing each measured line with this context's
+    /// copy would decode the library on the main actor, and a decoded route
+    /// stays resident in this context afterwards. So an edit that lands while
+    /// the routes are being measured can still publish figures for the line
+    /// before it, as the sweep always could.
     @MainActor
     @discardableResult static func cacheElevation(
         _ measurements: [ElevationMeasurement],
@@ -104,8 +105,7 @@ nonisolated enum HikeListMetrics {
         let context = container.mainContext
         var changes: [CacheChange] = []
         for measurement in measurements {
-            guard let hike = hike(measurement.hikeID, in: context),
-                  !hike.isDeleted, hike.route == measurement.route else { continue }
+            guard let hike = hike(measurement.hikeID, in: context), !hike.isDeleted else { continue }
             do {
                 let existing = try HikeLocalState.fetchExisting(for: hike.id, in: context)
                 let state = existing ?? HikeLocalState(hikeID: hike.id)

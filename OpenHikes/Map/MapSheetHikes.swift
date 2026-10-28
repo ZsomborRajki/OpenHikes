@@ -538,8 +538,10 @@ private extension MapSheetHikes {
         // Only ever for the hikes an elevation order needs and nothing has,
         // so an ordinary launch asks for nothing and a library measured once
         // stays measured. See `HikeListMetrics` for why this cannot be done
-        // where the sorting is.
-        .task(id: TaskKey(sort: sort, count: hikes.count)) {
+        // where the sorting is. At `.utility`, as the detached sweep it
+        // replaced was: the measuring half inherits the priority, so walking
+        // a library's routes does not compete with the hiker's taps.
+        .task(id: TaskKey(sort: sort, count: hikes.count), priority: .utility) {
             let missing = HikeListOrder.hikesMissingElevation(in: hikes, for: sort)
             guard !missing.isEmpty else { return }
             // Route work runs off this actor; publication returns to this
