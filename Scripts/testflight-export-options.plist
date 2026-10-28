@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  How .github/workflows/testflight.yml exports an archive: signed for App
+  Store Connect with the team's cloud-managed distribution certificate, and
+  uploaded rather than written out as an .ipa.
+
+  manageAppVersionAndBuildNumber is off because the workflow has already
+  chosen the build (Scripts/release-version.sh) and tags the commit with it.
+  Left on, Xcode may raise the number during upload, and the tag would name a
+  build that does not exist.
+-->
+<plist version="1.0">
+<dict>
+	<key>destination</key>
+	<string>upload</string>
+	<key>iCloudContainerEnvironment</key>
+	<string>Production</string>
+	<key>manageAppVersionAndBuildNumber</key>
+	<false/>
+	<key>method</key>
+	<string>app-store-connect</string>
+	<key>signingStyle</key>
+	<string>automatic</string>
+	<key>teamID</key>
+	<string>697EW27G9U</string>
+	<key>uploadSymbols</key>
+	<true/>
+</dict>
+</plist>

@@ -1,0 +1,229 @@
+name: TestFlight
+
+# Archives the chosen commit, uploads it to App Store Connect for TestFlight,
+# and tags it `v<version>-<build>` (*Releasing* in AGENTS.md). Run it from the
+# Actions tab, or with
+#
+#   gh workflow run testflight.yml -f version=1.5 -f cloudkit_promoted=true
+#
+# The version is stamped at build time rather than committed. `main` takes
+# changes only through pull requests, so a workflow cannot push a bump to it,
+# and a bump that waited on a pull request would put a review between "ship
+# this" and the upload. `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` on
+# the `xcodebuild` line reach all four shipping targets, because each
+# hand-written Info.plist reads them. The tag, not `project.pbxproj`, records
+# what shipped, and Scripts/release-version.sh counts builds from the tags.
+#
+# Every secret lives in the `testflight` environment, never at the repository
+# level, so `ci.yml`, which runs on every pull request, cannot read one. Set
+# them once, from a checkout that has the keys:
+#
+#   plutil -extract StadiaAPIKey raw -o - OpenHikes/Secrets.plist \
+#     | gh secret set STADIA_API_KEY --env testflight
+#   plutil -extract ThunderforestAPIKey raw -o - OpenHikes/Secrets.plist \
+#     | gh secret set THUNDERFOREST_API_KEY --env testflight
+#
+# - APP_STORE_CONNECT_KEY, APP_STORE_CONNECT_KEY_ID and
+#   APP_STORE_CONNECT_ISSUER_ID: a team key from App Store Connect, Users and
+#   Access, Integrations, the .p8's whole text (`gh secret set
+#   APP_STORE_CONNECT_KEY --env testflight < AuthKey_<id>.p8`). It needs the
+#   Admin role: the export signs with the team's cloud-managed distribution
+#   certificate, and a lesser key gets "Cloud signing permission error".
+# - DEVELOPMENT_CERTIFICATE_P12 and DEVELOPMENT_CERTIFICATE_PASSWORD: an Apple
+#   Development certificate with its private key, exported from Keychain
+#   Access as a .p12 (`base64 -i Development.p12 | gh secret set
+#   DEVELOPMENT_CERTIFICATE_P12 --env testflight`). The archive is signed for
+#   development and re-signed for distribution on export. Without one, every
+#   run on a fresh runner asks Apple for a new development certificate, and
+#   the second run is refused because the first one's private key is gone.
+#
+# What it does not do:
+# - Promote the CloudKit schema. No command can, so the run refuses to start
+#   until `cloudkit_promoted` is ticked (*CloudKit* in AGENTS.md).
+# - Run the tests. `ci.yml` does that on every push to `main`; check that
+#   run is green for the commit being shipped.
+# - Publish a GitHub Release. Those are for App Store builds.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to ship, such as 1.5 or 1.5.1
+        required: true
+        type: string
+      build:
+        description: Build number (empty picks one past the highest tagged or committed build)
+        required: false
+        type: string
+      cloudkit_promoted:
+        description: Production's CloudKit schema has every field this build writes
+        required: true
+        type: boolean
+        default: false
+
+# One upload at a time. A second run waits, then reads the first one's tag
+# when it picks its build number, so the two cannot choose the same one.
+concurrency:
+  group: testflight
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+# The same toolchain as `ci.yml`, for the reasons argued there.
+env:
+  DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+
+jobs:
+  upload:
+    name: Upload to TestFlight
+    runs-on: xcode-27
+    timeout-minutes: 60
+    environment: testflight
+    permissions:
+      contents: write # the release tag; `main` itself still refuses a push
+    steps:
+      - name: Require the CloudKit schema promote
+        if: ${{ !inputs.cloudkit_promoted }}
+        run: |
+          echo "::error::Promote the CloudKit schema to production first, then run this again with cloudkit_promoted ticked. A TestFlight build writes to the production container, which cannot add a field on save (see CloudKit in AGENTS.md)."
+          exit 1
+
+      # Every tag, because the build number counts up from the highest one.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/verify-xcode
+
+      - name: Choose the version and build
+        id: version
+        env:
+          VERSION: ${{ inputs.version }}
+          BUILD: ${{ inputs.build }}
+        run: |
+          set -o pipefail
+          arguments=(--version "$VERSION")
+          if [[ -n "$BUILD" ]]; then
+            arguments+=(--build "$BUILD")
+          fi
+          Scripts/release-version.sh "${arguments[@]}" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Bundle the map keys
+        env:
+          STADIA_API_KEY: ${{ secrets.STADIA_API_KEY }}
+          THUNDERFOREST_API_KEY: ${{ secrets.THUNDERFOREST_API_KEY }}
+        run: |
+          Scripts/write-release-secrets.sh
+          Scripts/check-release-secrets.sh
+
+      # GitHub's own recipe for a signing identity on a hosted runner: a
+      # keychain of the job's own, unlocked for its length and searched first.
+      - name: Install the signing certificate and the API key
+        env:
+          DEVELOPMENT_CERTIFICATE_P12: ${{ secrets.DEVELOPMENT_CERTIFICATE_P12 }}
+          DEVELOPMENT_CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPMENT_CERTIFICATE_PASSWORD }}
+          APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_KEY }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in DEVELOPMENT_CERTIFICATE_P12 DEVELOPMENT_CERTIFICATE_PASSWORD \
+            APP_STORE_CONNECT_KEY APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::The testflight environment has no $name secret. The header of .github/workflows/testflight.yml says how to set it."
+              missing=1
+            fi
+          done
+          [[ "$missing" == 0 ]] || exit 1
+
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          keychain_password="$(uuidgen)"
+          certificate="$RUNNER_TEMP/development.p12"
+          base64 --decode <<< "$DEVELOPMENT_CERTIFICATE_P12" > "$certificate"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$certificate" -P "$DEVELOPMENT_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple: -k "$keychain_password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          rm "$certificate"
+
+          api_key="$RUNNER_TEMP/AuthKey_$APP_STORE_CONNECT_KEY_ID.p8"
+          printf '%s\n' "$APP_STORE_CONNECT_KEY" > "$api_key"
+          echo "API_KEY_PATH=$api_key" >> "$GITHUB_ENV"
+
+      - name: Archive
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          BUILD: ${{ steps.version.outputs.build }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -project OpenHikes.xcodeproj \
+            -scheme OpenHikes \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/OpenHikes.xcarchive \
+            -skipPackagePluginValidation \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$API_KEY_PATH" \
+            -authenticationKeyID "$APP_STORE_CONNECT_KEY_ID" \
+            -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID" \
+            MARKETING_VERSION="$VERSION" \
+            CURRENT_PROJECT_VERSION="$BUILD" \
+            | xcbeautify --renderer github-actions --disable-logging
+
+      # The file written above proves the runner had the keys; this proves the
+      # app carries them. A Secrets.plist the target stopped bundling would
+      # otherwise archive, upload and draw no paid map, exactly as a missing
+      # one does.
+      - name: Check the archived app carries the keys
+        run: |
+          Scripts/check-release-secrets.sh \
+            --plist build/OpenHikes.xcarchive/Products/Applications/OpenHikes.app/Secrets.plist
+
+      # Not piped through xcbeautify, which prints nothing for output it
+      # cannot parse; an export's errors are short and are the whole story.
+      - name: Upload to App Store Connect
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath build/OpenHikes.xcarchive \
+            -exportOptionsPlist Scripts/testflight-export-options.plist \
+            -exportPath build/export \
+            -skipPackagePluginValidation \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$API_KEY_PATH" \
+            -authenticationKeyID "$APP_STORE_CONNECT_KEY_ID" \
+            -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID"
+
+      # Only after the upload, so every tag names a build App Store Connect
+      # has. If this step fails, the build is there untagged: push the tag by
+      # hand, or the next run picks the same number and is refused.
+      - name: Tag the uploaded commit
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          BUILD: ${{ steps.version.outputs.build }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          git -c user.name='github-actions[bot]' \
+            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            tag -a "$TAG" -m "OpenHikes $VERSION ($BUILD), uploaded to TestFlight by $run_url"
+          git push origin "refs/tags/$TAG"
+          echo "Uploaded OpenHikes $VERSION ($BUILD) from \`${GITHUB_SHA::8}\` and tagged it \`$TAG\`." \
+            >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove the keychain and keys
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2> /dev/null || true
+          rm -f "$RUNNER_TEMP"/AuthKey_*.p8 OpenHikes/Secrets.plist

@@ -401,23 +401,37 @@ a change to recording, the map, the sheet or the render path; the PR template,
 
 ### Releasing
 
-- **Bump all four shipping targets together.** The app, the widget, the watch
-  app and the watch widgets each carry `MARKETING_VERSION` and
-  `CURRENT_PROJECT_VERSION` in `project.pbxproj`.
+- **Upload with the TestFlight workflow.** `.github/workflows/testflight.yml`
+  runs on demand with the version to ship (`gh workflow run testflight.yml -f
+  version=<version> -f cloudkit_promoted=true`). It archives the chosen
+  commit, uploads it and pushes its tag. Its header lists the `testflight`
+  environment's secrets and how to set them.
+  - It stamps the version at build time and commits nothing, because `main`
+    takes no pushes. So the tags, not `project.pbxproj`, record what shipped.
+  - The build number is one past the highest tagged or committed build
+    (`Scripts/release-version.sh`). An untagged upload from Xcode is invisible
+    to it; pass `build` past that one.
+- **An archive from Xcode bumps all four shipping targets together.** The app,
+  the widget, the watch app and the watch widgets each carry
+  `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in `project.pbxproj`.
 - **Run `Scripts/check-release-secrets.sh` before pressing Archive.** The
   gitignored `OpenHikes/Secrets.plist` holds the Stadia and Thunderforest keys,
   and an archive succeeds without it, shipping paid map styles that draw
-  nothing. CI archives without keys on purpose, so this check cannot be a CI
-  step.
+  nothing. `ci.yml` archives without keys on purpose, so the check is no step
+  of it. The TestFlight workflow writes the file from its secrets
+  (`Scripts/write-release-secrets.sh`), then runs the check on that file and on
+  the archived app's copy.
 - **Promote the CloudKit schema before uploading.** An App Store Connect
   upload, TestFlight included, is signed for the production container, and a
   save there cannot add a field. Check production against the model first (see
-  *CloudKit*).
+  *CloudKit*). Nothing can check it for the workflow, so it refuses to start
+  until `cloudkit_promoted` is ticked.
 - **Tag each archived commit.** Use an annotated tag,
   `git tag -a v<MARKETING_VERSION>-<CURRENT_PROJECT_VERSION>`, and add a GitHub
   Release for App Store builds. There are no release branches, so a tag is the
   only way to map an Organizer crash report to a revision. The bump commit is
-  not the answer: the archive can be any commit at or after it.
+  not the answer: the archive can be any commit at or after it. The workflow
+  tags its own uploads; an archive from Xcode is tagged by hand.
 - **Run `Scripts/periphery.sh` after a feature lands.** No CI job runs it. With
   `MemberImportVisibility` on, deleting an unused import is safe, because the
   build fails at once if the import was load-bearing.
