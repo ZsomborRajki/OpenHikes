@@ -66,9 +66,12 @@ nonisolated enum SettingsKey {
     /// same rule that dims a reading fetched in this session.
     static let lastWeatherReading = "weather.lastReading"
     /// Whether a photo taken in OpenHikes is also written to the system photo
-    /// library. Off unless the user turns it on — and the only reason the app
-    /// ever asks for photo-library access, which it does on the first save
-    /// after the switch is flipped rather than when it is flipped.
+    /// library. Off unless the user turns it on. ``PhotoLibraryWriter`` asks
+    /// for add-only access at save time rather than when the switch is flipped.
+    ///
+    /// The system `PhotosPicker` needs no photo-library permission. *Find
+    /// Photos* independently requests read/write access through
+    /// ``PhotosLibraryReader/requestAccess()`` when the hiker asks to scan.
     static let savePhotosToLibrary = "settings.savePhotosToLibrary"
     /// Whether hikes and their photos are mirrored through the user's private
     /// iCloud database. Read by ``CloudSyncCoordinator`` at launch, and the
@@ -109,14 +112,15 @@ nonisolated enum SettingsKey {
     /// Whether a finished recording is also written to Health as a hiking
     /// workout.
     ///
-    /// Off until a hiker turns it on, and the *turning on* is what asks
-    /// HealthKit for permission — see ``HikeWorkoutWriting``. Health is the
-    /// hiker's most sensitive store and the app has no business writing to it
-    /// because they recorded a walk.
+    /// Off until a hiker turns it on. ``HealthKitWorkoutWriter`` asks for
+    /// authorization at the first export, rather than when this preference
+    /// changes. Health is the hiker's most sensitive store and the app has no
+    /// business writing to it because they recorded a walk.
     ///
     /// Deliberately not synced through ``SyncedSettingsMirror``: authorization
-    /// is per-device, and a second phone that has never been granted Health
-    /// access would show the switch on and write nothing.
+    /// is per-device. A synced switch would raise Health's prompt at the first
+    /// export on a phone where the hiker never turned it on, and on one where
+    /// Health was refused it would show on and write nothing.
     static let savesHikesToHealth = "settings.savesHikesToHealth"
     /// The name a hiker's shared hikes are published under, as they last
     /// typed it.
@@ -204,9 +208,9 @@ nonisolated enum SettingsKey {
 nonisolated enum SettingsDefault {
     /// Off. A second copy in the user's photo library is a reasonable thing to
     /// want and an unreasonable thing to assume: it costs storage, it mixes
-    /// trail pictures into a library the user curates themselves, and it is
-    /// the only thing that would make the app ask for photo-library access at
-    /// all. The app's own copy is the one the hike depends on either way.
+    /// trail pictures into a library the user curates themselves, and it needs
+    /// the add-only access described on ``SettingsKey/savePhotosToLibrary``.
+    /// The app's own copy is the one the hike depends on either way.
     static let savePhotosToLibrary = false
     /// On. Unlike the photo-library switch this costs the user nothing they
     /// did not already have — it is their own private iCloud storage, holding

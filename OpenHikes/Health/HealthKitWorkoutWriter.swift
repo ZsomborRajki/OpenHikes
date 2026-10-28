@@ -74,12 +74,11 @@ final class HealthKitWorkoutWriter: HikeWorkoutWriting {
     func write(_ request: HikeWorkoutRequest) async throws -> UUID {
         guard Self.isAvailable else { throw HikeWorkoutFailure.unavailable }
         // Asked at the first write rather than when the switch is flipped,
-        // which is the shape *Also Save to Photos* already takes and the
-        // reason its footer says the same thing. Not re-asked afterwards:
-        // HealthKit answers a second `requestAuthorization` for a type the
-        // hiker has refused by doing nothing at all, so a refusal that is not
-        // remembered is a prompt that never appears and a write that silently
-        // fails forever.
+        // which is the shape *Also Save to Photos* already takes. Not re-asked
+        // afterwards: HealthKit answers a second `requestAuthorization` for a
+        // type the hiker has refused by doing nothing at all, so a refusal
+        // that is not remembered is a prompt that never appears and a write
+        // that silently fails forever.
         if !isAuthorizationDetermined {
             _ = await requestAuthorization()
         }
