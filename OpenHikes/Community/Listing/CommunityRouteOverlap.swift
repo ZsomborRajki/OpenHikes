@@ -28,13 +28,27 @@
 //  this is a check that runs while a sheet is opening.
 //
 //  The old route is *densified* before it is indexed — interpolated along each
-//  leg so no two indexed points are further apart than half the tolerance.
+//  walked leg so no two indexed points are further apart than half the
+//  tolerance.
 //  Without that, a GPX recorded with a point every 200 m would report almost
 //  no overlap with a walk straight down the middle of it, because the test is
 //  point-to-point and the points are further apart than the tolerance is wide.
 //  Densifying is cheaper and much simpler to be sure of than point-to-segment
 //  distance, and it fails in the safe direction: it can only ever find *more*
 //  overlap, never less.
+//
+//  ## A pause is not trail
+//
+//  A leg the recording was paused across — a drive or a lift between two
+//  recorded pieces, or the jump between two GPX `<trkseg>`s — is never
+//  densified, because nobody walked it (see ``RouteBoundary``). Interpolated,
+//  it put kilometres of road into the index, and a different hike along that
+//  road was refused as a retread (#1121). The index is built piece by piece
+//  from ``TrailRuns/pieces``, the one reading of a route's pauses, which
+//  keeps every fix — a lone one between two pauses included, since the hiker
+//  was there — and joins only the fixes of one piece. The route being tested
+//  needs no such care: it is sampled at its own fixes, never between them, so
+//  its paused legs contribute nothing to either side of the fraction.
 //
 //  Neither of the two constants is a fact about the world, and both are
 //  argued for where they are declared.
@@ -43,6 +57,7 @@
 import CoreLocation
 import Foundation
 import OpenHikesData
+import OpenHikesShared
 
 nonisolated enum CommunityRouteOverlap {
     /// How far off a line a point may be and still count as on it.
@@ -130,7 +145,9 @@ nonisolated private extension CommunityRouteOverlap {
         )
     }
 
-    /// Local offsets of `route`, densified, bucketed by cell.
+    /// Local offsets of `route`, densified along each piece the pauses leave,
+    /// bucketed by cell. Every fix is indexed and no paused leg is — see the
+    /// file header.
     static func grid(
         of route: [RouteCoordinate],
         origin: CLLocationCoordinate2D
@@ -143,29 +160,31 @@ nonisolated private extension CommunityRouteOverlap {
             count += 1
         }
 
-        var previous: (x: Double, y: Double)?
-        for coordinate in route {
-            guard count < indexLimit else { break }
-            let offset = RouteGeometry.localOffset(from: origin, to: coordinate.clCoordinate)
-            if let previous {
-                // Interpolate the leg. `steps` is how many points it takes for
-                // no two to be more than half a tolerance apart — see the file
-                // header for why the gap rather than the endpoints is what
-                // matters.
-                let span = hypot(offset.x - previous.x, offset.y - previous.y)
-                let steps = Int((span / (toleranceMeters / 2)).rounded(.up))
-                if steps > 1 {
-                    for step in 1..<steps where count < indexLimit {
-                        let fraction = Double(step) / Double(steps)
-                        add((
-                            x: previous.x + (offset.x - previous.x) * fraction,
-                            y: previous.y + (offset.y - previous.y) * fraction
-                        ))
+        for piece in route.trailRuns.pieces {
+            var previous: (x: Double, y: Double)?
+            for coordinate in route[piece] {
+                guard count < indexLimit else { return index }
+                let offset = RouteGeometry.localOffset(from: origin, to: coordinate.clCoordinate)
+                if let previous {
+                    // Interpolate the leg. `steps` is how many points it takes
+                    // for no two to be more than half a tolerance apart — see
+                    // the file header for why the gap rather than the
+                    // endpoints is what matters.
+                    let span = hypot(offset.x - previous.x, offset.y - previous.y)
+                    let steps = Int((span / (toleranceMeters / 2)).rounded(.up))
+                    if steps > 1 {
+                        for step in 1..<steps where count < indexLimit {
+                            let fraction = Double(step) / Double(steps)
+                            add((
+                                x: previous.x + (offset.x - previous.x) * fraction,
+                                y: previous.y + (offset.y - previous.y) * fraction
+                            ))
+                        }
                     }
                 }
+                add(offset)
+                previous = offset
             }
-            add(offset)
-            previous = offset
         }
         return index
     }
