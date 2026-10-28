@@ -267,7 +267,8 @@ enum TrailDraftSave {
             difficulty: hike.difficultyMetersByGrade,
             photos: hike.photos,
             climb: hike.climbMeters,
-            descent: hike.descentMeters
+            descent: hike.descentMeters,
+            elevationRevision: hike.elevationRouteRevision
         )
         let kept = keepingPlaces
             ? TrailPlaceOrder.touched(places(of: hike, drawn: draft.places, atOpen: placesAtOpen), along: route)
@@ -286,13 +287,14 @@ enum TrailDraftSave {
         hike.distanceMeters = draft.distanceMeters
         hike.surfaceMetersByCategory = [:]
         hike.difficultyMetersByGrade = [:]
-        // The library's cached climb is a figure about the old line, and
-        // nothing else would ever notice it had gone stale: it is refilled
-        // only where it is missing. See ``HikeListMetrics``.
+        // Clear figures about the old line immediately. The library also
+        // validates their route identity, including edits received from
+        // another device; see ``HikeListMetrics``.
         if before.climb != nil || before.descent != nil {
             hike.climbMeters = nil
             hike.descentMeters = nil
         }
+        if before.elevationRevision != nil { hike.elevationRouteRevision = nil }
         hike.drawnRoute = DrawnRoute(draft, editedUnderSubmissionID: hike.communitySubmissionID)
         if let kept { hike.replacePlaces(with: kept, in: context) }
         do {
@@ -309,6 +311,7 @@ enum TrailDraftSave {
                 hike.climbMeters = before.climb
                 hike.descentMeters = before.descent
             }
+            if before.elevationRevision != nil { hike.elevationRouteRevision = before.elevationRevision }
             logger.error(
                 """
                 An edited trail could not be saved: \

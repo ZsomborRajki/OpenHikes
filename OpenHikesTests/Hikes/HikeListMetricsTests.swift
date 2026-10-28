@@ -22,7 +22,7 @@ import Testing
 @Suite("The elevation figures a library is sorted by")
 struct HikeListMetricsTests {
     @Test("a noisy flat track does not accumulate a mountain of phantom climb")
-    func sensorNoiseIsNotClimb() throws {
+    func sensorNoiseIsNotClimb() async throws {
         let container = try Fixture.modelContainer()
         let context = ModelContext(container)
         // A phone on a table: two hundred points wandering a metre and a half
@@ -33,20 +33,20 @@ struct HikeListMetricsTests {
         let hike = Fixture.hike(in: context, title: "Flat", route: Self.noisyFlatRoute)
         try context.save()
 
-        _ = HikeListMetrics.fillElevation(for: [hike.id], in: container)
+        _ = await HikeListMetrics.fillElevation(for: [hike.id], in: container)
 
         let climb = try #require(refetched(hike.id, in: container)?.climbMeters)
         #expect(climb < 10)
     }
 
     @Test("a real climb is still measured")
-    func aRealClimbSurvivesTheDeadband() throws {
+    func aRealClimbSurvivesTheDeadband() async throws {
         let container = try Fixture.modelContainer()
         let context = ModelContext(container)
         let hike = Fixture.hike(in: context, title: "Up", route: Self.climbingRoute)
         try context.save()
 
-        _ = HikeListMetrics.fillElevation(for: [hike.id], in: container)
+        _ = await HikeListMetrics.fillElevation(for: [hike.id], in: container)
 
         let saved = try #require(refetched(hike.id, in: container))
         let climb = try #require(saved.climbMeters)
@@ -56,7 +56,7 @@ struct HikeListMetricsTests {
     }
 
     @Test("a route with no heights is left unmeasured rather than filed as flat")
-    func aHeightlessRouteCachesNothing() throws {
+    func aHeightlessRouteCachesNothing() async throws {
         let container = try Fixture.modelContainer()
         let context = ModelContext(container)
         // A GPX imported without `<ele>`. Zero would be a claim that the walk
@@ -65,7 +65,7 @@ struct HikeListMetricsTests {
         let hike = Fixture.hike(in: context, title: "No Heights", route: Self.heightlessRoute)
         try context.save()
 
-        _ = HikeListMetrics.fillElevation(for: [hike.id], in: container)
+        _ = await HikeListMetrics.fillElevation(for: [hike.id], in: container)
 
         let saved = try #require(refetched(hike.id, in: container))
         #expect(saved.climbMeters == nil)

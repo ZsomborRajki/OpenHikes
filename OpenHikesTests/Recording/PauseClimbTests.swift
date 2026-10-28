@@ -155,14 +155,14 @@ struct PauseClimbTests {
     }
 
     @Test("the library's cached climb ends its run at the pause")
-    func libraryFigureEndsAtAPause() throws {
+    func libraryFigureEndsAtAPause() async throws {
         let prepared = try saved(Self.lift, resumingAt: [2])
         let container = try Fixture.modelContainer()
         let context = ModelContext(container)
         let hike = Fixture.hike(in: context, title: "Lift", route: prepared.route)
         try context.save()
 
-        _ = HikeListMetrics.fillElevation(for: [hike.id], in: container)
+        _ = await HikeListMetrics.fillElevation(for: [hike.id], in: container)
 
         let cached = try #require(refetchedHike(hike.id, in: container))
         #expect(cached.climbMeters == 20)

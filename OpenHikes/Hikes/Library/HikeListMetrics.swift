@@ -9,9 +9,16 @@
 //  to read it from a SwiftUI body — which is exactly what sorting a library by
 //  climb would do, for every hike, on every redraw.
 //
-//  So the first time a hiker asks for one of those orders, this fills the cache
-//  on ``HikeLocalState`` in its own context, off the main actor, and the list
-//  redraws when it lands. Afterwards the sort reads two `Double`s.
+//  So the first time a hiker asks for an elevation order, this reads and
+//  measures routes in its own context, off the main actor. It publishes the
+//  resulting figures through the main context, where the sidecar's other
+//  writers live.
+//  A second writing context cannot see a first tile claim still pending there,
+//  and would insert a second sidecar whose empty claims hide the real ones.
+//  A route fingerprint kept beside the figures includes heights and pauses,
+//  so an edit arriving from another device cannot keep its old local relief.
+//  Afterwards the sort reads two `Double`s. Route observation belongs to the
+//  list's task, never its body: see `HikeListMetrics+Observation.swift`.
 //
 //  It runs against a background context rather than the main one for the reason
 //  every other sweep here does: it may touch every hike in the library, and a
@@ -27,52 +34,166 @@ import SwiftData
 nonisolated enum HikeListMetrics {
     private static let logger = Logger(subsystem: "OpenHikes", category: "HikeListMetrics")
 
-    /// Fills climb and descent for whichever of `hikeIDs` have none.
+    struct ElevationMeasurement: Sendable {
+        let hikeID: UUID
+        let climbMeters: Double?
+        let descentMeters: Double?
+        let revision: String
+    }
+
+    private struct RouteInput {
+        let hikeID: UUID
+        let route: [RouteCoordinate]
+    }
+
+    /// Validates climb and descent against the current route for `hikeIDs`.
     ///
     /// Returns whether anything was written, so a caller knows whether a
     /// redraw is worth asking for. Silent on failure: a library that cannot be
     /// measured is a library sorted with those hikes last, which is what a
     /// missing figure already means.
     ///
-    /// A hike whose route carries no heights is measured again every time an
-    /// elevation order is chosen, because nothing is written for it and so it
-    /// is still missing next time. That is the honest cost of not inventing a
-    /// third state to remember "measured, and there was nothing there": the
-    /// sweep is off the main actor, and the alternative is a zero the sort
-    /// would read as a flat walk.
+    /// Matching complete caches are reused. A route with no usable change
+    /// stays missing rather than being called flat; if it replaced a measured
+    /// route, the old figures are cleared without touching other local state.
+    @MainActor
     @discardableResult static func fillElevation(
         for hikeIDs: [UUID],
         in container: ModelContainer
-    ) -> Bool {
-        guard !hikeIDs.isEmpty else { return false }
+    ) async -> Bool {
+        let measurements = await measureElevation(for: hikeIDs, in: container)
+        guard !Task.isCancelled else { return false }
+        return cacheElevation(measurements, in: container)
+    }
+
+    /// Reads and walks routes away from the UI, without creating or writing
+    /// any sidecar. Only the figures travel back: publication must not read a
+    /// route on the main actor.
+    @concurrent
+    static func measureElevation(
+        for hikeIDs: [UUID],
+        in container: ModelContainer
+    ) async -> [ElevationMeasurement] {
+        guard !hikeIDs.isEmpty else { return [] }
         let context = ModelContext(container)
-        var wrote = false
-        for hikeID in hikeIDs {
-            guard let hike = hike(hikeID, in: context) else { continue }
-            let totals = elevationTotals(of: hike.route)
-            // A route carrying no heights, or one, is left unmeasured rather
-            // than filed as flat — see ``ElevationAccumulator/hasChange``.
-            // The accumulator's zero is the absence of a reading, and
-            // ``HikeListSort`` is built on the distinction: a missing figure
-            // sorts last, while zero is a claim that the walk was level. A
-            // GPX imported without `<ele>` has not made that claim.
-            guard totals.hasChange else { continue }
-            guard let state = try? HikeLocalState.fetchExisting(for: hikeID, in: context)
-                ?? HikeLocalState.forHike(hikeID, in: context) else { continue }
-            state.climbMeters = totals.gainMeters
-            state.descentMeters = totals.lossMeters
-            wrote = true
+        return hikeIDs.compactMap { hikeID in
+            guard !Task.isCancelled, let hike = hike(hikeID, in: context) else { return nil }
+            return measurement(for: RouteInput(hikeID: hikeID, route: hike.route), in: context)
         }
-        guard wrote else { return false }
+    }
+
+    private static func measurement(for input: RouteInput, in context: ModelContext) -> ElevationMeasurement? {
+        let revision = elevationRevision(of: input.route)
+        let state = try? HikeLocalState.fetchExisting(for: input.hikeID, in: context)
+        if state?.elevationRouteRevision == revision, state?.climbMeters != nil, state?.descentMeters != nil {
+            return nil
+        }
+        let totals = elevationTotals(of: input.route)
+        // A missing height is not a flat route. An existing obsolete figure
+        // must still be cleared; an unmeasured route needs no new sidecar.
+        guard totals.hasChange || state?.climbMeters != nil || state?.descentMeters != nil else { return nil }
+        return ElevationMeasurement(
+            hikeID: input.hikeID,
+            climbMeters: totals.hasChange ? totals.gainMeters : nil,
+            descentMeters: totals.hasChange ? totals.lossMeters : nil,
+            revision: revision
+        )
+    }
+
+    /// Stable across launches, unlike Swift's randomized `Hasher`. The
+    /// presence tag distinguishes a missing height from a measured zero.
+    private static func elevationRevision(of route: [RouteCoordinate]) -> String {
+        var hasher = StableHasher()
+        for point in route {
+            hasher.combine(point.latitude)
+            hasher.combine(point.longitude)
+            if let height = point.elevation {
+                hasher.combine("height")
+                hasher.combine(height)
+            } else {
+                hasher.combine("missing")
+            }
+            hasher.combine(point.isPauseBoundary ? "pause" : "walk")
+        }
+        return String(hasher.value, radix: 16)
+    }
+
+    /// The one publication boundary, on the same context as pending tile
+    /// claims and the rest of the UI's local state.
+    ///
+    /// It reads no route. Comparing each measured line with this context's
+    /// copy would decode the library on the main actor, and a decoded route
+    /// stays resident in this context afterwards. An edit that lands while
+    /// the routes are being measured can publish figures for the line before
+    /// it, but they carry that line's revision, so the next validation
+    /// measures again. A write through this context starts that validation at
+    /// once: see `HikeListMetrics+Observation.swift`.
+    @MainActor
+    @discardableResult static func cacheElevation(
+        _ measurements: [ElevationMeasurement],
+        in container: ModelContainer,
+        save: (ModelContext) throws -> Void = { try $0.save() }
+    ) -> Bool {
+        let context = container.mainContext
+        var changes: [CacheChange] = []
+        for measurement in measurements {
+            guard let hike = hike(measurement.hikeID, in: context), !hike.isDeleted else { continue }
+            do {
+                let existing = try HikeLocalState.fetchExisting(for: hike.id, in: context)
+                if let existing,
+                   existing.elevationRouteRevision == measurement.revision,
+                   existing.climbMeters == measurement.climbMeters,
+                   existing.descentMeters == measurement.descentMeters { continue }
+                let state = existing ?? HikeLocalState(hikeID: hike.id)
+                if existing == nil { context.insert(state) }
+                changes.append(CacheChange(state: state, inserted: existing == nil))
+                state.climbMeters = measurement.climbMeters
+                state.descentMeters = measurement.descentMeters
+                state.elevationRouteRevision = measurement.revision
+            } catch {
+                Self.logger.error("Hike elevation cache lookup failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        guard !changes.isEmpty else { return false }
         do {
-            try context.save()
+            try save(context)
         } catch {
+            // This context also owns user edits. Undo only this publication;
+            // rolling the context back would discard unrelated pending work.
+            for change in changes.reversed() { change.undo(in: context) }
             Self.logger.error(
                 "Hike elevation totals could not be cached: \(error.localizedDescription, privacy: .public)"
             )
             return false
         }
         return true
+    }
+
+    @MainActor
+    private struct CacheChange {
+        let state: HikeLocalState
+        let inserted: Bool
+        let climbMeters: Double?
+        let descentMeters: Double?
+        let revision: String?
+
+        init(state: HikeLocalState, inserted: Bool) {
+            self.state = state
+            self.inserted = inserted
+            climbMeters = state.climbMeters
+            descentMeters = state.descentMeters
+            revision = state.elevationRouteRevision
+        }
+
+        func undo(in context: ModelContext) {
+            if inserted {
+                context.delete(state)
+            } else {
+                state.climbMeters = climbMeters
+                state.descentMeters = descentMeters
+                state.elevationRouteRevision = revision
+            }
+        }
     }
 
     private static func hike(_ hikeID: UUID, in context: ModelContext) -> Hike? {

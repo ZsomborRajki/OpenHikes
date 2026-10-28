@@ -346,7 +346,7 @@ private extension MapSheetHikes {
     ///
     /// Always there, unlike the control it replaces, which appeared only once
     /// the hiker had dragged something. An order a hiker cannot see is an order
-    /// they cannot change on purpose — and *Most Climb* is not a thing anybody
+    /// they cannot change on purpose — and *Hilliest* is not a thing anybody
     /// discovers by dragging a row.
     ///
     /// It states the current order rather than showing a bare glyph, because
@@ -535,34 +535,31 @@ private extension MapSheetHikes {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .environment(\.editMode, $editMode)
-        // Only ever for the hikes an elevation order needs and nothing has,
-        // so an ordinary launch asks for nothing and a library measured once
-        // stays measured. See `HikeListMetrics` for why this cannot be done
-        // where the sorting is.
-        .task(id: TaskKey(sort: sort, count: hikes.count)) {
-            let missing = HikeListOrder.hikesMissingElevation(in: hikes, for: sort)
-            guard !missing.isEmpty else { return }
-            // Off this actor deliberately: the sweep opens its own context and
-            // may walk every route in the library, which is the one thing that
-            // must not happen where a list is drawn.
-            let container = modelContext.container
-            let filled = await Task.detached(priority: .utility) {
-                HikeListMetrics.fillElevation(for: missing, in: container)
-            }.value
-            if filled { orderRevision += 1 }
+        // Hilliest validates cached relief against the stored route each time
+        // this task starts, and again whenever a route is written through this
+        // context. A write through another context, which is how an edit from
+        // another device lands, is not known to notify a hike here, so it is
+        // validated the next time the task starts. At `.utility`: the
+        // measuring half inherits the priority, so walking a library's routes
+        // does not compete with the hiker's taps. The observation read and all
+        // route work stay outside this body.
+        .task(id: TaskKey(sort: sort, hikeIDs: hikes.map(\.id)), priority: .utility) {
+            let candidates = HikeListOrder.hikesForElevationValidation(in: hikes, for: sort)
+            guard !candidates.isEmpty else { return }
+            await HikeListMetrics.observeElevation(in: hikes, container: modelContext.container) {
+                orderRevision += 1
+            }
         }
     }
 
     /// What a change of has to restart the elevation fill.
     ///
-    /// The sort, because only two of them need figures; and the number of
-    /// hikes, because an import or a finished walk adds one nothing has
-    /// measured. Not the hikes themselves: a `Hike` changes on every tint
-    /// slider drag, and re-running a library sweep for that is the thing the
-    /// query isolation next door exists to prevent.
+    /// The sort and the identities being watched, rather than route arrays
+    /// or whole hikes. A route edit is observed inside the task, so a tint
+    /// slider cannot put route hashing or equality in body evaluation.
     private struct TaskKey: Equatable {
         let sort: HikeListSort
-        let count: Int
+        let hikeIDs: [UUID]
     }
 
     /// The hike being recorded or walked right now, if there is one.

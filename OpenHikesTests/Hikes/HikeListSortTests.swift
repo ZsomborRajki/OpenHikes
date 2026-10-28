@@ -2,12 +2,11 @@
 //  HikeListSortTests.swift
 //  OpenHikesTests
 //
-//  The six orders a library can be put in, and what a missing figure does.
+//  The orders a library can be put in, and what a missing figure does.
 //
 //  Real `Hike` rows in an in-memory container, for the reason
-//  ``HikeListOrderTests`` gives: two of the keys are not on `Hike` at all —
-//  climb and descent live in the unmirrored sidecar — and a stand-in would
-//  test the passthrough away.
+//  ``HikeListOrderTests`` gives: the elevation figures live in the unmirrored
+//  sidecar, and a stand-in would test the passthrough away.
 //
 
 import Foundation
@@ -64,18 +63,18 @@ struct HikeListSortTests {
         #expect(arranged.dropFirst().map(\.title) == ["Middling", "Long"])
     }
 
-    @Test("only the elevation orders ask for anything to be measured")
-    func onlyElevationOrdersNeedAFill() throws {
+    @Test("only Hilliest asks for elevation figures to be validated")
+    func onlyHilliestNeedsValidation() throws {
         let context = try Fixture.modelContext()
         let hikes = try makeHikes(in: context)
 
-        #expect(HikeListOrder.hikesMissingElevation(in: hikes, for: .newest).isEmpty)
-        #expect(HikeListOrder.hikesMissingElevation(in: hikes, for: .longest).isEmpty)
-        #expect(HikeListOrder.hikesMissingElevation(in: hikes, for: .hilliest).count == hikes.count)
+        #expect(HikeListOrder.hikesForElevationValidation(in: hikes, for: .newest).isEmpty)
+        #expect(HikeListOrder.hikesForElevationValidation(in: hikes, for: .longest).isEmpty)
+        #expect(HikeListOrder.hikesForElevationValidation(in: hikes, for: .hilliest).count == hikes.count)
     }
 
-    @Test("a measured hike is not asked to be measured again")
-    func measuredHikesAreNotRefilled() throws {
+    @Test("a non-nil figure still needs its route identity validated")
+    func measuredHikesAreValidated() throws {
         let context = try Fixture.modelContext()
         let hikes = try makeHikes(in: context)
         for hike in hikes {
@@ -83,7 +82,7 @@ struct HikeListSortTests {
             hike.descentMeters = 100
         }
 
-        #expect(HikeListOrder.hikesMissingElevation(in: hikes, for: .hilliest).isEmpty)
+        #expect(HikeListOrder.hikesForElevationValidation(in: hikes, for: .hilliest) == hikes.map(\.id))
     }
 
     @Test("a hand-made order outranks whatever sort is chosen")

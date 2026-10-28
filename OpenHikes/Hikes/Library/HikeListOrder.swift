@@ -85,14 +85,14 @@ enum HikeListOrder {
         return active.map { [$0] + rest } ?? rest
     }
 
-    /// The hikes whose elevation figures a sort needs and nothing has.
+    /// The hikes whose elevation figures must be validated for this sort.
     ///
-    /// Asked before an elevation order is drawn, so the cache is filled for
-    /// what is missing and nothing else — see ``HikeListMetrics``. Empty for
-    /// every other order, which is what keeps them free.
-    static func hikesMissingElevation(in hikes: [Hike], for sort: HikeListSort) -> [UUID] {
+    /// A non-nil cache can describe an older route received from another
+    /// device, so every candidate is checked outside the body. The worker
+    /// reuses matching figures. Other orders need no route validation.
+    static func hikesForElevationValidation(in hikes: [Hike], for sort: HikeListSort) -> [UUID] {
         guard sort.needsElevation else { return [] }
-        return hikes.filter { $0.climbMeters == nil || $0.descentMeters == nil }.map(\.id)
+        return hikes.map(\.id)
     }
 
     /// Applies a drag, and writes a position for every row while it is at it.
