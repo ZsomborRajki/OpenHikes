@@ -30,10 +30,12 @@
 //  kept. That is the same call ``GPXImport`` makes about an unprojectable
 //  waypoint and the same one ``CommunityRouteOutline/simplified(_:)`` already
 //  makes on the way out, and it is the proportionate one: dropping a point
-//  joins its neighbours, which is the shape a lost fix already leaves in every
-//  recorded route, while refusing the walk costs the hiker a real trail over
-//  one bad sample. A route with fewer than two points left is refused, because
-//  that is not a line.
+//  joins its neighbours within a walked piece, which is the shape a lost fix
+//  already leaves in every recorded route, while refusing the walk costs the
+//  hiker a real trail over one bad sample. A pause on a dropped point carries
+//  forward to the next usable point, so cleaning cannot join separate pieces.
+//  A route with fewer than two points left is refused, because that is not a
+//  line.
 //
 //  A refusal is an empty route, which is
 //  ``CommunityRouteOutline/decoded(_:)``'s answer to the same question and
@@ -223,10 +225,21 @@ nonisolated enum CommunityRoutePayload {
         limits: Limits = .standard
     ) -> [RouteCoordinate] {
         guard route.count <= limits.maximumPointCount else { return [] }
+        var cleaned: [RouteCoordinate] = []
+        cleaned.reserveCapacity(route.count)
+        var pendingPause = false
+        for point in route {
+            pendingPause = pendingPause || point.isPauseBoundary
+            guard var usable = usable(point) else { continue }
+            if pendingPause { usable.boundary = .paused }
+            cleaned.append(usable)
+            pendingPause = false
+        }
         // The spike rule needs the neighbours, so it runs over the route
         // rather than point by point, and after the range check so a void
-        // run's neighbours are the real heights around it.
-        let points = PlausibleElevation.despiked(route.compactMap(usable))
+        // run's neighbours are the real heights around it. Pauses are restored
+        // first, so heights in separate walked pieces never become neighbours.
+        let points = PlausibleElevation.despiked(cleaned)
         guard points.count >= 2 else { return [] }
         return points
     }
