@@ -149,8 +149,8 @@ final class TrailPointFinder {
 
     nonisolated deinit { /* intentionally empty */ }
 
-    /// Where an answer goes, or `nil` once its owner releases the map.
-    func onFound(_ deliver: (([TrailPlace]) -> Void)?) {
+    /// Where an answer goes. Set once, by the controller.
+    func onFound(_ deliver: @escaping ([TrailPlace]) -> Void) {
         self.deliver = deliver
     }
 

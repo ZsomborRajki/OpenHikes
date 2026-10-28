@@ -25,7 +25,7 @@ struct PlacesAroundScreen<Content: View>: View {
     let around: TrailPlacesAround
     let mapController: MapController
     let placePins: TrailPlacePinController?
-    let session: HikePlacesSession
+    let search: HikePlacesAroundSearch
     /// The found places not on the hike, drawn on the map as pale pins.
     let candidates: [TrailPlaceRow]
     /// Brings the sheet down to its middle, so the map is in view.
@@ -48,13 +48,12 @@ struct PlacesAroundScreen<Content: View>: View {
 
     @Environment(\.modelContext) private var modelContext
     @State private var token: Int?
-    @State private var host = UUID()
-    private var search: HikePlacesAroundSearch { session.search }
     /// Set when an add was refused. The screen stays as it was under it, so
     /// tapping ⊕ again is the retry.
     @State private var refusal: HikePlaceRefusal?
 
     var body: some View {
+        @Bindable var search = search
         ScrollView {
             content(PlacesAroundRows(open: open, add: add))
                 .padding()
@@ -72,7 +71,7 @@ struct PlacesAroundScreen<Content: View>: View {
         .onChange(of: candidates, initial: true) { _, rows in
             if let token { around.show(rows, token: token) }
         }
-        .sheet(isPresented: session.cardBinding(for: host)) {
+        .sheet(isPresented: $search.selection.isPresent()) {
             HikePlaceAroundCard(search: search, hike: hike, placeRows: placePins?.placeRows, onAdd: add) { photo in
                 // The card goes first: a push under a presented sheet lands
                 // behind it.
@@ -84,26 +83,26 @@ struct PlacesAroundScreen<Content: View>: View {
     }
 
     private func attach() {
-        guard let claim = session.attach(host: host, to: around, handlers: TrailPlacesAround.Handlers(
+        token = around.attach(TrailPlacesAround.Handlers(
             select: select,
             searchArea: onSearchArea,
             dropPin: { coordinate in
                 onAddPlace(HikePlaceSpot(coordinate))
             }
-        )) else { return }
-        token = claim
+        ))
         around.finder.onFound { [hike, onFound] places in
             guard hike.isAttached else { return }
             onFound(places)
         }
-        around.show(candidates, token: claim)
+        if let token { around.show(candidates, token: token) }
         onShowMap()
         onAttach()
     }
 
     private func detach() {
+        search.cancel()
         guard let token else { return }
-        session.detach(host: host, token: token)
+        around.detach(token: token)
         self.token = nil
     }
 

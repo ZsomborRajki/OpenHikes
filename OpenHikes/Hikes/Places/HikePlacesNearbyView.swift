@@ -32,7 +32,6 @@ struct HikePlacesNearbyView: View {
     let hike: Hike
     let around: TrailPlacesAround
     let mapController: MapController
-    let session: HikePlacesSession
     var placePins: TrailPlacePinController?
     /// The walk recorded so far, read once as the screen opens.
     var line: () -> [CLLocationCoordinate2D] = { [] }
@@ -46,7 +45,14 @@ struct HikePlacesNearbyView: View {
     /// Opens *Add Place* at a spot the hiker pressed on the map.
     var onAddPlace: (HikePlaceSpot) -> Void = { _ in /* no-op default */ }
 
-    private var search: HikePlacesAroundSearch { session.search }
+    @State private var search = HikePlacesAroundSearch()
+    /// What the rows are measured from: the hiker as the screen opened, or
+    /// the middle of the first search where there was no fix to read.
+    @State private var origin: CLLocationCoordinate2D?
+    /// What has been asked, so switching a kind on asks that area again,
+    /// *Try Again* has something to retry, and coming back to the screen asks
+    /// nothing unless a search was cut off.
+    @State private var asked = PlacesNearbySearch()
 
     private var filter: TrailPlaceFilter { around.finder.filter }
 
@@ -55,14 +61,14 @@ struct HikePlacesNearbyView: View {
         let entries = PlacesNearbyEntry.sorted(
             held: hike.orderedPlaces(preparedBy: placePins?.placeRows),
             candidates: candidates,
-            from: session.origin
+            from: origin
         )
         PlacesAroundScreen(
             hike: hike,
             around: around,
             mapController: mapController,
             placePins: placePins,
-            session: session,
+            search: search,
             candidates: candidates,
             onShowMap: onShowMap,
             onOpenPhoto: onOpenPhoto,
@@ -113,30 +119,47 @@ struct HikePlacesNearbyView: View {
 
     // MARK: - What the screen does
 
+    /// The frame around the walk and the hiker, asked about once. Back from
+    /// a screen pushed over this one — *Add Place*, or a photograph — which
+    /// took the claim and with it cancelled anything out, the map stays where
+    /// the hiker left it, and only a search that never answered is asked
+    /// again.
     private func askFirst() {
-        session.askNearbyFirst(
-            using: around.finder,
-            avoiding: hike.places,
-            line: line,
-            position: position,
-            show: mapController.show
-        )
+        if asked.hasAsked {
+            if let area = asked.interrupted { ask(area) }
+            return
+        }
+        let here = position()
+        guard let region = PlacesNearbyFrame.region(line: line(), position: here) else { return }
+        origin = here ?? region.center
+        mapController.show(region)
+        ask(PlacesNearbyFrame.area(of: region))
     }
 
     private func receive(_ places: [TrailPlace]) {
-        session.receiveNearby(places, using: around.finder, avoiding: hike.places)
+        // No line to measure along: the rows are ordered by distance from the
+        // hiker instead — see ``PlacesNearbyEntry``.
+        search.receiveArea(places, along: [])
+        asked.answer(keeping: filter.shown)
+        // A kind switched on while this was out was refused then.
+        askAgainIfWider()
     }
 
     private func ask(_ area: CommunitySearchArea) {
-        session.askNearby(area, using: around.finder, avoiding: hike.places)
+        if origin == nil { origin = area.coordinate }
+        let symbols = filter.shown
+        let isTaken = around.finder.search(in: area, along: [], avoiding: hike.places)
+        asked.ask(area, for: symbols, isTaken: isTaken)
     }
 
     private func retry() {
-        session.retryNearby(using: around.finder, avoiding: hike.places)
+        if let area = asked.area { ask(area) }
     }
 
+    /// Asks the last area again when a kind it left out has been switched on.
+    /// Switching one off only filters what was already found.
     private func askAgainIfWider() {
-        session.askNearbyAgainIfWider(using: around.finder, avoiding: hike.places)
+        if let area = asked.widened(showing: filter.shown) { ask(area) }
     }
 }
 

@@ -31,7 +31,6 @@ struct HikePlacesAroundView: View {
     let hike: Hike
     let around: TrailPlacesAround
     let mapController: MapController
-    let session: HikePlacesSession
     var placePins: TrailPlacePinController?
     /// Brings the sheet down to its middle, so the map is in view.
     var onShowMap: () -> Void = { /* no-op default */ }
@@ -40,7 +39,7 @@ struct HikePlacesAroundView: View {
     /// Opens *Add Place* at a spot the hiker pressed on the map.
     var onAddPlace: (HikePlaceSpot) -> Void = { _ in /* no-op default */ }
 
-    private var search: HikePlacesAroundSearch { session.search }
+    @State private var search = HikePlacesAroundSearch()
 
     private var filter: TrailPlaceFilter { around.finder.filter }
 
@@ -55,7 +54,7 @@ struct HikePlacesAroundView: View {
             around: around,
             mapController: mapController,
             placePins: placePins,
-            session: session,
+            search: search,
             candidates: candidates,
             onShowMap: onShowMap,
             onOpenPhoto: onOpenPhoto,
@@ -90,8 +89,7 @@ struct HikePlacesAroundView: View {
     }
 
     private var reachPicker: some View {
-        @Bindable var search = search
-        return Picker("Within", selection: $search.reach) {
+        Picker("Within", selection: $search.reach) {
             ForEach(TrailPlaceReach.choices) { reach in
                 Text(reach.label).tag(reach)
             }
@@ -177,13 +175,13 @@ struct HikePlacesAroundView: View {
     // MARK: - What the screen does
 
     private func searchIfNeeded() {
-        guard hike.isAttached else { return }
-        session.searchAlongIfNeeded(hike.route, from: around.finder.source, showing: filter.shown)
+        guard search.needsSearch(showing: filter.shown) else { return }
+        searchNow()
     }
 
     private func searchNow() {
-        guard hike.isAttached else { return }
-        session.searchAlong(hike.route, from: around.finder.source, showing: filter.shown)
+        guard let source = around.finder.source, hike.isAttached, !filter.shown.isEmpty else { return }
+        search.search(along: hike.route, from: source, showing: filter.shown)
     }
 }
 
