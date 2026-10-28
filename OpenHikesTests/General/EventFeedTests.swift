@@ -5,7 +5,9 @@
 //  The three things ``EventFeed`` promises its readers — every reader hears
 //  every message, a reader that goes away leaves the next one working, and
 //  nothing is replayed to a reader that arrives late — and the one it
-//  promises its senders: a send never waits for anybody.
+//  promises its senders: a send never waits for anybody. The first holds by
+//  default: a reader that asks for only its newest unread message, as the
+//  hike detail's byte refresh does, gets that and nothing older.
 //
 
 import Foundation
