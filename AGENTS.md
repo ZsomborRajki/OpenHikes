@@ -403,10 +403,10 @@ a change to recording, the map, the sheet or the render path; the PR template,
 
 - **Upload with the TestFlight workflow.** `.github/workflows/testflight.yml`
   runs on demand with the version to ship (`gh workflow run testflight.yml -f
-  version=<version> -f cloudkit_promoted=true`). It archives `main`, uploads
-  it and pushes its tag. It runs only from `main`, the one branch its
-  `testflight` environment admits, and its header lists that environment's
-  secrets and how to set them.
+  version=<version> -f cloudkit_promoted=true`). It archives the branch it is
+  run from, uploads it and pushes its tag. Its header lists the `testflight`
+  environment's secrets and how to set them, and argues why that environment
+  admits every branch.
   - It stamps the version at build time and commits nothing, because `main`
     takes no pushes. So the tags, not `project.pbxproj`, record what shipped.
   - The build number is one past the highest tagged or committed build

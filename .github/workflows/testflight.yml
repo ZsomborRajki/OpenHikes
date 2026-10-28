@@ -1,8 +1,8 @@
 name: TestFlight
 
-# Archives `main`, uploads it to App Store Connect for TestFlight, and tags
-# the commit `v<version>-<build>` (*Releasing* in AGENTS.md). Run it from the
-# Actions tab, or with
+# Archives the chosen branch, uploads it to App Store Connect for TestFlight,
+# and tags the commit `v<version>-<build>` (*Releasing* in AGENTS.md). Run it
+# from the Actions tab, or with
 #
 #   gh workflow run testflight.yml -f version=1.5 -f cloudkit_promoted=true
 #
@@ -15,18 +15,16 @@ name: TestFlight
 # what shipped, and Scripts/release-version.sh counts builds from the tags.
 #
 # Every secret lives in the `testflight` environment, never at the repository
-# level, and only protected branches may deploy to it. `main` is the only one,
-# and that rule is what keeps the secrets here. A job reads an environment's
-# secrets just by naming it, and a branch can name this one in any workflow
-# it edits, `ci.yml` included: its pull request runs the edit. The same rule
-# refuses a dispatch from any branch but `main`. Give the environment the rule
-# before it holds a secret:
+# level. The environment has no branch rule, by the owner's choice, so a
+# release can come from any branch. The cost: a job reads an environment's
+# secrets just by naming it, so a workflow edited on any branch of this
+# repository, `ci.yml` included, could read them through its pull request. A
+# fork's pull request gets no secrets, and only the owner pushes branches
+# here, so that reach ends at the owner's own branches and agents. A
+# deployment branch rule on the environment is the way to narrow it, and
+# would end releases from other branches.
 #
-#   gh api -X PUT repos/ZsomborRajki/OpenHikes/environments/testflight \
-#     -F 'deployment_branch_policy[protected_branches]=true' \
-#     -F 'deployment_branch_policy[custom_branch_policies]=false'
-#
-# Then set the secrets once, from a checkout that has the keys:
+# Set the secrets once, from a checkout that has the keys:
 #
 #   plutil -extract StadiaAPIKey raw -o - OpenHikes/Secrets.plist \
 #     | gh secret set STADIA_API_KEY --env testflight
@@ -39,19 +37,33 @@ name: TestFlight
 #   APP_STORE_CONNECT_KEY --env testflight < AuthKey_<id>.p8`). It needs the
 #   Admin role: the export signs with the team's cloud-managed distribution
 #   certificate, and a lesser key gets "Cloud signing permission error".
+#   `asc auth status` names the key the `asc` CLI signs in with, and
+#   `asc auth issuer-id` prints its issuer.
 # - DEVELOPMENT_CERTIFICATE_P12 and DEVELOPMENT_CERTIFICATE_PASSWORD: an Apple
-#   Development certificate with its private key, exported from Keychain
-#   Access as a .p12 (`base64 -i Development.p12 | gh secret set
-#   DEVELOPMENT_CERTIFICATE_P12 --env testflight`). The archive is signed for
-#   development and re-signed for distribution on export. Without one, every
-#   run on a fresh runner asks Apple for a new development certificate, and
-#   the second run is refused because the first one's private key is gone.
+#   Development certificate of CI's own, as a base64 .p12, and its password.
+#   The archive is signed for development and re-signed for distribution on
+#   export. Without one, every run on a fresh runner asks Apple for a new
+#   development certificate, and the second run is refused because the first
+#   one's private key is gone. Its own certificate can be revoked without
+#   touching anybody's Mac, and `asc` makes one without a keychain:
+#
+#     asc certificates create --certificate-type DEVELOPMENT --generate-csr \
+#       --key-out ci.key --csr-out ci.csr --output json \
+#       | jq -r .data.attributes.certificateContent | base64 --decode > ci.cer
+#     openssl rand -base64 32 | tr -d '\n' > ci.password
+#     asc certificates export --certificate ci.cer --private-key ci.key \
+#       --password-file ci.password --p12-out ci.p12
+#     base64 -i ci.p12 | gh secret set DEVELOPMENT_CERTIFICATE_P12 --env testflight
+#     gh secret set DEVELOPMENT_CERTIFICATE_PASSWORD --env testflight < ci.password
+#
+#   A certificate lasts a year. When the archive step stops finding one, make
+#   a new one the same way and revoke the old.
 #
 # What it does not do:
 # - Promote the CloudKit schema. No command can, so the run refuses to start
 #   until `cloudkit_promoted` is ticked (*CloudKit* in AGENTS.md).
-# - Run the tests. `ci.yml` does that on every push to `main`; check that
-#   run is green for the commit being shipped.
+# - Run the tests. `ci.yml` does that on every push to `main` and every pull
+#   request; check that its run is green for the commit being shipped.
 # - Publish a GitHub Release. Those are for App Store builds.
 
 on:
