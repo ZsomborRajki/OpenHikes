@@ -10,12 +10,16 @@
 //  one of those goes on working with nothing added to it, and *Follow This
 //  Trail* works on a drawn trail the day it is saved.
 //
-//  The consequence, stated rather than discovered: a drawn trail is
-//  indistinguishable from an imported one, and its `date` is the day it was
-//  made rather than a day it was walked. That is consistent — an imported
-//  trail is also a line somebody drew elsewhere — and there is deliberately no
-//  *planned* flag and no exclusion from the library's totals. Adding one later
-//  is a column, not a redesign.
+//  The consequence, stated rather than discovered: a drawn trail is the same
+//  row a GPX import writes, plus what it was drawn from for *Edit Route* (see
+//  ``DrawnRoute``), and its `date` is the day it was made rather than a day it
+//  was walked. That is consistent — an imported trail is also a line somebody
+//  drew elsewhere — and there is deliberately no *planned* flag, because
+//  telling a plan from a walk takes none. The library's totals count a hike
+//  as walked only when its route carries a clock, and a drawn line carries
+//  none, so the trail itself never counts and each walk along it does, by
+//  what it covered and on the day it started. ``LibraryTotals`` owns that
+//  rule.
 //
 //  Two points is the floor, and it is a refusal rather than a disabled button
 //  alone: one point is a place, and a `Hike` whose route is a single
@@ -50,9 +54,21 @@
 //  reason ``HikeImport`` commits before its caller navigates: an insert is a
 //  change pending in a context, and everything downstream of a successful save
 //  — selecting the hike, drawing it, clearing the draft that made it — acts on
-//  the claim that it is *kept*. Unlike an import this stays on the main actor:
-//  a drawn trail is a few dozen points, not the twenty thousand a day's
-//  recording serializes.
+//  the claim that it is *kept*.
+//
+//  Unlike an import's, this commit stays on the main actor, in the context
+//  the screen hands it — and not because the line is small. A snapped trail
+//  is saved as the paths it follows, thousands of points rather than the
+//  stops that were tapped, and a save flattens them, puts whatever heights
+//  were read on every one, measures the places against them and serializes
+//  them, all inside the tap. It stays for what it reads and what it hands
+//  back: the stops, the legs and the places are the draft's, which is
+//  main-actor state, and the hike that comes back is the screen's own row,
+//  selected and drawn at once — an edit writes into the very row the hike's
+//  screen holds. A save has not been timed on a long snapped trail. If a
+//  timing ever finds it holding the button, the import's shape is the one to
+//  take: the draft copied out as values, a context of its own, and the row
+//  fetched back by id.
 //
 
 import Algorithms
