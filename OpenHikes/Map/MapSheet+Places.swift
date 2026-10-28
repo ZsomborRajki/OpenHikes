@@ -25,9 +25,9 @@ extension MapSheet {
         case let .newPlace(hike, spot):
             placeAdderDestination(at: spot, on: hike, session: presentation.placeAdder(for: route))
         case let .placesAround(hike):
-            placesAroundDestination(of: hike)
+            placesAroundDestination(of: hike, search: presentation.placesAroundSearch(for: route))
         case let .placesNearby(hike):
-            placesNearbyDestination(of: hike)
+            placesNearbyDestination(of: hike, session: presentation.placesNearby(for: route))
         case .commonsGallery, .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto, .hike, .pendingPhotos,
             .pendingSubmission, .photo, .recording, .routeStyle, .totals, .trailDraft, .walk:
             EmptyView()
@@ -36,12 +36,18 @@ extension MapSheet {
 
     /// *Places Around Trail*. A press on the map opens *Add Place* at that
     /// spot, over this screen, so back from the new place returns here.
-    func placesAroundDestination(of hike: Hike) -> some View {
+    ///
+    /// What the screen has found is kept by the presentation rather than by
+    /// the screen, so a rotation neither closes the card open on it nor asks
+    /// again — see ``HikePlacesAroundSearch``. *Places Nearby* is kept the
+    /// same way.
+    func placesAroundDestination(of hike: Hike, search: HikePlacesAroundSearch) -> some View {
         HikePlacesAroundView(
             hike: hike,
             around: placePins.around,
             mapController: mapController,
             placePins: placePins,
+            search: search,
             onShowMap: presentation.makeRoomForTheMap,
             onOpenPhoto: { photo in presentation.path.append(.photo(hike, photo.id)) },
             onAddPlace: { spot in
@@ -56,12 +62,13 @@ extension MapSheet {
     /// *Places Nearby*, over the recording screen: the walk so far and where
     /// the hiker is, read as it opens. A press on the map opens *Add Place*,
     /// as it does on *Places Around Trail*.
-    func placesNearbyDestination(of hike: Hike) -> some View {
+    func placesNearbyDestination(of hike: Hike, session: HikePlacesNearbySession) -> some View {
         HikePlacesNearbyView(
             hike: hike,
             around: placePins.around,
             mapController: mapController,
             placePins: placePins,
+            session: session,
             line: { [recorder = hikeRecorder] in recorder.trace.recordedCoordinates },
             position: { [recorder = hikeRecorder] in
                 PhotoTrailAnchor.recordingCoordinate(recorder.lastAcceptedPoint)

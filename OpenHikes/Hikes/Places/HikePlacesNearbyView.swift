@@ -33,6 +33,9 @@ struct HikePlacesNearbyView: View {
     let around: TrailPlacesAround
     let mapController: MapController
     var placePins: TrailPlacePinController?
+    /// What the screen has found and asked, kept for it so a turn of the
+    /// phone keeps them — see ``HikePlacesNearbySession``.
+    let session: HikePlacesNearbySession
     /// The walk recorded so far, read once as the screen opens.
     var line: () -> [CLLocationCoordinate2D] = { [] }
     /// Where the hiker is, read once as the screen opens. What every row's
@@ -45,30 +48,21 @@ struct HikePlacesNearbyView: View {
     /// Opens *Add Place* at a spot the hiker pressed on the map.
     var onAddPlace: (HikePlaceSpot) -> Void = { _ in /* no-op default */ }
 
-    @State private var search = HikePlacesAroundSearch()
-    /// What the rows are measured from: the hiker as the screen opened, or
-    /// the middle of the first search where there was no fix to read.
-    @State private var origin: CLLocationCoordinate2D?
-    /// What has been asked, so switching a kind on asks that area again,
-    /// *Try Again* has something to retry, and coming back to the screen asks
-    /// nothing unless a search was cut off.
-    @State private var asked = PlacesNearbySearch()
-
     private var filter: TrailPlaceFilter { around.finder.filter }
 
     var body: some View {
-        let candidates = search.candidates(showing: filter.shown, held: hike.places)
+        let candidates = session.search.candidates(showing: filter.shown, held: hike.places)
         let entries = PlacesNearbyEntry.sorted(
             held: hike.orderedPlaces(preparedBy: placePins?.placeRows),
             candidates: candidates,
-            from: origin
+            from: session.origin
         )
         PlacesAroundScreen(
             hike: hike,
             around: around,
             mapController: mapController,
             placePins: placePins,
-            search: search,
+            search: session.search,
             candidates: candidates,
             onShowMap: onShowMap,
             onOpenPhoto: onOpenPhoto,
@@ -123,15 +117,16 @@ struct HikePlacesNearbyView: View {
     /// a screen pushed over this one — *Add Place*, or a photograph — which
     /// took the claim and with it cancelled anything out, the map stays where
     /// the hiker left it, and only a search that never answered is asked
-    /// again.
+    /// again. A turn of the phone, which builds this screen again in the other
+    /// host on the same session, comes back the same way.
     private func askFirst() {
-        if asked.hasAsked {
-            if let area = asked.interrupted { ask(area) }
+        if session.asked.hasAsked {
+            if let area = session.asked.interrupted { ask(area) }
             return
         }
         let here = position()
         guard let region = PlacesNearbyFrame.region(line: line(), position: here) else { return }
-        origin = here ?? region.center
+        session.origin = here ?? region.center
         mapController.show(region)
         ask(PlacesNearbyFrame.area(of: region))
     }
@@ -139,27 +134,27 @@ struct HikePlacesNearbyView: View {
     private func receive(_ places: [TrailPlace]) {
         // No line to measure along: the rows are ordered by distance from the
         // hiker instead — see ``PlacesNearbyEntry``.
-        search.receiveArea(places, along: [])
-        asked.answer(keeping: filter.shown)
+        session.search.receiveArea(places, along: [])
+        session.asked.answer(keeping: filter.shown)
         // A kind switched on while this was out was refused then.
         askAgainIfWider()
     }
 
     private func ask(_ area: CommunitySearchArea) {
-        if origin == nil { origin = area.coordinate }
+        if session.origin == nil { session.origin = area.coordinate }
         let symbols = filter.shown
         let isTaken = around.finder.search(in: area, along: [], avoiding: hike.places)
-        asked.ask(area, for: symbols, isTaken: isTaken)
+        session.asked.ask(area, for: symbols, isTaken: isTaken)
     }
 
     private func retry() {
-        if let area = asked.area { ask(area) }
+        if let area = session.asked.area { ask(area) }
     }
 
     /// Asks the last area again when a kind it left out has been switched on.
     /// Switching one off only filters what was already found.
     private func askAgainIfWider() {
-        if let area = asked.widened(showing: filter.shown) { ask(area) }
+        if let area = session.asked.widened(showing: filter.shown) { ask(area) }
     }
 }
 

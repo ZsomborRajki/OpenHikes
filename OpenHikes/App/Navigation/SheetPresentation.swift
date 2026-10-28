@@ -240,6 +240,11 @@ final class SheetPresentation {
     /// The same, for *Add Place*'s form and the camera it has open — see
     /// ``HikePlaceAdderSession``.
     @ObservationIgnored private var placeAdders: [SheetRoute: HikePlaceAdderSession] = [:]
+    /// The same, for what *Places Around Trail* has found and the card open
+    /// on it — see ``HikePlacesAroundSearch``.
+    @ObservationIgnored private var placesAroundSearches: [SheetRoute: HikePlacesAroundSearch] = [:]
+    /// The same, for *Places Nearby* — see ``HikePlacesNearbySession``.
+    @ObservationIgnored private var placesNearbySessions: [SheetRoute: HikePlacesNearbySession] = [:]
     /// The screens that have brought what they are about into view — see
     /// ``claimsFirstFraming(of:)``.
     @ObservationIgnored private var framedRoutes: Set<SheetRoute> = []
@@ -452,6 +457,20 @@ final class SheetPresentation {
         return session
     }
 
+    func placesAroundSearch(for route: SheetRoute) -> HikePlacesAroundSearch {
+        if let existing = placesAroundSearches[route] { return existing }
+        let search = HikePlacesAroundSearch()
+        placesAroundSearches[route] = search
+        return search
+    }
+
+    func placesNearby(for route: SheetRoute) -> HikePlacesNearbySession {
+        if let existing = placesNearbySessions[route] { return existing }
+        let session = HikePlacesNearbySession()
+        placesNearbySessions[route] = session
+        return session
+    }
+
     /// Whether this is the first time since `route` was pushed that its
     /// screen asks to bring what it is about into view: `true` once, then
     /// `false` until the route is popped.
@@ -643,6 +662,8 @@ final class SheetPresentation {
         communityPhotoSelections = communityPhotoSelections.filter { storedPath.contains($0.key) }
         walkShares = walkShares.filter { storedPath.contains($0.key) }
         placeAdders = placeAdders.filter { storedPath.contains($0.key) }
+        placesAroundSearches = placesAroundSearches.filter { storedPath.contains($0.key) }
+        placesNearbySessions = placesNearbySessions.filter { storedPath.contains($0.key) }
         framedRoutes = framedRoutes.filter { storedPath.contains($0) }
         let recording = storedPath.last == .recording
         if isRecordingPresented != recording { isRecordingPresented = recording }

@@ -93,6 +93,26 @@ struct HikePlacesAroundSearchTests {
         #expect(search.needsSearch(showing: [.water, .summit]))
     }
 
+    /// A turn of the phone builds the screen again on the same search, and
+    /// the new screen asks whether to search as it comes up, possibly while
+    /// the old screen's request is still out. Checked before the request's
+    /// task can run: this suite holds the main actor until it awaits.
+    @Test("a request still out counts as asked, until it is cancelled")
+    func requestOutCountsAsAsked() async {
+        let search = HikePlacesAroundSearch()
+        let out = search.search(along: Line.route, from: AnsweringSource(answer: [Self.spring]), showing: [.water])
+
+        #expect(!search.needsSearch(showing: [.water]), "a screen coming up waits for the answer")
+        search.reach = .nearby
+        #expect(!search.needsSearch(showing: [.water]), "and so does a narrower reach")
+        #expect(search.needsSearch(showing: [.water, .summit]), "a kind the request leaves out is asked for")
+
+        search.cancel()
+        #expect(search.needsSearch(showing: [.water]), "a cancelled request is asked again")
+        await out.value
+        #expect(search.found.isEmpty, "and its answer lands nowhere")
+    }
+
     @Test("a kind switched off is left out of the offer")
     func switchedOffKindIsLeftOut() async {
         let search = await Self.searched()

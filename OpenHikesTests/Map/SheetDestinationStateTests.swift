@@ -138,4 +138,65 @@ struct SheetDestinationStateTests {
         presentation.path[presentation.path.count - 1] = route
         #expect(presentation.placeAdder(for: route) !== added, "nor does Add")
     }
+
+    /// #1170: a turn of the phone replaces *Places Around Trail*, which
+    /// closed the card open over it, put *Within* back and asked the line
+    /// again, so what it has found lives here until the screen is popped.
+    @Test("Places Around Trail's search and its open card outlive rotation, and go with the screen")
+    func placesAroundSearchFollowsTheNavigationLifetime() throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        let route = SheetRoute.placesAround(hike)
+        let presentation = SheetPresentation()
+        presentation.path = [.hike(hike), route]
+        let search = presentation.placesAroundSearch(for: route)
+        let card = UUID()
+        search.reach = .onTrail
+        search.selection = card
+
+        for layout in [SheetLayout.sidePanel, .bottomSheet] {
+            presentation.layout = layout
+            #expect(presentation.placesAroundSearch(for: route) === search)
+            #expect(search.selection == card, "the card open over the screen is presented again")
+            #expect(search.reach == .onTrail)
+        }
+
+        let spot = HikePlaceSpot(CLLocationCoordinate2D(latitude: 47.6, longitude: 12.9))
+        presentation.path.append(.newPlace(hike, spot))
+        #expect(presentation.placesAroundSearch(for: route) === search, "a screen pushed over it keeps it")
+        presentation.path = [.hike(hike)]
+        presentation.path.append(route)
+        #expect(presentation.placesAroundSearch(for: route) !== search, "Back leaves nothing for the next visit")
+        #expect(presentation.placesAroundSearch(for: route).selection == nil)
+    }
+
+    /// The same for *Places Nearby*, which also keeps where its rows are
+    /// measured from and what it has asked, so a turn neither frames the map
+    /// afresh nor asks about the area again.
+    @Test("Places Nearby's session outlives rotation, and goes with the screen")
+    func placesNearbyFollowsTheNavigationLifetime() throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        let route = SheetRoute.placesNearby(hike)
+        let presentation = SheetPresentation()
+        presentation.path = [.recording, route]
+        let session = presentation.placesNearby(for: route)
+        let here = CLLocationCoordinate2D(latitude: 47.6, longitude: 12.9)
+        session.origin = here
+        session.asked.ask(CommunitySearchArea(coordinate: here, radiusMeters: 1500), for: [.water], isTaken: true)
+        session.search.selection = UUID()
+
+        for layout in [SheetLayout.sidePanel, .bottomSheet] {
+            presentation.layout = layout
+            #expect(presentation.placesNearby(for: route) === session)
+            #expect(session.asked.hasAsked, "coming up again asks nothing")
+            #expect(session.search.selection != nil)
+        }
+
+        presentation.path.removeLast()
+        presentation.path.append(route)
+        #expect(presentation.placesNearby(for: route) !== session)
+        #expect(presentation.placesNearby(for: route).origin == nil)
+        #expect(!presentation.placesNearby(for: route).asked.hasAsked)
+    }
 }

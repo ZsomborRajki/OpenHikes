@@ -32,14 +32,15 @@ struct HikePlacesAroundView: View {
     let around: TrailPlacesAround
     let mapController: MapController
     var placePins: TrailPlacePinController?
+    /// What the screen has found and the card open on it, kept for it so a
+    /// turn of the phone keeps them — see ``HikePlacesAroundSearch``.
+    let search: HikePlacesAroundSearch
     /// Brings the sheet down to its middle, so the map is in view.
     var onShowMap: () -> Void = { /* no-op default */ }
     /// Opens one of the hike's photographs, from a place's card.
     var onOpenPhoto: (HikePhoto) -> Void = { _ in /* no-op default */ }
     /// Opens *Add Place* at a spot the hiker pressed on the map.
     var onAddPlace: (HikePlaceSpot) -> Void = { _ in /* no-op default */ }
-
-    @State private var search = HikePlacesAroundSearch()
 
     private var filter: TrailPlaceFilter { around.finder.filter }
 
@@ -89,7 +90,8 @@ struct HikePlacesAroundView: View {
     }
 
     private var reachPicker: some View {
-        Picker("Within", selection: $search.reach) {
+        @Bindable var search = search
+        return Picker("Within", selection: $search.reach) {
             ForEach(TrailPlaceReach.choices) { reach in
                 Text(reach.label).tag(reach)
             }
