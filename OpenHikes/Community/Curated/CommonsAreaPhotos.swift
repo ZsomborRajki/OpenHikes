@@ -128,8 +128,8 @@ nonisolated enum CommonsAreaPhotos {
             .filter { !covered.contains($0.key) }
             .values
             .compactMap { $0.min(by: nearer) }
-            .sorted(by: nearer)
-        return (first + gaps.prefix(limit - first.count)).sorted(by: nearer)
+            .min(count: limit - first.count, sortedBy: nearer)
+        return (first + gaps).sorted(by: nearer)
     }
 
     // MARK: - The grid
