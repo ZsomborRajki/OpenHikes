@@ -424,7 +424,7 @@ final class WeatherManager {
     /// about.
     private typealias KnownPlace = (source: WeatherSubject, place: WeatherPlaceDescription)
 
-    /// What the detail sheet heads itself with and names its days in, and
+    /// What the detail sheet heads itself with and names its days and clock times in, and
     /// which reading it belongs to.
     ///
     /// Observed, because the title is drawn before the geocode lands and has
@@ -445,7 +445,7 @@ final class WeatherManager {
         currentPlace?.cityName
     }
 
-    /// The zone the current reading's days begin at midnight in, or `nil`
+    /// The zone the current reading's clock times and forecast days belong to, or `nil`
     /// when it is the reader's own or nobody has said — see
     /// ``WeatherPlaceNaming``.
     var forecastTimeZone: TimeZone? {

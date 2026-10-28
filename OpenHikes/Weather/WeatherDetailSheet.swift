@@ -124,6 +124,7 @@ struct WeatherDetailView: View {
     let weather: WeatherManager
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.locale) private var locale
 
     /// `nil` until WeatherKit answers, and for good if it never does. The
     /// wording and the fallback link below do not wait on it — see
@@ -278,8 +279,9 @@ struct WeatherDetailView: View {
     }
 
     private func hourColumn(_ hour: WeatherHourSummary) -> some View {
-        VStack(spacing: Self.HourStrip.rowSpacing) {
-            Text(hour.date, format: .dateTime.hour())
+        let label = forecastHour(hour.date, locale: locale)
+        return VStack(spacing: Self.HourStrip.rowSpacing) {
+            Text(verbatim: label)
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Image(systemName: hour.symbolName)
@@ -302,7 +304,7 @@ struct WeatherDetailView: View {
         }
         .frame(width: Self.HourStrip.columnWidth)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(hour.date, format: .dateTime.hour()))
+        .accessibilityLabel(Text(verbatim: label))
         .accessibilityValue(Self.spokenHour(hour))
     }
 
@@ -388,14 +390,14 @@ struct WeatherDetailView: View {
                 if let sunrise = daylight.sunrise {
                     DetailRow(
                         label: "Sunrise",
-                        value: Self.time(sunrise),
+                        value: forecastTime(sunrise, locale: locale),
                         systemImage: "sunrise"
                     )
                 }
                 if let sunset = daylight.sunset {
                     DetailRow(
                         label: "Sunset",
-                        value: Self.time(sunset),
+                        value: forecastTime(sunset, locale: locale),
                         systemImage: "sunset"
                     )
                         .accessibilityIdentifier("weather-detail-sunset")
@@ -406,7 +408,7 @@ struct WeatherDetailView: View {
                     // fact twice.
                     DetailRow(
                         label: "Light until",
-                        value: Self.time(civilDusk),
+                        value: forecastTime(civilDusk, locale: locale),
                         systemImage: "sun.horizon"
                     )
                 }
@@ -422,11 +424,6 @@ struct WeatherDetailView: View {
             }
             .accessibilityIdentifier("weather-detail-daylight")
         }
-    }
-
-    /// A clock time, in the reader's own format.
-    private static func time(_ date: Date) -> String {
-        date.formatted(date: .omitted, time: .shortened)
     }
 
     /// The day's high and low as one row, or `nil` when the forecast carried
