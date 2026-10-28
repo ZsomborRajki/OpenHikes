@@ -782,9 +782,11 @@ a change to recording, the map, the sheet or the render path; the PR template,
   same contents, because a seventh parameter is past the lint limit.
 - **The primary surface has two shapes: a sheet when the window is taller
   than wide, a panel when it is wider.**
-  - A compact height ignores detents, so `MapSidePanel` draws the same
-    `MapSheet` beside the map, and `SheetPresentation.layout` settles the
-    differences.
+  - At a compact height a sheet left to adapt is presented full-screen, its
+    detents ignored, so `MapSidePanel` draws the same `MapSheet` beside the
+    map, and `SheetPresentation.layout` settles the differences. A sheet
+    with `.presentationCompactAdaptation(.none)`, as the place cards have,
+    stays a sheet there and keeps every detent but `.medium` (`SheetLayout`).
   - A wider window of regular height — an unfolded iPhone Duo, an iPad later —
     takes the panel too, by choice; there the sheet was a card in the middle
     of the bottom edge. `SheetLayout(windowSize:isCompactHeight:)` is the rule.

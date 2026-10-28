@@ -4,13 +4,14 @@
 //
 //  The one orientation nothing here used to run in.
 //
-//  The app declares landscape and could not draw it: `.presentationDetents`
-//  are honoured only in a compact-width, regular-height presentation, so in
-//  compact height the system presented `MapSheet` full-screen — and because
-//  `OpenHikesView` keeps that sheet up permanently and puts it back whenever it
-//  is dismissed, that was the entire UI. A white sheet with a search field on
-//  it, no map anywhere, and no gesture, button or state that brought one back
-//  short of rotating the phone again. Landscape draws a side panel now.
+//  The app declares landscape and could not draw it: a sheet left to adapt
+//  honours `.presentationDetents` only in a compact-width, regular-height
+//  presentation, so in compact height the system presented `MapSheet`
+//  full-screen — and because `OpenHikesView` keeps that sheet up permanently
+//  and puts it back whenever it is dismissed, that was the entire UI. A white
+//  sheet with a search field on it, no map anywhere, and no gesture, button or
+//  state that brought one back short of rotating the phone again. Landscape
+//  draws a side panel now.
 //
 //  Measured rather than named, the way the collapsed sheet is in
 //  `PhotoUITests`: what went wrong was a frame, so what is asserted is a frame.
