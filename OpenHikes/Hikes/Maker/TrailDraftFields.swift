@@ -219,37 +219,33 @@ struct TrailDraftLineHeader: View {
     // wrap between metrics, never squeeze a duration into one word per line.
     @ViewBuilder
     private func elevationFigures(_ climb: RouteElevationSummary?, waiting: Bool) -> some View {
-        Group {
-            // The same thing the *Search this area* pill's spinner says, in
-            // the slot the answer will land in: a figure is coming. It is on
-            // screen once, after the hiker stops drawing, for as long as one
-            // request takes — never during the drawing itself.
-            if waiting {
-                ProgressView()
-                    #if os(iOS)
-                    .controlSize(.mini)
-                    #endif
-            }
-            if let gain = climb?.gainMeters {
-                Label(Self.height(gain), systemImage: "arrow.up")
-            }
-            if let loss = climb?.lossMeters {
-                Label(Self.height(loss), systemImage: "arrow.down")
-            }
+        // The same thing the *Search this area* pill's spinner says, in the
+        // slot the answer will land in: a figure is coming. It is on screen
+        // once, after the hiker stops drawing, for as long as one request
+        // takes — never during the drawing itself.
+        if waiting {
+            ProgressView()
+                #if os(iOS)
+                .controlSize(.mini)
+                #endif
+        }
+        if let gain = climb?.gainMeters {
+            Label(Self.height(gain), systemImage: "arrow.up")
+        }
+        if let loss = climb?.lossMeters {
+            Label(Self.height(loss), systemImage: "arrow.down")
         }
     }
 
     @ViewBuilder
     private func travelFigures(time: TimeInterval?, length: String) -> some View {
-        Group {
-            if let time {
-                Label(HikeFormat.travelTime(time), systemImage: "clock")
-            }
-            // On the length alone: an identifier on the row would be pushed
-            // down onto the time and the climb too.
-            Text(length)
-                .accessibilityIdentifier("trail-draft-length")
+        if let time {
+            Label(HikeFormat.travelTime(time), systemImage: "clock")
         }
+        // On the length alone: an identifier on the row would be pushed down
+        // onto the time and the climb too.
+        Text(length)
+            .accessibilityIdentifier("trail-draft-length")
     }
 
     private static func height(_ meters: Double) -> String {

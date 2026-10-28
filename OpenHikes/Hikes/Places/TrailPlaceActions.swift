@@ -7,11 +7,17 @@
 //  whole buttons to another row. A fixed width or an unconstrained ideal
 //  width would reject even short English captions on a standard-size phone.
 //
+//  The rule counts lines, not words: one long word that a narrow column
+//  breaks across both lines still passes. A layout's measurements cannot tell
+//  a break inside a word from one between two.
+//
 
 import SwiftUI
 
 struct TrailPlaceActions<Content: View>: View {
-    @ScaledMetric(relativeTo: .caption) private var captionLineHeight: CGFloat = 15
+    /// One line of the buttons' caption at the default size, scaled by the
+    /// caption's own text style so the allowance grows with what it measures.
+    @ScaledMetric(relativeTo: TrailPlaceActionLabelStyle.captionStyle) private var captionLineHeight: CGFloat = 15
     @ViewBuilder let content: Content
 
     var body: some View {
