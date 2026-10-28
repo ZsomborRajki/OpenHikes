@@ -42,8 +42,9 @@ protocol MovementReminderNotifying: AnyObject {
     /// never been asked — which is right at the pause the hiker just tapped
     /// and wrong on every later return to the foreground, where the app would
     /// be asking again about something they did half an hour ago. This is the
-    /// question without the prompt, and the only new thing it can report is a
-    /// permission taken away in iOS Settings while a pause was running.
+    /// question without the prompt, and the new things it can report come from
+    /// iOS Settings: a permission taken away while a pause was running, or one
+    /// given while a warning was waiting for it.
     ///
     /// An unanswered prompt reads as allowed: a hiker who has not said no
     /// has not refused, and what this answer is used to take away is a watch

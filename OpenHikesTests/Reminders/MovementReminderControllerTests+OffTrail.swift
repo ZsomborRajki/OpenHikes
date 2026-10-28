@@ -110,6 +110,7 @@ extension MovementReminderControllerTests {
 
         observe(harness, offRouteMeters: Self.wellOff, after: 0)
         observe(harness, offRouteMeters: Self.wellOff, after: Self.dwell)
+        await harness.controller.settle()
         observe(harness, offRouteMeters: Self.onTheLine, after: Self.dwell * 2)
         observe(harness, offRouteMeters: Self.wellOff, after: Self.dwell * 3)
         observe(harness, offRouteMeters: Self.wellOff, after: Self.dwell * 4)
