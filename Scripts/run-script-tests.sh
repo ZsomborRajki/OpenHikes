@@ -2137,6 +2137,12 @@ if expect_status 1 \
     && expect_contains "$calls" "screenshot locale de_DE" "the runner environment" \
     && expect_contains "$calls" '"Zoom":"Test translation"' "the runner translations"; then pass; fi
 
+run_script "a language-only screenshot locale does not invent a region" \
+    "$screenshots_light" --frame 7 --no-photos --no-retry --prepared-device "$pro_udid" \
+    --pool-owner screenshot-tests --locale en --derived-data "$screens_dd" --output "$work/screens-out"
+if expect_status 1 && expect_contains "$calls" "-testLanguage en" "the recorded calls" \
+    && expect_absent "$calls" "-testRegion" "the recorded calls"; then pass; fi
+
 run_script "screenshots refuses another owner's prepared device" \
     "$screenshots_light" --prepared-device "$pro_udid" --pool-owner another-session
 if expect_status 2 \
@@ -2677,6 +2683,10 @@ polls=0
 SECONDS=0
 xcrun() {
     polls=$((polls + 1))
+    if [[ "$mode" == capture-timeout || ( "$mode" == capture-retry && $polls -eq 1 ) ]]; then
+        echo "watch temporarily unavailable" >&2
+        return 1
+    fi
     local pixels=ready-a
     if [[ "$mode" == timeout || $polls -le 2 ]]; then pixels=grid
     elif (( polls >= 5 )); then pixels=ready-b
@@ -2700,6 +2710,16 @@ run_script "watch map timeout retains the last loading frame as evidence" \
     "$work/watch-poll" timeout
 if expect_status 1 && expect_contains "$output" "last frame:" "the error" \
     && expect_contains "$output" "grid" "the retained frame"; then pass; fi
+run_script "watch map polling retries a transient screenshot failure" \
+    bash "$work/watch-poll-fixture.sh" "$repository_root/Scripts/lib/watch-screenshot-map.sh" \
+    "$work/watch-poll" capture-retry
+if expect_status 0 && expect_contains "$output" "polls=7" "the poll count" \
+    && expect_contains "$output" "ready-b" "the final verified frame"; then pass; fi
+run_script "watch map capture failures report their cause at the deadline" \
+    bash "$work/watch-poll-fixture.sh" "$repository_root/Scripts/lib/watch-screenshot-map.sh" \
+    "$work/watch-poll" capture-timeout
+if expect_status 1 && expect_contains "$output" "Could not capture the watch map" "the error" \
+    && expect_contains "$output" "watch temporarily unavailable" "the capture failure"; then pass; fi
 
 # Renaming or adding a map frame must preserve both warm-up and verification.
 cat > "$work/watch-frame-fixture.sh" <<'BASH'
@@ -2883,6 +2903,20 @@ for unsafe in / // "$HOME" "$fake_checkout" "$fake_checkout/Screenshots/Photos" 
         else fail "unsafe output cleanup removed an input"; fi
     fi
 done
+run_script "refused output planning does not create a missing source directory" \
+    bash -c 'source "$1"; repository_root="$2"; screenshot_output_directory "$2/OpenHikes/Shots/Nested" iPhone en_IE "" light' _ \
+    "$repository_root/Scripts/lib/screenshot-output.sh" "$fake_checkout"
+if expect_status 2; then
+    if [[ ! -e "$fake_checkout/OpenHikes" ]]; then pass
+    else fail "refused planning created a source directory"; fi
+fi
+run_script "valid output planning also leaves missing parents untouched" \
+    bash -c 'source "$1"; repository_root="$2"; screenshot_output_directory "$3/missing/nested" iPhone en_IE "" light' _ \
+    "$repository_root/Scripts/lib/screenshot-output.sh" "$fake_checkout" "$screens_output"
+if expect_status 0; then
+    if [[ ! -e "$screens_output/missing" ]]; then pass
+    else fail "planning created the output root"; fi
+fi
 ln -s "$german_set" "$work/capture-link"
 run_script "screenshot output refuses a symbolic link before cleaning it" \
     bash -c 'source "$1"; repository_root="$2"; screenshot_output_directory "$3" iPhone en_IE "" light' _ \
@@ -2894,6 +2928,19 @@ fi
 
 preserved_set="$work/screens-out/iphone_18_pro_max_en_ie_${screenshot_test_date}/light"
 mkdir -p "$preserved_set"
+touch "$preserved_set/03-prior.png"
+preserved_library_set="$work/screens-out/iphone_18_pro_max_en_ie_2026_10_26"
+mkdir -p "$preserved_library_set/light"
+touch "$preserved_library_set/.openhikes-screenshot-set" "$preserved_library_set/light/01-prior.png"
+STUB_DEVICES="$screens_prepared" \
+STUB_SCREENSHOT_RESULTS="$work/screens-results.json" STUB_SCREENSHOT_ATTACHMENTS="$screens_attachments" \
+    run_script "partial screenshot cleanup preserves earlier stamped-library captures" \
+    "$screenshots_light" --frame 1 --frame 3 --clean --no-photos --no-retry --prepared-device "$pro_udid" \
+    --pool-owner screenshot-tests --derived-data "$screens_dd" --output "$work/screens-out"
+if expect_status 0 && expect_contains "$output" "Keeping earlier captures" "the cleanup decision"; then
+    if [[ -f "$preserved_library_set/light/01-prior.png" ]]; then pass
+    else fail "a partial clean run deleted a skipped library frame"; fi
+fi
 touch "$preserved_set/03-prior.png"
 STUB_DEVICES="$screens_prepared" STUB_XCODEBUILD_STATUS=65 \
     run_script "a failed screenshot build preserves earlier captures even with --clean" \

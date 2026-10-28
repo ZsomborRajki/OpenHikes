@@ -27,6 +27,7 @@ extension ScreenshotUITests {
     private static let maximumPlaceholderFraction = 0.04
     private static let maximumSmallPatchFraction = 0.01
     private static let mapSampleInset: CGFloat = 12
+    private static let locationPulseRadius: CGFloat = 64
 
     @MainActor
     private func screenshotPixels(on display: ScreenshotDisplay) -> (bytes: [UInt8], width: Int, height: Int)? {
@@ -90,8 +91,19 @@ extension ScreenshotUITests {
         var placeholder = 0
         var samples = 0
         var signature = Hasher()
+        let location = screenshotUserLocation(in: app)
+        let center = location.exists ? CGPoint(x: location.frame.midX.rounded(), y: location.frame.midY.rounded()) : nil
+        // Hash the center, not its animated accessibility bounds: camera or
+        // location movement must still restart the quiet interval.
+        signature.combine(center?.x)
+        signature.combine(center?.y)
+        let pulse = center.map { point in
+            CGRect(x: point.x, y: point.y, width: 0, height: 0)
+                .insetBy(dx: -Self.locationPulseRadius, dy: -Self.locationPulseRadius)
+        } ?? .null
         for row in stride(from: Int(region.minY), to: Int(region.maxY), by: Self.terrainSampleStride) {
             for column in stride(from: Int(region.minX), to: Int(region.maxX), by: Self.terrainSampleStride) {
+                if pulse.contains(CGPoint(x: column, y: row)) { continue }
                 let offset = (row * image.width + column) * 4
                 let channels = image.bytes[offset..<(offset + 3)]
                 for channel in channels { signature.combine(channel) }

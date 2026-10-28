@@ -40,6 +40,17 @@ extension ScreenshotUITests {
         app.buttons[screenshotSystemText("COMPASS_BUTTON", bundle: "MapKitFramework", framework: MKMapView.self)]
     }
 
+    /// MapKit's animated location puck is a map annotation, including on the
+    /// Duo where hit testing cannot tell us whether its display is visible.
+    @MainActor
+    func screenshotUserLocation(in app: XCUIApplication) -> XCUIElement {
+        let language = Self.screenshotIsGerman ? "de" : "en"
+        let resources = Bundle(for: MKMapView.self).bundleURL.appendingPathComponent("\(language).lproj")
+        let label = Bundle(url: resources)?.localizedString(forKey: "My Location", value: nil, table: "Localizable")
+        XCTAssertNotNil(label, "MapKit should supply its location annotation label")
+        return app.otherElements.matching(NSPredicate(format: "label == %@", label ?? "My Location")).firstMatch
+    }
+
     @MainActor
     private func screenshotSystemText(_ key: String, bundle: String, framework: AnyClass) -> String {
         let language = Self.screenshotIsGerman ? "de" : "en"

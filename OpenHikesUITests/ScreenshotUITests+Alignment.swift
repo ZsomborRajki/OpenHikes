@@ -29,7 +29,8 @@ extension ScreenshotUITests {
         edge: ScreenshotViewportEdge,
         tolerance: CGFloat,
         in app: XCUIApplication,
-        named name: String
+        named name: String,
+        leadingDrag: Bool = false
     ) {
         let container = scrollContainer(in: app)
         let display = screenshotDisplay(in: app)
@@ -45,7 +46,7 @@ extension ScreenshotUITests {
             let reach = viewport.height / 2
             let requested = min(max(delta, -reach), reach)
             let distance = abs(requested) < 24 ? (requested < 0 ? -24.0 : 24.0) : requested
-            let start = CGPoint(x: viewport.midX, y: viewport.midY)
+            let start = CGPoint(x: leadingDrag ? container.frame.minX + 8 : viewport.midX, y: viewport.midY)
             XCTAssertTrue(ScreenshotDisplayGesture.drag(
                 from: start, to: CGPoint(x: start.x, y: start.y + distance), on: display
             ))

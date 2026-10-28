@@ -23,7 +23,6 @@ struct TrailPlaceActions<Content: View>: View {
 
 private struct TrailPlaceActionLayout: Layout {
     let captionLineHeight: CGFloat
-    private let spacing: CGFloat = 8
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let frames = frames(width: proposal.width, subviews: subviews)
@@ -40,15 +39,35 @@ private struct TrailPlaceActionLayout: Layout {
     }
 
     private func frames(width proposed: CGFloat?, subviews: Subviews) -> [CGRect] {
-        guard !subviews.isEmpty else { return [] }
-        let ideal = subviews.map { $0.sizeThatFits(.unspecified) }
+        TrailPlaceActionFrames.frames(
+            width: proposed,
+            ideal: subviews.map { $0.sizeThatFits(.unspecified) },
+            captionLineHeight: captionLineHeight
+        ) { width in
+            subviews.map { $0.sizeThatFits(ProposedViewSize(width: width, height: nil)) }
+        }
+    }
+}
+
+/// The measured sizes are inputs so the two-line cutoff and row geometry can
+/// be checked without creating SwiftUI layout subviews.
+nonisolated enum TrailPlaceActionFrames {
+    private static let spacing: CGFloat = 8
+
+    static func frames(
+        width proposed: CGFloat?,
+        ideal: [CGSize],
+        captionLineHeight: CGFloat,
+        measure: (CGFloat) -> [CGSize]
+    ) -> [CGRect] {
+        guard !ideal.isEmpty else { return [] }
         let available = proposed.flatMap { $0.isFinite ? $0 : nil }
-        let width = max(0, available ?? (ideal.map(\.width).reduce(0, +) + spacing * CGFloat(subviews.count - 1)))
-        var columns = subviews.count
+        let width = max(0, available ?? (ideal.map(\.width).reduce(0, +) + spacing * CGFloat(ideal.count - 1)))
+        var columns = ideal.count
         var sizes: [CGSize] = []
         while true {
             let columnWidth = max(0, (width - spacing * CGFloat(columns - 1)) / CGFloat(columns))
-            sizes = subviews.map { $0.sizeThatFits(ProposedViewSize(width: columnWidth, height: nil)) }
+            sizes = measure(columnWidth)
             if columns == 1 || zip(sizes, ideal).allSatisfy({ $0.height <= $1.height + captionLineHeight + 1 }) {
                 break
             }
@@ -57,8 +76,8 @@ private struct TrailPlaceActionLayout: Layout {
         let columnWidth = max(0, (width - spacing * CGFloat(columns - 1)) / CGFloat(columns))
         var result: [CGRect] = []
         var top: CGFloat = 0
-        for start in stride(from: 0, to: subviews.count, by: columns) {
-            let end = min(start + columns, subviews.count)
+        for start in stride(from: 0, to: ideal.count, by: columns) {
+            let end = min(start + columns, ideal.count)
             let height = sizes[start..<end].map(\.height).max() ?? 0
             for index in start..<end {
                 result.append(CGRect(

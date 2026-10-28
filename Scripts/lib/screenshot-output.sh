@@ -4,14 +4,31 @@
 # an arbitrary --output may also hold the hiker's photographs. Resolve paths
 # before preparation, but remove old frames only after build and install.
 
+# Resolve a missing destination through its existing parents without creating
+# anything. In particular, refusing a path inside a synchronized source folder
+# must not leave an empty resource directory behind.
+screenshot_canonical_directory() {
+    local directory="$1" parent leaf
+    if [[ -d "$directory" ]]; then (cd "$directory" && pwd -P); return; fi
+    if [[ -e "$directory" || -L "$directory" ]]; then return 2; fi
+    leaf="$(basename "$directory")"
+    parent="$(screenshot_canonical_directory "$(dirname "$directory")")" || return 2
+    case "$leaf" in
+        .) directory="$parent" ;;
+        ..) directory="$(dirname "$parent")" ;;
+        *) directory="${parent%/}/$leaf" ;;
+    esac
+    if [[ -d "$directory" ]]; then (cd "$directory" && pwd -P)
+    else printf '%s\n' "$directory"; fi
+}
+
 screenshot_output_directory() {
     local root="$1" device="$2" locale="$3" layout="$4" appearance="$5" checkout
     if [[ -L "$root" ]]; then
         echo "The screenshot output must be a directory, not a symbolic link: $root" >&2
         return 2
     fi
-    mkdir -p "$root" || return 2
-    root="$(cd "$root" && pwd -P)" || return 2
+    root="$(screenshot_canonical_directory "$root")" || return 2
     # macOS preserves a leading // in pwd; it still addresses filesystem root.
     while [[ "$root" == //* ]]; do root="${root#/}"; done
     checkout="$(cd "$repository_root" && pwd -P)" || return 2
@@ -48,7 +65,7 @@ screenshot_output_directory() {
 screenshot_prepare_output() {
     local root="$1" directory="$2" clean="$3" set candidate frame shot
     shift 3
-    root="$(cd "$root" && pwd -P)" || return 2
+    root="$(screenshot_canonical_directory "$root")" || return 2
     while [[ "$root" == //* ]]; do root="${root#/}"; done
     set="$directory"
     case "${directory##*/}" in light|dark) set="${directory%/*}" ;; esac
@@ -57,6 +74,7 @@ screenshot_prepare_output() {
         echo "Refusing an unsafe screenshot result directory: $directory" >&2
         return 2
     fi
+    mkdir -p "$root" || return 1
     if [[ "$clean" == true ]]; then
         for candidate in "$root"/*; do
             if [[ -d "$candidate" && ! -L "$candidate" \

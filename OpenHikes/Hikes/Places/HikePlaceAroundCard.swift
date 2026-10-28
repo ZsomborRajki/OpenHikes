@@ -55,6 +55,7 @@ struct HikePlaceAroundCard: View {
                 HikePlaceAroundCardContent(
                     content: content,
                     hike: hike,
+                    allowsScrolling: detent == .large,
                     onAdd: onAdd,
                     onOpenPhoto: onOpenPhoto,
                     onClose: { search.selection = nil }
@@ -98,6 +99,7 @@ struct HikePlaceAroundCard: View {
 private struct HikePlaceAroundCardContent: View {
     let content: HikePlaceAroundCard.Content
     let hike: Hike
+    let allowsScrolling: Bool
     let onAdd: (UUID) -> Void
     let onOpenPhoto: (HikePhoto) -> Void
     let onClose: () -> Void
@@ -114,32 +116,30 @@ private struct HikePlaceAroundCardContent: View {
 
     var body: some View {
         let card = HikePlaceCard(row: content.row)
-        VStack(alignment: .leading, spacing: StatCardMetrics.sectionSpacing) {
-            header(card)
-            actions(title: card.title)
-            if content.isOnHike {
-                if !card.note.isEmpty {
-                    Text(card.note)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+        PlaceCardScroll(selection: place.id, allowsScrolling: allowsScrolling) {
+            VStack(alignment: .leading, spacing: StatCardMetrics.sectionSpacing) {
+                header(card)
+                actions(title: card.title)
+                if content.isOnHike {
+                    if !card.note.isEmpty {
+                        Text(card.note)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    HikePlacePhotoStrip(photos: hike.photos(ofPlace: place.id), store: .shared, onOpen: onOpenPhoto)
+                    if filing > 0 {
+                        ProgressView()
+                            .accessibilityLabel(Text("Adding photos"))
+                    }
                 }
-                HikePlacePhotoStrip(photos: hike.photos(ofPlace: place.id), store: .shared, onOpen: onOpenPhoto)
-                if filing > 0 {
-                    ProgressView()
-                        .accessibilityLabel(Text("Adding photos"))
-                }
+                TrailPlaceFactsAndLocation(
+                    facts: card.facts,
+                    coordinate: card.coordinate,
+                    openStreetMapURL: card.openStreetMapURL
+                )
             }
-            TrailPlaceFactsAndLocation(
-                facts: card.facts,
-                coordinate: card.coordinate,
-                openStreetMapURL: card.openStreetMapURL
-            )
+            .padding(.horizontal)
+            .padding(.top, Self.topPadding)
         }
-        .padding(.horizontal)
-        .padding(.top, Self.topPadding)
-        // Hung from the top of whatever the detent offers, for the reason the
-        // maker's card gives: without the `minHeight` a card taller than the
-        // smallest detent was centred, its title above the top edge.
-        .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
         .photoCapturePickers($capture, onCaptured: file, onPicked: file)
         .photoCaptureAlerts($capture)
