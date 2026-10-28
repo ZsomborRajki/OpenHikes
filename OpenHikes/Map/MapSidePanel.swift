@@ -5,9 +5,10 @@
 //  The wide half of the map's primary surface: the sheet's own contents, drawn
 //  down the leading edge with the map beside them instead of underneath.
 //
-//  `.presentationDetents` are not honoured at a compact height. iPhone
-//  landscape is compact height, so the system ignores them and presents the
-//  sheet full-screen — and because `OpenHikesView` keeps that sheet up
+//  `.presentationDetents` are not honoured at a compact height by a sheet left
+//  to adapt, as `MapSheet` is; ``SheetLayout`` has the sheets that opt out.
+//  iPhone landscape is compact height, so the system ignores them and presents
+//  the sheet full-screen — and because `OpenHikesView` keeps that sheet up
 //  permanently and puts it back whenever it is dismissed, full-screen there
 //  does not mean "a taller sheet" but "no map, and no way back to one". A phone
 //  taken out of a pocket at a junction rotates on its own; a hiker who cannot

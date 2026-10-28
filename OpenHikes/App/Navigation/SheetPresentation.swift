@@ -44,14 +44,21 @@ import SwiftUI
 
 /// The shape the sheet's contents are drawn in.
 ///
-/// Not a cosmetic choice at a compact height: `.presentationDetents` are not
-/// honoured there, and iPhone landscape is compact *height* — so the system
-/// presents the sheet full-screen. For an app that keeps this sheet up
-/// permanently and re-presents it when it is dismissed, that is not a taller
-/// sheet but the whole UI, with the map behind it and no way back. Landscape
-/// gets a side panel instead, and so does any window wider than tall with
-/// room for the map beside it — see ``init(windowSize:isCompactHeight:)``,
-/// which is the whole rule.
+/// Not a cosmetic choice at a compact height: a sheet left to adapt, as this
+/// one is, has its `.presentationDetents` ignored there, and iPhone landscape
+/// is compact *height* — so the system presents the sheet full-screen. For an
+/// app that keeps this sheet up permanently and re-presents it when it is
+/// dismissed, that is not a taller sheet but the whole UI, with the map behind
+/// it and no way back. Landscape gets a side panel instead, and so does any
+/// window wider than tall with room for the map beside it — see
+/// ``init(windowSize:isCompactHeight:)``, which is the whole rule.
+///
+/// A sheet that opts out with `.presentationCompactAdaptation(.none)` stays a
+/// sheet there and keeps every detent but `.medium`, which is inactive at a
+/// compact height — measured on iOS 18.6 and 27. The place cards over a map,
+/// ``TrailPlaceSheet`` and ``HikePlaceAroundCard``, are such sheets, and
+/// `OrientationUITests.testALandscapePlaceCardScrollsToItsLastRow` holds one
+/// of them to it.
 enum SheetLayout {
     /// Taller than wide: an Apple Maps-style detented sheet over the map.
     case bottomSheet
