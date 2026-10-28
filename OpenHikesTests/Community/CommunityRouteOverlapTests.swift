@@ -29,17 +29,19 @@ struct CommunityRouteOverlapTests {
         meters: Double,
         count: Int,
         eastOffset: Double = 0,
-        startingAt startMeters: Double = 0
+        startingAt startMeters: Double = 0,
+        latitude baseLatitude: Double = 47.6,
+        longitude baseLongitude: Double = 12.87
     ) -> [RouteCoordinate] {
-        let baseLatitude = 47.6
-        let baseLongitude = 12.87
         let metersPerDegreeLatitude = 111_320.0
         let metersPerDegreeLongitude = metersPerDegreeLatitude * cos(baseLatitude * .pi / 180)
         return (0..<count).map { step in
             let along = startMeters + meters * Double(step) / Double(max(count - 1, 1))
             return RouteCoordinate(
                 latitude: baseLatitude + along / metersPerDegreeLatitude,
-                longitude: baseLongitude + eastOffset / metersPerDegreeLongitude
+                longitude: RouteGeometry.normalizedLongitude(
+                    baseLongitude + eastOffset / metersPerDegreeLongitude
+                )
             )
         }
     }
@@ -158,5 +160,144 @@ struct CommunityRouteOverlapTests {
 
         #expect(firstHalfThenAway.count > CommunityRouteOverlap.sampleLimit)
         #expect(!CommunityRouteOverlap.isDuplicate(firstHalfThenAway, of: published))
+    }
+
+    // MARK: - The bounding-box rejection, away from the equator and the date line
+
+    /// The case the issue was found with: two parallel lines at 60° north,
+    /// 0.0005° of longitude apart — about 28 m there, inside the tolerance. A
+    /// box padded by the equator's degree of longitude was too narrow by half
+    /// and refused the pair before the grid could measure it.
+    @Test("parallel lines a few tens of metres apart at 60° north are one path")
+    func highLatitudeDegreeApart() {
+        let first = (0..<120).map { step in
+            RouteCoordinate(latitude: 60 + Double(step) * 0.0002, longitude: 10)
+        }
+        let second = first.map { RouteCoordinate(latitude: $0.latitude, longitude: 10.0005) }
+
+        #expect(CommunityRouteOverlap.coverage(of: first, by: second) == 1)
+        #expect(CommunityRouteOverlap.isDuplicate(first, of: second))
+    }
+
+    /// Just inside the tolerance and just outside it, at every latitude from
+    /// the equator to the Arctic: the rejection may only ever pass a pair on
+    /// to the grid, never decide the answer, so a line 38 m off is covered
+    /// wherever it is walked and one 42 m off is not.
+    @Test(
+        "the tolerance is the same number of metres at every latitude",
+        arguments: [0.0, 1.0, 47.0, 60.0, 80.0, -60.0]
+    )
+    func toleranceHoldsAtLatitude(_ latitude: Double) {
+        let route = Self.line(meters: 1000, count: 60, latitude: latitude)
+        let inside = Self.line(meters: 1000, count: 60, eastOffset: 38, latitude: latitude)
+        let outside = Self.line(meters: 1000, count: 60, eastOffset: 42, latitude: latitude)
+
+        #expect(CommunityRouteOverlap.coverage(of: route, by: inside) == 1)
+        #expect(CommunityRouteOverlap.coverage(of: inside, by: route) == 1)
+        #expect(CommunityRouteOverlap.coverage(of: route, by: outside) == 0)
+        #expect(CommunityRouteOverlap.coverage(of: outside, by: route) == 0)
+    }
+
+    /// Two lines either side of the antimeridian, neither crossing it: their
+    /// boxes sit at opposite ends of the longitude range and are a few metres
+    /// apart on the ground.
+    @Test(
+        "lines either side of the antimeridian are measured the short way round",
+        arguments: [0.0, 60.0, -45.0]
+    )
+    func eitherSideOfTheAntimeridian(_ latitude: Double) {
+        let west = Self.line(meters: 1000, count: 60, eastOffset: -19, latitude: latitude, longitude: 180)
+        let east = Self.line(meters: 1000, count: 60, eastOffset: 19, latitude: latitude, longitude: 180)
+        let farEast = Self.line(meters: 1000, count: 60, eastOffset: 23, latitude: latitude, longitude: 180)
+
+        #expect(west.allSatisfy { $0.longitude > 179 })
+        #expect(east.allSatisfy { $0.longitude < -179 })
+        #expect(CommunityRouteOverlap.coverage(of: west, by: east) == 1)
+        #expect(CommunityRouteOverlap.coverage(of: east, by: west) == 1)
+        #expect(CommunityRouteOverlap.coverage(of: west, by: farEast) == 0)
+        #expect(CommunityRouteOverlap.coverage(of: farEast, by: west) == 0)
+    }
+
+    /// A sparse route whose one leg crosses the antimeridian is densified the
+    /// short way across it, onto ground outside the box its own points make.
+    /// A walk along that stretch has to reach the grid all the same.
+    @Test("a leg across the antimeridian covers the ground between its ends")
+    func legAcrossTheAntimeridian() {
+        let sparse = [
+            RouteCoordinate(latitude: 0, longitude: 179.99),
+            RouteCoordinate(latitude: 0, longitude: -179.99),
+        ]
+        let along = (0...40).map { step in
+            RouteCoordinate(latitude: 0, longitude: 179.995 + Double(step) * 0.0001)
+        }
+        let beside = along.map { RouteCoordinate(latitude: 0.0005, longitude: $0.longitude) }
+
+        #expect(CommunityRouteOverlap.coverage(of: along, by: sparse) == 1)
+        #expect(CommunityRouteOverlap.coverage(of: beside, by: sparse) == 0)
+    }
+
+    // MARK: - A pause is not trail
+
+    /// Two walked pieces with a four-kilometre transfer between them, a drive
+    /// or a lift the recording was paused across (see *The app* in AGENTS.md).
+    private static let pausedTransfer = [
+        RouteCoordinate(latitude: 47, longitude: 19),
+        RouteCoordinate(latitude: 47.01, longitude: 19),
+        RouteCoordinate(latitude: 47.05, longitude: 19, boundary: .paused),
+        RouteCoordinate(latitude: 47.06, longitude: 19),
+    ]
+
+    /// A straight line north along longitude 19, `count` points from one
+    /// latitude to another.
+    private static func meridian(from start: Double, to end: Double, count: Int = 60) -> [RouteCoordinate] {
+        (0..<count).map { step in
+            RouteCoordinate(
+                latitude: start + (end - start) * Double(step) / Double(count - 1),
+                longitude: 19
+            )
+        }
+    }
+
+    /// The ground a recording was paused across was never walked, so a hike
+    /// along it is a different walk, however neatly it fits between the two
+    /// pieces. Densifying the paused leg indexed it as trail and refused this.
+    @Test("a walk through another hike's paused transfer is not a retread of it")
+    func pausedTransferIsNotTrail() {
+        let between = Self.meridian(from: 47.02, to: 47.04)
+
+        #expect(CommunityRouteOverlap.coverage(of: between, by: Self.pausedTransfer) == 0)
+        #expect(!CommunityRouteOverlap.isDuplicate(between, of: Self.pausedTransfer))
+    }
+
+    /// The control: each walked piece is still trail, densified as before, so
+    /// a walk along either one is a retread.
+    @Test("a walk along either walked piece is still a retread", arguments: [47.0, 47.05])
+    func walkedPieceIsTrail(_ start: Double) {
+        let along = Self.meridian(from: start, to: start + 0.01)
+
+        #expect(CommunityRouteOverlap.coverage(of: along, by: Self.pausedTransfer) == 1)
+        #expect(CommunityRouteOverlap.isDuplicate(along, of: Self.pausedTransfer))
+    }
+
+    /// A fix with a pause on both sides — a GPX `<trkseg>` of one point — is
+    /// still somewhere the hiker was, so it stays in the index; only the legs
+    /// to and from it are left out.
+    @Test("a lone fix between two pauses is kept, and the legs to it are not")
+    func loneFixIsKept() {
+        let route = [
+            RouteCoordinate(latitude: 47, longitude: 19),
+            RouteCoordinate(latitude: 47.01, longitude: 19),
+            RouteCoordinate(latitude: 47.03, longitude: 19, boundary: .paused),
+            RouteCoordinate(latitude: 47.05, longitude: 19, boundary: .paused),
+            RouteCoordinate(latitude: 47.06, longitude: 19),
+        ]
+        let atFix = [RouteCoordinate(latitude: 47.03, longitude: 19)]
+        let onPausedLegs = [
+            RouteCoordinate(latitude: 47.02, longitude: 19),
+            RouteCoordinate(latitude: 47.04, longitude: 19),
+        ]
+
+        #expect(CommunityRouteOverlap.coverage(of: atFix, by: route) == 1)
+        #expect(CommunityRouteOverlap.coverage(of: onPausedLegs, by: route) == 0)
     }
 }

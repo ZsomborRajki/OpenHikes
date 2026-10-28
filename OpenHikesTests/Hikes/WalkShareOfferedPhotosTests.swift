@@ -34,6 +34,28 @@ struct WalkShareOfferedPhotosTests {
         #expect(offered.map(\.id) == [during.id, earlier.id])
     }
 
+    @Test("each group keeps the hike's own order")
+    func groupsKeepTheirOrder() {
+        let firstOther = HikePhoto(capturedAt: Self.start.addingTimeInterval(-7200))
+        let firstWalked = HikePhoto(capturedAt: Self.start.addingTimeInterval(1800))
+        let secondOther = HikePhoto(capturedAt: Self.end.addingTimeInterval(600))
+        let secondWalked = HikePhoto(capturedAt: Self.start.addingTimeInterval(300))
+        let lastWalked = HikePhoto(capturedAt: Self.start)
+        let lastOther = HikePhoto(capturedAt: Self.start.addingTimeInterval(-60))
+        let place = HikePhoto(capturedAt: Self.start.addingTimeInterval(900), isPlaceOnly: true)
+
+        let offered = WalkShareFlow.offered(
+            [firstOther, firstWalked, place, secondOther, secondWalked, lastWalked, lastOther],
+            walkedFrom: Self.start,
+            to: Self.end
+        )
+
+        #expect(offered.map(\.id) == [
+            firstWalked.id, secondWalked.id, lastWalked.id,
+            firstOther.id, secondOther.id, lastOther.id,
+        ])
+    }
+
     @Test("a place-only row and a Commons copy are not offered")
     func neitherPlacesNorLicensedCopies() {
         let own = HikePhoto(capturedAt: Self.start.addingTimeInterval(600))

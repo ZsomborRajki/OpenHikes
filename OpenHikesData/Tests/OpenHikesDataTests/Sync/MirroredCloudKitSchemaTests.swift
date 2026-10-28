@@ -71,7 +71,9 @@ struct MirroredCloudKitSchemaTests {
     /// ``TrailDraftRecord`` is here for a related reason of its own: a
     /// half-drawn trail is one device's unfinished work, and mirroring it
     /// would put a line nobody has finished into the hiker's other devices and
-    /// then resolve two people drawing at once last-writer-wins. The list is
+    /// then resolve two people drawing at once last-writer-wins.
+    /// ``DeletedWatchWalk`` names a session on a watch paired with this phone,
+    /// which no other device will be offered. The list is
     /// spelled out rather than counted so that *moving* a model into the
     /// mirrored store fails here rather than on somebody's second phone.
     @Test
@@ -79,7 +81,7 @@ struct MirroredCloudKitSchemaTests {
         let mirroredNames = Set(mirrored.entities.map(\.name))
         let sidecarNames = Set(sidecar.entities.map(\.name))
 
-        #expect(sidecarNames == ["HikeLocalState", "TrailDraftRecord"])
+        #expect(sidecarNames == ["DeletedWatchWalk", "HikeLocalState", "TrailDraftRecord"])
         #expect(mirroredNames.isDisjoint(with: sidecarNames))
     }
 

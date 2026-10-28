@@ -117,21 +117,8 @@ nonisolated enum CommonsAreaPhotos {
         let nearer = { (lhs: CommonsPhotoCandidate, rhs: CommonsPhotoCandidate) in
             nearerTheMiddle(lhs, rhs, of: area)
         }
-        var taken: [String: Int] = [:]
-        var preferred: [CommonsPhotoCandidate] = []
-        var heldBack: [CommonsPhotoCandidate] = []
-        for photo in candidates.sorted(by: nearer) {
-            guard let author = authors[photo.pageID] else {
-                preferred.append(photo)
-                continue
-            }
-            let count = taken[author, default: 0]
-            if count < CommonsTrailPhotos.perAuthorLimit {
-                taken[author] = count + 1
-                preferred.append(photo)
-            } else {
-                heldBack.append(photo)
-            }
+        let (preferred, heldBack) = CommonsAuthorBudget.partition(candidates.sorted(by: nearer)) { photo in
+            authors[photo.pageID]
         }
         let first = spread(preferred, in: area, limit: limit)
         guard first.count < limit else { return first }
@@ -141,8 +128,8 @@ nonisolated enum CommonsAreaPhotos {
             .filter { !covered.contains($0.key) }
             .values
             .compactMap { $0.min(by: nearer) }
-            .sorted(by: nearer)
-        return (first + gaps.prefix(limit - first.count)).sorted(by: nearer)
+            .min(count: limit - first.count, sortedBy: nearer)
+        return (first + gaps).sorted(by: nearer)
     }
 
     // MARK: - The grid

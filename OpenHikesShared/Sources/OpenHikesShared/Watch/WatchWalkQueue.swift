@@ -92,10 +92,11 @@ public actor WatchWalkQueue {
     /// Reads one walk, for sending.
     ///
     /// `nil` for a walk not on the queue, or one that cannot be read. A file
-    /// that reads but does not decode never will, so it stops counting for
-    /// the rest of this process — counted, it would be a hike waiting for an
-    /// iPhone forever — but stays on disk. One that cannot be read at all is
-    /// kept, because that can pass.
+    /// that reads but does not decode, or is in a format this build does not
+    /// read, never will in this build, so it stops counting for the rest of
+    /// this process — counted, it would be a hike waiting for an iPhone
+    /// forever — but stays on disk, for a build that can read it. One that
+    /// cannot be read at all is kept, because that can pass.
     public func walk(_ sessionID: UUID) -> WatchRecordedWalk? {
         guard let entry = index()[sessionID], !entry.isUndecodable else { return nil }
         let url = url(of: entry.fileName)
@@ -310,9 +311,13 @@ public actor WatchWalkQueue {
         }
     }
 
+    /// Held to the version check the link applies, so a walk this build
+    /// would refuse from the phone's side is never offered to it: a file in
+    /// another format — left by an older or newer build of the watch app —
+    /// reads as one that does not decode, and stays on disk with it.
     private static func decode(_ data: Data, named fileName: String) -> WatchRecordedWalk? {
-        do {
-            return try JSONDecoder().decode(WatchRecordedWalk.self, from: data)
+        do throws(SharedPayloadReadFailure) {
+            return try WatchRecordedWalk.decodeCurrentFormat(from: data)
         } catch {
             // Said rather than swallowed: a file that can never be decoded is
             // a walk that will never reach the phone, and a cost that
@@ -320,7 +325,7 @@ public actor WatchWalkQueue {
             logger.error(
                 """
                 \(fileName, privacy: .public) could not be read: \
-                \(error.localizedDescription, privacy: .public)
+                \(String(describing: error), privacy: .public)
                 """
             )
             return nil

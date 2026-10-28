@@ -210,6 +210,46 @@ final class WatchRecordingMirrorTests {
         #expect(outcome.recording.state == .idle)
     }
 
+    @Test("a lost Stop reply is corrected by the next publisher tick")
+    func aLostStopReplyIsCorrected() async throws {
+        let published = Published()
+        let coordinator = makeCoordinator()
+        let mirror = makeMirror(publishing: published, coordinator: coordinator)
+        _ = try await coordinator.startRecording()
+        walk()
+        await mirror.publishCurrentState()
+        let command = WatchRecordingCommand(action: .stop)
+        _ = await mirror.perform(command)
+
+        let answer = WatchCommandAnswer.undelivered(commandID: command.id, reason: "Reply lost")
+        #expect(answer.reading(holding: published.readings.last)?.state == .recording)
+        await mirror.publishCurrentState()
+        await mirror.publishCurrentState()
+
+        #expect(published.readings.count == 2)
+        #expect(published.readings.last?.state == .idle)
+    }
+
+    @Test("commands between ticks still earn a correction when the old push was already idle")
+    func commandsBetweenTicksStillEarnACorrection() async {
+        let published = Published()
+        let coordinator = makeCoordinator()
+        let mirror = makeMirror(publishing: published, coordinator: coordinator)
+        await mirror.publishCurrentState()
+        let started = await mirror.perform(WatchRecordingCommand(action: .start))
+        walk()
+        let command = WatchRecordingCommand(action: .stop)
+        _ = await mirror.perform(command)
+
+        let answer = WatchCommandAnswer.undelivered(commandID: command.id, reason: "Reply lost")
+        #expect(answer.reading(holding: started.recording)?.state == .recording)
+        await mirror.publishCurrentState()
+        await mirror.publishCurrentState()
+
+        #expect(published.readings.count == 2)
+        #expect(published.readings.last?.state == .idle)
+    }
+
     // MARK: - Harness
 
     /// Collects what the mirror sent, in order.

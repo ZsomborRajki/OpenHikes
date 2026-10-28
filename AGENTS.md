@@ -436,9 +436,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
     `Hikes/Maker/`), never into `Models/`, `Views/` or `Services/`.
   - A folder's root holds what all of its subfolders use.
   - Tests mirror the same folders.
-- **`OpenHikesData` is what a hike *is*.** This package holds the five
+- **`OpenHikesData` is what a hike *is*.** This package holds the six
   `@Model` types (`Hike`, `HikeWalk`, `TrailPoint`, `HikeLocalState`,
-  `TrailDraftRecord`), `OpenHikesSchema`, `RouteProfile`, their stored value
+  `TrailDraftRecord`, `DeletedWatchWalk`), `OpenHikesSchema`, `RouteProfile`, their stored value
   types and the framework-free logic over them.
   - It defaults to `MainActor`, like the app.
   - An app extension on one of its types takes the app's isolation, so a pure
@@ -636,10 +636,11 @@ a change to recording, the map, the sheet or the render path; the PR template,
 - **Two stores, one container.**
   - `Hike`, `HikeWalk` and `TrailPoint` mirror to the hiker's private CloudKit
     database.
-  - `HikeLocalState` and `TrailDraftRecord` live in an unmirrored configuration.
-    They hold everything about *this* device: tile claims, offline downloads,
-    the walk in progress, recording ownership, a drawing in progress and an
-    unfinished community upload.
+  - `HikeLocalState`, `TrailDraftRecord` and `DeletedWatchWalk` live in an
+    unmirrored configuration. They hold everything about *this* device: tile
+    claims, offline downloads, the walk in progress, recording ownership, a
+    drawing in progress, an unfinished community upload and the watch walks
+    whose hikes were deleted here.
   - The split matters. The tile sweep deletes what no hike claims, so mirrored
     claims would strip another device of its tiles.
 - **Build containers only through `ModelContainer.openHikes(…)`.**
@@ -1302,6 +1303,8 @@ this before changing `OpenHikesWatch/`, `OpenHikes/Watch/` or the shared
 - **A recorded walk is written before it is sent.**
   - `WatchStore` queues it on disk and drops it only on a `WatchWalkReceipt`.
   - The phone's import is idempotent on `HikeLocalState.watchSessionID`.
+    Deleting the hike leaves a `DeletedWatchWalk` in the same save, so a
+    retry still earns its receipt and does not bring the hike back.
   - A failed write leaves the walk `.unsaved` (`WatchStoppedWalk`).
   - Until Stop, `WatchRecorder` journals fixes, pauses and resumes. A crash
     resumes the workout session, or offers Continue, Save or Discard; the

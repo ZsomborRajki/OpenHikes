@@ -28,13 +28,27 @@
 //  this is a check that runs while a sheet is opening.
 //
 //  The old route is *densified* before it is indexed — interpolated along each
-//  leg so no two indexed points are further apart than half the tolerance.
+//  walked leg so no two indexed points are further apart than half the
+//  tolerance.
 //  Without that, a GPX recorded with a point every 200 m would report almost
 //  no overlap with a walk straight down the middle of it, because the test is
 //  point-to-point and the points are further apart than the tolerance is wide.
 //  Densifying is cheaper and much simpler to be sure of than point-to-segment
 //  distance, and it fails in the safe direction: it can only ever find *more*
 //  overlap, never less.
+//
+//  ## A pause is not trail
+//
+//  A leg the recording was paused across — a drive or a lift between two
+//  recorded pieces, or the jump between two GPX `<trkseg>`s — is never
+//  densified, because nobody walked it (see ``RouteBoundary``). Interpolated,
+//  it put kilometres of road into the index, and a different hike along that
+//  road was refused as a retread (#1121). The index is built piece by piece
+//  from ``TrailRuns/pieces``, the one reading of a route's pauses, which
+//  keeps every fix — a lone one between two pauses included, since the hiker
+//  was there — and joins only the fixes of one piece. The route being tested
+//  needs no such care: it is sampled at its own fixes, never between them, so
+//  its paused legs contribute nothing to either side of the fraction.
 //
 //  Neither of the two constants is a fact about the world, and both are
 //  argued for where they are declared.
@@ -43,6 +57,7 @@
 import CoreLocation
 import Foundation
 import OpenHikesData
+import OpenHikesShared
 
 nonisolated enum CommunityRouteOverlap {
     /// How far off a line a point may be and still count as on it.
@@ -130,7 +145,9 @@ nonisolated private extension CommunityRouteOverlap {
         )
     }
 
-    /// Local offsets of `route`, densified, bucketed by cell.
+    /// Local offsets of `route`, densified along each piece the pauses leave,
+    /// bucketed by cell. Every fix is indexed and no paused leg is — see the
+    /// file header.
     static func grid(
         of route: [RouteCoordinate],
         origin: CLLocationCoordinate2D
@@ -143,29 +160,31 @@ nonisolated private extension CommunityRouteOverlap {
             count += 1
         }
 
-        var previous: (x: Double, y: Double)?
-        for coordinate in route {
-            guard count < indexLimit else { break }
-            let offset = RouteGeometry.localOffset(from: origin, to: coordinate.clCoordinate)
-            if let previous {
-                // Interpolate the leg. `steps` is how many points it takes for
-                // no two to be more than half a tolerance apart — see the file
-                // header for why the gap rather than the endpoints is what
-                // matters.
-                let span = hypot(offset.x - previous.x, offset.y - previous.y)
-                let steps = Int((span / (toleranceMeters / 2)).rounded(.up))
-                if steps > 1 {
-                    for step in 1..<steps where count < indexLimit {
-                        let fraction = Double(step) / Double(steps)
-                        add((
-                            x: previous.x + (offset.x - previous.x) * fraction,
-                            y: previous.y + (offset.y - previous.y) * fraction
-                        ))
+        for piece in route.trailRuns.pieces {
+            var previous: (x: Double, y: Double)?
+            for coordinate in route[piece] {
+                guard count < indexLimit else { return index }
+                let offset = RouteGeometry.localOffset(from: origin, to: coordinate.clCoordinate)
+                if let previous {
+                    // Interpolate the leg. `steps` is how many points it takes
+                    // for no two to be more than half a tolerance apart — see
+                    // the file header for why the gap rather than the
+                    // endpoints is what matters.
+                    let span = hypot(offset.x - previous.x, offset.y - previous.y)
+                    let steps = Int((span / (toleranceMeters / 2)).rounded(.up))
+                    if steps > 1 {
+                        for step in 1..<steps where count < indexLimit {
+                            let fraction = Double(step) / Double(steps)
+                            add((
+                                x: previous.x + (offset.x - previous.x) * fraction,
+                                y: previous.y + (offset.y - previous.y) * fraction
+                            ))
+                        }
                     }
                 }
+                add(offset)
+                previous = offset
             }
-            add(offset)
-            previous = offset
         }
         return index
     }
@@ -204,25 +223,57 @@ nonisolated private extension CommunityRouteOverlap {
 
     /// Whether the two bounding boxes come within a tolerance of each other.
     ///
-    /// In degrees rather than metres, and generously: a tolerance is converted
-    /// through ``RouteGeometry/metersPerDegreeLatitude``, which is the figure
-    /// at the equator where a degree of longitude is longest, so the padding is
-    /// never too small anywhere. Over-padding costs a grid pass that finds
-    /// nothing; under-padding would discard a real duplicate.
+    /// The rejection may pass a pair on to the grid but never decide the
+    /// answer, so it pads by the tolerance as the grid measures it: in the
+    /// metres ``RouteGeometry/localOffset(from:to:)`` counts, and east–west at
+    /// the most poleward latitude either box reaches. A degree of longitude
+    /// shortens toward the poles — at 60° it is half the equator's — and the
+    /// grid measures longitude at the first point of `other`, which lies
+    /// inside its box, so no pair it compares is held to a shorter degree
+    /// than that one. Over-padding costs a grid pass that finds nothing;
+    /// under-padding would discard a real duplicate.
     ///
-    /// A route crossing the antimeridian has a box spanning the globe and this
-    /// says the two meet, which sends the pair to the grid — where
-    /// ``RouteGeometry/localOffset(from:to:)`` does handle the wrap. The
-    /// rejection is an optimisation, so being wrong here costs time and never
-    /// an answer.
+    /// Longitude is a circle, so the gap between two boxes is measured both
+    /// ways round and the shorter one counts: two walks either side of the
+    /// antimeridian are metres apart, not a world. A route with a leg across
+    /// it — consecutive points more than half the world apart, which only the
+    /// short way across explains — is densified onto ground outside the box
+    /// its own points make, so it meets everything east–west and the grid,
+    /// which handles the wrap, decides.
     static func boxesMeet(_ route: [RouteCoordinate], _ other: [RouteCoordinate]) -> Bool {
-        let padding = toleranceMeters / RouteGeometry.metersPerDegreeLatitude
         let first = box(of: route)
         let second = box(of: other)
-        return first.minLatitude - padding <= second.maxLatitude
-            && second.minLatitude - padding <= first.maxLatitude
-            && first.minLongitude - padding <= second.maxLongitude
-            && second.minLongitude - padding <= first.maxLongitude
+
+        let latitudePadding = toleranceMeters / gridMetersPerDegree(latitudeAt: 0)
+        guard first.minLatitude - latitudePadding <= second.maxLatitude,
+              second.minLatitude - latitudePadding <= first.maxLatitude
+        else { return false }
+
+        guard !first.crossesAntimeridian, !second.crossesAntimeridian else { return true }
+        let poleward = [first.minLatitude, first.maxLatitude, second.minLatitude, second.maxLatitude]
+            .map { min(abs($0), 90) }
+            .max() ?? 90
+        let longitudePadding = toleranceMeters / gridMetersPerDegree(longitudeAt: poleward)
+        let directGap = max(0, second.minLongitude - first.maxLongitude, first.minLongitude - second.maxLongitude)
+        let wrappedGap = 360 - max(first.maxLongitude - second.minLongitude, second.maxLongitude - first.minLongitude)
+        return min(directGap, wrappedGap) <= longitudePadding
+    }
+
+    /// Metres in a degree of latitude, as the grid counts them.
+    static func gridMetersPerDegree(latitudeAt latitude: Double) -> Double {
+        RouteGeometry.localOffset(
+            from: CLLocationCoordinate2D(latitude: latitude, longitude: 0),
+            to: CLLocationCoordinate2D(latitude: latitude + 1, longitude: 0)
+        ).y
+    }
+
+    /// Metres in a degree of longitude at `latitude`, as the grid counts them.
+    /// Next to nothing at a pole, which pads the box the whole way round.
+    static func gridMetersPerDegree(longitudeAt latitude: Double) -> Double {
+        RouteGeometry.localOffset(
+            from: CLLocationCoordinate2D(latitude: latitude, longitude: 0),
+            to: CLLocationCoordinate2D(latitude: latitude, longitude: 1)
+        ).x
     }
 
     struct Box {
@@ -230,6 +281,7 @@ nonisolated private extension CommunityRouteOverlap {
         let maxLatitude: Double
         let minLongitude: Double
         let maxLongitude: Double
+        let crossesAntimeridian: Bool
     }
 
     static func box(of route: [RouteCoordinate]) -> Box {
@@ -237,17 +289,24 @@ nonisolated private extension CommunityRouteOverlap {
         var maxLatitude = -Double.greatestFiniteMagnitude
         var minLongitude = Double.greatestFiniteMagnitude
         var maxLongitude = -Double.greatestFiniteMagnitude
+        var crossesAntimeridian = false
+        var previousLongitude: Double?
         for point in route {
             minLatitude = min(minLatitude, point.latitude)
             maxLatitude = max(maxLatitude, point.latitude)
             minLongitude = min(minLongitude, point.longitude)
             maxLongitude = max(maxLongitude, point.longitude)
+            if let previousLongitude, abs(point.longitude - previousLongitude) > 180 {
+                crossesAntimeridian = true
+            }
+            previousLongitude = point.longitude
         }
         return Box(
             minLatitude: minLatitude,
             maxLatitude: maxLatitude,
             minLongitude: minLongitude,
-            maxLongitude: maxLongitude
+            maxLongitude: maxLongitude,
+            crossesAntimeridian: crossesAntimeridian
         )
     }
 }

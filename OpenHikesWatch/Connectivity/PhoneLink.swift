@@ -52,9 +52,10 @@ import WatchConnectivity
 
 /// What the link hands back to the model, already decoded.
 enum PhoneDelivery: Sendable {
-    /// The phone's answer to a button, carrying the state that resulted and
-    /// the refusal sentence if there was one.
-    case commandOutcome(WatchCommandOutcome)
+    /// The end of a button's wait: the phone's answer, carrying the state
+    /// that resulted and the refusal sentence if there was one, or the
+    /// watch's own failure to get an answer, which carries no state.
+    case commandAnswer(WatchCommandAnswer)
     case library(WatchLibraryDigest)
     /// What the phone's own recorder is doing, pushed or answered.
     case phoneRecording(WatchPhoneRecording)
@@ -268,34 +269,25 @@ final class PhoneLink: NSObject {
                 onMainActor { self?.deliverRefusal(of: command, saying: "Your iPhone couldn’t answer that.") }
                 return
             }
-            onMainActor { self?.onDelivery?(.commandOutcome(outcome)) }
+            onMainActor { self?.onDelivery?(.commandAnswer(.answered(outcome))) }
         } errorHandler: { [weak self] error in
             Self.logger.debug("A command failed: \(error.localizedDescription, privacy: .public)")
             onMainActor { self?.deliverRefusal(of: command, saying: "That didn’t reach your iPhone.") }
         }
     }
 
-    /// Answers a command the watch could not send, in the shape the phone
-    /// would have answered in.
+    /// Ends the wait for a command the watch got no answer to.
     ///
     /// One path out for every failure, so the screen has exactly one thing to
-    /// handle: an outcome always arrives, and it always carries a state.
-    /// The reason is a resource rather than a `String`, so the four written
-    /// in this file reach the watch's String Catalog (#1028). The phone's own
-    /// refusals arrive already worded by the phone.
+    /// handle: an answer always arrives. It carries no state, because the
+    /// watch cannot see the phone and must not claim to know what its
+    /// recorder is doing — an invented idle would hide a hike still running
+    /// there (see `WatchCommandAnswer`). The reason is a resource rather than
+    /// a `String`, so the four written in this file reach the watch's String
+    /// Catalog (#1028). The phone's own refusals arrive already worded by the
+    /// phone.
     private func deliverRefusal(of command: WatchRecordingCommand, saying reason: LocalizedStringResource) {
-        onDelivery?(
-            .commandOutcome(
-                WatchCommandOutcome(
-                    commandID: command.id,
-                    // Idle rather than a guess: the watch cannot see the
-                    // phone, so it must not claim to know what its recorder
-                    // is doing.
-                    recording: .idle(),
-                    refusal: String(localized: reason)
-                )
-            )
-        )
+        onDelivery?(.commandAnswer(.undelivered(commandID: command.id, reason: String(localized: reason))))
     }
 
     /// Sends whatever `build` encodes, or logs why nothing went.
@@ -419,7 +411,7 @@ nonisolated extension PhoneLink: WCSessionDelegate {
                 onMainActor { [weak self] in self?.onDelivery?(.phoneRecording(recording)) }
             case .commandOutcome:
                 let outcome = try WatchLink.commandOutcome(from: message)
-                onMainActor { [weak self] in self?.onDelivery?(.commandOutcome(outcome)) }
+                onMainActor { [weak self] in self?.onDelivery?(.commandAnswer(.answered(outcome))) }
             case .recordingCommand, .recordedWalk, .trailRequest:
                 // The watch's own outgoing kinds. Arriving here means the
                 // phone echoed one back, which nothing does; ignoring it is
