@@ -105,8 +105,8 @@ struct HikeListElevationRevisionTests {
         }
         try Self.expectClimb(100, on: hike)
 
-        // The receiving context now exposes the changed route on the same
-        // row. Neither its identity, list count nor selected sort changes.
+        // A route written through the observing context, on the same row.
+        // Neither its identity, the list count nor the selected sort changes.
         hike.replaceRoute(with: Edit.heights.route)
         try context.save()
         await settleDelegateHop(until: "the same visible trail's new heights to be measured") {
@@ -139,6 +139,26 @@ struct HikeListElevationRevisionTests {
             let hike = try #require(try Self.hike(id, in: context))
             try Self.expectClimb(100, on: hike)
         }
+    }
+
+    @Test("figures published for a line an edit has replaced are measured again")
+    func anOvertakenMeasurementIsCorrected() async throws {
+        let container = try Fixture.modelContainer()
+        let context = container.mainContext
+        context.autosaveEnabled = false
+        let hike = Fixture.hike(in: context, route: Self.originalRoute)
+        try context.save()
+        let measured = await HikeListMetrics.measureElevation(for: [hike.id], in: container)
+        hike.replaceRoute(with: Edit.heights.route)
+        try context.save()
+
+        // Publication reads no route on the main actor, so the overtaken
+        // figures land, stamped with the line they measured.
+        #expect(HikeListMetrics.cacheElevation(measured, in: container))
+        try Self.expectClimb(100, on: hike)
+
+        #expect(await HikeListMetrics.fillElevation(for: [hike.id], in: container))
+        try Self.expectClimb(Edit.heights.climb, on: hike)
     }
 
     @Test("a refused refresh leaves the old identity eligible for a later successful retry")
