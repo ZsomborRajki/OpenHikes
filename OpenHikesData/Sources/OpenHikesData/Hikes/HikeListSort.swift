@@ -4,29 +4,27 @@
 //
 //  The orders a library can be put in, and what each one reads.
 //
-//  Two of these are free and four are not, which is the whole reason this is a
-//  type rather than a closure. Date, name and length are stored on ``Hike``;
-//  how many times a trail has been walked is a relationship to count; and climb
-//  and descent are not stored anywhere at all — ``Hike/routeStatistics`` walks
-//  every point of a route to work them out, and doing that for a whole library
-//  on every redraw is the thing its own documentation warns against. They are
-//  cached instead: see ``HikeListMetrics``.
+//  The orders have different costs, which is why this is a type rather than a
+//  closure. Date, name and length are stored on ``Hike``; how many times a trail
+//  has been walked is a relationship to count; and Hilliest combines derived
+//  climb and descent cached in the device-local ``HikeLocalState``. Deriving
+//  those figures walks every point of a route, so ``HikeListMetrics`` measures
+//  them off the main actor and the sort reads the cache. Route work stays out
+//  of SwiftUI bodies.
 //
 //  A hike whose figure is missing sorts last rather than as zero. Zero is a
 //  claim — a flat walk — and "not worked out yet" is not one.
 //
 //  ## Why the keys are worked out before the sort and not during it
 //
-//  Because three of the four readings are expensive and a sort asks for each of
-//  them *n log n* times. `walkCount` is a SwiftData relationship; climb is
-//  behind a sidecar fetch; and a locale-aware `compare` allocates on every
-//  call. Sorting a two-hundred-hike library by name that way is some sixteen
-//  hundred locale comparisons on the main actor, inside a body pass, every
-//  time the list is drawn.
+//  Reading a key can fault `walkCount`'s SwiftData relationship or the elevation
+//  sidecar, and names need locale-aware folding. Doing that work in the
+//  comparator repeats it *n log n* times on the main actor, inside a body pass,
+//  every time the list is drawn.
 //
 //  So each hike is measured once — ``key(for:)`` — and the sort runs on plain
 //  `Double`s and `String`s. The readings drop from *n log n* to *n*, and what
-//  is left is comparisons of numbers.
+//  is left is comparisons of numbers and folded names.
 //
 
 import Foundation
@@ -48,11 +46,9 @@ public enum HikeListSort: String, CaseIterable, Identifiable {
 
     public var id: String { rawValue }
 
-    /// The order the menu offers these in, which is not the order they are
-    /// declared in — declaration is alphabetical because the lint rule asks
-    /// for it, and a menu that opened with *Most Climb* at the top would be
-    /// sorted for the compiler rather than for a hiker. Newest is first
-    /// because it is the default and the one most often being returned to.
+    /// The menu's order is explicit rather than following the alphabetical
+    /// declarations the lint rule asks for. Newest is first because it is
+    /// the default and the one most often being returned to.
     public static let menuOrder: [Self] = [
         .newest, .alphabetical, .longest, .mostWalked, .hilliest,
     ]
@@ -67,10 +63,10 @@ public enum HikeListSort: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Whether this order needs figures nothing has worked out yet.
+    /// Whether this order needs cached elevation figures.
     ///
-    /// Only ``hilliest`` does, and asking for it is what sets the cache
-    /// filling. Everything else reads what a hike already carries.
+    /// Only ``hilliest`` does. The list validates and fills that cache outside
+    /// its body; other orders need no route work.
     public var needsElevation: Bool {
         switch self {
         case .hilliest: true

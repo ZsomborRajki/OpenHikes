@@ -2,12 +2,11 @@
 //  HikeListSortTests.swift
 //  OpenHikesTests
 //
-//  The six orders a library can be put in, and what a missing figure does.
+//  The orders a library can be put in, and what a missing figure does.
 //
 //  Real `Hike` rows in an in-memory container, for the reason
-//  ``HikeListOrderTests`` gives: two of the keys are not on `Hike` at all —
-//  climb and descent live in the unmirrored sidecar — and a stand-in would
-//  test the passthrough away.
+//  ``HikeListOrderTests`` gives: the elevation figures live in the unmirrored
+//  sidecar, and a stand-in would test the passthrough away.
 //
 
 import Foundation
