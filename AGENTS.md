@@ -417,7 +417,7 @@ a change to recording, the map, the sheet or the render path; the PR template,
   the build `Scripts/release-version.sh --version <version>` prints. The app,
   the widget, the watch app and the watch widgets each carry
   `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in `project.pbxproj`, and
-  the number committed there falls behind every build the workflow tags.
+  the version and build committed there fall behind what the workflow tags.
 - **Run `Scripts/check-release-secrets.sh` before pressing Archive.** The
   gitignored `OpenHikes/Secrets.plist` holds the Stadia and Thunderforest keys,
   and an archive succeeds without it, shipping paid map styles that draw

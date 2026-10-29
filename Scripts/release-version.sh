@@ -4,19 +4,23 @@
 # tag that names it.
 #
 # The version is the person's: they type it into the TestFlight workflow. The
-# build is not, because App Store Connect refuses a build number it already
-# has for that version, and nothing in this repository asks it which those
-# are. So the build is one past the highest this repository knows for the
-# same version: its `v<version>-<build>` tags (*Releasing* in AGENTS.md tags
-# every archived commit) and any `CURRENT_PROJECT_VERSION` committed beside
-# that `MARKETING_VERSION` in the project, whichever is higher. A build
-# uploaded from Xcode and never tagged is invisible here. App Store Connect
-# then refuses the upload by name, and `--build` is the way past it.
+# build is not, because App Store Connect refuses a build number no higher
+# than one it already has for that version, and nothing in this repository
+# asks it which those are. So the build is one past the highest this
+# repository knows for the same version: its `v<version>-<build>` tags
+# (*Releasing* in AGENTS.md tags every archived commit) and any
+# `CURRENT_PROJECT_VERSION` committed beside that `MARKETING_VERSION` in the
+# project, whichever is higher. A build uploaded from Xcode and never tagged
+# is invisible here. App Store Connect then refuses the upload by name, and
+# `--build` is the way past it.
 #
 # Each version starts again at build 1, by the owner's choice. App Store
-# Connect allows it for an iOS app, whose build need only be unique within its
-# version, and this app's uploads from Xcode restarted at 1 the same way. A
-# Mac app's builds would have to keep climbing across versions.
+# Connect allows it for an iOS app, whose builds have to climb only within a
+# version (Apple's TN2420), and this app's uploads from Xcode restarted at 1
+# the same way. A Mac app's builds would have to keep climbing across
+# versions. Here a `--build` is checked against its own tag alone, so one
+# below a build the version already has reaches App Store Connect, which
+# refuses it after the archive.
 #
 # The tag must not exist yet. Two uploads cannot share one, and a tag that
 # moved would map an Organizer crash report to the wrong revision.

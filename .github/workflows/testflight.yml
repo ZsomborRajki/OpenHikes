@@ -89,7 +89,8 @@ on:
         default: false
 
 # One upload at a time. A second run waits, then reads the first one's tag
-# when it picks its build number, so the two cannot choose the same one.
+# when it picks its build number, so two uploads of one version cannot choose
+# the same build.
 concurrency:
   group: testflight
   cancel-in-progress: false
