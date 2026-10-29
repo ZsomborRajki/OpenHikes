@@ -23,7 +23,7 @@
 //
 //  ## The workout in Health
 //
-//  ``HikeWorkoutWriting/write(_:)``'s own header states the invariant: Health
+//  `HikeRecorder.exportToHealth` states the invariant this file keeps: Health
 //  is a second store and it must never hold a walk this app does not. Deleting
 //  a hike inverted it — the row, the sidecar, the photographs and the walk
 //  history all went, and the `HKWorkout` and its `HKWorkoutRoute` stayed in
