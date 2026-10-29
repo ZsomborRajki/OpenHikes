@@ -396,6 +396,54 @@ extension RefusedSaveScopeTests {
         #expect(stored.photos.count == 2, "the photograph saved elsewhere is not written over")
     }
 
+    /// A refused edit that put a place row in leaves the hike's walks
+    /// readable. On iOS 27.0, rolling back that row beside the columns the
+    /// edit wrote left a list nothing had read yet unreadable: the next read
+    /// of the hike's walks trapped inside SwiftData, and the hike's photo
+    /// section reads them on every pass, as the delete confirmation does to
+    /// count them. The trail is made in a context of its own and fetched
+    /// into the main one, as after a relaunch with the edit kept, so nothing
+    /// in the main context has read its walks.
+    @Test("a refused route edit leaves the hike's walks readable", arguments: [true, false])
+    func aRefusedEditLeavesTheWalksReadable(refusesEverySave: Bool) throws {
+        let container = try Fixture.modelContainer()
+        let maker = ModelContext(container)
+        let (made, spring) = try Self.measuredTrail(in: maker)
+        let walk = HikeWalk(
+            hikeID: made.id,
+            startedAt: .now,
+            endedAt: .now,
+            activeSeconds: 60,
+            coveredIntervals: [0, 10],
+            furthestDistanceMeters: 10,
+            routeDistanceMeters: 10,
+            endReason: .ended
+        )
+        maker.insert(walk)
+        walk.hike = made
+        try maker.save()
+        let context = Self.mainContext(of: container)
+        let editedID = made.id
+        let hike = try #require(try context.fetch(FetchDescriptor<Hike>()).first { $0.id == editedID })
+
+        let outcome = TrailDraftSave.update(
+            hike,
+            from: Self.lineAway(),
+            openedWith: [spring.id],
+            into: context,
+            save: Self.save(refusingEverySave: refusesEverySave) { context in
+                context.changedModelsArray.contains { ($0 as? Hike)?.id == editedID }
+            }
+        )
+
+        guard case .refused(.notSaved) = outcome else {
+            Issue.record("expected the store's refusal, got \(outcome)")
+            return
+        }
+        #expect(hike.places.map(\.name) == ["Spring"])
+        #expect(hike.walks?.count == 1, "the walk is still the hike's, and its list can be read")
+    }
+
     /// A drawn trail with every column an edit writes filled in — a place
     /// with a photograph filed under it, both breakdowns, a cached climb —
     /// and saved, so a refused edit has all of it to put back.
@@ -421,10 +469,9 @@ extension RefusedSaveScopeTests {
     /// A line the spring is nowhere near, with a hut on it, so the edit also
     /// deletes the spring's row, unfiles its photograph and inserts a row for
     /// the hut: the rollback has a row of each kind to take back. The
-    /// inserted one is the case to watch on iOS 27.0, where rolling back a
-    /// related row inserted beside columns written over its hike has trapped
-    /// inside SwiftData at the next read of the hike's rows — though never
-    /// on this path.
+    /// inserted one is the case to watch on iOS 27.0, where rolling it back
+    /// beside the columns written over its hike left the hike's walks
+    /// unreadable — see ``aRefusedEditLeavesTheWalksReadable(refusesEverySave:)``.
     private static func lineAway() -> TrailDraft {
         let away = TrailDraft()
         away.append(CLLocationCoordinate2D(latitude: Line.south, longitude: Line.longitude + Self.eastward))

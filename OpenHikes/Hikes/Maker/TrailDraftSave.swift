@@ -295,6 +295,16 @@ enum TrailDraftSave {
             return refusedEdit(error)
         }
         let route = draft.routeCoordinates
+        // The hike's walks are read before anything is written, though the
+        // edit never touches them. Measured on iOS 27.0: when the rollback
+        // below takes back a place row this edit inserted, beside the columns
+        // it wrote, a list of the hike's rows that nothing had read yet is
+        // left unreadable, and the next read of the walks trapped inside
+        // SwiftData. The hike's photo section reads them on every pass, and
+        // the delete confirmation counts them. A list read first came back
+        // readable, which is why the places, read by ``UneditedHike``, always
+        // did.
+        _ = hike.walks
         let before = UneditedHike(hike)
         let kept = keepingPlaces
             ? TrailPlaceOrder.touched(places(of: hike, drawn: draft.places, atOpen: placesAtOpen), along: route)
@@ -335,7 +345,9 @@ enum TrailDraftSave {
 
     /// The hike as an edit found it: every column
     /// ``update(_:from:openedWith:into:heights:keepingPlaces:save:)`` writes,
-    /// and its list of place rows.
+    /// and its list of place rows — all but the boxes
+    /// ``Hike/pinUnboxedDownloads()`` pins, which are safe to leave after a
+    /// refusal.
     private struct UneditedHike {
         let route: [RouteCoordinate]
         let distance: Double
