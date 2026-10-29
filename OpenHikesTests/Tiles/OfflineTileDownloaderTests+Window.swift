@@ -11,7 +11,7 @@
 //
 //  They inject their own ``TileLoadGate`` rather than using the app's. The
 //  shared one is narrower than the window it would be measuring — a bulk
-//  download may hold only its share of the app's blocking slots — and it is
+//  download may hold only its share of the gate's slots — and it is
 //  shared with every other suite that loads a tile.
 //
 

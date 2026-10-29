@@ -2,28 +2,41 @@
 //  TileLoadGate.swift
 //  OpenHikes
 //
-//  One admission gate for every tile pipeline in the app.
+//  One admission gate for the map's tile loads and the bulk downloader's.
 //
 //  There used to be two, which is the problem this file exists to fix: the
 //  renderer capped on-screen tile loads at 4, the bulk downloader
 //  independently capped its own fetches at 5, and neither knew about the
-//  other — so a download running while the map was being panned could put 9
-//  blocking pipelines through Swift's small cooperative pool at once, which
-//  is the exact jam the renderer's cap was written to prevent.
+//  other — so a download running while the map was being panned could have 9
+//  pipelines under way at once, with 9 requests open and their disk work
+//  queued for Swift's small cooperative pool, which is the exact jam the
+//  renderer's cap was written to prevent.
 //
 
 import DequeModule
 import Foundation
 
 /// Bounds how many tile pipelines (network fetch, disk reads and writes, and —
-/// via ``AutoSaveTileStore`` — a file move into durable storage) run their
-/// blocking work at once, across the whole app.
+/// via ``AutoSaveTileStore`` — a file move into durable storage) are under way
+/// at once, across both callers.
 ///
-/// Each pipeline blocks a thread in Swift's cooperative pool for as long as its
-/// synchronous filesystem and network work takes. The pool doesn't grow to
-/// absorb that, and MapKit's own tile-rendering dispatch competes for the same
-/// worker threads, so too many at once stalls the map rather than speeding
-/// anything up.
+/// A slot is held for the whole pipeline, but a thread only for part of it.
+/// The request is an `await` on `URLSession`, which suspends the pipeline and
+/// gives its thread back for as long as the server takes, and a second caller
+/// after the same tile awaits that request rather than making its own. What
+/// does hold a thread is the synchronous work around the request — the disk
+/// lookup, the image decode, the file write or move — which runs on Swift's
+/// cooperative pool. The pool is sized to the CPU and doesn't grow to absorb
+/// blocking work, so an unbounded burst of that work, like the zoom-to-fit
+/// described above ``CachingTileOverlayRenderer``, leaves the tile loads and
+/// everything else that runs there queued behind the disk.
+///
+/// The budgets therefore bound two things, and those, rather than one thread
+/// per slot, are what a change to them is measured against:
+///
+/// - how much synchronous tile work can be on the cooperative pool at once, and
+/// - how many requests the map and a download have open against tile servers
+///   at once. A slow server ties up slots, not threads.
 ///
 /// Admission is by ``Priority`` rather than first-come-first-served, because
 /// the two callers want opposite things. Tiles the user is looking at are
@@ -47,7 +60,7 @@ actor TileLoadGate {
         case background
     }
 
-    /// Blocking pipelines allowed at once, across every caller.
+    /// Pipelines allowed at once, across every caller.
     private let totalBudget: Int
     /// The most of those a bulk download may hold. The remainder is what
     /// guarantees the map keeps loading tiles while a download runs.

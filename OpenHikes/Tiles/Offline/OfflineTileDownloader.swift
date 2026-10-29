@@ -149,9 +149,9 @@ final class OfflineTileDownloader {
     nonisolated static let tileBudget = 4000
 
     /// How many tiles are kept in flight in the task group at once — a
-    /// pipelining window, not a concurrency cap. What actually limits
-    /// simultaneous blocking work is ``TileLoadGate``, shared with the map's
-    /// own tile loads; tasks beyond its background share simply park on it.
+    /// pipelining window, not a concurrency cap. What actually limits how many
+    /// are under way at once is ``TileLoadGate``, shared with the map's own
+    /// tile loads; tasks beyond its background share simply park on it.
     /// Keeping this a little wider than that share means there's always one
     /// ready to go the moment a slot frees.
     nonisolated static let inFlightWindow = 5
