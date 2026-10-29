@@ -32,6 +32,12 @@ struct HikePlaceStagedPhoto: Identifiable {
 
     /// Files it under `place` through the path every photograph takes,
     /// answering what went wrong — `nil` when it is on the hike.
+    ///
+    /// A frame goes the camera's way and a pick the picker's, so each is
+    /// dated as the pill would date it — by the shutter where the picture
+    /// says — and a new one is pinned at the place either way. A pick the
+    /// hike already holds is only filed under it, keeping its own date and
+    /// pin.
     func file(
         under place: TrailPlace,
         of hike: Hike,
@@ -52,11 +58,14 @@ struct HikePlaceStagedPhoto: Identifiable {
             )
             return stored == nil ? .captureNotStored : nil
         case let .picked(data, identifier):
-            let stored = await HikePhotoImport.add(
+            // Dated by its own file rather than by this call, which for *Add
+            // Place* is the tap on *Add* (#1188). No plan: a new pick is
+            // pinned at the place, whatever the camera's GPS says.
+            let stored = await HikePhotoImport.addPicked(
                 data,
                 to: hike,
-                coordinate: place.clCoordinate,
-                savesToPhotoLibrary: false,
+                plan: nil,
+                fallback: place.clCoordinate,
                 assetLocalIdentifier: identifier,
                 placeID: place.id,
                 store: store,
