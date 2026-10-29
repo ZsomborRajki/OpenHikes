@@ -8,10 +8,12 @@
 //  legs and a whole ``RouteProfile`` — synchronously in the picker's
 //  completion, and placed each photograph on the main actor once its metadata
 //  read came back, projecting the camera onto the whole route whenever the
-//  clock could not place it (#1189). Asserted through the work seam rather
-//  than a stopwatch, as ``PhotoDiscoveryControllerTests`` asserts Find
-//  Photos': each step records the thread it ran on, and the caller is the
-//  main actor itself, so a step that stays on its caller's executor fails.
+//  clock could not place it (#1189). It then read the hike on the main actor
+//  as the picker closed, decoding and hashing the route before the hop
+//  (#1215). Asserted through the work seam rather than a stopwatch, as
+//  ``PhotoDiscoveryControllerTests`` asserts Find Photos': each step records
+//  the thread it ran on, and the caller is the main actor itself, so a step
+//  that stays on its caller's executor fails.
 //
 //  Split from ``PickedPhotoPlacementTests`` as an extension, because one test
 //  type goes in a file and these share its fixtures.
@@ -21,20 +23,28 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import SwiftData
 import Synchronization
 import Testing
 
 extension PickedPhotoPlacementTests {
     /// Which threads each step of an import ran on, one entry per call.
     nonisolated final class WorkLog: Sendable {
-        private let threads = Mutex<(plans: [Bool], placements: [Bool])>(([], []))
+        private let threads = Mutex<(fetches: [Bool], plans: [Bool], placements: [Bool])>(([], [], []))
 
+        /// One entry per hike fetched from the store, which only a saved hike
+        /// is — see ``HikePhotoSearchPlan/SourceRead``.
+        var fetchesOnMainThread: [Bool] { threads.withLock(\.fetches) }
         var plansOnMainThread: [Bool] { threads.withLock(\.plans) }
         var placementsOnMainThread: [Bool] { threads.withLock(\.placements) }
 
         /// The real work, recording where each step ran before doing it.
         var work: PickedPhotoWork {
             PickedPhotoWork(
+                fetchHike: { context, id in
+                    self.threads.withLock { $0.fetches.append(Thread.isMainThread) }
+                    return try PickedPhotoWork.standard.fetchHike(context, id)
+                },
                 buildPlan: { source in
                     self.threads.withLock { $0.plans.append(Thread.isMainThread) }
                     return PickedPhotoWork.standard.buildPlan(source)
@@ -73,6 +83,47 @@ extension PickedPhotoPlacementTests {
         #expect(log.plansOnMainThread == [false])
         #expect(plan.isEmpty)
         #expect(plan.profile != nil)
+    }
+
+    /// The selection's source was read on the main actor as the picker
+    /// closed: the route decoded on first access and, with a walk along it,
+    /// hashed again to tell which walks are along its line (#1215). A saved
+    /// hike is read in a context of the import's own instead, to the plan
+    /// the same hike read on the main actor builds — the walk along the line
+    /// in it, and the walk along a line since redrawn left out.
+    @Test("a saved hike's selection is read off the main thread, to the same plan")
+    func savedSelectionIsReadOffTheMainThread() async throws {
+        #expect(pthread_main_np() != 0, "the bug needs a main-actor caller to reproduce")
+        let log = WorkLog()
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context, route: PhotoDiscoveryFixture.route)
+        let length = RouteProfile(route: PhotoDiscoveryFixture.route).totalDistanceMeters
+        let aDayLater = 24.0 * 60
+        for revision in [PhotoDiscoveryFixture.routeRevision, "a line since redrawn"] {
+            let walk = PhotoDiscoveryFixture.walk(
+                hikeID: hike.id,
+                fromStep: aDayLater,
+                toStep: aDayLater + 9,
+                covering: 0...length,
+                routeDistanceMeters: length,
+                routeRevision: revision
+            )
+            context.insert(walk)
+            walk.hike = hike
+        }
+        try context.save()
+        let selection = try Self.selection(filedOn: hike)
+
+        let plan = try #require(await log.work.plan(from: selection.pickerSearchSource))
+        let readOnTheMainActor = HikePhotoSearchPlan(source: hike.photoSearchSource, profilesRoute: true)
+
+        #expect(log.fetchesOnMainThread == [false])
+        #expect(log.plansOnMainThread == [false])
+        #expect(plan.route == readOnTheMainActor.route)
+        #expect(plan.walks == readOnTheMainActor.walks)
+        #expect(plan.walks.count == 1)
+        #expect(plan.timeline?.searchWindow == readOnTheMainActor.timeline?.searchWindow)
+        #expect(plan.profile?.totalDistanceMeters == readOnTheMainActor.profile?.totalDistanceMeters)
     }
 
     /// A place's own screen is where its picks belong, so a selection made
@@ -114,7 +165,7 @@ extension PickedPhotoPlacementTests {
                 )
             )
         }
-        let plan = await log.work.plan(from: hike.photoSearchSource)
+        let plan = await log.work.plan(from: HikePhotoSearchPlan.SourceRead(hike))
 
         let photo = try #require(
             await HikePhotoImport.addPicked(

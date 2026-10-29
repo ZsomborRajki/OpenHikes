@@ -167,7 +167,10 @@ extension Hike {
     /// column, because this is the one question that wants the walks *of this
     /// row* and has no list to rank — the reason the relationship exists at
     /// all beyond its cascade.
-    var walkPhotoTimelines: [HikeWalkPhotoTimeline] {
+    ///
+    /// `nonisolated`, because a photo search reads it off the main actor
+    /// from a context of its own — see ``HikePhotoSearchPlan/SourceRead``.
+    nonisolated var walkPhotoTimelines: [HikeWalkPhotoTimeline] {
         walksAlongCurrentRoute
             .compactMap(Self.photoTimeline(of:))
             .sorted { $0.startedAt < $1.startedAt }
@@ -181,7 +184,7 @@ extension Hike {
 
     /// The finished walks along the line the hike has now, by the rule
     /// ``walkPhotoTimelines`` states.
-    private var walksAlongCurrentRoute: [HikeWalk] {
+    nonisolated private var walksAlongCurrentRoute: [HikeWalk] {
         let finished = walks ?? []
         // The revision reads every point of the route, so a hike with no walks
         // — most of them — never pays for it.
@@ -190,7 +193,7 @@ extension Hike {
         return finished.filter { $0.isAlong(revision: revision) }
     }
 
-    private static func photoTimeline(of walk: HikeWalk) -> HikeWalkPhotoTimeline? {
+    nonisolated private static func photoTimeline(of walk: HikeWalk) -> HikeWalkPhotoTimeline? {
         HikeWalkPhotoTimeline(
             startedAt: walk.startedAt,
             endedAt: walk.endedAt,
