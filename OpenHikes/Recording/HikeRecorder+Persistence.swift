@@ -228,9 +228,12 @@ extension HikeRecorder {
     /// store and it must never hold a walk this app does not. Fire-and-forget
     /// because the hiker is waiting for their hike to appear and a Health
     /// round trip is not something to make them wait on — and because there is
-    /// nothing to report. A refused or failed write leaves no workout, no
-    /// route and no half-finished builder behind, so unlike a file written
-    /// outside SwiftData this needs no owner and no sweep.
+    /// nothing to report. A failed write can still leave something in Health,
+    /// and unlike a file written outside SwiftData nothing can sweep for it,
+    /// because Health cannot be read. So its owner is filed first:
+    /// ``HikeWorkoutExport/write(_:with:filingInto:)`` marks the hike before
+    /// Health hears anything, and the hike's deletion takes back whatever the
+    /// write left, by the hike's own identifier.
     ///
     /// The ascent and descent come off the accumulator rather than from the
     /// saved line: they are barometrically fused where the device had a

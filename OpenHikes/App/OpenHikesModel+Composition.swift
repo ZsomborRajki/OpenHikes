@@ -530,9 +530,11 @@ private extension OpenHikesModel {
     /// submission to the public database.
     ///
     /// `nil` is not a stub. The export simply does not happen for that launch,
-    /// and everything worth asserting sits above ``HikeWorkoutWriting``, which
+    /// and what the export decides sits above ``HikeWorkoutWriting``, which
     /// is the whole reason that protocol exists — HealthKit is unavailable in
-    /// a hosted unit test the way ActivityKit and `StoreKitTest` are.
+    /// a hosted unit test the way ActivityKit and `StoreKitTest` are. What the
+    /// writer itself decides sits above ``HealthWorkoutStore``, a second,
+    /// narrower seam under it.
     static func makeWorkoutWriter() -> (any HikeWorkoutWriting)? {
         guard !AppLaunchEnvironment.isRunningTests else { return nil }
         guard HealthKitWorkoutWriter.isAvailable else { return nil }
