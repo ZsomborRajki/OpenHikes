@@ -12,6 +12,12 @@
 //  not, and — the reason the gate is ahead of the watch rather than behind it —
 //  that an alert read while browsing is still news when the walk starts.
 //
+//  The permission prompt is the one place the gate is asked twice. The first
+//  one stays up for as long as the hiker leaves it, so the held-prompt cases
+//  change what is true behind it — the poll cancelled, the walk or the
+//  recording over, the badge moved, the alert cleared or lapsed — and assert
+//  that the answer posts nothing and spends nothing.
+//
 
 import CoreLocation
 import Foundation
@@ -165,7 +171,133 @@ struct WeatherAlertSessionTests {
         #expect(notifier.postedKinds == [.severeWeather])
     }
 
+    // MARK: An answer that outlives its question
+
+    /// The prompt can stay up for as long as the hiker leaves it, and the poll
+    /// that asked can be cancelled behind it. A cancelled attempt says nothing
+    /// and spends nothing: the next pass still has the warning to give.
+    @Test("a cancelled attempt posts nothing and leaves the alert unsaid")
+    func cancelledAttemptPostsNothing() async throws {
+        let (manager, notifier) = try Self.manager(showing: Self.walkedTrail)
+        let walk = WeatherAlertSession.walking(hikeID: Self.walkedID)
+        notifier.holdsThePrompt = true
+
+        let first = Task { await manager.announceStandingAlerts(during: walk) }
+        guard await notifier.awaitPrompt() else { return }
+        first.cancel()
+        notifier.answerPrompt(allowing: true)
+        await first.value
+        #expect(notifier.posted.isEmpty)
+
+        await manager.announceStandingAlerts(during: walk)
+        #expect(notifier.postedKinds == [.severeWeather])
+    }
+
+    @Test("a walk that ends while the prompt is up is not interrupted")
+    func walkEndingDuringThePromptPostsNothing() async throws {
+        let (manager, notifier) = try Self.manager(showing: Self.walkedTrail)
+        let moment = Moment(session: .walking(hikeID: Self.walkedID))
+        notifier.holdsThePrompt = true
+
+        let first = Task { await manager.announceStandingAlerts(during: moment.session) }
+        guard await notifier.awaitPrompt() else { return }
+        moment.session = .browsing
+        notifier.answerPrompt(allowing: true)
+        await first.value
+        #expect(notifier.posted.isEmpty)
+
+        moment.session = .walking(hikeID: Self.walkedID)
+        await manager.announceStandingAlerts(during: moment.session)
+        #expect(notifier.postedKinds == [.severeWeather])
+    }
+
+    @Test("a recording that stops while the prompt is up is not interrupted")
+    func recordingEndingDuringThePromptPostsNothing() async throws {
+        let (manager, notifier) = try Self.manager(showing: .me(Self.ridge))
+        let moment = Moment(session: .recording)
+        notifier.holdsThePrompt = true
+
+        let first = Task { await manager.announceStandingAlerts(during: moment.session) }
+        guard await notifier.awaitPrompt() else { return }
+        moment.session = .browsing
+        notifier.answerPrompt(allowing: true)
+        await first.value
+
+        #expect(notifier.posted.isEmpty)
+    }
+
+    /// Another trail opened mid-walk is browsing again, so the answer finds
+    /// nothing of the hiker's on the badge. The walked trail's warning is
+    /// still unsaid when the badge comes back to it.
+    @Test("a badge moved off the walked trail while the prompt is up posts nothing")
+    func subjectSwitchDuringThePromptPostsNothing() async throws {
+        let (manager, notifier) = try Self.manager(showing: Self.walkedTrail)
+        let walk = WeatherAlertSession.walking(hikeID: Self.walkedID)
+        notifier.holdsThePrompt = true
+
+        let first = Task { await manager.announceStandingAlerts(during: walk) }
+        guard await notifier.awaitPrompt() else { return }
+        manager.focus(on: Self.otherTrail, willRequest: false)
+        notifier.answerPrompt(allowing: true)
+        await first.value
+        #expect(notifier.posted.isEmpty)
+
+        manager.focus(on: Self.walkedTrail, willRequest: false)
+        await manager.announceStandingAlerts(during: walk)
+        #expect(notifier.postedKinds == [.severeWeather])
+    }
+
+    /// The fetch that lands while the prompt is up is the reading the answer
+    /// is weighed against, so a storm that cleared is not announced from the
+    /// reading that still had it.
+    @Test("a clear reading that replaces the alert while the prompt is up posts nothing")
+    func clearReadingDuringThePromptPostsNothing() async throws {
+        let (manager, notifier) = try Self.manager(showing: Self.walkedTrail)
+        let walk = WeatherAlertSession.walking(hikeID: Self.walkedID)
+        notifier.holdsThePrompt = true
+
+        let first = Task { await manager.announceStandingAlerts(during: walk) }
+        guard await notifier.awaitPrompt() else { return }
+        manager.applyUITestSnapshot(Self.snapshot(alerts: .clear), subject: Self.walkedTrail)
+        notifier.answerPrompt(allowing: true)
+        await first.value
+
+        #expect(notifier.posted.isEmpty)
+    }
+
+    @Test("a reading that goes stale while the prompt is up posts nothing")
+    func readingGoingStaleDuringThePromptPostsNothing() async throws {
+        let (manager, notifier) = try Self.manager(showing: Self.walkedTrail)
+        let walk = WeatherAlertSession.walking(hikeID: Self.walkedID)
+        let moment = Moment(session: walk)
+        let start = moment.now
+        notifier.holdsThePrompt = true
+
+        let first = Task { await manager.announceStandingAlerts(during: walk, asOf: moment.now) }
+        guard await notifier.awaitPrompt() else { return }
+        moment.now = start.addingTimeInterval(WeatherPollingPolicy.standard.stalenessInterval)
+        notifier.answerPrompt(allowing: true)
+        await first.value
+        #expect(notifier.posted.isEmpty)
+
+        await manager.announceStandingAlerts(during: walk, asOf: start)
+        #expect(notifier.postedKinds == [.severeWeather])
+    }
+
     // MARK: Fixtures
+
+    /// What is true when the prompt is answered, changed by the test while it
+    /// is up. A class, because the announcement reads it back after the
+    /// suspension rather than taking a copy before it.
+    @MainActor
+    private final class Moment {
+        var session: WeatherAlertSession
+        var now = Date.now
+
+        init(session: WeatherAlertSession) {
+            self.session = session
+        }
+    }
 
     /// A manager with a fresh reading carrying one severe alert on the badge,
     /// put there the way a launch puts one: through the store's restore.
@@ -181,22 +313,24 @@ struct WeatherAlertSessionTests {
         return (manager, notifier)
     }
 
-    private static func snapshot() -> WeatherSnapshot {
+    private static func snapshot(alerts: WeatherAlerts = storm) -> WeatherSnapshot {
         WeatherSnapshot(
             symbolName: "cloud.bolt.fill",
             temperature: Measurement(value: 12, unit: UnitTemperature.celsius),
             conditionDescription: "Thunderstorms",
             capturedAt: .now,
             conditions: .preview,
-            alerts: .active([
-                WeatherAlertSummary(
-                    id: "storm-1",
-                    summary: "Severe thunderstorm warning",
-                    severity: .severe,
-                    detailsURL: URL(string: "https://weather.example/storm-1") ?? URL(filePath: "/"),
-                    source: "Deutscher Wetterdienst"
-                ),
-            ])
+            alerts: alerts
         )
     }
+
+    private static let storm = WeatherAlerts.active([
+        WeatherAlertSummary(
+            id: "storm-1",
+            summary: "Severe thunderstorm warning",
+            severity: .severe,
+            detailsURL: URL(string: "https://weather.example/storm-1") ?? URL(filePath: "/"),
+            source: "Deutscher Wetterdienst"
+        ),
+    ])
 }
