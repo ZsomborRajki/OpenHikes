@@ -1335,8 +1335,11 @@ this before changing `OpenHikesWatch/`, `OpenHikes/Watch/` or the shared
   out-and-back is settled by course on both devices
   (`RouteProfileHeadingFirstTests`).
 - **The workout session only keeps the app alive.** Its builder is always
-  discarded, because the phone's `HealthKitWorkoutWriter` is the only Health
-  writer. The session is read for heart rate alone.
+  discarded, because the phone's `HealthKitWorkoutWriter` is the walk's only
+  Health writer. The session is read for heart rate alone, and its data
+  source collects nothing else (`WatchWorkoutCollection`): a discard keeps
+  out the workout but not the samples the builder was given, so Health may
+  keep the readings.
 - **There is no watch test bundle.** Decisions live in `OpenHikesShared` value
   types under `swift test` (`WatchRouteTracker`, `WatchWalkAccumulator`,
   `WatchFixPolicy`, `WatchStoppedWalk`, `WatchLink`, `WatchGlanceDisplay`…). The

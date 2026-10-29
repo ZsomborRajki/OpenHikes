@@ -24,7 +24,12 @@
 //
 //  The one thing the session *is* read for is the hiker's heart rate, which is
 //  the figure a watch can show and a phone cannot, and which comes off the
-//  live builder while the session runs.
+//  live builder while the session runs. So heart rate is also the one thing
+//  its data source collects. Discarding the builder keeps out the workout and
+//  leaves every sample the builder was given, and a data source left to
+//  HealthKit's defaults can give it energy and distance too: energy nothing
+//  here says it writes, and a second distance beside the walk the phone
+//  writes. See ``WatchWorkoutCollection``.
 //
 //  ## Whose recording this is
 //
@@ -351,8 +356,9 @@ final class WatchRecorder: NSObject {
             return false
         }
         do {
-            // Share is what a session needs; heart rate is the one thing read.
-            // Nothing is written at the end — see this file's header.
+            // Share is what a session needs; heart rate is the one thing read,
+            // and the one thing collected. No workout is written at the end —
+            // see this file's header.
             try await healthStore.requestAuthorization(
                 toShare: [HKQuantityType.workoutType()],
                 read: [HKQuantityType(.heartRate)]
@@ -443,13 +449,11 @@ final class WatchRecorder: NSObject {
     ///
     /// The data source is set on a recovered builder too: it is the one
     /// thing heart rate is read from, and a recovered session does not bring
-    /// the last process's back with it.
+    /// the last process's back with it. It collects heart rate alone — see
+    /// ``heartRateSource(for:)``.
     private func attach(_ attached: HKWorkoutSession) {
         let collector = attached.associatedWorkoutBuilder()
-        collector.dataSource = HKLiveWorkoutDataSource(
-            healthStore: healthStore,
-            workoutConfiguration: attached.workoutConfiguration
-        )
+        collector.dataSource = heartRateSource(for: attached.workoutConfiguration)
         collector.delegate = self
         attached.delegate = self
         session = attached
@@ -481,7 +485,8 @@ final class WatchRecorder: NSObject {
     /// `discardWorkout` rather than `finishWorkout`, deliberately and on every
     /// path. See this file's header: the phone is the one writer of workouts,
     /// and a watch that finished this builder would put a second one in Health
-    /// for the same walk.
+    /// for the same walk. It throws away the workout and nothing else: what
+    /// the builder was given stays, which is why it is given heart rate alone.
     private func endWorkoutSession() {
         session?.end()
         builder?.discardWorkout()
@@ -590,9 +595,9 @@ final class WatchRecorder: NSObject {
     }
 }
 
-// Keeping a stopped walk, recovery and the journal, in an extension of the
-// same file: it can reach the recorder's private state, and the class body
-// stays within the lint's type length.
+// Keeping a stopped walk, recovery, the journal and the data source, in an
+// extension of the same file: it can reach the recorder's private state, and
+// the class body stays within the lint's type length.
 extension WatchRecorder {
     // MARK: Keeping a stopped walk
 
@@ -786,6 +791,27 @@ extension WatchRecorder {
             Self.logger.error("Recording journal not written: \(error.localizedDescription, privacy: .public)")
         }
     }
+
+    // MARK: The data source
+
+    /// A live data source for `configuration` that goes on collecting heart
+    /// rate, as HealthKit set it up, and stops everything else HealthKit
+    /// chose — see ``WatchWorkoutCollection``.
+    private func heartRateSource(for configuration: HKWorkoutConfiguration) -> HKLiveWorkoutDataSource {
+        let source = HKLiveWorkoutDataSource(healthStore: healthStore, workoutConfiguration: configuration)
+        let defaults = source.typesToCollect
+        let collection = WatchWorkoutCollection(defaults: Set(defaults.map(\.identifier)))
+        for type in defaults where collection.stopped.contains(type.identifier) {
+            source.disableCollection(for: type)
+        }
+        // What HealthKit offered and what it was left with, so a recording on
+        // a real watch shows whether the change took, beside what Health
+        // kept (#1210).
+        let left = source.typesToCollect.map(\.identifier).sorted().joined(separator: ", ")
+        let stopped = collection.stopped.sorted().joined(separator: ", ")
+        Self.logger.notice("Workout collects \(left, privacy: .public); stopped \(stopped, privacy: .public)")
+        return source
+    }
 }
 
 /// `nonisolated` on the extension, which is the spelling the repository
@@ -862,6 +888,9 @@ nonisolated extension WatchRecorder: HKLiveWorkoutBuilderDelegate {
         _ workoutBuilder: HKLiveWorkoutBuilder,
         didCollectDataOf collectedTypes: Set<HKSampleType>
     ) {
+        // Heart rate is all the data source collects, so it is all that
+        // arrives here. A figure that reads another type has it collected
+        // too — see ``WatchWorkoutCollection``.
         guard collectedTypes.contains(HKQuantityType(.heartRate)),
               let statistics = workoutBuilder.statistics(for: HKQuantityType(.heartRate))
         else { return }
