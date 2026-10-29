@@ -1379,6 +1379,18 @@ if expect_status 0 && expect_contains "$output" $'build=3\ntag=v1.4-3' "the outp
     pass
 fi
 
+# A chosen build answers to the same record as a picked one. An archive from
+# Xcode carried the committed pair, so 1.4 (2) is taken whether or not it was
+# ever tagged.
+run_script "release-version refuses a chosen build no higher than the one committed beside the version" \
+    "$release_version" --version 1.4 --build 2 --project "$release_project"
+if expect_status 1 \
+    && expect_contains "$output" "1.4 already has build 2, committed in $release_project" "the error" \
+    && expect_contains "$output" "The next free build is 3." "the error" \
+    && expect_absent "$output" "tag=" "the output"; then
+    pass
+fi
+
 # Compared as numbers: as text, 9 sorts above 10. The tags that are not of
 # the shape the workflow makes name no build at all, and 1.4.1's builds are
 # not 1.4's.
@@ -1394,6 +1406,18 @@ fi
 run_script "release-version counts on from tags alone when nothing is committed" \
     "$release_version" --version 1.4.1 --project "$release_project"
 if expect_status 0 && expect_contains "$output" $'build=31\ntag=v1.4.1-31' "the output"; then
+    pass
+fi
+
+# The run this refusal is for: a build typed for a version that already has a
+# higher one, whose own tag is free. App Store Connect would refuse it only
+# after the archive.
+run_script "release-version refuses a chosen build below one the version has tagged" \
+    "$release_version" --version 1.4.1 --build 1 --project "$release_project"
+if expect_status 1 \
+    && expect_contains "$output" "1.4.1 already has build 30, tagged v1.4.1-30" "the error" \
+    && expect_contains "$output" "The next free build is 31." "the error" \
+    && expect_absent "$output" "tag=" "the output"; then
     pass
 fi
 
@@ -1420,9 +1444,46 @@ if expect_status 1 \
     pass
 fi
 
+# The error says to pass --build, so a chosen build gets past a project it
+# cannot read, and is held to what the tags still say.
+run_script "release-version holds a chosen build to the tags when the project cannot say" \
+    "$release_version" --version 1.4 --build 2 --project "$release_unversioned"
+if expect_status 1 \
+    && expect_contains "$output" "build 2 is checked against 1.4's tags alone" "the warning" \
+    && expect_contains "$output" "1.4 already has build 10, tagged v1.4-10" "the error" \
+    && expect_absent "$output" "tag=" "the output"; then
+    pass
+fi
+
+run_script "release-version takes a chosen build past a project it cannot read" \
+    "$release_version" --version 1.5 --build 3 --project "$release_unversioned"
+if expect_status 0 \
+    && expect_contains "$output" "build 3 is checked against 1.5's tags alone" "the warning" \
+    && expect_contains "$output" $'version=1.5\nbuild=3\ntag=v1.5-3' "the output"; then
+    pass
+fi
+
 run_script "release-version takes the build it is given" \
     "$release_version" --version 1.5.1 --build 40 --project "$release_project"
 if expect_status 0 && expect_contains "$output" $'version=1.5.1\nbuild=40\ntag=v1.5.1-40' "the output"; then
+    pass
+fi
+
+# The way past an upload from Xcode that was never tagged: any build above
+# the highest this repository knows for the version, from the next free one.
+for chosen in 11 12; do
+    run_script "release-version takes the chosen build $chosen, above the version's highest" \
+        "$release_version" --version 1.4 --build "$chosen" --project "$release_project"
+    if expect_status 0 \
+        && expect_contains "$output" $'version=1.4\nbuild='"$chosen"$'\ntag=v1.4-'"$chosen" "the output"; then
+        pass
+    fi
+done
+
+# 2^64, which shell arithmetic wraps to 0.
+run_script "release-version takes a chosen build too long for shell arithmetic" \
+    "$release_version" --version 1.4 --build 18446744073709551616 --project "$release_project"
+if expect_status 0 && expect_contains "$output" $'build=18446744073709551616\ntag=v1.4-18446744073709551616' "the output"; then
     pass
 fi
 
@@ -1430,6 +1491,7 @@ run_script "release-version refuses a build that was already uploaded" \
     "$release_version" --version 1.4 --build 10 --project "$release_project"
 if expect_status 1 \
     && expect_contains "$output" "v1.4-10 already exists" "the error" \
+    && expect_contains "$output" "The next free build is 11." "the error" \
     && expect_absent "$output" "tag=" "the output"; then
     pass
 fi
