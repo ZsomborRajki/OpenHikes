@@ -36,12 +36,15 @@
 //  rather than leaving a reader to check: it deletes *by predicate* rather
 //  than by sample, so it never fetches one. The alternative — `delete(_:)`,
 //  which takes the `HKWorkout` — would have needed `.workoutType()` in
-//  `readTypes` and cost exactly the promise this section makes. A delete is
-//  not a read, but it is also not nothing, so the Settings footer says it
-//  out loud beside the sentence about reading. The switch is off until a hiker turns it on,
-//  because Health is their most sensitive store and the app has no business
-//  writing to it merely because they recorded a walk — the same shape
-//  ``SettingsKey/keepScreenAwake`` and *Also Save to Photos* already take.
+//  `readTypes` and cost exactly the promise this section makes, which the
+//  Health purpose strings in `Info.plist` make to the hiker. A delete is not
+//  a read, but it is also not nothing, so the Settings footer says it out
+//  loud: deleting the hike takes its workout with it.
+//
+//  The switch is off until a hiker turns it on, because Health is their most
+//  sensitive store and the app has no business writing to it merely because
+//  they recorded a walk — the same shape ``SettingsKey/keepScreenAwake`` and
+//  *Also Save to Photos* already take.
 //
 
 import Foundation
@@ -102,7 +105,7 @@ protocol HikeWorkoutWriting: Sendable {
     /// **A delete, and still no read type.** `HKHealthStore.delete(_:)` takes
     /// the sample, which would mean fetching it, which would mean asking for
     /// `.workoutType()` as a *read* type — and the promise above, and the
-    /// sentence under the Settings switch, are that nothing is read back.
+    /// Health purpose strings in `Info.plist`, are that nothing is read back.
     /// `deleteObjects(of:predicate:)` against
     /// `HKQuery.predicateForObject(with:)` needs only share authorization, so
     /// the one thing this app has ever been allowed to do to Health is the

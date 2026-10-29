@@ -120,7 +120,7 @@ final class HealthKitWorkoutWriter: HikeWorkoutWriting {
     /// `HKHealthStore.delete(_:)` wants the `HKWorkout` itself, and getting
     /// one means an `HKSampleQuery`, which means `.workoutType()` in
     /// `readTypes` — the authorization this app has never asked for and whose
-    /// absence the Settings footer states. `deleteObjects(of:predicate:)`
+    /// absence the Health purpose strings state. `deleteObjects(of:predicate:)`
     /// needs only the share access already granted, and
     /// `HKQuery.predicateForObject(with:)` names exactly the one workout by
     /// its UUID.
