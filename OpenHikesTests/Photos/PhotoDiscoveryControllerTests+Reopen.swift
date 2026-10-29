@@ -2,18 +2,19 @@
 //  PhotoDiscoveryControllerTests+Reopen.swift
 //  OpenHikesTests
 //
-//  What a reopened Find Photos sheet is first built from, and what a search
-//  whose sheet has closed may still write (#1212).
+//  What a reopened Find Photos sheet is first built from, and what a search or
+//  an import whose sheet has closed may still do to it (#1212).
 //
 //  The controller outlives its sheet, and the sheet's first body pass reads
 //  the phase and the matches before its `.task` has started the search that
 //  withdraws them. So the section's button resets the controller in the tap
 //  that presents the sheet. The first three tests close a presentation on its
 //  grid, on its empty state and part-way through an import, do what that tap
-//  does, and read what the first pass would. The two after them leave a
-//  search and an import running across the reset, and the last cancels a
-//  search while the permission prompt is up, which is what closing the sheet
-//  does to its `.task`.
+//  does, and read what the first pass would. The three after them leave a
+//  search and an import running across the reset, and check what a stopped
+//  import hands back to the button that would close its sheet. The last
+//  cancels a search while the permission prompt is up, which is what closing
+//  the sheet does to its `.task`.
 //
 //  Split from ``PhotoDiscoveryControllerTests`` as an extension for the reason
 //  the other halves are: one test type per file, and these share every
@@ -171,6 +172,47 @@ extension PhotoDiscoveryControllerTests {
 
         expectStartsOver(controller)
         #expect(library.calls.withLock(\.dataReads) == 1, "the second asset is never read")
+    }
+
+    /// The Add button closes its sheet on the count its import hands back,
+    /// once nothing is left to review, which a reset leaves true. A stopped
+    /// import still finishes the copy it was part-way through and returns
+    /// after it, so the sheet may have been opened again by then, and the
+    /// button's dismiss action, read in the presentation that has gone,
+    /// closes the reopened one. So a stopped import hands back no count.
+    @Test("an import stopped when its sheet closed hands back no count")
+    func stoppedImportHandsBackNoCount() async throws {
+        let sandbox = PhotoStoreSandbox()
+        let gate = TestGate()
+        let library = StubPhotoLibraryFixture(
+            assets: [
+                PhotoDiscoveryFixture.asset("a", atStep: 2),
+                PhotoDiscoveryFixture.asset("b", atStep: 5),
+            ],
+            dataGate: gate
+        )
+        let controller = PhotoDiscoveryController(reader: library)
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context, route: PhotoDiscoveryFixture.route)
+        await controller.search(in: hike)
+        let importing = Task { @MainActor in
+            await controller.runImport(into: hike, store: sandbox.store)
+        }
+        await settleDelegateHop(until: "the import to reach its first asset") {
+            gate.isHolding
+        }
+
+        // What the sheet's `onDisappear` does, then the section's button.
+        controller.cancelImport()
+        controller.reset()
+        gate.open()
+        let landed = await importing.value
+
+        #expect(landed == nil, "nothing for the Add button to close a sheet on")
+        #expect(
+            hike.photos.map(\.assetLocalIdentifier) == ["a"],
+            "though the copy that was under way still lands"
+        )
     }
 
     /// Closing the sheet cancels its `.task`, and with it the search. A search

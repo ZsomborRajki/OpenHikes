@@ -11,21 +11,22 @@
 //  in `@State`, on the *Details* face of a hike's screen, so it lives as long
 //  as that section rather than as long as the sheet. Dismissing the sheet
 //  disposes of nothing, and opening it again hands the new presentation the
-//  same controller, with whatever the last one left in it. Only a new section
-//  makes a new one: opening the hike again, flipping its screen to *History*
-//  and back, or a turn or an iPhone Duo opening or closing that moves the
-//  screen between the sheet and the side panel — see *The map screen* in the
-//  repository instructions.
+//  same controller, once the section's button has reset it (below). Only a
+//  new section makes a new one: opening the hike again, flipping its screen
+//  to *History* and back, or a turn or an iPhone Duo opening or closing that
+//  moves the screen between the sheet and the side panel — see *The map
+//  screen* in the repository instructions.
 //
 //  None of what the last presentation left reaches the next one. Each search
 //  withdraws the previous results before it first suspends, and the sheet
 //  cancels a running import as it goes, because an import left running would
-//  write into the state the next search is filling — see ``search(in:)`` and
-//  ``runImport(into:store:)``. The withdrawal comes after a reopened sheet's
-//  first body pass, though, because the search is started by the `.task` that
-//  pass attaches. So the section's button also resets the controller before
-//  it presents the sheet, and that pass is built from nothing the last
-//  presentation left — see ``reset()``.
+//  write into the state the next search is filling, and a stopped import
+//  hands its Add button no count to close a sheet on — see ``search(in:)``
+//  and ``runImport(into:store:)``. The withdrawal comes after a reopened
+//  sheet's first body pass, though, because the search is started by the
+//  `.task` that pass attaches. So the section's button also resets the
+//  controller before it presents the sheet, and that pass is built from
+//  nothing the last presentation left — see ``reset()``.
 //
 //  Three things are worth stating about the order it does its work in.
 //
@@ -302,15 +303,24 @@ final class PhotoDiscoveryController {
     /// hands the same controller to a fresh ``search(in:)``, so an abandoned
     /// import was free to land its tail on top of that search — resetting a
     /// phase mid-search, and clearing matches the new search had just found.
+    ///
+    /// - Returns: How many landed, or `nil` once the import has been stopped
+    ///   by ``cancelImport()`` or ``reset()``, or overtaken by a newer one.
+    ///   A stopped import still finishes the copy it was part-way through,
+    ///   and returns after it, by which time its sheet may have been opened
+    ///   again. The Add button closes its sheet on this count, and its
+    ///   dismiss action, read in the presentation that has gone, writes the
+    ///   binding the reopened one is shown by: a count would close that one.
     @discardableResult func runImport(
         into hike: Hike,
         store: HikePhotoStore = .shared
-    ) async -> Int {
+    ) async -> Int? {
         importTask?.cancel()
         let task = Task { await importSelected(into: hike, store: store) }
         importTask = task
         let landed = await task.value
-        if importTask == task { importTask = nil }
+        guard importTask == task else { return nil }
+        importTask = nil
         return landed
     }
 
@@ -337,12 +347,14 @@ final class PhotoDiscoveryController {
     /// *Done*, the empty state after an import that took everything, or the
     /// count of an import it was closed part-way through.
     ///
-    /// Nothing the last presentation started may write after this either. A
-    /// search started by *Select More Photos* runs in that button's own
-    /// `Task`, which closing the sheet does not cancel, so it is overtaken
-    /// here as a newer search would overtake it. The import is cancelled when
-    /// the sheet goes, and again here, so that a clean first pass does not
-    /// depend on the sheet's `onDisappear` having come before the tap.
+    /// Nothing the last presentation started may write here after this, or
+    /// close the sheet this tap presents. A search started by *Select More
+    /// Photos* runs in that button's own `Task`, which closing the sheet does
+    /// not cancel, so it is overtaken here as a newer search would overtake
+    /// it. The import is cancelled when the sheet goes, and again here, so
+    /// that a clean first pass does not depend on the sheet's `onDisappear`
+    /// having come before the tap, and once stopped it hands the Add button
+    /// no count to close a sheet on — see ``runImport(into:store:)``.
     func reset() {
         searchGeneration += 1
         cancelImport()
