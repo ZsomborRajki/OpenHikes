@@ -7,8 +7,24 @@
 //  A reference type observed by one sheet, for the ordinary reason — the
 //  search is a `Task` that outlives a view body, and the selection has to
 //  survive the grid being rebuilt as thumbnails land. Nothing else in the app
-//  observes it, and it is created per presentation rather than owned by the
-//  model: there is no state here worth keeping once the sheet is gone.
+//  observes it, and the model does not own it: ``HikePhotoSection`` keeps it
+//  in `@State`, on the *Details* face of a hike's screen, so it lives as long
+//  as that section rather than as long as the sheet. Dismissing the sheet
+//  disposes of nothing, and opening it again hands the new presentation the
+//  same controller, with whatever the last one left in it. Only a new section
+//  makes a new one: opening the hike again, flipping its screen to *History*
+//  and back, or a turn or an iPhone Duo opening or closing that moves the
+//  screen between the sheet and the side panel — see *The map screen* in the
+//  repository instructions.
+//
+//  None of what the last presentation left is meant to reach the next one.
+//  Each search withdraws the previous results before it first suspends, and
+//  the sheet cancels a running import as it goes, because an import left
+//  running would write into the state the next search is filling — see
+//  ``search(in:)`` and ``runImport(into:store:)``. The withdrawal comes after
+//  a reopened sheet's first body pass, though: the search is started by the
+//  `.task` that pass attaches, so that pass is built from whatever the last
+//  presentation left.
 //
 //  Three things are worth stating about the order it does its work in.
 //
@@ -282,11 +298,10 @@ final class PhotoDiscoveryController {
     /// ``phase`` and ``matches`` that nothing was drawing.
     ///
     /// Which is worse than wasted work, because this controller outlives its
-    /// sheet: it is created once per hike screen so that reopening the sheet
-    /// doesn't lose what a scan already found. An abandoned import was
-    /// therefore free to land its tail on top of the fresh ``search(in:)``
-    /// that reopening starts — resetting a phase mid-search, and clearing
-    /// matches the new search had just found.
+    /// sheet — the top of this file says for how long. Reopening the sheet
+    /// hands the same controller to a fresh ``search(in:)``, so an abandoned
+    /// import was free to land its tail on top of that search — resetting a
+    /// phase mid-search, and clearing matches the new search had just found.
     @discardableResult func runImport(
         into hike: Hike,
         store: HikePhotoStore = .shared
