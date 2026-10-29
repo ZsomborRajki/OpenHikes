@@ -158,10 +158,19 @@ nonisolated enum HikeDeletion {
     /// A refused save takes the whole deletion back rather than leaving half
     /// of it pending: the caller is left with hikes that are still in the
     /// store, sidecars that still exist, and every file still on disk — the
-    /// state it can safely leave on screen. The rollback also drops any other
-    /// unsaved edit in the context, which is the price of not committing a
-    /// deletion the user did not get: a context whose save has just failed has
-    /// nothing that is going to be persisted anyway.
+    /// state it can safely leave on screen.
+    ///
+    /// Taken back through the context's rollback, because a deleted row cannot
+    /// be put back by hand the way ``HikePlaceChange`` puts back a place. And
+    /// so whatever the context already holds is committed first, in a save of
+    /// its own, leaving the rollback nothing but the deletion to take. This is
+    /// the shared main context, and it autosaves: a rename, or the tile claims
+    /// auto-save folds in — the list's swipe folds the browsed hike's a moment
+    /// before calling this — may be waiting there for the next save, and a
+    /// refused deletion is no reason to lose them. A refusal is what a full
+    /// disk does, and freeing space is the retry. A store that refuses that
+    /// first commit has refused the deletion too, before anything was taken
+    /// out.
     ///
     /// - Parameter hikes: All from one store. An empty list, or a hike that
     ///   was never inserted, needs no commit — nothing persisted it, so
@@ -197,6 +206,14 @@ nonisolated enum HikeDeletion {
         // nothing left to ask.
         let deletedIDs = hikes.map(\.id)
         let context = hikes.firstNonNil(\.modelContext)
+        if let context, context.hasChanges {
+            do {
+                try save(context)
+            } catch {
+                logKept(error)
+                throw error
+            }
+        }
         for hike in hikes {
             hike.deleteLocalState()
             hike.modelContext?.delete(hike)
@@ -209,12 +226,7 @@ nonisolated enum HikeDeletion {
                 try save(context)
             } catch {
                 context.rollback()
-                logger.error(
-                    """
-                    Kept a hike whose deletion could not be saved: \
-                    \(error.localizedDescription, privacy: .public)
-                    """
-                )
+                logKept(error)
                 throw error
             }
         }
@@ -233,6 +245,15 @@ nonisolated enum HikeDeletion {
             SharedStore.clearTrailSnapshot(for: hikeID)
             SharedStore.clearBasemaps(for: hikeID)
         }
+    }
+
+    private static func logKept(_ error: any Error) {
+        logger.error(
+            """
+            Kept a hike whose deletion could not be saved: \
+            \(error.localizedDescription, privacy: .public)
+            """
+        )
     }
 
     /// Takes the workouts out of Health, after the deletion is on disk.
