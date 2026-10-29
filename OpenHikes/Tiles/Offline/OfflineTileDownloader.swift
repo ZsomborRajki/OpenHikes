@@ -339,12 +339,18 @@ final class OfflineTileDownloader {
         // A provider whose terms cap durable storage may not have room for
         // this. Asked before a single tile is fetched, so a user who declines
         // has cost nothing and lost nothing.
-        if let shortfall = await spaceShortfall(
+        let shortfall = await spaceShortfall(
             tiles: tiles,
             fetching: outstanding,
             source: source
-        ) {
-            guard generation == self.generation, !Task.isCancelled else { return }
+        )
+        // Checked whichever way the answer went: the quota read enumerates
+        // storage off the main actor, and a cancel and restart during it own
+        // the downloader now. A stale run that went on into `run` would reset
+        // the replacement's `claimedKeys` before its first generation check
+        // (#1229).
+        guard generation == self.generation, !Task.isCancelled else { return }
+        if let shortfall {
             pendingRun = PendingRun(
                 tiles: tiles,
                 outstanding: outstanding,
@@ -526,13 +532,22 @@ final class OfflineTileDownloader {
             phase = .finished
             return
         }
-        phase = .failed(
-            await failureMessage(
-                savedCount: sortedKeys.count,
-                plannedCount: tiles.count,
-                source: source
-            )
+        let message = await failureMessage(
+            savedCount: sortedKeys.count,
+            plannedCount: tiles.count,
+            source: source
         )
+        // Asked again on the far side of the quota read, which suspends: a
+        // cancel during it has already put the phase to rest, and a restart
+        // owns it outright. Publishing the old run's failure over either
+        // turned a download still in flight into a failed one, which the
+        // registry then no longer stands down (#1229).
+        guard generation == self.generation else { return }
+        guard !Task.isCancelled else {
+            phase = .idle
+            return
+        }
+        phase = .failed(message)
     }
 }
 
