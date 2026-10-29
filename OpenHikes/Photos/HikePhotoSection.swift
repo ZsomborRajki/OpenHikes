@@ -44,12 +44,14 @@ struct HikePhotoSection: View {
 
     @State private var isDiscovering = false
     /// Kept for as long as this section is, not per presentation, so a
-    /// reopened sheet is handed the same controller. It does not keep what a
-    /// scan found: each presentation searches again, and the search withdraws
-    /// the last one's results first. ``PhotoDiscoveryController`` says how
-    /// long it lives and what keeps one presentation out of the next. Its
-    /// reader is resolved by ``PhotoLibrarySource``, which is what lets UI
-    /// automation drive this without a photo library or a permission prompt.
+    /// reopened sheet is handed the same controller, still holding whatever
+    /// the last presentation left in it. It is not kept for what a scan found:
+    /// each presentation searches again, and the search withdraws the last
+    /// one's results before it first suspends. ``PhotoDiscoveryController``
+    /// says how long it lives and how much of one presentation reaches the
+    /// next. Its reader is resolved by ``PhotoLibrarySource``, which is what
+    /// lets UI automation drive this without a photo library or a permission
+    /// prompt.
     @State private var discovery = PhotoDiscoveryController(
         reader: PhotoLibrarySource.reader()
     )

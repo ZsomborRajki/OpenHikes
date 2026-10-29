@@ -13,14 +13,18 @@
 //  disposes of nothing, and opening it again hands the new presentation the
 //  same controller, with whatever the last one left in it. Only a new section
 //  makes a new one: opening the hike again, flipping its screen to *History*
-//  and back, or a turn that moves the screen between the sheet and the side
-//  panel — see *The map screen* in the repository instructions.
+//  and back, or a turn or an iPhone Duo opening or closing that moves the
+//  screen between the sheet and the side panel — see *The map screen* in the
+//  repository instructions.
 //
 //  None of what the last presentation left is meant to reach the next one.
 //  Each search withdraws the previous results before it first suspends, and
 //  the sheet cancels a running import as it goes, because an import left
 //  running would write into the state the next search is filling — see
-//  ``search(in:)`` and ``runImport(into:store:)``.
+//  ``search(in:)`` and ``runImport(into:store:)``. The withdrawal comes after
+//  a reopened sheet's first body pass, though: the search is started by the
+//  `.task` that pass attaches, so that pass is built from whatever the last
+//  presentation left.
 //
 //  Three things are worth stating about the order it does its work in.
 //
