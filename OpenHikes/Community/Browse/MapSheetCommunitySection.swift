@@ -103,27 +103,6 @@ extension MapSheetHikes {
         CommunityImport.importedByListing(in: hikes)
     }
 
-    /// The hand-ordered places of community rows, by listing id.
-    ///
-    /// In memory, and deliberately: these are *results*, not a library. They
-    /// are re-asked whenever the map moves, so an order kept on disk would
-    /// outlive the answer it described and start arranging a different set of
-    /// hikes. Within a session the ids are stable, so a hiker who put three
-    /// rows in the order they mean to walk them keeps that while they browse.
-    ///
-    /// A listing nobody has moved has no entry and keeps the place the search
-    /// gave it, after everything that was placed by hand.
-    func arrangedCommunity(_ listings: [CommunityListing]) -> [CommunityListing] {
-        guard !community.handOrder.isEmpty else { return listings }
-        let ordered = listings.enumerated().sorted { first, second in
-            let left = community.handOrder[first.element.id] ?? Int.max
-            let right = community.handOrder[second.element.id] ?? Int.max
-            if left != right { return left < right }
-            return first.offset < second.offset
-        }
-        return ordered.map(\.element)
-    }
-
     /// Applies a drag within one section, and numbers that section's rows.
     ///
     /// Per section rather than across both: the two are different kinds of
@@ -237,7 +216,7 @@ extension MapSheetHikes {
     /// Empty sections are absent rather than empty: a heading over nothing is
     /// a claim that there is a kind of answer here when there is not.
     @ViewBuilder var sharedSection: some View {
-        let listings = arrangedCommunity(sharedListings)
+        let listings = community.arranged(sharedListings)
         if !listings.isEmpty {
             Section {
                 // A failure over rows that are still on screen. The empty
@@ -265,7 +244,7 @@ extension MapSheetHikes {
 
     /// The ways OpenStreetMap knows about, under the walks people shared.
     @ViewBuilder var curatedSection: some View {
-        let listings = arrangedCommunity(curatedListings)
+        let listings = community.arranged(curatedListings)
         if !listings.isEmpty {
             Section {
                 ForEach(listings) { listing in

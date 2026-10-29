@@ -44,14 +44,12 @@ struct HikePhotoSection: View {
 
     @State private var isDiscovering = false
     /// Kept for as long as this section is, not per presentation, so a
-    /// reopened sheet is handed the same controller, still holding whatever
-    /// the last presentation left in it. It is not kept for what a scan found:
-    /// each presentation searches again, and the search withdraws the last
-    /// one's results before it first suspends. ``PhotoDiscoveryController``
-    /// says how long it lives and how much of one presentation reaches the
-    /// next. Its reader is resolved by ``PhotoLibrarySource``, which is what
-    /// lets UI automation drive this without a photo library or a permission
-    /// prompt.
+    /// reopened sheet is handed the same controller. It is not kept for what a
+    /// scan found: the button below resets it before each presentation, and
+    /// each presentation searches again. ``PhotoDiscoveryController`` says how
+    /// long it lives and why nothing of one presentation reaches the next. Its
+    /// reader is resolved by ``PhotoLibrarySource``, which is what lets UI
+    /// automation drive this without a photo library or a permission prompt.
     @State private var discovery = PhotoDiscoveryController(
         reader: PhotoLibrarySource.reader()
     )
@@ -107,6 +105,10 @@ struct HikePhotoSection: View {
     /// is built before access is requested.
     private var discoverButton: some View {
         Button("Find Photos of This Hike", systemImage: "magnifyingglass") {
+            // In the tap, before the sheet's first pass reads the controller:
+            // see ``PhotoDiscoveryController/reset()``. The action runs on the
+            // tap, not in this body, so the section still reads none of it.
+            discovery.reset()
             isDiscovering = true
         }
         .sectionActionButtonStyle()

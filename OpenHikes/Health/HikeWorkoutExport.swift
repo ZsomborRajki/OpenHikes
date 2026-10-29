@@ -3,7 +3,7 @@
 //  OpenHikes
 //
 //  What every path into Health shares: whether the hiker asked for it, and
-//  what is kept once the workout exists.
+//  the mark that lets the hike's deletion take the write back.
 //
 //  Two paths write a workout — a recording this phone finished, in
 //  `HikeRecorder`, and a walk the watch recorded and handed over, in
@@ -30,72 +30,79 @@ enum HikeWorkoutExport {
             ?? SettingsDefault.savesHikesToHealth
     }
 
-    /// Writes `request` and files the workout's identifier against its hike —
-    /// or, when the hike was deleted while Health was answering, takes the
-    /// workout straight back out.
+    /// Writes `request`, marking its hike as written to Health before Health
+    /// hears anything — and, when the hike was deleted while Health was
+    /// answering, takes the write straight back out.
     ///
     /// Logs rather than throws, because every caller has already saved the
-    /// hike and there is nothing to report: a refused or failed write leaves
-    /// no workout behind, and a hike Health would not take is still a hike.
+    /// hike and there is nothing to report: a hike Health would not take is
+    /// still a hike.
     ///
-    /// The owner is looked up *after* the write, because the write suspends
-    /// for as long as HealthKit takes, and a hike can be deleted in that
-    /// window. ``HikeDeletion`` removes only the workouts already filed when
-    /// it runs, and this one has not been filed yet — so filing it anyway
-    /// would put a sidecar back for a hike that is gone and leave a workout
-    /// in Health that nothing will ever remove.
+    /// **Marked first** (``HikeLocalState/wroteToHealth``). A write can leave
+    /// something in Health on every way out of it: a workout a locked phone
+    /// saved without handing it back, a sample a failed write could not take
+    /// back, a write this process never came back to finish. Health cannot be
+    /// read to find any of them afterwards. Everything the write saves
+    /// carries the hike's identifier, so a deletion only needs to know
+    /// whether to ask, and marking the hike before the first call is what
+    /// makes the answer yes on every one of those paths. A hike that cannot be
+    /// marked is not written: that write could leave Health holding a walk
+    /// nothing would ever take back.
+    ///
+    /// **Looked up on both sides of the write.** A hike already gone gets no
+    /// write and no mark, because marking it would put a sidecar back for a
+    /// hike that is gone. And the write suspends for as long as HealthKit
+    /// takes, so a hike can be deleted in that window. ``HikeDeletion`` asks
+    /// Health as the deletion commits, which can be before this write's
+    /// objects exist, so a hike found gone once Health answers has its write
+    /// taken back here as well.
     static func write(
         _ request: HikeWorkoutRequest,
         with writer: any HikeWorkoutWriting,
         filingInto container: ModelContainer
     ) async {
         let context = container.mainContext
-        let workoutID: UUID
-        do {
-            workoutID = try await writer.write(request)
-        } catch {
-            logger.error(
-                """
-                Health export failed for \(request.hikeID, privacy: .private): \
-                \(error.localizedDescription, privacy: .public)
-                """
-            )
-            return
-        }
         let hikeID = request.hikeID
-        let isGone = hikeIsGone {
+        let countHikes = {
             var descriptor = FetchDescriptor<Hike>(predicate: #Predicate { $0.id == hikeID })
             descriptor.fetchLimit = 1
             return try context.fetchCount(descriptor)
         }
-        if isGone {
-            await withdraw(workoutID, of: hikeID, from: writer)
-            return
-        }
+        if hikeIsGone(counting: countHikes) { return }
         do {
-            // Filed against the row only once the workout exists, so a
-            // stored identifier always names something — see
-            // ``HikeLocalState/healthWorkoutID``.
-            let state = HikeLocalState.forHike(hikeID, in: context)
-            state.healthWorkoutID = workoutID
+            HikeLocalState.forHike(hikeID, in: context).wroteToHealth = true
             try context.save()
         } catch {
             logger.error(
                 """
-                Health export for \(hikeID, privacy: .private) was not filed: \
+                Health export for \(hikeID, privacy: .private) was not started, because \
+                its hike could not be marked: \(error.localizedDescription, privacy: .public)
+                """
+            )
+            return
+        }
+        do {
+            try await writer.write(request)
+        } catch {
+            logger.error(
+                """
+                Health export failed for \(hikeID, privacy: .private): \
                 \(error.localizedDescription, privacy: .public)
                 """
             )
+        }
+        if hikeIsGone(counting: countHikes) {
+            await withdraw(hikeID, from: writer)
         }
     }
 
     /// Whether the store *answered* that the hike is no longer there.
     ///
     /// A fetch that failed is not that answer. It reads as "still here", so
-    /// the identifier is filed exactly as it would have been: if the hike does
-    /// exist — overwhelmingly the likelier case — its later deletion finds the
-    /// workout and removes it; taking the workout out now instead would
-    /// delete a walk from Health that is still in the list.
+    /// the hike is marked and written, and its write is kept, exactly as they
+    /// would have been: if the hike does exist — overwhelmingly the likelier
+    /// case — its later deletion takes the write back; taking it back now
+    /// instead would delete a walk from Health that is still in the list.
     ///
     /// - Parameter count: How many hikes carry the id, handed in because
     ///   nothing makes a `ModelContext` throw on demand, and the branch worth
@@ -114,16 +121,12 @@ enum HikeWorkoutExport {
         }
     }
 
-    /// Takes a workout out of Health whose hike was deleted while it was
-    /// being written. Awaited rather than fired off, because the caller is
-    /// already a task of its own and has nothing else left to do.
-    private static func withdraw(
-        _ workoutID: UUID,
-        of hikeID: UUID,
-        from writer: any HikeWorkoutWriting
-    ) async {
+    /// Takes a write out of Health whose hike was deleted while it was being
+    /// written. Awaited rather than fired off, because the caller is already
+    /// a task of its own and has nothing else left to do.
+    private static func withdraw(_ hikeID: UUID, from writer: any HikeWorkoutWriting) async {
         do {
-            try await writer.delete(workoutID: workoutID)
+            try await writer.deleteWorkout(of: hikeID)
         } catch {
             logger.error(
                 """

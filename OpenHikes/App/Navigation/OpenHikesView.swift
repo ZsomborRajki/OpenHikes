@@ -158,8 +158,10 @@ struct OpenHikesView: View {
     /// The route drawn on the map — always the currently selected hike, if any,
     /// once its projection has landed. Geometry only: its appearance reaches
     /// the map through ``routeStyle``, which is what keeps a colour or width
-    /// drag out of this body, and the geometry itself is made in the selection
-    /// handler below, which is what keeps a long route's projection out of it.
+    /// drag out of this body, and the geometry itself is made off the main
+    /// actor, started by the selection handler below or by the cache when the
+    /// selected line is replaced, which is what keeps a long route's
+    /// projection out of it.
     private var displayedRoute: DisplayedRoute? {
         DisplayedRoute.forSelection(
             selectedHike,

@@ -158,18 +158,19 @@ final class OfflineTileDownloader {
 
     /// How many newly saved tiles are claimed at a time.
     ///
-    /// **This is the number that decides what a killed run keeps.** A run's
-    /// tiles used to be claimed once, at the end, so a process evicted at 90%
-    /// of four thousand tiles kept none of them — the next launch trim
-    /// reclaims every durable tile no hike claims, and nothing had claimed
-    /// these. Claiming as they land caps that loss at this many tiles instead
-    /// of the whole run.
+    /// **This is the number that decides what a killed run is sure to keep.**
+    /// A run's tiles used to be claimed once, at the end, so a process evicted
+    /// at 90% of four thousand tiles had claimed none of them. No hike owned
+    /// them, which left them cache residue the launch trim may evict.
+    /// Claiming as they land caps that unclaimed tail at this many tiles
+    /// instead of the whole run, and a tile of it still on disk when the next
+    /// attempt reaches it is kept without a fetch.
     ///
     /// Not smaller, because each claim is a SwiftData `save()` on the main
     /// actor: per tile it would be four thousand commits in a run, which is
     /// the hiker's scrolling paying for the download's durability. Not larger,
-    /// because the point is bounding the loss. At 4000 tiles this is at most
-    /// 32 commits, and at most 125 tiles lost to a kill.
+    /// because the point is bounding the tail. At 4000 tiles this is at most
+    /// 32 commits, and at most 125 tiles a kill leaves unclaimed.
     nonisolated static let defaultClaimBatchSize = 125
 
     /// Where this run asks not to be suspended halfway through — see
@@ -216,9 +217,9 @@ final class OfflineTileDownloader {
     /// that would do the fetching has to be the thing that keeps it.
     /// - Parameter claim: Where this run's verified coverage is recorded and
     ///   committed when it ends — see ``Claim``. Required rather than
-    ///   defaulted: a download whose tiles nothing claims is one the next
-    ///   launch trim deletes, so every caller has to say where the map it is
-    ///   about to spend a connection on belongs.
+    ///   defaulted: tiles nothing claims are cache residue the launch trim
+    ///   may evict, so every caller has to say where the map it is about to
+    ///   spend a connection on belongs.
     func start(
         route: [RouteCoordinate],
         source: ActiveTileSource,
@@ -339,12 +340,24 @@ final class OfflineTileDownloader {
         // A provider whose terms cap durable storage may not have room for
         // this. Asked before a single tile is fetched, so a user who declines
         // has cost nothing and lost nothing.
-        if let shortfall = await spaceShortfall(
+        let shortfall = await spaceShortfall(
             tiles: tiles,
             fetching: outstanding,
             source: source
-        ) {
-            guard generation == self.generation, !Task.isCancelled else { return }
+        )
+        // Checked whichever way the answer went: the quota read enumerates
+        // storage off the main actor, and a cancel and restart during it own
+        // the downloader now. A stale run that went on into `run` would reset
+        // the replacement's `claimedKeys` before its first generation check
+        // (#1229). A current run whose task was cancelled anyway is put to
+        // rest, as `finalize` puts one, rather than left advertising a
+        // download that will not go on.
+        guard generation == self.generation else { return }
+        guard !Task.isCancelled else {
+            phase = .idle
+            return
+        }
+        if let shortfall {
             pendingRun = PendingRun(
                 tiles: tiles,
                 outstanding: outstanding,
@@ -446,14 +459,15 @@ final class OfflineTileDownloader {
                     completed = resumedKeys.count + savedKeys.count
                 }
                 // Claimed as they land, which is the whole of this change: a
-                // process evicted between here and `finalize` used to cost the
-                // hiker every tile the run had fetched.
+                // process evicted between here and `finalize` used to leave
+                // every tile the run had fetched unclaimed: cache residue the
+                // launch trim may evict.
                 if savedKeys.count - claimedKeys.count >= claimBatchSize {
                     guard claimBatch(of: savedKeys, source: source) else {
                         // The store refused. Carrying on would spend the
-                        // hiker's connection on tiles nothing can claim — and
-                        // the next launch trim deletes exactly those — so the
-                        // run stops here rather than at the end.
+                        // hiker's connection on tiles nothing can claim — cache
+                        // residue the launch trim may evict — so the run stops
+                        // here rather than at the end.
                         group.cancelAll()
                         break
                     }
@@ -472,9 +486,9 @@ final class OfflineTileDownloader {
     /// Publishes what the run produced, and commits who it belongs to first.
     ///
     /// The order is the point: every tile counted here is already on durable
-    /// storage, where the next launch trim deletes whatever no hike claims. A
-    /// phase saying the map was saved, published ahead of the claim, is a
-    /// promise a refused commit — or a hike deleted while this ran — has
+    /// storage, and one no hike claims is cache residue the launch trim may
+    /// evict. A phase saying the map was saved, published ahead of the claim,
+    /// is a promise a refused commit — or a hike deleted while this ran — has
     /// already broken. See ``OfflineDownloadClaim``.
     ///
     /// **This is no longer the only claim a run makes** — see
@@ -526,13 +540,23 @@ final class OfflineTileDownloader {
             phase = .finished
             return
         }
-        phase = .failed(
-            await failureMessage(
-                savedCount: sortedKeys.count,
-                plannedCount: tiles.count,
-                source: source
-            )
+        let message = await failureMessage(
+            savedCount: sortedKeys.count,
+            plannedCount: tiles.count,
+            source: source
         )
+        // Asked again on the far side of the quota read, which suspends: a
+        // cancel during it has already put the phase to rest, and a restart
+        // owns it outright. Published over a cancel, the old run's failure
+        // reported one the hiker never had; over a restart, it failed a
+        // download still in flight, which the registry then no longer stood
+        // down (#1229).
+        guard generation == self.generation else { return }
+        guard !Task.isCancelled else {
+            phase = .idle
+            return
+        }
+        phase = .failed(message)
     }
 }
 
@@ -695,10 +719,11 @@ extension OfflineTileDownloader {
         guard let token = backgroundTime.begin({ [weak self] in
             // The system is about to reclaim the time. Stopping is not
             // optional here — an app still running when the grant expires is
-            // killed rather than suspended, and a killed run is the one
-            // outcome that costs the hiker every tile it fetched. An ended
-            // grant's late callback must leave both the space prompt and a
-            // confirmed run alone, although they share its plan's generation.
+            // killed rather than suspended. Cancelling loses this run no
+            // more than a kill would — its claimed batches stay either way —
+            // and keeps the rest of the app alive. An ended grant's late
+            // callback must leave both the space prompt and a confirmed run
+            // alone, although they share its plan's generation.
             guard let self, backgroundTimeGrant?.owner == owner else { return }
             cancel()
         }) else { return nil }

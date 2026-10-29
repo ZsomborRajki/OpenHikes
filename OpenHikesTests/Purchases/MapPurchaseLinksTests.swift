@@ -3,13 +3,18 @@
 //  OpenHikesTests
 //
 //  Which copy of the privacy policy and the terms the app opens, and that
-//  every copy it can open is a page this checkout publishes.
+//  every copy it can open is one `Scripts/check-legal-pages.sh` checks.
 //
-//  The pages are read out of `docs/`, which GitHub Pages serves at
-//  `/OpenHikes/`, rather than fetched: a suite never reaches the network, and a
-//  page missing here is a page that 404s once `main` publishes. What this
-//  cannot see is the site itself — a merge not yet deployed, or Pages switched
-//  off — which is the reachability App Review checks for.
+//  That script, not this suite, holds the pages in `docs/` to the links: each
+//  one published, in its language, with its original's effective date. A pull
+//  request that touches nothing but `docs/` skips every job that builds the
+//  app, and those are the pull requests that break the pages, so the check
+//  runs as a script in a job no filter skips (*CI* in `AGENTS.md`). It reads
+//  the links as the URL literals in `MapPurchaseLinks.swift`; what is left
+//  here is that every URL the app opens is one of them, in the folder its
+//  language is read off. What neither can see is the site itself — a merge
+//  not yet deployed, or Pages switched off — which is the reachability App
+//  Review checks for.
 //
 
 import Foundation
@@ -41,7 +46,8 @@ struct MapPurchaseLinksTests {
     /// A language the app ships with no pages of its own is a screen in that
     /// language opening a policy in another, which is what the German pages
     /// exist to end. Adding a localization fails here until ``PageLanguage``
-    /// has a case for it and `docs/` the folder that case links.
+    /// has a case for it, and the page check then fails until `docs/` has the
+    /// folder that case links.
     @Test("every language the app ships has pages of its own")
     func everyShippedLanguageHasPages() throws {
         let shipped = Bundle.main.localizations.filter { $0 != "Base" }
@@ -55,54 +61,38 @@ struct MapPurchaseLinksTests {
         }
     }
 
-    @Test("each linked page is published from docs/ in its own language", arguments: PageLanguage.allCases)
-    func linkedPagesArePublishedHere(language: PageLanguage) throws {
-        for url in [language.privacyPolicy, language.termsAndConditions] {
-            let html = try Self.page(at: url)
-            #expect(html.contains("<html lang=\"\(language.rawValue)\">"), "\(url) is not marked as \(language)")
-        }
-    }
-
-    /// The cost of publishing two copies is the one nobody updates: the
-    /// English page changes, and the German goes on promising what the app no
-    /// longer does. Each page states the date it took effect in a single
-    /// `<time datetime>`, so an English change that moves its date fails here
-    /// until the translation says the same.
+    /// The page check finds the pages the app links by reading
+    /// `MapPurchaseLinks.swift` for quoted URLs, so a URL built any other way
+    /// would be a page it never checks. It reads a translation's language off
+    /// its folder (`de/privacy/` is `privacy/` in `de`), so each page sits at
+    /// its English original's path under this language's code, or the
+    /// `<html lang>` it holds the page to would be another language's.
     @Test(
-        "each translation takes effect with its original",
-        arguments: PageLanguage.allCases.filter { $0 != .english }
+        "each linked page is a URL the page check reads, in the folder of its language",
+        arguments: PageLanguage.allCases
     )
-    func translationsTakeEffectWithTheirOriginals(language: PageLanguage) throws {
-        #expect(
-            try Self.effectiveDate(of: language.privacyPolicy)
-                == Self.effectiveDate(of: PageLanguage.english.privacyPolicy),
-            "the \(language) privacy policy was not updated with the English one"
+    func linkedPagesAreCheckedPages(language: PageLanguage) throws {
+        let source = try String(
+            contentsOf: StringCatalogTests.sourceRoot.appending(path: "OpenHikes/Purchases/MapPurchaseLinks.swift"),
+            encoding: .utf8
         )
-        #expect(
-            try Self.effectiveDate(of: language.termsAndConditions)
-                == Self.effectiveDate(of: PageLanguage.english.termsAndConditions),
-            "the \(language) terms were not updated with the English ones"
-        )
-    }
-
-    /// The file GitHub Pages serves `url` from: the site publishes `docs/` at
-    /// `/OpenHikes/`, and a folder's page is its `index.html`.
-    private static func page(at url: URL) throws -> String {
-        let site = "/OpenHikes/"
-        try #require(url.host() == "zsomborrajki.github.io" && url.path().hasPrefix(site), "\(url) is not on the site")
-        let folder = url.path().dropFirst(site.count)
-        let file = StringCatalogTests.sourceRoot.appending(path: "docs/\(folder)index.html")
-        return try String(contentsOf: file, encoding: .utf8)
-    }
-
-    /// The `datetime` of the page's one `<time>` element.
-    private static func effectiveDate(of url: URL) throws -> Substring {
-        let html = try page(at: url)
-        let marker = "<time datetime=\""
-        let parts = html.components(separatedBy: marker)
-        try #require(parts.count == 2, "\(url) should state exactly one effective date")
-        let start = try #require(html.range(of: marker)).upperBound
-        let end = try #require(html[start...].firstIndex(of: "\""))
-        return html[start..<end]
+        let site = "https://zsomborrajki.github.io/OpenHikes/"
+        let folder = language == .english ? "" : "\(language.rawValue)/"
+        let pages = [
+            (language.privacyPolicy, PageLanguage.english.privacyPolicy),
+            (language.termsAndConditions, PageLanguage.english.termsAndConditions),
+        ]
+        for (url, original) in pages {
+            #expect(url.absoluteString.hasPrefix(site), "\(url) is not on the site")
+            let translated = site + folder + String(original.absoluteString.dropFirst(site.count))
+            #expect(
+                url.absoluteString == translated,
+                "\(url) should be \(translated): the page check reads a page's language off its folder"
+            )
+            #expect(
+                source.contains("\"\(url.absoluteString)\""),
+                "\(url) is not spelled out in MapPurchaseLinks.swift, so Scripts/check-legal-pages.sh never checks it"
+            )
+        }
     }
 }

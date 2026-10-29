@@ -17,13 +17,14 @@
 //  ## What this does and does not buy
 //
 //  It buys the grant iOS gives any app that asks, which covers a large share
-//  of real downloads. It does **not** survive termination: a run killed while
-//  suspended still keeps none of its tiles, because
-//  ``OfflineDownloadRegistry`` commits the claim only at the end and an
-//  uncommitted run's tiles are reclaimed by the next launch trim. That is the
-//  right rule for a *cancelled* run and the wrong one for a killed one, and
-//  fixing it means committing the claim incrementally — a change to the
-//  ownership model rather than to the lifetime of a task. See the issue.
+//  of real downloads. The grant does **not** survive termination: a run killed
+//  while suspended stops where it was. What it already committed stays,
+//  because the downloader claims saved tiles in batches as they land
+//  (``OfflineTileDownloader/defaultClaimBatchSize``), and the next attempt
+//  resumes from those claimed keys instead of fetching them again. Only the
+//  tail saved since the last batch is unclaimed. No hike owns it, so the
+//  launch trim may evict it as cache residue, and a tile of it still on disk
+//  when the next attempt reaches it is kept without a fetch.
 //
 //  ## No background mode, and that is the point
 //

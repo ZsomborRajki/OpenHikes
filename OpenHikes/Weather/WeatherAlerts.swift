@@ -108,6 +108,17 @@ nonisolated struct WeatherAlertSummary: Codable, Equatable, Identifiable, Sendab
     // keeps serving it.
 }
 
+nonisolated extension WeatherAlertSummary {
+    /// Worst first, so the one that matters is the one read first.
+    ///
+    /// On severity alone: alerts of equal grade keep the order the authority
+    /// sent them in, because `sorted(by:)` is stable, and that is the only
+    /// ordering this app has any standing to claim is meaningful.
+    static func worstFirst(_ summaries: [Self]) -> [Self] {
+        summaries.sorted { $0.severity > $1.severity }
+    }
+}
+
 /// What `.alerts` said about a place.
 ///
 /// Three cases rather than an array, because an empty array cannot tell the

@@ -60,6 +60,28 @@ nonisolated final class TileOverlay: MKTileOverlay, @unchecked Sendable {
     func cacheTile(at path: MKTileOverlayPath) async -> TileLoadDisposition {
         let key = cacheKey(for: path)
         let result = await cache.loadTileResult(forKey: key, url: url(forTilePath: path))
+        return offerToAutoSave(result, key: key, path: path)
+    }
+
+    /// The tile from memory or from a current copy on disk, or `nil` when only
+    /// a request can answer: a tile on no disk, or saved coverage past its
+    /// age, which is refreshed before it is drawn. Only ``cacheTile(at:)``
+    /// asks a server for either.
+    ///
+    /// What the renderer asks before it waits for a ``TileLoadGate`` slot, so
+    /// that a tile already on disk is not held up behind requests for the
+    /// tiles around it; see ``CachingTileOverlayRenderer``.
+    func loadStoredTile(at path: MKTileOverlayPath) async -> TileLoadDisposition? {
+        let key = cacheKey(for: path)
+        guard let result = await cache.loadStoredTileResult(forKey: key) else { return nil }
+        return offerToAutoSave(result, key: key, path: path)
+    }
+
+    private func offerToAutoSave(
+        _ result: TileLoadResult,
+        key: String,
+        path: MKTileOverlayPath
+    ) -> TileLoadDisposition {
         guard case .loaded = result else { return result.disposition }
 
         // Opportunistically keep tiles the user actually views — never a
@@ -68,7 +90,8 @@ nonisolated final class TileOverlay: MKTileOverlay, @unchecked Sendable {
         // saves anything at all, and it also fills gaps a bulk download left
         // (e.g. an area zoomed into that the bulk pass didn't cover) for
         // providers that support both. Takes only the key: the tile's bytes are
-        // in the cache the load above just populated, and get moved, not re-encoded.
+        // in the cache the load that found it just populated, and get moved,
+        // not re-encoded.
         autoSaveStore.considerPersisting(key: key, z: path.z, x: path.x, y: path.y)
         return .loaded
     }

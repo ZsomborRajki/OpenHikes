@@ -387,8 +387,8 @@ final class WeatherManager {
     /// for the movement reminders.
     @ObservationIgnored private let notifier: (any MovementReminderNotifying)?
     /// One watch per subject, bounded the same way ``cache`` is and for the
-    /// same reason. See ``announceAlerts(in:for:)`` for why it is per subject
-    /// rather than one for the app.
+    /// same reason. See ``announceAlerts(in:for:standing:)`` for why it is per
+    /// subject rather than one for the app.
     @ObservationIgnored private var alertWatches: OrderedDictionary<String, WeatherAlertWatch> = [:]
     @ObservationIgnored private let store: WeatherReadingStore?
     /// Where the badge's reading reaches the home screen widget. A suite hands
@@ -723,14 +723,34 @@ final class WeatherManager {
     /// usually last night's, and a walk adopted on relaunch should hear about
     /// the storm from the fetch that follows, not from a warning that may
     /// already have lapsed.
+    ///
+    /// **`session` and `now` are read twice: before the permission prompt and
+    /// again after it.** Hence the autoclosures. The first prompt waits on the
+    /// hiker for as long as they leave it up, and by the time it is answered
+    /// the walk may have ended, the badge may have moved or cleared, the alert
+    /// may have lapsed, and the poll that asked may have been cancelled. A
+    /// session or a clock captured before the prompt cannot say any of that,
+    /// so the answer is weighed against what is true when it arrives.
     func announceStandingAlerts(
-        during session: WeatherAlertSession,
-        asOf now: Date = .now
+        during session: @autoclosure () -> WeatherAlertSession,
+        asOf now: @autoclosure () -> Date = .now
     ) async {
+        guard let (snapshot, subject) = standingReading(during: session(), asOf: now()) else { return }
+        await announceAlerts(in: snapshot, for: subject) {
+            self.standingReading(during: session(), asOf: now())
+        }
+    }
+
+    /// The reading on the badge, if its alerts may interrupt the hiker now:
+    /// fresh, and about somewhere `session` covers.
+    private func standingReading(
+        during session: WeatherAlertSession,
+        asOf now: Date
+    ) -> (WeatherSnapshot, WeatherSubject)? {
         guard case let .reading(snapshot, subject) = state,
               session.covers(subject),
-              !snapshot.isStale(asOf: now) else { return }
-        await announceAlerts(in: snapshot, for: subject)
+              !snapshot.isStale(asOf: now) else { return nil }
+        return (snapshot, subject)
     }
 
     /// Posts the worst alert not said yet over `subject`.
@@ -755,9 +775,23 @@ final class WeatherManager {
     /// the same main-actor turn as the decision to post, so two attempts that
     /// overlap while a prompt is up cannot both post: whichever resumes first
     /// marks the alert, and the other finds nothing left to say.
+    ///
+    /// **And only about what still stands once it can be.** After the prompt,
+    /// `standing` re-reads the badge and the session, and what is told and
+    /// posted comes from that rather than from `snapshot` and `subject`. A
+    /// cancelled attempt, or one whose reading is no longer the hiker's — the
+    /// walk ended, the badge moved to a trail being browsed, the reading went
+    /// stale — says nothing and spends nothing, so the alert is still there
+    /// for the pass that next finds it standing. A reading replaced while the
+    /// prompt was up is the one asked about, so a storm that cleared is not
+    /// announced from the reading that had it. Outside the UI-test fixture
+    /// only the poll loop moves the badge, and the loop that asked is waiting
+    /// on this call, so a badge that moved behind the prompt was moved by a
+    /// loop started after that one was cancelled.
     private func announceAlerts(
         in snapshot: WeatherSnapshot,
-        for subject: WeatherSubject
+        for subject: WeatherSubject,
+        standing: () -> (WeatherSnapshot, WeatherSubject)?
     ) async {
         guard let notifier, let alerts = snapshot.alerts else { return }
         guard !touchAlertWatch(for: subject).unannounced(in: alerts).isEmpty else { return }
@@ -766,15 +800,18 @@ final class WeatherManager {
         // because a storm warning just came in is a question about something
         // the hiker is in the middle of. One at launch is a question about
         // something that may never happen.
-        guard await notifier.authorize() else { return }
-        var watch = touchAlertWatch(for: subject)
-        let worthSaying = watch.observed(alerts)
-        alertWatches[subject.key] = watch
+        guard await notifier.authorize(),
+              !Task.isCancelled,
+              let (reading, place) = standing(),
+              let standingAlerts = reading.alerts else { return }
+        var watch = touchAlertWatch(for: place)
+        let worthSaying = watch.observed(standingAlerts)
+        alertWatches[place.key] = watch
         guard let worst = worthSaying.first else { return }
         await notifier.post(
             MovementReminderWording.severeWeather(
                 worst,
-                placeName: knownPlace(for: subject)?.place.cityName ?? subject.placeName ?? ""
+                placeName: knownPlace(for: place)?.place.cityName ?? place.placeName ?? ""
             )
         )
     }
