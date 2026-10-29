@@ -79,11 +79,12 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
     ///
     /// Without this the offline map is undamped: `draw` misses on every
     /// uncached tile every pass, and each miss spends an unstructured `Task`,
-    /// two ``TileLoadGate`` hops and a failed disk stat to be told the same
-    /// "no" again — the per-tile-per-pass cost the failure log exists to
+    /// two failed disk lookups and two ``TileLoadGate`` hops to be told the
+    /// same "no" again — the per-tile-per-pass cost the failure log exists to
     /// avoid, and it lands hardest on the case this app is built for, panning
     /// the edge of a downloaded region with no signal, where these no-ops
-    /// queue through the gate ahead of the cached neighbours' real loads.
+    /// queue through the gate ahead of saved coverage past its age, which
+    /// takes a slot to be drawn.
     ///
     /// Held with no expiry, exactly as ``TileFailureLog/mayAttempt(_:at:isOnline:)``
     /// holds failures offline: the policy transition is the only thing that
@@ -119,8 +120,16 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
     /// overlay has nothing to do with.
     private var cache: TileCache { tileOverlay.cache }
 
-    init(overlay: TileOverlay) {
+    /// Where a load that may need a request waits for a slot. The app's
+    /// gate, shared with the bulk downloader, unless a test hands over one
+    /// of its own — for the reason ``OfflineTileDownloader``'s is
+    /// injectable: the shared one is live in the host app, and a suite that
+    /// filled it would stall whatever else is drawing there.
+    private let gate: TileLoadGate
+
+    init(overlay: TileOverlay, gate: TileLoadGate = .shared) {
         tileOverlay = overlay
+        self.gate = gate
         super.init(overlay: overlay)
         // Retry tiles once interactive fetching is allowed (on the main queue).
         overlay.cache.addObserver(self)
@@ -290,7 +299,7 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
     /// finds it in the memory tier, returns `true`, and the caller redraws —
     /// which misses again. That is the request/redraw cycle the failure branch
     /// below is written to avoid, reached through the success branch instead,
-    /// and it spins one task, two gate hops and a full main-thread redraw per
+    /// and it spins one task, a memory lookup and a full main-thread redraw per
     /// visible tile for as long as the map stays overzoomed, on a device
     /// nobody is touching. `nil` says the ancestor is already in memory, so
     /// there is nothing to fetch and nothing to invalidate.
@@ -364,18 +373,17 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
         }
         guard isNew else { return }
 
-        // Deliberately *not* @MainActor: `cacheTile` runs on its caller's
-        // executor, and once the load returns it offers the tile to
+        // Deliberately *not* @MainActor: the overlay's loads run on their
+        // caller's executor, and once one finds the tile it offers it to
         // AutoSaveTileStore, which can move it into durable storage
-        // synchronously. The load's own disk reads and writes leave the main
-        // thread by themselves (`loadTileResult` is `@concurrent`), and its
+        // synchronously. The loads' own disk reads and writes leave the main
+        // thread by themselves (the cache's halves are `@concurrent`), and a
         // request is an `await` that holds no thread at all. Keeping this Task
         // unisolated keeps the move off the main thread too, instead of
         // stalling it every scroll/zoom.
+        let loadGate = gate
         Task { [weak self] in
-            await TileLoadGate.shared.acquire(.interactive)
-            let disposition = await overlay.cacheTile(at: fetchPath)
-            await TileLoadGate.shared.release(.interactive)
+            let disposition = await Self.load(fetchPath, from: overlay, through: loadGate)
             guard let self else { return }
             let waiting = inFlight.withLock { $0.removeValue(forKey: key) ?? [tileRect] }
             switch disposition {
@@ -422,6 +430,37 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
                 }
             }
         }
+    }
+
+    /// Loads a tile the draw pass missed, asking the disk before the gate.
+    ///
+    /// A slot is held for as long as a server takes to answer, which on one
+    /// bar on a ridge can be the session's whole idle timeout, and the map
+    /// may hold every slot at once. Every load used to take one before it
+    /// read the disk, so a tile already there waited for one of those
+    /// requests to end before it was even read: a map saved for offline use
+    /// stayed off the screen behind requests for the tiles around it. The
+    /// disk needs no slot, so it goes first, and only a tile it cannot
+    /// answer queues.
+    ///
+    /// The gate still bounds every request the map makes, and the decode,
+    /// write and auto-save move that follow one. What runs ahead of it is a
+    /// lookup, a few stats and one small read, and for a tile on no disk,
+    /// which is every tile of the zoom-to-fit this file's header describes,
+    /// only the stats run before the load queues as it always did. Saved
+    /// coverage past its age is left to the load under the slot, because it
+    /// is refreshed before it is drawn. That load asks the disk again, since
+    /// a download may have saved the tile while it waited.
+    private static func load(
+        _ path: MKTileOverlayPath,
+        from overlay: TileOverlay,
+        through gate: TileLoadGate
+    ) async -> TileLoadDisposition {
+        if let stored = await overlay.loadStoredTile(at: path) { return stored }
+        await gate.acquire(.interactive)
+        let disposition = await overlay.cacheTile(at: path)
+        await gate.release(.interactive)
+        return disposition
     }
 
     #if DEBUG
