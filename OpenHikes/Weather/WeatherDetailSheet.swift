@@ -525,7 +525,7 @@ struct WeatherDetailView: View {
 /// The alert sections, in a same-file extension.
 ///
 /// `WeatherDetailView` sits at SwiftLint's `type_body_length` limit and these
-/// three members put it over. The extension is the way out — `.swiftlint.yml`
+/// two members put it over. The extension is the way out — `.swiftlint.yml`
 /// sets `excluded_types: [extension, protocol]` — and it is **in this file**
 /// rather than a neighbouring one because `private` in Swift is file-scoped:
 /// a cross-file extension could not reach `DetailRow` or the view's own state
@@ -550,7 +550,7 @@ private extension WeatherDetailView {
     private func alertsSection(_ alerts: WeatherAlerts?) -> some View {
         if let alerts, case .active(let summaries) = alerts {
             Section {
-                ForEach(Self.worstFirst(summaries)) { alert in
+                ForEach(WeatherAlertSummary.worstFirst(summaries)) { alert in
                     Link(destination: alert.detailsURL) {
                         Label {
                             VStack(alignment: .leading, spacing: Self.alertRowSpacing) {
@@ -618,23 +618,6 @@ private extension WeatherDetailView {
         case .active, .none:
             EmptyView()
         }
-    }
-
-    /// Worst first, so the one that matters is the one read first.
-    ///
-    /// A stable sort on severity alone: alerts of equal grade keep the order
-    /// the authority sent them in, which is the only ordering this app has any
-    /// standing to claim is meaningful.
-    private static func worstFirst(
-        _ summaries: [WeatherAlertSummary]
-    ) -> [WeatherAlertSummary] {
-        summaries.enumerated()
-            .sorted { lhs, rhs in
-                lhs.element.severity == rhs.element.severity
-                    ? lhs.offset < rhs.offset
-                    : lhs.element.severity > rhs.element.severity
-            }
-            .map(\.element)
     }
 }
 
