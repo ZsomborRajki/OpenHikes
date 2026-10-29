@@ -13,12 +13,8 @@ import Foundation
 
 extension CommunityBrowser {
     /// `listings` with the hand-ordered rows first, in the order they were put.
-    ///
-    /// In memory, and deliberately: these are *results*, not a library. They
-    /// are re-asked whenever the map moves, so an order kept on disk would
-    /// outlive the answer it described and start arranging a different set of
-    /// hikes. Within a session the ids are stable, so a hiker who put three
-    /// rows in the order they mean to walk them keeps that while they browse.
+    /// Why that order is kept in memory, and for how long, is
+    /// ``handOrder``'s to say.
     ///
     /// A listing nobody has moved has no entry and keeps the place the search
     /// gave it, after everything that was placed by hand. That relies on
