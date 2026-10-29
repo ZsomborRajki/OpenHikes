@@ -392,7 +392,10 @@ private extension MapSheetHikes {
     }
 
     var sortMenu: some View {
-        Menu {
+        // Asked once for the label and the value both: the answer is a fetch
+        // — see ``HikeListOrder/isCustom(_:)``.
+        let isCustom = isCustomOrder
+        return Menu {
             // The hand-made order is never offered here — a hiker makes it by
             // dragging, not by picking it out of a list of orders it is not
             // one of. While it is in force nothing is ticked at all, which is
@@ -407,7 +410,7 @@ private extension MapSheetHikes {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "arrow.up.arrow.down")
-                Text(isCustomOrder ? String(localized: "Your Order") : sort.title)
+                Text(isCustom ? String(localized: "Your Order") : sort.title)
                 Image(systemName: "chevron.down")
                     .font(.caption2.weight(.bold))
             }
@@ -427,7 +430,7 @@ private extension MapSheetHikes {
         // trigger costs nothing new.
         .sensoryFeedback(HapticMoment.choiceChanged.feedback, trigger: sort)
         .accessibilityLabel("Sort hikes")
-        .accessibilityValue(isCustomOrder ? String(localized: "Your order") : sort.title)
+        .accessibilityValue(isCustom ? String(localized: "Your order") : sort.title)
         .accessibilityIdentifier("hike-order-button")
     }
 
