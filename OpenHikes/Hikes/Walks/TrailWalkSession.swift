@@ -595,7 +595,8 @@ final class TrailWalkSession {
         // ending is when this watch starts mattering, not when it stops. And
         // past the commit, like everything else the end changes: a refused
         // end leaves the walk under way, so its standing warnings still
-        // stand, and the after-dark one it has already had stays spent.
+        // stand, and a once-only warning it has had stays spent — the
+        // after-dark one for the walk, the off-trail one for the departure.
         reminders?.walkDidStopFollowing()
         clearState()
         // An ended walk is exactly what has to stop the next matched fix from

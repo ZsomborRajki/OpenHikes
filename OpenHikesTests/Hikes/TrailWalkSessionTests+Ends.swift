@@ -178,6 +178,52 @@ extension TrailWalkSessionTests {
         #expect(harness.notifier.withdrawn.contains(.afterDark), "the end that lands takes the warning down")
     }
 
+    /// The other once-only warning. Told before the commit that nobody was
+    /// following any more, a refused End also forgot a departure the walk
+    /// had already been warned about, so a hiker still off the line was told
+    /// "Off the trail" again one dwell later.
+    @Test("a refused commit leaves an off-trail warning spent")
+    func refusedCommitKeepsTheOffTrailWarningSpent() async {
+        let harness = MovementReminderHarness.harness(clock: clock)
+        var refusing = false
+        let session = TrailWalkSession(
+            context: context,
+            reminders: harness.controller,
+            clock: clock.read,
+            save: { store in
+                if refusing { throw CocoaError(.fileWriteUnknown) }
+                try store.save()
+            }
+        )
+        let hike = hike()
+        walk(session, hike: hike, profile: RouteProfile(route: hike.route), from: 0, through: 3)
+        stayOffTheTrail(session, hike: hike)
+        await harness.controller.settle()
+        #expect(harness.notifier.postedKinds == [.leftTheTrail], "precondition: the walk was warned")
+
+        refusing = true
+        guard case .refused = session.end() else {
+            Issue.record("a store that refuses the commit must refuse the end")
+            return
+        }
+        refusing = false
+        stayOffTheTrail(session, hike: hike)
+        await harness.controller.settle()
+        #expect(harness.notifier.postedKinds == [.leftTheTrail], "once per departure, and this is the same one")
+    }
+
+    /// Two fixes well off the line, a dwell apart: what being told takes.
+    private func stayOffTheTrail(_ session: TrailWalkSession, hike: Hike) {
+        for _ in 0..<2 {
+            clock.advance(by: MovementReminderPolicy.offTrailDwell)
+            session.recordRouteDistance(
+                hikeID: hike.id,
+                offRouteMeters: MovementReminderPolicy.offTrailMeters * 2,
+                at: clock.now
+            )
+        }
+    }
+
     /// An end at the other end. The direction a GPX stores its points in is
     /// the importer's, not the hiker's, so a hiker who covers the route
     /// from its stored end to its stored start has walked the trail — and
