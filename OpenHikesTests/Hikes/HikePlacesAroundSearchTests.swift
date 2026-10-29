@@ -292,6 +292,27 @@ struct HikePlacesAroundSearchTests {
         #expect(listing.onTrail.map(\.isAdded) == [true, false])
         #expect(listing.nearby.map(\.id) == [Self.hut.id, Self.summit.id])
     }
+
+    /// The sort compares the walking position alone and leaves a tie to
+    /// `sorted(by:)` being stable, so this is what holds a tie in place.
+    @Test("places at the same point keep the order they came in, the hike's own first")
+    func listingKeepsTiesInArrivalOrder() {
+        let onTheLine = TrailPlaceAnchor(distanceAlongRouteMeters: 600, offRouteMeters: 0)
+        let heldSpring = TrailPlaceRow(place: Self.spring, anchor: onTheLine)
+        let foundTwin = TrailPlaceRow(place: Self.place(5, latitude: 47.605), anchor: onTheLine)
+        let firstAway = TrailPlaceRow(place: Self.place(6, latitude: 47.61), anchor: nil, offRouteMeters: 800)
+        let secondAway = TrailPlaceRow(place: Self.place(7, latitude: 47.61), anchor: nil, offRouteMeters: 800)
+        let thirdAway = TrailPlaceRow(place: Self.place(8, latitude: 47.61), anchor: nil, offRouteMeters: 800)
+
+        let listing = TrailPlaceAroundListing(
+            held: [heldSpring],
+            candidates: [firstAway, foundTwin, secondAway, thirdAway]
+        )
+
+        #expect(listing.onTrail.map(\.id) == [heldSpring.id, foundTwin.id])
+        #expect(listing.onTrail.map(\.isAdded) == [true, false])
+        #expect(listing.nearby.map(\.id) == [firstAway.id, secondAway.id, thirdAway.id])
+    }
 }
 
 private struct AnsweringSource: TrailPointSourcing {

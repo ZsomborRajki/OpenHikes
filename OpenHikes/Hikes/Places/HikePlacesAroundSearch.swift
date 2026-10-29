@@ -99,17 +99,12 @@ struct TrailPlaceAroundListing: Equatable {
     ///
     /// In the order they are met walking the line: a place too far off to be
     /// described by a distance along it sorts after every one that can be,
-    /// nearest the line first.
+    /// nearest the line first. Two places at the same point keep the order
+    /// they came in, the hike's own first, because `sorted(by:)` is stable.
     init(held: [TrailPlaceRow], candidates: [TrailPlaceRow]) {
         let entries = held.map { TrailPlaceAroundEntry(row: $0, isAdded: true) }
             + candidates.map { TrailPlaceAroundEntry(row: $0, isAdded: false) }
-        let indexed = entries.enumerated().sorted { left, right in
-            let lhs = Self.key(left.element.row)
-            let rhs = Self.key(right.element.row)
-            guard lhs != rhs else { return left.offset < right.offset }
-            return lhs.along != rhs.along ? lhs.along < rhs.along : lhs.off < rhs.off
-        }
-        let sorted = indexed.map(\.element)
+        let sorted = entries.sorted { Self.key($0.row) < Self.key($1.row) }
         onTrail = sorted.filter(\.row.isOnTheLine)
         nearby = sorted.filter { !$0.row.isOnTheLine }
     }
