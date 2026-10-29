@@ -833,8 +833,9 @@ private func closeDiscardedRecording(_ hikeID: UUID?) {
 private func showSavedHike(_ hike: Hike) {
     selectedHike = hike
     presentation.makeRoomForTheMap()
-    // The path last: a save finishes on a task, not in a tap — see
-    // ``SheetPresentation/path``.
+    // The path last: a recording's save and a new trail's finish on a task,
+    // not in a tap — see ``SheetPresentation/path``. An edit's finishes in
+    // its tap, where the order would not matter.
     presentation.path = [.hike(hike)]
 }
 

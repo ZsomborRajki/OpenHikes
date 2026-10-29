@@ -221,8 +221,8 @@ extension Hike {
     /// timestamps.
     ///
     /// Built on demand rather than stored: it is derived entirely from
-    /// ``route``, and the one screen that wants it wants it once, behind a
-    /// button tap.
+    /// ``route``. Only tests read it: Find Photos and the picker build their
+    /// timeline off the main actor, as part of a ``HikePhotoSearchPlan``.
     var photoTimeline: HikePhotoTimeline? { HikePhotoTimeline(route: route) }
 
     /// Whether it is worth offering to look through the photo library for

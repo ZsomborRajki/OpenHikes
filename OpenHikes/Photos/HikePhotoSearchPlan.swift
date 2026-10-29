@@ -156,8 +156,9 @@ extension Hike {
     ///
     /// Built on demand rather than stored, for the reason
     /// ``Hike/photoTimeline`` is: it is derived entirely from the route and
-    /// the walks, and the one screen that wants it wants it behind a button
-    /// tap.
+    /// the walks. Only `HikeWalkPhotoRouteRevisionTests` reads it: Find
+    /// Photos and the picker each take ``photoSearchSource`` and build the
+    /// plan off the main actor.
     var photoSearchPlan: HikePhotoSearchPlan {
         HikePhotoSearchPlan(source: photoSearchSource)
     }

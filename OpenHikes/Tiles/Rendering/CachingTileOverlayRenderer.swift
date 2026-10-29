@@ -25,7 +25,7 @@ import Synchronization
 // Tasks together, each blocking a thread in Swift's small cooperative pool on
 // synchronous filesystem work (slower still on the Simulator). The pool
 // doesn't grow to absorb that — it backs up, and since MapKit's own
-// tile-rendering dispatch competes for the same worker threads, the whole map
+// tile-rendering dispatch competes for the same cores, the whole map
 // can appear to freeze, including after switching providers (the new
 // overlay's tile loads queue up behind the same jam).
 //

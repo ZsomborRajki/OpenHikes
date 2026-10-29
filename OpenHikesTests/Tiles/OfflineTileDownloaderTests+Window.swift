@@ -2,12 +2,14 @@
 //  OfflineTileDownloaderTests+Window.swift
 //  OpenHikesTests
 //
-//  The in-flight window is where the app decides how hard to lean on a tile
-//  host. A task group bounds when work starts, not how much of it there is,
-//  so `run(tiles:…)` primes the group with a window's worth and then refills
-//  it one task per result. What these pin is that hand-off: every planned
-//  tile asked for exactly once, never more of the route dispatched than the
-//  window holds, and nothing asked for at all once the download is cancelled.
+//  The in-flight window is how much of a route a download keeps dispatched
+//  at once, not how hard it leans on a tile host: the gate's background
+//  share decides that. A task group bounds when work starts, not how much of
+//  it there is, so `run(tiles:…)` primes the group with a window's worth and
+//  then refills it one task per result. What these pin is that hand-off:
+//  every planned tile asked for exactly once, never more of the route
+//  dispatched than the window holds, and nothing asked for at all once the
+//  download is cancelled.
 //
 //  They inject their own ``TileLoadGate`` rather than using the app's. The
 //  shared one is narrower than the window it would be measuring — a bulk

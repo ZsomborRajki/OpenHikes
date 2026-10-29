@@ -4,7 +4,7 @@
 //
 //  The fourth store a hike can be in, and the one this app cannot read back.
 //
-//  ``HikeWorkoutWriting/write(_:)``'s header states the invariant these pin:
+//  The invariant these pin is the one `HikeRecorder.exportToHealth` states:
 //  Health is a second store and it must never hold a walk this app does not.
 //  Deleting a hike used to invert it — the row, the sidecar, the photographs
 //  and the walk history all went, the `HKWorkout` stayed, and the app threw

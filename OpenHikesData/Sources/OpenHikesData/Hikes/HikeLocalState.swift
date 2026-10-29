@@ -90,7 +90,7 @@ public final class HikeLocalState {
     /// Read by ``HikeDeletion``, which is what it was stored for: an
     /// identifier thrown away cannot be recovered, and Health is a second
     /// store that must never hold a walk this app does not — see
-    /// ``HikeWorkoutWriting/write(_:)``. It is read while the sidecar is still
+    /// `HikeRecorder.exportToHealth`. It is read while the sidecar is still
     /// here and spent after the deletion commits, for the reason the photo
     /// files are; that ordering is argued in `HikeDeletion.swift`.
     public var healthWorkoutID: UUID?
