@@ -17,9 +17,10 @@
 //  drew elsewhere — and there is deliberately no *planned* flag, because
 //  telling a plan from a walk takes none. The library's totals count a hike
 //  as walked only when its route carries a clock, and a drawn line carries
-//  none, so the trail itself never counts and each walk along it does, by
-//  what it covered and on the day it started. ``LibraryTotals`` owns that
-//  rule.
+//  none, so the trail itself never counts. Its walks count instead, each by
+//  what it covered and on the day it started, less whatever part of its time
+//  a counted hike's clock also covers, which that hike has counted already.
+//  ``LibraryTotals`` owns that rule.
 //
 //  Two points is the floor, and it is a refusal rather than a disabled button
 //  alone: one point is a place, and a `Hike` whose route is a single
@@ -61,14 +62,14 @@
 //  is saved as the paths it follows, thousands of points rather than the
 //  stops that were tapped, and a save flattens them, puts whatever heights
 //  were read on every one, measures the places against them and serializes
-//  them, all inside the tap. It stays for what it reads and what it hands
-//  back: the stops, the legs and the places are the draft's, which is
-//  main-actor state, and the hike that comes back is the screen's own row,
-//  selected and drawn at once — an edit writes into the very row the hike's
-//  screen holds. A save has not been timed on a long snapped trail. If a
-//  timing ever finds it holding the button, the import's shape is the one to
-//  take: the draft copied out as values, a context of its own, and the row
-//  fetched back by id.
+//  them, all before the hike's screen can open. It stays for what it reads
+//  and what it hands back: the stops, the legs and the places are the
+//  draft's, which is main-actor state, and the hike that comes back is the
+//  screen's own row, selected and drawn at once — an edit writes into the
+//  very row the hike's screen holds. A save has not been timed on a long
+//  snapped trail. If a timing ever finds it holding the button, the import's
+//  shape is the one to take: the draft copied out as values, a context of
+//  its own, and the row fetched back by id.
 //
 
 import Algorithms
