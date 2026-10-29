@@ -94,8 +94,8 @@ Scripts/run-ui-tests.sh --all --device "$udid" --derived-data DerivedData
 Scripts/sim-pool.sh release
 ```
 
-CI runs the lint, the unit tests, both packages and the script tests, on the
-same device.
+CI runs the lint, the unit tests on the same device, both packages, the
+script tests and the page check.
 
 ### Before trusting a run
 

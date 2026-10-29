@@ -44,11 +44,11 @@ jobs:
   # *required* check: `main`'s branch protection carries
   # `required_pull_request_reviews`, `enforce_admins` and
   # `required_conversation_resolution`, and no `required_status_checks` at
-  # all. So a red run here is an annotation
-  # rather than a block, and "fails the workflow" in this file means "reports
-  # red" — #182 and #185 both merged with `Thread sanitizer` red. This comment
-  # used to assert the opposite; naming the eight in the repository settings
-  # is the change that would make it true.
+  # all. So a red run here is an annotation rather than a block, and "fails
+  # the workflow" in this file means "reports red" — #182 and #185 both
+  # merged with `Thread sanitizer` red. This comment used to assert the
+  # opposite; naming the eight in the repository settings is the change that
+  # would make it true.
   #
   # The filtering below is a job-level `if:` rather than a `paths-ignore:` on
   # the trigger, and that choice is what keeps the option open. A required

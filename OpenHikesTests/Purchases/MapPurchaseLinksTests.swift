@@ -11,9 +11,10 @@
 //  app, and those are the pull requests that break the pages, so the check
 //  runs as a script in a job no filter skips (*CI* in `AGENTS.md`). It reads
 //  the links as the URL literals in `MapPurchaseLinks.swift`; what is left
-//  here is that every URL the app opens is one of them. What neither can see
-//  is the site itself — a merge not yet deployed, or Pages switched off —
-//  which is the reachability App Review checks for.
+//  here is that every URL the app opens is one of them, in the folder its
+//  language is read off. What neither can see is the site itself — a merge
+//  not yet deployed, or Pages switched off — which is the reachability App
+//  Review checks for.
 //
 
 import Foundation
@@ -62,16 +63,32 @@ struct MapPurchaseLinksTests {
 
     /// The page check finds the pages the app links by reading
     /// `MapPurchaseLinks.swift` for quoted URLs, so a URL built any other way
-    /// would be a page it never checks.
-    @Test("each linked page is a URL the page check reads", arguments: PageLanguage.allCases)
+    /// would be a page it never checks. It reads a translation's language off
+    /// its folder (`de/privacy/` is `privacy/` in `de`), so each page sits at
+    /// its English original's path under this language's code, or the
+    /// `<html lang>` it holds the page to would be another language's.
+    @Test(
+        "each linked page is a URL the page check reads, in the folder of its language",
+        arguments: PageLanguage.allCases
+    )
     func linkedPagesAreCheckedPages(language: PageLanguage) throws {
         let source = try String(
             contentsOf: StringCatalogTests.sourceRoot.appending(path: "OpenHikes/Purchases/MapPurchaseLinks.swift"),
             encoding: .utf8
         )
-        for url in [language.privacyPolicy, language.termsAndConditions] {
-            let site = "https://zsomborrajki.github.io/OpenHikes/"
+        let site = "https://zsomborrajki.github.io/OpenHikes/"
+        let folder = language == .english ? "" : "\(language.rawValue)/"
+        let pages = [
+            (language.privacyPolicy, PageLanguage.english.privacyPolicy),
+            (language.termsAndConditions, PageLanguage.english.termsAndConditions),
+        ]
+        for (url, original) in pages {
             #expect(url.absoluteString.hasPrefix(site), "\(url) is not on the site")
+            let translated = site + folder + String(original.absoluteString.dropFirst(site.count))
+            #expect(
+                url.absoluteString == translated,
+                "\(url) should be \(translated): the page check reads a page's language off its folder"
+            )
             #expect(
                 source.contains("\"\(url.absoluteString)\""),
                 "\(url) is not spelled out in MapPurchaseLinks.swift, so Scripts/check-legal-pages.sh never checks it"
