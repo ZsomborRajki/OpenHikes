@@ -180,21 +180,29 @@ final class DisplayedRouteCoordinateCache {
     /// Called from `OpenHikesView`'s selection change handler — deliberately
     /// not from its `body`, which is the entire point of this type. A
     /// recording's draft is left alone: its line is the recorder's to draw,
-    /// and the change that finishes it calls here again.
+    /// and the change that finishes it calls here again. The same hike again
+    /// starts nothing; a new line for it is ``project(_:)``'s to draw.
     func prepare(for hike: Hike?) {
         guard let hike else {
             clear()
             return
         }
         guard !hike.isRecording, hike.id != hikeID else { return }
+        project(hike)
+    }
+
+    /// Projects `hike`'s line as it stands, replacing any projection still in
+    /// flight — the one way into this cache, for a new selection and for
+    /// anything that has to draw the selected hike's line again.
+    private func project(_ hike: Hike) {
         hikeID = hike.id
         generation &+= 1
         let started = generation
         let id = hike.id
         let route = hike.route
-        let project = build
+        let makeDrawnRoute = build
         preparation = Task { [weak self] in
-            let drawn = await Self.projectOffMain(route, build: project)
+            let drawn = await Self.projectOffMain(route, build: makeDrawnRoute)
             guard let self, started == generation else { return }
             prepared = Prepared(hikeID: id, route: drawn)
         }
