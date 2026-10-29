@@ -2,16 +2,18 @@
 //  DisplayedRoute.swift
 //  OpenHikes
 //
-//  What the map draws: the route's geometry, keyed by id so the map only
-//  rebuilds its polyline when the selection changes, and — separately — the
-//  route's live appearance, which changes at drag frequency and so is kept out
-//  of SwiftUI entirely.
+//  What the map draws: the route's geometry, keyed by id and revision so the
+//  map only rebuilds its polyline when the selection changes or the selected
+//  line is replaced, and — separately — the route's live appearance, which
+//  changes at drag frequency and so is kept out of SwiftUI entirely.
 //
 
 import CoreLocation
+import Observation
 import OpenHikesData
 import OpenHikesShared
 import SwiftUI
+import Synchronization
 
 struct DisplayedRoute: Equatable {
     let id: UUID
@@ -29,45 +31,55 @@ struct DisplayedRoute: Equatable {
     /// by walked run and only the dotted stretch above crosses each pause
     /// (#1034). See ``TrailRuns``.
     let runs: TrailRuns
+    /// Which projection of the hike's line this is — see
+    /// ``DisplayedRouteCoordinateCache/DrawnRoute/revision``. *Edit Route*
+    /// keeps the hike's id and replaces its line, and mirroring can deliver
+    /// that edit while the hike is selected, so the id alone cannot say
+    /// whether the map's polyline is still the right one.
+    let revision: Int
 
-    /// The segment lists and the cut are defaulted because most callers —
-    /// every test and every caller that draws a fully measured, uninterrupted
-    /// route — have nothing to declare here, and that is the ordinary case:
-    /// with no `runs`, the line is one run.
+    /// The segment lists, the cut and the revision are defaulted because most
+    /// callers — every test and every caller that draws a fully measured,
+    /// uninterrupted route — have nothing to declare here, and that is the
+    /// ordinary case: with no `runs`, the line is one run.
     init(
         id: UUID,
         coordinates: [CLLocationCoordinate2D],
         inferredSegments: [[CLLocationCoordinate2D]] = [],
         pausedSegments: [[CLLocationCoordinate2D]] = [],
-        runs: TrailRuns? = nil
+        runs: TrailRuns? = nil,
+        revision: Int = 0
     ) {
         self.id = id
         self.coordinates = coordinates
         self.inferredSegments = inferredSegments
         self.pausedSegments = pausedSegments
         self.runs = runs ?? TrailRuns(pointCount: coordinates.count, pauseIndices: [])
+        self.revision = revision
     }
 
     /// Coordinates are intentionally excluded: they only ever change together
-    /// with `id` (a new hike selection), so comparing `id` is both sufficient
-    /// and avoids an O(n) array diff on every SwiftUI update. The inferred
-    /// segments and the paused ones are derived from those same coordinates
-    /// and excluded for the same reason.
+    /// with `id` (a new hike selection) or `revision` (a new line for the same
+    /// hike), so comparing those two is both sufficient and avoids an O(n)
+    /// array diff on every SwiftUI update. The inferred segments and the
+    /// paused ones are derived from those same coordinates and excluded for
+    /// the same reason.
     ///
     /// Tint and width are excluded because they aren't here: they live in
     /// ``RouteStyle``, so a colour, width, pattern or border change never reaches this
     /// value — and therefore never reaches the view that builds it.
     static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.id == rhs.id
+        lhs.id == rhs.id && lhs.revision == rhs.revision
     }
 
     /// The finished route to draw for the current selection.
     ///
     /// It lives here rather than inline in the view because the properties it
-    /// reads — `id` and `isRecording`, plus `route` only on a change of
-    /// selection — are the set that decides how often the root view, and with
-    /// it the sheet closure inside it, is invalidated. Keeping it in one named
-    /// place is what lets a test observe exactly that set; see
+    /// reads — `id`, `isRecording` and `route`, the last registered without
+    /// being decoded except when the line has to be projected again — are the
+    /// set that decides how often the root view, and with it the sheet
+    /// closure inside it, is invalidated. Keeping it in one named place is
+    /// what lets a test observe exactly that set; see
     /// `RouteAppearanceIsolationTests`.
     static func forSelection(
         _ hike: Hike?,
@@ -81,32 +93,79 @@ struct DisplayedRoute: Equatable {
             coordinates: drawn.coordinates,
             inferredSegments: drawn.inferredSegments,
             pausedSegments: drawn.pausedSegments,
-            runs: drawn.runs
+            runs: drawn.runs,
+            revision: drawn.revision
         )
     }
 }
 
-/// Finished route points are immutable after import or recording finalization,
-/// so their Core Location projection is kept across unrelated body passes
-/// rather than remapped on each one. Active recording drafts never enter this
-/// cache.
+/// The selected route's Core Location projection, kept across unrelated body
+/// passes rather than remapped on each one. Active recording drafts never
+/// enter this cache.
+///
+/// A finished hike's line is not immutable: *Edit Route* keeps the hike's id
+/// and replaces its line, heights filled onto a line replace it, and mirroring
+/// delivers either to a device where the hike is selected (#1228). So the
+/// projection is kept per line rather than per hike — rebuilt when the
+/// selection moves to another hike, or when the selected hike's `route` is
+/// written — and each rebuild carries a new ``DrawnRoute/revision``, which is
+/// what tells the map its polyline is stale.
+///
+/// A write is noticed through observation rather than by comparing the line,
+/// because reading `route` after any save of the hike decodes the whole
+/// externally stored value again — measured at 30 to 200 milliseconds for
+/// twenty thousand points on a Mac — and the root view's body would pay that
+/// on its next pass. ``Hike/trackRouteChanges()`` registers the dependency without
+/// decoding, so the body asking is re-run by a write, and the flag armed
+/// beside it tells this cache that the re-run is for a new line.
+///
+/// Only a write that notifies the hike object handed in is noticed. A sibling
+/// context's save was measured not to (see `HikeListMetrics+Observation.swift`):
+/// the main context's hike took the new line only when a fetch refreshed it,
+/// and nothing observing it was told. So an edit mirrored in from another
+/// device is redrawn only if its import notifies the main context's hike,
+/// which nobody has watched on a device (#1228).
 final class DisplayedRouteCoordinateCache {
     struct DrawnRoute {
         let coordinates: [CLLocationCoordinate2D]
         let inferredSegments: [[CLLocationCoordinate2D]]
         let pausedSegments: [[CLLocationCoordinate2D]]
         let runs: TrailRuns
+        /// Counts this cache's projections, so two of them — of two hikes, or
+        /// of one hike before and after its line was replaced — never share
+        /// one. Zero only for ``empty``.
+        let revision: Int
 
         static let empty = Self(
             coordinates: [],
             inferredSegments: [],
             pausedSegments: [],
-            runs: TrailRuns(pointCount: 0, pauseIndices: [])
+            runs: TrailRuns(pointCount: 0, pauseIndices: []),
+            revision: 0
         )
+    }
+
+    /// Raised, from wherever the write happened, by the first write to the
+    /// cached hike's `route` after it was projected.
+    ///
+    /// Raised synchronously rather than through a main-actor hop, because the
+    /// write also invalidates the body that asked, and a hop could land after
+    /// that body has already run again and been handed the old line. One per
+    /// projection, so a registration left over from a previous one — an
+    /// observation can only be ignored, never cancelled — raises a flag
+    /// nothing reads any more.
+    nonisolated private final class RouteWrite: Sendable {
+        private let raised = Mutex(false)
+
+        var isRaised: Bool { raised.withLock { $0 } }
+
+        func raise() { raised.withLock { $0 = true } }
     }
 
     private var hikeID: UUID?
     private var cached: DrawnRoute = .empty
+    private var routeWrite = RouteWrite()
+    private var revision = 0
 
     func coordinates(for hike: Hike) -> [CLLocationCoordinate2D] {
         drawnRoute(for: hike).coordinates
@@ -116,15 +175,30 @@ final class DisplayedRouteCoordinateCache {
     /// differently — inferred and paused — derived together because they come
     /// from one walk of the same route, and cached together so a body pass
     /// that asks for any of them pays for none of them twice.
+    ///
+    /// Registers `route` with whatever is observing the caller on every call,
+    /// a hit included, so a write to the line re-runs the body that drew it.
     func drawnRoute(for hike: Hike) -> DrawnRoute {
-        guard hike.id != hikeID else { return cached }
+        hike.trackRouteChanges()
+        guard hike.id != hikeID || routeWrite.isRaised else { return cached }
         hikeID = hike.id
+        let write = RouteWrite()
+        routeWrite = write
+        // Armed before the read, so a write that lands after it is a new
+        // line rather than one this projection already holds.
+        withObservationTracking {
+            hike.trackRouteChanges()
+        } onChange: {
+            write.raise()
+        }
         let route = hike.route
+        revision += 1
         cached = DrawnRoute(
             coordinates: route.map(\.clCoordinate),
             inferredSegments: route.inferredSegments,
             pausedSegments: route.pausedSegments,
-            runs: route.trailRuns
+            runs: route.trailRuns,
+            revision: revision
         )
         return cached
     }
@@ -132,6 +206,7 @@ final class DisplayedRouteCoordinateCache {
     func clear() {
         hikeID = nil
         cached = .empty
+        routeWrite = RouteWrite()
     }
 }
 

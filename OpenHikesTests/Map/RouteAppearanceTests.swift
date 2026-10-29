@@ -80,11 +80,12 @@ struct RouteAppearanceTests {
     }
 
     /// The map rebuilds its polyline when this changes, so it must change for
-    /// a new selection and for nothing else. The coordinates are deliberately
-    /// ignored (they only ever change together with the id), and so is the
-    /// route's appearance — that lives in `RouteStyle` and reaches the map
-    /// without a redraw at all.
-    @Test("a displayed route compares by identity alone")
+    /// a new selection or a new line for the selected hike (#1228), and for
+    /// nothing else. The coordinates are deliberately ignored (they only ever
+    /// change together with the id or the revision), and so is the route's
+    /// appearance — that lives in `RouteStyle` and reaches the map without a
+    /// redraw at all.
+    @Test("a displayed route compares by identity and revision alone")
     func displayedRouteEquality() {
         let id = UUID()
         let coordinates = Fixture.coordinates(Fixture.ridgeRoute)
@@ -92,7 +93,9 @@ struct RouteAppearanceTests {
 
         #expect(base == DisplayedRoute(id: id, coordinates: coordinates))
         #expect(base != DisplayedRoute(id: UUID(), coordinates: coordinates))
-        // Same hike: not a redraw, whatever the coordinates say.
+        // Same hike and revision: not a redraw, whatever the coordinates say.
         #expect(base == DisplayedRoute(id: id, coordinates: []))
+        // Same hike, new line: a redraw, even with the same coordinates.
+        #expect(base != DisplayedRoute(id: id, coordinates: coordinates, revision: 1))
     }
 }

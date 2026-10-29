@@ -106,7 +106,11 @@ struct RouteAppearanceIsolationTests {
         let a = DisplayedRoute.forSelection(first, cache: cache)
         let b = DisplayedRoute.forSelection(second, cache: cache)
         #expect(a != b)
-        #expect(a == DisplayedRoute.forSelection(first, cache: cache))
+        // Asked again with nothing written, the same hike is the same route,
+        // so an unrelated body pass is not a redraw. (Coming back to `first`
+        // after `second` projects it again, which is a redraw the map needs
+        // anyway: it is drawing `second` by then.)
+        #expect(b == DisplayedRoute.forSelection(second, cache: cache))
         #expect(DisplayedRoute.forSelection(nil, cache: cache) == nil)
     }
 

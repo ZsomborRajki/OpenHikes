@@ -12,13 +12,14 @@
 //  all that it needs — *where* those metres are is a second measurement, and
 //  keeping it would be a CloudKit column holding a copy of the route for
 //  something the trail graph answers again in milliseconds once it is cached.
-//  So grades are asked for every time the selection changes, by the same walk
-//  the section's figures came from (see ``TrailBreakdownAnalyzer``): measured
-//  from one graph, a stretch drawn red on the map is the red share of the bar
-//  beneath it. Only the colours are measured each time, though. The bar's
-//  figures are stored once and kept (see `Hike.surfaceMetersByCategory`), so a
-//  change to the analyzer, or newer tagging once the cached graph refreshes,
-//  can set the two apart. Steepness is cheaper still: the route carries its
+//  So grades are asked for every time the selection changes, or the selected
+//  hike's line is replaced under it, by the same walk the section's figures
+//  came from (see ``TrailBreakdownAnalyzer``): measured from one graph, a
+//  stretch drawn red on the map is the red share of the bar beneath it. Only
+//  the colours are measured each time, though. The bar's figures are stored
+//  once and kept (see `Hike.surfaceMetersByCategory`), so a change to the
+//  analyzer, or newer tagging once the cached graph refreshes, can set the
+//  two apart. Steepness is cheaper still: the route carries its
 //  own heights, and ``RouteSteepness`` reads them in one pass.
 //
 //  Held in a reference type the map observes directly, for the reason
@@ -28,7 +29,9 @@
 
 import CoreLocation
 import Foundation
+import Observation
 import OpenHikesData
+import Synchronization
 
 /// What the selected hike's line is coloured by. One setting for every hike
 /// rather than a column on each, because it is a way of reading the map and
@@ -85,6 +88,30 @@ final class RouteShading {
     /// that replaced it.
     @ObservationIgnored private var generation = 0
 
+    /// Raised, from wherever the write happened, by the first write to the
+    /// followed hike's route after it was last measured — the flag
+    /// ``DisplayedRouteCoordinateCache`` keeps for the drawn line, and raised
+    /// synchronously for the same reason: the map can draw the new line
+    /// before a hop lands, and must not hand it the old one's colours. One per
+    /// measurement, so a registration left from an earlier one raises a flag
+    /// nothing reads.
+    nonisolated private final class LineWrite: Sendable {
+        private let raised = Mutex(false)
+
+        var isRaised: Bool { raised.withLock { $0 } }
+
+        func raise() { raised.withLock { $0 = true } }
+    }
+
+    @ObservationIgnored private var lineWrite = LineWrite()
+
+    /// Whether ``stretches`` were measured along the followed hike's line as
+    /// it is now: false from the first write to that line until the hop after
+    /// it clears them. *Edit Route*, heights filled onto a line and mirroring
+    /// all replace a line under the hike's id (#1228), and the map draws the
+    /// new line at once, so it asks this rather than trusting ``hikeID``.
+    var describesCurrentLine: Bool { !lineWrite.isRaised }
+
     /// `provider` is `nil` exactly where ``OpenHikesModel/trailGraphProvider``
     /// is, and then no grade is ever measured and the line keeps its colour
     /// under `difficulty`. Steepness needs no provider.
@@ -110,9 +137,10 @@ final class RouteShading {
     /// Measures `hike`'s route, or clears the map with `nil`.
     ///
     /// Called on every selection change. A different hike clears the old
-    /// one's stretches at once; the same hike again — reselected after its
-    /// route was edited — keeps them up until the new answer replaces them,
-    /// so the line does not flash back to its plain colour in between.
+    /// one's stretches at once; the same hike again keeps them up until the
+    /// new answer replaces them, so the line does not flash back to its plain
+    /// colour in between. A line replaced while it is followed is not a
+    /// change of selection, and is measured again by ``watchLine(of:)``.
     func follow(_ hike: Hike?) {
         followed = hike
         if hike?.id != hikeID { publish(hikeID: nil, stretches: []) }
@@ -133,6 +161,7 @@ final class RouteShading {
     private func measure() {
         cancelMeasurement()
         guard let hike = followed else { return }
+        watchLine(of: hike)
         switch coloring {
         case .off:
             publish(hikeID: nil, stretches: [])
@@ -168,6 +197,31 @@ final class RouteShading {
                 Stretch(shade: run.shade, coordinates: run.coordinates)
             }
         }
+    }
+
+    /// Measures the line again when it is replaced under the same hike, which
+    /// no change of selection announces. Armed before the line is read, so a
+    /// write that lands after the read is a new line; and only `route` is
+    /// registered, so a colour or width write is not.
+    private func watchLine(of hike: Hike) {
+        let write = LineWrite()
+        lineWrite = write
+        withObservationTracking {
+            hike.trackRouteChanges()
+        } onChange: { [weak self] in
+            write.raise()
+            let shading = self
+            Task { @MainActor in shading?.lineDidChange(write) }
+        }
+    }
+
+    /// Takes the old line's colours off, then measures the new line. The
+    /// colours go at once, as they do for another hike: they were measured
+    /// along ground the line no longer covers.
+    private func lineDidChange(_ write: LineWrite) {
+        guard write === lineWrite else { return }
+        publish(hikeID: nil, stretches: [])
+        measure()
     }
 
     /// Runs `answer` and publishes it against `hikeID`, unless something has

@@ -32,10 +32,12 @@ extension MapView.Coordinator {
     }
 
     /// Keeps the stretches as polylines, built once per answer rather than
-    /// once per restyle, and recolours the line with them.
+    /// once per restyle, and recolours the line with them — none, while they
+    /// were measured along a line the hike has replaced since.
     func applyRouteShading(_ shading: RouteShading) {
-        shadedHikeID = shading.hikeID
-        shadedStretches = shading.stretches.map { stretch in
+        let current = shading.describesCurrentLine
+        shadedHikeID = current ? shading.hikeID : nil
+        shadedStretches = (current ? shading.stretches : []).map { stretch in
             (stretch.shade, MKPolyline(coordinates: stretch.coordinates, count: stretch.coordinates.count))
         }
         applyRouteShades()
