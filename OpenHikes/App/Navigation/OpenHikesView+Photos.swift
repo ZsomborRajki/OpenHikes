@@ -93,8 +93,8 @@ extension OpenHikesView {
         guard let subject = photoCapture.currentSubject() else { return }
         // Read off the hike here, on its actor, and indexed off it, once for
         // the whole selection — see ``PickedPhotoWork``. A selection filed
-        // under a place is never matched, so it reads nothing.
-        let source = subject.placeID == nil ? subject.hike.photoSearchSource : nil
+        // under a place reads nothing.
+        let source = subject.pickerSearchSource
         photoCapture.runLibraryImport {
             let plan = await PickedPhotoWork.standard.plan(from: source)
             for item in items {

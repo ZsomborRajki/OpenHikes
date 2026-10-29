@@ -47,6 +47,15 @@ extension PickedPhotoPlacementTests {
         }
     }
 
+    /// Where a selection is filed when the picker closes, as
+    /// `attachPickedPhotos` reads it: the claim in force, made the way a
+    /// hike's screen makes one, or a place's screen when `place` is set.
+    private static func selection(filedOn hike: Hike, place: UUID? = nil) throws -> PhotoCaptureController.Filing {
+        let controller = PhotoCaptureController()
+        controller.attach(to: hike, place: place) { _ in graphSelection }
+        return try #require(controller.currentSubject())
+    }
+
     /// An unstamped route with no walks has nothing for a library scan to
     /// search, so the profile is there only because the picker asked for it.
     @Test("a selection's plan is built off the main thread, profile included")
@@ -57,21 +66,27 @@ extension PickedPhotoPlacementTests {
         let log = WorkLog()
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context, route: PhotoDiscoveryFixture.unstampedRoute)
+        let selection = try Self.selection(filedOn: hike)
 
-        let plan = try #require(await log.work.plan(from: hike.photoSearchSource))
+        let plan = try #require(await log.work.plan(from: selection.pickerSearchSource))
 
         #expect(log.plansOnMainThread == [false])
         #expect(plan.isEmpty)
         #expect(plan.profile != nil)
     }
 
-    /// A place's own screen is where its picks belong, so there is no plan
-    /// to build — and nothing route-sized to spend.
+    /// A place's own screen is where its picks belong, so a selection made
+    /// there reads nothing off the hike and builds no plan — not even on a
+    /// recorded route, which a selection on the hike's own screen would
+    /// index and match against.
     @Test("a selection filed under a place indexes nothing")
-    func placeSelectionBuildsNoPlan() async {
+    func placeSelectionBuildsNoPlan() async throws {
         let log = WorkLog()
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context, route: PhotoDiscoveryFixture.route)
+        let selection = try Self.selection(filedOn: hike, place: UUID())
 
-        let plan = await log.work.plan(from: nil)
+        let plan = await log.work.plan(from: selection.pickerSearchSource)
 
         #expect(plan == nil)
         #expect(log.plansOnMainThread.isEmpty)

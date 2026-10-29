@@ -46,10 +46,10 @@ nonisolated struct PickedPhotoWork: Sendable {
     /// The plan a whole selection is placed against, built off the main
     /// actor.
     ///
-    /// `nil` for a selection filed under a place, which is pinned to the
-    /// place and never matched, and for an import already cancelled: its
-    /// caller stops before placing anything, so a route's worth of indexing
-    /// would be spent on no one.
+    /// `nil` for a selection filed under a place, which has no source — see
+    /// ``PhotoCaptureController/Filing/pickerSearchSource`` — and for an
+    /// import already cancelled: its caller stops before placing anything,
+    /// so a route's worth of indexing would be spent on no one.
     @concurrent
     func plan(from source: HikePhotoSearchPlan.Source?) async -> HikePhotoSearchPlan? {
         guard let source, !Task.isCancelled else { return nil }
@@ -67,5 +67,19 @@ nonisolated struct PickedPhotoWork: Sendable {
     ) async -> PickedPhotoPlacement {
         assertOffMainThread("Placing a picked photo must stay off the main thread")
         return place(PickedPhotoMetadata.read(data), plan, fallback)
+    }
+}
+
+extension PhotoCaptureController.Filing {
+    /// What a selection from the picker filed here is matched against, read
+    /// off the hike now, on its actor, for ``PickedPhotoWork/plan(from:)`` to
+    /// index off it.
+    ///
+    /// `nil` for a selection filed under a place. The place is where its
+    /// pictures are pinned, however well their clocks or cameras would match
+    /// the walk — see ``PickedPhotoPlacement/resolve(_:plan:fallback:now:)``
+    /// — so there is nothing to read off the hike and nothing to index.
+    var pickerSearchSource: HikePhotoSearchPlan.Source? {
+        placeID == nil ? hike.photoSearchSource : nil
     }
 }
