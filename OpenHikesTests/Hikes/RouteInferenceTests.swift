@@ -148,7 +148,7 @@ struct RouteInferenceTests {
     }
 
     @Test("a drawn route carries its inferred stretches to the map")
-    func displayedRouteCarriesInferredSegments() throws {
+    func displayedRouteCarriesInferredSegments() async throws {
         let hike = Hike(
             title: "Spotty",
             distanceMeters: 3000,
@@ -159,12 +159,7 @@ struct RouteInferenceTests {
             ]
         )
 
-        let drawn = try #require(
-            DisplayedRoute.forSelection(
-                hike,
-                cache: DisplayedRouteCoordinateCache()
-            )
-        )
+        let drawn = try #require(await DisplayedRoute.prepared(for: hike))
 
         #expect(drawn.coordinates.count == 3)
         #expect(drawn.inferredSegments.count == 1)
@@ -175,7 +170,7 @@ struct RouteInferenceTests {
     /// things, so a route carrying both has to hand the map two lists rather
     /// than one merged one — see ``RouteBoundary``.
     @Test("a pause and an inferred stretch reach the map as separate lines")
-    func pausesAndInferencesDoNotMerge() throws {
+    func pausesAndInferencesDoNotMerge() async throws {
         let hike = Hike(
             title: "Broken",
             distanceMeters: 5000,
@@ -188,12 +183,7 @@ struct RouteInferenceTests {
             ]
         )
 
-        let drawn = try #require(
-            DisplayedRoute.forSelection(
-                hike,
-                cache: DisplayedRouteCoordinateCache()
-            )
-        )
+        let drawn = try #require(await DisplayedRoute.prepared(for: hike))
 
         #expect(drawn.inferredSegments.count == 1)
         #expect(drawn.pausedSegments.count == 1)

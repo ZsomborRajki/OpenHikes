@@ -3,7 +3,8 @@
 //  OpenHikes
 //
 //  What the map draws: the route's geometry, keyed by id so the map only
-//  rebuilds its polyline when the selection changes, and — separately — the
+//  rebuilds its polyline when the selection changes and projected off the
+//  main actor before the root body ever reads it, and — separately — the
 //  route's live appearance, which changes at drag frequency and so is kept out
 //  of SwiftUI entirely.
 //
@@ -64,18 +65,20 @@ struct DisplayedRoute: Equatable {
     /// The finished route to draw for the current selection.
     ///
     /// It lives here rather than inline in the view because the properties it
-    /// reads — `id` and `isRecording`, plus `route` only on a change of
-    /// selection — are the set that decides how often the root view, and with
-    /// it the sheet closure inside it, is invalidated. Keeping it in one named
-    /// place is what lets a test observe exactly that set; see
-    /// `RouteAppearanceIsolationTests`.
+    /// reads — `id` and `isRecording`, plus whatever the cache has prepared —
+    /// are the set that decides how often the root view, and with it the
+    /// sheet closure inside it, is invalidated. Keeping it in one named place
+    /// is what lets a test observe exactly that set; see
+    /// `RouteAppearanceIsolationTests`. `route` is not in it: the cache is
+    /// filled outside the body, and `nil` here until it has been is a route
+    /// not drawn yet rather than a route with nothing in it.
     static func forSelection(
         _ hike: Hike?,
         cache: DisplayedRouteCoordinateCache,
         recordingPresented: Bool = false
     ) -> Self? {
-        guard !recordingPresented, let hike, !hike.isRecording else { return nil }
-        let drawn = cache.drawnRoute(for: hike)
+        guard !recordingPresented, let hike, !hike.isRecording,
+              let drawn = cache.drawnRoute(for: hike) else { return nil }
         return Self(
             id: hike.id,
             coordinates: drawn.coordinates,
@@ -86,52 +89,137 @@ struct DisplayedRoute: Equatable {
     }
 }
 
-/// Finished route points are immutable after import or recording finalization,
-/// so their Core Location projection is kept across unrelated body passes
-/// rather than remapped on each one. Active recording drafts never enter this
-/// cache.
+/// The selected route's Core Location projection, prepared outside the body
+/// that draws it and kept across that body's unrelated passes.
+///
+/// Finished route points are immutable after import or recording
+/// finalization, so one projection per selection is enough. Active recording
+/// drafts never enter this cache.
+///
+/// **Projected off the main actor, from the selection's change handler
+/// (#1232).** Projecting a route maps every point to Core Location and walks
+/// the route twice more for its inferred stretches, its paused ones and its
+/// runs. That used to happen on the root body's first pass after a selection,
+/// on the main actor: about 12 ms of a 20,000-point trail's 40, and 130 of a
+/// 200,000-point one's 410, measured on the simulator. Now the body only
+/// reads what ``prepare(for:)`` has published, and `prepare` hands the route
+/// to ``projectOffMain(_:build:)`` and publishes the answer when it lands.
+/// The root body runs once more for that, the one observable write this type
+/// makes per selection.
+///
+/// The route itself is read where the hike lives, on the main actor, and only
+/// the projection leaves. That read is the rest of those figures — a route not
+/// read yet is external storage decoded whole — but it is paid once per
+/// context, and the selection handler that calls `prepare` pays it there
+/// anyway: ``BackgroundTrailTracker``'s `HikeRouteInput` reads `hike.route`
+/// in the same handler whenever no walk is holding it, and ``RouteShading`` and
+/// auto-save's corridor read it when they have work to do. A context of its
+/// own would decode a second copy off the main actor and leave the first
+/// where it is; the decode leaves the main actor only when all of them do.
+@Observable
 final class DisplayedRouteCoordinateCache {
-    struct DrawnRoute {
+    /// Non-isolated so releasing the last reference never requires proving
+    /// we're on the main actor — see ``RouteStyle``'s deinit for why.
+    nonisolated deinit { /* intentionally empty */ }
+
+    nonisolated struct DrawnRoute: Sendable {
         let coordinates: [CLLocationCoordinate2D]
         let inferredSegments: [[CLLocationCoordinate2D]]
         let pausedSegments: [[CLLocationCoordinate2D]]
         let runs: TrailRuns
 
-        static let empty = Self(
-            coordinates: [],
-            inferredSegments: [],
-            pausedSegments: [],
-            runs: TrailRuns(pointCount: 0, pauseIndices: [])
-        )
+        /// The projected line and the stretches within it the map has to
+        /// draw differently — inferred and paused — derived together because
+        /// they come from one walk of the same route.
+        init(route: [RouteCoordinate]) {
+            coordinates = route.map(\.clCoordinate)
+            inferredSegments = route.inferredSegments
+            pausedSegments = route.pausedSegments
+            runs = route.trailRuns
+        }
     }
 
-    private var hikeID: UUID?
-    private var cached: DrawnRoute = .empty
-
-    func coordinates(for hike: Hike) -> [CLLocationCoordinate2D] {
-        drawnRoute(for: hike).coordinates
+    /// A projection, and the hike it is the projection of.
+    struct Prepared {
+        let hikeID: UUID
+        let route: DrawnRoute
     }
 
-    /// The projected line and the stretches within it the map has to draw
-    /// differently — inferred and paused — derived together because they come
-    /// from one walk of the same route, and cached together so a body pass
-    /// that asks for any of them pays for none of them twice.
-    func drawnRoute(for hike: Hike) -> DrawnRoute {
-        guard hike.id != hikeID else { return cached }
+    /// The one property the root body observes: written when a projection
+    /// lands and when the selection clears, and at no other time.
+    private var prepared: Prepared?
+
+    /// The hike the projection above belongs to, or is being made for, so a
+    /// handler pass that does not change the selection starts nothing.
+    @ObservationIgnored private var hikeID: UUID?
+    /// Identifies the current request, so a projection still in flight for a
+    /// selection that has since moved on is dropped rather than published
+    /// over the one that replaced it — the arrangement ``RouteShading``'s
+    /// own `generation` explains.
+    @ObservationIgnored private var generation = 0
+    /// The projection in flight, if any. Readable so a suite can wait on the
+    /// effect rather than on a duration.
+    @ObservationIgnored private(set) var preparation: Task<Void, Never>?
+    /// What a projection is, as a seam so a suite can see which thread made
+    /// it. ``DrawnRoute/init(route:)`` everywhere else.
+    @ObservationIgnored private let build: @Sendable ([RouteCoordinate]) -> DrawnRoute
+
+    init(build: @escaping @Sendable ([RouteCoordinate]) -> DrawnRoute = DrawnRoute.init(route:)) {
+        self.build = build
+    }
+
+    /// What the body draws for `hike`: its projection once it has landed,
+    /// and nothing until then.
+    func drawnRoute(for hike: Hike) -> DrawnRoute? {
+        guard let prepared, prepared.hikeID == hike.id else { return nil }
+        return prepared.route
+    }
+
+    /// Starts projecting `hike`'s route, or clears the cache with `nil`.
+    ///
+    /// Called from `OpenHikesView`'s selection change handler — deliberately
+    /// not from its `body`, which is the entire point of this type. A
+    /// recording's draft is left alone: its line is the recorder's to draw,
+    /// and the change that finishes it calls here again.
+    func prepare(for hike: Hike?) {
+        guard let hike else {
+            clear()
+            return
+        }
+        guard !hike.isRecording, hike.id != hikeID else { return }
         hikeID = hike.id
+        generation &+= 1
+        let started = generation
+        let id = hike.id
         let route = hike.route
-        cached = DrawnRoute(
-            coordinates: route.map(\.clCoordinate),
-            inferredSegments: route.inferredSegments,
-            pausedSegments: route.pausedSegments,
-            runs: route.trailRuns
-        )
-        return cached
+        let project = build
+        preparation = Task { [weak self] in
+            let drawn = await Self.projectOffMain(route, build: project)
+            guard let self, started == generation else { return }
+            prepared = Prepared(hikeID: id, route: drawn)
+        }
     }
 
-    func clear() {
+    /// Projects `route` off the main actor.
+    ///
+    /// `@concurrent`, because a `nonisolated async` function runs on its
+    /// caller's executor, and the caller is the main actor.
+    @concurrent
+    nonisolated static func projectOffMain(
+        _ route: [RouteCoordinate],
+        build: @Sendable ([RouteCoordinate]) -> DrawnRoute
+    ) async -> DrawnRoute {
+        assertOffMainThread("Projecting the selected route must stay off the main thread")
+        return build(route)
+    }
+
+    private func clear() {
+        generation &+= 1
         hikeID = nil
-        cached = .empty
+        preparation = nil
+        // `Prepared` is not `Equatable`, so Observation would notify the body
+        // for a `nil` written over `nil`.
+        if prepared != nil { prepared = nil }
     }
 }
 
