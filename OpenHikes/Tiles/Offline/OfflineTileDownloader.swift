@@ -695,10 +695,11 @@ extension OfflineTileDownloader {
         guard let token = backgroundTime.begin({ [weak self] in
             // The system is about to reclaim the time. Stopping is not
             // optional here — an app still running when the grant expires is
-            // killed rather than suspended, and a killed run is the one
-            // outcome that costs the hiker every tile it fetched. An ended
-            // grant's late callback must leave both the space prompt and a
-            // confirmed run alone, although they share its plan's generation.
+            // killed rather than suspended. Cancelling loses this run no
+            // more than a kill would — its claimed batches stay either way —
+            // and keeps the rest of the app alive. An ended grant's late
+            // callback must leave both the space prompt and a confirmed run
+            // alone, although they share its plan's generation.
             guard let self, backgroundTimeGrant?.owner == owner else { return }
             cancel()
         }) else { return nil }

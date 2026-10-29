@@ -22,8 +22,9 @@
 //  because the downloader claims saved tiles in batches as they land
 //  (``OfflineTileDownloader/defaultClaimBatchSize``), and the next attempt
 //  resumes from those claimed keys instead of fetching them again. Only the
-//  unfinished tail saved since the last batch is unclaimed, and the next
-//  launch trim reclaims it.
+//  tail saved since the last batch is unclaimed. No hike owns it, so the
+//  launch trim may evict it as cache residue, and a tile of it still on disk
+//  when the next attempt reaches it is kept without a fetch.
 //
 //  ## No background mode, and that is the point
 //
