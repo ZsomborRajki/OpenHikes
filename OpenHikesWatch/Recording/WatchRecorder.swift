@@ -182,8 +182,9 @@ final class WatchRecorder: NSObject {
     @ObservationIgnored private let glances = WatchGlancePublisher()
     @ObservationIgnored private let healthStore = HKHealthStore()
     @ObservationIgnored private let locations = CLLocationManager()
-    @ObservationIgnored private var session: HKWorkoutSession?
-    @ObservationIgnored private var builder: HKLiveWorkoutBuilder?
+    /// The workout session and builder this recording holds, which are the
+    /// only ones whose callbacks speak for it — see ``WatchWorkoutOwnership``.
+    @ObservationIgnored private var workout = WatchWorkoutOwnership<HKWorkoutSession, HKLiveWorkoutBuilder>()
     @ObservationIgnored private var accumulator = WatchWalkAccumulator()
     @ObservationIgnored private var sessionID = UUID()
     @ObservationIgnored private var startedAt = Date.now
@@ -246,7 +247,7 @@ final class WatchRecorder: NSObject {
         guard phase == .recording else { return }
         accumulator.pause()
         journaling { try $0.record(.paused(.now), at: .now) }
-        session?.pause()
+        workout.session?.pause()
         // The feed is left running rather than stopped. On a phone a pause can
         // afford to drop to significant-location-change monitoring, because
         // the process survives; here the workout session is what keeps this
@@ -259,7 +260,7 @@ final class WatchRecorder: NSObject {
 
     func resume() {
         guard phase == .paused else { return }
-        session?.resume()
+        workout.session?.resume()
         let now = Date.now
         window.reopen(at: now)
         journaling { try $0.record(.resumed(now), at: now) }
@@ -456,8 +457,7 @@ final class WatchRecorder: NSObject {
         collector.dataSource = heartRateSource(for: attached.workoutConfiguration)
         collector.delegate = self
         attached.delegate = self
-        session = attached
-        builder = collector
+        workout.attach(attached, builder: collector)
     }
 
     #if DEBUG
@@ -487,11 +487,26 @@ final class WatchRecorder: NSObject {
     /// and a watch that finished this builder would put a second one in Health
     /// for the same walk. It throws away the workout and nothing else: what
     /// the builder was given stays, which is why it is given heart rate alone.
+    ///
+    /// Let go of before anything else hears from them: a session ended here
+    /// can still report a failure, and its builder a reading, once the next
+    /// recording has begun.
     private func endWorkoutSession() {
-        session?.end()
-        builder?.discardWorkout()
-        session = nil
-        builder = nil
+        guard let ended = workout.release() else { return }
+        ended.session.end()
+        ended.builder.discardWorkout()
+    }
+
+    /// Stops the recording `failed` was holding up, if it still is.
+    ///
+    /// Asked again here rather than trusted from the callback: the hiker may
+    /// have pressed Stop and started another walk between the two, and that
+    /// walk's session has not failed. ``stop()`` leaves the running or paused
+    /// phase and lets the session go before it first suspends, so nothing
+    /// comes between this answer and that.
+    private func stop(afterFailureOf failed: HKWorkoutSession) async {
+        guard workout.failureEnds(failed, isRecording: phase.isActive) else { return }
+        await stop()
     }
 
     // MARK: Fixes
@@ -865,14 +880,17 @@ nonisolated extension WatchRecorder: HKWorkoutSessionDelegate {
     func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
         Self.logger.error("Workout session failed: \(error.localizedDescription, privacy: .public)")
         onMainActor { [weak self] in
-            guard let self, phase.isActive else { return }
+            // Only the session this recording holds: one ended at an earlier
+            // Stop can report its failure after the next walk has started,
+            // and has no say over it (#1231).
+            guard let self, workout.failureEnds(workoutSession, isRecording: phase.isActive) else { return }
             // The session is what keeps this app running, so losing it is not
             // a detail — but the walk so far is on the accumulator and stop()
             // will keep it. Stopping is therefore better than carrying on
             // into a suspension nobody would be told about. The walk reaches
             // the phone through ``onWalkQueued``, and the model hears through
             // ``onRecordingEnded`` that the receiver is down, as for a Stop.
-            Task { await self.stop() }
+            Task { await self.stop(afterFailureOf: workoutSession) }
         }
     }
 }
@@ -899,6 +917,11 @@ nonisolated extension WatchRecorder: HKLiveWorkoutBuilderDelegate {
         // The sample's own time, so the screen can tell a reading from the
         // last one before the sensor stopped (#1024).
         let sampledAt = statistics.mostRecentQuantityDateInterval()?.end
-        onMainActor { [weak self] in self?.stats.update(heartRateBPM: beats, sampledAt: sampledAt) }
+        onMainActor { [weak self] in
+            // Only the held builder's: one discarded at an earlier Stop would
+            // put that walk's pulse on this one's screen.
+            guard let self, workout.admitsCollection(from: workoutBuilder) else { return }
+            stats.update(heartRateBPM: beats, sampledAt: sampledAt)
+        }
     }
 }

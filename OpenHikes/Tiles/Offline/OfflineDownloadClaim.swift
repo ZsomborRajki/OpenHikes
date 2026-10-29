@@ -8,11 +8,11 @@
 //  A downloaded map is two things in two places: bytes in Application
 //  Support, and a record in the hike's ``HikeLocalState`` sidecar saying whose
 //  they are. The bytes go first — there is nothing to claim until they are on
-//  disk — so the window between them is the dangerous one:
-//  `TileCache.trimCache(claimedBy:)` deletes every durable tile no hike
-//  claims, so a run whose tiles landed and whose record did not has spent a
-//  hiker's connection, battery, time and storage on a map the next launch
-//  quietly removes.
+//  disk — so the window between them is the dangerous one. A durable tile no
+//  hike claims is cache residue `TileCache.trimCache(claimedBy:limit:)` may
+//  evict, so a run whose tiles landed and whose record did not has spent a
+//  hiker's connection, battery, time and storage on a map no hike owns, which
+//  a later launch can quietly remove.
 //
 //  Which is why the claim is not a screen's job. It used to be:
 //  `HikeDetailView` merged ``OfflineTileDownloader/completedRecord`` from an
@@ -77,7 +77,7 @@ nonisolated enum OfflineDownloadClaim {
         // "this device has stored nothing", and writing through that answer
         // materialises a *second* sidecar row holding only this record. The
         // real one is then unreachable behind a `fetchLimit` of one, and every
-        // download it still claims is a trim away from being deleted.
+        // download it still claims is cache residue the launch trim may evict.
         // Resolving here also warms the cache the merge reads, so the two
         // cannot disagree a line apart.
         let previousState: HikeLocalState?

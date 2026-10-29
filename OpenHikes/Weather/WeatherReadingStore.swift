@@ -41,8 +41,9 @@ nonisolated struct StoredWeatherReading: Sendable {
 /// Reads and writes the one persisted reading.
 ///
 /// Main-actor isolated by the module's default, which is where both its
-/// callers are: ``WeatherManager`` loads once at init and saves on each
-/// successful fetch. `UserDefaults` is not `Sendable`, so a `nonisolated`
+/// callers are: ``WeatherManager`` loads once in
+/// ``WeatherManager/restoreLastReading()``, after the first frame, and saves
+/// on each successful fetch. `UserDefaults` is not `Sendable`, so a `nonisolated`
 /// version of this would have to launder it — and there is nothing here that
 /// wants to run anywhere else.
 final class WeatherReadingStore {

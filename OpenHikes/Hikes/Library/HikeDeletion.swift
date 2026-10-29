@@ -29,12 +29,14 @@
 //  history all went, and the `HKWorkout` and its `HKWorkoutRoute` stayed in
 //  Health permanently, with the app having thrown away the only handle it had.
 //
-//  So ``HikeLocalState/healthWorkoutID`` is read *before* the sidecar goes —
+//  So ``HikeLocalState/wroteToHealth`` is read *before* the sidecar goes —
 //  a deleted row has nothing left to read — and spent *after* the store has
-//  accepted the deletion, for the reason the photo files are: the identifier
-//  is recoverable from the sidecar right up until the commit, and is gone
-//  forever afterwards. A refused save therefore leaves the workout exactly
-//  where it was, beside a hike that is still in the list.
+//  accepted the deletion, for the reason the photo files are: the sidecar's
+//  word that this device wrote the hike to Health is there right up until the
+//  commit, and is gone forever afterwards. A refused save therefore leaves the
+//  workout exactly where it was, beside a hike that is still in the list.
+//  What the word is spent on is the hike's own identifier, which everything
+//  the write saved carries — see `HealthKitWorkoutWriter.swift`.
 //
 //  It is the last thing to happen and the only one that cannot fail the
 //  deletion. A hiker who asked for a hike to go gets it whether or not a
@@ -196,13 +198,14 @@ nonisolated enum HikeDeletion {
         let files = hikes.flatMap { $0.photos.map(HikePhotoStore.PhotoFiles.init) }
         // Read while the sidecar is still there, for the reason the file names
         // are read while the models are still attached: `deleteLocalState()`
-        // takes the only record of this identifier with it, and after the
-        // commit there is nothing left to ask. Spent after the save, so a
-        // refusal leaves the workout beside the hike that is still in the
-        // list. A workout Health is still writing has no identifier here yet;
+        // takes the only record that these hikes went to Health with it, and
+        // after the commit there is nothing left to ask. Spent after the save,
+        // so a refusal leaves the workout beside the hike that is still in the
+        // list. A write Health is still answering is asked about too, and may
+        // not have saved everything yet;
         // ``HikeWorkoutExport/write(_:with:filingInto:)`` finds its hike gone
-        // when Health answers, and takes that one back itself.
-        let workoutIDs = hikes.compactMap { $0.localState?.healthWorkoutID }
+        // when Health answers, and asks again.
+        let healthHikeIDs = hikes.filter { $0.localState?.wroteToHealth == true }.map(\.id)
         // The same, for the watch walks these hikes were imported from — see
         // this file's header.
         let watchSessionIDs = hikes.compactMap { $0.localState?.watchSessionID }
@@ -239,7 +242,7 @@ nonisolated enum HikeDeletion {
             }
         }
         HikePhotoImport.discardFiles(files, from: store)
-        remove(workoutIDs, from: workouts)
+        remove(healthHikeIDs, from: workouts)
         // The App Group copies of these trails, which nothing else would take.
         // A widget pinned to a deleted hike is *meant* to keep its snapshot
         // and its map through a mere deselection — see ``SharedStore/clear()``
@@ -301,7 +304,8 @@ nonisolated enum HikeDeletion {
         )
     }
 
-    /// Takes the workouts out of Health, after the deletion is on disk.
+    /// Takes these hikes' workouts out of Health, after the deletion is on
+    /// disk.
     ///
     /// Fire-and-forget and logged, the shape ``HikeRecorder`` already uses for
     /// the write. Nothing waits on it and nothing reports it: the hike is gone
@@ -311,14 +315,14 @@ nonisolated enum HikeDeletion {
     /// drafts — which carry no workout at all — cost nothing.
     @MainActor
     private static func remove(
-        _ workoutIDs: [UUID],
+        _ hikeIDs: [UUID],
         from workouts: (any HikeWorkoutWriting)?
     ) {
-        guard let workouts, !workoutIDs.isEmpty else { return }
+        guard let workouts, !hikeIDs.isEmpty else { return }
         Task {
-            for workoutID in workoutIDs {
+            for hikeID in hikeIDs {
                 do {
-                    try await workouts.delete(workoutID: workoutID)
+                    try await workouts.deleteWorkout(of: hikeID)
                 } catch {
                     logger.error(
                         """

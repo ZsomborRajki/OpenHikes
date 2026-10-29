@@ -452,35 +452,9 @@ nonisolated extension TileCache {
             "loadTileResult(forKey:url:purpose:) stats and reads tile files synchronously — call it off the main thread"
         )
         let mutationToken = mutationToken(forKey: key)
-        if let cached = memoryImage(forKey: key) { return .loaded(cached) }
-
-        // Which tier holds this key, and whether the durable copy is coverage
-        // that has gone stale. Read *before* the disk lookup, which deletes an
-        // expired browsing file as it finds it: the answer decides where a
-        // refetched tile is written back below, and whether there is anything
-        // to fall back on if it cannot be fetched at all.
-        let paths = filePaths(forKey: key)
-        let durableStoredAt = storedModificationDate(for: paths.durable, in: .durable)
-        let wasDurable = durableStoredAt != nil
-        let hasStaleCoverage = durableStoredAt.map { isExpired($0) } ?? false
-
-        // Stale coverage with a browsing-tier duplicate beside it: reconciled
-        // here, because the lookup below cannot be trusted to meet it. It asks
-        // the browsing tier first, and asking unlinks an expired browsing file
-        // — so two copies left by an older build that are both past the TTL
-        // would lose the newer one before either the launch sweep or a promote
-        // reached them, and the older would be the copy drawn. Same rule as
-        // those two paths apply; see ``adoptNewerCachedCopy(cached:durable:diskName:)``.
-        if hasStaleCoverage { reconcileStaleDuplicate(forKey: key) }
-
-        if let tile = freshDiskImage(forKey: key) {
-            guard publishDiskTile(
-                tile,
-                forKey: key,
-                token: mutationToken
-            ) else { return .failed }
-            return .loaded(tile.image)
-        }
+        let stored = lookUpStoredTile(forKey: key, token: mutationToken)
+        if let answer = stored.answer { return answer }
+        let hasStaleCoverage = stored.hasStaleCoverage
 
         // Offline, metered, or asked to conserve: the tile isn't cached and
         // opening a connection for it is either doomed or unwanted. Return
@@ -547,10 +521,72 @@ nonisolated extension TileCache {
         guard storeFetchedTile(
             fetched,
             forKey: key,
-            in: wasDurable ? .durable : .browsing,
+            in: stored.wasDurable ? .durable : .browsing,
             token: mutationToken
         ) else { return .failed }
         return .loaded(fetched.image)
+    }
+
+    /// The half of ``loadTileResult(forKey:url:purpose:)`` that needs no tile
+    /// server: the memory tier, then a current copy on disk, or `nil` when
+    /// only a request could answer. Saved coverage past its age is `nil` as
+    /// well, because it is refreshed before it is drawn and only the full
+    /// load may ask for that.
+    ///
+    /// Never opens a connection, which is what lets the map ask it before it
+    /// waits for a ``TileLoadGate`` slot; see ``CachingTileOverlayRenderer``.
+    /// `@concurrent` for the full load's reason.
+    @concurrent
+    func loadStoredTileResult(forKey key: String) async -> TileLoadResult? {
+        assertOffMainThread(
+            "loadStoredTileResult(forKey:) stats and reads tile files synchronously — call it off the main thread"
+        )
+        return lookUpStoredTile(forKey: key, token: mutationToken(forKey: key)).answer
+    }
+
+    /// What this device holds for a key, before any request is considered.
+    private struct StoredTileLookup {
+        /// The memory tier's tile, or a current one from disk — `.failed` if
+        /// a deletion raced the read — and `nil` when neither has the tile.
+        var answer: TileLoadResult?
+        /// Whether a durable copy exists, current or not: the tier a
+        /// refetched tile is written back to.
+        var wasDurable = false
+        /// Whether that copy is coverage past its age: what is drawn if the
+        /// refresh cannot be made.
+        var hasStaleCoverage = false
+    }
+
+    /// Memory, then disk (ephemeral, then durable), publishing a disk hit to
+    /// memory. Both loads above go through here, so the one the map makes
+    /// outside the gate cannot disagree with the one it makes under it.
+    private func lookUpStoredTile(forKey key: String, token: MutationToken) -> StoredTileLookup {
+        if let cached = memoryImage(forKey: key) { return StoredTileLookup(answer: .loaded(cached)) }
+
+        // Which tier holds this key, and whether the durable copy is coverage
+        // that has gone stale. Read *before* the disk lookup, which deletes an
+        // expired browsing file as it finds it: the answer decides where a
+        // refetched tile is written back, and whether there is anything to
+        // fall back on if it cannot be fetched at all.
+        let durableStoredAt = storedModificationDate(for: filePaths(forKey: key).durable, in: .durable)
+        var lookup = StoredTileLookup(
+            wasDurable: durableStoredAt != nil,
+            hasStaleCoverage: durableStoredAt.map { isExpired($0) } ?? false
+        )
+
+        // Stale coverage with a browsing-tier duplicate beside it: reconciled
+        // here, because the lookup below cannot be trusted to meet it. It asks
+        // the browsing tier first, and asking unlinks an expired browsing file
+        // — so two copies left by an older build that are both past the TTL
+        // would lose the newer one before either the launch sweep or a promote
+        // reached them, and the older would be the copy drawn. Same rule as
+        // those two paths apply; see ``adoptNewerCachedCopy(cached:durable:diskName:)``.
+        if lookup.hasStaleCoverage { reconcileStaleDuplicate(forKey: key) }
+
+        if let tile = freshDiskImage(forKey: key) {
+            lookup.answer = publishDiskTile(tile, forKey: key, token: token) ? .loaded(tile.image) : .failed
+        }
+        return lookup
     }
 
     /// Fetches a tile straight into durable storage — the bulk-download path.

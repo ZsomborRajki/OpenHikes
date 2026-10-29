@@ -40,6 +40,7 @@
 //  rather than asking again.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 import Observation
@@ -104,9 +105,9 @@ struct TrailPlaceAroundListing: Equatable {
     init(held: [TrailPlaceRow], candidates: [TrailPlaceRow]) {
         let entries = held.map { TrailPlaceAroundEntry(row: $0, isAdded: true) }
             + candidates.map { TrailPlaceAroundEntry(row: $0, isAdded: false) }
-        let sorted = entries.sorted { Self.key($0.row) < Self.key($1.row) }
-        onTrail = sorted.filter(\.row.isOnTheLine)
-        nearby = sorted.filter { !$0.row.isOnTheLine }
+        // `partitioned(by:)` answers (does not satisfy, satisfies), and each
+        // half keeps the walking order.
+        (nearby, onTrail) = entries.sorted { Self.key($0.row) < Self.key($1.row) }.partitioned(by: \.row.isOnTheLine)
     }
 
     init() { /* empty */ }

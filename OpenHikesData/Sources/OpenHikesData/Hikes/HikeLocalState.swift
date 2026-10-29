@@ -74,26 +74,30 @@ public final class HikeLocalState {
     /// consulted for `isRecording` rows by the abandoned-draft sweep.
     public var ownsRecordingDraft: Bool = false
 
-    /// The `HKWorkout` this hike was written to in *this* device's Health
-    /// store, or `nil` if it never was.
+    /// Whether this hike was written to *this* device's Health store, or a
+    /// write of it was begun there.
     ///
     /// Here rather than on ``Hike`` for exactly the reason every other column
-    /// in this file is: it identifies a record in a store that does not leave
-    /// this device. Mirroring it would point a second phone at a workout it
-    /// does not have, and — unlike the tile arrays — there would be no sweep
+    /// in this file is: it describes a store that does not leave this device.
+    /// Mirroring it would have a second phone ask its own Health about a write
+    /// it never made, and — unlike the tile arrays — there would be no sweep
     /// that could notice, because a Health store nobody can read cannot be
     /// reconciled against.
     ///
-    /// Written after the workout exists, so a row carrying one is a row whose
-    /// export is known to have landed.
+    /// Set *before* the write's first call to Health, and never cleared while
+    /// the hike exists. A write can leave something in Health on every way
+    /// out of it, including a workout a locked phone saved without handing it
+    /// back, and a write the process never came back to finish. Everything
+    /// it saves carries the hike's own identifier, so a deletion needs only
+    /// this: whether to ask.
     ///
-    /// Read by ``HikeDeletion``, which is what it was stored for: an
-    /// identifier thrown away cannot be recovered, and Health is a second
-    /// store that must never hold a walk this app does not — see
+    /// Read by ``HikeDeletion``, which is what it was stored for. A hike
+    /// without it asks Health for nothing, and Health is a second store that
+    /// must never hold a walk this app does not — see
     /// `HikeRecorder.exportToHealth`. It is read while the sidecar is still
     /// here and spent after the deletion commits, for the reason the photo
     /// files are; that ordering is argued in `HikeDeletion.swift`.
-    public var healthWorkoutID: UUID?
+    public var wroteToHealth: Bool = false
 
     /// The watch recording this hike was imported from, or `nil` for a hike
     /// that came from anywhere else.
@@ -105,7 +109,7 @@ public final class HikeLocalState {
     /// Recognising the second arrival is the difference between that being
     /// free and it being a duplicate hike a hiker has to find and delete.
     ///
-    /// Here rather than on ``Hike`` for the reason ``healthWorkoutID`` is: it
+    /// Here rather than on ``Hike`` for the reason ``wroteToHealth`` is: it
     /// names something outside the synced store — a session on a watch paired
     /// with *this* phone, which is the only device that will ever receive that
     /// transfer. A second phone mirroring the column would learn an identifier

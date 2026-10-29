@@ -8,9 +8,10 @@
 //  HealthKit is unavailable in a hosted unit test the way ActivityKit and
 //  `StoreKitTest` are, and `makeWorkoutWriter()` answers `nil` for exactly
 //  this launch, so nothing here touches a real Health store. That is the
-//  reason ``HikeWorkoutWriting`` exists: every decision worth asserting — the
-//  switch, the figures, the identifier filed afterwards — sits above it, and
-//  the one file that speaks HealthKit sits below.
+//  reason ``HikeWorkoutWriting`` exists: every decision about the export worth
+//  asserting — the switch, the figures, the mark filed before the write —
+//  sits above it, and the one file that speaks HealthKit sits below. What that
+//  file decides is `HealthKitWorkoutWriterTests`'s.
 //
 //  The bias of this suite is deliberate. Most of what matters about a Health
 //  export is that it does not happen: not for a hiker who never asked, not
@@ -28,26 +29,27 @@ import Testing
 @MainActor
 final class StubWorkoutWriter: HikeWorkoutWriting {
     private(set) var written: [HikeWorkoutRequest] = []
-    var result: Result<UUID, HikeWorkoutFailure> = .success(UUID())
+    /// What the next write throws. `nil` succeeds.
+    var failure: HikeWorkoutFailure?
 
-    func write(_ request: HikeWorkoutRequest) async throws -> UUID {
+    func write(_ request: HikeWorkoutRequest) async throws {
         written.append(request)
         // A hop, so the stub behaves like the real writer: a caller that
         // happens to be correct only because nothing suspended is a caller
         // that breaks on a device.
         await Task.yield()
-        return try result.get()
+        if let failure { throw failure }
     }
 
-    /// What a deletion asked Health to remove, in the order it asked.
+    /// The hikes a deletion asked Health to take back, in the order it asked.
     private(set) var deleted: [UUID] = []
     /// What the next delete does. `nil` succeeds; a failure is what a caller
     /// has to be able to survive, since the hike is gone from the list either
     /// way.
     var deleteFailure: HikeWorkoutFailure?
 
-    func delete(workoutID: UUID) async throws {
-        deleted.append(workoutID)
+    func deleteWorkout(of hikeID: UUID) async throws {
+        deleted.append(hikeID)
         await Task.yield()
         if let deleteFailure { throw deleteFailure }
     }
@@ -231,33 +233,32 @@ struct HikeHealthExportTests {
         #expect(request.weather == nil)
     }
 
-    /// The identifier names a record in *this* device's Health store, which is
-    /// why it belongs on `HikeLocalState` rather than on the mirrored row.
-    @Test("the workout identifier is filed against the hike once the write lands")
-    func theWorkoutIdentifierIsRemembered() async throws {
+    /// The mark is about *this* device's Health store, which is why it belongs
+    /// on `HikeLocalState` rather than on the mirrored row.
+    @Test("the hike is marked as written to Health")
+    func theHikeIsMarked() async throws {
         let harness = try harness(savesToHealth: .on)
-        let workoutID = UUID()
-        harness.writer.result = .success(workoutID)
 
         let hike = try harness.persist()
         await harness.settle()
 
         let state = HikeLocalState.existing(for: hike.id, in: harness.context)
-        #expect(state?.healthWorkoutID == workoutID)
+        #expect(state?.wroteToHealth == true)
     }
 
-    /// A failed write leaves nothing behind — no workout, no route, no
-    /// half-finished builder — which is why this needs no owner and no sweep.
-    @Test("a failed write leaves no identifier claiming one exists")
-    func aFailedWriteRemembersNothing() async throws {
+    /// A failed write can still leave something in Health: a sample it could
+    /// not take back, say. The mark is what lets the hike's deletion ask for
+    /// it, so a failure keeps it.
+    @Test("a failed write keeps its mark, so the hike's deletion still asks Health")
+    func aFailedWriteKeepsItsMark() async throws {
         let harness = try harness(savesToHealth: .on)
-        harness.writer.result = .failure(.notWritten)
+        harness.writer.failure = .unavailable
 
         let hike = try harness.persist()
         await harness.settle()
 
         let state = HikeLocalState.existing(for: hike.id, in: harness.context)
-        #expect(state?.healthWorkoutID == nil)
+        #expect(state?.wroteToHealth == true)
     }
 
     /// The hike is what the hiker came for. Health is a second store and must
@@ -265,7 +266,7 @@ struct HikeHealthExportTests {
     @Test("the hike is saved whether or not Health accepts it")
     func aFailedExportDoesNotCostTheHike() async throws {
         let harness = try harness(savesToHealth: .on)
-        harness.writer.result = .failure(.unavailable)
+        harness.writer.failure = .unavailable
 
         let hike = try harness.persist()
         await harness.settle()

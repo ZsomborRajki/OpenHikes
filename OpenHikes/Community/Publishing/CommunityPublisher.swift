@@ -34,6 +34,7 @@
 //  uploading anything again.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 import OpenHikesData
@@ -394,8 +395,10 @@ nonisolated enum CommunityPublisher {
     /// would hand them to both senders.
     @MainActor
     static func shareablePhotos(of hike: Hike) -> [HikePhoto] {
-        let ordered = ownPhotos(of: hike)
-        return ordered.filter(\.isAnchored) + ordered.filter { !$0.isAnchored }
+        // `partitioned(by:)` answers (does not satisfy, satisfies), and each
+        // half keeps the hike's order.
+        let (unanchored, anchored) = ownPhotos(of: hike).partitioned(by: \.isAnchored)
+        return anchored + unanchored
     }
 
     /// A hike's photographs minus the ones that came with somebody else's
