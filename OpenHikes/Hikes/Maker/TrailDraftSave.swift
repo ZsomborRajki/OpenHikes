@@ -262,10 +262,11 @@ enum TrailDraftSave {
     ///   leaves the hike's places as they are — see the file header.
     ///
     /// A refused save puts everything back: the rows through the context's
-    /// rollback, and the hike's own columns by hand as well, because the
-    /// rollback cannot be counted on for those. On iOS 27.0 it was measured
-    /// taking them back itself, but ``StoredTileDeletion`` records one that
-    /// kept an attribute written over an existing row. The rollback has
+    /// rollback, and the hike's own columns and its list of place rows by
+    /// hand as well, because the rollback cannot be counted on for those. On
+    /// iOS 27.0 it was measured taking them back itself. On iOS 18.6 it left
+    /// the list as the edit had left it, and ``StoredTileDeletion`` records
+    /// one that kept an attribute written over an existing row. The rollback has
     /// nothing else to take, because what the context already held is
     /// committed first — see ``HikeDeletion/delete(_:store:workouts:save:)``,
     /// which does the same for the same reason.
@@ -297,6 +298,7 @@ enum TrailDraftSave {
             surface: hike.surfaceMetersByCategory,
             difficulty: hike.difficultyMetersByGrade,
             photos: hike.photos,
+            points: hike.trailPoints ?? [],
             climb: hike.climbMeters,
             descent: hike.descentMeters,
             elevationRevision: hike.elevationRouteRevision
@@ -338,6 +340,7 @@ enum TrailDraftSave {
             hike.surfaceMetersByCategory = before.surface
             hike.difficultyMetersByGrade = before.difficulty
             hike.photos = before.photos
+            restorePlaceRows(of: hike, to: before.points)
             if before.climb != nil || before.descent != nil {
                 hike.climbMeters = before.climb
                 hike.descentMeters = before.descent
@@ -346,6 +349,19 @@ enum TrailDraftSave {
             return refusedEdit(error)
         }
         return .saved(hike)
+    }
+
+    /// Puts a refused edit's place rows back in the hike's list of them.
+    ///
+    /// The rows the edit deleted come back with the rollback, but on the iOS
+    /// 18 floor the hike's own list of them does not: measured on 18.6, a
+    /// restored row names the hike while the hike still lists none, and the
+    /// columns put back by hand make the next save write that empty list,
+    /// leaving the place on disk with no hike. On iOS 27 the list is back
+    /// already, and this compares equal.
+    private static func restorePlaceRows(of hike: Hike, to points: [TrailPoint]) {
+        guard hike.trailPoints?.map(\.persistentModelID) != points.map(\.persistentModelID) else { return }
+        hike.trailPoints = points
     }
 
     private static func refusedEdit(_ error: any Error) -> TrailDraftSaveOutcome {
