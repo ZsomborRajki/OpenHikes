@@ -49,7 +49,7 @@ extension MapCoordinatorTests {
     /// The cut comes from the selected hike's own route: a pause named on its
     /// first point opens nothing, and one arriving at its fourth cuts it there.
     @Test("a selected hike's pauses reach its renderer")
-    func selectedHikesPausesCutItsLine() throws {
+    func selectedHikesPausesCutItsLine() async throws {
         let route = (0..<6).map { index in
             RouteCoordinate(
                 latitude: 47.63,
@@ -58,7 +58,7 @@ extension MapCoordinatorTests {
             )
         }
         let hike = Hike(title: "Two Halves", distanceMeters: 300, route: route)
-        let drawn = try #require(DisplayedRoute.forSelection(hike, cache: DisplayedRouteCoordinateCache()))
+        let drawn = try #require(await DisplayedRoute.prepared(for: hike))
         #expect(drawn.runs.pausedLegs == [2])
 
         let coordinator = MapView.Coordinator()

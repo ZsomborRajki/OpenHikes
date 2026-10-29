@@ -102,11 +102,13 @@ extension MapCoordinatorTests {
     /// End to end from the stored hike: a pause added to the selected hike's
     /// line, under the same id, cuts the line the map is already drawing.
     @Test("a pause added to the selected hike's line cuts the drawn line")
-    func pauseBoundaryEditCutsTheDrawnLine() throws {
+    func pauseBoundaryEditCutsTheDrawnLine() async throws {
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context, title: "Two Halves", route: Self.eastward(from: 47.63))
         let cache = DisplayedRouteCoordinateCache()
         let coordinator = MapView.Coordinator()
+        cache.prepare(for: hike)
+        await cache.preparation?.value
         let before = try #require(DisplayedRoute.forSelection(hike, cache: cache))
         let map = makeMap(mapView(route: before), coordinator)
         defer { detach(map) }
@@ -114,6 +116,9 @@ extension MapCoordinatorTests {
         #expect(coordinator.routePausedLegs.isEmpty)
 
         hike.replaceRoute(with: Self.eastward(from: 47.63, paused: true))
+        await settle(until: "the new line's projection to land") {
+            DisplayedRoute.forSelection(hike, cache: cache) != before
+        }
         let after = try #require(DisplayedRoute.forSelection(hike, cache: cache))
         mapView(route: after).update(map, coordinator)
 
@@ -128,6 +133,11 @@ extension MapCoordinatorTests {
     /// heights is coloured all along it. The old line's stretches lie where
     /// the old line ran, so the new line is handed none of them, and then
     /// its own.
+    ///
+    /// The new line is handed to the map the moment it is written, before
+    /// any hop: the earliest it could arrive. The cache's own projection
+    /// lands after the shading's hop has cleared the old stretches, so drawn
+    /// this early, only the coordinator keeps them off the new line.
     @Test("a new line for the drawn hike is coloured by its own stretches, never the old line's")
     func replacedLineIsShadedAgain() async throws {
         let url = try #require(Bundle.main.url(forResource: UITestTrailTagFixture.gpxName, withExtension: "gpx"))
@@ -139,6 +149,8 @@ extension MapCoordinatorTests {
         let shading = RouteShading(provider: nil, defaults: defaults)
         let cache = DisplayedRouteCoordinateCache()
         let coordinator = MapView.Coordinator()
+        cache.prepare(for: hike)
+        await cache.preparation?.value
         let before = try #require(DisplayedRoute.forSelection(hike, cache: cache))
         let map = makeMap(mapView(route: before, base: .system(.standard), routeShading: shading), coordinator)
         defer { detach(map) }
@@ -149,12 +161,17 @@ extension MapCoordinatorTests {
         await shading.measurement?.value
         await settle(until: "the old line's stretches to reach it") { !oldRenderer.shades.isEmpty }
 
-        hike.replaceRoute(with: route.map { point in
+        let moved = route.map { point in
             var moved = point
             moved.latitude += 0.5
             return moved
-        })
-        let after = try #require(DisplayedRoute.forSelection(hike, cache: cache))
+        }
+        hike.replaceRoute(with: moved)
+        let after = DisplayedRoute(
+            id: hike.id,
+            coordinates: Fixture.coordinates(moved),
+            revision: before.revision + 1
+        )
         mapView(route: after, base: .system(.standard), routeShading: shading).update(map, coordinator)
         let newLine = try #require(coordinator.routeOverlay)
         let renderer = try #require(coordinator.mapView(map, rendererFor: newLine) as? DirectionalPolylineRenderer)

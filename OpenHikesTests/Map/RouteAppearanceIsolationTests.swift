@@ -97,20 +97,25 @@ struct RouteAppearanceIsolationTests {
     /// route's identity is what tells the map to rebuild its polyline, and a
     /// new selection must still reach it.
     @Test("a new selection still reaches the map")
-    func selectionStillInvalidates() throws {
+    func selectionStillInvalidates() async throws {
         let context = try Fixture.modelContext()
         let first = Fixture.hike(in: context, title: "First")
         let second = Fixture.hike(in: context, title: "Second")
         let cache = DisplayedRouteCoordinateCache()
 
-        let a = DisplayedRoute.forSelection(first, cache: cache)
-        let b = DisplayedRoute.forSelection(second, cache: cache)
-        #expect(a != b)
+        cache.prepare(for: first)
+        await cache.preparation?.value
+        let a = try #require(DisplayedRoute.forSelection(first, cache: cache))
         // Asked again with nothing written, the same hike is the same route,
         // so an unrelated body pass is not a redraw. (Coming back to `first`
         // after `second` projects it again, which is a redraw the map needs
         // anyway: it is drawing `second` by then.)
-        #expect(b == DisplayedRoute.forSelection(second, cache: cache))
+        #expect(a == DisplayedRoute.forSelection(first, cache: cache))
+
+        cache.prepare(for: second)
+        await cache.preparation?.value
+        let b = try #require(DisplayedRoute.forSelection(second, cache: cache))
+        #expect(a != b)
         #expect(DisplayedRoute.forSelection(nil, cache: cache) == nil)
     }
 

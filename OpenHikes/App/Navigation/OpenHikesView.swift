@@ -32,8 +32,9 @@ struct OpenHikesView: View {
     @State private var hikeDeletionRefused = false
     /// Lets the hike detail view drive one-shot map commands (e.g. the Zoom button).
     @State private var mapController = MapController()
-    /// Keeps the selected route's Core Location projection across unrelated
-    /// body passes — see ``DisplayedRouteCoordinateCache``.
+    /// The selected route's Core Location projection, made off the main actor
+    /// when the selection changes and kept across unrelated body passes —
+    /// see ``DisplayedRouteCoordinateCache``.
     @State private var displayedRouteCoordinateCache = DisplayedRouteCoordinateCache()
     /// The drawn route's tint and width, observed directly by the map. Both are
     /// written continuously — a `ColorPicker` drag and a `Slider` drag — so
@@ -154,9 +155,13 @@ struct OpenHikesView: View {
     /// filed, so nothing in this body depends on it.
     var savePhotosToLibrary: Bool { appModel.storedSettings.savesPhotosToLibrary }
 
-    /// The route drawn on the map — always the currently selected hike, if any.
-    /// Geometry only: its appearance reaches the map through ``routeStyle``,
-    /// which is what keeps a colour or width drag out of this body.
+    /// The route drawn on the map — always the currently selected hike, if any,
+    /// once its projection has landed. Geometry only: its appearance reaches
+    /// the map through ``routeStyle``, which is what keeps a colour or width
+    /// drag out of this body, and the geometry itself is made off the main
+    /// actor, started by the selection handler below or by the cache when the
+    /// selected line is replaced, which is what keeps a long route's
+    /// projection out of it.
     private var displayedRoute: DisplayedRoute? {
         DisplayedRoute.forSelection(
             selectedHike,
@@ -463,9 +468,9 @@ struct OpenHikesView: View {
             // `OpenHikesModel` filters it out of the rest.
             .onChange(of: selectedHikeState) { _, _ in
                 importSelectionGate.invalidate()
-                if selectedHike == nil {
-                    displayedRouteCoordinateCache.clear()
-                }
+                // First, so the projection is under way before anything
+                // else here spends the main actor's time.
+                displayedRouteCoordinateCache.prepare(for: selectedHike)
                 // A covered stretch belongs to the route it was drawn over.
                 walkHighlight.clear()
                 // Hands the map the new route's appearance, and re-points the
