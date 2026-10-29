@@ -144,10 +144,10 @@ final class HealthKitWorkoutWriter: HikeWorkoutWriting {
     /// `HKHealthStore.delete(_:)` wants the `HKWorkout` itself, and getting
     /// one means an `HKSampleQuery`, which means `.workoutType()` in
     /// `readTypes` — the authorization this app has never asked for and whose
-    /// absence the Settings footer states. `deleteObjects(of:predicate:)`
-    /// needs only the share access already granted, and
-    /// `HKQuery.predicateForObject(with:)` names exactly the one workout by
-    /// its UUID.
+    /// absence the Health purpose strings in `OpenHikes/Info.plist` state.
+    /// `deleteObjects(of:predicate:)` needs only the share access already
+    /// granted, and `HKQuery.predicateForObject(with:)` names exactly the one
+    /// workout by its UUID.
     ///
     /// **It can only reach this app's own samples, which is the other half of
     /// why it is safe.** HealthKit refuses a delete of an object another
