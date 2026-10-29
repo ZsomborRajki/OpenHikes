@@ -570,11 +570,13 @@ final class TrailWalkSession {
         walkedHike?.walkInProgress = nil
         guard save(reason: "ending a walk") else {
             // Put both edits back by hand rather than through
-            // `ModelContext.rollback()`, which does not do the second one:
-            // measured in ``StoredTileDeletion``, a rolled-back context still
-            // holds an attribute written over an existing row. Undoing the
-            // row by hand as well keeps the pair symmetrical and leaves every
-            // other pending edit in the context alone.
+            // `ModelContext.rollback()`, which would also discard every other
+            // pending edit in this shared main context. Nor would it put the
+            // second one back on the iOS 18 floor, where it leaves an
+            // attribute written over an existing row as written, with no
+            // change pending — see ``StoredTileDeletion`` for what was
+            // measured where. Undoing the row by hand as well keeps the pair
+            // symmetrical.
             if let row {
                 row.hike = nil
                 context.delete(row)

@@ -104,9 +104,13 @@ extension HikeRecorder {
     /// Takes the inserted row back by hand, for a save the store refused.
     ///
     /// By hand rather than through `ModelContext.rollback()`, for the reason
-    /// ``TrailWalkSession`` gives where it undoes the same pair: a rolled-back
-    /// context still holds attributes written over an existing row, and the
-    /// caller here has its own fields to put back.
+    /// ``TrailWalkSession`` gives where it undoes the same pair: a rollback
+    /// would also discard every other pending edit in this shared main
+    /// context. The caller puts its own fields back by hand too, which a
+    /// rollback would not have done on the iOS 18 floor either. And on iOS
+    /// 27.0 a rollback of this pair — the draft's columns, and a walk row
+    /// related to it — left the draft's walks unreadable: measured, the next
+    /// read of them trapped inside SwiftData.
     func discardRecordedWalk(_ walk: HikeWalk?) {
         guard let walk else { return }
         walk.hike = nil
