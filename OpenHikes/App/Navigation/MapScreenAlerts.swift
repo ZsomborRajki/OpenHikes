@@ -36,7 +36,8 @@
 //  What the alerts say is still owned by whoever raises them — the state they
 //  read lives on ``OpenHikesView`` or on the app model's ``RecordingEntry``,
 //  both of which outlive every rebuild of the sheet, so a rebuild mid-alert
-//  loses the box and not the reason for it.
+//  loses the box and not the reason for it. That includes the hikes list's own
+//  refused *Delete*: the list is inside the sheet, and so is rebuilt with it.
 //
 //  One more is attached beside these rather than through them, for the same
 //  reason and on the same contents: the trail maker's missed photographs —
@@ -59,15 +60,14 @@ extension View {
     ///   - locationAccess: Whether the map's refused "my location" button has
     ///     been tapped — see ``LocationAccessPrompt``.
     ///   - photoCapture: The camera and library pickers' own failures.
-    ///   - walkEndRefused: The record button's End Hike and Record, refused by
-    ///     the store — see ``RecordingEntry/walkEndRefused``.
+    ///   - refusals: What the store turned down — see ``MapScreenRefusals``.
     func mapScreenAlerts(
         importReport: Binding<HikeImportReport>,
         searchFailure: Binding<SearchFailure?>,
         startupIssue: Binding<Bool>,
         locationAccess: Binding<Bool>,
         photoCapture: Binding<PhotoCaptureState>,
-        walkEndRefused: Binding<Bool>
+        refusals: MapScreenRefusals
     ) -> some View {
         modifier(
             MapScreenAlerts(
@@ -76,10 +76,26 @@ extension View {
                 startupIssue: startupIssue,
                 locationAccess: locationAccess,
                 photoCapture: photoCapture,
-                walkEndRefused: walkEndRefused
+                walkEndRefused: refusals.walkEnd,
+                hikeDeletionRefused: refusals.hikeDeletion
             )
         )
     }
+}
+
+/// Something the hiker asked for on the map screen that the store refused
+/// and put back, so that nothing changed: one alert each, and each says so.
+///
+/// One argument for the two rather than one each, because they are one
+/// subject — and ``View/mapScreenAlerts(importReport:searchFailure:startupIssue:locationAccess:photoCapture:refusals:)``
+/// is at the parameter count the linter allows.
+struct MapScreenRefusals {
+    /// The record button's End Hike and Record — see
+    /// ``RecordingEntry/walkEndRefused``.
+    let walkEnd: Binding<Bool>
+    /// The hikes list's *Delete*. The hike is still in the list, its photos
+    /// and its saved map with it — see ``HikeDeletion/Outcome/refused``.
+    let hikeDeletion: Binding<Bool>
 }
 
 private struct MapScreenAlerts: ViewModifier {
@@ -89,6 +105,7 @@ private struct MapScreenAlerts: ViewModifier {
     @Binding var locationAccess: Bool
     @Binding var photoCapture: PhotoCaptureState
     @Binding var walkEndRefused: Bool
+    @Binding var hikeDeletionRefused: Bool
 
     private var placeNoticeShown: Binding<Bool> {
         Binding(
@@ -136,6 +153,14 @@ private struct MapScreenAlerts: ViewModifier {
                 Button("OK", role: .cancel) { /* dismiss */ }
             } message: {
                 Text("Its record could not be saved, so the hike is still under way. Try ending it again.")
+            }
+            // The hike is still in the list behind it, so this says only what
+            // to do — in the words a refused place removal uses, see
+            // ``HikePlaceRefusal``. A refusal is what a full disk does.
+            .alert("Couldn’t Delete Hike", isPresented: $hikeDeletionRefused) {
+                Button("OK", role: .cancel) { /* dismiss */ }
+            } message: {
+                Text("Check that the device has storage available, then try again.")
             }
     }
 }

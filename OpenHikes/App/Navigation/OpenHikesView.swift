@@ -26,6 +26,10 @@ struct OpenHikesView: View {
     /// directly by the map — see ``WalkHighlight``.
     @State private var walkHighlight = WalkHighlight()
     @State private var searchFailure: SearchFailure?
+    /// Raised by the hikes list's refused *Delete*, presented by
+    /// ``MapScreenAlerts``. Owned here rather than by the list, which is
+    /// inside the sheet and rebuilt with it — see ``MapScreenRefusals``.
+    @State private var hikeDeletionRefused = false
     /// Lets the hike detail view drive one-shot map commands (e.g. the Zoom button).
     @State private var mapController = MapController()
     /// Keeps the selected route's Core Location projection across unrelated
@@ -574,6 +578,7 @@ extension OpenHikesView {
             onImportGPX: importGPX,
             onImportFailed: { importReport.failure = .file(.unreadable) },
             onSearchFailed: { failure in searchFailure = failure },
+            onHikeDeletionRefused: { hikeDeletionRefused = true },
             onSheetTopChange: onSheetTopChange,
             onSheetDetentCommitted: onSheetDetentCommitted
         )
@@ -593,7 +598,10 @@ extension OpenHikesView {
                 startupIssue: showingStorageStartupIssue,
                 locationAccess: locationAccessPrompt.isShowingBinding,
                 photoCapture: $photoPresentation,
-                walkEndRefused: Bindable(appModel.recordingEntry).walkEndRefused
+                refusals: MapScreenRefusals(
+                    walkEnd: Bindable(appModel.recordingEntry).walkEndRefused,
+                    hikeDeletion: $hikeDeletionRefused
+                )
             )
             .trailDraftPhotoCopyAlert(appModel.trailMaker.photos.photoCopy)
     }
