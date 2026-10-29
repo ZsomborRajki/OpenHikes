@@ -222,13 +222,17 @@ struct WeatherAlertSessionTests {
         moment.session = .browsing
         notifier.answerPrompt(allowing: true)
         await first.value
-
         #expect(notifier.posted.isEmpty)
+
+        moment.session = .recording
+        await manager.announceStandingAlerts(during: moment.session)
+        #expect(notifier.postedKinds == [.severeWeather])
     }
 
     /// Another trail opened mid-walk is browsing again, so the answer finds
-    /// nothing of the hiker's on the badge. The walked trail's warning is
-    /// still unsaid when the badge comes back to it.
+    /// nothing of the hiker's on the badge — not even the storm standing over
+    /// the trail opened. The walked trail's warning is still unsaid when the
+    /// badge comes back to it.
     @Test("a badge moved off the walked trail while the prompt is up posts nothing")
     func subjectSwitchDuringThePromptPostsNothing() async throws {
         let (manager, notifier) = try Self.manager(showing: Self.walkedTrail)
@@ -237,7 +241,7 @@ struct WeatherAlertSessionTests {
 
         let first = Task { await manager.announceStandingAlerts(during: walk) }
         guard await notifier.awaitPrompt() else { return }
-        manager.focus(on: Self.otherTrail, willRequest: false)
+        manager.applyUITestSnapshot(Self.snapshot(), subject: Self.otherTrail)
         notifier.answerPrompt(allowing: true)
         await first.value
         #expect(notifier.posted.isEmpty)
@@ -249,7 +253,8 @@ struct WeatherAlertSessionTests {
 
     /// The fetch that lands while the prompt is up is the reading the answer
     /// is weighed against, so a storm that cleared is not announced from the
-    /// reading that still had it.
+    /// reading that still had it — nor marked said, so the same warning
+    /// issued again is still news.
     @Test("a clear reading that replaces the alert while the prompt is up posts nothing")
     func clearReadingDuringThePromptPostsNothing() async throws {
         let (manager, notifier) = try Self.manager(showing: Self.walkedTrail)
@@ -261,8 +266,11 @@ struct WeatherAlertSessionTests {
         manager.applyUITestSnapshot(Self.snapshot(alerts: .clear), subject: Self.walkedTrail)
         notifier.answerPrompt(allowing: true)
         await first.value
-
         #expect(notifier.posted.isEmpty)
+
+        manager.applyUITestSnapshot(Self.snapshot(), subject: Self.walkedTrail)
+        await manager.announceStandingAlerts(during: walk)
+        #expect(notifier.postedKinds == [.severeWeather])
     }
 
     @Test("a reading that goes stale while the prompt is up posts nothing")

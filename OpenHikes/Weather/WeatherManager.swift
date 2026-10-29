@@ -387,8 +387,8 @@ final class WeatherManager {
     /// for the movement reminders.
     @ObservationIgnored private let notifier: (any MovementReminderNotifying)?
     /// One watch per subject, bounded the same way ``cache`` is and for the
-    /// same reason. See ``announceAlerts(in:for:)`` for why it is per subject
-    /// rather than one for the app.
+    /// same reason. See ``announceAlerts(in:for:standing:)`` for why it is per
+    /// subject rather than one for the app.
     @ObservationIgnored private var alertWatches: OrderedDictionary<String, WeatherAlertWatch> = [:]
     @ObservationIgnored private let store: WeatherReadingStore?
     /// Where the badge's reading reaches the home screen widget. A suite hands
@@ -784,7 +784,10 @@ final class WeatherManager {
     /// stale — says nothing and spends nothing, so the alert is still there
     /// for the pass that next finds it standing. A reading replaced while the
     /// prompt was up is the one asked about, so a storm that cleared is not
-    /// announced from the reading that had it.
+    /// announced from the reading that had it. Outside the UI-test fixture
+    /// only the poll loop moves the badge, and the loop that asked is waiting
+    /// on this call, so a badge that moved behind the prompt was moved by a
+    /// loop started after that one was cancelled.
     private func announceAlerts(
         in snapshot: WeatherSnapshot,
         for subject: WeatherSubject,
