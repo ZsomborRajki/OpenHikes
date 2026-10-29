@@ -18,9 +18,14 @@
 # Connect allows it for an iOS app, whose builds have to climb only within a
 # version (Apple's TN2420), and this app's uploads from Xcode restarted at 1
 # the same way. A Mac app's builds would have to keep climbing across
-# versions. Here a `--build` is checked against its own tag alone, so one
-# below a build the version already has reaches App Store Connect, which
-# refuses it after the archive.
+# versions.
+#
+# A `--build` has to beat the same highest build. One that does not is
+# refused here, naming the next free build, because App Store Connect would
+# refuse it only after the archive. A build chosen past an untagged upload is
+# above everything known here too. When the project cannot be read, no build
+# is picked, since one could fall at or below a committed build, but a
+# `--build` is still taken, checked against the version's tags alone.
 #
 # The tag must not exist yet. Two uploads cannot share one, and a tag that
 # moved would map an Organizer crash report to the wrong revision.
@@ -32,7 +37,8 @@
 #
 # Exit status:
 #   0  the version and build are usable, and the tag is free
-#   1  the tag already exists, or no build could be chosen
+#   1  the tag already exists, the build is no higher than one the version
+#      has, or no build could be chosen
 #   2  a usage error: a missing or malformed version or build
 
 set -euo pipefail
@@ -111,12 +117,14 @@ if ! tags="$(git -C "$repository" tag --list 'v*' 2>&1)"; then
     exit 1
 fi
 
-if [[ -z "$build" ]]; then
-    if [[ ! -f "$project" ]]; then
-        echo "error: $project does not exist. Pass --build." >&2
-        exit 1
-    fi
-    highest=0
+# The highest build this repository knows for the version and where it is
+# written, and why the project cannot say, if it cannot.
+highest=0
+highest_from=""
+unreadable=""
+if [[ ! -f "$project" ]]; then
+    unreadable="$project does not exist"
+else
     # Each build configuration commits a version and a build together, and an
     # archive from Xcode carries the pair, so a committed build counts only
     # beside the version being shipped. The four shipping targets should
@@ -137,11 +145,12 @@ if [[ -z "$build" ]]; then
                 configurations=$(( configurations + 1 ))
                 if [[ "$committed_version" == "$version" ]]; then
                     if [[ ! "$committed_build" =~ ^[0-9]+$ ]]; then
-                        echo "error: $project has CURRENT_PROJECT_VERSION = $committed_build beside $version, which is not a whole number. Pass --build." >&2
-                        exit 1
+                        unreadable="$project has CURRENT_PROJECT_VERSION = $committed_build beside $version, which is not a whole number"
+                        break
                     fi
                     if (( 10#$committed_build > highest )); then
                         highest="$(( 10#$committed_build ))"
+                        highest_from="committed in $project"
                     fi
                 fi
             fi
@@ -149,25 +158,43 @@ if [[ -z "$build" ]]; then
             committed_build=""
         fi
     done < "$project"
-    if (( configurations == 0 )); then
-        echo "error: $project commits no MARKETING_VERSION beside a CURRENT_PROJECT_VERSION. Pass --build." >&2
+    if [[ -z "$unreadable" ]] && (( configurations == 0 )); then
+        unreadable="$project commits no MARKETING_VERSION beside a CURRENT_PROJECT_VERSION"
+    fi
+fi
+if [[ -n "$unreadable" ]]; then
+    if [[ -z "$build" ]]; then
+        echo "error: $unreadable. Pass --build." >&2
         exit 1
     fi
-    # Only this version's tags of the shape this script makes count. Anything
-    # else — a `v2-beta`, a `vacation`, another version's tag — names no build
-    # of it.
-    while IFS= read -r tag; do
-        tagged="${tag#"v$version-"}"
-        if [[ "$tagged" != "$tag" && "$tagged" =~ ^[0-9]+$ ]] && (( 10#$tagged > highest )); then
-            highest="$(( 10#$tagged ))"
-        fi
-    done <<< "$tags"
-    build="$(( highest + 1 ))"
+    echo "warning: $unreadable, so build $build is checked against $version's tags alone." >&2
+    highest=0
+    highest_from=""
+fi
+# Only this version's tags of the shape this script makes count. Anything
+# else — a `v2-beta`, a `vacation`, another version's tag — names no build
+# of it.
+while IFS= read -r tag; do
+    tagged="${tag#"v$version-"}"
+    if [[ "$tagged" != "$tag" && "$tagged" =~ ^[0-9]+$ ]] && (( 10#$tagged > highest )); then
+        highest="$(( 10#$tagged ))"
+        highest_from="tagged $tag"
+    fi
+done <<< "$tags"
+next="$(( highest + 1 ))"
+if [[ -z "$build" ]]; then
+    build="$next"
 fi
 
 tag="v$version-$build"
 if git -C "$repository" rev-parse -q --verify "refs/tags/$tag" > /dev/null; then
-    echo "error: $tag already exists, so $version ($build) was uploaded before. Choose another build." >&2
+    echo "error: $tag already exists, so $version ($build) was uploaded before. The next free build is $next." >&2
+    exit 1
+fi
+# More digits is higher, since a build has no leading zero. Shell arithmetic
+# would wrap a build past 2^63 instead, and could find it lower.
+if (( ${#build} <= ${#highest} && build <= highest )); then
+    echo "error: $version already has build $highest, $highest_from, so App Store Connect would refuse $version ($build) after the archive. The next free build is $next." >&2
     exit 1
 fi
 
