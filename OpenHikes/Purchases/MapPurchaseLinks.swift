@@ -44,9 +44,11 @@ enum MapPurchaseLinks {
     /// `docs/de/privacy/index.html` translates `docs/privacy/index.html`, and
     /// `docs/de/terms/index.html` translates `docs/terms/index.html`. Each
     /// translation carries its original's effective date, so an English
-    /// change that bumps the date fails `MapPurchaseLinksTests` until the
-    /// German says the same. A language the app ships has to be a case here
-    /// with a folder there; the same suite fails on one that is not.
+    /// change that bumps the date fails `Scripts/check-legal-pages.sh` until
+    /// the German says the same. That script finds the pages by reading the
+    /// quoted URLs below, so spell each one out. A language the app ships has
+    /// to be a case here with a folder there; `MapPurchaseLinksTests` fails
+    /// on one that is not a case, and the script on a folder that is missing.
     nonisolated enum PageLanguage: String, CaseIterable, Sendable {
         case english = "en"
         case german = "de"

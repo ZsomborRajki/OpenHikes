@@ -16,11 +16,14 @@
 # it, and its validators are what stand between a typo and a playback loop that
 # divides by zero — an untested flag rots into a no-op that still exits 0.
 #
-# The two CI gate programs are here for a plainer reason. Scripts/
+# The three CI gate programs are here for a plainer reason. Scripts/
 # check-coverage-floor.sh can fail the workflow, and Scripts/
 # check-sanitized-selection.sh is the only thing that would notice a sanitized
 # suite that silently did not run — `xcodebuild` drops an `-only-testing:`
 # identifier that resolves to nothing without a warning and still exits 0.
+# Scripts/check-legal-pages.sh is the only check a pull request that touches
+# nothing but docs/ still runs, so it alone stands between a stale translation
+# of the privacy policy and a merge.
 # Scripts/check-release-secrets.sh is the archive checklist's second step, and
 # the mistake it catches is the silent one: a template copied into place and
 # not filled in parses, resolves to nothing, and reads exactly like a working
@@ -1265,6 +1268,106 @@ FIXTURE
 run_script "check-release-secrets refuses a plist that is not a dictionary" \
     "$secrets_gate" --plist "$gate_work/array.plist"
 if expect_status 1 && expect_contains "$output" "not a dictionary" "the error"; then
+    pass
+fi
+
+echo "Published legal pages"
+
+# The one check a pull request touching nothing but docs/ still runs, because
+# every job that builds the app skips one. It reads the pages the app links out
+# of MapPurchaseLinks.swift, so each case below is a small checkout of its own:
+# that file and the four pages, which the case then breaks one way.
+legal_gate="$repository_root/Scripts/check-legal-pages.sh"
+legal_work="$work/legal-pages"
+
+# A checkout whose English and German pages agree, at `$1`.
+write_legal_site() {
+    local root="$1" page language date
+    mkdir -p "$root/OpenHikes/Purchases"
+    cat > "$root/OpenHikes/Purchases/MapPurchaseLinks.swift" <<'FIXTURE'
+case .english: URL(string: "https://zsomborrajki.github.io/OpenHikes/privacy/")!
+case .german: URL(string: "https://zsomborrajki.github.io/OpenHikes/de/privacy/")!
+case .english: URL(string: "https://zsomborrajki.github.io/OpenHikes/terms/")!
+case .german: URL(string: "https://zsomborrajki.github.io/OpenHikes/de/terms/")!
+static let termsOfUse = URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!
+FIXTURE
+    for page in privacy terms de/privacy de/terms; do
+        language=en
+        [[ "$page" == de/* ]] && language=de
+        date=2026-10-12
+        [[ "$page" == *privacy ]] && date=2026-10-29
+        mkdir -p "$root/docs/$page"
+        printf '<!DOCTYPE html>\n<html lang="%s">\n<p>Effective <time datetime="%s">%s</time>.</p>\n</html>\n' \
+            "$language" "$date" "$date" > "$root/docs/$page/index.html"
+    done
+}
+
+write_legal_site "$legal_work/agreed"
+run_script "check-legal-pages passes pages that agree" \
+    "$legal_gate" --root "$legal_work/agreed"
+if expect_status 0 \
+    && expect_contains "$output" "ok    docs/de/privacy/index.html (de, 2026-10-29)" "the output" \
+    && expect_contains "$output" "ok    docs/terms/index.html (en, 2026-10-12)" "the output" \
+    && expect_absent "$output" "apple.com" "the output"; then
+    pass
+fi
+
+# The mistake the check exists for: the English policy changes its date and
+# the German goes on promising what it promised before.
+write_legal_site "$legal_work/stale"
+sed -i '' 's/2026-10-29/2026-11-02/g' "$legal_work/stale/docs/privacy/index.html"
+run_script "check-legal-pages fails a translation left behind its original" \
+    "$legal_gate" --root "$legal_work/stale"
+if expect_status 1 \
+    && expect_contains "$output" "docs/de/privacy/index.html takes effect 2026-10-29" "the error" \
+    && expect_contains "$output" "docs/privacy/index.html took effect 2026-11-02" "the error"; then
+    pass
+fi
+
+write_legal_site "$legal_work/deleted"
+rm -r "$legal_work/deleted/docs/de/terms"
+run_script "check-legal-pages fails a linked page that is not published" \
+    "$legal_gate" --root "$legal_work/deleted"
+if expect_status 1 \
+    && expect_contains "$output" "docs/de/terms/index.html is missing" "the error" \
+    && expect_contains "$output" "OpenHikes/de/terms/" "the error"; then
+    pass
+fi
+
+write_legal_site "$legal_work/mislabelled"
+sed -i '' 's/lang="de"/lang="en"/' "$legal_work/mislabelled/docs/de/terms/index.html"
+run_script "check-legal-pages fails a page marked in another language" \
+    "$legal_gate" --root "$legal_work/mislabelled"
+if expect_status 1 \
+    && expect_contains "$output" "docs/de/terms/index.html is not marked <html lang=\"de\">" "the error" \
+    && expect_absent "$output" "ok    docs/de/terms" "the output"; then
+    pass
+fi
+
+# Two dates on one page leave nothing to compare the translation with.
+write_legal_site "$legal_work/two-dates"
+printf '<p>Updated <time datetime="2026-10-01">then</time>.</p>\n' \
+    >> "$legal_work/two-dates/docs/terms/index.html"
+run_script "check-legal-pages fails a page that states two effective dates" \
+    "$legal_gate" --root "$legal_work/two-dates"
+if expect_status 1 \
+    && expect_contains "$output" "docs/terms/index.html should state exactly one effective date" "the error"; then
+    pass
+fi
+
+# The links are read out of Swift, so a rewrite that leaves the file
+# spelling no URL would otherwise check nothing and pass.
+write_legal_site "$legal_work/unlinked"
+printf 'enum MapPurchaseLinks {}\n' > "$legal_work/unlinked/OpenHikes/Purchases/MapPurchaseLinks.swift"
+run_script "check-legal-pages refuses a links file that links nothing" \
+    "$legal_gate" --root "$legal_work/unlinked"
+if expect_status 1 && expect_contains "$output" "links no page" "the error"; then
+    pass
+fi
+
+run_script "check-legal-pages rejects an argument it does not understand" \
+    "$legal_gate" --site "$legal_work/agreed"
+if expect_status 2 && expect_contains "$output" "unknown argument '--site'" "the error"; then
     pass
 fi
 
