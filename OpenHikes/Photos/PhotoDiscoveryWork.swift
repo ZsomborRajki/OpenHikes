@@ -27,7 +27,6 @@
 //
 
 import Foundation
-import OpenHikesData
 
 nonisolated struct PhotoDiscoveryWork: Sendable {
     /// Builds the plan's indexes from what was read off the hike.
