@@ -87,9 +87,10 @@
 //  ## The seam
 //
 //  ``HealthWorkoutStore`` and ``HealthWorkoutBuilding`` are the calls this
-//  writer makes, one requirement each, and ``HealthKitStore`` passes them
-//  straight to HealthKit. So the order, the tag, what counts as written and
-//  what a failure takes back all stay in this writer, where
+//  writer makes, one requirement each, except the route's, which covers the
+//  route builder's two calls. ``HealthKitStore`` passes them straight to
+//  HealthKit. So the order, the tag, what counts as written and what a
+//  failure takes back all stay in this writer, where
 //  `HealthKitWorkoutWriterTests` runs them against a scripted store.
 //
 
@@ -384,13 +385,15 @@ final class HealthKitWorkoutWriter: HikeWorkoutWriting {
 /// script.
 ///
 /// Deliberately thin: each requirement is one call on `HKHealthStore` or
-/// `HKWorkoutBuilder`, which ``HealthKitStore`` passes straight through. So
-/// every decision stays in ``HealthKitWorkoutWriter``: the order of the
-/// calls, the tag on what they save, what counts as written, and what a
-/// failure takes back. Those are the decisions a stub standing in for
-/// ``HikeWorkoutWriting`` cannot reach. Such a stub can fail a write or let it
-/// succeed, but it cannot be a Health store that saved a workout and handed
-/// nothing back, or one that kept a sample and then refused the workout.
+/// `HKWorkoutBuilder`, which ``HealthKitStore`` passes straight through. The
+/// one exception is ``HealthWorkoutBuilding/finishRoute(_:metadata:)``, which
+/// covers the two calls an `HKWorkoutRouteBuilder` takes. So every decision
+/// stays in ``HealthKitWorkoutWriter``: the order of the calls, the tag on
+/// what they save, what counts as written, and what a failure takes back.
+/// Those are the decisions a stub standing in for ``HikeWorkoutWriting``
+/// cannot reach. Such a stub can fail a write or let it succeed, but it
+/// cannot be a Health store that saved a workout and handed nothing back, or
+/// one that kept a sample and then refused the workout.
 ///
 /// Authorization asks for share types only. There is no read parameter
 /// anywhere on this, so nothing above it can ask for one.

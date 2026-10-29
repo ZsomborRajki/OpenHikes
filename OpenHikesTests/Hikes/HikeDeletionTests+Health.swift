@@ -13,9 +13,11 @@
 //  An extension rather than a suite of its own, for the reason
 //  `HikeDeletionTests+Photos.swift` is one: the ordering against the commit is
 //  the same argument in a different store, and the two belong beside each
-//  other. `HikeWorkoutWriting` is unavailable in a hosted test the way
-//  ActivityKit and `StoreKitTest` are, so everything worth asserting sits
-//  above the seam — which is exactly what that protocol exists for.
+//  other. The real `HikeWorkoutWriting` is unavailable in a hosted test the
+//  way ActivityKit and `StoreKitTest` are, so what the deletion decides sits
+//  above the seam — which is exactly what that protocol exists for. What the
+//  writer then asks Health for, type by type, is
+//  `HealthKitWorkoutWriterTests`'s.
 //
 
 import Foundation
