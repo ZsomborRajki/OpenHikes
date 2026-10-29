@@ -204,10 +204,9 @@ final class AutoSaveController {
     /// What it takes to put auto-save back after a deletion the store refused.
     ///
     /// The keys are the payload: they were moved out of
-    /// ``AutoSaveTileStore``'s pending set into the hike's manifest as an
-    /// *unsaved* write, so whatever returns the hike — or its manifest — to
-    /// the last committed state takes them back out with it, and the store no
-    /// longer has them either.
+    /// ``AutoSaveTileStore``'s pending set into the hike's manifest, so
+    /// whatever returns the manifest to what it held before the fold takes
+    /// them back out with it, and the store no longer has them either.
     struct StandDown {
         let hikeID: UUID
         let foldedKeys: [String]
@@ -235,16 +234,20 @@ final class AutoSaveController {
     /// Puts auto-save back on a hike whose deletion the store would not
     /// accept — of the hike, or of the tiles it had saved.
     ///
-    /// Both halves have to be undone. The refusal returned the manifest to
-    /// the last committed state, so the keys folded in on the way out claim
-    /// nothing — and their tiles are durable, so the next launch trim would
-    /// delete a walk's worth of map the user still has the hike for. And the
+    /// Both halves have to be undone. ``StoredTileDeletion`` puts back the
+    /// manifest it read before the fold, so the keys folded in on the way out
+    /// claim nothing — and their tiles are durable, so the next launch trim
+    /// would delete a walk's worth of map the user still has the hike for.
+    /// ``HikeDeletion`` commits the fold before it takes the hike out, so
+    /// there they are still in it — committed, or pending where that commit
+    /// was refused too — and only a key the manifest lacks is added. And the
     /// selection never changed, so nothing else is going to re-arm the
     /// controller: without this the still-selected hike would quietly stop
     /// auto-saving until it was selected again.
     func restoreAfterRefusal(_ standDown: StandDown, for hike: Hike) {
         guard standDown.hikeID == hike.id else { return }
-        hike.autoSavedTileKeys.append(contentsOf: standDown.foldedKeys)
+        let held = Set(hike.autoSavedTileKeys)
+        hike.autoSavedTileKeys.append(contentsOf: standDown.foldedKeys.filter { !held.contains($0) })
         // The path a re-selection takes, so eligibility and a suspended scene
         // are answered here the way they are answered there.
         hikeSelectionChanged(to: hike)

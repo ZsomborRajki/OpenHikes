@@ -7,12 +7,12 @@
 //
 //  `AutoSaveController.standDown(for:)` is not a notification: it folds the
 //  last drain window's tile keys out of `AutoSaveTileStore`'s pending set and
-//  into the hike's manifest — an unsaved write — and then stops saving. A
-//  rollback takes that write back with the deletion, and the selection never
-//  changed, so nothing re-arms the controller on its own. Left alone, a
-//  transient save failure would cost the user a walk's worth of durable tiles
-//  (claimed by nothing, deleted at the next launch trim) and silently stop
-//  auto-saving for a hike that is still on screen.
+//  into the hike's manifest and then stops saving. A refusal has to leave that
+//  claim in the manifest exactly once, and the selection never changed, so
+//  nothing re-arms the controller on its own. Left alone, a transient save
+//  failure would cost the user a walk's worth of durable tiles (claimed by
+//  nothing, deleted at the next launch trim) and silently stop auto-saving
+//  for a hike that is still on screen.
 //
 //  These call the sequence `MapSheet.delete(_:among:)` calls rather than
 //  restating it, the way `SheetRouteTests` does: a mirrored rule pins the
@@ -78,10 +78,9 @@ extension HikeDeletionTests {
             Issue.record("a save that threw must be reported as a refusal")
             return
         }
-        // The claim, which the rollback took back out of the manifest along
-        // with the deletion. Without it the tile is on disk spoken for by
-        // nobody, and the next launch trim deletes a map the user still has
-        // the hike for.
+        // The claim the stand-down folded in, once. Without it the tile is on
+        // disk spoken for by nobody, and the next launch trim deletes a map
+        // the user still has the hike for.
         #expect(hike.autoSavedTileKeys == [Self.tileKey])
         // And the controller, which nothing else would re-arm: the selection
         // never changed, so there is no `onChange` to come.

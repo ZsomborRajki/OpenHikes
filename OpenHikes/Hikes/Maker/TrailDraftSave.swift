@@ -245,9 +245,13 @@ enum TrailDraftSave {
     ///   leaves the hike's places as they are — see the file header.
     ///
     /// A refused save puts everything back: the rows through the context's
-    /// rollback, and the hike's own columns by hand, because a rolled-back
-    /// context still holds an attribute written over an existing row — the
-    /// measurement ``StoredTileDeletion`` records.
+    /// rollback, and the hike's own columns by hand as well, because the
+    /// rollback cannot be counted on for those. On iOS 27.0 it was measured
+    /// taking them back itself, but ``StoredTileDeletion`` records one that
+    /// kept an attribute written over an existing row. The rollback has
+    /// nothing else to take, because what the context already held is
+    /// committed first — see ``HikeDeletion/delete(_:store:workouts:save:)``,
+    /// which does the same for the same reason.
     @discardableResult static func update(
         _ hike: Hike,
         from draft: TrailDraft,
@@ -258,6 +262,16 @@ enum TrailDraftSave {
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) -> TrailDraftSaveOutcome {
         guard draft.waypoints.count > 1 else { return .refused(.tooShort) }
+        // What the context already holds goes first, in a commit of its own,
+        // before anything is touched: this is the shared main context, and a
+        // rename waiting there for its autosave, or a drawing whose own commit
+        // the store refused, is not this edit's to roll back. A store that
+        // refuses this commit has refused the edit too.
+        do {
+            if context.hasChanges { try save(context) }
+        } catch {
+            return refusedEdit(error)
+        }
         let route = draft.routeCoordinates
         let before = (
             route: hike.route,
@@ -312,15 +326,19 @@ enum TrailDraftSave {
                 hike.descentMeters = before.descent
             }
             if before.elevationRevision != nil { hike.elevationRouteRevision = before.elevationRevision }
-            logger.error(
-                """
-                An edited trail could not be saved: \
-                \(error.localizedDescription, privacy: .public)
-                """
-            )
-            return .refused(.notSaved)
+            return refusedEdit(error)
         }
         return .saved(hike)
+    }
+
+    private static func refusedEdit(_ error: any Error) -> TrailDraftSaveOutcome {
+        logger.error(
+            """
+            An edited trail could not be saved: \
+            \(error.localizedDescription, privacy: .public)
+            """
+        )
+        return .refused(.notSaved)
     }
 
     /// The places an edit's save chooses from: the drawing's, merged with what
