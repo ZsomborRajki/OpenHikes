@@ -17,14 +17,15 @@
 //  screen between the sheet and the side panel — see *The map screen* in the
 //  repository instructions.
 //
-//  None of what the last presentation left is meant to reach the next one.
-//  Each search withdraws the previous results before it first suspends, and
-//  the sheet cancels a running import as it goes, because an import left
-//  running would write into the state the next search is filling — see
-//  ``search(in:)`` and ``runImport(into:store:)``. The withdrawal comes after
-//  a reopened sheet's first body pass, though: the search is started by the
-//  `.task` that pass attaches, so that pass is built from whatever the last
-//  presentation left.
+//  None of what the last presentation left reaches the next one. Each search
+//  withdraws the previous results before it first suspends, and the sheet
+//  cancels a running import as it goes, because an import left running would
+//  write into the state the next search is filling — see ``search(in:)`` and
+//  ``runImport(into:store:)``. The withdrawal comes after a reopened sheet's
+//  first body pass, though, because the search is started by the `.task` that
+//  pass attaches. So the section's button also resets the controller before
+//  it presents the sheet, and that pass is built from nothing the last
+//  presentation left — see ``reset()``.
 //
 //  Three things are worth stating about the order it does its work in.
 //
@@ -171,13 +172,12 @@ final class PhotoDiscoveryController {
             return
         }
         let access = await reader.requestAccess()
-        guard generation == searchGeneration else { return }
+        guard isCurrent(generation) else { return }
         libraryAccess = access
         guard access.allowsReading else {
             phase = access == .restricted ? .accessRestricted : .accessDenied
             return
         }
-        guard !Task.isCancelled else { return }
 
         let assets = await libraryAssets(in: plan.searchWindows)
         guard isCurrent(generation), hike.isAttached else { return }
@@ -324,6 +324,33 @@ final class PhotoDiscoveryController {
     func cancelImport() {
         importTask?.cancel()
         importTask = nil
+    }
+
+    /// Puts this controller back where a new one starts, for the sheet the
+    /// section is about to present.
+    ///
+    /// Called by ``HikePhotoSection``'s button, in the tap that presents the
+    /// sheet. The sheet's first body pass reads ``phase`` and ``matches``
+    /// before its `.task` has started a search, and until this the search was
+    /// the only thing that withdrew them, so a reopened sheet was first built
+    /// as the last one was closed: the old grid and its Add button after
+    /// *Done*, the empty state after an import that took everything, or the
+    /// count of an import it was closed part-way through.
+    ///
+    /// Nothing the last presentation started may write after this either. A
+    /// search started by *Select More Photos* runs in that button's own
+    /// `Task`, which closing the sheet does not cancel, so it is overtaken
+    /// here as a newer search would overtake it. The import is cancelled when
+    /// the sheet goes, and again here, so that a clean first pass does not
+    /// depend on the sheet's `onDisappear` having come before the tap.
+    func reset() {
+        searchGeneration += 1
+        cancelImport()
+        phase = .idle
+        libraryAccess = nil
+        matches = []
+        selection = []
+        importFailed = false
     }
 
     /// Copies the chosen photos into `hike`, and returns how many landed.
