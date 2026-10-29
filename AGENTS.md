@@ -409,14 +409,15 @@ a change to recording, the map, the sheet or the render path; the PR template,
   admits every branch.
   - It stamps the version at build time and commits nothing, because `main`
     takes no pushes. So the tags, not `project.pbxproj`, record what shipped.
-  - The build number is one past the highest tagged or committed build
+  - Each version's builds start at 1. After that, the build number is one
+    past the highest build tagged or committed for that version
     (`Scripts/release-version.sh`). An untagged upload from Xcode is invisible
     to it; pass `build` past that one.
 - **Before an archive from Xcode, bump all four shipping targets together**, to
   the build `Scripts/release-version.sh --version <version>` prints. The app,
   the widget, the watch app and the watch widgets each carry
   `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in `project.pbxproj`, and
-  the number committed there falls behind every build the workflow tags.
+  the version and build committed there fall behind what the workflow tags.
 - **Run `Scripts/check-release-secrets.sh` before pressing Archive.** The
   gitignored `OpenHikes/Secrets.plist` holds the Stadia and Thunderforest keys,
   and an archive succeeds without it, shipping paid map styles that draw

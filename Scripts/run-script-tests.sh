@@ -1336,38 +1336,87 @@ if expect_status 1 && expect_contains "$output" "already exists" "the error"; th
 fi
 
 # A repository of its own, so the tags read are the fixture's and never this
-# checkout's: a project at build 2, as the four targets are committed today.
+# checkout's: a target at 1.4 (2), as the four shipping targets are committed
+# today, and a test bundle whose higher build sits beside a version of its own.
 release_version="$repository_root/Scripts/release-version.sh"
 release_repository="$release_work/repository"
 release_project="$release_repository/OpenHikes.xcodeproj/project.pbxproj"
 mkdir -p "$(dirname "$release_project")"
 cat > "$release_project" <<'FIXTURE'
+		A85E855B2FE3EBF600558639 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
 				CURRENT_PROJECT_VERSION = 2;
 				MARKETING_VERSION = 1.4;
-				CURRENT_PROJECT_VERSION = 2;
-				MARKETING_VERSION = 1.4;
+			};
+			name = Debug;
+		};
+		AB0000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CURRENT_PROJECT_VERSION = 7;
+				MARKETING_VERSION = 1.0;
+			};
+			name = Debug;
+		};
 FIXTURE
 git -C "$release_repository" init -q
 git -C "$release_repository" add .
 git -C "$release_repository" -c user.name=Fixture -c user.email=fixture@example.com \
     -c commit.gpgsign=false -c core.hooksPath=/dev/null commit -q -m "Fixture"
 
-run_script "release-version counts on from the committed build when nothing is tagged" \
+run_script "release-version starts a new version at build 1" \
     "$release_version" --version 1.5 --project "$release_project"
 if expect_status 0 \
     && expect_contains "$output" "version=1.5" "the output" \
-    && expect_contains "$output" $'build=3\ntag=v1.5-3' "the output"; then
+    && expect_contains "$output" $'build=1\ntag=v1.5-1' "the output"; then
+    pass
+fi
+
+run_script "release-version counts on from the build committed beside the version" \
+    "$release_version" --version 1.4 --project "$release_project"
+if expect_status 0 && expect_contains "$output" $'build=3\ntag=v1.4-3' "the output"; then
     pass
 fi
 
 # Compared as numbers: as text, 9 sorts above 10. The tags that are not of
-# the shape the workflow makes name no build at all.
-for fixture_tag in v1.4-9 v1.4-10 v1.4-rc1 vacation; do
+# the shape the workflow makes name no build at all, and 1.4.1's builds are
+# not 1.4's.
+for fixture_tag in v1.4-9 v1.4-10 v1.4-rc1 vacation v1.4.1-30; do
     git -C "$release_repository" tag "$fixture_tag"
 done
-run_script "release-version counts on from the highest tagged build" \
+run_script "release-version counts on from the version's highest tagged build" \
+    "$release_version" --version 1.4 --project "$release_project"
+if expect_status 0 && expect_contains "$output" $'build=11\ntag=v1.4-11' "the output"; then
+    pass
+fi
+
+run_script "release-version counts on from tags alone when nothing is committed" \
+    "$release_version" --version 1.4.1 --project "$release_project"
+if expect_status 0 && expect_contains "$output" $'build=31\ntag=v1.4.1-31' "the output"; then
+    pass
+fi
+
+run_script "release-version starts at build 1 beside other versions' tags" \
     "$release_version" --version 1.5 --project "$release_project"
-if expect_status 0 && expect_contains "$output" $'build=11\ntag=v1.5-11' "the output"; then
+if expect_status 0 && expect_contains "$output" $'build=1\ntag=v1.5-1' "the output"; then
+    pass
+fi
+
+# A build whose version it cannot read means the project is not laid out the
+# way this script reads it, so it would miss a committed build it should beat.
+release_unversioned="$release_repository/Unversioned.xcodeproj/project.pbxproj"
+mkdir -p "$(dirname "$release_unversioned")"
+cat > "$release_unversioned" <<'FIXTURE'
+			buildSettings = {
+				CURRENT_PROJECT_VERSION = 2;
+			};
+FIXTURE
+run_script "release-version refuses a project that commits no version beside a build" \
+    "$release_version" --version 1.5 --project "$release_unversioned"
+if expect_status 1 \
+    && expect_contains "$output" "commits no MARKETING_VERSION beside a CURRENT_PROJECT_VERSION" "the error" \
+    && expect_absent "$output" "tag=" "the output"; then
     pass
 fi
 

@@ -6,6 +6,11 @@ name: TestFlight
 #
 #   gh workflow run testflight.yml -f version=1.5 -f cloudkit_promoted=true
 #
+# To choose the build number rather than take the next one for the version,
+# add `-f build=<number>`. Every input needs its own `-f`: given a bare
+# `build=<number>`, gh dispatches the run anyway and drops the build without
+# a warning.
+#
 # The version is stamped at build time rather than committed. `main` takes
 # changes only through pull requests, so a workflow cannot push a bump to it,
 # and a bump that waited on a pull request would put a review between "ship
@@ -74,7 +79,7 @@ on:
         required: true
         type: string
       build:
-        description: Build number (empty picks one past the highest tagged or committed build)
+        description: Build number (empty picks 1 for a new version, else one past its highest tagged or committed build)
         required: false
         type: string
       cloudkit_promoted:
@@ -84,7 +89,8 @@ on:
         default: false
 
 # One upload at a time. A second run waits, then reads the first one's tag
-# when it picks its build number, so the two cannot choose the same one.
+# when it picks its build number, so two uploads of one version cannot choose
+# the same build.
 concurrency:
   group: testflight
   cancel-in-progress: false
@@ -111,7 +117,8 @@ jobs:
           echo "::error::Promote the CloudKit schema to production first, then run this again with cloudkit_promoted ticked. A TestFlight build writes to the production container, which cannot add a field on save (see CloudKit in AGENTS.md)."
           exit 1
 
-      # Every tag, because the build number counts up from the highest one.
+      # Every tag, because the build number counts up from its version's
+      # highest one.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0

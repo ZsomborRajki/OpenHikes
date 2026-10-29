@@ -4,18 +4,23 @@
 # tag that names it.
 #
 # The version is the person's: they type it into the TestFlight workflow. The
-# build is not, because App Store Connect refuses a build number it has
-# already seen and nothing in this repository asks it which those are. So the
-# build is one past the highest this repository knows: every
-# `v<version>-<build>` tag (*Releasing* in AGENTS.md tags every archived
-# commit) and the `CURRENT_PROJECT_VERSION` committed in the project,
-# whichever is higher. A build uploaded from Xcode and never tagged is
-# invisible here. App Store Connect then refuses the upload by name, and
+# build is not, because App Store Connect refuses a build number no higher
+# than one it already has for that version, and nothing in this repository
+# asks it which those are. So the build is one past the highest this
+# repository knows for the same version: its `v<version>-<build>` tags
+# (*Releasing* in AGENTS.md tags every archived commit) and any
+# `CURRENT_PROJECT_VERSION` committed beside that `MARKETING_VERSION` in the
+# project, whichever is higher. A build uploaded from Xcode and never tagged
+# is invisible here. App Store Connect then refuses the upload by name, and
 # `--build` is the way past it.
 #
-# Builds count up across versions rather than restarting at 1 for each, so
-# "higher than any build before" holds whatever App Store Connect's rule for a
-# new version is.
+# Each version starts again at build 1, by the owner's choice. App Store
+# Connect allows it for an iOS app, whose builds have to climb only within a
+# version (Apple's TN2420), and this app's uploads from Xcode restarted at 1
+# the same way. A Mac app's builds would have to keep climbing across
+# versions. Here a `--build` is checked against its own tag alone, so one
+# below a build the version already has reaches App Store Connect, which
+# refuses it after the archive.
 #
 # The tag must not exist yet. Two uploads cannot share one, and a tag that
 # moved would map an Organizer crash report to the wrong revision.
@@ -42,8 +47,8 @@ Prints the version, build number and tag a TestFlight upload carries.
 
 Options:
   --version <version>  The marketing version, one to three numbers (1.5, 1.5.1)
-  --build <number>     The build number (default: one past the highest tagged
-                       or committed build)
+  --build <number>     The build number (default: one past the highest build
+                       tagged or committed for this version, or 1)
   --project <pbxproj>  The project whose committed build counts
                        (default: $default_project)
   -h, --help           Show this help
@@ -112,29 +117,49 @@ if [[ -z "$build" ]]; then
         exit 1
     fi
     highest=0
-    # The four shipping targets should agree; if they do not, the highest is
-    # the one an upload has to beat.
-    while IFS= read -r committed; do
-        if [[ ! "$committed" =~ ^[0-9]+$ ]]; then
-            echo "error: $project has CURRENT_PROJECT_VERSION = $committed, which is not a whole number. Pass --build." >&2
-            exit 1
+    # Each build configuration commits a version and a build together, and an
+    # archive from Xcode carries the pair, so a committed build counts only
+    # beside the version being shipped. The four shipping targets should
+    # agree; if they do not, the highest is the one an upload has to beat.
+    setting='^[[:space:]]*(MARKETING_VERSION|CURRENT_PROJECT_VERSION) = "?([^";]*)"?;'
+    settings_end='^[[:space:]]*};'
+    configurations=0
+    committed_version=""
+    committed_build=""
+    while IFS= read -r line; do
+        if [[ "$line" =~ $setting ]]; then
+            case "${BASH_REMATCH[1]}" in
+                MARKETING_VERSION) committed_version="${BASH_REMATCH[2]}" ;;
+                CURRENT_PROJECT_VERSION) committed_build="${BASH_REMATCH[2]}" ;;
+            esac
+        elif [[ "$line" =~ $settings_end ]]; then
+            if [[ -n "$committed_version" && -n "$committed_build" ]]; then
+                configurations=$(( configurations + 1 ))
+                if [[ "$committed_version" == "$version" ]]; then
+                    if [[ ! "$committed_build" =~ ^[0-9]+$ ]]; then
+                        echo "error: $project has CURRENT_PROJECT_VERSION = $committed_build beside $version, which is not a whole number. Pass --build." >&2
+                        exit 1
+                    fi
+                    if (( 10#$committed_build > highest )); then
+                        highest="$(( 10#$committed_build ))"
+                    fi
+                fi
+            fi
+            committed_version=""
+            committed_build=""
         fi
-        if (( committed > highest )); then
-            highest="$committed"
-        fi
-    done < <(sed -nE 's/^[[:space:]]*CURRENT_PROJECT_VERSION = "?([^";]*)"?;.*/\1/p' "$project")
-    if (( highest == 0 )); then
-        echo "error: $project names no CURRENT_PROJECT_VERSION. Pass --build." >&2
+    done < "$project"
+    if (( configurations == 0 )); then
+        echo "error: $project commits no MARKETING_VERSION beside a CURRENT_PROJECT_VERSION. Pass --build." >&2
         exit 1
     fi
-    # Only tags of the shape this script makes count. Anything else — a
-    # `v2-beta`, a `vacation` — names no build.
+    # Only this version's tags of the shape this script makes count. Anything
+    # else — a `v2-beta`, a `vacation`, another version's tag — names no build
+    # of it.
     while IFS= read -r tag; do
-        if [[ "$tag" =~ ^v[0-9.]+-([0-9]+)$ ]]; then
-            tagged="${BASH_REMATCH[1]}"
-            if (( 10#$tagged > highest )); then
-                highest="$(( 10#$tagged ))"
-            fi
+        tagged="${tag#"v$version-"}"
+        if [[ "$tagged" != "$tag" && "$tagged" =~ ^[0-9]+$ ]] && (( 10#$tagged > highest )); then
+            highest="$(( 10#$tagged ))"
         fi
     done <<< "$tags"
     build="$(( highest + 1 ))"
