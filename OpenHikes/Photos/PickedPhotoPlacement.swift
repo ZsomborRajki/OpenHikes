@@ -189,9 +189,12 @@ extension HikePhotoImport {
     ///
     /// - Parameters:
     ///   - plan: Built once for the whole selection by the caller, with its
-    ///     profile — see ``Hike/photoSearchPlan(profilesRoute:)`` — because
-    ///     both are route-sized work; `nil` for a photo filed under a place.
+    ///     profile and off the main actor — see
+    ///     ``PickedPhotoWork/plan(from:)`` — because both are route-sized
+    ///     work; `nil` for a photo filed under a place.
     ///   - fallback: The anchor in force when the picker closed.
+    ///   - work: Replaced only by a suite that watches where the placement
+    ///     runs.
     @MainActor
     static func addPicked(
         _ data: Data,
@@ -201,10 +204,13 @@ extension HikePhotoImport {
         assetLocalIdentifier: String?,
         placeID: UUID? = nil,
         store: HikePhotoStore = .shared,
+        work: PickedPhotoWork = .standard,
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) async -> HikePhoto? {
-        let metadata = await pickedMetadata(of: data)
-        let placement = PickedPhotoPlacement.resolve(metadata, plan: plan, fallback: fallback)
+        // The read and the placement in one hop: awaiting the read alone
+        // brought the placement back here, and its positional tier can
+        // project the camera onto the whole route.
+        let placement = await work.placement(of: data, plan: plan, fallback: fallback)
         return await add(
             data,
             to: hike,
@@ -218,10 +224,5 @@ extension HikePhotoImport {
             store: store,
             save: save
         )
-    }
-
-    @concurrent
-    private static func pickedMetadata(of data: Data) async -> PickedPhotoMetadata {
-        PickedPhotoMetadata.read(data)
     }
 }
