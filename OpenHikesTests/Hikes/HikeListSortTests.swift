@@ -63,6 +63,23 @@ struct HikeListSortTests {
         #expect(arranged.dropFirst().map(\.title) == ["Middling", "Long"])
     }
 
+    @Test("half a measurement sorts with the unmeasured, not as a smaller figure")
+    func halfMeasuredSortsLast() throws {
+        let context = try Fixture.modelContext()
+        let hikes = try makeHikes(in: context)
+        let measured = try #require(hikes.first { $0.title == "Long" })
+        measured.climbMeters = 100
+        measured.descentMeters = 100
+        // Climbed but not yet descended: an unfinished figure, which would
+        // otherwise sort wherever its measured half happened to land.
+        let half = try #require(hikes.first { $0.title == "Short" })
+        half.climbMeters = 5000
+
+        let arranged = HikeListOrder.arrange(hikes, activeHikeID: nil, sort: .hilliest)
+
+        #expect(arranged.map(\.title) == ["Long", "Middling", "Short"])
+    }
+
     @Test("only Hilliest asks for elevation figures to be validated")
     func onlyHilliestNeedsValidation() throws {
         let context = try Fixture.modelContext()
