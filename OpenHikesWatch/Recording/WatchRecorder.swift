@@ -501,8 +501,9 @@ final class WatchRecorder: NSObject {
     ///
     /// Asked again here rather than trusted from the callback: the hiker may
     /// have pressed Stop and started another walk between the two, and that
-    /// walk's session has not failed. ``stop()`` leaves `.recording` before it
-    /// first suspends, so nothing comes between this answer and that.
+    /// walk's session has not failed. ``stop()`` leaves the running or paused
+    /// phase and lets the session go before it first suspends, so nothing
+    /// comes between this answer and that.
     private func stop(afterFailureOf failed: HKWorkoutSession) async {
         guard workout.failureEnds(failed, isRecording: phase.isActive) else { return }
         await stop()

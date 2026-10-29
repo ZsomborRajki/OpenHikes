@@ -76,14 +76,18 @@ struct WatchWorkoutOwnershipTests {
         #expect(!held.failureEnds(session, isRecording: false))
     }
 
-    @Test("a recovered session takes over from the one it replaced")
-    func recoveredSessionTakesOver() {
-        let crashed = Session()
-        var ownership = Self.recording(on: crashed)
+    @Test("a session HealthKit hands back after a crash is heard until its walk stops")
+    func recoveredSessionIsHeardUntilStop() {
+        // The relaunched process holds nothing: the crashed one's session went
+        // with it, and HealthKit hands back a new object for the same workout.
+        var ownership = Ownership()
         let recovered = Session()
         ownership.attach(recovered, builder: Builder())
         #expect(ownership.failureEnds(recovered, isRecording: true))
-        #expect(!ownership.failureEnds(crashed, isRecording: true))
+        // Stopped like any walk, it has no say over the next one.
+        _ = ownership.release()
+        ownership.attach(Session(), builder: Builder())
+        #expect(!ownership.failureEnds(recovered, isRecording: true))
     }
 
     @Test("only the held builder's reading reaches the screen")
