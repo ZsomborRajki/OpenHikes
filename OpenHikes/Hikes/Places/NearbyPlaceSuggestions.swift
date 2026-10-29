@@ -74,6 +74,10 @@ nonisolated enum NearbyPlaceSuggestions {
             .map(\.place)
     }
 
+    /// The element, as ``TrailPlaceOSM/isSameElement(as:)`` has it: its type
+    /// and number. Not the whole ``TrailPlaceOSM``, whose `Hashable` counts its
+    /// facts: the walk's copy of the hut was read when it was marked, and
+    /// today's answer may say more about the same hut.
     private static func key(_ osm: TrailPlaceOSM) -> String {
         "\(osm.elementType)/\(osm.elementID)"
     }

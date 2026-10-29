@@ -22,14 +22,15 @@ struct NearbyPlaceSuggestionsTests {
         _ id: Int64,
         metersNorth: Double,
         type: String = "node",
-        name: String = ""
+        name: String = "",
+        facts: [TrailPlaceFact] = []
     ) -> TrailPlace {
         TrailPlace(
             latitude: here.latitude + metersNorth / RouteGeometry.metersPerDegreeLatitude,
             longitude: here.longitude,
             name: name,
             symbol: .shelter,
-            osm: TrailPlaceOSM(elementType: type, elementID: id)
+            osm: TrailPlaceOSM(elementType: type, elementID: id, facts: facts)
         )
     }
 
@@ -115,6 +116,24 @@ struct NearbyPlaceSuggestionsTests {
         #expect(offered.map(\.name) == ["Node", "Relation"])
     }
 
+    /// An element is its type and number, not what the map says about it. The
+    /// walk's copy of the hut was read when it was marked, and the map may say
+    /// more about the hut today; a repeat that says more is still a repeat.
+    @Test("what the map says about an element does not make it another one")
+    func factsAreNotPartOfTheElement() {
+        let water = [TrailPlaceFact(kind: .drinkingWater, value: "yes")]
+        let marked = Self.place(1, metersNorth: 10, name: "Hut")
+        let found = [
+            Self.place(1, metersNorth: 10, name: "Hut", facts: water),
+            Self.place(2, metersNorth: 12, name: "Spring"),
+            Self.place(2, metersNorth: 12, name: "Spring again", facts: water),
+        ]
+
+        let offered = NearbyPlaceSuggestions.suggestions(from: found, around: Self.here, excluding: [marked])
+
+        #expect(offered.map(\.name) == ["Spring"])
+    }
+
     /// The hut and its spring mapped on the same spot are two things to
     /// choose from, offered in the order they were answered.
     @Test("two elements at one spot are both offered, in the order answered")
@@ -148,6 +167,19 @@ struct NearbyPlaceSuggestionsTests {
         let offered = NearbyPlaceSuggestions.suggestions(from: repeats + others, around: Self.here, excluding: [])
 
         #expect(offered.compactMap(\.osm?.elementID) == Array(1...Int64(NearbyPlaceSuggestions.maximumSuggestions)))
+    }
+
+    /// What the walk already has is left out before the list is cut, so
+    /// holding the nearest few still leaves a full list of the rest.
+    @Test("held elements do not use up the short list")
+    func heldElementsDoNotSpendTheCap() {
+        let held = (1...3).map { Self.place(Int64($0), metersNorth: Double($0)) }
+        let others = (4...20).map { Self.place(Int64($0), metersNorth: Double($0)) }
+        let cap = Int64(NearbyPlaceSuggestions.maximumSuggestions)
+
+        let offered = NearbyPlaceSuggestions.suggestions(from: held + others, around: Self.here, excluding: held)
+
+        #expect(offered.compactMap(\.osm?.elementID) == Array(4...(3 + cap)))
     }
 
     // MARK: The finder
