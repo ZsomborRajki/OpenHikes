@@ -53,6 +53,7 @@ nonisolated enum AppLaunchEnvironment {
         let failsFirstSave: Bool
         let refusesTrailPhotoCopy: Bool
         let refusesPublicationReset: Bool
+        let refusesHikeDeletion: Bool
         let losesImportSelection: Bool
         let stubsWeather: Bool
         let grantsPaidMaps: Bool
@@ -104,6 +105,7 @@ nonisolated enum AppLaunchEnvironment {
             failsFirstSave = false
             refusesTrailPhotoCopy = false
             refusesPublicationReset = false
+            refusesHikeDeletion = false
             losesImportSelection = false
             stubsWeather = false
             grantsPaidMaps = false
@@ -131,6 +133,7 @@ nonisolated enum AppLaunchEnvironment {
         private static let failFirstSaveArgument = "--ui-test-fail-first-save"
         private static let refuseTrailPhotoCopyArgument = "--ui-test-refuse-trail-photo-copy"
         private static let refusePublicationResetArgument = "--ui-test-refuse-publication-reset"
+        private static let refuseHikeDeletionArgument = "--ui-test-refuse-hike-deletion"
         private static let loseImportSelectionArgument =
             "--ui-test-lose-import-selection"
         private static let stubWeatherArgument = "--ui-test-weather"
@@ -204,20 +207,14 @@ nonisolated enum AppLaunchEnvironment {
             )
             routeHue = Self.hue(in: arguments, isUITesting: isUITesting)
             mapStart = Self.mapStart(in: arguments, isUITesting: isUITesting)
-            failsFirstSave = isUITesting
-                && arguments.contains(Self.failFirstSaveArgument)
-            refusesTrailPhotoCopy = isUITesting
-                && arguments.contains(Self.refuseTrailPhotoCopyArgument)
-            refusesPublicationReset = isUITesting
-                && arguments.contains(Self.refusePublicationResetArgument)
-            losesImportSelection = isUITesting
-                && arguments.contains(Self.loseImportSelectionArgument)
-            stubsWeather = isUITesting
-                && arguments.contains(Self.stubWeatherArgument)
-            grantsPaidMaps = isUITesting
-                && arguments.contains(Self.entitledArgument)
-            asksLiveMakerServices = isUITesting
-                && arguments.contains(Self.liveMakerArgument)
+            failsFirstSave = isUITesting && arguments.contains(Self.failFirstSaveArgument)
+            refusesTrailPhotoCopy = isUITesting && arguments.contains(Self.refuseTrailPhotoCopyArgument)
+            refusesPublicationReset = isUITesting && arguments.contains(Self.refusePublicationResetArgument)
+            refusesHikeDeletion = isUITesting && arguments.contains(Self.refuseHikeDeletionArgument)
+            losesImportSelection = isUITesting && arguments.contains(Self.loseImportSelectionArgument)
+            stubsWeather = isUITesting && arguments.contains(Self.stubWeatherArgument)
+            grantsPaidMaps = isUITesting && arguments.contains(Self.entitledArgument)
+            asksLiveMakerServices = isUITesting && arguments.contains(Self.liveMakerArgument)
             stubbedLibraryPhotoCount = Self.stubbedLibraryPhotoCount(
                 in: arguments,
                 isUITesting: isUITesting
@@ -480,6 +477,11 @@ nonisolated enum AppLaunchEnvironment {
     /// so automation can reach the alert that says the hike is still as it
     /// was, without depending on an actual disk fault.
     static let refusesPublicationReset = configuration.refusesPublicationReset
+
+    /// Refuses the save the hikes list's *Delete* makes, so automation can
+    /// reach the alert that says the hike is still there, without depending
+    /// on an actual disk fault.
+    static let refusesHikeDeletion = configuration.refusesHikeDeletion
 
     /// Whether an import should give up the selection it would otherwise
     /// take.

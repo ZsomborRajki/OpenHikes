@@ -134,6 +134,48 @@ nonisolated final class MapScreenAlertUITests: XCTestCase {
         XCTAssertTrue(element("map-sheet", in: app).exists, "and the sheet should have survived the notice")
     }
 
+    /// A deletion the store refused says so. It used to say nothing: the hike
+    /// stayed in the list, which is the right answer for the list, and the
+    /// hiker was left with a *Delete* that had changed nothing. The alert is
+    /// raised from the list's own question, in the moment that question is
+    /// being dismissed, so this also checks that it is not lost to it.
+    @MainActor
+    func testARefusedDeletionIsReported() {
+        let app = launchApp(
+            arguments: [
+                "--ui-test-expanded-sheet",
+                "--ui-test-import-gpx=\(UITestFixture.gpxName)",
+                "--ui-test-refuse-hike-deletion",
+            ]
+        )
+        let row = awaitHikeRow(titled: UITestFixture.importedHikeTitle, in: app)
+        row.swipeLeft()
+        let delete = app.buttons["Delete"]
+        XCTAssertTrue(
+            delete.waitForExistence(timeout: UITestTimeout.navigation),
+            "swiping a row should reveal its delete action"
+        )
+        delete.tap()
+        confirmDestructive(
+            "Delete Hike",
+            in: app,
+            failureMessage: "deleting a hike should ask first"
+        )
+
+        let alert = app.alerts["Couldn’t Delete Hike"]
+        XCTAssertTrue(
+            alert.waitForExistence(timeout: UITestTimeout.navigation),
+            "a deletion the store refused should say so rather than do nothing"
+        )
+        alert.buttons["OK"].tap()
+
+        XCTAssertTrue(
+            awaitHikeRow(titled: UITestFixture.importedHikeTitle, in: app).exists,
+            "and the hike should still be in the list"
+        )
+        XCTAssertTrue(element("map-sheet", in: app).exists, "and the sheet should have survived the alert")
+    }
+
     /// Enough taps to land one inside another's presentation, and few enough
     /// that the test is over in a couple of seconds.
     private static let rapidTaps = 5

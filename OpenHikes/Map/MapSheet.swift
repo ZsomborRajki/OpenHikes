@@ -75,6 +75,8 @@ struct MapSheet: View {
     var onImportFailed: () -> Void = { /* no-op default */ }
     /// A place search reached MapKit and came back with an error.
     var onSearchFailed: (SearchFailure) -> Void = { _ in /* no-op default */ }
+    /// The store refused a hike's deletion from the list, and put it all back.
+    var onHikeDeletionRefused: () -> Void = { /* no-op default */ }
     /// Reports the sheet's top edge (global Y) as it's dragged, so the map can
     /// keep the "my location" button riding just above the sheet.
     var onSheetTopChange: (CGFloat) -> Void = { _ in /* no-op default */ }
@@ -82,7 +84,9 @@ struct MapSheet: View {
     /// which is the only one the map learns a resting height for.
     var onSheetDetentCommitted: (Bool) -> Void = { _ in /* no-op default */ }
 
-    @Environment(OpenHikesModel.self) private var appModel
+    /// Internal rather than private so the reviewer's two destinations, in
+    /// `MapSheet+Review.swift`, can reach the transport and the queue.
+    @Environment(OpenHikesModel.self) var appModel
     @FocusState private var searchFocused: Bool
     @State private var showImporter = false
     @State private var showSettings = false
@@ -549,9 +553,9 @@ private extension MapSheet {
     /// The recording screen.
     ///
     /// Its own property for the reason ``trailDraftDestination`` and the two
-    /// reviewer methods below are: the switch they came out of is at the
-    /// length the linter allows, and it reads as a list of destinations rather
-    /// than as the destinations themselves.
+    /// reviewer methods in `MapSheet+Review.swift` are: the switch they came
+    /// out of is at the length the linter allows, and it reads as a list of
+    /// destinations rather than as the destinations themselves.
     var recordingDestination: some View {
         RecordingView(
             recorder: appModel.hikeRecorder,
@@ -581,7 +585,7 @@ private extension MapSheet {
     /// The trail maker.
     ///
     /// Its own property rather than a case body, for the reason the two
-    /// reviewer destinations below have their own methods: the switch it comes
+    /// reviewer destinations have their own methods: the switch it comes
     /// out of is at the length the linter allows, and a destination taking
     /// five arguments is what pushes it past.
     var trailDraftDestination: some View {
@@ -597,58 +601,6 @@ private extension MapSheet {
             // selected, drawn, and open at its own screen.
             onSaved: showSavedHike
         )
-    }
-}
-
-// MARK: - The reviewer's two destinations
-
-// An extension rather than more of the struct above, and the reason is the
-// length limit doing its job: these two are one subject — where a queue row
-// goes — and they are reachable only by somebody the *server* has decided is a
-// reviewer, which is almost nobody. Reading them beside the destinations every
-// hiker reaches obscured both.
-private extension MapSheet {
-    /// The review screen, or nothing.
-    ///
-    /// Guarded on the transport exactly as the preview above is, and
-    /// unreachable without one for a second reason: the route that gets here
-    /// comes from a queue that only a transport can fill.
-    @ViewBuilder
-    private func pendingSubmissionDestination(
-        _ pending: CommunityPendingSubmission
-    ) -> some View {
-        if let transport = appModel.communityTransport {
-            CommunityReviewView(
-                pending: pending,
-                transport: transport,
-                queue: appModel.communityReview,
-                browser: appModel.community,
-                // Back to the list the row was on. The row itself is already
-                // gone — the screen tells the queue before it pops — so this
-                // lands on a list that agrees with the decision just made.
-                onFinished: { presentation.path.removeAll() }
-            )
-        }
-    }
-
-    /// The contributed-photo review screen, or nothing.
-    ///
-    /// Guarded on the transport for the reason the one above is, and
-    /// unreachable without one for the same second reason: the route that
-    /// gets here comes from a queue only a transport can fill.
-    @ViewBuilder
-    private func pendingPhotosDestination(
-        _ pending: CommunityPendingPhotos
-    ) -> some View {
-        if let transport = appModel.communityTransport {
-            CommunityPhotoReviewView(
-                pending: pending,
-                transport: transport,
-                queue: appModel.communityReview,
-                browser: appModel.community,
-                onFinished: { presentation.path.removeAll() }
-            )
-        }
     }
 }
 
@@ -680,8 +632,15 @@ private func delete(_ hike: Hike, among hikes: [Hike]) {
         // because that is where the writer lives — it is the same instance
         // that wrote the workout — and passed rather than reached for inside
         // `HikeDeletion`, which has no composition root to ask.
-        workouts: hikeRecorder.workoutWriter
-    ) else { return }
+        workouts: hikeRecorder.workoutWriter,
+        save: Self.deletionSave
+    ) else {
+        // And says so. The hike still in the list is the right answer for
+        // the list, but a Delete that changed nothing, with nothing said,
+        // reads as one that was never made.
+        onHikeDeletionRefused()
+        return
+    }
 
     // Clearing the selection stops the *map* drawing a deleted trail; clearing
     // the path stops its detail view staying pushed, showing a hike that no
@@ -709,6 +668,18 @@ private func delete(_ hike: Hike, among hikes: [Hike]) {
             await deletionPlan.removeExclusiveTiles(from: .shared)
         }
     }
+}
+
+/// The save *Delete* commits through. A refused write is not something
+/// automation can ask a disk for, so `--ui-test-refuse-hike-deletion`
+/// supplies one.
+private static var deletionSave: (ModelContext) throws -> Void {
+    #if DEBUG
+    if AppLaunchEnvironment.refusesHikeDeletion {
+        return { _ in throw CocoaError(.fileWriteUnknown) }
+    }
+    #endif
+    return { try $0.save() }
 }
 
 /// Opens a tapped hike suggestion straight to its detail view.
