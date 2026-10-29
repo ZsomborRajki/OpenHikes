@@ -30,9 +30,11 @@
 //    a second set that could only disagree with the hike's. A write
 //    afterwards measures none of it twice.
 //  - Health must never hold a walk this app does not, so the write waits for
-//    a successful save. A builder started at Start would have to be thrown
-//    away on every path that saves nothing — a discard, a refused save — the
-//    way the watch throws its own away.
+//    a successful save. A builder started at Start would break that rule from
+//    its first sample, which is saved to Health as it is added. Throwing the
+//    builder away on a path that saves nothing — a discard, a refused save —
+//    keeps out only the workout: `discardWorkout()` leaves the samples where
+//    they are (`HKWorkoutBuilder.h` says both).
 //  - The same write takes the watch's walks (``WatchWalkHealthExport``),
 //    which no session on this phone ever saw, so one writer serves both
 //    devices.
