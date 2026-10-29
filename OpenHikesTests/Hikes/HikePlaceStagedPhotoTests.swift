@@ -12,7 +12,8 @@
 //  the way the pill's picker reads it (#1188): filed by *Add* minutes or days
 //  later, it is still the photograph it was, and ``HikePhoto/capturedAt`` is
 //  what orders the gallery, groups a walk's share card and dates its exported
-//  waypoint. The place stays the only word on where it is pinned.
+//  waypoint. The place stays the only word on where a new one is pinned; one
+//  the hike already holds is only filed under it.
 //
 
 import CoreLocation
@@ -198,22 +199,24 @@ struct HikePlaceStagedPhotoTests {
         #expect(photo.capturedAt <= after)
     }
 
-    /// Already on the walk — from the pill's picker or a library scan, both
-    /// of which date it by its shutter — then picked again for a place: the
-    /// same photograph moves under the place, with the date it came in with,
-    /// and no second copy.
-    @Test("a picture the hike already holds is refiled under the place with its own date")
+    /// Already on the walk, dated by whichever path brought it in, then
+    /// picked again for a place: the same photograph moves under the place
+    /// with the date it came in with, and no second copy. That date is set
+    /// apart from the one the file names, so a refile that re-dated the
+    /// photograph from its file would show here.
+    @Test("a picture the hike already holds is refiled under the place, keeping the date it came in with")
     func pickedAgainIsRefiledWithItsDate() async throws {
         let context = try Fixture.modelContext()
         let (hike, place) = Self.hikeWithPlace(in: context)
         let data = try Self.exifJPEG()
+        let cameInAt = Self.takenAt.addingTimeInterval(-90)
         let first = try #require(
             await HikePhotoImport.add(
                 data,
                 to: hike,
                 coordinate: Self.elsewhereOnTheTrail,
                 savesToPhotoLibrary: false,
-                capturedAt: Self.takenAt,
+                capturedAt: cameInAt,
                 assetLocalIdentifier: "asset-7",
                 store: Self.store(),
                 save: { _ in /* in memory */ }
@@ -228,7 +231,7 @@ struct HikePlaceStagedPhotoTests {
         #expect(hike.photos.map(\.id) == [first.id], "the same photograph, not a second copy")
         let refiled = try #require(hike.photos(ofPlace: place.id).first)
         #expect(refiled.id == first.id)
-        #expect(refiled.capturedAt == Self.takenAt)
+        #expect(refiled.capturedAt == cameInAt, "filed under the place, not re-dated from its file")
     }
 
     @Test("bytes that are not a picture are reported as an import that failed")
