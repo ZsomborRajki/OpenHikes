@@ -43,8 +43,9 @@ import Foundation
 /// gate, and offered to auto-save there (see ``CachingTileOverlayRenderer``):
 /// read under a slot, a saved tile waited out every slow request ahead of
 /// it, for bytes that never needed the radio. That read, a few stats and one
-/// small file, is the part of the map's synchronous tile work the budgets
-/// leave unbounded.
+/// small file, and the offer, which moves a browsed tile near the auto-saved
+/// hike's route into durable storage, are the part of the map's synchronous
+/// tile work the budgets leave unbounded.
 ///
 /// Admission is by ``Priority`` rather than first-come-first-served, because
 /// the two callers want opposite things. Tiles the user is looking at are

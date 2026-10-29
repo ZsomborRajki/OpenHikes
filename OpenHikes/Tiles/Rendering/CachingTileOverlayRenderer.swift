@@ -445,12 +445,14 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
     ///
     /// The gate still bounds every request the map makes, and the decode,
     /// write and auto-save move that follow one. What runs ahead of it is a
-    /// lookup, a few stats and one small read, and for a tile on no disk,
-    /// which is every tile of the zoom-to-fit this file's header describes,
-    /// only the stats run before the load queues as it always did. Saved
-    /// coverage past its age is left to the load under the slot, because it
-    /// is refreshed before it is drawn. That load asks the disk again, since
-    /// a download may have saved the tile while it waited.
+    /// lookup, a few stats and one small read, then the auto-save offer for a
+    /// tile it finds, which moves a browsed tile near the auto-saved hike's
+    /// route into durable storage. For a tile on no disk, which is every tile
+    /// of the zoom-to-fit this file's header describes, only the stats run
+    /// before the load queues as it always did. Saved coverage past its age
+    /// is left to the load under the slot, because it is refreshed before it
+    /// is drawn. That load asks the disk again, since a download may have
+    /// saved the tile while it waited.
     private static func load(
         _ path: MKTileOverlayPath,
         from overlay: TileOverlay,
