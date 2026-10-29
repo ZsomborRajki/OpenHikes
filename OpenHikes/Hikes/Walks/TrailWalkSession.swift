@@ -540,16 +540,14 @@ final class TrailWalkSession {
     /// column together: on a refusal the inserted row and the cleared
     /// sidecar exist only as pending edits, and a process that exits there
     /// would find a sidecar still describing an open walk with the row gone.
-    /// So a refusal rolls the context back and leaves the walk exactly as it
-    /// was — the same refusal ``HikeDeletion`` and ``HikeRecorder`` make, and
-    /// the caller either says so or tries again on the next fix.
+    /// So a refusal puts both edits back by hand — the comment there says why
+    /// not through the context's rollback — and leaves the walk under way as
+    /// it was, its warnings still standing. ``HikeDeletion`` and ``HikeRecorder``
+    /// keep the same order, each by its own means: nothing goes out until the
+    /// store has kept it, and a refusal leaves the caller what it had. The
+    /// caller here either says so or tries again on the next fix.
     @discardableResult private func finish(reason: TrailWalkEndReason, at now: Date) -> TrailWalkEnd {
         guard let closing = record else { return .discarded }
-        // Nobody is following anything any more, so a standing "Off the trail"
-        // is a claim about a walk that is over. Here rather than in
-        // `walkDidResumeOrEnd()`, which is about a *pause* ending — a pause
-        // ending is when this watch starts mattering, not when it stops.
-        reminders?.walkDidStopFollowing()
         // An abandonment is noticed long after it happened — six hours later
         // at best, and at the next launch for a walk found stale — so `now` is
         // when nobody was walking any more, not when the walk ended.
@@ -591,6 +589,15 @@ final class TrailWalkSession {
         let lingers = row != nil && reason != .abandoned
         let final = lingers ? Self.payload(for: closing, at: endedAt, state: .finished) : nil
         let endedID = closing.hikeID
+        // Nobody is following anything any more, so a standing "Off the trail"
+        // is a claim about a walk that is over. Here rather than in
+        // `walkDidResumeOrEnd()`, which is about a *pause* ending — a pause
+        // ending is when this watch starts mattering, not when it stops. And
+        // past the commit, like everything else the end changes: a refused
+        // end leaves the walk under way, so its standing warnings still
+        // stand, and a once-only warning it has had stays spent — the
+        // after-dark one for the walk, the off-trail one for the departure.
+        reminders?.walkDidStopFollowing()
         clearState()
         // An ended walk is exactly what has to stop the next matched fix from
         // starting another one.

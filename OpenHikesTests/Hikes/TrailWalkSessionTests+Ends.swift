@@ -129,6 +129,101 @@ extension TrailWalkSessionTests {
         #expect(try walks(of: hike).isEmpty, "with no row left behind")
     }
 
+    /// Nor is it the end of the walk's reminders. Told before the commit that
+    /// nobody was following any more, a refused End took down the warnings
+    /// standing over a walk that was still under way, and re-armed the
+    /// once-per-walk after-dark warning, which the next estimate then said a
+    /// second time.
+    @Test("a refused commit leaves the walk's reminders standing")
+    func refusedCommitKeepsTheReminders() async throws {
+        let harness = MovementReminderHarness.harness(clock: clock)
+        // Dusk in eight minutes: the rest of this trail takes far longer.
+        let dusk = clock.read().addingTimeInterval(8 * 60)
+        var refusing = false
+        let session = TrailWalkSession(
+            context: context,
+            reminders: harness.controller,
+            clock: clock.read,
+            daylight: { _, _ in WeatherDaylight(civilDusk: dusk) },
+            save: { store in
+                if refusing { throw CocoaError(.fileWriteUnknown) }
+                try store.save()
+            }
+        )
+        let hike = hike()
+        let profile = RouteProfile(route: hike.route)
+        walk(session, hike: hike, profile: profile, from: 0, through: 3)
+        await harness.controller.settle()
+        #expect(harness.notifier.postedKinds == [.afterDark], "precondition: the walk was warned")
+        let withdrawn = harness.notifier.withdrawn
+
+        refusing = true
+        guard case .refused = session.end() else {
+            Issue.record("a store that refuses the commit must refuse the end")
+            return
+        }
+        await harness.controller.settle()
+        #expect(harness.notifier.withdrawn == withdrawn, "the walk is still under way, and so is what it was told")
+
+        refusing = false
+        walk(session, hike: hike, profile: profile, from: 4, through: 5)
+        await harness.controller.settle()
+        #expect(harness.notifier.postedKinds == [.afterDark], "once per walk, and this is still the same walk")
+
+        if case .refused = session.end() {
+            Issue.record("a store that accepts the commit ends the walk")
+            return
+        }
+        await harness.controller.settle()
+        #expect(harness.notifier.withdrawn.contains(.afterDark), "the end that lands takes the warning down")
+    }
+
+    /// The other once-only warning. Told before the commit that nobody was
+    /// following any more, a refused End also forgot a departure the walk
+    /// had already been warned about, so a hiker still off the line was told
+    /// "Off the trail" again one dwell later.
+    @Test("a refused commit leaves an off-trail warning spent")
+    func refusedCommitKeepsTheOffTrailWarningSpent() async {
+        let harness = MovementReminderHarness.harness(clock: clock)
+        var refusing = false
+        let session = TrailWalkSession(
+            context: context,
+            reminders: harness.controller,
+            clock: clock.read,
+            save: { store in
+                if refusing { throw CocoaError(.fileWriteUnknown) }
+                try store.save()
+            }
+        )
+        let hike = hike()
+        walk(session, hike: hike, profile: RouteProfile(route: hike.route), from: 0, through: 3)
+        stayOffTheTrail(session, hike: hike)
+        await harness.controller.settle()
+        #expect(harness.notifier.postedKinds == [.leftTheTrail], "precondition: the walk was warned")
+
+        refusing = true
+        guard case .refused = session.end() else {
+            Issue.record("a store that refuses the commit must refuse the end")
+            return
+        }
+        refusing = false
+        stayOffTheTrail(session, hike: hike)
+        await harness.controller.settle()
+        #expect(harness.notifier.postedKinds == [.leftTheTrail], "once per departure, and this is the same one")
+    }
+
+    /// Two fixes well off the line, a dwell apart: what being told takes.
+    private func stayOffTheTrail(_ session: TrailWalkSession, hike: Hike) {
+        for _ in 0..<2 {
+            clock.advance(by: MovementReminderPolicy.offTrailDwell)
+            session.recordRouteDistance(
+                hikeID: hike.id,
+                offRouteMeters: MovementReminderPolicy.offTrailMeters * 2,
+                at: clock.now
+            )
+        }
+    }
+
     /// An end at the other end. The direction a GPX stores its points in is
     /// the importer's, not the hiker's, so a hiker who covers the route
     /// from its stored end to its stored start has walked the trail — and
