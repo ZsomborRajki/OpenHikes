@@ -548,12 +548,12 @@ struct MapView: MapViewRepresentable, Equatable {
     ///
     /// The same route means the same line, not only the same hike: *Edit
     /// Route*, filled heights and mirroring all replace a hike's line under
-    /// its id, and the polyline, the points a tap is tested against and the
-    /// cut at its pauses must all follow (#1228). Only a new hike is fitted
-    /// to. A new line for the hike already on screen is redrawn where the
-    /// hiker is looking, because it can arrive from another device at any
-    /// moment — mid-pan included — and a line whose heights were filled in
-    /// has not moved at all.
+    /// its id, and the polyline, the points a tap is tested against, the
+    /// cut at its pauses and its coloured stretches must all follow (#1228).
+    /// Only a new hike is fitted to. A new line for the hike already on
+    /// screen is redrawn where the hiker is looking, because it can arrive
+    /// from another device at any moment — mid-pan included — and a line
+    /// whose heights were filled in has not moved at all.
     private func updateRoute(_ mapView: MKMapView, _ coordinator: Coordinator) {
         let isNewHike = coordinator.routeID != route?.id
         guard isNewHike || coordinator.routeRevision != route?.revision else { return }
@@ -575,6 +575,12 @@ struct MapView: MapViewRepresentable, Equatable {
         if !coordinator.pausedRouteOverlays.isEmpty {
             mapView.removeOverlays(coordinator.pausedRouteOverlays)
             coordinator.pausedRouteOverlays = []
+        }
+        if !isNewHike {
+            // The stretches kept for this hike may have been measured along
+            // the line just taken off. Asked again rather than trusted, the
+            // shading hands the new line only stretches measured along it.
+            coordinator.applyRouteShading(routeShading)
         }
 
         guard let route, route.coordinates.count > 1 else { return }

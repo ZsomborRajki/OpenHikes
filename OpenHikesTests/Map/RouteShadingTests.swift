@@ -3,8 +3,8 @@
 //  OpenHikesTests
 //
 //  What the map is told to colour the selected line by, and when it is told
-//  nothing: the *Color By* control, the selection moving on, and a route OSM
-//  has already said it grades nowhere.
+//  nothing: the *Color By* control, the selection moving on, the line being
+//  replaced under it, and a route OSM has already said it grades nowhere.
 //
 //  Measured against the bundled trail-tag fixture — the graph and GPX the
 //  Difficulty section's own UI test draws from — so a stretch here and a share
@@ -255,6 +255,37 @@ struct RouteShadingTests {
         await shading.measurement?.value
         #expect(shading.hikeID == hike.id)
         #expect(!shading.stretches.isEmpty)
+    }
+
+    /// *Edit Route*, heights filled onto a line and mirroring all replace a
+    /// line under the hike's id, which no change of selection announces
+    /// (#1228). The old line's stretches lie where the old line ran.
+    @Test("a new line for the followed hike disowns the old stretches at once, then is measured again")
+    func replacedLineIsMeasuredAgain() async throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context, route: try fixtureRoute())
+        let defaults = try scratchDefaults()
+        defaults.set(RouteColoring.elevation.rawValue, forKey: SettingsKey.routeColoring)
+        let shading = RouteShading(provider: nil, defaults: defaults)
+        shading.follow(hike)
+        await shading.measurement?.value
+        #expect(!shading.stretches.isEmpty)
+        #expect(shading.describesCurrentLine)
+
+        // Half a degree north: the same heights, along other ground.
+        let moved = try fixtureRoute().map { point in
+            var moved = point
+            moved.latitude += 0.5
+            return moved
+        }
+        hike.replaceRoute(with: moved)
+
+        #expect(!shading.describesCurrentLine, "the stretches are the old line's from the write on")
+        await settleDelegateHop(until: "the new line's stretches to be published") {
+            shading.describesCurrentLine && shading.hikeID == hike.id && !shading.stretches.isEmpty
+        }
+        let southernmost = try #require(moved.map(\.latitude).min())
+        #expect(shading.stretches.allSatisfy { $0.coordinates.allSatisfy { $0.latitude >= southernmost - 1e-9 } })
     }
 
     @Test("by elevation, a route with no heights colours nothing")
