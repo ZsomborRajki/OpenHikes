@@ -262,14 +262,18 @@ enum TrailDraftSave {
     ///   leaves the hike's places as they are — see the file header.
     ///
     /// A refused save puts everything back: the rows through the context's
-    /// rollback, and the hike's own columns and its list of place rows by
-    /// hand as well, because the rollback cannot be counted on for those. On
-    /// iOS 27.0 it was measured taking them back itself. On iOS 18.6 it left
-    /// the list as the edit had left it, and ``StoredTileDeletion`` records
-    /// one that kept an attribute written over an existing row. The rollback has
-    /// nothing else to take, because what the context already held is
-    /// committed first — see ``HikeDeletion/delete(_:store:workouts:save:)``,
-    /// which does the same for the same reason.
+    /// rollback, and then by hand whatever of the hike's own columns and its
+    /// list of place rows the rollback left as the edit wrote them, and
+    /// nothing else — see ``UneditedHike/putBack(into:)``. Which that is
+    /// depends on the OS. Measured on iOS 27.0, the rollback takes all of it
+    /// back itself; measured on 18.6, the iOS 18 floor takes back none of it
+    /// — see ``StoredTileDeletion`` for the columns and
+    /// ``restorePlaceRows(of:to:)`` for the list. iOS 26 was not measured,
+    /// and need not be: comparing before writing is right whichever way an
+    /// OS goes. The rollback has nothing else to take, because what the
+    /// context already held is committed first — see
+    /// ``HikeDeletion/delete(_:store:workouts:save:)``, which does the same
+    /// for the same reason.
     @discardableResult static func update(
         _ hike: Hike,
         from draft: TrailDraft,
@@ -291,18 +295,17 @@ enum TrailDraftSave {
             return refusedEdit(error)
         }
         let route = draft.routeCoordinates
-        let before = (
-            route: hike.route,
-            distance: hike.distanceMeters,
-            drawn: hike.drawnRouteData,
-            surface: hike.surfaceMetersByCategory,
-            difficulty: hike.difficultyMetersByGrade,
-            photos: hike.photos,
-            points: hike.trailPoints ?? [],
-            climb: hike.climbMeters,
-            descent: hike.descentMeters,
-            elevationRevision: hike.elevationRouteRevision
-        )
+        // The hike's walks are read before anything is written, though the
+        // edit never touches them. Measured on iOS 27.0: when the rollback
+        // below takes back a place row this edit inserted, beside the columns
+        // it wrote, a list of the hike's rows that nothing had read yet is
+        // left unreadable, and the next read of the walks trapped inside
+        // SwiftData. The hike's photo section reads them on every pass, and
+        // the delete confirmation counts them. A list read first came back
+        // readable, which is why the places, read by ``UneditedHike``, always
+        // did.
+        _ = hike.walks
+        let before = UneditedHike(hike)
         let kept = keepingPlaces
             ? TrailPlaceOrder.touched(places(of: hike, drawn: draft.places, atOpen: placesAtOpen), along: route)
             : nil
@@ -334,21 +337,70 @@ enum TrailDraftSave {
             try save(context)
         } catch {
             context.rollback()
-            hike.replaceRoute(with: before.route)
-            hike.distanceMeters = before.distance
-            hike.drawnRouteData = before.drawn
-            hike.surfaceMetersByCategory = before.surface
-            hike.difficultyMetersByGrade = before.difficulty
-            hike.photos = before.photos
-            restorePlaceRows(of: hike, to: before.points)
-            if before.climb != nil || before.descent != nil {
-                hike.climbMeters = before.climb
-                hike.descentMeters = before.descent
-            }
-            if before.elevationRevision != nil { hike.elevationRouteRevision = before.elevationRevision }
+            before.putBack(into: hike)
             return refusedEdit(error)
         }
         return .saved(hike)
+    }
+
+    /// The hike as an edit found it: every column
+    /// ``update(_:from:openedWith:into:heights:keepingPlaces:save:)`` writes,
+    /// and its list of place rows — all but the boxes
+    /// ``Hike/pinUnboxedDownloads()`` pins, which are safe to leave after a
+    /// refusal.
+    private struct UneditedHike {
+        let route: [RouteCoordinate]
+        let distance: Double
+        let drawn: Data?
+        let surface: [String: Double]
+        let difficulty: [String: Double]
+        let photos: [HikePhoto]
+        let points: [TrailPoint]
+        let climb: Double?
+        let descent: Double?
+        let elevationRevision: String?
+
+        init(_ hike: Hike) {
+            route = hike.route
+            distance = hike.distanceMeters
+            drawn = hike.drawnRouteData
+            surface = hike.surfaceMetersByCategory
+            difficulty = hike.difficultyMetersByGrade
+            photos = hike.photos
+            points = hike.trailPoints ?? []
+            climb = hike.climbMeters
+            descent = hike.descentMeters
+            elevationRevision = hike.elevationRouteRevision
+        }
+
+        /// Writes back what a refused edit's rollback left as the edit wrote
+        /// it, and nothing the rollback took back.
+        ///
+        /// A column the rollback took back — on iOS 27.0, every one — is not
+        /// written again, because `@Model` filters no same-value write
+        /// (AGENTS.md *Render isolation, in practice*). Written anyway, it
+        /// left the hike changed in the shared context, and that context's
+        /// next save — an autosave, a rename — put the pre-edit breakdown and
+        /// length over the ones another context had saved since, as an import
+        /// or the hiker's other device would: measured on iOS 27.0. A column
+        /// the rollback left as the edit wrote it — on the iOS 18 floor,
+        /// every one, with no change pending — is put back, or the next save
+        /// that writes the hike for any reason would write the refused edit.
+        /// That leaves the hike changed there, and on the floor a save writes
+        /// a changed row whole, so the next one can still put the pre-edit
+        /// values over another context's.
+        func putBack(into hike: Hike) {
+            if hike.route != route { hike.replaceRoute(with: route) }
+            if hike.distanceMeters != distance { hike.distanceMeters = distance }
+            if hike.drawnRouteData != drawn { hike.drawnRouteData = drawn }
+            if hike.surfaceMetersByCategory != surface { hike.surfaceMetersByCategory = surface }
+            if hike.difficultyMetersByGrade != difficulty { hike.difficultyMetersByGrade = difficulty }
+            if hike.photos != photos { hike.photos = photos }
+            TrailDraftSave.restorePlaceRows(of: hike, to: points)
+            if hike.climbMeters != climb { hike.climbMeters = climb }
+            if hike.descentMeters != descent { hike.descentMeters = descent }
+            if hike.elevationRouteRevision != elevationRevision { hike.elevationRouteRevision = elevationRevision }
+        }
     }
 
     /// Puts a refused edit's place rows back in the hike's list of them.

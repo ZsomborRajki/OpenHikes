@@ -175,16 +175,23 @@ nonisolated enum StoredTileDeletion {
             try save(context)
         } catch {
             // Put back by hand rather than through `ModelContext.rollback()`,
-            // which does not do it: measured here, a rolled-back context still
-            // holds the emptied manifest and the switched-off preference — it
-            // takes back an insertion or a deletion, not an attribute written
-            // over an existing row. `AutoSaveController.sceneWillResignActive`
-            // already restores this same property the same way, for the same
-            // reason. And it has to be restored, because a manifest left empty
-            // in the context is coverage the hiker still has, waiting for
-            // whichever autosave lands next to forget it without a word —
-            // durable tiles the launch trim then reclaims, for a hike whose
-            // deletion was refused.
+            // which would also discard every other pending edit in the hike's
+            // context, the shared main one: a rename waiting for its autosave,
+            // and the browsed hike's newest claims that `flushPendingKeys()`
+            // folded in above. Nor does a rollback put this back on every OS.
+            // Measured in a hosted test on iOS 18.6, for the iOS 18 floor, it
+            // takes back an insertion or a deletion but not an attribute
+            // written over an existing row: the emptied manifest and the
+            // switched-off preference stay as written, with no change
+            // pending, and the next save that writes the row for any other
+            // reason writes them. Measured on iOS 27.0, it takes them back.
+            // iOS 26 was not measured. `AutoSaveController.sceneWillResignActive`
+            // puts this same property back by hand as well. And it has to be
+            // put back, because a manifest left empty in the context is
+            // coverage the hiker still has, waiting for whichever autosave
+            // lands next to forget it without a word — durable tiles the
+            // launch trim then reclaims, for a hike whose deletion was
+            // refused.
             hike.offlineDownloads = previousDownloads
             hike.autoSavedTileKeys = previousKeys
             hike.autoSaveTilesEnabled = wasAutoSaving
