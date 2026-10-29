@@ -85,11 +85,9 @@ struct WatchWalkHealthExportTests {
         #expect(request.endedAt.timeIntervalSince(request.startedAt) - paused == walk.activeSeconds)
     }
 
-    @Test("the workout identifier is filed against the hike the walk became")
-    func theWorkoutIdentifierIsRemembered() async throws {
+    @Test("the hike the walk became is marked as written to Health")
+    func theHikeIsMarked() async throws {
         let harness = try Harness(savesToHealth: .on)
-        let workoutID = UUID()
-        harness.writer.result = .success(workoutID)
 
         let outcome = await harness.arrive(Fixture.walk())
 
@@ -98,7 +96,7 @@ struct WatchWalkHealthExportTests {
             return
         }
         let state = HikeLocalState.existing(for: hikeID, in: harness.container.mainContext)
-        #expect(state?.healthWorkoutID == workoutID)
+        #expect(state?.wroteToHealth == true)
     }
 
     @Test("a hiker who did not ask gets nothing written", arguments: [Harness.Switch.neverSet, .off])
@@ -162,10 +160,12 @@ struct WatchWalkHealthExportTests {
         #expect(harness.writer.written.count == 1)
     }
 
-    @Test("a failed write keeps the hike and files no identifier")
-    func aFailedWriteCostsNothing() async throws {
+    /// The mark stays because a failed write can still leave something in
+    /// Health, and the mark is what has the hike's deletion ask for it.
+    @Test("a failed write keeps the hike, and its mark")
+    func aFailedWriteKeepsTheHike() async throws {
         let harness = try Harness(savesToHealth: .on)
-        harness.writer.result = .failure(.notWritten)
+        harness.writer.failure = .unavailable
 
         let outcome = await harness.arrive(Fixture.walk())
 
@@ -176,7 +176,7 @@ struct WatchWalkHealthExportTests {
         #expect(harness.writer.written.count == 1)
         #expect(try Fixture.hike(hikeID, in: harness.container.mainContext) != nil)
         let state = HikeLocalState.existing(for: hikeID, in: harness.container.mainContext)
-        #expect(state?.healthWorkoutID == nil)
+        #expect(state?.wroteToHealth == true)
     }
 
     // MARK: - Harness

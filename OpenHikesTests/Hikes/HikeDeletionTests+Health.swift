@@ -26,15 +26,12 @@ import Testing
 
 @MainActor
 extension HikeDeletionTests {
-    /// A saved hike whose recording reached Health, with the identifier filed
-    /// against its sidecar the way `HikeRecorder` files one.
-    private func recordedHike(
-        in context: ModelContext,
-        workoutID: UUID
-    ) -> Hike {
+    /// A saved hike whose recording reached Health, marked on its sidecar the
+    /// way `HikeWorkoutExport` marks one.
+    private func recordedHike(in context: ModelContext) -> Hike {
         let hike = Fixture.hike(in: context)
         let state = HikeLocalState.forHike(hike.id, in: context)
-        state.healthWorkoutID = workoutID
+        state.wroteToHealth = true
         try? context.save()
         return hike
     }
@@ -42,33 +39,33 @@ extension HikeDeletionTests {
     @Test("deleting a hike takes its workout out of Health")
     func deletingAHikeRemovesItsWorkout() async throws {
         let context = try Fixture.modelContext()
-        let workoutID = UUID()
-        let hike = recordedHike(in: context, workoutID: workoutID)
+        let hike = recordedHike(in: context)
+        let hikeID = hike.id
         let writer = StubWorkoutWriter()
 
         try HikeDeletion.delete([hike], workouts: writer)
         // The removal is fire-and-forget, the shape the write already takes.
         await Task.yield()
 
-        #expect(writer.deleted == [workoutID])
+        #expect(writer.deleted == [hikeID])
     }
 
-    /// The whole reason the identifier is read before `deleteLocalState()`
-    /// rather than after: a deleted row has no sidecar left to ask, so a
-    /// deletion that looked it up afterwards would find nothing and silently
-    /// leave the workout behind — which is the bug, wearing a fix.
-    @Test("the identifier survives the sidecar it was stored in")
-    func readsTheIdentifierBeforeTheSidecarGoes() async throws {
+    /// The whole reason the mark is read before `deleteLocalState()` rather
+    /// than after: a deleted row has no sidecar left to ask, so a deletion
+    /// that looked it up afterwards would find nothing and silently leave the
+    /// workout behind — which is the bug, wearing a fix.
+    @Test("the mark survives the sidecar it was stored in")
+    func readsTheMarkBeforeTheSidecarGoes() async throws {
         let context = try Fixture.modelContext()
-        let workoutID = UUID()
-        let hike = recordedHike(in: context, workoutID: workoutID)
+        let hike = recordedHike(in: context)
+        let hikeID = hike.id
         let writer = StubWorkoutWriter()
 
         try HikeDeletion.delete([hike], workouts: writer)
         await Task.yield()
 
-        #expect(HikeLocalState.existing(for: hike.id, in: context) == nil)
-        #expect(writer.deleted == [workoutID], "and the workout still went")
+        #expect(HikeLocalState.existing(for: hikeID, in: context) == nil)
+        #expect(writer.deleted == [hikeID], "and the workout still went")
     }
 
     /// A refused save puts everything back — the hike, its sidecar and its
@@ -78,12 +75,12 @@ extension HikeDeletionTests {
     @Test("a refused deletion leaves the workout where it was")
     func aRefusedDeletionKeepsTheWorkout() async throws {
         let context = try Fixture.modelContext()
-        let hike = recordedHike(in: context, workoutID: UUID())
+        let hike = recordedHike(in: context)
         let writer = StubWorkoutWriter()
 
         #expect(throws: (any Error).self) {
             try HikeDeletion.delete([hike], workouts: writer) { _ in
-                throw HikeWorkoutFailure.notWritten
+                throw HikeWorkoutFailure.unavailable
             }
         }
         await Task.yield()
@@ -111,7 +108,7 @@ extension HikeDeletionTests {
     @Test("a launch with no Health writer still deletes the hike")
     func deletesWithoutAWriter() throws {
         let context = try Fixture.modelContext()
-        let hike = recordedHike(in: context, workoutID: UUID())
+        let hike = recordedHike(in: context)
 
         try HikeDeletion.delete([hike])
 
@@ -124,7 +121,7 @@ extension HikeDeletionTests {
     @Test("a hike is still deleted when Health refuses to remove its workout")
     func survivesARefusalFromHealth() async throws {
         let context = try Fixture.modelContext()
-        let hike = recordedHike(in: context, workoutID: UUID())
+        let hike = recordedHike(in: context)
         let writer = StubWorkoutWriter()
         writer.deleteFailure = .unavailable
 
@@ -139,23 +136,23 @@ extension HikeDeletionTests {
     @Test("a batch asks only about the hikes that have a workout")
     func asksOnlyAboutExportedHikes() async throws {
         let context = try Fixture.modelContext()
-        let workoutID = UUID()
-        let exported = recordedHike(in: context, workoutID: workoutID)
+        let exported = recordedHike(in: context)
+        let exportedID = exported.id
         let plain = Fixture.hike(in: context, title: "Imported Track")
         let writer = StubWorkoutWriter()
 
         try HikeDeletion.delete([exported, plain], workouts: writer)
         await Task.yield()
 
-        #expect(writer.deleted == [workoutID])
+        #expect(writer.deleted == [exportedID])
     }
 
     // MARK: - A deletion while the export is still being written
 
-    /// The race the deletion above cannot see: ``HikeDeletion`` removes the
-    /// workouts already filed when it runs, and one Health has not answered
-    /// for yet has no identifier to file. The export has to notice the hike
-    /// went while it was suspended, and take the workout back itself.
+    /// The race the deletion above cannot settle alone: ``HikeDeletion`` asks
+    /// Health as it commits, and a write Health has not answered for yet may
+    /// not have saved everything by then. The export has to notice the hike
+    /// went while it was suspended, and ask again.
     @Test("a workout Health finishes after its hike was deleted is taken back out")
     func aWorkoutFinishedAfterDeletionIsRemoved() async throws {
         let container = try Fixture.modelContainer()
@@ -174,6 +171,9 @@ extension HikeDeletionTests {
         }
         await writer.untilWriting()
         try HikeDeletion.delete([hike], workouts: writer)
+        await settleDelegateHop(until: "the deletion to ask while the write is held") {
+            writer.deleted == [hikeID]
+        }
         writer.finish()
         await export.value
 
@@ -182,33 +182,55 @@ extension HikeDeletionTests {
             HikeLocalState.existing(for: hikeID, in: context) == nil,
             "no sidecar comes back for a hike that is gone"
         )
-        #expect(writer.deleted == [writer.workoutID])
+        #expect(writer.deleted == [hikeID, hikeID], "asked as it committed, and again once Health answered")
     }
 
     /// The same suspension with nothing deleted under it, so the check above
-    /// is not simply refusing to file anything written slowly.
-    @Test("a slow write for a hike that is still here is filed as usual")
-    func aSlowWriteForALiveHikeIsFiled() async throws {
+    /// is not simply taking back anything written slowly. The mark is on disk
+    /// before Health hears anything, which is what a deletion during the
+    /// write asks by, and one after a write this process never finished.
+    @Test("a slow write for a hike that is still here is marked before Health answers")
+    func aSlowWriteForALiveHikeIsMarkedFirst() async throws {
         let container = try Fixture.modelContainer()
         let context = container.mainContext
         let hike = Fixture.hike(in: context)
         try context.save()
+        let hikeID = hike.id
         let writer = HeldWorkoutWriter()
 
         let export = Task {
             await HikeWorkoutExport.write(
-                Self.request(for: hike.id),
+                Self.request(for: hikeID),
                 with: writer,
                 filingInto: container
             )
         }
         await writer.untilWriting()
+        let markedOnDisk = HikeLocalState.existing(for: hikeID, in: ModelContext(container))?.wroteToHealth
         writer.finish()
         await export.value
 
-        let state = HikeLocalState.existing(for: hike.id, in: context)
-        #expect(state?.healthWorkoutID == writer.workoutID)
+        #expect(markedOnDisk == true)
+        #expect(HikeLocalState.existing(for: hikeID, in: context)?.wroteToHealth == true)
         #expect(writer.deleted.isEmpty)
+    }
+
+    /// Marking a hike that is already gone would put a sidecar back for it,
+    /// and writing it would put a walk in Health this app does not hold.
+    @Test("a hike gone before its export starts is neither written nor marked")
+    func aHikeGoneBeforeItsExportIsLeftAlone() async throws {
+        let container = try Fixture.modelContainer()
+        let context = container.mainContext
+        let hike = Fixture.hike(in: context)
+        try context.save()
+        let hikeID = hike.id
+        try HikeDeletion.delete([hike])
+        let writer = StubWorkoutWriter()
+
+        await HikeWorkoutExport.write(Self.request(for: hikeID), with: writer, filingInto: container)
+
+        #expect(writer.written.isEmpty)
+        #expect(HikeLocalState.existing(for: hikeID, in: context) == nil)
     }
 
     /// A store that could not say is not a store that said "gone": taking the
@@ -245,24 +267,23 @@ extension HikeDeletionTests {
 /// deletion can land at a known point inside it — a handshake, not a race.
 @MainActor
 private final class HeldWorkoutWriter: HikeWorkoutWriting {
-    let workoutID = UUID()
+    /// The hikes a deletion asked Health to take back, in the order it asked.
     private(set) var deleted: [UUID] = []
     private var hasEntered = false
     private var entered: CheckedContinuation<Void, Never>?
     private var held: CheckedContinuation<Void, Never>?
 
-    func write(_ request: HikeWorkoutRequest) async -> UUID {
+    func write(_ request: HikeWorkoutRequest) async {
         hasEntered = true
         entered?.resume()
         entered = nil
         // Parked in the same main-actor turn as the resume above, so `held`
         // is set before the test can reach `finish()`.
         await withCheckedContinuation { held = $0 }
-        return workoutID
     }
 
-    func delete(workoutID: UUID) {
-        deleted.append(workoutID)
+    func deleteWorkout(of hikeID: UUID) {
+        deleted.append(hikeID)
     }
 
     /// Returns once `write` has been entered and is waiting.
@@ -271,7 +292,7 @@ private final class HeldWorkoutWriter: HikeWorkoutWriting {
         await withCheckedContinuation { entered = $0 }
     }
 
-    /// Lets the held `write` answer with ``workoutID``.
+    /// Lets the held `write` answer.
     func finish() {
         held?.resume()
         held = nil
