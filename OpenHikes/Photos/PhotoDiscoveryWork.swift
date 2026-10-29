@@ -15,20 +15,27 @@
 //  the main thread after the fetch came back, with the sheet's spinner frozen
 //  in front of it (#1119).
 //
-//  So both steps take plain values — ``HikePhotoSearchPlan/Source``, the
-//  plan, the assets — and run `@concurrent`, never in a bare `Task`, which
-//  would inherit the controller's actor. The controller reads the hike on the
-//  main actor before the hop and writes what comes back on it after, so no
-//  model crosses.
+//  So both steps take plain values — a ``HikePhotoSearchPlan/SourceRead``,
+//  the plan, the assets — and run `@concurrent`, never in a bare `Task`,
+//  which would inherit the controller's actor. The first reads the hike as
+//  well as indexing it, in a context of its own, because the read decodes
+//  the route and hashes it, which is route-sized too (#1215). The controller
+//  names the hike on the main actor before the hop and writes what comes
+//  back on it after, so no model crosses.
 //
 //  The steps themselves are closures only so a suite can see which thread
-//  they ran on: ``standard`` is the plan and the matcher as they are, and
-//  nothing else ever replaces them.
+//  they ran on: ``standard`` is the fetch, the plan and the matcher as they
+//  are, and nothing else ever replaces them.
 //
 
 import Foundation
+import OpenHikesData
+import SwiftData
 
 nonisolated struct PhotoDiscoveryWork: Sendable {
+    /// Fetches the hike a search reads, into the context the read made for
+    /// it — ``HikePhotoSearchPlan/SourceRead/fetchHike(_:_:)``.
+    let fetchHike: @Sendable (ModelContext, PersistentIdentifier) throws -> Hike?
     /// Builds the plan's indexes from what was read off the hike.
     let buildPlan: @Sendable (HikePhotoSearchPlan.Source) -> HikePhotoSearchPlan
     /// Matches the library's answer against a plan, leaving out the
@@ -36,17 +43,23 @@ nonisolated struct PhotoDiscoveryWork: Sendable {
     let matchAssets: @Sendable (HikePhotoSearchPlan, [PhotoLibraryAsset], Set<String>) -> [LibraryPhotoMatch]
 
     static let standard = Self(
+        fetchHike: HikePhotoSearchPlan.SourceRead.fetchHike,
         buildPlan: { HikePhotoSearchPlan(source: $0) },
         matchAssets: { plan, assets, alreadyImported in
             plan.matches(assets: assets, alreadyImported: alreadyImported)
         }
     )
 
-    /// The plan `source` supports, built off the main actor.
+    /// The plan the hike `read` names supports, read and built off the main
+    /// actor.
+    ///
+    /// A hike the store no longer holds has nothing left to search, and
+    /// reads as such: ``PhotoDiscoveryController/Phase/unsupported``, for the
+    /// moment its own context still holds it after a deletion elsewhere.
     @concurrent
-    func plan(from source: HikePhotoSearchPlan.Source) async -> HikePhotoSearchPlan {
-        assertOffMainThread("Indexing a hike's route for a photo search must stay off the main thread")
-        return buildPlan(source)
+    func plan(for read: HikePhotoSearchPlan.SourceRead) async -> HikePhotoSearchPlan {
+        assertOffMainThread("Reading and indexing a hike's route for a photo search must stay off the main thread")
+        return buildPlan(read.source(fetch: fetchHike) ?? HikePhotoSearchPlan.Source(route: [], walks: []))
     }
 
     /// What `plan` makes of `assets`, matched off the main actor.

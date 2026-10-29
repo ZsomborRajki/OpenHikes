@@ -49,9 +49,10 @@
 //  library; ``libraryAccess`` is kept for the sheet to say so, and
 //  ``selectMorePhotos(in:from:)`` is the way out.
 //
-//  The route-sized work — indexing the route, matching the library's answer
-//  against it — runs off the main actor, through ``PhotoDiscoveryWork``. Only
-//  the hike is read here, before the hop, and only the newest search writes
+//  The route-sized work — reading the route, indexing it, matching the
+//  library's answer against it — runs off the main actor, through
+//  ``PhotoDiscoveryWork``. Here the hike is only named, before the hop — see
+//  ``HikePhotoSearchPlan/SourceRead`` — and only the newest search writes
 //  what comes back: the sheet starts one per presentation, and the picker for
 //  the shared subset starts another, so an older one still matching must not
 //  land its answer on top of the newer one's.
@@ -164,7 +165,7 @@ final class PhotoDiscoveryController {
         matches = []
         selection = []
         importFailed = false
-        let plan = await work.plan(from: hike.photoSearchSource)
+        let plan = await work.plan(for: HikePhotoSearchPlan.SourceRead(hike))
         guard isCurrent(generation), hike.isAttached else { return }
         guard !plan.isEmpty else {
             phase = .unsupported

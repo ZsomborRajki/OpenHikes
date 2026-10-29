@@ -91,8 +91,8 @@ extension OpenHikesView {
     /// still never opens.
     func attachPickedPhotos(_ items: [PhotosPickerItem]) {
         guard let subject = photoCapture.currentSubject() else { return }
-        // Read off the hike here, on its actor, and indexed off it, once for
-        // the whole selection — see ``PickedPhotoWork``. A selection filed
+        // Named here, on the hike's actor, and read and indexed off it, once
+        // for the whole selection — see ``PickedPhotoWork``. A selection filed
         // under a place reads nothing.
         let source = subject.pickerSearchSource
         photoCapture.runLibraryImport {

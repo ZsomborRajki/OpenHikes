@@ -163,12 +163,15 @@ extension Hike {
         HikePhotoSearchPlan(source: photoSearchSource)
     }
 
-    /// The values ``photoSearchPlan`` is built from, read on this row's actor.
+    /// The values ``photoSearchPlan`` is built from, read on whichever thread
+    /// owns this row's context.
     ///
     /// The route is decoded and the walks narrowed to the ones along it here;
-    /// the indexes are left to whoever builds the plan, which for a library
-    /// scan and for the picker is somewhere off the main actor.
-    var photoSearchSource: HikePhotoSearchPlan.Source {
+    /// the indexes are left to whoever builds the plan. A library scan and
+    /// the picker read it in a context of their own, off the main actor,
+    /// unless this row holds edits its store has not had yet — see
+    /// ``HikePhotoSearchPlan/SourceRead``.
+    nonisolated var photoSearchSource: HikePhotoSearchPlan.Source {
         HikePhotoSearchPlan.Source(route: route, walks: walkPhotoTimelines)
     }
 }
