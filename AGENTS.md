@@ -77,6 +77,9 @@ swift test --package-path OpenHikesData -Xswiftc -warnings-as-errors
 # The shell scripts, against stubbed xcrun, xcodebuild, swiftlint and periphery
 Scripts/run-script-tests.sh
 
+# The privacy policy and terms pages the app links, read out of docs/
+Scripts/check-legal-pages.sh
+
 # The watch app alone: the fast loop. The OpenHikes scheme already builds it,
 # because the app embeds it.
 xcodebuild build -project OpenHikes.xcodeproj -scheme OpenHikesWatch \
@@ -115,10 +118,11 @@ same device.
 
 ### CI
 
-`.github/workflows/ci.yml` has seven jobs that can fail a run:
+`.github/workflows/ci.yml` has eight jobs that can fail a run:
 
 | Job | What it covers |
 |---|---|
+| `Published legal pages` | The pages the app links in `docs/` (`Scripts/check-legal-pages.sh`) |
 | `Lint and shared package` | Lint, script tests, both packages in Debug and Release |
 | `App and widget tests` | Strict suite preconditions, the string-catalog check, the coverage floor |
 | `iOS Debug build`, `iOS Release build` | Simulator builds |
@@ -132,7 +136,8 @@ same device.
   everything unless every changed path is `*.md`, `LICENSE` or under `docs/`. It
   is a job-level `if:` rather than `paths-ignore:`, because a skipped job
   reports success and so would not block a check made required later. A push
-  to `main` builds everything.
+  to `main` builds everything. `Published legal pages` has no `if:`: it is
+  the one job that reads `docs/`, and it takes seconds.
 - **The toolchain is pinned.** CI uses the `xcode-27` image with Xcode 27.0
   pinned by `DEVELOPER_DIR` at the top of `ci.yml`, and its Swift is 6.4. A
   local Xcode 27.x matches only while `xcrun swift --version` says 6.4 too; a
@@ -921,8 +926,10 @@ a change to recording, the map, the sheet or the render path; the PR template,
     the app opens the copy in its own language (`MapPurchaseLinks.PageLanguage`
     argues why). An edit to an English page edits its German copy in the same
     change, and the two move their `<time datetime>` together, which
-    `MapPurchaseLinksTests` holds them to. The same suite fails on an app
-    language that has no pages of its own.
+    `Scripts/check-legal-pages.sh` holds them to, on every pull request. It
+    reads the pages from the quoted URLs in `MapPurchaseLinks.swift`.
+    `MapPurchaseLinksTests` fails on an app language that has no pages of
+    its own.
   - The hosted tests and the UI suites assert English copy, so they assume a
     simulator whose language is English, as CI's is.
 - **OpenHikes Pro is one monthly subscription.**

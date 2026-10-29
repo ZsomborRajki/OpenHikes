@@ -38,28 +38,31 @@ env:
   IOS_DESTINATION: platform=iOS Simulator,name=iPhone 18 Pro
 
 jobs:
-  # Seven jobs below can fail this workflow — `quality`, `unit-tests`, the two
-  # `builds` matrix entries, `archive`, `thread-sanitizer` and
-  # `accessibility-ui-tests`. None of them is a *required* check: `main`'s
-  # branch protection carries `required_pull_request_reviews`,
-  # `enforce_admins` and `required_conversation_resolution`, and no
-  # `required_status_checks` at all. So a red run here is an annotation
+  # Eight jobs below can fail this workflow — `legal-pages`, `quality`,
+  # `unit-tests`, the two `builds` matrix entries, `archive`,
+  # `thread-sanitizer` and `accessibility-ui-tests`. None of them is a
+  # *required* check: `main`'s branch protection carries
+  # `required_pull_request_reviews`, `enforce_admins` and
+  # `required_conversation_resolution`, and no `required_status_checks` at
+  # all. So a red run here is an annotation
   # rather than a block, and "fails the workflow" in this file means "reports
   # red" — #182 and #185 both merged with `Thread sanitizer` red. This comment
-  # used to assert the opposite; naming the seven in the repository settings
+  # used to assert the opposite; naming the eight in the repository settings
   # is the change that would make it true.
   #
   # The filtering below is a job-level `if:` rather than a `paths-ignore:` on
   # the trigger, and that choice is what keeps the option open. A required
   # check belonging to a workflow that never ran sits at "Expected" forever
   # and blocks the merge outright, so a README typo would be stuck the day
-  # anybody ticked those seven boxes. A *job* skipped by an `if:` reports
+  # anybody ticked those eight boxes. A *job* skipped by an `if:` reports
   # success instead, which is correct whether or not it is required.
   #
   # The list is an allow-list, so it fails towards running CI: a path nobody
   # thought about is code until someone says otherwise, and one code file
   # among a hundred prose ones puts the whole run back. `docs/` is the
-  # published Pages site, which no job reads and no target compiles.
+  # published Pages site, which no target compiles. The one thing that reads
+  # it is the check of the pages the app links, and that is `legal-pages`,
+  # which no filter skips.
   #
   # Only `pull_request` is filtered. A push to `main` and a manual dispatch
   # build everything, because the point of this is to spare review of a
@@ -116,6 +119,23 @@ jobs:
               >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "code=$code" >> "$GITHUB_OUTPUT"
+
+  # The privacy policy and the terms the app opens, read straight out of
+  # `docs/`: every linked page published, in its language, and each
+  # translation taking effect with its original. A pull request that touches
+  # nothing but `docs/` is exactly the one that can break that, and it skips
+  # every job below, so this one runs on every event with no `if:`. It needs
+  # bash and grep and nothing built; Scripts/check-legal-pages.sh says what it
+  # checks, and Scripts/run-script-tests.sh breaks a site each way it fails.
+  legal-pages:
+    name: Published legal pages
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check the pages the app links
+        run: Scripts/check-legal-pages.sh
 
   quality:
     name: Lint and shared package
