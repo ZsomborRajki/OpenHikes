@@ -271,5 +271,11 @@ struct RefusedSaveScopeTests {
         }
         #expect(hike.autoSavedTileKeys == [Self.corridorTileKey])
         #expect(controller.currentHike?.id == hike.id)
+        // And once on disk, after the save that lands next.
+        try context.save()
+        let stored = try #require(
+            try ModelContext(container).fetch(FetchDescriptor<Hike>()).first { $0.id == hikeID }
+        )
+        #expect(stored.autoSavedTileKeys == [Self.corridorTileKey])
     }
 }

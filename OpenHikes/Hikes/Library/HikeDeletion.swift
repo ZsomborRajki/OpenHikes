@@ -175,9 +175,11 @@ nonisolated enum HikeDeletion {
     /// - Parameter hikes: All from one store. An empty list, or a hike that
     ///   was never inserted, needs no commit — nothing persisted it, so
     ///   nothing can bring it back and its files are free to go.
-    /// - Parameter save: The seam the commit goes through, so a test can watch
-    ///   what is on disk at the moment the deletion lands, or refuse it. The
-    ///   recorder passes its own — see ``HikeRecorder/saveModelContext``.
+    /// - Parameter save: The seam both commits go through — what the context
+    ///   already held, when it holds anything, and then the deletion — so a
+    ///   test can watch what is on disk at the moment the deletion lands, or
+    ///   refuse either one. The recorder passes its own — see
+    ///   ``HikeRecorder/saveModelContext``.
     /// - Parameter workouts: Where a recorded hike's `HKWorkout` is removed
     ///   from — see this file's header. `nil` deletes no workout, which is
     ///   what a launch with no Health writer should do.
