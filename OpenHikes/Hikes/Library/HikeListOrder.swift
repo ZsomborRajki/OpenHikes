@@ -40,6 +40,7 @@ import Foundation
 // indices are the ones a drag reports. Re-deriving that arithmetic here would
 // be re-deriving the one thing the caller and this type have to agree about.
 import OpenHikesData
+import SwiftData
 import SwiftUI
 
 enum HikeListOrder {
@@ -48,7 +49,7 @@ enum HikeListOrder {
     /// True as soon as any hike carries a position, which is what the first
     /// drag guarantees for all of them.
     static func isCustom(_ hikes: [Hike]) -> Bool {
-        hikes.contains { $0.listOrder != nil }
+        !positions(of: hikes).isEmpty
     }
 
     /// The order to draw: the hike in progress first, then the rest.
@@ -65,24 +66,68 @@ enum HikeListOrder {
         let active = activeHikeID.flatMap { id in hikes.first { $0.id == id } }
         let unpinned = active == nil ? hikes : hikes.filter { $0.id != activeHikeID }
 
-        if isCustom(hikes) {
-            rest = unpinned.sorted { first, second in
-                // A hike with no position is newer than the ordering itself.
-                // `Int.min` puts it above everything placed, where a walk that
-                // has just finished belongs.
-                let left = first.listOrder ?? Int.min
-                let right = second.listOrder ?? Int.min
-                if left != right { return left < right }
+        let positions = positions(of: hikes)
+        if !positions.isEmpty {
+            // A hike with no position is newer than the ordering itself.
+            // `Int.min` puts it above everything placed, where a walk that has
+            // just finished belongs.
+            let placed = unpinned.map { (position: positions[$0.id] ?? Int.min, date: $0.date, hike: $0) }
+            let ordered = placed.sorted { first, second in
+                if first.position != second.position { return first.position < second.position }
                 return first.date > second.date
             }
+            rest = ordered.map(\.hike)
         } else {
             // Measured once each and then sorted on the measurements — see
             // ``HikeListSort``'s header for what this costs when it is done
             // the other way round.
-            let keyed = unpinned.map { (key: sort.key(for: $0), hike: $0) }
+            let relief = sort.needsElevation ? relief(of: unpinned) : [:]
+            let keyed = unpinned.map { (key: sort.key(for: $0, verticalMeters: relief[$0.id]), hike: $0) }
             rest = keyed.sorted { sort.precedes($0.key, $1.key) }.map(\.hike)
         }
         return active.map { [$0] + rest } ?? rest
+    }
+
+    /// Where each hike the hiker has placed sits.
+    private static func positions(of hikes: [Hike]) -> [UUID: Int] {
+        sidecars(of: hikes, matching: #Predicate { $0.listOrder != nil }).compactMapValues(\.listOrder)
+    }
+
+    /// *Hilliest*'s figure for each hike that has one — see
+    /// ``HikeLocalState/verticalMeters``.
+    private static func relief(of hikes: [Hike]) -> [UUID: Double] {
+        sidecars(
+            of: hikes,
+            matching: #Predicate { $0.climbMeters != nil && $0.descentMeters != nil }
+        ).compactMapValues(\.verticalMeters)
+    }
+
+    /// The device-local rows of `hikes` that match `predicate`, in one fetch.
+    ///
+    /// Asked of the store rather than of each hike, because a hike reads its
+    /// sidecar with a fetch and remembers the row it found but not that it
+    /// found none. A hike with no sidecar — every hike another device synced
+    /// here, until this one stores something for it — fetched again on every
+    /// read. The list asks for positions several times in each pass of a body
+    /// that every write to any hike re-runs, so a read per hike was a fetch
+    /// per hike per pass, for nothing: the answer while a sort is in force is
+    /// that no hike has one, and this fetch finds that in one query.
+    ///
+    /// Rows left by a hike that is not in `hikes` are left out, so the
+    /// question is still asked of the hikes themselves.
+    private static func sidecars(
+        of hikes: [Hike],
+        matching predicate: Predicate<HikeLocalState>
+    ) -> [UUID: HikeLocalState] {
+        guard let context = hikes.lazy.compactMap(\.modelContext).first,
+              let rows = try? context.fetch(FetchDescriptor(predicate: predicate)),
+              !rows.isEmpty else { return [:] }
+        let shown = Set(hikes.map(\.id))
+        var byHike: [UUID: HikeLocalState] = [:]
+        for row in rows where shown.contains(row.hikeID) && byHike[row.hikeID] == nil {
+            byHike[row.hikeID] = row
+        }
+        return byHike
     }
 
     /// The hikes whose elevation figures must be validated for this sort.

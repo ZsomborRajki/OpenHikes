@@ -101,6 +101,22 @@ struct HikeListOrderTests {
         #expect(HikeListOrder.arrange(hikes, activeHikeID: nil).map(\.title) == ["Newest", "Middle", "Oldest"])
     }
 
+    @Test("a position left by a hike that is not in the list does not take it over")
+    func aStrayPositionIsNotAnOrder() throws {
+        let context = try Fixture.modelContext()
+        let hikes = try makeHikes(in: context)
+        // The positions are read in one fetch of every sidecar that holds one,
+        // so a row whose hike is gone — deleted on another device, say — is
+        // in that fetch too. It says nothing about these hikes.
+        let stray = HikeLocalState(hikeID: UUID())
+        stray.listOrder = 0
+        context.insert(stray)
+        try context.save()
+
+        #expect(!HikeListOrder.isCustom(hikes))
+        #expect(HikeListOrder.arrange(hikes, activeHikeID: nil).map(\.title) == ["Newest", "Middle", "Oldest"])
+    }
+
     /// Three hikes a day apart, oldest last, which is the order the list draws
     /// them in before anybody touches it.
     private func makeHikes(in context: ModelContext) throws -> [Hike] {

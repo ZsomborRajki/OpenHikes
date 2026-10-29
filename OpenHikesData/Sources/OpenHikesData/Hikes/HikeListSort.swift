@@ -17,14 +17,15 @@
 //
 //  ## Why the keys are worked out before the sort and not during it
 //
-//  Reading a key can fault `walkCount`'s SwiftData relationship or the elevation
-//  sidecar, and names need locale-aware folding. Doing that work in the
-//  comparator repeats it *n log n* times on the main actor, inside a body pass,
-//  every time the list is drawn.
+//  Reading a key can fault `walkCount`'s SwiftData relationship, and names need
+//  locale-aware folding. Doing that work in the comparator repeats it *n log n*
+//  times on the main actor, inside a body pass, every time the list is drawn.
 //
-//  So each hike is measured once — ``key(for:)`` — and the sort runs on plain
-//  `Double`s and `String`s. The readings drop from *n log n* to *n*, and what
-//  is left is comparisons of numbers and folded names.
+//  So each hike is measured once — ``key(for:verticalMeters:)`` — and the sort
+//  runs on plain `Double`s and `String`s. The readings drop from *n log n* to
+//  *n*, and what is left is comparisons of numbers and folded names. The
+//  elevation sidecar is not read even *n* times: the caller reads every
+//  sidecar it needs in one fetch and hands each hike its figure.
 //
 
 import Foundation
@@ -97,7 +98,14 @@ public enum HikeListSort: String, CaseIterable, Identifiable {
     }
 
     /// Measures one hike for this order.
-    public func key(for hike: Hike) -> Key {
+    ///
+    /// Hilliest's figure is handed in rather than read here: it lives in the
+    /// hike's device-local sidecar — see ``HikeLocalState/verticalMeters`` —
+    /// and a library's sidecars are read in one fetch by whoever sorts it. A
+    /// hike reads its own sidecar with a fetch, and remembers the row it
+    /// found but not that it found none, so asking every hike costs a fetch
+    /// per hike that has none.
+    public func key(for hike: Hike, verticalMeters: Double?) -> Key {
         switch self {
         case .newest:
             Key(figure: nil, name: "", date: hike.date)
@@ -120,7 +128,7 @@ public enum HikeListSort: String, CaseIterable, Identifiable {
         case .mostWalked:
             Key(figure: Double(hike.walkCount), name: "", date: hike.date)
         case .hilliest:
-            Key(figure: hike.verticalMeters, name: "", date: hike.date)
+            Key(figure: verticalMeters, name: "", date: hike.date)
         }
     }
 
@@ -144,18 +152,19 @@ public enum HikeListSort: String, CaseIterable, Identifiable {
     }
 }
 
-public extension Hike {
+public extension HikeLocalState {
     /// Everything this walk goes up and down, added.
     ///
-    /// `nil` until both halves have been measured — see
-    /// ``HikeLocalState/climbMeters``. Half a figure is not a smaller figure,
-    /// it is an unfinished one, and sorting on it would put a hike wherever
-    /// the measured half happened to land.
+    /// `nil` until both halves have been measured — see ``climbMeters``. Half
+    /// a figure is not a smaller figure, it is an unfinished one, and sorting
+    /// on it would put a hike wherever the measured half happened to land.
     var verticalMeters: Double? {
         guard let climbMeters, let descentMeters else { return nil }
         return climbMeters + descentMeters
     }
+}
 
+public extension Hike {
     /// How many walks this trail has a record of.
     ///
     /// Read through the relationship rather than stored, which means faulting
