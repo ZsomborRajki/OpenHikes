@@ -19,9 +19,10 @@
 //  the plan, the assets — and run `@concurrent`, never in a bare `Task`,
 //  which would inherit the controller's actor. The first reads the hike as
 //  well as indexing it, in a context of its own, because the read decodes
-//  the route and hashes it, which is route-sized too (#1215). The controller
-//  names the hike on the main actor before the hop and writes what comes
-//  back on it after, so no model crosses.
+//  the route and hashes it, which is route-sized too (#1215) — unless the
+//  hike holds edits its store has not had yet, which only its own context
+//  can read. The controller names or reads the hike on the main actor before
+//  the hop and writes what comes back on it after, so no model crosses.
 //
 //  The steps themselves are closures only so a suite can see which thread
 //  they ran on: ``standard`` is the fetch, the plan and the matcher as they
@@ -53,13 +54,15 @@ nonisolated struct PhotoDiscoveryWork: Sendable {
     /// The plan the hike `read` names supports, read and built off the main
     /// actor.
     ///
-    /// A hike the store no longer holds has nothing left to search, and
-    /// reads as such: ``PhotoDiscoveryController/Phase/unsupported``, for the
-    /// moment its own context still holds it after a deletion elsewhere.
+    /// `nil` for a hike the store no longer holds, or cannot read. Its own
+    /// context can go on holding it after a deletion elsewhere, and an empty
+    /// plan would then say what ``PhotoDiscoveryController/Phase/unsupported``
+    /// says, that the route has no clock. So the controller writes nothing,
+    /// as it does for a hike its context has let go.
     @concurrent
-    func plan(for read: HikePhotoSearchPlan.SourceRead) async -> HikePhotoSearchPlan {
+    func plan(for read: HikePhotoSearchPlan.SourceRead) async -> HikePhotoSearchPlan? {
         assertOffMainThread("Reading and indexing a hike's route for a photo search must stay off the main thread")
-        return buildPlan(read.source(fetch: fetchHike) ?? HikePhotoSearchPlan.Source(route: [], walks: []))
+        return read.source(fetch: fetchHike).map(buildPlan)
     }
 
     /// What `plan` makes of `assets`, matched off the main actor.

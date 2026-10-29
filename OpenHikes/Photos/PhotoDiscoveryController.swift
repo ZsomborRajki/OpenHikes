@@ -51,11 +51,12 @@
 //
 //  The route-sized work — reading the route, indexing it, matching the
 //  library's answer against it — runs off the main actor, through
-//  ``PhotoDiscoveryWork``. Here the hike is only named, before the hop — see
-//  ``HikePhotoSearchPlan/SourceRead`` — and only the newest search writes
-//  what comes back: the sheet starts one per presentation, and the picker for
-//  the shared subset starts another, so an older one still matching must not
-//  land its answer on top of the newer one's.
+//  ``PhotoDiscoveryWork``. Here the hike is only named before the hop, unless
+//  it holds edits its store has not had yet, which are read here — see
+//  ``HikePhotoSearchPlan/SourceRead``. Only the newest search writes what
+//  comes back: the sheet starts one per presentation, and the picker for the
+//  shared subset starts another, so an older one still matching must not land
+//  its answer on top of the newer one's.
 //
 
 import Foundation
@@ -165,8 +166,12 @@ final class PhotoDiscoveryController {
         matches = []
         selection = []
         importFailed = false
-        let plan = await work.plan(for: HikePhotoSearchPlan.SourceRead(hike))
-        guard isCurrent(generation), hike.isAttached else { return }
+        // No plan is a hike the store did not hand back, which this context
+        // can still hold. It has gone as a detached one has, so nothing is
+        // written — see ``PhotoDiscoveryWork/plan(for:)``.
+        guard let plan = await work.plan(for: HikePhotoSearchPlan.SourceRead(hike)),
+              isCurrent(generation), hike.isAttached
+        else { return }
         guard !plan.isEmpty else {
             phase = .unsupported
             return

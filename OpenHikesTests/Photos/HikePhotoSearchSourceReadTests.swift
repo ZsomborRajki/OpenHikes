@@ -61,7 +61,7 @@ struct HikePhotoSearchSourceReadTests {
         try context.save()
 
         #expect(read.source(fetch: HikePhotoSearchPlan.SourceRead.fetchHike) == nil)
-        #expect(await PhotoDiscoveryWork.standard.plan(for: read).isEmpty)
+        #expect(await PhotoDiscoveryWork.standard.plan(for: read) == nil)
         #expect(await PickedPhotoWork.standard.plan(from: read) == nil)
     }
 }

@@ -19,8 +19,10 @@
 //  the plan, the photograph's bytes — and run `@concurrent`, never in a bare
 //  `Task`, which would inherit the caller's actor. The first reads the hike
 //  as well, in a context of its own, because the read decodes the route and
-//  hashes it (#1215). The hike is named on the main actor before the hop and
-//  the photo stored on it after, so no model crosses.
+//  hashes it (#1215) — unless the hike holds edits its store has not had
+//  yet, which only its own context can read. The hike is named or read on
+//  the main actor before the hop and the photo stored on it after, so no
+//  model crosses.
 //
 //  The steps themselves are closures only so a suite can see which thread
 //  they ran on: ``standard`` is the fetch, the plan and the placement as they
@@ -83,7 +85,8 @@ nonisolated struct PickedPhotoWork: Sendable {
 extension PhotoCaptureController.Filing {
     /// What a selection from the picker filed here is matched against, named
     /// now, on the hike's actor, for ``PickedPhotoWork/plan(from:)`` to read
-    /// and index off it.
+    /// and index off it — or read now, for a hike holding edits its store has
+    /// not had yet: see ``HikePhotoSearchPlan/SourceRead``.
     ///
     /// `nil` for a selection filed under a place. The place is where its
     /// pictures are pinned, however well their clocks or cameras would match

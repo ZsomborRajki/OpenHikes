@@ -15,8 +15,8 @@
 //  fails.
 //
 //  Moving the match behind an `await` opens a window the synchronous one
-//  never had, so the second test pins who may close it: only the newest
-//  search writes.
+//  never had, so *a search overtaken by a newer one writes nothing* pins who
+//  may close it: only the newest search writes.
 //
 //  Split from ``PhotoDiscoveryControllerTests`` as an extension for the reason
 //  the other halves are: one test type per file, and these share every
@@ -113,6 +113,31 @@ extension PhotoDiscoveryControllerTests {
         #expect(controller.matches.map(\.id) == ["route", "walk"])
         #expect(controller.matches.map(\.evidence) == [.time, .walk])
         #expect(controller.matches == readOnTheMainActor)
+    }
+
+    /// The hike is named on the main actor and read off it, so its row can go
+    /// in between: deleted through another context, as an import of a
+    /// deletion made on another device is, which this hike's own context has
+    /// not merged. Then there is nothing to search and nothing true to say.
+    /// ``PhotoDiscoveryController/Phase/unsupported`` would tell the hiker a
+    /// route stamped at every point has no clock.
+    @Test("a hike gone from the store writes nothing, not that its route has no clock")
+    func hikeGoneFromTheStoreWritesNothing() async throws {
+        let library = StubPhotoLibraryFixture(assets: [PhotoDiscoveryFixture.asset("a", atStep: 2)])
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context, route: PhotoDiscoveryFixture.route)
+        try context.save()
+        let elsewhere = ModelContext(context.container)
+        let row = try #require(try HikePhotoSearchPlan.SourceRead.fetchHike(elsewhere, hike.persistentModelID))
+        elsewhere.delete(row)
+        try elsewhere.save()
+        try #require(hike.isAttached, "the search's own context has not merged the deletion")
+
+        let controller = PhotoDiscoveryController(reader: library)
+        await controller.search(in: hike)
+
+        #expect(controller.phase == .searching)
+        #expect(library.calls.withLock(\.accessRequests) == 0)
     }
 
     /// A day later, in route steps.
