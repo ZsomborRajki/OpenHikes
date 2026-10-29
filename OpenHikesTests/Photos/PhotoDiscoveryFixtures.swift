@@ -169,6 +169,9 @@ nonisolated final class StubPhotoLibraryFixture: PhotoLibraryReading {
     /// Empty stands for closing it without changing anything.
     let assetsSharedByPicker: [PhotoLibraryAsset]
     let calls = Mutex(Calls())
+    /// The permission prompt, held open: a test can act while the flow is
+    /// waiting on the user's answer rather than before or after it.
+    private let accessGate: TestGate?
     /// Held at, so a test can arrange something while the flow is genuinely
     /// mid-fetch rather than before or after one.
     private let fetchGate: TestGate?
@@ -184,11 +187,13 @@ nonisolated final class StubPhotoLibraryFixture: PhotoLibraryReading {
         assets: [PhotoLibraryAsset] = [],
         unreadable: Set<String> = [],
         assetsSharedByPicker: [PhotoLibraryAsset] = [],
+        accessGate: TestGate? = nil,
         fetchGate: TestGate? = nil,
         dataGate: TestGate? = nil
     ) {
         self.unreadable = unreadable
         self.assetsSharedByPicker = assetsSharedByPicker
+        self.accessGate = accessGate
         self.fetchGate = fetchGate
         self.dataGate = dataGate
         state = Mutex(State(access: access, assets: assets))
@@ -205,15 +210,13 @@ nonisolated final class StubPhotoLibraryFixture: PhotoLibraryReading {
         }
     }
 
-    // Async because the protocol is, not because these bodies suspend: a real
-    // library is a cross-process query, this one is a handful of stored
-    // properties.
-    // swiftlint:disable async_without_await
+    /// Answers with the access as it stands once the gate, if any, opens —
+    /// what the user chose when the prompt went away.
     func requestAccess() async -> PhotoLibraryAccess {
         calls.withLock { $0.accessRequests += 1 }
+        await accessGate?.wait()
         return access
     }
-    // swiftlint:enable async_without_await
 
     func currentAccess() -> PhotoLibraryAccess { access }
 

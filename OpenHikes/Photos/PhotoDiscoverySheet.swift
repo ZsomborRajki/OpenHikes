@@ -451,8 +451,11 @@ private struct DiscoveryAddButton: View {
                 // has finished its job, and leaving it up on its empty state
                 // would read as an import that found nothing rather than as
                 // one that just succeeded. Anything that failed stays in
-                // `matches`, which keeps the sheet open to be retried.
-                if added > 0, controller.matches.isEmpty { dismiss() }
+                // `matches`, which keeps the sheet open to be retried. No
+                // count means the import was stopped: this sheet went, and
+                // `dismiss` would close one opened since, or a newer import
+                // took over, and its own task decides.
+                if let added, added > 0, controller.matches.isEmpty { dismiss() }
             }
         } label: {
             if count > 0 {
