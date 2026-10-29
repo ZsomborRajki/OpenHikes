@@ -118,6 +118,11 @@ struct DisplayedRoute: Equatable {
 /// on its next pass. ``Hike/trackRouteChanges()`` registers the dependency without
 /// decoding, so the body asking is re-run by a write, and the flag armed
 /// beside it tells this cache that the re-run is for a new line.
+///
+/// Only a write that notifies the hike object handed in is noticed. A sibling
+/// context's save was measured not to (see `HikeListMetrics+Observation.swift`),
+/// so an edit mirrored in from another device is redrawn only if its import
+/// notifies the main context's hike, which nobody has watched on a device.
 final class DisplayedRouteCoordinateCache {
     struct DrawnRoute {
         let coordinates: [CLLocationCoordinate2D]

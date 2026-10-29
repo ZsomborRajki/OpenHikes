@@ -91,11 +91,14 @@ struct DisplayedRouteCoordinateCacheTests {
 
     /// What `OpenHikesView`'s body reads must include the line, or a write to
     /// it would re-run nothing and the cache would never be asked again.
+    /// Projected once first, so the pass observed is one the cache answers:
+    /// the body's ordinary pass, which reads no route value of its own.
     @Test("a new line invalidates whoever drew the old one")
     func routeWriteInvalidatesTheReader() async throws {
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context, route: Self.originalRoute)
         let cache = DisplayedRouteCoordinateCache()
+        _ = cache.drawnRoute(for: hike)
         let reader = ObservationCounter { _ = DisplayedRoute.forSelection(hike, cache: cache) }
         await reader.settle()
 
