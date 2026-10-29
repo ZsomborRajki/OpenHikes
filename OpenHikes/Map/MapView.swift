@@ -545,9 +545,20 @@ struct MapView: MapViewRepresentable, Equatable {
 
     /// Draws the current route (if any) and fits the map to it. No-op while the
     /// same route is already shown, so unrelated view updates don't re-zoom.
+    ///
+    /// The same route means the same line, not only the same hike: *Edit
+    /// Route*, filled heights and mirroring all replace a hike's line under
+    /// its id, and the polyline, the points a tap is tested against and the
+    /// cut at its pauses must all follow (#1228). Only a new hike is fitted
+    /// to. A new line for the hike already on screen is redrawn where the
+    /// hiker is looking, because it can arrive from another device at any
+    /// moment — mid-pan included — and a line whose heights were filled in
+    /// has not moved at all.
     private func updateRoute(_ mapView: MKMapView, _ coordinator: Coordinator) {
-        guard coordinator.routeID != route?.id else { return }
+        let isNewHike = coordinator.routeID != route?.id
+        guard isNewHike || coordinator.routeRevision != route?.revision else { return }
         coordinator.routeID = route?.id
+        coordinator.routeRevision = route?.revision
 
         if let existing = coordinator.routeOverlay {
             mapView.removeOverlay(existing)
@@ -602,7 +613,9 @@ struct MapView: MapViewRepresentable, Equatable {
             above: coordinator.inferredRouteOverlays.last ?? polyline
         )
 
-        coordinator.fitToCurrentRoute(mapView, animated: true)
+        if isNewHike {
+            coordinator.fitToCurrentRoute(mapView, animated: true)
+        }
     }
 
     /// Keeps the map's own controls clear of ``MapSidePanel``.

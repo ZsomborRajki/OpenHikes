@@ -35,6 +35,11 @@ extension MapView {
         /// ``observeLocationAccess(_:on:)``.
         var isObservingLocationAccess = false
         var routeID: UUID?
+        /// Which line of the hike `routeID` names is drawn — see
+        /// ``DisplayedRoute/revision``. Beside the id rather than in place of
+        /// it, because the two changes are answered differently: a new hike
+        /// is fitted to, and a new line for the same hike is not.
+        var routeRevision: Int?
         var routeOverlay: MKPolyline?
         /// The drawn route's points, kept beside the polyline MapKit owns
         /// because the two are asked different questions — the same split, for
