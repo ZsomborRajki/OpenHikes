@@ -40,6 +40,7 @@
 //  rather than asking again.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 import Observation
@@ -109,9 +110,9 @@ struct TrailPlaceAroundListing: Equatable {
             guard lhs != rhs else { return left.offset < right.offset }
             return lhs.along != rhs.along ? lhs.along < rhs.along : lhs.off < rhs.off
         }
-        let sorted = indexed.map(\.element)
-        onTrail = sorted.filter(\.row.isOnTheLine)
-        nearby = sorted.filter { !$0.row.isOnTheLine }
+        // `partitioned(by:)` answers (does not satisfy, satisfies), and each
+        // half keeps the walking order.
+        (nearby, onTrail) = indexed.map(\.element).partitioned(by: \.row.isOnTheLine)
     }
 
     init() { /* empty */ }
