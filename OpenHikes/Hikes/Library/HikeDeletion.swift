@@ -170,7 +170,9 @@ nonisolated enum HikeDeletion {
     /// refused deletion is no reason to lose them. A refusal is what a full
     /// disk does, and freeing space is the retry. A store that refuses that
     /// first commit has refused the deletion too, before anything was taken
-    /// out.
+    /// out. A hike's walks and places go by hand rather than by the cascade,
+    /// so that the rollback is one the iOS 18 floor survives — see
+    /// ``ChildRows``.
     ///
     /// - Parameter hikes: All from one store. An empty list, or a hike that
     ///   was never inserted, needs no commit — nothing persisted it, so
@@ -216,9 +218,12 @@ nonisolated enum HikeDeletion {
                 throw error
             }
         }
+        var rows: [ChildRows] = []
         for hike in hikes {
             hike.deleteLocalState()
-            hike.modelContext?.delete(hike)
+            guard let hikeContext = hike.modelContext else { continue }
+            rows.append(ChildRows(deleting: hike, in: hikeContext))
+            hikeContext.delete(hike)
         }
         if let context {
             for sessionID in watchSessionIDs {
@@ -228,6 +233,7 @@ nonisolated enum HikeDeletion {
                 try save(context)
             } catch {
                 context.rollback()
+                for taken in rows { taken.restoreLists() }
                 logKept(error)
                 throw error
             }
@@ -246,6 +252,43 @@ nonisolated enum HikeDeletion {
         for hikeID in deletedIDs {
             SharedStore.clearTrailSnapshot(for: hikeID)
             SharedStore.clearBasemaps(for: hikeID)
+        }
+    }
+
+    /// A hike's walks and places, deleted by hand ahead of the hike itself.
+    ///
+    /// The cascade would take them, but on the iOS 18 floor a rollback of a
+    /// cascaded deletion crashes in SwiftData: measured on 18.6, refusing the
+    /// deletion of a hike with a recorded walk ended in `ModelSnapshot`'s
+    /// "must be initialized with a known-keys dictionary". Rows deleted by
+    /// hand, from lists emptied first, roll back without it. The rollback
+    /// then restores the rows but, on that floor, not the hike's lists of
+    /// them, which the next save would write empty — so a refusal puts the
+    /// lists back by hand, as ``TrailDraftSave``'s refused edit does for its
+    /// places. On iOS 27 the lists are back already, and compare equal.
+    @MainActor
+    private struct ChildRows {
+        let hike: Hike
+        let walks: [HikeWalk]
+        let points: [TrailPoint]
+
+        init(deleting hike: Hike, in context: ModelContext) {
+            self.hike = hike
+            walks = hike.walks ?? []
+            points = hike.trailPoints ?? []
+            if !walks.isEmpty { hike.walks = [] }
+            if !points.isEmpty { hike.trailPoints = [] }
+            for walk in walks { context.delete(walk) }
+            for point in points { context.delete(point) }
+        }
+
+        func restoreLists() {
+            if (hike.walks ?? []).map(\.persistentModelID) != walks.map(\.persistentModelID) {
+                hike.walks = walks
+            }
+            if (hike.trailPoints ?? []).map(\.persistentModelID) != points.map(\.persistentModelID) {
+                hike.trailPoints = points
+            }
         }
     }
 

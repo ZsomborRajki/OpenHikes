@@ -175,6 +175,58 @@ struct RefusedSaveScopeTests {
         #expect(stored.first { $0.id == doomedID }?.listOrder == 1)
     }
 
+    /// The cascade is what used to take a deleted hike's rows, and on the iOS
+    /// 18 floor a rollback of a cascaded deletion crashed in SwiftData — a
+    /// hike with a recorded walk was enough. Its walks and places now go by
+    /// hand, and a refusal puts the hike's lists of them back.
+    @Test("a refused deletion keeps the hike's walks and places", arguments: [true, false])
+    func aRefusedDeletionKeepsTheHikesRows(refusesEverySave: Bool) throws {
+        let container = try Fixture.modelContainer()
+        let context = Self.mainContext(of: container)
+        let photos = HikePhotoImportTests.Sandbox()
+        let doomed = Fixture.hike(in: context, title: "Walked")
+        doomed.addPlaces([TrailPlace(latitude: Line.middle, longitude: Line.longitude, name: "Spring")], in: context)
+        let walk = HikeWalk(
+            hikeID: doomed.id,
+            startedAt: .now,
+            endedAt: .now,
+            activeSeconds: 60,
+            coveredIntervals: [0, 10],
+            furthestDistanceMeters: 10,
+            routeDistanceMeters: 10,
+            endReason: .ended
+        )
+        context.insert(walk)
+        walk.hike = doomed
+        let other = Fixture.hike(in: context, title: "Other hike")
+        try context.save()
+        let pending = PendingWork(beside: other, in: context)
+
+        let doomedID = doomed.id
+        #expect(throws: Refused.self) {
+            try HikeDeletion.delete(
+                [doomed],
+                store: photos.store,
+                save: Self.save(refusingEverySave: refusesEverySave) { context in
+                    context.deletedModelsArray.contains { ($0 as? Hike)?.id == doomedID }
+                }
+            )
+        }
+
+        #expect(doomed.isAttached)
+        #expect(doomed.walks?.count == 1)
+        #expect(doomed.places.map(\.name) == ["Spring"])
+        // A later save writes the hike again — the floor wrote its lists
+        // empty — and the rows have to still be its own on disk.
+        doomed.customName = "Kept"
+        try pending.expectKept(in: context, hikesOnDisk: 3)
+        let stored = try #require(
+            try ModelContext(container).fetch(FetchDescriptor<Hike>()).first { $0.id == doomedID }
+        )
+        #expect(stored.walks?.count == 1)
+        #expect(stored.places.map(\.name) == ["Spring"])
+    }
+
     /// The swipe folds the browsed hike's last drain window into its manifest
     /// before it plans — see `HikeDeletionTests+Tiles` — and those keys are
     /// then nowhere else: a rollback that took the fold back left durable
