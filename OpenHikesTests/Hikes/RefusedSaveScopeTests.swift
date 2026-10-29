@@ -13,6 +13,10 @@
 //  newest tiles claimed by nothing. Now each commits what is already pending
 //  first, so its rollback has only its own change to take.
 //
+//  And a refused edit writes back nothing its rollback has already taken
+//  back: a column written again leaves the hike changed in the shared context,
+//  for the next save to put over whatever another context saved since.
+//
 //  Every test runs twice. Once with every save refused — a full disk, which
 //  refuses the operation and the rest alike, so the rest has to stay pending
 //  for the save that lands once space is freed — and once with only the
@@ -329,5 +333,147 @@ struct RefusedSaveScopeTests {
             try ModelContext(container).fetch(FetchDescriptor<Hike>()).first { $0.id == hikeID }
         )
         #expect(stored.autoSavedTileKeys == [Self.corridorTileKey])
+    }
+}
+
+// MARK: - What a refused edit leaves pending
+
+extension RefusedSaveScopeTests {
+    /// What the trail is measured with before the edit: the length both
+    /// breakdowns give their one category, and the cached climb and descent.
+    nonisolated private static let measuredMeters: Double = 400
+    nonisolated private static let measuredClimb: Double = 120
+    nonisolated private static let measuredDescent: Double = 80
+    /// How far east the edit moves the line: a kilometre and a half, much
+    /// further than a place can sit off a line and still be kept.
+    nonisolated private static let eastward: Double = 0.02
+
+    /// The rollback takes back what it can, and the refused edit writes back
+    /// only what it left. iOS 27.0 takes every column back, which leaves the
+    /// edit nothing to write. Written back anyway, a column left the hike
+    /// changed in the shared context — `@Model` filters no same-value write —
+    /// and that context's next save put the pre-edit gallery over a
+    /// photograph another context had saved since, as the hiker's other
+    /// device would. The iOS 18 floor takes no column back, and there every
+    /// one is written back by hand.
+    @Test("a refused route edit writes back only what its rollback left", arguments: [true, false])
+    func aRefusedEditWritesBackOnlyWhatTheRollbackLeft(refusesEverySave: Bool) throws {
+        let container = try Fixture.modelContainer()
+        let context = Self.mainContext(of: container)
+        let (hike, spring) = try Self.measuredTrail(in: context)
+        let before = EditedColumns(hike)
+
+        let editedID = hike.id
+        let outcome = TrailDraftSave.update(
+            hike,
+            from: Self.lineAway(),
+            openedWith: [spring.id],
+            into: context,
+            save: Self.save(refusingEverySave: refusesEverySave) { context in
+                context.changedModelsArray.contains { ($0 as? Hike)?.id == editedID }
+            }
+        )
+
+        guard case .refused(.notSaved) = outcome else {
+            Issue.record("expected the store's refusal, got \(outcome)")
+            return
+        }
+        #expect(EditedColumns(hike) == before, "every column is back")
+        // On the floor nothing was taken back, so everything had to be written.
+        guard try Self.rollbackTakesBackWrites() else { return }
+        #expect(!hike.hasChanges, "nothing the rollback took back is written again")
+        #expect(hike.localState?.hasChanges == false, "nor in the hike's sidecar")
+
+        let elsewhere = ModelContext(container)
+        let copy = try #require(try elsewhere.fetch(FetchDescriptor<Hike>()).first { $0.id == editedID })
+        copy.addPhoto(HikePhoto())
+        try elsewhere.save()
+        _ = Fixture.hike(in: context, title: "Added meanwhile")
+        try context.save()
+        let stored = try #require(
+            try ModelContext(container).fetch(FetchDescriptor<Hike>()).first { $0.id == editedID }
+        )
+        #expect(stored.photos.count == 2, "the photograph saved elsewhere is not written over")
+    }
+
+    /// A drawn trail with every column an edit writes filled in — a place
+    /// with a photograph filed under it, both breakdowns, a cached climb —
+    /// and saved, so a refused edit has all of it to put back.
+    private static func measuredTrail(in context: ModelContext) throws -> (Hike, TrailPlace) {
+        let draft = TrailDraft()
+        draft.append(CLLocationCoordinate2D(latitude: Line.south, longitude: Line.longitude))
+        draft.append(CLLocationCoordinate2D(latitude: Line.north, longitude: Line.longitude))
+        let spring = TrailPlace(latitude: Line.middle, longitude: Line.longitude, name: "Spring")
+        draft.addPlaces([spring])
+        let hike = try #require(TrailDraftSave.hike(from: draft, named: "Ridge", into: context).hike)
+        var photo = HikePhoto()
+        photo.placeID = spring.id
+        hike.addPhoto(photo)
+        hike.surfaceMetersByCategory = ["paved": Self.measuredMeters]
+        hike.difficultyMetersByGrade = ["hiking": Self.measuredMeters]
+        hike.climbMeters = Self.measuredClimb
+        hike.descentMeters = Self.measuredDescent
+        hike.elevationRouteRevision = "measured-route"
+        try context.save()
+        return (hike, spring)
+    }
+
+    /// A line the spring is nowhere near, with a hut on it, so the edit also
+    /// deletes the spring's row, unfiles its photograph and inserts a row for
+    /// the hut: the rollback has a row of each kind to take back. The
+    /// inserted one is the case to watch on iOS 27.0, where rolling back a
+    /// related row inserted beside columns written over its hike has trapped
+    /// inside SwiftData at the next read of the hike's rows — though never
+    /// on this path.
+    private static func lineAway() -> TrailDraft {
+        let away = TrailDraft()
+        away.append(CLLocationCoordinate2D(latitude: Line.south, longitude: Line.longitude + Self.eastward))
+        away.append(CLLocationCoordinate2D(latitude: Line.north, longitude: Line.longitude + Self.eastward))
+        away.addPlaces([TrailPlace(latitude: Line.middle, longitude: Line.longitude + Self.eastward, name: "Hut")])
+        return away
+    }
+
+    /// Whether a rollback on this OS takes back what was written over saved
+    /// rows: a column, and a list of rows. Measured on iOS 27.0 it takes back
+    /// both, and on 18.6, the iOS 18 floor, neither.
+    private static func rollbackTakesBackWrites() throws -> Bool {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        hike.addPlaces([TrailPlace(latitude: Line.middle, longitude: Line.longitude, name: "Spring")], in: context)
+        try context.save()
+        hike.customName = "Written"
+        hike.trailPoints = []
+        context.rollback()
+        return hike.customName == nil && hike.places.count == 1
+    }
+}
+
+/// Every column a route edit writes, and the hike's places, as one value to
+/// hold before and after a refusal.
+private struct EditedColumns: Equatable {
+    let route: [RouteCoordinate]
+    let duration: Double?
+    let distance: Double
+    let drawn: Data?
+    let surface: [String: Double]
+    let difficulty: [String: Double]
+    let photos: [HikePhoto]
+    let places: [String]
+    let climb: Double?
+    let descent: Double?
+    let elevationRevision: String?
+
+    init(_ hike: Hike) {
+        route = hike.route
+        duration = hike.durationSeconds
+        distance = hike.distanceMeters
+        drawn = hike.drawnRouteData
+        surface = hike.surfaceMetersByCategory
+        difficulty = hike.difficultyMetersByGrade
+        photos = hike.photos
+        places = hike.places.map(\.name)
+        climb = hike.climbMeters
+        descent = hike.descentMeters
+        elevationRevision = hike.elevationRouteRevision
     }
 }
