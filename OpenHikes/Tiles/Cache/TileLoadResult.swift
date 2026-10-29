@@ -3,7 +3,9 @@
 //  OpenHikes
 //
 //  Preserves the difference between a failed tile request and one suppressed
-//  by network policy as the load crosses from the cache to the renderer.
+//  by network policy as the load crosses from the cache to the renderer, and
+//  the difference between a current tile and saved coverage drawn ahead of
+//  its refresh.
 //
 
 import Foundation
@@ -12,6 +14,11 @@ import Foundation
 nonisolated enum TileLoadDisposition: Sendable {
     case failed
     case loaded
+    /// Saved coverage past its age, in the memory tier and drawn as it is,
+    /// with its refresh still to be asked for. Only the map's read outside
+    /// the load gate answers this; see
+    /// ``TileCache/loadStoredTileResult(forKey:)``.
+    case stale
     case suppressed
 }
 
@@ -24,17 +31,22 @@ nonisolated enum TileLoadDisposition: Sendable {
 nonisolated enum TileLoadResult {
     case failed
     case loaded(TileImage)
+    /// See ``TileLoadDisposition/stale``.
+    case stale(TileImage)
     case suppressed
 
     var image: TileImage? {
-        guard case let .loaded(image) = self else { return nil }
-        return image
+        switch self {
+        case let .loaded(image), let .stale(image): image
+        case .failed, .suppressed: nil
+        }
     }
 
     var disposition: TileLoadDisposition {
         switch self {
         case .failed: .failed
         case .loaded: .loaded
+        case .stale: .stale
         case .suppressed: .suppressed
         }
     }

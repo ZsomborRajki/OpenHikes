@@ -7,11 +7,13 @@
 //  The split here is the difference between cache and coverage. A browsing
 //  tile is only ever offered while it is current; a durable tile — a map the
 //  hiker saved for a trip — is offered current if it can be, and stale if
-//  that is all there is. Serving the stale copy is the last step of
-//  ``TileCache/loadTileResult(forKey:url:purpose:)``, reached only once a
-//  refresh has been refused by policy or has failed outright, and it exists
-//  because the phone that cannot refresh a tile is the phone that most needs
-//  the one already on disk.
+//  that is all there is. The map is offered the stale copy first and has it
+//  refreshed behind it (``TileCache/loadStoredTileResult(forKey:)``), because
+//  the refresh can wait a long time for a slot and a server.
+//  ``TileCache/loadTileResult(forKey:url:purpose:)`` serves it last, once a
+//  refresh has been refused by policy or has failed outright. Either way it
+//  exists because the phone that cannot refresh a tile is the phone that most
+//  needs the one already on disk.
 //
 
 import Algorithms
@@ -25,6 +27,61 @@ import AppKit
 #endif
 
 nonisolated extension TileCache {
+
+    /// What this device holds for a key, before any request is considered.
+    ///
+    /// This and the two lookups below are internal rather than private only
+    /// because the loads in `TileCache` ask them, and `private` in an
+    /// extension is file-scoped.
+    struct StoredTileLookup {
+        /// The memory tier's tile, or a current one from disk — `.failed` if
+        /// a deletion raced the read — and `nil` when neither has the tile.
+        var answer: TileLoadResult?
+        /// Whether a durable copy exists, current or not: the tier a
+        /// refetched tile is written back to.
+        var wasDurable = false
+        /// Whether that copy is coverage past its age: what is drawn while
+        /// the refresh waits, or if it cannot be made.
+        var hasStaleCoverage = false
+    }
+
+    /// Memory, then disk (ephemeral, then durable), publishing a disk hit to
+    /// memory. Every load in `TileCache` goes through here, so the one the
+    /// map makes outside the gate cannot disagree with the one it makes
+    /// under it.
+    func lookUpStoredTile(forKey key: String, token: MutationToken) -> StoredTileLookup {
+        if let cached = memoryImage(forKey: key) { return StoredTileLookup(answer: .loaded(cached)) }
+        return lookUpDiskTile(forKey: key, token: token)
+    }
+
+    /// The disk half of ``lookUpStoredTile(forKey:token:)``, which the map's
+    /// refresh asks on its own.
+    func lookUpDiskTile(forKey key: String, token: MutationToken) -> StoredTileLookup {
+        // Which tier holds this key, and whether the durable copy is coverage
+        // that has gone stale. Read *before* the disk lookup, which deletes an
+        // expired browsing file as it finds it: the answer decides where a
+        // refetched tile is written back, and whether there is anything to
+        // fall back on if it cannot be fetched at all.
+        let durableStoredAt = storedModificationDate(for: filePaths(forKey: key).durable, in: .durable)
+        var lookup = StoredTileLookup(
+            wasDurable: durableStoredAt != nil,
+            hasStaleCoverage: durableStoredAt.map { isExpired($0) } ?? false
+        )
+
+        // Stale coverage with a browsing-tier duplicate beside it: reconciled
+        // here, because the lookup below cannot be trusted to meet it. It asks
+        // the browsing tier first, and asking unlinks an expired browsing file
+        // — so two copies left by an older build that are both past the TTL
+        // would lose the newer one before either the launch sweep or a promote
+        // reached them, and the older would be the copy drawn. Same rule as
+        // those two paths apply; see ``adoptNewerCachedCopy(cached:durable:diskName:)``.
+        if lookup.hasStaleCoverage { reconcileStaleDuplicate(forKey: key) }
+
+        if let tile = freshDiskImage(forKey: key) {
+            lookup.answer = publishDiskTile(tile, forKey: key, token: token) ? .loaded(tile.image) : .failed
+        }
+        return lookup
+    }
 
     /// The tile as it sits on disk *and still current*, ephemeral tier first —
     /// it's the one a browsing fetch refreshes, and the two hold the same image.
@@ -49,19 +106,21 @@ nonisolated extension TileCache {
     /// The durable tile for `key` whatever its age — the saved coverage a hike
     /// is claiming, read without asking whether it is current.
     ///
-    /// Only reached once a refresh has been ruled out or has failed, which is
-    /// why it is a second read rather than something ``freshDiskImage(forKey:)``
-    /// returns alongside: on the ordinary path the refresh succeeds and these
-    /// bytes are replaced, and decoding a tile that is about to be thrown away
-    /// would put a wasted PNG decode on the render path for every stale tile on
-    /// screen.
+    /// Read only where the stale copy is about to be drawn: by the map, ahead
+    /// of its refresh, and by a load that has ruled a refresh out or seen it
+    /// fail. That is why it is a second read rather than something
+    /// ``freshDiskImage(forKey:)`` returns alongside. The map's refresh asks
+    /// the disk only whether a current copy has landed while it waited, and
+    /// has no use for the old bytes.
     func durableImage(forKey key: String) -> TileImage? {
         decodedTile(at: filePaths(forKey: key).durable)
     }
 
-    /// The stale durable tile for `key`, for a load that has run out of ways to
+    /// The stale durable tile for `key`, for a load that draws it as it is:
+    /// the map's, ahead of its refresh, or one that has run out of ways to
     /// refresh it. Returns `nil` only if the saved bytes turn out to be
-    /// unreadable, in which case the caller reports its original outcome.
+    /// unreadable, or a deletion took them while they were read, in which case
+    /// the caller reports its original outcome.
     ///
     /// **Published to the memory tier, marked as stale.** That is not an
     /// optimisation here, it is what makes the tile appear: `draw` paints only
