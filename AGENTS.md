@@ -940,6 +940,10 @@ a change to recording, the map, the sheet or the render path; the PR template,
     reads the pages from the quoted URLs in `MapPurchaseLinks.swift`.
     `MapPurchaseLinksTests` fails on an app language that has no pages of
     its own.
+  - **So is the support page.** `docs/de/support/` translates
+    `docs/support/`, and the German App Store listing links it. The app
+    links neither, so no script holds the two together: an edit to one
+    edits the other in the same change.
   - The hosted tests and the UI suites assert English copy, so they assume a
     simulator whose language is English, as CI's is.
 - **OpenHikes Pro is one monthly subscription.**
