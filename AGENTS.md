@@ -138,9 +138,9 @@ script tests and the page check.
   macOS runners while the branches still open waited behind them.
   `.github/workflows/cancel-superseded-runs.yml` hands the branch to
   `Scripts/cancel-branch-runs.sh` on a `delete` event and on a closed pull
-  request, which takes down every run against it that has not finished. It
-  refuses the default branch: a queued run there is the only thing that will
-  ever say whether that commit compiles.
+  request, which takes down every run against it that has not finished,
+  other than the workflow's own. It refuses the default branch: a queued run
+  there is the only thing that will ever say whether that commit compiles.
 - **Documentation-only pull requests skip the jobs.** The `changes` job runs
   everything unless every changed path is `*.md`, `LICENSE` or under `docs/`. It
   is a job-level `if:` rather than `paths-ignore:`, because a skipped job

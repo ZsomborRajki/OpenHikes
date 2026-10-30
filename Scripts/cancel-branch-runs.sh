@@ -20,9 +20,20 @@
 # cancelled runs there has already hidden five unverified merges — see
 # *CI* in `AGENTS.md`, and `cancel-on-push-masks-broken-main`.
 #
-# A run that finishes between the listing and the cancel answers 409, which is
-# this script's own race and not a failure. Anything else a cancel reports is
-# one: a refusal is almost always the token's, and a silent one would leave the
+# It spares the workflow that calls it (--spare-workflow). A run started by a
+# closed pull request carries that pull request's head branch, so the cleanup
+# run lists itself, in progress and newest of all: cancelled first, it would be
+# stopped before the cancels behind it were ever sent, and on a merge that
+# keeps its branch no `delete` event follows to send them. When the `delete`
+# event's cleanup runs first, the other one is listed too, waiting on the
+# workflow's concurrency group, and has nothing to take down.
+#
+# A run that finishes between the listing and the cancel is this script's own
+# race and not a failure, so a cancel that fails is followed by a look at the
+# run, and one that has completed is reported as such. The status is asked
+# rather than the error read: the API answers 409, but `gh run cancel` rewrites
+# that into a sentence that carries no status code. Anything else is a failure:
+# a refusal is almost always the token's, and a silent one would leave the
 # queue exactly as full as before while the job went green.
 #
 # Exit status:
@@ -43,6 +54,9 @@ Options:
   --repo <owner/name>
                     The repository, when not the checkout in the working
                     directory
+  --spare-workflow <name>
+                    Leave the runs of this workflow alone: the one calling
+                    this script, whose own run is listed for the branch
   --limit <n>       How many of the branch's most recent runs to look at
                     (default 100)
   --dry-run         Print what would be cancelled and cancel nothing
@@ -62,6 +76,7 @@ require_value() {
 
 branch=""
 repo=""
+spared_workflow=""
 limit=100
 dry_run=false
 show_help=false
@@ -79,6 +94,11 @@ while [[ $# -gt 0 ]]; do
         --repo)
             require_value "$1" "${2:-}"
             repo="$2"
+            shift 2
+            ;;
+        --spare-workflow)
+            require_value "$1" "${2:-}"
+            spared_workflow="$2"
             shift 2
             ;;
         --limit)
@@ -124,7 +144,7 @@ if ! command -v gh > /dev/null 2>&1; then
 fi
 
 # gh reads this for every subcommand below, which keeps the repository out of
-# three argument lists.
+# each of their argument lists.
 [[ -z "$repo" ]] || export GH_REPO="$repo"
 
 default_branch="$(gh repo view --json defaultBranchRef \
@@ -153,6 +173,7 @@ refused=0
 while IFS=$'\t' read -r id status workflow; do
     [[ -n "$id" ]] || continue
     [[ "$status" != "completed" ]] || continue
+    [[ -z "$spared_workflow" || "$workflow" != "$spared_workflow" ]] || continue
 
     if [[ "$dry_run" == true ]]; then
         echo "Would cancel $workflow run $id ($status) on $branch."
@@ -164,7 +185,8 @@ while IFS=$'\t' read -r id status workflow; do
     if answer="$(gh run cancel "$id" 2>&1)"; then
         echo "Cancelled $workflow run $id ($status) on $branch."
         cancelled=$(( cancelled + 1 ))
-    elif [[ "$answer" == *409* ]]; then
+    elif [[ "$(gh run view "$id" --json status --jq '.status' 2> /dev/null)" \
+        == "completed" ]]; then
         # It finished while this script was reading the list.
         echo "$workflow run $id on $branch had already finished."
     else
