@@ -1475,8 +1475,9 @@ Reopening one needs new evidence, not a fresh reading of the same code.
   - `aps-environment = development` is correct, because signing substitutes
     `production` on archive.
 - **Load-bearing but never observed.**
-  - The overzoom path assumes MapKit re-enters `draw` after every
-    `setNeedsDisplay(_ mapRect:)`.
+  - The overzoom path, and the redraw that puts a refreshed tile over the
+    saved copy drawn ahead of it, assume MapKit re-enters `draw` after
+    every `setNeedsDisplay(_ mapRect:)`.
   - Mirroring is assumed to carry `@Attribute(.externalStorage)` routes as
     `CKAsset`s. Nobody has watched a 20,000-point route cross a real container.
 

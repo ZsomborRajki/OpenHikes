@@ -92,8 +92,9 @@ nonisolated final class TileCache: @unchecked Sendable {
         /// When this entry was admitted as *stale durable coverage* rather than
         /// as a current tile, if it was.
         ///
-        /// A tile is only ever admitted this way once the load path has run out
-        /// of ways to refresh it, and it then answers reads for
+        /// A tile is admitted this way when the map draws it ahead of its
+        /// refresh, and when a load that answers once has run out of ways to
+        /// refresh it. Either way it then answers reads for
         /// ``TileCache/staleCoverageRecheckInterval`` rather than being turned
         /// away by the TTL like everything else here. Both halves are load
         /// bearing: `draw` paints only what this tier holds, so coverage kept
@@ -196,13 +197,13 @@ nonisolated final class TileCache: @unchecked Sendable {
     /// no longer answer for it.
     ///
     /// Moved forward whenever interactive fetching becomes allowed again. The
-    /// entries it governs were admitted precisely because nothing could refresh
-    /// them, and the event that makes a refresh possible is the event that
-    /// should retire them: renderers answer the same notification with a
-    /// redraw, `draw` consults ``memoryImage(forKey:referenceDate:)`` first,
-    /// and entries still standing there would answer it. A hiker who regains
-    /// signal over a map they are not panning would go on being shown week-old
-    /// ground, with nothing scheduled to ask again.
+    /// entries it governs were admitted ahead of a refresh or because nothing
+    /// could refresh them, and the event that makes a refresh possible is the
+    /// event that should retire them: renderers answer the same notification
+    /// with a redraw, `draw` consults ``memoryImage(forKey:referenceDate:)``
+    /// first, and entries still standing there would answer it. A hiker who
+    /// regains signal over a map they are not panning would go on being shown
+    /// week-old ground, with nothing scheduled to ask again.
     let staleCoverageInvalidatedAt = Mutex(Date.distantPast)
 
     var isOnline: Bool { conditions.withLock { $0.isOnline } }
@@ -402,12 +403,6 @@ extension FetchedTile: @unchecked Sendable {}
 
 nonisolated extension TileCache {
 
-    /// Puts a tile in the memory tier, charged at its decoded size.
-    ///
-    /// The single insertion point on purpose: `setObject(_:forKey:)` without a
-    /// cost enters as free, and one call site that forgot would quietly exempt
-    /// its tiles from ``memoryByteLimit`` — with no symptom until the app is
-    /// killed for memory somewhere else entirely.
     /// Loads a tile for display — memory, then disk (ephemeral, then durable),
     /// then the network — populating the faster tiers as it goes, and reports
     /// which of those answered.
@@ -424,13 +419,30 @@ nonisolated extension TileCache {
     ///
     /// **Saved coverage is served stale rather than not at all.** A durable
     /// tile past ``tileExpirationInterval`` is refreshed if a request is
-    /// allowed and lands, and drawn as it is if either of those fails. Nothing
-    /// on this path unlinks the saved bytes to make room for a replacement
-    /// that may never arrive: the old copy is overwritten by
+    /// allowed and lands, and answered as it is if either of those fails.
+    /// Nothing on this path unlinks the saved bytes to make room for a
+    /// replacement that may never arrive: the old copy is overwritten by
     /// ``storeFetchedTile(_:forKey:in:token:)``'s atomic write or not at all.
     /// This is what stops a map downloaded a week before a trip from being
     /// blank on the trail, and it keeps the hike's `offlineDownloads` claim
     /// true rather than describing bytes that were deleted at launch.
+    ///
+    /// **Refreshed before it is answered, which the map no longer waits for.**
+    /// One answer per tile is what a caller that draws once needs: a Settings
+    /// card composes four tiles and is done with them. But the refresh is a
+    /// request, the map makes its requests under ``TileLoadGate`` slots, and
+    /// a slot is held for as long as a server takes to answer. With no
+    /// timeout of its own, a request on one bar on a ridge is given sixty
+    /// seconds between bytes before it fails, so slow requests for the tiles
+    /// around it could hold every slot, and the refresh would wait for one
+    /// and then take as long again. Saved coverage asked for through here was
+    /// off the map for all of that, and a map downloaded more than a week
+    /// before a hike is that coverage throughout. The map redraws a tile
+    /// whenever better bytes arrive, so it does not wait: it draws the saved
+    /// copy at once, through ``loadStoredTileResult(forKey:)``, and has it
+    /// refreshed behind the drawn copy by
+    /// ``refreshStaleTileResult(forKey:url:)``. That is the same request at
+    /// the same priority, written back over the same file.
     ///
     /// `@concurrent` rather than plain `nonisolated`: everything below the
     /// first memory hit is synchronous disk work, and an `async` function that
@@ -454,8 +466,88 @@ nonisolated extension TileCache {
         let mutationToken = mutationToken(forKey: key)
         let stored = lookUpStoredTile(forKey: key, token: mutationToken)
         if let answer = stored.answer { return answer }
-        let hasStaleCoverage = stored.hasStaleCoverage
+        return await requestTile(
+            forKey: key,
+            url: url,
+            purpose: purpose,
+            after: stored,
+            answeringWithStaleCoverage: stored.hasStaleCoverage,
+            token: mutationToken
+        )
+    }
 
+    /// The half of ``loadTileResult(forKey:url:purpose:)`` that needs no tile
+    /// server: the memory tier, then a current copy on disk, then saved
+    /// coverage past its age. That last is published to the memory tier,
+    /// marked as stale, and answered as ``TileLoadResult/stale(_:)``, so the
+    /// map draws it now and asks ``refreshStaleTileResult(forKey:url:)`` for
+    /// the refresh. `nil` when only a request could answer: a tile on no
+    /// disk, or saved bytes that can no longer be read or were deleted as
+    /// they were read, which the full load deals with as it always has.
+    ///
+    /// Never opens a connection, which is what lets the map ask it before it
+    /// waits for a ``TileLoadGate`` slot; see ``CachingTileOverlayRenderer``.
+    /// `@concurrent` for the full load's reason.
+    @concurrent
+    func loadStoredTileResult(forKey key: String) async -> TileLoadResult? {
+        assertOffMainThread(
+            "loadStoredTileResult(forKey:) stats and reads tile files synchronously — call it off the main thread"
+        )
+        let mutationToken = mutationToken(forKey: key)
+        let stored = lookUpStoredTile(forKey: key, token: mutationToken)
+        guard stored.answer == nil, stored.hasStaleCoverage else { return stored.answer }
+        return staleCoverage(forKey: key, reason: "refresh-pending", token: mutationToken)
+            .map(TileLoadResult.stale)
+    }
+
+    /// The refresh ``loadStoredTileResult(forKey:)`` leaves to the map for
+    /// saved coverage it answered stale: the request the full load makes
+    /// before it answers, made after the saved copy is drawn.
+    ///
+    /// The memory tier is passed over, because the stale copy published there
+    /// would answer it. The disk is asked again, because another load may
+    /// have refreshed the tile while this one waited for its slot. A fresh
+    /// tile goes back into the tier the stale one was in, written atomically
+    /// over it. Otherwise this answers with what the request came to —
+    /// `.failed` for a request that failed or a `Retry-After` that withheld
+    /// it, `.suppressed` for one the policy refused — and not with the saved
+    /// copy, which is drawn already. The outcome is what the renderer backs
+    /// off on.
+    @concurrent
+    func refreshStaleTileResult(forKey key: String, url: URL) async -> TileLoadResult {
+        assertOffMainThread(
+            "refreshStaleTileResult(forKey:url:) writes tile files synchronously — call it off the main thread"
+        )
+        let mutationToken = mutationToken(forKey: key)
+        let stored = lookUpDiskTile(forKey: key, token: mutationToken)
+        if let answer = stored.answer { return answer }
+        return await requestTile(
+            forKey: key,
+            url: url,
+            purpose: .interactive,
+            after: stored,
+            answeringWithStaleCoverage: false,
+            token: mutationToken
+        )
+    }
+
+    /// The half of a load that needs a tile server: the network policy, any
+    /// `Retry-After` standing for the key, then one request, written back to
+    /// the tier `stored` found the key in and published to memory.
+    ///
+    /// `answeringWithStaleCoverage` is what tells the two callers apart. The
+    /// full load answers a request that brings nothing with the saved copy
+    /// past its age, where there is one, because it has no other answer to
+    /// give. The map's refresh answers with what the request came to: its
+    /// saved copy is drawn already, so the outcome is the only news.
+    private func requestTile(
+        forKey key: String,
+        url: URL,
+        purpose: TileFetchPurpose,
+        after stored: StoredTileLookup,
+        answeringWithStaleCoverage: Bool,
+        token: MutationToken
+    ) async -> TileLoadResult {
         // Offline, metered, or asked to conserve: the tile isn't cached and
         // opening a connection for it is either doomed or unwanted. Return
         // without requesting so we don't spam failing loads for every visible
@@ -474,30 +566,33 @@ nonisolated extension TileCache {
             return withheldFetch(
                 forKey: key,
                 reason: decision.reason ?? "unknown",
-                hasStaleCoverage: hasStaleCoverage,
-                token: mutationToken,
+                hasStaleCoverage: answeringWithStaleCoverage,
+                token: token,
                 otherwise: .suppressed
             )
         }
 
         // A 429 or an overloaded 503 named its own deadline, and stale coverage
         // is the one thing that can reach the network with nothing holding it
-        // back: serving the saved copy reports `.loaded`, so the renderer
-        // records a success, clears its failure log, and never feeds that
-        // deadline into the backoff built to honour it. The memory entry then
-        // expires on ``staleCoverageRecheckInterval`` and the tile is asked for
-        // again — five minutes into a fifteen-minute `Retry-After`, which on
-        // OSM's community-funded servers is the request pattern that header
-        // exists to stop. Honoured here instead, and the saved bytes are drawn
-        // for as long as it stands. With no coverage to draw this is `.failed`,
-        // which is the same miss the server itself would have produced, so the
-        // renderer records it and reads the deadline as its floor as usual.
+        // back. The full load answers with the saved copy as `.loaded`, so the
+        // renderer records a success, clears its failure log, and never feeds
+        // that deadline into the backoff built to honour it. The memory entry
+        // then expires on ``staleCoverageRecheckInterval`` and the tile is
+        // asked for again — five minutes into a fifteen-minute `Retry-After`,
+        // which on OSM's community-funded servers is the request pattern that
+        // header exists to stop. Honoured here instead, for every caller, and
+        // the saved bytes are drawn for as long as it stands. With no coverage
+        // to draw this is `.failed`, which is the same miss the server itself
+        // would have produced, so the renderer records it and reads the
+        // deadline as its floor as usual. The map's refresh is `.failed` here
+        // either way, since its copy is drawn already, and its own backoff
+        // reads the same floor.
         if retryDeadline(forKey: key) != nil {
             return withheldFetch(
                 forKey: key,
                 reason: "retry-after",
-                hasStaleCoverage: hasStaleCoverage,
-                token: mutationToken,
+                hasStaleCoverage: answeringWithStaleCoverage,
+                token: token,
                 otherwise: .failed
             )
         }
@@ -506,8 +601,8 @@ nonisolated extension TileCache {
             // The refresh was allowed and still didn't land — a timeout, a 500,
             // a captive portal. The saved bytes were never unlinked to make
             // room for it, so they are still here to draw.
-            if hasStaleCoverage,
-               let stale = staleCoverage(forKey: key, reason: "refresh-failed", token: mutationToken) {
+            if answeringWithStaleCoverage,
+               let stale = staleCoverage(forKey: key, reason: "refresh-failed", token: token) {
                 return .loaded(stale)
             }
             return .failed
@@ -522,71 +617,9 @@ nonisolated extension TileCache {
             fetched,
             forKey: key,
             in: stored.wasDurable ? .durable : .browsing,
-            token: mutationToken
+            token: token
         ) else { return .failed }
         return .loaded(fetched.image)
-    }
-
-    /// The half of ``loadTileResult(forKey:url:purpose:)`` that needs no tile
-    /// server: the memory tier, then a current copy on disk, or `nil` when
-    /// only a request could answer. Saved coverage past its age is `nil` as
-    /// well, because it is refreshed before it is drawn and only the full
-    /// load may ask for that.
-    ///
-    /// Never opens a connection, which is what lets the map ask it before it
-    /// waits for a ``TileLoadGate`` slot; see ``CachingTileOverlayRenderer``.
-    /// `@concurrent` for the full load's reason.
-    @concurrent
-    func loadStoredTileResult(forKey key: String) async -> TileLoadResult? {
-        assertOffMainThread(
-            "loadStoredTileResult(forKey:) stats and reads tile files synchronously — call it off the main thread"
-        )
-        return lookUpStoredTile(forKey: key, token: mutationToken(forKey: key)).answer
-    }
-
-    /// What this device holds for a key, before any request is considered.
-    private struct StoredTileLookup {
-        /// The memory tier's tile, or a current one from disk — `.failed` if
-        /// a deletion raced the read — and `nil` when neither has the tile.
-        var answer: TileLoadResult?
-        /// Whether a durable copy exists, current or not: the tier a
-        /// refetched tile is written back to.
-        var wasDurable = false
-        /// Whether that copy is coverage past its age: what is drawn if the
-        /// refresh cannot be made.
-        var hasStaleCoverage = false
-    }
-
-    /// Memory, then disk (ephemeral, then durable), publishing a disk hit to
-    /// memory. Both loads above go through here, so the one the map makes
-    /// outside the gate cannot disagree with the one it makes under it.
-    private func lookUpStoredTile(forKey key: String, token: MutationToken) -> StoredTileLookup {
-        if let cached = memoryImage(forKey: key) { return StoredTileLookup(answer: .loaded(cached)) }
-
-        // Which tier holds this key, and whether the durable copy is coverage
-        // that has gone stale. Read *before* the disk lookup, which deletes an
-        // expired browsing file as it finds it: the answer decides where a
-        // refetched tile is written back, and whether there is anything to
-        // fall back on if it cannot be fetched at all.
-        let durableStoredAt = storedModificationDate(for: filePaths(forKey: key).durable, in: .durable)
-        var lookup = StoredTileLookup(
-            wasDurable: durableStoredAt != nil,
-            hasStaleCoverage: durableStoredAt.map { isExpired($0) } ?? false
-        )
-
-        // Stale coverage with a browsing-tier duplicate beside it: reconciled
-        // here, because the lookup below cannot be trusted to meet it. It asks
-        // the browsing tier first, and asking unlinks an expired browsing file
-        // — so two copies left by an older build that are both past the TTL
-        // would lose the newer one before either the launch sweep or a promote
-        // reached them, and the older would be the copy drawn. Same rule as
-        // those two paths apply; see ``adoptNewerCachedCopy(cached:durable:diskName:)``.
-        if lookup.hasStaleCoverage { reconcileStaleDuplicate(forKey: key) }
-
-        if let tile = freshDiskImage(forKey: key) {
-            lookup.answer = publishDiskTile(tile, forKey: key, token: token) ? .loaded(tile.image) : .failed
-        }
-        return lookup
     }
 
     /// Fetches a tile straight into durable storage — the bulk-download path.

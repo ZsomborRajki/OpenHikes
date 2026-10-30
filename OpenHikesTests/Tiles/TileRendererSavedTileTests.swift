@@ -7,7 +7,11 @@
 //  slot is held for as long as a server takes to answer — on one bar on a
 //  ridge, up to the session's idle timeout. Six slow requests for the tiles
 //  around it kept a tile saved for offline use off the screen until one of
-//  them ended.
+//  them ended. Saved coverage past its age waited longest of all: it was
+//  refreshed before it was drawn, so after the slot it waited out its own
+//  request too. It is drawn first now, and refreshed behind the drawn copy;
+//  what that refresh may and may not do is in
+//  `TileRendererSavedTileTests+StaleCoverage.swift`.
 //
 //  Slow is a state here rather than a duration: the stub holds every request
 //  open until the test lets it go (see `StubTileProtocol`). Each renderer
@@ -34,19 +38,37 @@ struct TileRendererSavedTileTests {
         case browsed
     }
 
-    private static let providerID = "osm_saved_tile_test"
+    static let providerID = "osm_saved_tile_test"
 
     /// One row of tiles at one zoom, none of them stored until a test puts
     /// one there.
-    private static func path(_ column: Int) -> MKTileOverlayPath {
+    static func path(_ column: Int) -> MKTileOverlayPath {
         MKTileOverlayPath(x: 8600 + column, y: 5800, z: 14, contentScaleFactor: 2)
     }
 
-    private static func key(for path: MKTileOverlayPath) -> String {
+    static func key(for path: MKTileOverlayPath) -> String {
         TileCacheKey.namespaced(providerID: providerID, z: path.z, x: path.x, y: path.y)
     }
 
-    private func renderer(on stub: StubbedTileCache, gate: TileLoadGate) -> CachingTileOverlayRenderer {
+    /// A day past the seven-day age at which saved coverage is due a refresh.
+    static let staleByDays: Double = 8
+
+    /// When the bytes on disk were last written, which is how a test tells a
+    /// copy left alone from one replaced: a refreshed tile has the same name
+    /// and the same bytes as the stub's fixture it replaced.
+    static func modificationDate(of file: URL) throws -> Date {
+        try #require(try FileManager.default.attributesOfItem(atPath: file.path)[.modificationDate] as? Date)
+    }
+
+    /// Whether the memory tier holds a current tile for `key`, rather than
+    /// a stale copy or nothing. A stale entry answers only for the recheck
+    /// interval, so asking past it tells the two apart.
+    static func holdsCurrentTile(_ cache: TileCache, forKey key: String) -> Bool {
+        let pastRecheck = Date(timeIntervalSinceNow: TileCache.staleCoverageRecheckInterval * 2)
+        return cache.memoryImage(forKey: key, referenceDate: pastRecheck) != nil
+    }
+
+    func renderer(on stub: StubbedTileCache, gate: TileLoadGate) -> CachingTileOverlayRenderer {
         let overlay = TileOverlay(
             providerID: Self.providerID,
             urlTemplate: "https://tiles.example.invalid/{z}/{x}/{y}.png",
@@ -61,7 +83,7 @@ struct TileRendererSavedTileTests {
     /// gate is an actor and a settle condition cannot `await`. The caller
     /// still asserts, so a lapsed deadline is reported as the expectation it
     /// was waiting for.
-    private func settle(untilTrue condition: () async -> Bool) async {
+    func settle(untilTrue condition: () async -> Bool) async {
         let deadline = ContinuousClock.now + .seconds(5)
         while !(await condition()), ContinuousClock.now < deadline {
             guard await settlePollTick() else { break }
@@ -72,7 +94,7 @@ struct TileRendererSavedTileTests {
     /// every request held open, and returns the number of slots once each is
     /// held by a request on the wire. With no download running, that is all
     /// of them.
-    private func fillEverySlot(of gate: TileLoadGate, from renderer: CachingTileOverlayRenderer) async -> Int {
+    func fillEverySlot(of gate: TileLoadGate, from renderer: CachingTileOverlayRenderer) async -> Int {
         StubTileProtocol.alwaysRespond(with: .tile())
         StubTileProtocol.holdResponses()
         let slots = await gate.budgets.total
@@ -85,7 +107,7 @@ struct TileRendererSavedTileTests {
 
     /// Lets the held requests answer, and waits for every load to give its
     /// slot back, so nothing is still writing into the sandbox when it goes.
-    private func drain(_ gate: TileLoadGate) async {
+    func drain(_ gate: TileLoadGate) async {
         StubTileProtocol.releaseResponses()
         await settle { await gate.inFlight.total == 0 }
         #expect(await gate.inFlight.total == 0, "every load ends once its server answers")
@@ -176,12 +198,13 @@ struct TileRendererSavedTileTests {
         #expect(stub.cache.memoryImage(forKey: Self.key(for: unstored)) != nil)
     }
 
-    /// Saved coverage past its age is refreshed before it is drawn, and only
-    /// a load holding a slot may ask for the refresh. Drawn from outside the
-    /// gate instead, the old copy would answer every later pass from memory
-    /// and the refresh would never be asked for at all.
-    @Test("saved coverage past its age waits for the load that can refresh it")
-    func staleCoverageWaitsForItsRefresh() async throws {
+    /// Saved coverage past its age is drawn the same way, ahead of the
+    /// refresh that may replace it, and the refresh still waits for a slot
+    /// like every request. A map downloaded more than a week before a hike is
+    /// this case throughout, and it used to wait out a slot and then its own
+    /// request before any of it appeared.
+    @Test("saved coverage past its age is drawn while slow requests hold every slot, then refreshed")
+    func staleCoverageIsDrawnAheadOfItsRefresh() async throws {
         let stub = StubbedTileCache()
         defer { stub.tearDown() }
         let gate = TileLoadGate()
@@ -190,18 +213,27 @@ struct TileRendererSavedTileTests {
 
         let stale = Self.path(slots)
         let key = Self.key(for: stale)
-        try stub.place(in: stub.savedFile(for: key), agedByDays: 8)
+        let file = stub.savedFile(for: key)
+        try stub.place(in: file, agedByDays: Self.staleByDays)
+        let savedAt = try Self.modificationDate(of: file)
         renderer.loadTileForTesting(at: stale)
-        await settle { await gate.testState.interactiveWaiters == 1 }
 
-        #expect(await gate.testState.interactiveWaiters == 1, "it queues for the slot its refresh needs")
-        #expect(stub.cache.memoryImage(forKey: key) == nil, "and the old copy is not drawn in the meantime")
+        await settleDelegateHop(until: "the saved copy to reach the memory tier the map draws from") {
+            stub.cache.memoryImage(forKey: key) != nil && renderer.redrawCount(at: stale) == 1
+        }
+        await settle { await gate.testState.interactiveWaiters == 1 }
+        #expect(await gate.testState.interactiveWaiters == 1, "its refresh still queues for a slot")
+        #expect(StubTileProtocol.requestCount == slots, "and asks nothing until one frees")
+        #expect(try Self.modificationDate(of: file) == savedAt, "the saved copy is left on disk as it was meanwhile")
 
         await drain(gate)
-        #expect(StubTileProtocol.requestCount == slots + 1, "the refresh is asked for once a slot frees")
-        #expect(stub.cache.memoryImage(forKey: key) != nil)
-        let attributes = try FileManager.default.attributesOfItem(atPath: stub.savedFile(for: key).path)
-        let savedAt = try #require(attributes[.modificationDate] as? Date)
-        #expect(!stub.cache.isExpired(savedAt), "and the saved copy is current again")
+        await settleDelegateHop(until: "the refreshed tile to be drawn over the saved copy") {
+            renderer.redrawCount(at: stale) == 2
+        }
+        #expect(StubTileProtocol.requestCount == slots + 1, "the refresh was asked for, once, when a slot freed")
+        #expect(Self.holdsCurrentTile(stub.cache, forKey: key), "memory holds the fresh bytes, not the stale copy")
+        #expect(!stub.cache.isExpired(try Self.modificationDate(of: file)), "and so does the saved file")
+        #expect(!stub.isBrowsed(key), "written back into the durable tier, not beside it")
+        #expect(renderer.refreshCounts == (underWay: 0, failed: 0))
     }
 }
