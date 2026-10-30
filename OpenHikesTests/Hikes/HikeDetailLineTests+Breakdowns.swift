@@ -79,6 +79,10 @@ extension HikeDetailLineTests {
         await settleDelegateHop(until: "the new line's read is out") { self.lineFetches.isHolding }
 
         // The ridge's answer lands while the new line is still being read.
+        // Past the handed-back graph it is a few points' analysis and a hop
+        // to the main actor, which the round trips after it let run: dropped,
+        // as it should be, it leaves nothing to wait for by name. Kept, it
+        // is stored before the new line lands, and the wait below runs out.
         graph.open()
         await settleDelegateHop(until: "the ridge's graph has been handed back") { graph.answered == 1 }
         await settleDelegateHop()
