@@ -13,33 +13,26 @@ import OpenHikesShared
 nonisolated struct HikeDetailPreparedContent: Sendable {
     let profile: RouteProfile
     let stats: [Stat]
+    /// The line both were built from, handed on with them, so that nothing
+    /// that follows the hiker along it reads the line from the hike again —
+    /// see ``ShownLine``.
+    let line: SelectedLine.Line
+    /// The line as a walk names it — ``TrailWalkRecord/routeRevision(of:)``
+    /// — worked out here with the rest, so a matched fix asks whether a walk
+    /// is along it without hashing the line on the main actor.
+    let walkRevision: String
 }
 
-/// The geometry the hike detail screen's route-derived work was built from,
-/// and so what its `.task(id:)`s are keyed on.
-///
-/// The hike's id alone is not enough. *Edit Route* keeps the id and replaces
-/// the line — see ``TrailDraftSave`` — and mirroring delivers that edit to a
-/// second device while this screen can be open there. Keyed on the id, the
-/// elevation profile, the statistics, the follow loop's matcher and the
-/// surface lookup all stayed on the old line until the screen was closed.
-///
-/// The route itself rather than a digest of it. A digest would walk the whole
-/// line on every body evaluation; `Array`'s `==` compares storage identity
-/// first and stops at the first differing point, so at worst it costs one
-/// comparison per point, only when the body is evaluated, and render
-/// isolation keeps that off the per-fix path. The distance is here as well
-/// because the statistics are built from it and a save sets it on its own.
-nonisolated struct HikeDetailRouteKey: Equatable, Sendable {
-    let hikeID: UUID
-    let route: [RouteCoordinate]
-    let distanceMeters: Double
-
-    @MainActor
-    init(_ hike: Hike) {
-        hikeID = hike.id
-        route = hike.route
-        distanceMeters = hike.distanceMeters
+extension HikeDetailView {
+    /// The line the detail screen's profile was built from, as its follow
+    /// loop hands it on.
+    struct PreparedLine {
+        /// ``ShownLine/revision`` when the line was read.
+        let revision: Int
+        let line: SelectedLine.Line
+        /// The line as a walk names it — see
+        /// ``HikeDetailPreparedContent/walkRevision``.
+        let walkRevision: String
     }
 }
 
@@ -57,26 +50,45 @@ nonisolated enum HikeDetailPreparation {
     /// route — the walk throws before ``HikeRouteStatistics/Builder/finish()``
     /// is reached.
     @concurrent
-    static func prepare(
-        route: [RouteCoordinate],
-        distanceMeters: Double
-    ) async throws(CancellationError) -> HikeDetailPreparedContent {
+    static func prepare(_ line: SelectedLine.Line) async throws(CancellationError) -> HikeDetailPreparedContent {
         assertOffMainThread(
             "Hike detail route preparation must stay off the main thread"
         )
         // The single route-sized walk behind every number and the elevation
         // chart.
-        var statistics = HikeRouteStatistics.Builder(distanceMeters: distanceMeters)
-        let profile = try RouteProfile.cancellable(route: route) { point, segmentMeters in
+        var statistics = HikeRouteStatistics.Builder(distanceMeters: line.distanceMeters)
+        let profile = try RouteProfile.cancellable(route: line.route) { point, segmentMeters in
             statistics.consume(point, segmentMeters: segmentMeters)
         }
+        let walkRevision = TrailWalkRecord.routeRevision(of: line.route)
+        guard !Task.isCancelled else { throw CancellationError() }
         return HikeDetailPreparedContent(
             profile: profile,
             stats: makeStats(
-                distanceMeters: distanceMeters,
+                distanceMeters: line.distanceMeters,
                 statistics: statistics.finish()
-            )
+            ),
+            line: line,
+            walkRevision: walkRevision
         )
+    }
+
+    /// The same, for the line `read` holds, waited for here rather than on
+    /// the main actor.
+    @concurrent
+    static func prepare(reading read: SelectedLine.Read) async throws(CancellationError) -> HikeDetailPreparedContent {
+        let line = SelectedLine.Line(route: await read.route, distanceMeters: await read.distanceMeters)
+        return try await prepare(line)
+    }
+
+    /// The same, for a line handed in as its points and its length — a
+    /// shared hike's preview, which has its own.
+    @concurrent
+    static func prepare(
+        route: [RouteCoordinate],
+        distanceMeters: Double
+    ) async throws(CancellationError) -> HikeDetailPreparedContent {
+        try await prepare(SelectedLine.Line(route: route, distanceMeters: distanceMeters))
     }
 
     private static func makeStats(

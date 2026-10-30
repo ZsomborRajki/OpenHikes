@@ -116,6 +116,21 @@ struct TrailWalkRouteRevisionTests {
     func missingRevisionIsAlongAnything() {
         #expect(Self.record(revised: false).isAlong(Self.route))
         #expect(Self.record(revised: false).isAlong([]))
+        #expect(Self.record(revised: false).isAlong(revision: "anything"))
+    }
+
+    /// A hike's screen works the revision out off the main actor and hands
+    /// it in, so asking with the revision has to answer as asking with the
+    /// line would (#1252).
+    @Test("asked with a line's revision, a record answers as it does for the line")
+    func revisionAnswersAsTheLineDoes() {
+        var moved = Self.route
+        moved[2].longitude += 0.0001
+        let walk = Self.record(along: Self.route)
+
+        for line in [Self.route, moved, Self.pausing(Self.route, at: [2]), []] {
+            #expect(walk.isAlong(revision: TrailWalkRecord.routeRevision(of: line)) == walk.isAlong(line))
+        }
     }
 
     @Test("stamping names the line only for a record that named none")

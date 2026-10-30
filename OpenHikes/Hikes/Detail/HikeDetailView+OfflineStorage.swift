@@ -47,9 +47,23 @@ extension HikeDetailView {
     /// runs on the concurrent executor. Auto-save manifest changes reach this
     /// through ``scheduleStoredBytesRefresh()`` so a run of drains collapses
     /// into one trailing measurement.
+    ///
+    /// Along the line the screen read off the main actor (``ShownLine``),
+    /// never along `hike.route`, which on the main actor decodes the whole
+    /// line (#1252). A download recorded without its box is recomputed along
+    /// it, so until it has landed there is nothing to measure that by; the
+    /// preparation that reads it measures then.
     func refreshStoredBytes() {
+        guard let route = line.current?.route ?? (hike.offlineDownloads.isEmpty ? [] : nil) else {
+            invalidateStoredBytesMeasurement()
+            return
+        }
+        refreshStoredBytes(along: route)
+    }
+
+    /// The same, along `route`, the line the preparation has just read.
+    func refreshStoredBytes(along route: [RouteCoordinate]) {
         invalidateStoredBytesMeasurement()
-        let route = hike.route
         let offlineDownloads = hike.offlineDownloads
         let autoSavedTileKeys = hike.autoSavedTileKeys
         guard !offlineDownloads.isEmpty || !autoSavedTileKeys.isEmpty else {

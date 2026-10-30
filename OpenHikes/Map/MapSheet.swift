@@ -503,6 +503,8 @@ struct MapSheet: View {
                 settings: appModel.storedSettings,
                 locationManager: appModel.locationManager,
                 backgroundTracker: appModel.backgroundTracker,
+                selectedLine: appModel.selectedLine,
+                lineStoreWatch: appModel.selectedLineStoreWatch,
                 trailGraphProvider: appModel.trailGraphProvider,
                 walkSession: appModel.walkSession,
                 photoCapture: photoCapture,

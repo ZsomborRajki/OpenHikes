@@ -31,8 +31,13 @@ import SwiftUI
 struct WalkToggleButton: View {
     let hike: Hike
     /// `nil` until the detail has built it; there is no route to walk until
-    /// then, and ``TrailWalkSession/start(hike:profile:)`` needs its length.
+    /// then, and ``TrailWalkSession/start(hike:profile:revision:)`` needs its
+    /// length.
     let profile: RouteProfile?
+    /// The line `profile` was built from, as a walk names it — see
+    /// ``HikeDetailPreparedContent/walkRevision`` — so a start does not read
+    /// the hike's line on the main actor to name it.
+    var walkRevision: String?
     let session: TrailWalkSession
 
     /// The phase a Pause or Resume asked for and the store refused.
@@ -50,7 +55,7 @@ struct WalkToggleButton: View {
                 Button("Start Hike", systemImage: "play.fill") {
                     // The start's haptic is the phase moving, answered by
                     // ``WalkControls`` for this hike — not played here too.
-                    session.start(hike: hike, profile: profile)
+                    session.start(hike: hike, profile: profile, revision: walkRevision)
                 }
                 // Tinted glass in the bar, as the call to action it is; once
                 // started the bar's own plain glass is enough.

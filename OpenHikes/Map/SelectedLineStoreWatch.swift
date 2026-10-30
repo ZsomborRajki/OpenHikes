@@ -153,6 +153,13 @@ final class SelectedLineStoreWatch {
         filter.admit(nil)
     }
 
+    /// Whether `hike` is the hike followed now. A hike's screen asks, to
+    /// read the line the selection's readers read only while it is theirs —
+    /// see ``ShownLine``.
+    func follows(_ hike: Hike) -> Bool {
+        followed?.hike === hike
+    }
+
     private func observeIfNeeded() {
         guard observer == nil else { return }
         let admitted = filter

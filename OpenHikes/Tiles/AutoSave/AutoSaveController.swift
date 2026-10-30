@@ -23,10 +23,11 @@ final class AutoSaveController {
     private weak var activeHike: Hike?
     /// The read of the line ``activeHike``'s corridor was last asked for.
     /// Edit Route saves into the same hike, so its ID alone cannot tell a
-    /// re-selection from a new route — the same reason `HikeDetailRouteKey`
-    /// holds the route itself. ``SelectedLine`` hands out the same read for
-    /// as long as nothing has written the line, so the same one again is a
-    /// re-selection; a new one is compared — see ``activate(_:)``.
+    /// re-selection from a new route — the same reason the hike's screen
+    /// keys its work on the line (``ShownLine``). ``SelectedLine`` hands out
+    /// the same read for as long as nothing has written the line, so the same
+    /// one again is a re-selection; a new one is compared — see
+    /// ``activate(_:)``.
     @ObservationIgnored private var activeLine: SelectedLine.Read?
     /// The read whose line the store's corridor was built from, so a new
     /// read that holds the same line keeps the corridor. `nil` until the

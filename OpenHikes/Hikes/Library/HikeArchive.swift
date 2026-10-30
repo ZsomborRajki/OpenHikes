@@ -293,8 +293,11 @@ extension HikeArchive {
     ///
     /// The track arrives with its own photographs emptied, because
     /// ``write(_:store:)`` rebuilds them from what it manages to copy.
-    init(hike: Hike) {
-        var track = GPXExport.Track(hike: hike)
+    ///
+    /// The line and the places along it are the ones the hike's screen
+    /// holds — see ``GPXExport/Track/init(hike:route:places:)``.
+    init(hike: Hike, route: [RouteCoordinate], places: [TrailPlace]) {
+        var track = GPXExport.Track(hike: hike, route: route, places: places)
         track.photographs = []
         self.init(
             track: track,

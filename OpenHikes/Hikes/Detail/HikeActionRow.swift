@@ -13,6 +13,10 @@
 //  Starting a walk is not here. That is the navigation bar's
 //  ``WalkToggleButton``, which is on screen at every detent.
 //
+//  The line is the screen's, read off the main actor (``ShownLine``): this
+//  row is drawn again by every save to the store, and reading `hike.route`
+//  here decoded the whole line on the main actor each time (#1252).
+//
 
 import Foundation
 import OpenHikesData
@@ -20,13 +24,19 @@ import SwiftUI
 
 struct HikeActionRow<OfflineTile: View>: View {
     let hike: Hike
+    /// The hike's line as its screen read it. The tiles that need a line wait
+    /// for it to land, as the rest of the screen does.
+    let line: ShownLine
+    /// Where the places are measured along the line, kept between passes,
+    /// or `nil` where there is no map — see ``HikePlaceRows``.
+    var placeRows: HikePlaceRows?
     let onZoom: () -> Void
     /// ``OfflineDownloadButton``, or nothing for a map that cannot bulk
     /// download. Handed in because the download belongs to the screen, which
     /// owns the downloader and the tile source it captures.
     @ViewBuilder let offlineTile: OfflineTile
 
-    private var hasRoute: Bool { hike.pointCount > 1 }
+    private var hasRoute: Bool { line.pointCount > 1 }
 
     var body: some View {
         // One glass sample for the row rather than one per tile, and the
@@ -75,8 +85,13 @@ struct HikeActionRow<OfflineTile: View>: View {
     /// The preview carries an icon so the sheet's header reads as the document
     /// being sent rather than as a bare line of text.
     private var shareTile: some View {
-        ShareLink(
-            item: HikeGPXFile(track: GPXExport.Track(hike: hike)),
+        let route = line.current?.route ?? []
+        return ShareLink(
+            item: HikeGPXFile(track: GPXExport.Track(
+                hike: hike,
+                route: route,
+                places: hike.orderedPlaces(along: route, preparedBy: placeRows).map(\.place)
+            )),
             preview: SharePreview(
                 hike.displayTitle,
                 icon: Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")

@@ -41,11 +41,17 @@ extension HikeDetailView {
     /// The payload is a `Sendable` ``HikeArchive`` snapshot for the reason
     /// ``HikeActionRow``'s *Share* is: `ShareLink` passes the exporter to the system,
     /// which calls it off the main actor, where a `@Model` must not be read.
-    /// Nothing is copied or zipped until a destination is picked.
+    /// Nothing is copied or zipped until a destination is picked. The line in
+    /// it is the one this screen read off the main actor — see ``ShownLine``.
     @ViewBuilder var archiveButton: some View {
         if hike.hasPhotos {
+            let route = line.current?.route ?? []
             ShareLink(
-                item: HikeArchiveFile(archive: HikeArchive(hike: hike)),
+                item: HikeArchiveFile(archive: HikeArchive(
+                    hike: hike,
+                    route: route,
+                    places: hike.orderedPlaces(along: route, preparedBy: placePins?.placeRows).map(\.place)
+                )),
                 preview: SharePreview(
                     hike.displayTitle,
                     icon: Image(systemName: "photo.on.rectangle.angled")
@@ -57,7 +63,7 @@ extension HikeDetailView {
                 )
             }
             .buttonStyle(.plain)
-            .disabled(hike.pointCount < 2)
+            .disabled(line.pointCount < 2)
         }
     }
 }

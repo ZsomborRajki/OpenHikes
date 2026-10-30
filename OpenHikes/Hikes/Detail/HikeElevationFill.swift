@@ -58,7 +58,13 @@ enum HikeElevationFill {
     /// Whether `hike` is one the subscription would give heights to — see
     /// the file header. A walk still being recorded has no line yet.
     static func canFill(_ hike: Hike) -> Bool {
-        !hike.isRecording && needsHeights(hike.route)
+        canFill(hike, along: hike.route)
+    }
+
+    /// The same, of `route`, the line `hike` has now as its screen read it
+    /// off the main actor — see ``ShownLine``.
+    static func canFill(_ hike: Hike, along route: [RouteCoordinate]) -> Bool {
+        !hike.isRecording && needsHeights(route)
     }
 
     /// Reads heights for `hike`'s line from `source` and saves them onto it.

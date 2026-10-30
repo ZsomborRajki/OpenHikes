@@ -491,8 +491,16 @@ nonisolated public struct TrailWalkRecord: Codable, Equatable, Sendable {
     /// Whether `route` is still the line this walk is along. A record with no
     /// revision says yes: there is nothing to tell an edit from.
     public func isAlong(_ route: [RouteCoordinate]) -> Bool {
+        guard routeRevision != nil else { return true }
+        return isAlong(revision: Self.routeRevision(of: route))
+    }
+
+    /// The same, of the line `revision` names — ``routeRevision(of:)`` worked
+    /// out already, where the line was read, so that asking costs no walk of
+    /// it here.
+    public func isAlong(revision: String) -> Bool {
         guard let routeRevision else { return true }
-        return routeRevision == Self.routeRevision(of: route)
+        return routeRevision == revision
     }
 
     /// This record, taken to be along `route` if it does not say which line

@@ -176,20 +176,27 @@ extension Hike {
             .sorted { $0.startedAt < $1.startedAt }
     }
 
-    /// Whether ``walkPhotoTimelines`` would hold anything — all a caption
-    /// needs — without building every timeline and sorting them to find out.
-    var hasWalkPhotoTimeline: Bool {
-        walksAlongCurrentRoute.contains { Self.photoTimeline(of: $0) != nil }
+    /// Whether ``walkPhotoTimelines`` would hold anything along `route`, the
+    /// line the hike has now as its screen read it — all a caption needs —
+    /// without building every timeline and sorting them to find out.
+    func hasWalkPhotoTimeline(along route: [RouteCoordinate]) -> Bool {
+        finishedWalks(along: route).contains { Self.photoTimeline(of: $0) != nil }
     }
 
     /// The finished walks along the line the hike has now, by the rule
     /// ``walkPhotoTimelines`` states.
     nonisolated private var walksAlongCurrentRoute: [HikeWalk] {
+        finishedWalks(along: route)
+    }
+
+    /// The finished walks along `route`. Read lazily: the revision reads
+    /// every point of the line, so a hike with no walks — most of them —
+    /// never pays for it, and a caller that has the line need not read the
+    /// column for it.
+    nonisolated private func finishedWalks(along route: @autoclosure () -> [RouteCoordinate]) -> [HikeWalk] {
         let finished = walks ?? []
-        // The revision reads every point of the route, so a hike with no walks
-        // — most of them — never pays for it.
         guard !finished.isEmpty else { return [] }
-        let revision = TrailWalkRecord.routeRevision(of: route)
+        let revision = TrailWalkRecord.routeRevision(of: route())
         return finished.filter { $0.isAlong(revision: revision) }
     }
 

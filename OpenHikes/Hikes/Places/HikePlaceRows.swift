@@ -251,6 +251,16 @@ extension Hike {
         rows?.rows(of: self) ?? orderedPlaces
     }
 
+    /// The same, along `route` rather than along this hike's own `route`:
+    /// the line as the hike's screen read it, off the main actor, where
+    /// reading the column on the main actor would decode all of it — see
+    /// ``ShownLine``. Before that line lands, `route` is empty and the places
+    /// come unmeasured, as the rows of a place still being measured do.
+    func orderedPlaces(along route: [RouteCoordinate], preparedBy rows: HikePlaceRows?) -> [TrailPlaceRow] {
+        guard isAttached else { return [] }
+        return rows?.rows(of: places, along: route, for: id) ?? TrailPlaceOrder.ordered(places, along: route)
+    }
+
     /// ``placeRow(id:)``, from `rows` where there is one.
     func placeRow(id: UUID, preparedBy rows: HikePlaceRows?) -> TrailPlaceRow? {
         guard let rows else { return placeRow(id: id) }

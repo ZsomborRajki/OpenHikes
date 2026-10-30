@@ -402,8 +402,13 @@ public final class Hike {
 
 public extension Hike {
     /// Registers this route as an observation dependency without decoding
-    /// its externally stored value. A list's task can watch for incoming
-    /// edits while its worker reads and measures the route off-main.
+    /// its externally stored value.
+    ///
+    /// It says the hike was saved, not that its line changed: with a `@Query`
+    /// live in a window, every save to the store refreshes every registered
+    /// hike and notifies `route` on each — see ``lineRevision``, which is what
+    /// says a line is new. A hike's screen registers it for that, to ask again
+    /// whose read it takes its line from when the selection may have moved.
     func trackRouteChanges() {
         access(keyPath: \.route)
     }

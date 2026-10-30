@@ -239,8 +239,12 @@ extension Hike {
     /// for a timestamp, and one with walks is hashed for its revision. The
     /// caption asks through ``PhotoMatchAvailability``, which keeps the answer
     /// until the route or the walks change.
-    var canMatchLibraryPhotos: Bool {
-        route.contains { $0.timestamp != nil } || hasWalkPhotoTimeline
+    var canMatchLibraryPhotos: Bool { canMatchLibraryPhotos(along: route) }
+
+    /// The same, of `route`, the line the hike has now as its screen read it
+    /// off the main actor — see ``ShownLine``.
+    func canMatchLibraryPhotos(along route: [RouteCoordinate]) -> Bool {
+        route.contains { $0.timestamp != nil } || hasWalkPhotoTimeline(along: route)
     }
 
     /// The library assets already imported into this hike, so a second scan

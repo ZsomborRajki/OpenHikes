@@ -208,6 +208,30 @@ final class WidgetFeedTests {
         )
     }
 
+    /// The hike's screen hands each fix the line it read off the main actor,
+    /// and the length read with it, so the fix never reads the hike's line on
+    /// the main actor (#1252). Here that line is not the hike's own, and the
+    /// widget, holding nothing for the trail, draws the one it was handed.
+    @Test("a live fix from the hike's screen is published with the screen's line")
+    func liveFixCarriesTheScreensLine() async throws {
+        let hike = hike()
+        tracker.hikeSelectionChanged(to: hike)
+        await tracker.waitForSelectionPublish()
+        SharedStore.clear()
+        let line = Fixture.loopRoute
+        let profile = RouteProfile(route: line)
+
+        let match = try #require(profile.nearestPoint(to: profile.coordinates[3]))
+        let shown = SelectedLine.Line(route: line, distanceMeters: profile.totalDistanceMeters)
+        tracker.publishLiveFix(hike: hike, profile: profile, match: match, line: shown)
+        await tracker.waitForLiveFixPublish()
+
+        let snapshot = try #require(SharedStore.load())
+        #expect(snapshot.liveFix != nil)
+        #expect(snapshot.polyline.first?.latitude == line.first?.latitude, "the screen's line, not the hike's")
+        #expect(snapshot.totalDistanceMeters == profile.totalDistanceMeters)
+    }
+
     /// The hiker's height comes off the same profile the match came from, so
     /// the widget and the app's elevation chart cannot disagree about the
     /// ground underfoot — and it is a trail elevation rather than the

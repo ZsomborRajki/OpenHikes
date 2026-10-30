@@ -97,11 +97,11 @@ struct WalkSummaryView: View {
         .fullScreenCover(isPresented: $share.isPresented, onDismiss: share.closed) {
             WalkShareFlow(walk: walk, trail: profile, trailMatchesWalk: routeMatchesWalk, session: share)
         }
-        // Keyed on the line as well as the walk, for the reason
-        // ``HikeDetailRouteKey`` gives: *Edit Route* keeps the hike and
-        // replaces its route, here or on another device while this screen is
-        // up, and keyed on the walk alone the summary went on drawing the
-        // stretches along the line that was replaced.
+        // Keyed on the line as well as the walk, for the reason the hike's
+        // own screen keys its work on its line (``ShownLine``): *Edit Route*
+        // keeps the hike and replaces its route, here or on another device
+        // while this screen is up, and keyed on the walk alone the summary
+        // went on drawing the stretches along the line that was replaced.
         .task(id: WalkSummaryRouteKey(walk: walk)) {
             let key = WalkSummaryRouteKey(walk: walk)
             // Clear an outdated line only when one exists: writing nil over
@@ -251,8 +251,9 @@ struct WalkSummaryView: View {
 }
 
 /// The line a walk summary was prepared from, and so what its `.task(id:)` is
-/// keyed on — the route itself, for the cost reasons ``HikeDetailRouteKey``
-/// gives.
+/// keyed on — the route itself rather than a digest of it, which would walk
+/// the whole line on every body pass, where `Array`'s `==` compares storage
+/// first and stops at the first point that differs.
 nonisolated struct WalkSummaryRouteKey: Equatable, Sendable {
     let walkID: UUID
     let route: [RouteCoordinate]
