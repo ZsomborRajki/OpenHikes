@@ -249,28 +249,49 @@ struct HikeListElevationOrderingTests {
 
     /// The task cannot measure every listed line for a look that failed:
     /// that is the pass a save used to cost, and a failure that held would
-    /// ask for it again after every look.
-    @Test("a look that cannot read history reads no line, and the next look finds what it missed")
+    /// ask for it again after every look. Nor can it wait for another save,
+    /// which may never come: the failed look took the only wake this one had.
+    @Test("a look that cannot read history reads no line, and the look it asks for at once finds what it missed")
     func aFailedLookReadsNoLine() async throws {
         let watching = try await watching(failing: [1])
         let stage = watching.stage
         defer { stage.close() }
         defer { watching.task.cancel() }
         let edited = stage.hikes[1]
-        let renamed = stage.hikes[2]
 
         try await write(HikeListElevationStage.line(1, climb: 500), on: edited, .elsewhere, in: stage)
-        await settleDelegateHop(until: "the look has failed") { watching.looks.completed == 2 }
-        await settleDelegateHop()
-        #expect(watching.measurements.calls.count == 1, "nothing measured for it")
-
-        try await SelectedLineStoreWatchTests.saveElsewhere(renamed.id, in: stage.container) { hike in
-            hike.title = "Renamed elsewhere"
-        }
-        await settleDelegateHop(until: "the line saved before the failure is published") {
+        await settleDelegateHop(until: "the line saved as the look failed is published, with no other save") {
             stage.has(edited, climbing: 500)
         }
-        #expect(watching.measuredSinceFirstPass == [[edited.id, renamed.id]])
+
+        #expect(watching.measuredSinceFirstPass == [[edited.id]], "no other line read for the failure")
+        #expect(watching.looks.arrived == 4, "the failed look, the one it asked for, and the one after measuring")
+    }
+
+    /// The look a failure asks for is the only one it asks for: a failure
+    /// that held would otherwise look again, and fail, as fast as it could.
+    @Test("a failure that holds asks for one more look, and none after it")
+    func aFailureThatHoldsAsksForOneMore() async throws {
+        let watching = try await watching(failing: Set(1...10))
+        let stage = watching.stage
+        defer { stage.close() }
+        defer { watching.task.cancel() }
+
+        try await write(HikeListElevationStage.line(1, climb: 500), on: stage.hikes[1], .elsewhere, in: stage)
+        await settleDelegateHop(until: "the failed look and the one it asked for have landed") {
+            watching.looks.completed == 3
+        }
+        // The next save's look is the effect that must follow: a third look
+        // asked for by the second failure would land before it.
+        try await SelectedLineStoreWatchTests.saveElsewhere(stage.hikes[2].id, in: stage.container) { hike in
+            hike.title = "Renamed elsewhere"
+        }
+        await settleDelegateHop(until: "the next save's look has landed") { watching.looks.completed == 4 }
+        await settleDelegateHop()
+
+        #expect(watching.looks.arrived == 4, "a look for each save, and one more for the first failure")
+        #expect(watching.measurements.calls.count == 1, "no line read while history cannot be read")
+        #expect(stage.publications == 1)
     }
 }
 

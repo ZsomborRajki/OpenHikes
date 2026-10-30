@@ -43,9 +43,13 @@
 //  A look that cannot read history names no row, where the selected line's
 //  watch takes it as naming its hike. Here that would mean every listed
 //  route, the pass this file exists to avoid, and a failure that held would
-//  ask for one after every look. The next look reads from the first pass
-//  again, which covers whatever this one could not name while history still
-//  holds it. Nothing in the app prunes history.
+//  ask for one after every look. Nor can it leave the rest to the next save:
+//  it took the wake of the save it was looking for, and another may never
+//  come. So the first look to fail asks for one more at once. That one reads
+//  from the first pass again, which an expired token cannot stop, and names
+//  whatever the failed look could not, while history still holds it. A
+//  failure that holds asks for nothing more until a look reads history
+//  again. Nothing in the app prunes history.
 //
 //  All of it stays in the list's task, never its body. Routes are read,
 //  fingerprinted and measured in a context of their own, publication reads
@@ -113,6 +117,10 @@ nonisolated extension HikeListMetrics {
         /// from, and any look after one that could not read it.
         private let since: Date
         private var token: DefaultHistoryToken?
+        /// Whether the last look could not read history. The first look of
+        /// such a run asks for one more at once, and the rest ask for nothing:
+        /// see the file header.
+        private var lookFailed = false
         /// Each listed hike's line revision when last read, in `hikes`' order.
         private var revisions: [Int] = []
         /// The hikes whose revision moved since the last look.
@@ -171,7 +179,8 @@ nonisolated extension HikeListMetrics {
 
         /// The listed hikes whose row a transaction since the last look
         /// updated, by the store's history. None when history could not be
-        /// read: see the file header.
+        /// read, and then the first such look asks for another: see the file
+        /// header.
         private func savedRows() async -> Set<UUID> {
             guard let storeID else { return [] }
             var ids: [PersistentIdentifier: UUID] = [:]
@@ -184,7 +193,12 @@ nonisolated extension HikeListMetrics {
                 token: token
             ))
             token = answer.token
-            guard answer.wasRead else { return [] }
+            guard answer.wasRead else {
+                if !lookFailed { wake.yield() }
+                lookFailed = true
+                return []
+            }
+            lookFailed = false
             return Set(answer.savedRows.compactMap { ids[$0] })
         }
 
