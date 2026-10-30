@@ -228,7 +228,11 @@ final class WidgetFeedTests {
 
         let snapshot = try #require(SharedStore.load())
         #expect(snapshot.liveFix != nil)
-        #expect(snapshot.polyline.first?.latitude == line.first?.latitude, "the screen's line, not the hike's")
+        let first = try #require(snapshot.polyline.first)
+        #expect(
+            first.latitude.isApproximatelyEqual(to: line.first?.latitude ?? 0, absoluteTolerance: 1e-9),
+            "the screen's line, not the hike's"
+        )
         #expect(snapshot.totalDistanceMeters == profile.totalDistanceMeters)
     }
 

@@ -21,6 +21,8 @@
 //  way ``HikePhotoSearchPlan/SourceRead`` reads a photo search's hike
 //  (#1226), and all four are handed the same ``Read``: whichever asks first
 //  starts it, and the rest wait on it. The main actor only names the row.
+//  The hike's own screen takes the same read while its hike is the selected
+//  one (#1252) — see ``ShownLine``.
 //
 //  ## A hike the store has not had yet
 //
@@ -192,7 +194,8 @@ final class SelectedLine {
 
     /// `hike`'s line as it stands: the read already made of it, under way
     /// or landed, while nothing has replaced its line since, and a new read
-    /// otherwise. What each of the four reads in place of `hike.route`.
+    /// otherwise. What each of the four, and the hike's own screen, reads in
+    /// place of `hike.route`.
     func read(of hike: Hike) -> Read {
         if let current, currentHike === hike, !current.isReplaced { return current }
         let read = start(hike)

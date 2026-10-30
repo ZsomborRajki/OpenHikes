@@ -407,8 +407,9 @@ public extension Hike {
     /// It says the hike was saved, not that its line changed: with a `@Query`
     /// live in a window, every save to the store refreshes every registered
     /// hike and notifies `route` on each — see ``lineRevision``, which is what
-    /// says a line is new. A hike's screen registers it for that, to ask again
-    /// whose read it takes its line from when the selection may have moved.
+    /// says a line is new. Its one reader, a hike's screen (`ShownLine`),
+    /// registers it for that alone: to ask again whose read it takes its line
+    /// from when the selection may have moved.
     func trackRouteChanges() {
         access(keyPath: \.route)
     }
@@ -427,8 +428,10 @@ public extension Hike {
     /// `route` therefore cannot tell a new line from a rename two rows down.
     /// This counter is `@Transient`, so no store and no refresh reaches it: it
     /// moves only when this context writes a line. A line another context
-    /// saved is the app's to notice, which `SelectedLineStoreWatch` does for
-    /// the selected hike.
+    /// saved is the app's to notice, from the store's history
+    /// (`StoreHistoryCheck`): `SelectedLineStoreWatch` notices it for the
+    /// selected hike, and for a hike whose screen the selection has left,
+    /// and the *Hilliest* list for the hikes it lists.
     var lineRevision: Int {
         access(keyPath: \.lineRevision)
         return lineReplacements
