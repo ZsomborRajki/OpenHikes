@@ -7,7 +7,7 @@
 //  composite, and SwiftData traps building a transaction that wrote one: a
 //  walk in progress on iOS 18.6 and 27, and a drawing's travel mode on 18.6.
 //  A check with no token read both stores by time until this was fixed, and
-//  so the app crashed in the middle of a walk. See `SelectedLineStoreCheck`.
+//  so the app crashed in the middle of a walk. See `StoreHistoryCheck`.
 //
 //  The checks are the watch's own, started by the store's own remote-change
 //  notification, and the other device's save is the stand-in
