@@ -31,6 +31,13 @@ import Synchronization
 //
 // The gate is shared with the bulk downloader, and these loads take it at
 // `.interactive` — see `TileLoadGate` for what that guarantees.
+//
+// What takes a slot is a request: for a tile on no disk, or the refresh of
+// saved coverage past its age. A slot is held for as long as a server takes
+// to answer, which on one bar can be the session's whole idle timeout, so a
+// tile on disk never waits for one, however old it is. It is read and drawn
+// first, and saved coverage past its age is refreshed behind the drawn copy
+// and drawn again when fresh bytes land; see `load(_:from:through:)`.
 
 /// `@unchecked Sendable` for the same reason ``TileOverlay`` is: it is an
 /// `MKOverlayRenderer` (which the MapKit SDK does not declare `Sendable`)
@@ -82,9 +89,7 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
     /// two failed disk lookups and two ``TileLoadGate`` hops to be told the
     /// same "no" again — the per-tile-per-pass cost the failure log exists to
     /// avoid, and it lands hardest on the case this app is built for, panning
-    /// the edge of a downloaded region with no signal, where these no-ops
-    /// queue through the gate ahead of saved coverage past its age, which
-    /// takes a slot to be drawn.
+    /// the edge of a downloaded region with no signal.
     ///
     /// Held with no expiry, exactly as ``TileFailureLog/mayAttempt(_:at:isOnline:)``
     /// holds failures offline: the policy transition is the only thing that
@@ -99,6 +104,58 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
     /// ``TileRetryPolicy/maximumTrackedFailures``, whose entries carry
     /// deadlines that differ.
     private static let maximumSuppressedTiles = 1024
+
+    /// Saved coverage past its age, drawn as it is and being refreshed behind
+    /// its copy, and the refreshes of it that failed. One lock for both, so a
+    /// refresh is started, joined or held back in one step: two loads reading
+    /// the same saved copy cannot both start one, and a refresh that is
+    /// finishing has recorded its outcome before the next may start.
+    private struct Refreshes {
+        /// Keys whose refresh is under way, each holding the rects that missed
+        /// on the saved copy and were drawn with it, so the fresh bytes are
+        /// drawn over every one of them. A rect that found the copy in memory
+        /// instead, such as an overzoomed tile cropped from it, is not here,
+        /// and shows the old bytes until MapKit next draws it.
+        ///
+        /// Apart from ``inFlight``, which holds rects with nothing drawn yet.
+        /// A refresh can wait a long time for a slot, and its copy's memory
+        /// entry lapses meanwhile. A draw that misses then reads the copy back
+        /// through an ordinary load, which finds the refresh here and joins it
+        /// rather than asking for a second.
+        var underWay: [String: [MKMapRect]] = [:]
+        /// Refreshes that failed — the server answered badly, or had asked
+        /// through `Retry-After` to be left alone — and when each may be asked
+        /// for again.
+        ///
+        /// Not ``failures``, which skips the whole tile. The saved copy has to
+        /// stay drawable while its refresh backs off, and a backoff floored by
+        /// a fifteen-minute `Retry-After` outlasts the copy's memory entry, so
+        /// recorded there it would take saved ground off the map for the rest
+        /// of it. Here only the request waits: the copy is read and drawn
+        /// again whenever its entry lapses, and the server is asked nothing
+        /// until the backoff has run out, so a refresh that keeps failing
+        /// cannot become a request per draw. No retry wake is armed for these,
+        /// because a redraw would only paint the copy again. The next refresh
+        /// is asked for by the next draw that misses, as it always was.
+        ///
+        /// Each failure waits the copy's recheck interval, or the server's
+        /// deadline if that is later, where a failed tile waits five seconds
+        /// at first. That is how long the old path left a tile alone after
+        /// its refresh failed: it drew the copy then, and the copy answered
+        /// for the interval. This copy was drawn before its refresh waited for
+        /// a slot, so its entry can lapse moments after the refresh fails, and
+        /// only this keeps the next request from coming sooner.
+        var failures = TileFailureLog(
+            policy: TileRetryPolicy(delays: [.seconds(TileCache.staleCoverageRecheckInterval)])
+        )
+    }
+
+    private let refreshes = Mutex(Refreshes())
+
+    #if DEBUG
+    /// Redraws asked for, by tile; see ``redrawCount(at:)``.
+    private let redraws = Mutex([String: Int]())
+    #endif
 
     /// The pending "a backoff has elapsed, redraw" wake-up, and when it fires.
     /// At most one is scheduled at a time: a redraw retries every tile that
@@ -145,9 +202,13 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
     ///
     /// Still a wholesale clear rather than a backoff reset, because this is
     /// the one event that invalidates every past failure at once: they were
-    /// all recorded against a network that no longer applies.
+    /// all recorded against a network that no longer applies. Failed
+    /// refreshes of saved coverage go too. The cache retires the stale copies'
+    /// memory entries on the same transition, so the redraw reads them back
+    /// and asks for each refresh again.
     func tileCacheDidUnblockInteractiveFetches() {
         let clearedCount = failures.withLock { $0.removeAll() }
+            + refreshes.withLock { $0.failures.removeAll() }
         suppressed.withLock { $0.removeAll() }
         cancelRetryWake()
         #if DEBUG
@@ -381,55 +442,92 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
         // request is an `await` that holds no thread at all. Keeping this Task
         // unisolated keeps the move off the main thread too, instead of
         // stalling it every scroll/zoom.
+        //
+        // Saved coverage past its age comes back `.stale`, already in memory.
+        // `finishLoad` draws it, and says whether this load is the one to
+        // refresh it behind the drawn copy.
         let loadGate = gate
         Task { [weak self] in
             let disposition = await Self.load(fetchPath, from: overlay, through: loadGate)
-            guard let self else { return }
-            let waiting = inFlight.withLock { $0.removeValue(forKey: key) ?? [tileRect] }
-            switch disposition {
-            case .loaded:
-                // A tile that loads clears its own failure history, so a later
-                // failure starts its backoff fresh rather than inheriting the
-                // last run of bad luck.
-                failures.withLock { $0.recordSuccess(key) }
-                // Redraw every rect these bytes cover — the asker, plus any
-                // overzoomed sibling whose request was folded into it.
-                // `setNeedsDisplay` must run on the main thread (a MapKit/UIKit
-                // requirement that isn't statically enforced), hence the hop.
-                await MainActor.run {
-                    for rect in waiting { self.setNeedsDisplay(rect) }
-                }
-            case .failed:
-                // Deliberately no redraw here: redrawing *on* failure is what
-                // spun the request loop. The retry instead rides a wake-up
-                // scheduled for when the backoff expires.
-                //
-                // A server that answered 429 or 503 with `Retry-After` named
-                // its own deadline, and that is fed in as a floor rather than
-                // as a second mechanism: the tile waits for whichever is
-                // longer. Read before the lock, since it takes the cache's.
-                let serverDeadline = overlay.retryDeadline(at: fetchPath)
-                let retryAt = failures.withLock { log in
-                    log.recordFailure(key, at: .now, notBefore: serverDeadline)
-                }
-                scheduleRetryWake()
-                #if DEBUG
-                let seconds = ContinuousClock.now.duration(to: retryAt).components.seconds
-                Self.logger.debug(
-                    "Tile \(key, privacy: .public) failed — retry in \(seconds, privacy: .public)s (TileRequests log)"
-                )
-                #endif
-            case .suppressed:
-                // No request was made, so there is no server failure to back
-                // off — just a tile not worth asking about again until the
-                // policy changes. The cache observer clears these and redraws
-                // when it does.
-                suppressed.withLock { keys in
-                    if keys.count >= Self.maximumSuppressedTiles { keys.removeAll() }
-                    keys.insert(key)
-                }
+            guard await self?.finishLoad(disposition, forKey: key, in: tileRect, at: fetchPath) == true else {
+                return
+            }
+            let refreshed = await Self.refresh(fetchPath, from: overlay, through: loadGate)
+            await self?.finishRefresh(refreshed, forKey: key, at: fetchPath)
+        }
+    }
+
+    /// Draws or records what a load came to, for every rect waiting on it, and
+    /// says whether a refresh is to follow: `true` only for saved coverage past
+    /// its age, drawn here, whose refresh is not already under way or backing
+    /// off.
+    private func finishLoad(
+        _ disposition: TileLoadDisposition,
+        forKey key: String,
+        in tileRect: MKMapRect,
+        at fetchPath: MKTileOverlayPath
+    ) async -> Bool {
+        let waiting = inFlight.withLock { $0.removeValue(forKey: key) ?? [tileRect] }
+        switch disposition {
+        case .loaded:
+            // A tile that loads clears its own failure history, so a later
+            // failure starts its backoff fresh rather than inheriting the
+            // last run of bad luck.
+            failures.withLock { $0.recordSuccess(key) }
+            // Redraw every rect these bytes cover — the asker, plus any
+            // overzoomed sibling whose request was folded into it.
+            await redraw(waiting, forKey: key)
+        case .stale:
+            // Drawn without touching either failure log. Nothing was asked of
+            // a server, and clearing a backoff here would undo the one a
+            // failed refresh of this copy is waiting out.
+            let startsRefresh = joinOrStartRefresh(forKey: key, showing: waiting)
+            await redraw(waiting, forKey: key)
+            return startsRefresh
+        case .failed:
+            // Deliberately no redraw here: redrawing *on* failure is what
+            // spun the request loop. The retry instead rides a wake-up
+            // scheduled for when the backoff expires.
+            //
+            // A server that answered 429 or 503 with `Retry-After` named
+            // its own deadline, and that is fed in as a floor rather than
+            // as a second mechanism: the tile waits for whichever is
+            // longer. Read before the lock, since it takes the cache's.
+            let serverDeadline = tileOverlay.retryDeadline(at: fetchPath)
+            let retryAt = failures.withLock { log in
+                log.recordFailure(key, at: .now, notBefore: serverDeadline)
+            }
+            scheduleRetryWake()
+            #if DEBUG
+            let seconds = ContinuousClock.now.duration(to: retryAt).components.seconds
+            Self.logger.debug(
+                "Tile \(key, privacy: .public) failed — retry in \(seconds, privacy: .public)s (TileRequests log)"
+            )
+            #endif
+        case .suppressed:
+            // No request was made, so there is no server failure to back
+            // off — just a tile not worth asking about again until the
+            // policy changes. The cache observer clears these and redraws
+            // when it does.
+            suppressed.withLock { keys in
+                if keys.count >= Self.maximumSuppressedTiles { keys.removeAll() }
+                keys.insert(key)
             }
         }
+        return false
+    }
+
+    /// Asks MapKit to draw `rects` again. `setNeedsDisplay` must run on the
+    /// main thread (a MapKit/UIKit requirement that isn't statically
+    /// enforced), hence the hop. `key` is what the test seam counts by.
+    private func redraw(_ rects: [MKMapRect], forKey key: String) async {
+        guard !rects.isEmpty else { return }
+        await MainActor.run {
+            for rect in rects { self.setNeedsDisplay(rect) }
+        }
+        #if DEBUG
+        redraws.withLock { $0[key, default: 0] += 1 }
+        #endif
     }
 
     /// Loads a tile the draw pass missed, asking the disk before the gate.
@@ -443,16 +541,21 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
     /// disk needs no slot, so it goes first, and only a tile it cannot
     /// answer queues.
     ///
+    /// That includes saved coverage past its age, which comes back `.stale`:
+    /// in memory and drawn as it is, with its refresh made behind it by
+    /// ``refresh(_:from:through:)``. It used to be refreshed before it was
+    /// drawn, so a map downloaded more than a week before a hike waited, tile
+    /// by tile, for a slot and then for its own request before any of it
+    /// appeared.
+    ///
     /// The gate still bounds every request the map makes, and the decode,
     /// write and auto-save move that follow one. What runs ahead of it is a
     /// lookup, a few stats and one small read, then the auto-save offer for a
     /// tile it finds, which moves a browsed tile near the auto-saved hike's
     /// route into durable storage. For a tile on no disk, which is every tile
     /// of the zoom-to-fit this file's header describes, only the stats run
-    /// before the load queues as it always did. Saved coverage past its age
-    /// is left to the load under the slot, because it is refreshed before it
-    /// is drawn. That load asks the disk again, since a download may have
-    /// saved the tile while it waited.
+    /// before the load queues as it always did. That load asks the disk
+    /// again, since a download may have saved the tile while it waited.
     private static func load(
         _ path: MKTileOverlayPath,
         from overlay: TileOverlay,
@@ -464,33 +567,6 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
         await gate.release(.interactive)
         return disposition
     }
-
-    #if DEBUG
-    /// Test seam: the skip decision a draw pass makes and discards. Exposed
-    /// rather than restated, so a test that loses the suppression check fails
-    /// instead of agreeing with a copy of it.
-    func mayAskForTile(at path: MKTileOverlayPath) -> Bool {
-        mayAsk(for: path.cacheKey)
-    }
-
-    /// Test seam: how many tiles are being skipped, and for which of the two
-    /// reasons — the distinction this renderer exists to keep straight.
-    var skipCounts: (failed: Int, suppressed: Int) {
-        (failures.withLock { $0.count }, suppressed.withLock { $0.count })
-    }
-
-    /// Test seam: one tile's worth of what `draw(_:zoomScale:in:)` does on a
-    /// miss. Reaching that branch through the real pass costs a bitmap
-    /// context and a screenful of grid arithmetic for the one call underneath.
-    func loadTileForTesting(at path: MKTileOverlayPath) {
-        loadTileIfNeeded(
-            for: path,
-            in: tileOverlay.boundingMapRect,
-            overlay: tileOverlay,
-            drewSomething: false
-        )
-    }
-    #endif
 
     /// Finds the nearest cached lower-zoom tile and identifies the relevant
     /// source region without allocating a cropped image.
@@ -585,6 +661,119 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
         return min(Self.maximumZoomLevel, max(0, Int(level)))
     }
 }
+
+// MARK: Refreshing saved coverage past its age
+
+nonisolated extension CachingTileOverlayRenderer {
+    /// Puts `rects` behind the refresh of `key` already under way, or starts
+    /// one for them unless a failed one is still backing off. See
+    /// ``Refreshes``.
+    private func joinOrStartRefresh(forKey key: String, showing rects: [MKMapRect]) -> Bool {
+        let isOnline = cache.isOnline
+        return refreshes.withLock { state in
+            if var showing = state.underWay[key] {
+                for rect in rects where !showing.contains(where: { MKMapRectEqualToRect($0, rect) }) {
+                    showing.append(rect)
+                }
+                state.underWay[key] = showing
+                return false
+            }
+            guard state.failures.mayAttempt(key, at: .now, isOnline: isOnline) else { return false }
+            state.underWay[key] = rects
+            return true
+        }
+    }
+
+    /// Draws the fresh bytes a refresh brought over the rects that drew the
+    /// saved copy for it (see ``Refreshes/underWay``), or backs off the
+    /// refresh that failed. The saved copy stays drawn either way.
+    ///
+    /// Only `.failed` backs off: the server failed, or had asked through
+    /// `Retry-After` to be left alone, and that deadline is the floor here as
+    /// it is for any failure. A refresh the policy refused asked nobody, so
+    /// nothing backs off. It is asked for again when its copy's memory entry
+    /// next lapses, as stale coverage always was, or at once when the policy
+    /// changes, since the change retires that entry.
+    private func finishRefresh(
+        _ disposition: TileLoadDisposition,
+        forKey key: String,
+        at fetchPath: MKTileOverlayPath
+    ) async {
+        // Read before the lock, since it takes the cache's.
+        let serverDeadline = disposition == .failed ? tileOverlay.retryDeadline(at: fetchPath) : nil
+        let showing = refreshes.withLock { state -> [MKMapRect] in
+            if disposition == .loaded { state.failures.recordSuccess(key) }
+            if disposition == .failed { state.failures.recordFailure(key, at: .now, notBefore: serverDeadline) }
+            return state.underWay.removeValue(forKey: key) ?? []
+        }
+        guard disposition == .loaded else { return }
+        failures.withLock { $0.recordSuccess(key) }
+        await redraw(showing, forKey: key)
+    }
+
+    /// The refresh ``load(_:from:through:)`` leaves for saved coverage it came
+    /// back with `.stale`, under the `.interactive` slot its request needs:
+    /// the same request the load used to make before the copy was drawn, made
+    /// after it.
+    private static func refresh(
+        _ path: MKTileOverlayPath,
+        from overlay: TileOverlay,
+        through gate: TileLoadGate
+    ) async -> TileLoadDisposition {
+        await gate.acquire(.interactive)
+        let disposition = await overlay.refreshStaleTile(at: path)
+        await gate.release(.interactive)
+        return disposition
+    }
+}
+
+#if DEBUG
+nonisolated extension CachingTileOverlayRenderer {
+    /// Test seam: the skip decision a draw pass makes and discards. Exposed
+    /// rather than restated, so a test that loses the suppression check fails
+    /// instead of agreeing with a copy of it.
+    func mayAskForTile(at path: MKTileOverlayPath) -> Bool {
+        mayAsk(for: path.cacheKey)
+    }
+
+    /// Test seam: how many tiles are being skipped, and for which of the two
+    /// reasons — the distinction this renderer exists to keep straight.
+    var skipCounts: (failed: Int, suppressed: Int) {
+        (failures.withLock { $0.count }, suppressed.withLock { $0.count })
+    }
+
+    /// Test seam: refreshes of saved coverage under way, and how many have
+    /// failed and are backing off — the third reason this renderer holds a
+    /// tile back, and the one that leaves it drawn.
+    var refreshCounts: (underWay: Int, failed: Int) {
+        refreshes.withLock { ($0.underWay.count, $0.failures.count) }
+    }
+
+    /// Test seam: when the failed refresh of a tile may be asked for again.
+    func refreshRetryTime(at path: MKTileOverlayPath) -> ContinuousClock.Instant? {
+        refreshes.withLock { $0.failures.retryTime(for: path.cacheKey) }
+    }
+
+    /// Test seam: how many times a tile has asked MapKit to draw it again.
+    /// A renderer outside a map view draws nothing, so this is the only
+    /// trace a redraw leaves.
+    func redrawCount(at path: MKTileOverlayPath) -> Int {
+        redraws.withLock { $0[path.cacheKey, default: 0] }
+    }
+
+    /// Test seam: one tile's worth of what `draw(_:zoomScale:in:)` does on a
+    /// miss. Reaching that branch through the real pass costs a bitmap
+    /// context and a screenful of grid arithmetic for the one call underneath.
+    func loadTileForTesting(at path: MKTileOverlayPath) {
+        loadTileIfNeeded(
+            for: path,
+            in: tileOverlay.boundingMapRect,
+            overlay: tileOverlay,
+            drewSomething: false
+        )
+    }
+}
+#endif
 
 /// The sub-rectangle of a `depth`-levels-up ancestor that corresponds to `path`.
 nonisolated func cropRect(depth: Int, path: MKTileOverlayPath, imageSize: CGSize) -> CGRect {

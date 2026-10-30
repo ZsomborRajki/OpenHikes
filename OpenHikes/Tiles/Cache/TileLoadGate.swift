@@ -38,14 +38,18 @@ import Foundation
 /// - how many requests the map and a download have open against tile servers
 ///   at once. A slow server ties up slots, not threads.
 ///
-/// Because a slow server ties up slots, the map takes one only for a tile it
-/// may have to request. A tile already on disk is read first, outside the
-/// gate, and offered to auto-save there (see ``CachingTileOverlayRenderer``):
-/// read under a slot, a saved tile waited out every slow request ahead of
-/// it, for bytes that never needed the radio. That read, a few stats and one
-/// small file, and the offer, which moves a browsed tile near the auto-saved
-/// hike's route into durable storage, are the part of the map's synchronous
-/// tile work the budgets leave unbounded.
+/// Because a slow server ties up slots, the map takes one only for a request.
+/// A tile already on disk is read first, outside the gate, then drawn and
+/// offered to auto-save there (see ``CachingTileOverlayRenderer``), however
+/// old it is. Read under a slot, a saved tile waited out every slow request
+/// ahead of it, for bytes that never needed the radio, and saved coverage
+/// past its age then waited out its own refresh before it was drawn. That
+/// refresh still takes a slot, at `.interactive`, but behind the drawn copy:
+/// it is the request the old path made, made after the hiker has the map
+/// rather than before. The read, a few stats and one small file, and the
+/// offer, which moves a browsed tile near the auto-saved hike's route into
+/// durable storage, are the part of the map's synchronous tile work the
+/// budgets leave unbounded.
 ///
 /// Admission is by ``Priority`` rather than first-come-first-served, because
 /// the two callers want opposite things. Tiles the user is looking at are
