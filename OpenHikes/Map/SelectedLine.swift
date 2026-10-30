@@ -174,9 +174,12 @@ final class SelectedLine {
     /// line the store holds and the current read does not. Read only inside
     /// the watches ``watch(_:onChange:)`` arms, never by a body.
     private var refreshes = 0
-    /// The comparison a ``refresh()`` is making, if any. Readable so a suite
-    /// can wait on the effect rather than on a duration.
+    /// The comparison a ``refresh()`` is making, if any, and any asked for
+    /// while it was out, made after it under the same task. Readable so a
+    /// suite can wait on the effect rather than on a duration.
     @ObservationIgnored private(set) var refreshing: Task<Void, Never>?
+    /// Whether a ``refresh()`` was asked for while one was being made.
+    @ObservationIgnored private var refreshesAgain = false
     /// How a saved row is fetched, as a seam so a suite can see which thread
     /// it ran on. ``fetchHike(_:_:)`` everywhere else.
     @ObservationIgnored private let fetch: @Sendable (ModelContext, PersistentIdentifier) throws -> Hike?
@@ -250,14 +253,28 @@ final class SelectedLine {
     /// selected hike's row was saved, and once the hike's own context holds
     /// what the store does. A hike with edits the store has not had is read
     /// where it is, as always, so a refresh then finds nothing new.
+    ///
+    /// One comparison at a time. Two at once compared against the same read,
+    /// so the first to land left the other nothing to replace, and a line
+    /// saved while the one before it was being compared was dropped for that
+    /// one. A refresh asked for meanwhile is made once the comparison out has
+    /// landed, against the read it left current.
     func refresh() {
-        guard let previous = current, let hike = currentHike else { return }
-        let fresh = start(hike)
+        guard refreshing == nil else {
+            refreshesAgain = true
+            return
+        }
         refreshing = Task { [weak self] in
-            guard await Self.differ(previous, fresh), let self, current === previous else { return }
-            current = fresh
-            previous.markReplaced()
-            refreshes &+= 1
+            repeat {
+                guard let self, let previous = current, let hike = currentHike else { break }
+                refreshesAgain = false
+                let fresh = start(hike)
+                guard await Self.differ(previous, fresh), current === previous else { continue }
+                current = fresh
+                previous.markReplaced()
+                refreshes &+= 1
+            } while self?.refreshesAgain == true
+            self?.refreshing = nil
         }
     }
 

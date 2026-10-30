@@ -27,7 +27,9 @@
 //  `ModelContext.didSave`. A save of the other store (tile claims, the walk
 //  in progress) is dropped on the thread that posted it, before any hop here.
 //  A save of the hike's own store costs one look at history
-//  (`SelectedLineStoreCheck`).
+//  (`SelectedLineStoreCheck`), and so does following a hike: a hike selected
+//  again is handed the read it had, which a line saved while it was let go
+//  has not replaced, so the first check runs at once, from that read.
 //
 //  A save of the selected hike's row costs a refresh. The watch fetches the
 //  hike where it lives, which brings the stored row into the main context's
@@ -38,9 +40,9 @@
 //
 //  The main context's own saves are not told apart by author. An author on
 //  the main context would change every transaction it writes, and what
-//  mirroring's export makes of that could not be checked here. So a local
-//  *Edit Route* costs one more refresh, which finds the line its readers
-//  already have.
+//  mirroring's export makes of that could not be checked here. So a line
+//  written here, such as heights filled in, costs one more refresh, which
+//  finds the line its readers already have.
 //
 //  A hike with unsaved changes cannot take a refresh. A fetch keeps its
 //  snapshot, and its next save writes that snapshot's line back over the one
@@ -123,7 +125,14 @@ final class SelectedLineStoreWatch {
     }
 
     /// Follows `hike`, whose readers hold a line from a read that began at
-    /// `since`. A hike that is not saved yet has no store to watch.
+    /// `since`, and checks the store from then at once. A hike that is not
+    /// saved yet has no store to watch.
+    ///
+    /// The check cannot wait for the next save. A hike selected again is
+    /// handed the read it had, and a line saved elsewhere while nothing was
+    /// followed has replaced nothing: it moves no revision, and its remote
+    /// change was dropped where it was posted. Nor was anything listening
+    /// between the start of a new selection's read and this call.
     func follow(_ hike: Hike, since: Date) {
         guard let container = hike.modelContext?.container,
               let storeID = hike.persistentModelID.storeIdentifier else {
@@ -134,6 +143,7 @@ final class SelectedLineStoreWatch {
         followed = Followed(hike: hike, container: container, storeID: storeID, since: since, generation: generation)
         filter.admit(storeID)
         observeIfNeeded()
+        startCheck()
     }
 
     /// Follows nothing: no save wakes the watch until the next ``follow(_:since:)``.

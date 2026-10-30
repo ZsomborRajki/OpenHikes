@@ -70,6 +70,8 @@ struct SelectedLineStoreWatchTests {
         let reader: StoreWatchReader
         let looks: LookCount
         let watch: SelectedLineStoreWatch
+        /// The checks the watch had made once it caught up with the hike.
+        let checked: Int
     }
 
     /// Where the stores go: emptied once per run, never during one — see
@@ -95,15 +97,19 @@ struct SelectedLineStoreWatchTests {
     /// A saved hike selected as the app selects one: read by a reader, then
     /// followed from the moment that read began, with a neighbor in the same
     /// store. Autosave is off, so an unsaved edit stays unsaved until a test
-    /// saves it.
-    private func stage(making: SelectedLineStoreCheck.Making? = nil) async throws -> Stage {
+    /// saves it. `holding` names the selected line's fetches to hold, the
+    /// selection's own read being the first.
+    private func stage(
+        making: SelectedLineStoreCheck.Making? = nil,
+        holding: Set<Int> = []
+    ) async throws -> Stage {
         let container = try Self.container()
         let main = container.mainContext
         main.autosaveEnabled = false
         let hike = Fixture.hike(in: main, title: "Followed", route: Self.original)
         let neighbor = Fixture.hike(in: main, title: "Neighbor", route: Self.original)
         try await RemoteChangeLog.save(main, settling: hike)
-        let fetches = StoreWatchFetchLog()
+        let fetches = StoreWatchFetchLog(holding: holding)
         let lines = SelectedLine(fetch: fetches.fetch)
         let reader = StoreWatchReader(lines, reading: hike)
         _ = await reader.line
@@ -113,6 +119,7 @@ struct SelectedLineStoreWatchTests {
             lines.refresh()
         }
         watch.follow(hike, since: try #require(lines.readBegan(for: hike)))
+        await settleDelegateHop(until: "the watch has caught up with the hike") { watch.isSettled }
         return Stage(
             container: container,
             hike: hike,
@@ -121,7 +128,8 @@ struct SelectedLineStoreWatchTests {
             fetches: fetches,
             reader: reader,
             looks: looks,
-            watch: watch
+            watch: watch,
+            checked: watch.completedChecks
         )
     }
 
@@ -151,7 +159,8 @@ struct SelectedLineStoreWatchTests {
     }
 
     /// Waits until a check has landed after the `checks` that had landed
-    /// before, with nothing queued behind it, and for any look it started.
+    /// before, with nothing queued behind it, and for any look it started —
+    /// `stage.checked` for the first after the stage's own.
     private func settle(_ stage: Stage, after checks: Int) async {
         await settleDelegateHop(until: "the watch has checked the store") {
             stage.watch.completedChecks > checks && stage.watch.isSettled
@@ -166,7 +175,7 @@ struct SelectedLineStoreWatchTests {
 
         try await Self.saveElsewhere(stage.hike.id, in: stage.container) { $0.replaceRoute(with: route) }
         await settleDelegateHop(until: "the reader hears of the new line") { stage.reader.heard == 1 }
-        await settle(stage, after: 0)
+        await settle(stage, after: stage.checked)
 
         #expect(await stage.reader.line == route)
         #expect(stage.hike.route == route, "the main context's copy holds the stored line")
@@ -175,25 +184,23 @@ struct SelectedLineStoreWatchTests {
         #expect(stage.fetches.ranOnMainThread == [false, false], "the selection's read, then the refresh's")
     }
 
-    @Test("a rename saved elsewhere is looked at, and hands out nothing")
-    func aRenameHandsOutNothing() async throws {
+    /// The line it already had is written back with a rename, as an import
+    /// of a row renamed on another device may write it, and never alone: an
+    /// unchanged line saved on its own was not always written. In 15 of 80
+    /// such saves on iOS 27, and 11 of 80 on 18.6, the store recorded no
+    /// transaction, so nothing was there to look at, and a look counted here
+    /// would have been a coin toss.
+    @Test("a rename saved elsewhere is looked at, and hands out nothing", arguments: [false, true])
+    func aRenameHandsOutNothing(writingTheLineBack: Bool) async throws {
         let stage = try await stage()
 
-        try await Self.saveElsewhere(stage.hike.id, in: stage.container) { $0.title = "Renamed elsewhere" }
-        await settle(stage, after: 0)
+        try await Self.saveElsewhere(stage.hike.id, in: stage.container) { hike in
+            hike.title = "Renamed elsewhere"
+            if writingTheLineBack { hike.replaceRoute(with: Self.original) }
+        }
+        await settle(stage, after: stage.checked)
 
         #expect(stage.looks.count == 1, "the hike's row was saved, and history cannot say which column")
-        #expect(stage.reader.heard == 0)
-    }
-
-    @Test("the same line saved again elsewhere is looked at, and hands out nothing")
-    func theSameLineHandsOutNothing() async throws {
-        let stage = try await stage()
-
-        try await Self.saveElsewhere(stage.hike.id, in: stage.container) { $0.replaceRoute(with: Self.original) }
-        await settle(stage, after: 0)
-
-        #expect(stage.looks.count == 1)
         #expect(stage.reader.heard == 0)
     }
 
@@ -203,7 +210,7 @@ struct SelectedLineStoreWatchTests {
         let moved = Edit.moved.route
 
         try await Self.saveElsewhere(stage.neighbor.id, in: stage.container) { $0.replaceRoute(with: moved) }
-        await settle(stage, after: 0)
+        await settle(stage, after: stage.checked)
 
         #expect(stage.looks.count == 0)
         #expect(stage.fetches.count == 1, "only the selection's read")
@@ -215,7 +222,7 @@ struct SelectedLineStoreWatchTests {
         let moved = Edit.moved.route
         try await Self.saveElsewhere(stage.hike.id, in: stage.container) { $0.replaceRoute(with: moved) }
         await settleDelegateHop(until: "the reader hears of the new line") { stage.reader.heard == 1 }
-        await settle(stage, after: 0)
+        await settle(stage, after: stage.checked)
         let checks = stage.watch.completedChecks
 
         try await Self.saveElsewhere(stage.neighbor.id, in: stage.container) { $0.title = "Renamed elsewhere" }
@@ -242,7 +249,7 @@ struct SelectedLineStoreWatchTests {
         await settleDelegateHop(until: "the local store's change is delivered") { changes.posted(localStore) }
         await settleDelegateHop()
         #expect(stage.watch.deliveredChanges == 0, "dropped on the thread that posted it")
-        #expect(stage.watch.completedChecks == 0)
+        #expect(stage.watch.completedChecks == stage.checked)
 
         // And the followed hike's own store, once it is not followed.
         stage.watch.stopFollowing()
@@ -250,7 +257,7 @@ struct SelectedLineStoreWatchTests {
         await settleDelegateHop(until: "the hike store's change is delivered") { changes.posted(hikesStore) }
         await settleDelegateHop()
         #expect(stage.watch.deliveredChanges == 0)
-        #expect(stage.watch.completedChecks == 0)
+        #expect(stage.watch.completedChecks == stage.checked)
         #expect(stage.looks.count == 0)
     }
 
@@ -259,9 +266,11 @@ struct SelectedLineStoreWatchTests {
         let stage = try await stage()
         let moved = Edit.moved.route
         stage.watch.follow(stage.neighbor, since: .now)
+        await settleDelegateHop(until: "the watch has caught up with the neighbor") { stage.watch.isSettled }
+        let checks = stage.watch.completedChecks
 
         try await Self.saveElsewhere(stage.hike.id, in: stage.container) { $0.replaceRoute(with: moved) }
-        await settle(stage, after: 0)
+        await settle(stage, after: checks)
 
         #expect(stage.looks.count == 0)
         #expect(stage.hike.route == Self.original, "and its copy is left as it was")
@@ -272,6 +281,7 @@ struct SelectedLineStoreWatchTests {
         let held = HeldStoreCheck()
         let stage = try await stage(making: held.making)
         let moved = Edit.moved.route
+        held.arm()
 
         try await Self.saveElsewhere(stage.hike.id, in: stage.container) { $0.replaceRoute(with: moved) }
         await settleDelegateHop(until: "the check is in flight") { held.arrived == 1 }
@@ -281,7 +291,7 @@ struct SelectedLineStoreWatchTests {
             stage.watch.follow(stage.neighbor, since: .now)
         }
         held.open()
-        await settle(stage, after: 0)
+        await settle(stage, after: stage.checked)
 
         #expect(stage.looks.count == 0)
         #expect(stage.hike.route == Self.original, "the hike left behind is not refreshed")
@@ -295,12 +305,12 @@ struct SelectedLineStoreWatchTests {
         stage.hike.tintHex = "#FF0000"
 
         try await Self.saveElsewhere(stage.hike.id, in: stage.container) { $0.replaceRoute(with: moved) }
-        await settle(stage, after: 0)
+        await settle(stage, after: stage.checked)
         #expect(stage.looks.count == 0, "a fetch cannot refresh a hike with unsaved changes")
         #expect(stage.hike.route == Self.original)
 
         try stage.container.mainContext.save()
-        await settle(stage, after: 1)
+        await settle(stage, after: stage.checked + 1)
 
         // Measured on iOS 18.6 and 27: that save writes its snapshot's line
         // back, so the store ends on the original, and nothing new reaches the
@@ -321,7 +331,7 @@ struct SelectedLineStoreWatchTests {
 
         stage.hike.replaceRoute(with: moved)
         try stage.container.mainContext.save()
-        await settle(stage, after: 0)
+        await settle(stage, after: stage.checked)
 
         #expect(stage.looks.count == 1, "the main context writes under no author, so its save is looked at too")
         #expect(stage.reader.heard == 1, "heard once, from the write itself")
@@ -343,19 +353,81 @@ struct SelectedLineStoreWatchTests {
 
         #expect(await stage.reader.line == heights)
     }
+
+    /// The second line is saved once the look at the first has read its row,
+    /// and that look is let land first, so the two looks are out at once.
+    @Test("a line saved while the one before is still being looked at is the line the reader ends with")
+    func aLineSavedDuringALookEndsOnIt() async throws {
+        let stage = try await stage(holding: [2, 3])
+        let moved = Edit.moved.route
+        let heights = Edit.heights.route
+
+        try await Self.saveElsewhere(stage.hike.id, in: stage.container) { $0.replaceRoute(with: moved) }
+        await settleDelegateHop(until: "the first look has read its row") { stage.fetches.held == 1 }
+        try await Self.saveElsewhere(stage.hike.id, in: stage.container) { $0.replaceRoute(with: heights) }
+        await settleDelegateHop(until: "the second save is looked at") {
+            stage.looks.count == 2 && stage.watch.isSettled
+        }
+        stage.fetches.open(2)
+        await settleDelegateHop(until: "the reader is handed the first line") { stage.reader.heard == 1 }
+        stage.fetches.open(3)
+        await settleDelegateHop(until: "the reader is handed the second line") { stage.reader.heard == 2 }
+        await stage.lines.refreshing?.value
+
+        #expect(await stage.reader.line == heights)
+    }
+
+    /// Selected again, a hike's readers are handed the read they had, which a
+    /// line saved elsewhere meanwhile has not replaced: it moves no revision,
+    /// and its save was dropped where it was posted while nothing was followed.
+    @Test("a line saved elsewhere while the hike was let go reaches the reader once it is followed again")
+    func aLineSavedWhileLetGoIsLookedAtOnReturn() async throws {
+        let stage = try await stage()
+        let moved = Edit.moved.route
+        stage.watch.stopFollowing()
+
+        try await Self.saveElsewhere(stage.hike.id, in: stage.container) { $0.replaceRoute(with: moved) }
+        stage.watch.follow(stage.hike, since: try #require(stage.lines.readBegan(for: stage.hike)))
+        await settleDelegateHop(until: "the reader hears of the line saved meanwhile") { stage.reader.heard == 1 }
+        await settle(stage, after: stage.checked)
+
+        #expect(await stage.reader.line == moved)
+        #expect(stage.hike.route == moved, "the main context's copy holds it too")
+    }
 }
 
 /// The selected line's fetches, and whether each ran on the main thread.
+/// The calls it was told to hold, counting from one, read their row and then
+/// wait for the test to open them, so a read lands when the test says.
 nonisolated private final class StoreWatchFetchLog: Sendable {
     private let threads = Mutex<[Bool]>([])
+    private let holds = Mutex(0)
+    private let gates: [Int: DispatchSemaphore]
+
+    init(holding calls: Set<Int>) {
+        gates = Dictionary(uniqueKeysWithValues: calls.map { ($0, DispatchSemaphore(value: 0)) })
+    }
 
     var count: Int { threads.withLock { $0.count } }
     var ranOnMainThread: [Bool] { threads.withLock { $0 } }
+    /// How many held calls have read their row.
+    var held: Int { holds.withLock { $0 } }
 
     func fetch(_ context: ModelContext, _ id: PersistentIdentifier) throws -> Hike? {
-        threads.withLock { $0.append(Thread.isMainThread) }
-        return try SelectedLine.fetchHike(context, id)
+        let call = threads.withLock { calls in
+            calls.append(Thread.isMainThread)
+            return calls.count
+        }
+        let hike = try SelectedLine.fetchHike(context, id)
+        guard let gate = gates[call] else { return hike }
+        // The line as this read found it, before anything saved later.
+        _ = hike?.route
+        holds.withLock { $0 += 1 }
+        gate.wait()
+        return hike
     }
+
+    func open(_ call: Int) { gates[call]?.signal() }
 }
 
 /// A reader of the selected line, reading it as the app's four do: the
@@ -391,15 +463,22 @@ private final class StoreWatchReader {
 }
 
 /// A check held at its start until the test opens it, so a selection can
-/// move on while it is in flight.
+/// move on while it is in flight. Only checks made once it is armed are
+/// held, so the one a follow starts with goes through.
 nonisolated private final class HeldStoreCheck: Sendable {
     private let gate = Mutex<(isOpen: Bool, waiting: [CheckedContinuation<Void, Never>])>((false, []))
-    private let arrivals = Mutex(0)
+    private let arrivals = Mutex<Int?>(nil)
 
-    var arrived: Int { arrivals.withLock { $0 } }
+    var arrived: Int { arrivals.withLock { $0 ?? 0 } }
+
+    func arm() { arrivals.withLock { $0 = 0 } }
 
     func making(_ request: SelectedLineStoreCheck.Request) async -> SelectedLineStoreCheck.Answer {
-        arrivals.withLock { $0 += 1 }
+        let isArmed = arrivals.withLock { count in
+            count = count.map { $0 + 1 }
+            return count != nil
+        }
+        guard isArmed else { return await SelectedLineStoreCheck.answer(request) }
         await withCheckedContinuation { continuation in
             let isOpen = gate.withLock { state in
                 if !state.isOpen { state.waiting.append(continuation) }

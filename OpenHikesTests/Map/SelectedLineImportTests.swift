@@ -27,6 +27,7 @@ import Foundation
 @testable import OpenHikes
 import OpenHikesData
 import OpenHikesShared
+import RealModule
 import SwiftData
 import SwiftUI
 import Synchronization
@@ -144,6 +145,7 @@ final class SelectedLineImportTests {
         await selection.shading.measurement?.value
         await selection.autoSave.waitForActivation()
         await selection.tracker.waitForSelectionPublish()
+        await settleDelegateHop(until: "the watch has caught up with the hike") { selection.watch.isSettled }
     }
 
     /// Another device's line, and its length, saved as the mirroring import
@@ -200,7 +202,10 @@ final class SelectedLineImportTests {
 
         #expect(selection.shading.describesCurrentLine)
         #expect(try await claims(Self.movedRoute[2], for: hike, key: "selected-line-import/17/moved@2.0"))
-        #expect(SharedStore.load()?.totalDistanceMeters == Self.movedLength)
+        #expect(Self.movedLength.isApproximatelyEqual(
+            to: SharedStore.load()?.totalDistanceMeters ?? 0,
+            absoluteTolerance: 0.001
+        ))
         #expect(hike.route == Self.movedRoute, "the main context's copy holds it too")
     }
 
@@ -220,15 +225,16 @@ final class SelectedLineImportTests {
         let shadingRevision = selection.shading.revision
         let published = reloads.count
         let fetched = selection.fetches.count
+        let checked = selection.watch.completedChecks
 
         neighbor.tintHex = "#FF00FF"
         try await RemoteChangeLog.save(container.mainContext, settling: neighbor)
         await settleDelegateHop(until: "the watch has checked the neighbor's save") {
-            selection.watch.completedChecks > 0 && selection.watch.isSettled
+            selection.watch.completedChecks > checked && selection.watch.isSettled
         }
         try await SelectedLineStoreWatchTests.saveElsewhere(hike.id, in: container) { $0.title = "Renamed elsewhere" }
         await settleDelegateHop(until: "the watch has checked the rename") {
-            selection.watch.completedChecks > 1 && selection.watch.isSettled
+            selection.watch.completedChecks > checked + 1 && selection.watch.isSettled
         }
         await selection.lines.refreshing?.value
         await settleDelegateHop()

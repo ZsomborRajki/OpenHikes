@@ -14,13 +14,15 @@
 //  if it differs.
 //
 //  It filters on the row, not the attribute. History's `updatedAttributes`
-//  would say whether `route` was written, and on iOS 27 it said so correctly,
-//  naming `route` for every write of the line, an identical one included. On
-//  18.6 it named `route` for a rename and left it out of a write of the line,
-//  and which of the two happened changed from run to run. A filter that
-//  trusted it there could miss a line. So a rename, a tint or a photo on the
-//  selected hike costs a refresh, which finds the same line and hands out
-//  nothing. Which row a change belongs to was right on both.
+//  would say whether `route` was written, and on iOS 27 it named `route` for
+//  every write of the line it recorded. On 18.6 it named `route` for a rename
+//  and left it out of a write of the line, and which of the two happened
+//  changed from run to run. A filter that trusted it there could miss a line.
+//  So a rename, a tint or a photo on the selected hike costs a refresh, which
+//  finds the same line and hands out nothing. Which row a change belongs to
+//  was right on both. (An unchanged line saved on its own was not always
+//  recorded at all, on either: 15 of 80 such saves on 27, and 11 of 80 on
+//  18.6, left no transaction, and so nothing to look at.)
 //
 //  History's rules, measured on both:
 //  - A token belongs to one store, so a query after a token returns only that

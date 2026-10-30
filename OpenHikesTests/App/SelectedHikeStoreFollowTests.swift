@@ -71,7 +71,11 @@ struct SelectedHikeStoreFollowTests {
         (coordinate?.latitude ?? 0) > (Fixture.ridgeRoute.last?.latitude ?? 0) + 0.4
     }
 
-    @Test("a hike selected through the model is followed in the store, and let go with the selection")
+    private static func isOnLoop(_ coordinate: CLLocationCoordinate2D?) -> Bool {
+        (coordinate?.latitude ?? 0) > (Fixture.loopRoute.map(\.latitude).min() ?? 0) - 0.001
+    }
+
+    @Test("a hike selected through the model is followed in the store, let go with it, and caught up on its return")
     func theModelFollowsTheSelection() async throws {
         let probe = try ModelProbe()
         let model = probe.model
@@ -101,5 +105,13 @@ struct SelectedHikeStoreFollowTests {
 
         #expect(model.selectedLineStoreWatch.deliveredChanges == delivered, "let go with the selection")
         #expect(hike.route == moved, "and its copy no longer refreshed")
+
+        // Selected again, its readers are handed the read they had, which the
+        // line saved meanwhile has not replaced.
+        model.selectedHikeDidChange(to: hike)
+        await settleDelegateHop(until: "the model's colours follow the line saved while it was let go") {
+            model.routeShading.stretches.contains { Self.isOnLoop($0.coordinates.first) }
+        }
+        #expect(hike.route == loop)
     }
 }
