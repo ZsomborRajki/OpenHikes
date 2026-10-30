@@ -90,15 +90,13 @@ final class SelectedLine {
     /// One read of one hike's line, under way or landed. `Sendable`, so the
     /// off-main work each reader does with the line can wait for it there.
     nonisolated final class Read: Sendable {
-        let hikeID: UUID
         /// When the read was started: a line saved after this may not be in
         /// it, and one saved before it is.
         let began: Date
         private let line: Task<Line, Never>
         private let replacement: Write
 
-        init(hikeID: UUID, began: Date, replacement: Write, line: Task<Line, Never>) {
-            self.hikeID = hikeID
+        init(began: Date, replacement: Write, line: Task<Line, Never>) {
             self.began = began
             self.replacement = replacement
             self.line = line
@@ -292,7 +290,6 @@ final class SelectedLine {
             replacement.raise()
         }
         return Read(
-            hikeID: hike.id,
             began: .now,
             replacement: replacement,
             line: Self.reading(Source(hike), fetch: fetch)
