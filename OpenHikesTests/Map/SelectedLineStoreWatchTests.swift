@@ -324,16 +324,30 @@ struct SelectedLineStoreWatchTests {
         #expect(stage.reader.heard == (stored == Self.original ? 0 : 1))
     }
 
-    @Test("a line written through the main context costs one look, and no second draw")
-    func aLocalWriteIsDrawnOnce() async throws {
+    /// A check with no token reads only what the import wrote, so the save is
+    /// looked at only once an import has given the watch a token.
+    @Test(
+        "a line written through the main context is drawn once, and looked at once a token is held",
+        arguments: [false, true]
+    )
+    func aLocalWriteIsDrawnOnce(afterAnImport: Bool) async throws {
         let stage = try await stage()
         let moved = Edit.moved.route
+        var checks = stage.checked
+        if afterAnImport {
+            try await Self.saveElsewhere(stage.hike.id, in: stage.container) { $0.title = "Renamed elsewhere" }
+            await settle(stage, after: checks)
+            checks = stage.watch.completedChecks
+        }
+        let looks = stage.looks.count
 
         stage.hike.replaceRoute(with: moved)
         try stage.container.mainContext.save()
-        await settle(stage, after: stage.checked)
+        await settle(stage, after: checks)
 
-        #expect(stage.looks.count == 1, "the main context writes under no author, so its save is looked at too")
+        // The main context writes under no author, so only a check that holds
+        // a token reads its save.
+        #expect(stage.looks.count == looks + (afterAnImport ? 1 : 0))
         #expect(stage.reader.heard == 1, "heard once, from the write itself")
         #expect(await stage.reader.line == moved)
     }

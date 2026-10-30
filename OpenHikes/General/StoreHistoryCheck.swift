@@ -22,8 +22,9 @@
 //  every write of the line it recorded. On 18.6 it named `route` for a rename
 //  and left it out of a write of the line, and which of the two happened
 //  changed from run to run. A filter that trusted it there could miss a line.
-//  So a rename, a tint or a photo on a hike asked about costs that look, which
-//  finds the same line. Which row a change belongs to was right on both. (An
+//  So a rename, a tint or a photo on a hike asked about costs that look once a
+//  check reads its save, and the look finds the same line. Which row a change
+//  belongs to was right on both. (An
 //  unchanged line saved on its own was not always recorded at all, on
 //  either: 15 of 80 such saves on 27, and 11 of 80 on 18.6, left no
 //  transaction, and so nothing to look at.)
@@ -31,17 +32,41 @@
 //  History's rules, measured on both:
 //  - A token belongs to one store, so a query after a token returns only that
 //    store's later transactions.
-//  - A query after a moment in time returns both stores' transactions.
-//  - `storeIdentifier` is refused in a predicate, so the other store's
-//    transactions are dropped here, in memory.
+//  - A query after a moment in time returns both stores' transactions, unless
+//    it also names an author only one store's transactions carry.
+//  - `storeIdentifier` is refused in a predicate, so a query cannot name its
+//    store. What one returns is still filtered by store here, in memory.
 //  - `fetchLimit` counts per store, so it cannot ask for "the newest".
 //  - A token's own `<` cannot be trusted in memory. On iOS 18.6 the first
 //    transaction's token compared greater than every later one, so `max()`
 //    picked the oldest. The newest is picked by transaction identifier, and a
 //    query's `token >`, compared by the store, was right on both.
-//  That is why a caller's first check starts from the moment the read of
-//  what it holds began, and every later one from the newest token it has
-//  seen.
+//
+//  No query may return a transaction of the device-local store, even one this
+//  file would drop: SwiftData traps while it builds the transaction, before
+//  the fetch returns. Two of that store's columns are composite, saved as one
+//  column per member. Neither OS could build a write of the walk in progress
+//  ("Failed to materialize a keypath for walkInProgress.phaseChangedAt from
+//  HikeLocalState"), and iOS 18.6 could not build a drawing's travel mode. A
+//  check that read by time alone took the app down in the middle of a walk.
+//  The Hikes store's models have no composite column.
+//
+//  So a check with no token reads only the transactions CloudKit's import
+//  committed since the read of what the caller holds began, picked by their
+//  author. The import writes only the mirrored store, so the device-local
+//  store returns nothing: measured on both with a walk saved since, with no
+//  trap, in about half a millisecond three thousand transactions deep. The
+//  newest import such a check finds is the first token, and every later check
+//  reads from the newest token it has seen, which returns that store's saves
+//  by any author. Until then, from the start of a follow or of the list's
+//  task, or from a read that failed, no check has one.
+//
+//  What a check with no token leaves out is every save under another author.
+//  In the app, the only context that saves a hike already in the store is the
+//  main context, and its writes of a line move the revision that both the
+//  selection's readers and the list watch. If the import's author ever
+//  changes, such a check finds nothing: a line received from another device
+//  is missed, and nothing traps.
 //
 
 import CoreData
@@ -60,8 +85,9 @@ nonisolated enum StoreHistoryCheck {
         /// The rows' own store, the one whose transactions are read.
         let storeID: String
         /// When the read of what the caller holds began. A check with no
-        /// ``token`` reads every transaction committed since; one the read
-        /// already saw costs a look that finds what the caller already has.
+        /// ``token`` reads every import committed since (see the header); one
+        /// the read already saw costs a look that finds what the caller
+        /// already has.
         let since: Date
         /// The newest transaction of the store an earlier check has read.
         let token: DefaultHistoryToken?
@@ -119,12 +145,20 @@ nonisolated enum StoreHistoryCheck {
         return (value as? String) ?? (value as? UUID)?.uuidString
     }
 
+    /// The author CloudKit's mirroring gives the transactions it imports, and
+    /// the only one a check with no token reads. No context of the app saves
+    /// under it.
+    private static let importAuthor = "NSCloudKitMirroringDelegate.import"
+
     private static func descriptor(for request: Request) -> HistoryDescriptor<DefaultHistoryTransaction> {
         if let token = request.token {
             return HistoryDescriptor(predicate: #Predicate { $0.token > token })
         }
+        // Never by time alone, which reads the device-local store too: see
+        // the header.
         let since = request.since
-        return HistoryDescriptor(predicate: #Predicate { $0.timestamp >= since })
+        let importer = importAuthor
+        return HistoryDescriptor(predicate: #Predicate { $0.timestamp >= since && $0.author == importer })
     }
 
     /// The rows of `rows` that a transaction in `transactions` updated; see

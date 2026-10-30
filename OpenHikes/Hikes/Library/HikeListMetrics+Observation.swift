@@ -7,7 +7,7 @@
 //  whose line may have been written since:
 //  - through the main context (heights filled in, a recording finished),
 //    which moves that hike's line revision at once;
-//  - by any context, such as an edit mirrored in from the hiker's other
+//  - by another context, such as an edit mirrored in from the hiker's other
 //    device, which the store's history names by its row.
 //  Validating a hike is what it always was: its line read in a context of
 //  its own, fingerprinted, and measured only if the fingerprint cached beside
@@ -22,11 +22,17 @@
 //  the main actor per save, while nothing on screen changed. Neither signal
 //  here moves for a refresh. The revision is not stored, and history lists
 //  only what was saved. History names the row and not the column, for the
-//  reason `StoreHistoryCheck` gives, so a rename, a tint or a walk of a
-//  listed hike costs that one hike's line, about 30 ms of 20,000 points, and
-//  a save of the other store costs nothing. The main context's own saves are
-//  in history too, so a line written here is named twice and validated once.
-//  The revision is what still names it while history cannot be read.
+//  reason `StoreHistoryCheck` gives, so a save of a listed hike that a look
+//  reads, a rename, a tint or a walk, costs that one hike's line, about 30 ms
+//  of 20,000 points, and a save of the other store costs nothing.
+//
+//  A look with no token reads only CloudKit's imports, because a read by time
+//  alone returns the device-local store's transactions too, and SwiftData
+//  traps building a walk's (see `StoreHistoryCheck`). So the main context's
+//  own saves are in what a look reads only once it holds a token, taken from
+//  the first import it finds; from then on a line written here is named twice
+//  and validated once. Before then, and while history cannot be read, the
+//  revision is what names it.
 //
 //  One thing at a time, and figures from a line already replaced are not
 //  kept. After each pass the task asks what changed while it measured, before
@@ -34,7 +40,7 @@
 //  again, and its figures from the line before are dropped. A save in the
 //  moment between that look and the publication gets past it: those figures
 //  land, and the next look names the hike, so they are measured again at
-//  once. The first look at history reads from the moment the first pass
+//  once. The first look reads the imports committed since the first pass
 //  began, because a save before then is in that pass and one after it may
 //  not be. Each later look reads from the newest transaction the one before
 //  saw. A task cancelled at any point, as switching the list to another order
@@ -46,10 +52,11 @@
 //  ask for one after every look. Nor can it leave the rest to the next save:
 //  it took the wake of the save it was looking for, and another may never
 //  come. So the first look to fail asks for one more at once. That one reads
-//  from the first pass again, which an expired token cannot stop, and names
-//  whatever the failed look could not, while history still holds it. A
-//  failure that holds asks for nothing more until a look reads history
-//  again. Nothing in the app prunes history.
+//  the imports since the first pass began, which an expired token cannot
+//  stop, and names any the failed look could not, while history still holds
+//  it; a line written here needs no history. A failure that holds asks for
+//  nothing more until a look reads history again. Nothing in the app prunes
+//  history.
 //
 //  All of it stays in the list's task, never its body. Routes are read,
 //  fingerprinted and measured in a context of their own, publication reads
@@ -113,8 +120,9 @@ nonisolated extension HikeListMetrics {
         /// `nil` if none of them had been saved by then, which a list never
         /// meets: the app saves every hike in the turn that inserts it.
         private let storeID: String?
-        /// When the first pass began: where the first look at history reads
-        /// from, and any look after one that could not read it.
+        /// When the first pass began: where a look with no token reads imports
+        /// from, as the first does, and any after one that could not read
+        /// history.
         private let since: Date
         private var token: DefaultHistoryToken?
         /// Whether the last look could not read history. The first look of

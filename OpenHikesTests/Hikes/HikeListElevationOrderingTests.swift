@@ -89,6 +89,9 @@ struct HikeListElevationOrderingTests {
         }
     }
 
+    /// Until an import gives the list its first token, a look reads only
+    /// imports, so a tint saved here first costs the look and no line. The
+    /// rename received then gives it one, and the next tint here is read.
     @Test("a save of one listed hike reads that hike's line alone, and a save of the other store reads none")
     func eachSaveReadsOnlyTheLinesItNames() async throws {
         let watching = try await watching()
@@ -98,27 +101,34 @@ struct HikeListElevationOrderingTests {
 
         stage.hikes[1].tintHex = "#FF00FF"
         try stage.container.mainContext.save()
-        await settleDelegateHop(until: "the tint is looked at, measured and looked past") {
-            watching.measurements.calls.count == 2 && watching.looks.completed == 3
+        await settleDelegateHop(until: "the tint is looked at, with no token yet") {
+            watching.looks.completed == 2
         }
+        await settleDelegateHop()
+        #expect(watching.measurements.calls.count == 1, "a look with no token reads only imports")
         try await SelectedLineStoreWatchTests.saveElsewhere(stage.hikes[2].id, in: stage.container) { hike in
             hike.title = "Renamed elsewhere"
         }
         await settleDelegateHop(until: "the rename is looked at, measured and looked past") {
-            watching.measurements.calls.count == 3 && watching.looks.completed == 5
+            watching.measurements.calls.count == 2 && watching.looks.completed == 4
+        }
+        stage.hikes[3].tintHex = "#00FFFF"
+        try stage.container.mainContext.save()
+        await settleDelegateHop(until: "the tint is looked at by token, measured and looked past") {
+            watching.measurements.calls.count == 3 && watching.looks.completed == 6
         }
         // A device-local field: its row lives in the other store.
         let changes = RemoteChangeLog()
         changes.start()
         defer { changes.stop() }
-        stage.hikes[3].autoSaveTilesEnabled = false
+        stage.hikes[4].autoSaveTilesEnabled = false
         try stage.container.mainContext.save()
-        let localStore = try #require(stage.hikes[3].localState?.persistentModelID.storeIdentifier)
+        let localStore = try #require(stage.hikes[4].localState?.persistentModelID.storeIdentifier)
         await settleDelegateHop(until: "the device-local save's change is delivered") { changes.posted(localStore) }
         await settleDelegateHop()
 
-        #expect(watching.measuredSinceFirstPass == [[stage.hikes[1].id], [stage.hikes[2].id]])
-        #expect(watching.looks.arrived == 5, "a save of the other store is dropped where it is posted")
+        #expect(watching.measuredSinceFirstPass == [[stage.hikes[2].id], [stage.hikes[3].id]])
+        #expect(watching.looks.arrived == 6, "a save of the other store is dropped where it is posted")
         #expect(stage.publications == 1, "no figure changed")
     }
 
