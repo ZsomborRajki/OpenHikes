@@ -132,7 +132,8 @@ private struct HikePlaceAroundCardContent: View {
                 TrailPlaceFactsAndLocation(
                     facts: card.facts,
                     coordinate: card.coordinate,
-                    openStreetMapURL: card.openStreetMapURL
+                    openStreetMapURL: card.openStreetMapURL,
+                    wikidataItem: card.wikidataItem
                 )
             }
             .padding(.horizontal)

@@ -16,6 +16,11 @@ import XCTest
 extension PlaceUITests {
     /// The summit off the line, which only a reach wider than the trail finds.
     private static let nearbySummit = "Thumsee Kopf"
+    /// The licence Wikipedia's words are shared under, as the summit's card
+    /// names it.
+    private static let textLicense = "CC BY-SA 4.0"
+    /// The least height a row of a place card has: `StatCardMetrics`'.
+    private static let rowMinimumHeight: CGFloat = 44
     /// Where the press lands: high on the map, clear of the sheet at its
     /// middle detent and of the pill in the strip at the top.
     private static let pressFraction = 0.3
@@ -73,6 +78,39 @@ extension PlaceUITests {
         )
         XCTAssertTrue(element("places-around-card-library", in: app).exists)
         XCTAssertFalse(element("hike-place-screen", in: app).exists, "and nothing was pushed over the screen")
+    }
+
+    /// The summit is the one seeded place OpenStreetMap links to Wikidata, so
+    /// its card opens with what Wikipedia says about it — the words, the
+    /// photograph with its credit, and the ways to the article and the licence.
+    @MainActor
+    func testAPlaceCardOpensWithWhatWikipediaSays() {
+        let app = openPlacesAround()
+        XCTAssertTrue(element("places-around-nearby", in: app).waitForExistence(timeout: UITestTimeout.navigation))
+        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", Self.nearbySummit)).firstMatch
+        scrollToTap(row, in: app)
+
+        let extract = element("wikidata-place-extract", in: app)
+        XCTAssertTrue(
+            extract.waitForExistence(timeout: UITestTimeout.navigation),
+            "the summit's card opens with the opening of its Wikipedia article"
+        )
+        XCTAssertTrue(extract.label.hasPrefix("Thumsee Kopf is a wooded summit"))
+        XCTAssertTrue(app.staticTexts["From Wikipedia"].exists, "under a heading that says where the words come from")
+        XCTAssertTrue(element("wikidata-place-photo", in: app).exists, "with the item's photograph")
+        XCTAssertTrue(
+            app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Lena Gruber")).firstMatch.exists,
+            "and the photograph's credit"
+        )
+        XCTAssertTrue(element("wikidata-place-article-link", in: app).exists, "and the way to the whole article")
+
+        let license = app.links["wikidata-place-text-license"]
+        scrollIntoView(license, in: app)
+        XCTAssertEqual(license.label, "Text License", "and the licence of the words, as one row")
+        XCTAssertEqual(license.value as? String, Self.textLicense)
+        // The row's height is the link's, as a row's is everywhere on the
+        // card — one line of text would be a target too small to touch.
+        XCTAssertGreaterThanOrEqual(license.frame.height, Self.rowMinimumHeight)
     }
 
     @MainActor

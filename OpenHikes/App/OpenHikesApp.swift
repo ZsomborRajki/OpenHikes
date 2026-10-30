@@ -154,5 +154,7 @@ private struct AppRoot: View {
             .defaultAppStorage(model.defaults)
             // Set once, here, and never written again — see ``AppTips``.
             .environment(\.appTips, model.tips)
+            // Set once, here, for the same reason — see ``WikidataPlaceLookup``.
+            .environment(\.wikidataLookup, model.wikidataLookup)
     }
 }

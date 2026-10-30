@@ -1144,7 +1144,8 @@ in its source header. Do not weaken one without a measurement.
   that the development export has it, and promote both.
 - **Deployment state, checked 2026-10-25.** Development and production export
   the same schema, `md5 a3ab9849bf6af7d5bf89fb03d667682f`, with a column for
-  every attribute in `MirroredCloudKitSchema.recordTypes`.
+  every attribute in `MirroredCloudKitSchema.recordTypes` except
+  `TrailPoint.osmWikidata`, which neither environment has yet.
   The only live columns the contract does not
   name are SwiftData's own `CD_entityName` and the to-one reference columns
   that the contract lists as relationships. Re-export before believing these
@@ -1301,6 +1302,18 @@ is world-readable, because browsing needs no account.
     (`CommonsPhotoQuery.imageHosts`), sending `TileCache.userAgent`.
   - Make one API request at a time, and fetch nothing in Low Data Mode.
   - Never offer one for community sharing: `HikePhoto.isOwn` is false.
+- **Wikipedia on a place's card** (`Hikes/Places/Wikidata/`). A place from
+  OpenStreetMap keeps its `wikidata` tag (`TrailPlaceOSM.wikidata`, mirrored
+  as `TrailPoint.osmWikidata`), and its card asks Wikidata for the article in
+  the device's languages and the item's photograph (`WikidataPlaceSource`,
+  live only from the composition root).
+  - Ask when a card opens, never for a list, and fetch nothing in Low Data
+    Mode.
+  - Keep what comes back in memory only (`WikidataPlaceLookup`). The words are
+    Wikipedia's, under CC BY-SA, so they are shown with their credit and link
+    and never written to the device, copied into a hike or shared.
+  - The photograph passes the checks every Commons file does
+    (`CommonsPhotoQuery.files(from:)`).
 - **Shared hikes draw as lines and pins.** `CommunityRouteOutline` is a polyline
   of about 1 KB on the submission, so a page's outlines arrive in one
   `desiredKeys` fetch. MapKit never hit-tests overlays, so the app does

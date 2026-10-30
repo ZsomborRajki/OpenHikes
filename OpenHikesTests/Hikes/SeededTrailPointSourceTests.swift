@@ -101,4 +101,20 @@ struct SeededTrailPointSourceTests {
         #expect(outcome.rows.isEmpty)
         #expect(outcome.outage == .unavailable)
     }
+
+    /// The summit is the one seeded place Wikipedia knows, which is what puts
+    /// the section on the card the places audit opens.
+    @Test("the seeded summit links to the one place the seeded Wikidata source knows")
+    func theSeededSummitHasAWikipediaSection() async throws {
+        let linked = SeededTrailPointSource.places.filter { $0.osm?.wikidata != nil }
+        let summit = try #require(linked.first)
+        let item = try #require(summit.osm?.wikidata)
+
+        let place = try #require(await SeededWikidataPlaceSource().place(item))
+
+        #expect(linked.count == 1)
+        #expect(summit.name == "Thumsee Kopf")
+        #expect(place.article?.title == "Thumsee Kopf")
+        #expect(place.photo?.credit.author == SeededWikidataPlaceSource.author)
+    }
 }

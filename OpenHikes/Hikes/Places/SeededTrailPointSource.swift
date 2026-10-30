@@ -121,7 +121,10 @@ nonisolated struct SeededTrailPointSource: TrailPointSourcing {
             osm: TrailPlaceOSM(
                 elementType: "node",
                 elementID: summitID,
-                facts: [TrailPlaceFact(kind: .elevation, value: "712")]
+                facts: [TrailPlaceFact(kind: .elevation, value: "712")],
+                // The one seeded place Wikipedia knows — see
+                // ``SeededWikidataPlaceSource``.
+                wikidata: SeededWikidataPlaceSource.item
             )
         ),
     ]

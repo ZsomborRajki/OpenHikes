@@ -17,9 +17,10 @@ import CoreLocation
 import OpenHikesData
 import SwiftUI
 
-/// What OpenStreetMap says about a place, then where it is.
+/// What Wikipedia says about a place, what OpenStreetMap says about it, then
+/// where it is.
 ///
-/// One view for both cards, which is the reason this file exists. `address` is
+/// One view for every card, which is the reason this file exists. `address` is
 /// the maker's, which asks MapKit; a saved hike's screen passes `nil` rather
 /// than a second geocoding path.
 struct TrailPlaceFactsAndLocation: View {
@@ -27,8 +28,27 @@ struct TrailPlaceFactsAndLocation: View {
     var address: String?
     let coordinate: CLLocationCoordinate2D
     var openStreetMapURL: URL?
+    /// The Wikidata item OpenStreetMap links the place to, which the card
+    /// opens with what Wikipedia says about — see ``WikidataPlaceSection``.
+    var wikidataItem: String?
+
+    @Environment(\.wikidataLookup) private var wikidata
+    /// What ``wikidataItem`` was answered with, carrying the item it is about
+    /// so a card handed another place never draws the last one's.
+    ///
+    /// Held here rather than by the section, because a section with nothing
+    /// to draw yet would have to be drawn as something for its task to run,
+    /// and that something would leave a gap in the card the size of the
+    /// space between sections. The *Location* list is always drawn, so the
+    /// question rides on it.
+    @State private var described: WikidataPlace?
 
     var body: some View {
+        // The answer this card was handed, or one an earlier card was — so a
+        // card reopened has its section in its first pass.
+        if let shown = wikidata?.shown(for: wikidataItem, described: described) {
+            WikidataPlaceSection(place: shown)
+        }
         if !facts.isEmpty {
             StatList(title: String(localized: "Details")) {
                 ForEach(facts, id: \.self, content: TrailPlaceFactRow.init)
@@ -59,6 +79,16 @@ struct TrailPlaceFactsAndLocation: View {
                 .accessibilityIdentifier("trail-place-osm-link")
             }
         }
+        .task(id: wikidataItem) { await describe() }
+    }
+
+    private func describe() async {
+        guard let wikidataItem, let wikidata else { return }
+        let answer = await wikidata.place(wikidataItem)
+        // A card handed another place while this was asked has a task of its
+        // own for that one, which this answer must not overwrite.
+        guard !Task.isCancelled else { return }
+        withAnimation { described = answer }
     }
 }
 
@@ -175,20 +205,33 @@ struct TrailPlaceFactRow: View {
     }
 }
 
-/// A ``StatRow`` whose value is a link: the website or the phone number.
+/// A ``StatRow`` whose value is a link: the website, the phone number, the
+/// licence of Wikipedia's words.
+///
+/// The whole row is the link, with its height and hit shape inside the label
+/// for the reason the card's *View on OpenStreetMap* has them there: with the
+/// row's height outside it, the link was one line of text tall, 20 pt
+/// measured. And one element, as a composite row is, so an identifier set on
+/// the row lands on the link and not on its label's words as well.
 struct TrailPlaceLinkRow: View {
     let label: String
     let title: String
     let destination: URL
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(label)
-            Link(title, destination: destination)
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .trailing)
+        Link(destination: destination) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(label)
+                    .foregroundStyle(.primary)
+                Text(title)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            .trailPlaceRow()
+            .contentShape(.rect)
         }
-        .trailPlaceRow()
+        .accessibilityLabel(label)
+        .accessibilityValue(title)
     }
 }
 
