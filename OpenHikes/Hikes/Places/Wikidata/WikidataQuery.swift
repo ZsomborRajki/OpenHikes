@@ -69,6 +69,10 @@ nonisolated enum WikidataQuery {
     /// not the name of a file.
     private static let maximumFileNameBytes = 240
 
+    /// The longest page title MediaWiki allows, in UTF-8 bytes. A link to a
+    /// longer one is not a link to a page.
+    private static let maximumTitleBytes = 255
+
     private static let successRange = 200..<300
 
     /// The summary of an article that is one, rather than a disambiguation
@@ -204,9 +208,16 @@ nonisolated enum WikidataQuery {
         }
         guard let entity = answer.entities.values.first else { return WikidataEntity() }
         return WikidataEntity(
-            articles: entity.sitelinks.compactMapValues { BoundedText.bounded($0.title, to: .title) },
+            articles: entity.sitelinks.compactMapValues { pageTitle($0.title) },
             image: image(among: entity.claims.image)
         )
+    }
+
+    /// `title` as a page's name, or `nil` for one no page can have. Whole or
+    /// not at all, because a title cut to a bound names another page — or
+    /// none, which would read as an article that has gone.
+    private static func pageTitle(_ title: String) -> String? {
+        title.isEmpty || title.utf8.count > maximumTitleBytes ? nil : title
     }
 
     /// The image an item's statements name: a preferred one before a normal

@@ -28,6 +28,11 @@ struct WikidataQueryTests {
             return Data(#"{"entities":{"Q1":{"id":"Q1","claims":{"P18":[\#(claims.joined(separator: ","))]}}}}"#.utf8)
         }
 
+        /// An item linked to one German article, titled `title`.
+        static func article(titled title: String) -> Data {
+            Data(#"{"entities":{"Q1":{"id":"Q1","sitelinks":{"dewiki":{"site":"dewiki","title":"\#(title)"}}}}}"#.utf8)
+        }
+
         /// A summary, with `changes` written over the Watzmann's.
         static func summary(_ changes: [String: Any]) throws -> Data {
             let parsed = try JSONSerialization.jsonObject(with: WikidataFixture.summary)
@@ -138,6 +143,16 @@ struct WikidataQueryTests {
         #expect(named.filter { $0.key != "titles" } == numbered.filter { $0.key != "pageids" })
     }
 
+    /// MediaWiki reads a `+` in a query as a space: asked for `File:A+B.jpg`
+    /// on 2026-10-30, Commons answered about `File:A B.jpg`.
+    @Test("a file name's plus is sent as one, not as a space")
+    func aFileNamesPlusIsSentAsOne() throws {
+        let url = try #require(CommonsPhotoQuery.imageInfo(ofFileTitled: "Lac+glacier.jpg").url)
+        let sent = URLComponents(url: url, resolvingAgainstBaseURL: false)?.percentEncodedQueryItems ?? []
+
+        #expect(sent.first { $0.name == "titles" }?.value == "File:Lac%2Bglacier.jpg")
+    }
+
     // MARK: - The item's answer
 
     @Test("an item's answer gives its articles and its image")
@@ -146,6 +161,18 @@ struct WikidataQueryTests {
 
         #expect(entity.articles == ["dewiki": "Watzmann", "enwiki": "Watzmann"])
         #expect(entity.image == "Watzmann von Norden.jpg")
+    }
+
+    /// A title is the page's name: cut to a bound it names another page, or
+    /// none, which would read as an article that has gone. MediaWiki's own
+    /// limit is 255 bytes.
+    @Test("a linked title is read whole, and one longer than a page's can be is no link")
+    func aLinkedTitleIsReadWhole() throws {
+        let long = String(repeating: "a", count: 200)
+        let tooLong = String(repeating: "a", count: 256)
+
+        #expect(try WikidataQuery.entity(from: Answers.article(titled: long)).articles["dewiki"] == long)
+        #expect(try WikidataQuery.entity(from: Answers.article(titled: tooLong)).articles["dewiki"] == nil)
     }
 
     @Test("the article read is the first language that has one")

@@ -205,20 +205,33 @@ struct TrailPlaceFactRow: View {
     }
 }
 
-/// A ``StatRow`` whose value is a link: the website or the phone number.
+/// A ``StatRow`` whose value is a link: the website, the phone number, the
+/// licence of Wikipedia's words.
+///
+/// The whole row is the link, with its height and hit shape inside the label
+/// for the reason the card's *View on OpenStreetMap* has them there: with the
+/// row's height outside it, the link was one line of text tall, 20 pt
+/// measured. And one element, as a composite row is, so an identifier set on
+/// the row lands on the link and not on its label's words as well.
 struct TrailPlaceLinkRow: View {
     let label: String
     let title: String
     let destination: URL
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(label)
-            Link(title, destination: destination)
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .trailing)
+        Link(destination: destination) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(label)
+                    .foregroundStyle(.primary)
+                Text(title)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            .trailPlaceRow()
+            .contentShape(.rect)
         }
-        .trailPlaceRow()
+        .accessibilityLabel(label)
+        .accessibilityValue(title)
     }
 }
 

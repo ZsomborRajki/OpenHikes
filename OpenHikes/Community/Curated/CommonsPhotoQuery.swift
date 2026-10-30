@@ -167,6 +167,12 @@ nonisolated enum CommonsPhotoQuery {
             // Arrays rather than objects keyed by page id, and plain booleans.
             URLQueryItem(name: "formatversion", value: "2"),
         ] + items
+        // `URLComponents` leaves a `+` as it is, and MediaWiki reads one in a
+        // query as a space, so a file named with one would be asked about
+        // under another name. Only a file's name can carry one — see
+        // ``imageInfo(ofFileTitled:)``.
+        let query = components?.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
+        components?.percentEncodedQuery = query
         // The endpoint is a literal and every value is percent-encoded by
         // `URLComponents`, so this cannot fail; the fallback keeps the type
         // honest rather than force-unwrapped.
