@@ -111,8 +111,11 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
     /// the same saved copy cannot both start one, and a refresh that is
     /// finishing has recorded its outcome before the next may start.
     private struct Refreshes {
-        /// Keys whose refresh is under way, each holding the rects showing the
-        /// saved copy, so the fresh bytes are drawn over every one of them.
+        /// Keys whose refresh is under way, each holding the rects that missed
+        /// on the saved copy and were drawn with it, so the fresh bytes are
+        /// drawn over every one of them. A rect that found the copy in memory
+        /// instead, such as an overzoomed tile cropped from it, is not here,
+        /// and shows the old bytes until MapKit next draws it.
         ///
         /// Apart from ``inFlight``, which holds rects with nothing drawn yet.
         /// A refresh can wait a long time for a slot, and its copy's memory
@@ -134,7 +137,17 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
         /// cannot become a request per draw. No retry wake is armed for these,
         /// because a redraw would only paint the copy again. The next refresh
         /// is asked for by the next draw that misses, as it always was.
-        var failures = TileFailureLog()
+        ///
+        /// Each failure waits the copy's recheck interval, or the server's
+        /// deadline if that is later, where a failed tile waits five seconds
+        /// at first. That is how long the old path left a tile alone after
+        /// its refresh failed: it drew the copy then, and the copy answered
+        /// for the interval. This copy was drawn before its refresh waited for
+        /// a slot, so its entry can lapse moments after the refresh fails, and
+        /// only this keeps the next request from coming sooner.
+        var failures = TileFailureLog(
+            policy: TileRetryPolicy(delays: [.seconds(TileCache.staleCoverageRecheckInterval)])
+        )
     }
 
     private let refreshes = Mutex(Refreshes())
@@ -671,9 +684,9 @@ nonisolated extension CachingTileOverlayRenderer {
         }
     }
 
-    /// Draws the fresh bytes a refresh brought over every rect showing the
-    /// saved copy, or backs off the refresh that failed. The saved copy stays
-    /// drawn either way.
+    /// Draws the fresh bytes a refresh brought over the rects that drew the
+    /// saved copy for it (see ``Refreshes/underWay``), or backs off the
+    /// refresh that failed. The saved copy stays drawn either way.
     ///
     /// Only `.failed` backs off: the server failed, or had asked through
     /// `Retry-After` to be left alone, and that deadline is the floor here as

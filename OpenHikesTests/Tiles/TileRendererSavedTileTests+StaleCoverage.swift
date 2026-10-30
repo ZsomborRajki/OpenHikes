@@ -129,7 +129,10 @@ extension TileRendererSavedTileTests {
     /// The refresh's failure is a server failing, and it backs off like one
     /// — floored, for a 429, by the deadline the server named. It goes to its
     /// own log rather than the one that skips a tile outright, because the
-    /// saved copy has to stay drawable while the refresh waits.
+    /// saved copy has to stay drawable while the refresh waits. And it waits
+    /// at least the recheck interval, as the load that refreshed before it
+    /// drew did: that one served the copy when its refresh failed, and the
+    /// copy answered for the interval before anything asked again.
     @Test("a failed refresh keeps the saved copy drawn and backs off", arguments: [
         StubTileProtocol.Response.status(500), Self.throttled,
     ])
@@ -140,6 +143,7 @@ extension TileRendererSavedTileTests {
         let (renderer, path, key) = try staleTile(on: stub)
         let savedAt = try Self.modificationDate(of: stub.savedFile(for: key))
 
+        let askedAt = ContinuousClock.now
         renderer.loadTileForTesting(at: path)
         await settleRefresh(of: path, on: renderer)
 
@@ -148,7 +152,8 @@ extension TileRendererSavedTileTests {
         #expect(try Self.modificationDate(of: stub.savedFile(for: key)) == savedAt, "a failed refresh writes nothing")
         #expect(renderer.refreshCounts.failed == 1, "the refresh backs off")
         let retryAt = try #require(renderer.refreshRetryTime(at: path))
-        #expect(retryAt > .now, "for a while yet")
+        let recheckAt = askedAt.advanced(by: .seconds(TileCache.staleCoverageRecheckInterval))
+        #expect(retryAt >= recheckAt, "no sooner than a failed refresh was ever asked again")
         if let serverDeadline = stub.cache.retryDeadline(forKey: key) {
             #expect(retryAt >= serverDeadline, "no sooner than a server that named a deadline asked")
         }
@@ -159,14 +164,16 @@ extension TileRendererSavedTileTests {
     /// And the backoff has teeth without costing the map anything. Once the
     /// copy's memory entry lapses, the next draw reads it back and draws it,
     /// and no refresh starts while the backoff stands — a refresh is under
-    /// way before the redraw this waits for, so one that started would show.
-    /// Throttled rather than a plain 500, so the backoff outlasts the test
-    /// however slowly the machine runs it.
+    /// way before the redraw this waits for, so one still running would
+    /// show, and one that had ended would have asked. A plain 500, because a
+    /// 429 leaves a `Retry-After` in the cache that withholds the request on
+    /// its own, and this backoff is the one under test. It lasts the recheck
+    /// interval, so it outlasts the test however slowly the machine runs it.
     @Test("a saved copy whose refresh is backing off is drawn again without a request")
     func backedOffRefreshStillDrawsTheCopy() async throws {
         let stub = StubbedTileCache()
         defer { stub.tearDown() }
-        StubTileProtocol.alwaysRespond(with: Self.throttled)
+        StubTileProtocol.alwaysRespond(with: .status(500))
         let (renderer, path, key) = try staleTile(on: stub)
         renderer.loadTileForTesting(at: path)
         await settleRefresh(of: path, on: renderer)

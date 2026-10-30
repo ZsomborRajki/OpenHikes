@@ -158,9 +158,11 @@ nonisolated extension TileCache {
     /// policy, and a deadline a server named for itself in `Retry-After` — so
     /// `reason` is the one place either is named. It describes the refusal,
     /// not what the map managed to put on screen in spite of it: a tile that
-    /// silently never loads is the hardest thing in this pipeline to debug,
-    /// and a hiker browsing downloaded ground offline is served entirely from
-    /// here.
+    /// silently never loads is the hardest thing in this pipeline to debug.
+    /// The map's own saved coverage is no longer served from here. It is
+    /// drawn ahead of its refresh by ``loadStoredTileResult(forKey:)``, and
+    /// the refresh arrives with `hasStaleCoverage` false, to be answered with
+    /// its refusal rather than with a copy that is on screen already.
     func withheldFetch(
         forKey key: String,
         reason: String,
