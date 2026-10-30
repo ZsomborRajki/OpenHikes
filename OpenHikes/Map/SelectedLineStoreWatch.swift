@@ -27,7 +27,7 @@
 //  `ModelContext.didSave`. A save of the other store (tile claims, the walk
 //  in progress) is dropped on the thread that posted it, before any hop here.
 //  A save of the hike's own store costs one look at history
-//  (`SelectedLineStoreCheck`), and so does following a hike: a hike selected
+//  (`StoreHistoryCheck`), and so does following a hike: a hike selected
 //  again is handed the read it had, which a line saved while it was let go
 //  has not replaced, so the first check runs at once, from that read.
 //
@@ -84,7 +84,7 @@ final class SelectedLineStoreWatch {
         var token: DefaultHistoryToken?
     }
 
-    private let making: SelectedLineStoreCheck.Making
+    private let making: StoreHistoryCheck.Making
     private let lineMayHaveChanged: () -> Void
     private let filter = StoreFilter()
     /// Removed by the `isolated deinit` below. SE-0371 hops that deinit back
@@ -113,7 +113,7 @@ final class SelectedLineStoreWatch {
     ///   copy holds what the store does, after a save of its row: the app's
     ///   is ``SelectedLine/refresh()``.
     init(
-        making: @escaping SelectedLineStoreCheck.Making = SelectedLineStoreCheck.answer,
+        making: @escaping StoreHistoryCheck.Making = StoreHistoryCheck.answer,
         lineMayHaveChanged: @escaping () -> Void
     ) {
         self.making = making
@@ -186,7 +186,7 @@ final class SelectedLineStoreWatch {
             return
         }
         guard let followed else { return }
-        let request = SelectedLineStoreCheck.Request(
+        let request = StoreHistoryCheck.Request(
             container: followed.container,
             persistentID: followed.hike.persistentModelID,
             storeID: followed.storeID,
@@ -201,7 +201,7 @@ final class SelectedLineStoreWatch {
         }
     }
 
-    private func land(_ answer: SelectedLineStoreCheck.Answer, generation: Int) {
+    private func land(_ answer: StoreHistoryCheck.Answer, generation: Int) {
         check = nil
         completedChecks &+= 1
         if var current = followed, current.generation == generation {

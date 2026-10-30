@@ -1,5 +1,5 @@
 //
-//  SelectedLineStoreCheck.swift
+//  StoreHistoryCheck.swift
 //  OpenHikes
 //
 //  The off-main half of `SelectedLineStoreWatch`: has anything saved the
@@ -44,7 +44,7 @@ import OpenHikesData
 import os
 import SwiftData
 
-nonisolated enum SelectedLineStoreCheck {
+nonisolated enum StoreHistoryCheck {
     private static let logger = Logger(subsystem: "OpenHikes", category: "SelectedLine")
 
     /// What a check needs, as values: the hike stays where its context lives.
