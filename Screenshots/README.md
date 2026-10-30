@@ -565,3 +565,30 @@ sync deletes — some minutes in, which is the middle of a capture. The symptom
 is `simctl launch` refusing with `FBSOpenApplicationServiceErrorDomain` code 4
 for an app that was launching a minute earlier, and it survives a reboot,
 because the app is genuinely gone.
+
+## The home page
+
+The site's home page, `docs/index.html`, shows five of the iPhone frames —
+04, 05, 08, 03 and 07, from the English light set — and watch frames 03 and
+04, as WebP copies in `docs/images/`. Frames 01, 02, 06, 09 and 10 are not
+among them: they carry the stock photographs, which stay out of this
+repository's history (*Photographs*). Frame 08 shows a Pro feature, the drawn
+trail's climb, so the page's Pro paragraph has to keep naming elevation.
+
+After a reshoot, remake the copies from the new sets with `cwebp`, from
+Homebrew's `webp`:
+
+```sh
+phone=Screenshots/Output/iphone_18_pro_max_en_ie_YYYY_MM_DD/light
+for frame in 03-nearby-trails 04-following-the-trail 05-recording-a-hike \
+    07-walk-summary 08-draw-your-own-trail; do
+  cwebp -q 82 -m 6 -sharp_yuv -resize 600 0 "$phone/$frame.png" -o "docs/images/$frame.webp"
+done
+watch=Screenshots/Output/apple_watch_ultra_4_49mm_en_ie_YYYY_MM_DD
+for frame in 03-how-much-is-left 04-recording-from-the-wrist; do
+  cwebp -q 85 -m 6 -sharp_yuv "$watch/$frame.png" -o "docs/images/watch-$frame.webp"
+done
+```
+
+Each frame's `alt` text on the page says what it shows without quoting its
+figures, so a reshoot changes it only when a frame shows something else.
