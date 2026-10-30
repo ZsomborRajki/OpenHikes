@@ -11,10 +11,10 @@ name: Cancel superseded runs
 #
 # Both events fire on the usual merge-and-delete, a few seconds apart, so they
 # are serialized per branch below rather than left to race. The second one
-# finds nothing, or is answered 409 by a run the first one has already taken
-# down, which the script reads as its own race.
+# finds nothing, or a run that the first one has already taken down, which the
+# script reads as its own race.
 #
-# It runs on ubuntu because it makes two API calls and builds nothing.
+# It runs on ubuntu because it makes a few API calls and builds nothing.
 on:
   delete:
   pull_request:
@@ -64,4 +64,9 @@ jobs:
           # `delete` carries the branch's name in `ref`; a pull request carries
           # it on its head. Neither is prefixed with refs/heads/.
           BRANCH: ${{ github.event.ref || github.event.pull_request.head.ref }}
-        run: Scripts/cancel-branch-runs.sh --branch "$BRANCH"
+        # This workflow's own runs are spared. A closed pull request's run
+        # carries the pull request's head branch, so this run is on the list it
+        # reads, and cancelling itself first would stop the cancels behind it.
+        run: >-
+          Scripts/cancel-branch-runs.sh --branch "$BRANCH"
+          --spare-workflow "$GITHUB_WORKFLOW"

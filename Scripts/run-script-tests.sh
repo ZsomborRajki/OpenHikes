@@ -39,9 +39,10 @@
 # Scripts/cancel-branch-runs.sh is here because it is the one script that
 # cancels work: it is handed a branch name by a `delete` event and takes down
 # every run against it, so what it will not touch — the default branch, a run
-# that has already finished — matters as much as what it will, and nothing
-# about either is visible until a run that was the only record of a commit is
-# gone. A refused cancel is asserted too, because a green job that cancelled
+# that has already finished, the cleanup run itself — matters as much as what
+# it will, and nothing about any of them is visible until a run that was the
+# only record of a commit is gone, or the cancels behind a cancelled cleanup
+# were never sent. A refused cancel is asserted too, because a green job that cancelled
 # nothing leaves the queue exactly as full as it was.
 # Scripts/sim-pool.sh is here because what it decides — which device a session
 # lands on, and whether that device is erased first — is invisible until two
@@ -321,14 +322,16 @@ if [[ " $* " == *" set "* && " $* " != *" -t 0 "* && -n "${STUB_HINGE_ANGLE_FAIL
 fi
 STUB
 
-# Answers the three gh subcommands Scripts/cancel-branch-runs.sh makes, and
+# Answers the four gh subcommands Scripts/cancel-branch-runs.sh makes, and
 # records every one. STUB_GH_DEFAULT_BRANCH is what `gh repo view` reports.
 # STUB_GH_RUNS names a file of the TSV rows `gh run list` prints for the branch
 # it was asked about, completed runs included, because deciding which of them
 # is still worth cancelling is the script's job and not the API's.
-# STUB_GH_CANCEL_409 and STUB_GH_CANCEL_REFUSES each name run ids: the first
-# answers as the API does for a run that finished between the listing and the
-# cancel, the second as it does for a token with no Actions scope.
+# STUB_GH_FINISHED and STUB_GH_CANCEL_REFUSES each name run ids: the first are
+# runs that finished between the listing and the cancel, answered in the words
+# gh 2.103.3 prints for the API's 409, which carry no status code, and then
+# reported `completed` by `gh run view`. The second are refused as a token with
+# no Actions scope is, and are still in progress when looked at again.
 cat > "$stub_bin/gh" <<'STUB'
 #!/usr/bin/env bash
 printf 'gh %s\n' "$*" >> "$STUB_CALL_LOG"
@@ -341,15 +344,23 @@ case "${1:-} ${2:-}" in
         ;;
     "run cancel")
         id="${3:-}"
-        if [[ " ${STUB_GH_CANCEL_409:-} " == *" $id "* ]]; then
-            echo "failed to cancel run: HTTP 409: Cannot cancel a workflow run that is completed." >&2
+        if [[ " ${STUB_GH_FINISHED:-} " == *" $id "* ]]; then
+            echo "Cannot cancel a workflow run that is completed" >&2
             exit 1
         fi
         if [[ " ${STUB_GH_CANCEL_REFUSES:-} " == *" $id "* ]]; then
-            echo "failed to cancel run: HTTP 403: Resource not accessible by integration" >&2
+            echo "HTTP 403: Resource not accessible by integration" >&2
             exit 1
         fi
-        echo "Request to cancel workflow submitted."
+        echo "Request to cancel workflow $id submitted."
+        ;;
+    "run view")
+        id="${3:-}"
+        if [[ " ${STUB_GH_FINISHED:-} " == *" $id "* ]]; then
+            echo "completed"
+        else
+            echo "in_progress"
+        fi
         ;;
     *)
         echo "stub gh: no answer for '$*'" >&2
@@ -3975,13 +3986,47 @@ if expect_status 0 \
     pass
 fi
 
+# What it lists when a closed pull request's cleanup is the caller: that run
+# carries the pull request's head branch, so it is on the list, newest and in
+# progress, and the `delete` event's cleanup may be waiting behind it.
+cat > "$work/gh-runs-cleanup.tsv" <<'EOF'
+102	pending	Cancel superseded runs
+101	in_progress	Cancel superseded runs
+100	queued	CI
+99	in_progress	CodeQL
+EOF
+
+# Cancelled first, the cleanup would be stopped before it sent the cancels
+# behind it, and a merge that keeps its branch has no `delete` to send them.
+STUB_GH_RUNS="$work/gh-runs-cleanup.tsv" \
+    run_script "cancel-branch-runs spares the workflow that calls it" \
+        "$cancel_runs" --branch "$cancel_branch" \
+        --spare-workflow "Cancel superseded runs"
+if expect_status 0 \
+    && expect_absent "$calls" "run cancel 102" "the recorded calls" \
+    && expect_absent "$calls" "run cancel 101" "the recorded calls" \
+    && expect_contains "$calls" "run cancel 100" "the recorded calls" \
+    && expect_contains "$calls" "run cancel 99" "the recorded calls"; then
+    pass
+fi
+
+run_script "cancel-branch-runs needs a value with --spare-workflow" \
+    "$cancel_runs" --branch "$cancel_branch" --spare-workflow
+if expect_status 2 \
+    && expect_contains "$output" "missing value" "the error" \
+    && expect_absent "$calls" "gh" "the recorded calls"; then
+    pass
+fi
+
 # The script's own race: the list is a moment old, and a run can finish inside
-# it. That is a 409 and not a failure.
-STUB_GH_RUNS="$work/gh-runs-merged.tsv" STUB_GH_CANCEL_409=41017637709 \
-    run_script "cancel-branch-runs reads a 409 as the run having finished under it" \
+# it. gh words the API's 409 without its code, so the run's status is what says
+# so, and it is not a failure.
+STUB_GH_RUNS="$work/gh-runs-merged.tsv" STUB_GH_FINISHED=41017637709 \
+    run_script "cancel-branch-runs reads a completed run as having finished under it" \
         "$cancel_runs" --branch "$cancel_branch"
 if expect_status 0 \
     && expect_contains "$output" "had already finished" "the report" \
+    && expect_contains "$calls" "run view 41017637709" "the recorded calls" \
     && expect_contains "$output" "Cancelled CI run 41017637698" "the report"; then
     pass
 fi
@@ -3993,6 +4038,7 @@ STUB_GH_RUNS="$work/gh-runs-merged.tsv" STUB_GH_CANCEL_REFUSES=41017637698 \
         "$cancel_runs" --branch "$cancel_branch"
 if expect_status 1 \
     && expect_contains "$output" "403" "the error" \
+    && expect_contains "$calls" "run view 41017637698" "the recorded calls" \
     && expect_contains "$calls" "run cancel 41017637709" "the recorded calls"; then
     pass
 fi
