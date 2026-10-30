@@ -1,0 +1,67 @@
+name: Cancel superseded runs
+
+# Merging a pull request leaves its runs queued, and on this project a queued
+# run holds a macOS runner for the better part of an hour while the branches
+# still open wait behind it. The `concurrency` group in `ci.yml` cancels a run
+# only when a newer push to the same ref supersedes it, and neither a merge nor
+# a branch deletion is a push, so nothing there ever reaches a merged branch's
+# runs. This workflow is what does, and `Scripts/cancel-branch-runs.sh` is the
+# program: a branch that has gone, and a pull request that is closed, both mean
+# the same thing to a run still waiting for a runner.
+#
+# Both events fire on the usual merge-and-delete, a few seconds apart, so they
+# are serialized per branch below rather than left to race. The second one
+# finds nothing, or is answered 409 by a run the first one has already taken
+# down, which the script reads as its own race.
+#
+# It runs on ubuntu because it makes two API calls and builds nothing.
+on:
+  delete:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cancel-superseded-${{ github.event.ref || github.event.pull_request.head.ref }}
+  cancel-in-progress: false
+
+jobs:
+  cancel:
+    name: Cancel the branch's queued runs
+    # A deleted *branch* only: the TestFlight workflow pushes a tag per upload,
+    # and `github.event.ref` for a deleted tag is a name no run ever had.
+    # And a pull request whose head is in this repository only: a fork's
+    # `closed` event carries a token that cannot write to Actions, so the job
+    # would do nothing but go red on somebody else's pull request.
+    if: >-
+      (github.event_name == 'delete' && github.event.ref_type == 'branch') ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      # This repository's default token is read-only, so the cancel is refused
+      # without this. The script reports a refusal rather than swallowing it:
+      # a green job that cancelled nothing would leave the queue exactly as
+      # full as before, and that is the state this workflow exists to notice.
+      actions: write
+    steps:
+      # The default branch rather than the event's ref: `pull_request` would
+      # otherwise check out `refs/pull/<n>/merge`, which no longer exists once
+      # the pull request is merged, and `delete` names a branch that has gone.
+      # It also means the program that runs is the one on `main`, never a
+      # version a pull request wrote.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Cancel what is still queued for the branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # `delete` carries the branch's name in `ref`; a pull request carries
+          # it on its head. Neither is prefixed with refs/heads/.
+          BRANCH: ${{ github.event.ref || github.event.pull_request.head.ref }}
+        run: Scripts/cancel-branch-runs.sh --branch "$BRANCH"
