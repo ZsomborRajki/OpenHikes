@@ -93,7 +93,17 @@ struct WeatherBadge: View {
     private static let heightDrivingTextStyle: Font.TextStyle = .title3
 
     let state: WeatherBadgeState
+    /// Whether the map under the badge is a light page whatever the phone's
+    /// appearance — ``MapBase/keepsChromeLight``. The tracking button is
+    /// inside the map view and takes the map's override; the badge is over
+    /// it, so it is handed the same answer instead. Without it, dark mode
+    /// drew a white temperature and white cloud on clear glass over light
+    /// tiles.
+    var keepsLight = false
     let onTap: () -> Void
+
+    /// The phone's own appearance, which the badge keeps over MapKit's maps.
+    @Environment(\.colorScheme) private var colorScheme
 
     /// Whether the reading has passed ``WeatherPollingPolicy/stalenessInterval``.
     ///
@@ -120,9 +130,9 @@ struct WeatherBadge: View {
             // The clear kind rather than the regular one. The badge stands
             // over the map rather than over another control, and the regular
             // glass frosted out whatever it covered, MapKit's scale included
-            // when the two met at the top of a short map. A multicolour
-            // symbol and a headline temperature read through clear glass, and
-            // the map stays visible behind them.
+            // when the two met at the top of a short map. A symbol and a
+            // headline temperature in the map's own appearance read through
+            // clear glass, and the map stays visible behind them.
             //
             // `interactive()` now that it is a control: the press response is
             // the only thing telling a sighted user the capsule answers a tap.
@@ -133,6 +143,11 @@ struct WeatherBadge: View {
             .minimumTapTarget()
         }
         .buttonStyle(.plain)
+        // Around the glass as well as the contents, as the map's override is
+        // around the tracking button's: the clear glass resolves its own
+        // light and dark, and the temperature and the symbol are the
+        // primary colour of whichever it is.
+        .environment(\.colorScheme, keepsLight ? .light : colorScheme)
         .task(id: state.snapshot?.capturedAt) { await trackStaleness() }
         // A symbol and a number that only mean anything together, and the
         // number needs its unit spelled out to be spoken as a temperature.
@@ -162,8 +177,12 @@ struct WeatherBadge: View {
                 .controlSize(.small)
                 .accessibilityHidden(true)
         case .reading(let snapshot, _):
+            // Hierarchical in the primary colour rather than multicolour, so
+            // the symbol turns over with the temperature: a multicolour
+            // cloud is white in both appearances, which vanished into the
+            // light glass over tiles.
             Image(systemName: snapshot.symbolName)
-                .symbolRenderingMode(.multicolor)
+                .symbolRenderingMode(.hierarchical)
                 .font(.system(Self.heightDrivingTextStyle))
                 .accessibilityHidden(true)
             // One formatter, two widths: this and the spoken value below are

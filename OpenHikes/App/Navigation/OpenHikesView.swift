@@ -249,7 +249,10 @@ struct OpenHikesView: View {
         }
             .overlay(alignment: .topLeading) {
                 if appModel.weatherManager.state != .idle, !panelCoversMap {
-                    WeatherBadge(state: appModel.weatherManager.state) {
+                    WeatherBadge(
+                        state: appModel.weatherManager.state,
+                        keepsLight: activeBase.keepsChromeLight
+                    ) {
                         weatherDetail.present()
                     }
                         // Beside the panel in landscape, for the same reason
