@@ -37,6 +37,7 @@ import OpenHikesData
 import OpenHikesShared
 import SwiftData
 import SwiftUI
+import Synchronization
 import Testing
 
 @MainActor
@@ -52,10 +53,40 @@ final class HikeDetailLineTests {
         }
     }
 
-    private let container: ModelContainer
-    private let model: OpenHikesModel
-    private let highlight = RouteHighlight()
+    /// The selection's fetch, which once armed holds the next call after it
+    /// has read its row, until opened: the read of a new line kept out, as a
+    /// long line or a busy store keeps it.
+    nonisolated final class HeldFetch: Sendable {
+        private let state = Mutex((isArmed: false, isHolding: false))
+        private let release = DispatchSemaphore(value: 0)
+
+        /// Whether the held call has read its row and is waiting.
+        var isHolding: Bool { state.withLock { $0.isHolding } }
+
+        func arm() { state.withLock { $0.isArmed = true } }
+
+        func fetch(_ context: ModelContext, _ id: PersistentIdentifier) throws -> Hike? {
+            let hike = try SelectedLine.fetchHike(context, id)
+            let holds = state.withLock { state in
+                defer { state.isArmed = false }
+                return state.isArmed
+            }
+            guard holds else { return hike }
+            _ = hike?.route
+            state.withLock { $0.isHolding = true }
+            release.wait()
+            return hike
+        }
+
+        func open() { release.signal() }
+    }
+
+    let container: ModelContainer
+    let model: OpenHikesModel
+    let highlight = RouteHighlight()
     private let sandbox = TileSandbox()
+    /// What the selection's reads fetch through, so one can be held.
+    let lineFetches = HeldFetch()
 
     init() throws {
         let directory = FileManager.default.temporaryDirectory
@@ -66,7 +97,7 @@ final class HikeDetailLineTests {
             localURL: directory.appending(path: "OpenHikesLocal.store")
         )
         container.mainContext.autosaveEnabled = false
-        let lines = SelectedLine()
+        let lines = SelectedLine(fetch: lineFetches.fetch)
         model = OpenHikesModel(
             container: container,
             backgroundTracker: BackgroundTrailTracker(
@@ -87,13 +118,13 @@ final class HikeDetailLineTests {
     }
 
     /// The ridge moved half a degree north.
-    private static let movedRoute = Fixture.ridgeRoute.map { point in
+    static let movedRoute = Fixture.ridgeRoute.map { point in
         var moved = point
         moved.latitude += 0.5
         return moved
     }
 
-    private static func isOnMovedRoute(_ coordinate: CLLocationCoordinate2D?) -> Bool {
+    static func isOnMovedRoute(_ coordinate: CLLocationCoordinate2D?) -> Bool {
         (coordinate?.latitude ?? 0) > (Fixture.ridgeRoute.last?.latitude ?? 0) + 0.4
     }
 
@@ -123,7 +154,7 @@ final class HikeDetailLineTests {
     }
 
     /// What the selection handler and the model do with a finished hike.
-    private func select(_ hike: Hike) async {
+    func select(_ hike: Hike) async {
         DisplayedRouteCoordinateCache().prepare(for: hike, from: model.selectedLine)
         model.selectedHikeDidChange(to: hike)
         await model.autoSaveController.waitForActivation()
@@ -132,7 +163,11 @@ final class HikeDetailLineTests {
 
     /// Hosts the hike's screen in a window, as the sheet pushes it, with the
     /// hikes list's query beside it when asked for.
-    private func host(_ hike: Hike, withHikesList: Bool) throws -> UIWindow {
+    func host(
+        _ hike: Hike,
+        withHikesList: Bool,
+        trailGraphProvider: (any TrailGraphProviding)? = nil
+    ) throws -> UIWindow {
         let detail = HikeDetailView(
             hike: hike,
             highlight: highlight,
@@ -144,6 +179,7 @@ final class HikeDetailLineTests {
             backgroundTracker: model.backgroundTracker,
             selectedLine: model.selectedLine,
             lineStoreWatch: model.selectedLineStoreWatch,
+            trailGraphProvider: trailGraphProvider,
             walkSession: model.walkSession,
             photoPins: PhotoMapPinController(),
             placePins: model.placePins
@@ -164,7 +200,7 @@ final class HikeDetailLineTests {
         return window
     }
 
-    private static func takeDown(_ window: UIWindow) {
+    static func takeDown(_ window: UIWindow) {
         window.isHidden = true
         window.rootViewController = nil
     }

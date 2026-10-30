@@ -641,7 +641,13 @@ private extension HikeDetailView {
             route: await read.route,
             provider: trailGraphProvider
         )
-        guard !Task.isCancelled, !breakdowns.isEmpty else { return }
+        // Nor for a line replaced while it was measured. What is measured is
+        // stored on the hike, and the new line moves this task's key only once
+        // it has been read: kept, an answer that landed before then stood for
+        // the new line, whose own task found it stored and measured nothing.
+        // A line saved elsewhere replaces the read once the store watch has
+        // compared it — see ``SelectedLine/refresh()``.
+        guard !Task.isCancelled, !read.isReplaced, !breakdowns.isEmpty else { return }
         // No transition and no curve of our own: SwiftUI's default animation
         // and default insertion — a fade — are what every other section that
         // appears late on this screen already uses.
