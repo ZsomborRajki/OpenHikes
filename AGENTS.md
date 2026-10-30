@@ -951,7 +951,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
     map styles (Stadia Outdoors, Stamen Terrain, Thunderforest Outdoors), offline
     Stadia maps, and Stadia elevation where a trail has none. A change updates
     the paywall, `OpenHikes.storekit`, `docs/terms/` in both languages, the
-    README and App Store Connect together.
+    support and home pages in `docs/`, the README and App Store Connect
+    together.
   - Everything else is free, the community included.
   - The paywall stays reachable from About even when no keys are bundled.
 - **Remember only the negative entitlement answer.** `MapEntitlementStore` starts
@@ -1514,8 +1515,8 @@ Each fact lives in one file:
 | `README.md` | What the app is and needs, and how to build it and find your way around. No engineering rationale. |
 | `CONTRIBUTING.md` | A person's short path to a first change. It points here. |
 | `SECURITY.md` | Vulnerability reporting, and what the public database grants to whom (the argument stays in `CommunitySchema.swift`) |
-| `Screenshots/README.md` | The App Store screenshot set and its capture scripts |
-| `docs/` | The GitHub Pages site (privacy, terms, support) linked from the App Store listing. It is not a documentation folder; new prose goes at the repository root. |
+| `Screenshots/README.md` | The App Store screenshot set, its capture scripts, and the copies the home page shows |
+| `docs/` | The GitHub Pages site: a home page, and the privacy, terms and support pages linked from the App Store listing. It is not a documentation folder; new prose goes at the repository root. |
 
 - **Open work is a GitHub issue, never a checked-in list.**
 - **Cite this file by section name.** Code comments cite sections such as

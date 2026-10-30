@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!--
+  The site's home page: what OpenHikes is, a look at it, and where to get it.
+  It loads nothing from anywhere else and runs nothing: no web fonts, no
+  JavaScript, no analytics, which is the app's own promise kept by its page.
+
+  Everything it shows is in images/. The screenshots are WebP copies of App
+  Store frames, chosen from the ones that carry no stock photographs;
+  Screenshots/README.md (*The home page*) says which, and how to remake them
+  after a reshoot. icon-512.jpg and apple-touch-icon.png are the app icon from
+  OpenHikes/Assets.xcassets/AppIcon.appiconset, flattened through JPEG with
+  sips so that neither carries an alpha channel. app-store-badge.svg is Apple's
+  own badge from toolbox.marketingtools.apple.com, unmodified, as Apple's
+  marketing guidelines require.
+-->
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenHikes — hiking app for iPhone and Apple Watch</title>
+<meta name="description" content="Record hikes, plan trails on offline OpenStreetMap maps and open any GPX file. Free for iPhone and Apple Watch, open source, with no account and no tracking.">
+<link rel="canonical" href="https://zsomborrajki.github.io/OpenHikes/">
+<link rel="icon" type="image/png" href="images/apple-touch-icon.png">
+<link rel="apple-touch-icon" href="images/apple-touch-icon.png">
+<meta name="apple-itunes-app" content="app-id=6787467479">
+<meta name="theme-color" content="#f6f7f4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0c0f0d" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="OpenHikes">
+<meta property="og:title" content="OpenHikes — hiking app for iPhone and Apple Watch">
+<meta property="og:description" content="Record hikes, plan trails on offline OpenStreetMap maps and open any GPX file. Free for iPhone and Apple Watch, open source, with no account and no tracking.">
+<meta property="og:url" content="https://zsomborrajki.github.io/OpenHikes/">
+<meta property="og:image" content="https://zsomborrajki.github.io/OpenHikes/images/icon-512.jpg">
+<meta property="og:image:width" content="512">
+<meta property="og:image:height" content="512">
+<meta property="og:image:alt" content="The OpenHikes app icon">
+<meta name="twitter:card" content="summary">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "MobileApplication",
+  "name": "OpenHikes",
+  "description": "Record hikes, plan trails on offline OpenStreetMap maps and open any GPX file, with no account and no server holding your hikes.",
+  "url": "https://zsomborrajki.github.io/OpenHikes/",
+  "image": "https://zsomborrajki.github.io/OpenHikes/images/icon-512.jpg",
+  "screenshot": [
+    "https://zsomborrajki.github.io/OpenHikes/images/04-following-the-trail.webp",
+    "https://zsomborrajki.github.io/OpenHikes/images/05-recording-a-hike.webp",
+    "https://zsomborrajki.github.io/OpenHikes/images/08-draw-your-own-trail.webp",
+    "https://zsomborrajki.github.io/OpenHikes/images/03-nearby-trails.webp",
+    "https://zsomborrajki.github.io/OpenHikes/images/07-walk-summary.webp"
+  ],
+  "operatingSystem": "iOS 18.4 or later, watchOS 11 or later",
+  "applicationCategory": "TravelApplication",
+  "installUrl": "https://apps.apple.com/app/openhikes/id6787467479",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "author": {
+    "@type": "Person",
+    "name": "Zsombor Rajki",
+    "url": "https://github.com/ZsomborRajki"
+  },
+  "license": "https://github.com/ZsomborRajki/OpenHikes/blob/main/LICENSE",
+  "sameAs": [
+    "https://apps.apple.com/app/openhikes/id6787467479",
+    "https://github.com/ZsomborRajki/OpenHikes"
+  ]
+}
+</script>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f6f7f4;
+    --surface: #ffffff;
+    --text: #17201a;
+    --muted: #56615a;
+    --line: rgb(23 32 26 / 0.12);
+    /* The app's AccentColor, light and dark */
+    --accent: #1b7f3b;
+    --glow-green: rgb(27 127 59 / 0.10);
+    --glow-red: rgb(229 72 77 / 0.07);
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 12px 32px rgb(0 0 0 / 0.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0c0f0d;
+      --surface: #151a17;
+      --text: #e8eee9;
+      --muted: #a3ada6;
+      --line: rgb(232 238 233 / 0.14);
+      --accent: #44ee6e;
+      --glow-green: rgb(68 238 110 / 0.11);
+      --glow-red: rgb(229 72 77 / 0.11);
+      --shadow: 0 12px 32px rgb(0 0 0 / 0.5);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    color: var(--text);
+    background-color: var(--bg);
+    /* The icon's two glows, green and red, behind the top of the page */
+    background-image:
+      radial-gradient(48rem 26rem at 12% -4rem, var(--glow-green), transparent 70%),
+      radial-gradient(48rem 26rem at 88% -4rem, var(--glow-red), transparent 70%);
+    background-repeat: no-repeat;
+    font: 1rem/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  }
+  a { color: var(--accent); }
+  h1, h2, h3, .tagline, .meta, figcaption { text-wrap: balance; }
+  p { text-wrap: pretty; }
+  a:focus-visible, .strip:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 0.375rem;
+  }
+  /* Inline padding only, so that no section's own top padding is overridden */
+  .wrap { max-width: 68rem; margin: 0 auto; padding-inline: 1.25rem; }
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .top { display: flex; justify-content: flex-end; gap: 1.25rem; padding-top: 1rem; font-size: 0.9375rem; }
+  .top a { color: var(--muted); text-decoration: none; }
+  .top a:hover { color: var(--text); text-decoration: underline; }
+
+  .hero { padding-top: 2.5rem; text-align: center; }
+  .hero .icon {
+    display: block;
+    width: 7.5rem;
+    height: 7.5rem;
+    margin: 0 auto;
+    border-radius: 22.5%;
+    box-shadow: var(--shadow);
+  }
+  h1 {
+    margin: 1.25rem 0 0.25rem;
+    font-size: clamp(2.25rem, 6vw, 3.25rem);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+  }
+  .tagline { margin: 0 0 1rem; font-size: clamp(1.15rem, 2.6vw, 1.4rem); font-weight: 600; }
+  .lead { max-width: 36rem; margin: 0 auto 1.75rem; color: var(--muted); font-size: 1.0625rem; }
+  .cta { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center; align-items: center; }
+  .cta .badge { display: block; border-radius: 0.625rem; }
+  .cta .badge img { display: block; width: 10rem; height: auto; }
+  .button {
+    display: inline-flex;
+    align-items: center;
+    height: 3.35rem;
+    padding: 0 1.25rem;
+    border: 1px solid var(--line);
+    border-radius: 0.75rem;
+    background: var(--surface);
+    color: var(--text);
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .button:hover { border-color: var(--muted); }
+  .meta { margin: 1rem 0 0; color: var(--muted); font-size: 0.875rem; }
+  .profile { display: block; width: 100%; max-width: 40rem; height: auto; margin: 2.25rem auto 0; color: var(--text); }
+
+  section { padding-top: 3.5rem; }
+  h2 { margin: 0 0 1.25rem; font-size: clamp(1.5rem, 3.5vw, 2rem); line-height: 1.2; letter-spacing: -0.01em; }
+
+  .shots { padding-top: 2rem; }
+  .strip { overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-inline: 1.25rem; }
+  /* Centered while it fits, scrolling from its first frame once it does not */
+  .track { display: flex; gap: 1.25rem; width: max-content; margin: 0 auto; padding: 0.75rem 1.25rem 1.5rem; }
+  .track figure { width: 13rem; margin: 0; scroll-snap-align: start; }
+  .track img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid var(--line);
+    border-radius: 1.75rem;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+  .track figcaption { margin-top: 0.75rem; color: var(--muted); font-size: 0.875rem; line-height: 1.4; text-align: center; }
+
+  .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(17rem, 100%), 1fr)); }
+  .card { padding: 1.25rem 1.25rem 1.125rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--surface); }
+  .card h3 { margin: 0 0 0.375rem; font-size: 1.0625rem; line-height: 1.3; }
+  .card p { margin: 0; }
+
+  .watch { display: grid; gap: 2rem; align-items: center; }
+  .watch p { margin: 0 0 1rem; }
+  .watch .note { color: var(--muted); font-size: 0.9375rem; }
+  .watch-shots { display: flex; gap: 1rem; justify-content: center; }
+  .watch-shots img {
+    width: min(11rem, 42vw);
+    height: auto;
+    border: 1px solid var(--line);
+    border-radius: 2.25rem;
+    background: #000;
+    box-shadow: var(--shadow);
+  }
+
+  .more { padding-top: 3.5rem; }
+  .trio { display: grid; gap: 2.5rem; }
+  .trio section { padding-top: 0; }
+  .trio h2 { margin-bottom: 0.75rem; font-size: 1.375rem; }
+  .trio p { margin: 0 0 0.75rem; }
+
+  @media (min-width: 52rem) {
+    .watch { grid-template-columns: 1fr 1fr; }
+    .trio { grid-template-columns: repeat(3, 1fr); }
+  }
+
+  footer { margin-top: 4rem; padding-block: 1.5rem 3rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.875rem; }
+  footer nav { display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; margin-bottom: 1rem; font-size: 0.9375rem; }
+  footer nav a { color: var(--text); }
+  footer p { margin: 0.25rem 0; }
+  footer p a { color: inherit; }
+</style>
+</head>
+<body>
+
+<header class="wrap">
+  <nav class="top" aria-label="Site">
+    <a href="support/">Support</a>
+    <a href="privacy/">Privacy</a>
+    <a href="https://github.com/ZsomborRajki/OpenHikes">GitHub</a>
+  </nav>
+</header>
+
+<main>
+
+<section class="hero wrap">
+  <img class="icon" src="images/icon-512.jpg" width="512" height="512" alt="">
+  <h1>OpenHikes</h1>
+  <p class="tagline">A hiking app for iPhone and Apple&nbsp;Watch.</p>
+  <p class="lead">Record your hikes, plan trails on offline maps and open any GPX file&nbsp;— with no account to make and no server holding your hikes. They live on your phone, and follow you between your own devices through your own iCloud.</p>
+  <div class="cta">
+    <a class="badge" href="https://apps.apple.com/app/openhikes/id6787467479"><img src="images/app-store-badge.svg" width="160" height="53" alt="Download on the App Store"></a>
+    <a class="button" href="https://github.com/ZsomborRajki/OpenHikes">Open source on GitHub</a>
+  </div>
+  <p class="meta">Free · iPhone with iOS&nbsp;18.4&nbsp;or&nbsp;later · Apple&nbsp;Watch&nbsp;app&nbsp;included</p>
+  <svg class="profile" viewBox="0 0 640 112" aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="climb" x1="0" x2="1" y1="0" y2="0">
+        <stop offset="0" stop-color="#34c759"/>
+        <stop offset="0.45" stop-color="#f2c94c"/>
+        <stop offset="0.75" stop-color="#f2994a"/>
+        <stop offset="1" stop-color="#e5484d"/>
+      </linearGradient>
+    </defs>
+    <path d="M8,98 C40,98 60,90 90,84 S130,70 150,74 S185,60 205,52 S240,30 270,24 S320,22 340,30 S372,74 400,78 S445,52 470,56 S505,84 540,88 S600,90 626,86"
+      fill="none" stroke="url(#climb)" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="626" cy="86" r="6" fill="currentColor"/>
+  </svg>
+</section>
+
+<section class="shots" aria-labelledby="shots-title">
+  <h2 id="shots-title" class="visually-hidden">Screenshots</h2>
+  <div class="strip" role="region" aria-label="Screenshots, scrolling sideways" tabindex="0">
+    <div class="track">
+      <figure>
+        <img src="images/04-following-the-trail.webp" width="600" height="1304" loading="lazy" decoding="async"
+          alt="A trail beside a lake on the map, colored by steepness, above its elevation profile and a Live Progress bar saying how much of it is left.">
+        <figcaption>Follow a trail, and see how much is left</figcaption>
+      </figure>
+      <figure>
+        <img src="images/05-recording-a-hike.webp" width="600" height="1304" loading="lazy" decoding="async"
+          alt="A hike being recorded, with its distance, duration and climb under the line recorded so far.">
+        <figcaption>Record with the phone in your pocket</figcaption>
+      </figure>
+      <figure>
+        <img src="images/08-draw-your-own-trail.webp" width="600" height="1304" loading="lazy" decoding="async"
+          alt="A new trail planned through three stops, routed along paths on the map, with the stops listed underneath.">
+        <figcaption>Plan a trail stop by stop</figcaption>
+      </figure>
+      <figure>
+        <img src="images/03-nearby-trails.webp" width="600" height="1304" loading="lazy" decoding="async"
+          alt="Hikes other people published and a waymarked route from OpenStreetMap, listed under the map with their lines drawn on it.">
+        <figcaption>Find trails other hikers published</figcaption>
+      </figure>
+      <figure>
+        <img src="images/07-walk-summary.webp" width="600" height="1304" loading="lazy" decoding="async"
+          alt="The summary of a walk that covered the whole trail, with its active time and furthest point.">
+        <figcaption>Look back on every walk</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section class="wrap" aria-labelledby="features-title">
+  <h2 id="features-title">What it does</h2>
+  <div class="grid">
+    <article class="card">
+      <h3>Record your hike</h3>
+      <p>Tap record and put the phone in your pocket. OpenHikes keeps the track with the screen off and fuses the barometer into the elevation, so the climb is the climb. A recording survives the app being closed, and Siri, Shortcuts and Control Center can start, pause and stop it.</p>
+    </article>
+    <article class="card">
+      <h3>Plan a trail</h3>
+      <p>Put stops on the map and each leg is routed along real paths, so the length is the length of the walk. Reorder the stops like directions in Apple Maps, then save the trail and hike it.</p>
+    </article>
+    <article class="card">
+      <h3>Maps that work with no signal</h3>
+      <p>OpenStreetMap is the default, and free. Areas you browse are kept automatically, so the map you looked at last night is still there in the valley with no bars. Color the route by steepness or by difficulty.</p>
+    </article>
+    <article class="card">
+      <h3>Bring the GPX you already have</h3>
+      <p>A .gpx file from Files, AirDrop, Mail or any share sheet opens straight into the app, with its statistics and an elevation profile you can scrub. Share a hike and you get a standard GPX file back, so nothing is locked in.</p>
+    </article>
+    <article class="card">
+      <h3>Places along the trail</h3>
+      <p>Viewpoints, summits, water, shelters, camps and parking along your trail, from OpenStreetMap. Attach your photos to them, or mark places of your own.</p>
+    </article>
+    <article class="card">
+      <h3>Photos where you took them</h3>
+      <p>Pictures from the hike are pinned to the point on the trail where they were taken, found by their timestamps or picked from your library. Share a hike as a picture: its line and figures over one of your own photos.</p>
+    </article>
+    <article class="card">
+      <h3>Trails other people have hiked</h3>
+      <p>Pan the map and ask, or search by name, for hikes other people have published and the waymarked routes OpenStreetMap knows about. Publishing your own is free, and a person reviews every hike before anyone else sees it.</p>
+    </article>
+    <article class="card">
+      <h3>On your Lock Screen and Home Screen</h3>
+      <p>A widget draws your trail with its progress. While you record or follow a trail, a Live Activity keeps the figures on the Lock Screen and in the Dynamic Island.</p>
+    </article>
+    <article class="card">
+      <h3>Weather, Health and iCloud</h3>
+      <p>Apple Weather sits over the map. Finished hikes can be saved to Health as workouts, and your hikes follow you to your other devices through your own iCloud.</p>
+    </article>
+  </div>
+</section>
+
+<section class="wrap watch" aria-labelledby="watch-title">
+  <div>
+    <h2 id="watch-title">On your wrist</h2>
+    <p>The Apple Watch app draws the trail you picked and shows where you are on it and how much is left. It works that out on the watch itself, so it keeps going with your phone in your bag.</p>
+    <p>It records a hike on its own, through a long walk with the screen dark, and hands the finished walk to your phone the next time the two are together. While your phone is the one recording, the watch can pause, resume and stop it.</p>
+    <p class="note">The watch app comes with the iPhone app and needs watchOS&nbsp;11 or later.</p>
+  </div>
+  <div class="watch-shots">
+    <img src="images/watch-03-how-much-is-left.webp" width="422" height="514" loading="lazy" decoding="async"
+      alt="Apple Watch following a trail, with the distance left, the share done and whether you are on the trail.">
+    <img src="images/watch-04-recording-from-the-wrist.webp" width="422" height="514" loading="lazy" decoding="async"
+      alt="Apple Watch recording a hike, with its time, distance, climb, average speed and heart rate.">
+  </div>
+</section>
+
+<div class="wrap more">
+  <div class="trio">
+    <section aria-labelledby="privacy-title">
+      <h2 id="privacy-title">Your hikes stay yours</h2>
+      <p>There is no OpenHikes account and no server holding your hikes. They sync through your own private iCloud, while photographs and saved maps stay on the device they came from. The app contains no analytics, no advertising and no tracking of any kind.</p>
+      <p>Nothing you record reaches other people unless you publish it. The <a href="privacy/">Privacy Policy</a> describes exactly what the app sends, and where.</p>
+    </section>
+    <section aria-labelledby="pro-title">
+      <h2 id="pro-title">Free, with an optional Pro</h2>
+      <p>Recording, the OpenStreetMap map, GPX, photos, community trails, the widget, the Live Activity, the Apple Watch app and iCloud sync are all free.</p>
+      <p>OpenHikes Pro is a monthly subscription with a free trial. It adds commercial map styles with hillshading and contour lines, a whole route’s map downloaded before you leave, and elevation for trails that have none. Those services bill OpenHikes for every use, and paying for them is what keeps the free map free.</p>
+    </section>
+    <section aria-labelledby="source-title">
+      <h2 id="source-title">Open source</h2>
+      <p>OpenHikes is made by one person and is open source under the MIT license. If you would rather know what it does than take a policy’s word for it, <a href="https://github.com/ZsomborRajki/OpenHikes">the whole app is on GitHub</a>, along with what is being worked on next.</p>
+      <p>Something broken, unclear or missing? The <a href="support/">support page</a> says how to get in touch, and answers the common questions.</p>
+    </section>
+  </div>
+</div>
+
+</main>
+
+<footer class="wrap">
+  <nav aria-label="Pages">
+    <a href="support/">Support</a>
+    <a href="privacy/">Privacy Policy</a>
+    <a href="terms/">Terms &amp; Conditions</a>
+    <a href="https://github.com/ZsomborRajki/OpenHikes">OpenHikes on GitHub</a>
+  </nav>
+  <p>The maps in the screenshots are © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>.</p>
+  <p>Apple, the Apple logo, iPhone and Apple Watch are trademarks of Apple Inc., registered in the U.S. and other countries and regions. App Store is a service mark of Apple Inc.</p>
+</footer>
+
+</body>
+</html>
