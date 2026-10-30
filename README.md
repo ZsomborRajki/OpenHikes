@@ -2,160 +2,110 @@
 
 [![Download on the App Store](docs/images/app-store-badge.svg)](https://apps.apple.com/app/openhikes/id6787467479)
 
-OpenHikes is a local-first SwiftUI and SwiftData trail viewer for iPhone, with a companion app for Apple Watch. It imports GPX tracks, records live hikes, displays them on a MapKit map, provides route statistics and an interactive elevation profile, and keeps selected map areas available offline.
+OpenHikes is a local-first hiking app for iPhone and Apple Watch, built with SwiftUI, SwiftData and MapKit. Record a hike, import a GPX file or draw a trail, then walk it, read its elevation profile and keep its map for when there is no signal.
 
-That is local-first with one deliberate exception. There is no OpenHikes account and no server holding your hikes: everything lives on the device, and what syncs travels through the hiker's own private iCloud database. The exception is sharing a hike, which publishes it to a public CloudKit database other people browse. `OpenHikes/PrivacyInfo.xcprivacy` and [the privacy policy](https://zsomborrajki.github.io/OpenHikes/privacy/) describe exactly what that sends.
+There is no OpenHikes account and no server holding your hikes: they live on the device and sync through your own private iCloud database. The one exception is sharing a hike, which publishes it to a public database that other hikers browse. [The privacy policy](https://zsomborrajki.github.io/OpenHikes/privacy/) says exactly what that sends.
 
 ## Features
 
-- **GPX import and export.** A downloaded `.gpx` opens straight into the app from Files, AirDrop or any share sheet — or several at once from *Import GPX* — and a file holding a multi-day trip or a region's walks becomes one hike per track, after a list of them you can untick. Each arrives with track metadata, route statistics — overall and moving-time average speed side by side, so a long lunch stop does not read as a slow walk — elevation-chart scrubbing, route styling and direction chevrons. The Share button hands a hike back out as GPX 1.1.
-- **Drawing a trail.** Every other trail in the app was drawn somewhere else — a recording is a walk that already happened, a GPX is a file somebody sent, a listing is somebody else's route. This is the one you make. Press and hold anywhere on the map and a pin drops there, with a card that tells you what is there and asks whether you want it on the route: the start, the far end or a stop along the way. Nothing changes until you answer, so looking at the map costs nothing, and closing the card leaves the pin where it is until you remove it. Each stretch between two points follows the paths OpenStreetMap has mapped, so the line goes where you could actually walk and the length is the length of the walk rather than of the line between the taps; a switch turns that off when you mean a straight line, and where nothing is mapped — or where OpenStreetMap is too busy to answer — the stretch stays straight, says so, and never stops you drawing. The route reads as a list of stops — where it starts, what it passes through, where it ends — joined by a line, with a handle on every row so any of them can be dragged somewhere else in the walk, and *Add Stop* under them once there is a start and a destination. Each row says what is *there*: a stop put down from a pin gets the address of its spot a moment later, or tap the row itself to search for somewhere by name and put it in — where you are and the places you picked before are listed before you type, and a row that already holds a place opens with it ready to replace. What comes out is an ordinary hike, so it can be walked, styled, exported as GPX and taken offline like any other. A half-finished trail survives the app being closed — on this device, which is the only one that has any business holding an unfinished line — and coming back to it brings the map to where your points are.
-- **Places along a trail.** The spring on the climb, the hut at the saddle, the junction you will otherwise walk past. While drawing a trail, *Search this area* asks OpenStreetMap what is near your line — the waterfall a hundred metres off the path, the spring on the climb, the hut at the saddle — and the ones your route passes are saved with it. The same tap asks Wikimedia Commons for photographs taken in the area and pins them on the map as thumbnails — turn the *Photos* chip off to skip them — so you can see whether the lake is worth the detour; a photo's card adds a stop where the camera stood, and the ones along your finished line are saved with the trail, credited. A hike you recorded, imported or saved from somebody else can ask afterwards with *Places Around Trail*: the map shows everything mapped on and near the line — up to a kilometre off it, or anywhere you point the map and tap *Search This Area* — with chips for the kinds you want, and each place is added with one tap, on the trail or off it; a press and hold on the map adds a place of your own right there. While recording, *Add Place* marks where you are standing — as the hut OpenStreetMap has mapped right there, or as a place of your own with a name, a kind and a note. *Places Nearby* looks further: it frames your walk so far and where you are, lists what is mapped there nearest first, and adds any of it to the recording with one tap. On a saved hike, the map's photo buttons carry an *Add Place* of their own: it drops a pin where the elevation graph is pointing — or where you are, while the hike follows you — and takes a name, a kind, a note and photographs before anything is added. Each place opens a card with what OpenStreetMap says about it and the photographs you took of it — and, for a place OpenStreetMap links to Wikidata, the opening of its Wikipedia article in your language and its photograph from Wikimedia Commons, credited and linked; a place from OpenStreetMap takes photographs and nothing else, while one you made can be renamed and described. They are listed in the order you walk past them, sync with the hike, go with it when you share it, and travel in and out as ordinary GPX waypoints — so a file somebody else marked up arrives with their huts and springs on it rather than as a bare line.
-- **Live recording.** Background location, pause and resume, crash-safe recovery, motion-aware fix handling and barometric elevation fusion. A finished recording is named for the trail it mostly followed, or else for the town it started in — *Budapest – Oct 26, 2026* — unless you type a name of your own.
-- **Recording controls.** Start, pause, resume, stop and check a recording through Siri, Shortcuts or Spotlight, plus a state-aware start/stop control in Control Center.
-- **Trail matching and review.** Bounded live matching against a cached OpenStreetMap walking graph, then a post-recording review where every section the matcher moved or found ambiguous can be kept, handed back to the raw GPS trace, or swapped for an alternative.
-- **Walking a trail.** A saved hike can be walked as well as read. Following one accrues the coverage of its route as the walk goes, pauses and resumes with it, and ends in a summary — coverage, active time, the furthest point reached — that stays in that hike's own History. *Share* on a summary puts the walk over a photograph: pick one of the hike's pictures or any from your library, and the distance, climb, time and average speed sit over it with the line you walked — two boxes you drag and pinch wherever the picture leaves room, with OpenHikes signed along the bottom.
-- **Totals.** How far you have walked this year, beside last year month by month, and in all — distance, climb, moving time, walks and trails — with your longest, highest and steepest hikes one tap away. Recordings, timed GPX files and walks along a saved trail count, and time spent following a trail while recording is not counted twice; a trail you drew or saved counts once you walk it.
-- **Surface and difficulty.** What OpenStreetMap knows about a route underfoot, and how demanding it is, folded into the handful of categories a hiker plans around: the Swiss Alpine Club's six grades and a short surface vocabulary. Measured once, the first time a hike is opened, and simply absent when the map has nothing to say about that valley. The selected route's line on the map is coloured by the same grades, in the same colours, stretch by stretch — on by default, with the switch under *Route Style*.
-- **Maps.** OpenStreetMap, Stadia Outdoors, Stamen Terrain and Thunderforest Outdoors tile providers, plus Apple Maps and Apple Satellite options that draw MapKit's own standard and satellite maps, with 3D terrain where Apple has it. An optional Waymarked Trails layer draws OpenStreetMap's marked hiking routes over any of them. Passive tile auto-save for browsed areas, and bulk offline downloads where the provider's terms permit them.
-- **Photos.** Pictures taken on a walk or picked from the library, pinned to where on the trail they were taken, shown as a gallery strip and as map pins. Photos taken with the system camera during a recording are found afterwards and matched against the recording's own timestamps. Granting access to only some photos is handled rather than treated as a refusal.
-- **Live context.** Current location, trail auto-follow with a progress readout, and search across saved hikes and MapKit place suggestions. WeatherKit conditions sit over the map as a badge that opens the current reading, the next twelve hours and the week ahead in full; temperatures, speeds, distances and elevations are spelled in the units the reader's own locale uses.
-- **Home Screen widget.** A rendered basemap under the trail, the trail's current temperature, climb and length across the top, a progress bar along the bottom, live-recording takeover, recording deep links, and sparse location anchors that help repair degraded GPS gaps.
-- **Live Activity.** The same figures on the Lock Screen, in the Dynamic Island and in a paired Apple Watch's Smart Stack while a recording runs or a trail is being followed, ticking their own clock so a walk costs no updates while it is simply going well.
-- **Apple Watch.** A trail imported on the phone is sent to the watch and walked from the wrist: the route drawn as a line, how far along you are, how much is left, and how far off the trail you have wandered — matched on the watch itself, so it keeps working with the phone in a rucksack or out of range. A hike recorded on the phone shows on the watch as it runs, and pauses, resumes and stops from there; the phone stays the one thing that owns that recording, and the watch drives it through the same controls Siri and Control Center use. Double Tap pauses and resumes either recording, for a hiker with a pole in each hand. The watch also records a hike entirely on its own, with a workout session keeping it running through a six-hour walk and the screen dark, and hands the finished walk to the phone when it is next in range. A walk that cannot be sent yet waits on the watch until it can. A complication and Smart Stack widget open the app from the watch face, and show the distance and time of the watch's own recording while it runs.
-- **iCloud sync.** Hikes and their metadata follow the hiker across their own devices, through their own private CloudKit database. Photo files and the tile cache stay on the device that produced them.
-- **Health.** A finished hike is written into the hiker's own Health store as a workout, behind a switch that is off until they turn it on. The phone only ever writes: it asks for no read access at all. The watch is the one exception in either direction — a recording there starts a workout session to stay alive with the wrist down, discards the workout it builds so the phone stays the walk's single writer, and reads the heart rate it shows while the walk runs.
-- **Community hikes.** Shared hikes are found by panning the map and asking, or by typing a name, and are drawn as lines rather than only as pins. Opening one shows the same statistics a hike of your own gets; saving it copies its route and photographs into your library. Publishing your own is free and is reviewed by a person before anyone else can see it; every published hike can be reported or its author blocked, and a hiker can ask for their own to be taken down. Browsing needs no account. Photographs travel the other way too: pictures brought back from a trail somebody else published — or from a waymarked OpenStreetMap route, which has none of its own — can be offered to it, are reviewed the same way a hike is, and carry the name of whoever took them. Saving such a hike brings the contributed photographs home with it.
-- **Waymarked trails from OpenStreetMap.** The same list also offers the signposted routes OpenStreetMap already knows about nearby, so it has something in it before anyone has published anything. They carry what a signpost carries and a stranger's upload cannot — the blaze to follow, whether it loops back to the car, and the two places it runs between — and they are marked as coming from OpenStreetMap rather than from a person: there is no author to credit or block, and a link to the route's own page for anyone who wants to correct it. Their photographs come from Wikimedia Commons: opening one asks Commons for openly licensed pictures taken along it, pins a dozen of them on the trail and credits each with its author and licence, and saving the trail keeps them — never offered for community sharing, since they are somebody else's, and written with their credit into the file whenever one is shared on its own or in a hike's archive. The same search pins the photographs Commons has of the area itself, as thumbnails on the map (the trail maker's *Photos* chip turns them off in both places); tapping one opens it with its credit and where it was taken, and *Plan a Trail Here* opens the trail maker with that spot as the destination. Long-distance paths are left out; what is offered is the length of a day.
-- **English and German.** Every screen, the widget, the Live Activity, the watch, Siri's phrases and the permission prompts follow the device's language; distances, heights and dates follow its region in either.
+- **Recording** in the background, with pause and resume, crash recovery and barometric elevation. The track is matched to OpenStreetMap's paths, and any stretch the matcher moved waits for your review before the hike is saved.
+- **GPX import and export**: open files from Files, AirDrop or any share sheet, one hike per track, and share any hike back as GPX, with its places as waypoints.
+- **Drawing a trail**: press and hold to drop stops, or search for them by name. Each leg follows the paths OpenStreetMap has mapped.
+- **Places** along a trail: huts, springs and waterfalls from OpenStreetMap, or places of your own, with your photographs and, where OpenStreetMap links one, the start of the place's Wikipedia article.
+- **Walking a saved trail**, with progress along it, a history of past walks and a shareable photo card.
+- **Statistics**: an interactive elevation profile, overall and moving average speed, surface and Swiss Alpine Club difficulty from OpenStreetMap, and yearly and all-time totals.
+- **Maps**: OpenStreetMap, Apple's standard and satellite maps, Stadia Outdoors, Stamen Terrain and Thunderforest Outdoors, with an optional Waymarked Trails layer. Tiles you browse are saved as you go, and a route's map can be downloaded where the provider allows it.
+- **Photos** taken on a walk or picked from the library, pinned to where on the trail they were taken.
+- **Weather** from WeatherKit: now, the next twelve hours and the week ahead.
+- **Widget and Live Activity**: the trail, or the recording in progress, on the Home Screen, the Lock Screen and in the Dynamic Island.
+- **Siri and Shortcuts** start, pause, resume and stop a recording, and a Control Center toggle starts and stops one.
+- **Apple Watch**: follow a trail from the wrist, drive the phone's recording, or record on the watch alone.
+- **iCloud sync** across your devices, through your private CloudKit database. Photo files and saved map tiles stay on the device that made them.
+- **Health**: a finished hike can be saved as a workout, behind a switch that starts off.
+- **Community**: browse what others published, with no account needed, and publish your own, which a person reviews before anyone else sees it. Waymarked routes from OpenStreetMap, with photos from Wikimedia Commons, fill the same list.
+- **English and German**, following the device's language.
+
+**OpenHikes Pro**, a monthly subscription, unlocks the paid map styles (Stadia Outdoors, Stamen Terrain and Thunderforest Outdoors), offline Stadia maps (Thunderforest's can't be downloaded ahead) and Stadia elevation for trails that have none. Everything else is free, the community included.
 
 ## Requirements
 
-- Xcode 27 or later — CI builds on Xcode 27.0 (`27A266a`). The phone targets
-  deploy to iOS 18.4, and the two local packages, `OpenHikesShared` and
-  `OpenHikesData`, declare the same floor; *Deployment floor* in
-  [`AGENTS.md`](AGENTS.md) covers how the app reaches newer APIs. The CodeQL
-  workflow is the one exception and still builds on Xcode 26.6, because
-  CodeQL's Swift extractor does not read Swift 6.4 yet.
-- An Apple development team that can sign the WeatherKit entitlement, both App Groups, the iCloud container, the push and Time Sensitive Notifications entitlements and HealthKit.
-- iPhone, plus an optional Apple Watch app. The phone targets set
-  `TARGETED_DEVICE_FAMILY = 1`; `OpenHikesWatch` sets `4` and deploys to
-  watchOS 11.0. The watch app is embedded in the phone app, so building the
-  `OpenHikes` scheme builds it too.
-
-OpenStreetMap is the keyless default and neither Apple option needs a key either. Stadia and Thunderforest require build-time API keys *and* a paid subscription with each vendor, whose terms forbid using them free of charge in a shipping app — in OpenHikes they sit behind a monthly subscription, OpenHikes Pro, which is what pays for them, along with saving a whole route's Stadia map for offline use — Thunderforest's licence reserves pre-caching for a plan this app is not on — and Stadia's elevation for drawn trails, OpenStreetMap routes and hikes imported without heights, which is billed per call too. Everything else in the app, the community feature included, is free. A build without keys shows them locked, and OpenStreetMap keeps working.
+- Xcode 27 or later. The app deploys to iOS 18.4 on iPhone, and its embedded watch app to watchOS 11.0.
+- An Apple development team that can sign WeatherKit, both App Groups, the iCloud container, push and Time Sensitive Notifications, and HealthKit.
+- Optionally, API keys for Stadia and Thunderforest, each with a paid plan from its vendor. OpenStreetMap and Apple's maps need no key, and a build without keys shows the paid styles locked.
 
 ## Setup
 
-1. Open `OpenHikes.xcodeproj` and set your development team for all four shipping targets: `OpenHikes`, `OpenWidgetExtension`, `OpenHikesWatch` and `OpenHikesWatchWidgets`. Each has its own signing settings, and the `OpenHikes` scheme builds all four (the app embeds the widget and the watch app, and the watch app embeds its widgets), so one left on the original team fails to sign. On a team other than the project's, also replace the `tappium.com.OpenHikes` prefix of all four bundle identifiers, because an App ID belongs to one team: the widget's and the watch's identifiers stay under the app's, and `WKCompanionAppBundleIdentifier` in `OpenHikesWatch/Info.plist` names the app's.
-2. Enable WeatherKit for the app's App ID in Certificates, Identifiers & Profiles, in both **App Services** and **App Capabilities**, then refresh its signing assets. The capability and entitlement are checked in, but Apple still returns HTTP 401 until the App ID itself is enabled.
-3. There are two App Groups. If your team cannot use one, replace it in both of its entitlement files and in its store constant:
-   - `group.tappium.com.OpenHikes`, shared by the phone app and its widget: `OpenHikes/OpenHikes.entitlements`, `OpenWidgetExtension.entitlements` and `SharedStore.appGroupID`.
-   - `group.tappium.com.OpenHikes.watch`, shared by the watch app and its complication: `OpenHikesWatch/OpenHikesWatch.entitlements`, `OpenHikesWatchWidgets/OpenHikesWatchWidgets.entitlements` and `WatchGlanceStore.appGroupID`.
+1. Open `OpenHikes.xcodeproj` and set your team on the four shipping targets: `OpenHikes`, `OpenWidgetExtension`, `OpenHikesWatch` and `OpenHikesWatchWidgets`. On a team other than the project's, also replace the `tappium.com.OpenHikes` prefix of their bundle identifiers and of `WKCompanionAppBundleIdentifier` in `OpenHikesWatch/Info.plist`.
+2. Enable WeatherKit for the app's App ID under both **App Services** and **App Capabilities** in Certificates, Identifiers & Profiles, then refresh signing. Until then WeatherKit answers HTTP 401.
+3. If your team can't use the two App Groups, replace each one in its entitlements and its constant. A mismatch fails silently, leaving the widget or the complication nothing to draw.
+   - `group.tappium.com.OpenHikes` (app and widget): `OpenHikes/OpenHikes.entitlements`, `OpenWidgetExtension.entitlements` and `SharedStore.appGroupID`
+   - `group.tappium.com.OpenHikes.watch` (watch and complication): `OpenHikesWatch/OpenHikesWatch.entitlements`, `OpenHikesWatchWidgets/OpenHikesWatchWidgets.entitlements` and `WatchGlanceStore.appGroupID`
+4. Xcode creates the iCloud container, `iCloud.tappium.com.OpenHikes`, on the first signed build, and SwiftData creates its development schema on first run. To use another container, replace it in `OpenHikes/OpenHikes.entitlements` and `CloudSyncCoordinator.containerIdentifier`.
+5. For the paid map styles, `cp Secrets.example.plist OpenHikes/Secrets.plist` and add your keys. The copy is gitignored and must never be committed.
+6. Build and run. The shared scheme runs against `OpenHikes.storekit`, so the Pro paywall works locally with no App Store Connect setup.
 
-   A constant that names a group its entitlements lack gets no container, and the app says nothing: the widget or the complication just has nothing to draw. Leave these replacements, and the bundle identifiers from step 1, out of a pull request.
-4. HealthKit needs no portal step in the ordinary case: the capability and both usage strings are checked in, and the App ID picks it up when Xcode refreshes signing assets. Enable it by hand in **App Capabilities** if signing refuses. The app only ever *writes* a finished hike into the hiker's own store — `HealthKitWorkoutWriter` asks for share types and no read types — and the switch is off until they turn it on.
-5. Time Sensitive Notifications needs no portal step in the ordinary case either, and the entitlement is checked in. Without it the two warnings the app can send — a severe-weather alert and leaving the trail — are delivered at the ordinary level, which any Focus mode silences; nothing reports that, so the symptom is a warning a hiker never sees.
-6. iCloud sync needs a CloudKit container. Xcode creates `iCloud.tappium.com.OpenHikes` on the first signed build; to use another identifier, replace it in `OpenHikes/OpenHikes.entitlements` and in `CloudSyncCoordinator.containerIdentifier`. SwiftData's mirroring creates the development schema from the model on first run.
-7. Optionally enable Stadia or Thunderforest:
-
-   ```sh
-   cp Secrets.example.plist OpenHikes/Secrets.plist
-   ```
-
-   Add your keys to the copied file. `OpenHikes/Secrets.plist` is gitignored and must never be committed; unavailable providers stay disabled in Settings.
-
-8. Build and run. `OpenHikes.storekit` at the repository root describes the OpenHikes Pro subscription and the shared scheme already points its Run action at it, so a local build has a working paywall with no Apple account involved.
-
-Shipping the subscription for real additionally needs a matching auto-renewable subscription in App Store Connect and an active Paid Apps agreement. The product itself (its ID, group, period and price) is `MapEntitlementStore.productID` and `OpenHikes.storekit`, and *Platform contracts* in [`AGENTS.md`](AGENTS.md) holds the rules around it, including that the product ID can never change.
+HealthKit and Time Sensitive Notifications need a portal step only if signing refuses them. Without the Time Sensitive entitlement, the severe-weather and off-trail warnings arrive at the ordinary level, which Focus silences. Keep your team's identifiers out of pull requests. Shipping Pro needs a matching subscription in App Store Connect and a Paid Apps agreement; *Platform contracts* in [`AGENTS.md`](AGENTS.md) has the rules.
 
 ## Recording demo
 
-Launch OpenHikes on a booted iOS Simulator, tap the record button (VoiceOver's *Record a hike*: the lower of the two glyph buttons on the map's leading edge, under the one that draws a trail), which starts a recording and opens it, and replay the bundled Thumsee route:
+On a booted simulator, tap the record button on the map (*Record a hike*, under *Make a trail*) and replay the bundled Thumsee route:
 
 ```sh
-Scripts/simulate-hike.sh start          # ~1.7 km accelerated preview
+Scripts/simulate-hike.sh start              # ~1.7 km accelerated preview
 Scripts/simulate-hike.sh --full --speed 4   # the complete 9.3 km route
-Scripts/simulate-hike.sh stop           # stop and clear location playback
+Scripts/simulate-hike.sh stop               # stop and clear location playback
 ```
 
-`--help` selects a simulator, another GPX file, playback speed, update interval or point count.
+`--help` lists the options for another simulator, route, speed, interval or point count.
 
 ## Build and test
 
 ```sh
-# Build the app, its embedded widget and the watch app. The watch target is a
-# dependency of the app, so this compiles it for watchOS as well — there is no
-# separate build to remember, and no way to break it without breaking this. A
-# generic destination needs no simulator, and the relative DerivedData keeps
-# each checkout's build its own.
+# The app with its widget and watch app; a generic destination needs no simulator
 xcodebuild build -project OpenHikes.xcodeproj -scheme OpenHikes \
   -destination 'generic/platform=iOS Simulator' -derivedDataPath DerivedData
 
-# Strict SwiftLint, the same one CI runs; --fix applies what it can correct
+# Strict SwiftLint, as CI runs it (--fix corrects what it can)
 Scripts/lint.sh
 ```
 
-The test commands — the app and widget unit tests, both local packages, the shell scripts' own tests and UI automation — are in *Build and test* in [`AGENTS.md`](AGENTS.md), written the way CI runs them, and the render trace is under *Render isolation, in practice* in the same file. Every run that needs a simulator takes one from `Scripts/sim-pool.sh` and builds into the checkout's own `DerivedData`; *A second session on this machine* in the same file says why, and how to give the device back.
-
-Unit and integration tests use Swift Testing; `OpenHikesUITests` uses XCUITest, because Apple's UI automation and launch metrics are not available through Swift Testing.
-
-`brew install xcbeautify periphery xcode-build-server artemnovichkov/tap/hinge` installs the optional tooling. None of it is required: each tool is used if present and skipped if not. `hinge` is what opens an iPhone Duo simulator, so without it the open Duo screenshot set is skipped. `periphery` has to be the version `Scripts/periphery.sh` pins, or newer — run it through that script, which checks that first, because an older Periphery reads none of `.periphery.yml` and reports a clean scan anyway. `xcode-build-server` is per-machine — run `xcode-build-server config -project OpenHikes.xcodeproj -scheme OpenHikes` locally, and again after adding or renaming a target.
-
-CI runs strict SwiftLint, the shell scripts' own smoke tests, both local packages' suites in debug and release, the app and widget unit tests with a coverage floor, warning-free debug and release builds, an unsigned device archive, the concurrency suites under Thread Sanitizer, and both accessibility UI classes. CodeQL and a dependency review run beside it. The functional UI automation stays out, because it leans on real gestures and timing-sensitive waits that a shared runner makes slow and flaky — run it locally before a change that touches recording, the map or render isolation.
+The tests, the optional tools and what CI runs are under *Build and test* in [`AGENTS.md`](AGENTS.md), with each command written the way CI runs it.
 
 ## Documentation
 
-- [`AGENTS.md`](AGENTS.md) — how code is written here: the commands, the architecture, the conventions, and the decisions already settled.
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) — the short version for a first change.
-- [`SECURITY.md`](SECURITY.md) — how to report a vulnerability privately, and what the public community database grants to whom.
-- [`Screenshots/README.md`](Screenshots/README.md) — capturing the App Store screenshot set, and the route and photographs the frames are built from.
-- [Issues](https://github.com/ZsomborRajki/OpenHikes/issues) — the open work: bugs, missing features, and product decisions that are still open.
+- [`AGENTS.md`](AGENTS.md): how code is written here, with the commands, the architecture and the decisions already settled.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md): the short path to a first change.
+- [`SECURITY.md`](SECURITY.md): reporting a vulnerability, and what the public community database grants to whom.
+- [`Screenshots/README.md`](Screenshots/README.md): the App Store screenshot set.
+- [Issues](https://github.com/ZsomborRajki/OpenHikes/issues): the open work.
 
 ## Project layout
 
-Following Apple's [Food Truck](https://github.com/apple/sample-food-truck) and [Backyard Birds](https://github.com/apple/sample-backyard-birds) samples, app source is organized by product domain rather than by generic `Managers`, `Models` and `Views` layers. `OpenHikesModel` is the composition root injected into the SwiftUI environment; feature-specific state and behaviour stay in their domain folders.
-
-| Path | Purpose |
+| Path | What it holds |
 |---|---|
-| `OpenHikes/App/` | App entry point, shared app model, configuration, deep-link routing, root navigation. |
-| `OpenHikes/Hikes/` | GPX import and export, drawing a trail on the map, the places along a trail, the surface and difficulty breakdowns, walks along a saved trail and their history, hike screens. The model itself is in `OpenHikesData/`. |
-| `OpenHikes/Recording/` | Live recording, recovery journal, sensors, trail matching, recording UI. |
-| `OpenHikes/Map/` | MapKit bridge, map state, search, location tracking, map rendering. |
-| `OpenHikes/Tiles/` | Tile provider policy, cache, auto-save, offline downloads, overlay rendering. |
-| `OpenHikes/Community/` | Publishing a hike to the public database, browsing and searching what other people published, the waymarked routes fetched from OpenStreetMap that fill the same list, the map's lines and pins for both, importing one, offering photographs to a trail that is already public, reviewing what is waiting, reporting and blocking. |
-| `OpenHikes/Photos/` | Capture and import, library discovery and time-to-place matching, the file store, trail anchoring, gallery, viewer and map pins. |
-| `OpenHikes/Health/` | Writing a finished hike into the hiker's own Health store, behind a switch and behind seams that keep a real Health store out of the tests. |
-| `OpenHikes/Sync/` | iCloud sync status and control, and the settings key-value mirror. |
-| `OpenHikes/Weather/` | WeatherKit polling, the badge over the map and its detail sheet, unit formatting, and Apple Weather attribution. |
-| `OpenHikes/Purchases/` | The Pro entitlement and its StoreKit state, the paywall, and the subscription terms and links. |
-| `OpenHikes/Settings/` | User-facing app, recording, map and storage settings. |
-| `OpenHikes/Reminders/` | Noticing that a paused hike has started moving again, or that a running one has stopped, and saying so once. |
-| `OpenHikes/LiveActivity/` | When a Lock Screen activity starts, updates and ends, behind a seam that keeps ActivityKit out of the tests. |
-| `OpenHikes/Intents/` | App Intents for controlling and querying a recording, the Siri and Spotlight shortcuts they are offered through, and the seam they perform behind. |
-| `OpenHikes/Tips/` | The first-run tips: which are shown, in what order and to whom, and the cards the map draws them in. |
-| `OpenHikes/General/` | Cross-domain extensions and diagnostics. |
-| `OpenHikes/SimulatedLocations/` | The bundled GPX routes the simulated hike and the screenshot capture play back. |
-| `OpenHikes/Watch/` | The phone's half of the watch link: sending the hiker's trails and one trail's geometry, and keeping the walks the watch recorded. |
-| `OpenHikesShared/` | Domain-foldered local Swift package shared by the app, the widget and the watch. |
-| `OpenHikesData/` | What a hike is: the SwiftData models, the schema, the route index and the logic over them, as a local package the app builds on. |
-| `OpenWidget/` | iOS Home Screen widget and the Live Activity's Lock Screen and Dynamic Island views. |
-| `OpenHikesWatch/` | The watchOS app: the link to the phone, the trail being followed, and recording a hike on the watch alone. |
-| `OpenHikesWatchWidgets/` | The watch's complication and Smart Stack widget, drawn from the glance the watch's recorder writes. |
-| `OpenHikesTests/`, `OpenWidgetTests/` | App-hosted tests mirroring the app's domain folders. |
-| `OpenHikesUITests/` | Simulator UI automation, location spoofing, launch metrics. |
-| `Scripts/` | The gates and tools a contributor runs by hand: lint, the UI-test runner and its render trace, the simulated hike, the App Store screenshot capture and its photo stamper, and the checks CI runs beside them. |
-| `Screenshots/` | The App Store screenshot set: what each frame has to say, how it is captured, and where its photographs come from. |
-| `docs/` | The published GitHub Pages site — a home page, and the privacy, terms and support pages the App Store listing links. Not a documentation folder. |
+| `OpenHikes/` | The iPhone app, one folder per product domain (`Hikes/`, `Recording/`, `Map/`, `Tiles/`, `Community/`…), with `App/` as the composition root |
+| `OpenHikesData/` | A local package: what a hike is, with the SwiftData models, the schema and the route index |
+| `OpenHikesShared/` | A local package compiled by the app, the widget and the watch |
+| `OpenWidget/` | The Home Screen widget, the Live Activity and the Control Center toggle |
+| `OpenHikesWatch/`, `OpenHikesWatchWidgets/` | The watch app, and its complication and Smart Stack widget |
+| `OpenHikesTests/`, `OpenWidgetTests/` | App-hosted unit tests, in folders that mirror the app's |
+| `OpenHikesUITests/` | UI automation |
+| `Scripts/` | Lint, the test runners, the simulated hike, the screenshot capture and the gates CI runs |
+| `Screenshots/` | The App Store screenshot set |
+| `docs/` | The GitHub Pages site: the home, privacy, terms and support pages |
 
 ## License
 
-OpenHikes is released under the [MIT License](LICENSE).
+The source is released under the [MIT License](LICENSE). The data and imagery the app shows are not ours to license:
 
-That covers the source in this repository only. Map data and map tiles are not ours to license: OpenStreetMap data is © OpenStreetMap contributors and is published under the [Open Database License](https://www.openstreetmap.org/copyright), the Stadia Maps and Thunderforest styles are used under their own terms, and the Waymarked Trails hiking-route layer is published under CC BY-SA 3.0 DE. Photographs from Wikimedia Commons belong to the people who took them and are shown under the licence each one names, with its credit beside it. The descriptions on a place's card are Wikipedia's, shown under CC BY-SA 4.0 with a link to the article, and are never stored or shared from the app. The app displays the credit each provider requires, which `OpenHikes/Tiles/TileAttribution.swift` is responsible for and its tests enforce. A fork that changes tile providers, or that redistributes cached tiles, takes on those obligations itself.
+- OpenStreetMap data is © OpenStreetMap contributors, under the [Open Database License](https://www.openstreetmap.org/copyright).
+- The Stadia Maps and Thunderforest styles are used under their own terms, and the Waymarked Trails layer under CC BY-SA 3.0 DE.
+- Wikimedia Commons photographs are shown under the licence each one names, with its credit. The Wikipedia text on a place's card is CC BY-SA 4.0, linked to its article, and is never stored or shared.
 
-Dependencies: `swift-algorithms`, `swift-collections` and `swift-async-algorithms` are Apache-2.0 licensed and ship inside the app; `swift-numerics`, also Apache-2.0, is linked directly only by the test targets, and reaches the app solely as a dependency of `swift-algorithms`; SwiftLint is a build-time plugin and is not linked into the binary.
+The app displays the credit each provider requires (`OpenHikes/Tiles/TileAttribution.swift`). A fork that changes tile providers, or redistributes cached tiles, takes on those obligations itself.
+
+The app ships `swift-algorithms`, `swift-collections` and `swift-async-algorithms`, all Apache-2.0; `swift-numerics`, also Apache-2.0, reaches it only through `swift-algorithms`. SwiftLint runs at build time and is not linked.
 
 ## Contact
 
-For feedback and suggestions, email [zsombor.rajki@gmail.com](mailto:zsombor.rajki@gmail.com) or visit the [OpenHikes project on GitHub](https://github.com/ZsomborRajki/OpenHikes).
+For feedback and suggestions, email [zsombor.rajki@gmail.com](mailto:zsombor.rajki@gmail.com) or open an [issue](https://github.com/ZsomborRajki/OpenHikes/issues).
