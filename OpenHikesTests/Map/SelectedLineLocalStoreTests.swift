@@ -88,13 +88,25 @@ struct SelectedLineLocalStoreTests {
 
     /// A walk keeps its progress in the hike's device-local row, and ends in
     /// one save of both stores: the walk's row in the hike's store, and the
-    /// column cleared in the other. That save starts a check, and the watch
-    /// holds no token yet. `WalkUITests` crashed here, four tests of nine.
-    @Test("a walk saved while the hike is followed traps no check, and a line saved elsewhere then reaches it")
-    func aWalkTrapsNoCheck() async throws {
+    /// column cleared in the other. That save starts a check. With no import
+    /// first, the watch holds no token yet, and `WalkUITests` crashed here,
+    /// four tests of nine. After one, the check reads by token.
+    @Test(
+        "a walk saved while the hike is followed traps no check, and a line saved elsewhere then reaches it",
+        arguments: [false, true]
+    )
+    func aWalkTrapsNoCheck(afterAnImport: Bool) async throws {
         let stage = try await stage()
         let main = stage.container.mainContext
         let moved = SelectedLineStoreWatchTests.Edit.moved.route
+        var checks = stage.checked
+        if afterAnImport {
+            try await SelectedLineStoreWatchTests.saveElsewhere(stage.hike.id, in: stage.container) { stored in
+                stored.title = "Renamed elsewhere"
+            }
+            await settle(stage, after: checks)
+            checks = stage.watch.completedChecks
+        }
         var walk = TrailWalkRecord(hikeID: stage.hike.id, routeDistanceMeters: 600, startedAt: .now)
         stage.hike.walkInProgress = walk
         try main.save()
@@ -115,13 +127,18 @@ struct SelectedLineLocalStoreTests {
         ended.hike = stage.hike
         stage.hike.walkInProgress = nil
         try main.save()
-        await settle(stage, after: stage.checked)
-        #expect(stage.looks.count == 0, "nothing was saved elsewhere")
+        await settle(stage, after: checks)
+        if !afterAnImport {
+            #expect(stage.looks.count == 0, "nothing was saved elsewhere")
+        }
+        let looks = stage.looks.count
 
         try await SelectedLineStoreWatchTests.saveElsewhere(stage.hike.id, in: stage.container) { stored in
             stored.replaceRoute(with: moved)
         }
-        await settleDelegateHop(until: "the hike is looked at") { stage.looks.count == 1 && stage.watch.isSettled }
+        await settleDelegateHop(until: "the hike is looked at") {
+            stage.looks.count == looks + 1 && stage.watch.isSettled
+        }
         await stage.lines.refreshing?.value
 
         #expect(await stage.lines.read(of: stage.hike).route == moved)
