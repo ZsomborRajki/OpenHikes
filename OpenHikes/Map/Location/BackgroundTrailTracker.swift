@@ -390,10 +390,14 @@ final class BackgroundTrailTracker: NSObject {
     ///   or `nil` when nothing is being walked. Written into the snapshot
     ///   beside the fix, so the widget and the Lock Screen read coverage and
     ///   position from the same bytes.
+    /// - Parameter line: the line `profile` was built from, and the length
+    ///   stored beside it, as the hike's screen read them off the main actor —
+    ///   see ``liveFixInput(of:line:)``.
     func publishLiveFix(
         hike: Hike,
         profile: RouteProfile,
         match: (distanceAlongRoute: Double, offRouteMeters: Double)?,
+        line: SelectedLine.Line? = nil,
         walk: SharedTrailSnapshot.Walk? = nil
     ) {
         // The first poll waits for selection publication in HikeDetailView.
@@ -430,7 +434,7 @@ final class BackgroundTrailTracker: NSObject {
         // Values, taken here because a `Hike` belongs to its context and
         // cannot leave the main actor. Everything the write path does with
         // them happens off it.
-        let input = HikeRouteInput(hike: hike)
+        let input = Self.liveFixInput(of: hike, line: line)
         guard isOnRoute, let match, let coordinate = profile.coordinate(atDistance: match.distanceAlongRoute) else {
             updateStoredLiveFix(nil, input: input, elevation: profile.elevation, walk: walk)
             return

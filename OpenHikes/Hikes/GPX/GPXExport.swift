@@ -711,13 +711,23 @@ extension GPXExport.Track {
     /// set GPX can express — see ``GPXExport/Photograph``. They keep the
     /// hike's own order, which is the order the gallery draws them in.
     init(hike: Hike) {
+        // In along-route order, which is the order the maker's list and
+        // the detail screen both draw them in — so a file opened in
+        // another reader lists them the way the hiker will walk past them.
+        self.init(hike: hike, route: hike.route, places: hike.orderedPlaces.map(\.place))
+    }
+
+    /// The same, along `route` and with `places` in its order, as a hike's
+    /// screen holds them: read off the main actor, where reading the hike's
+    /// own line on the main actor would decode all of it (#1252).
+    init(hike: Hike, route: [RouteCoordinate], places: [TrailPlace]) {
         self.init(
             name: hike.displayTitle,
             trackDescription: hike.trackDescription,
             author: hike.author ?? hike.importedAuthorName,
             keywords: hike.keywords,
             date: hike.date,
-            route: hike.route,
+            route: route,
             photographs: hike.photos.compactMap { photo in
                 guard let coordinate = photo.coordinate else { return nil }
                 return GPXExport.Photograph(
@@ -729,10 +739,7 @@ extension GPXExport.Track {
                     credit: CommonsPhotoCredit(photo)
                 )
             },
-            // In along-route order, which is the order the maker's list and
-            // the detail screen both draw them in — so a file opened in
-            // another reader lists them the way the hiker will walk past them.
-            places: hike.orderedPlaces.map(\.place)
+            places: places
         )
     }
 }

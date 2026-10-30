@@ -35,6 +35,11 @@ struct HikeDetailView: View {
     /// Fed the same auto-follow matches as the chart/map, throttled, so the
     /// widget stays reasonably fresh while this hike is being viewed.
     let backgroundTracker: BackgroundTrailTracker
+    /// Where the selected hike's line is read, and what follows it in the
+    /// store. This screen reads its hike's line from the same read while
+    /// that hike is the selected one — see ``ShownLine``.
+    let selectedLine: SelectedLine
+    let lineStoreWatch: SelectedLineStoreWatch
     /// OSM walking graph behind the surface and difficulty sections. `nil`
     /// disables both — see ``HikeTrailAnalysis``.
     var trailGraphProvider: (any TrailGraphProviding)?
@@ -146,6 +151,12 @@ struct HikeDetailView: View {
     /// for. The trail maker's Save and its refusal are two presentations for
     /// the same reason.
     @State var isShowingResetRefusal = false
+    /// The hike's line, read off the main actor and read again only when it
+    /// changes, which is what everything on this screen that needs the line
+    /// takes it from. Nothing here reads `hike.route`: after any save to the
+    /// store, that decoded the whole line on the main actor again (#1252).
+    /// See ``ShownLine``.
+    @State var line = ShownLine()
     // swiftlint:enable private_swiftui_state
     /// Owned by the navigation session so changing presentation hosts keeps
     /// the selected section and an unfinished rename. Read only by this screen.
@@ -164,8 +175,9 @@ struct HikeDetailView: View {
     /// actor so navigation does not pay the route-sized work.
     @State private var statItems: [Stat] = []
     /// The line ``profile`` and ``statItems`` were built from, so a restart
-    /// of the preparation task can tell a new line from the same one again.
-    @State private var preparedKey: HikeDetailRouteKey?
+    /// of the preparation task can tell a new line from the same one again,
+    /// and so the follow loop can hand the line on with each fix.
+    @State private var preparedLine: PreparedLine?
     /// Tracker/live-follow positions, isolated in a reference type — see
     /// ``TrackerState``. Drawn on the chart as two separate markers so a manual
     /// scrub and the live position can both be visible at once.
@@ -198,7 +210,7 @@ struct HikeDetailView: View {
         // ``HikePhotoPinClaim`` and ``HikePlacePinClaim``.
         .background {
             HikePhotoPinClaim(hike: hike, controller: photoPins, onOpen: onOpenPhoto)
-            HikePlacePinClaim(hike: hike, controller: placePins, onOpen: onOpenPlace)
+            HikePlacePinClaim(hike: hike, controller: placePins, line: line, onOpen: onOpenPlace)
         }
         .navigationTitle(hike.displayTitle)
         #if os(iOS)
@@ -210,61 +222,26 @@ struct HikeDetailView: View {
         // into the body, and neither dereferences it.
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                WalkToggleButton(hike: hike, profile: profile, session: walkSession)
+                WalkToggleButton(
+                    hike: hike, profile: profile, walkRevision: preparedLine?.walkRevision, session: walkSession
+                )
             }
         }
         // On the container rather than on the Details face, so flipping to
         // History neither restarts the profile build nor stops the follow
         // loop: a walk keeps accruing while its hiker reads its history.
         //
-        // Keyed on the line rather than the id — see ``HikeDetailRouteKey`` —
-        // so an edit that arrives while this screen is up cancels the old
-        // build and the old follow loop and starts both again on the new one.
-        .task(id: HikeDetailRouteKey(hike)) {
-            let key = HikeDetailRouteKey(hike)
-            // The handlers below match fixes against whatever `profile`
-            // holds, so a profile of the old line must not outlive the edit
-            // while the new one is built. Only when the line has changed:
-            // coming back from a pushed screen restarts this task too, and
-            // blanking the chart for that would be a flicker for nothing.
-            if preparedKey != key {
-                profile = nil
-            }
-            let prepared: HikeDetailPreparedContent
-            do throws(CancellationError) {
-                prepared = try await HikeDetailPreparation.prepare(
-                    route: key.route,
-                    distanceMeters: key.distanceMeters
-                )
-            } catch {
-                return
-            }
-            // The build can finish just as a newer line cancels it, and must
-            // not then overwrite what the newer run is about to write.
-            guard !Task.isCancelled else { return }
-            let built = prepared.profile
-            profile = built
-            preparedKey = key
-            statItems = prepared.stats
-            // Place the tracker at the start of the track, on both graph and map.
-            tracker.trackerDistance = 0
-            tracker.liveTrackerDistance = nil
-            follow.anchor = nil
-            follow.search = OffRouteSearchPolicy()
-            highlight.move(to: built.coordinate(atDistance: 0))
-            refreshStoredBytes()
-            autoSave.hikeSelectionChanged(to: hike)
-            // The maker's save lands here, and a hiker standing still sends
-            // no fix to notice the edit by: a walk along the old line must not
-            // be shown against the new one.
-            walkSession.endIfRouteChanged()
-            // Keep the first live fix from racing the widget's initial trail snapshot.
-            await backgroundTracker.waitForSelectionPublish()
-            await followLocation(profile: built)
+        // Keyed on the line rather than the id — see ``ShownLine`` — so an
+        // edit that arrives while this screen is up, made here or on another
+        // device, cancels the old build and the old follow loop and starts
+        // both again on the new one. A rename, a tint or any other save moves
+        // nothing this reads.
+        .task(id: line.revision) {
+            await prepareLine()
         }
         // An edited line comes with its breakdowns cleared, so the same key
         // that rebuilds the profile asks again for the new one.
-        .task(id: HikeDetailRouteKey(hike)) {
+        .task(id: line.revision) {
             await loadTrailBreakdowns()
         }
         // Toggling off should clear the live dot immediately, not wait for the
@@ -291,8 +268,8 @@ struct HikeDetailView: View {
             case .clear: highlight.move(to: nil)
             case .move(let coordinate): highlight.move(to: coordinate)
             }
-            if enabled, let profile {
-                updateLiveFollow(profile: profile)
+            if enabled, let profile, let preparedLine {
+                updateLiveFollow(profile: profile, along: preparedLine)
             }
         }
         // A scrub ends with the persistent tracker parked under the finger,
@@ -301,8 +278,8 @@ struct HikeDetailView: View {
         // stopped to drag the chart is, by definition, not producing new
         // fixes, so waiting for one could park the tracker there indefinitely.
         .onChange(of: isScrubbing) { _, scrubbing in
-            guard !scrubbing, let profile else { return }
-            updateLiveFollow(profile: profile)
+            guard !scrubbing, let profile, let preparedLine else { return }
+            updateLiveFollow(profile: profile, along: preparedLine)
         }
         // A download records and commits its own coverage now — see
         // ``OfflineDownloadClaim`` — because this screen is gone the moment
@@ -449,7 +426,7 @@ private extension HikeDetailView {
     /// Zoom, Follow, Offline and Share, under the title — see
     /// ``HikeActionRow``.
     private var actionRow: some View {
-        HikeActionRow(hike: hike) {
+        HikeActionRow(hike: hike, line: line, placeRows: placePins?.placeRows) {
             onZoomToRoute()
             mapController.fitToRoute()
         } offlineTile: {
@@ -459,7 +436,7 @@ private extension HikeDetailView {
                     canDownload: canDownload
                 ) {
                     downloader.start(
-                        route: hike.route,
+                        route: line.current?.route ?? [],
                         source: source,
                         // What a previous run already put on disk and
                         // claimed, so a download killed at 90% resumes
@@ -509,7 +486,7 @@ private extension HikeDetailView {
             Label("Auto-Save Tiles", systemImage: "arrow.down.circle")
         }
         .frame(minHeight: StatCardMetrics.rowMinimumHeight)
-        .disabled(hike.pointCount < 2)
+        .disabled(line.pointCount < 2)
     }
 
     /// Reads/writes `hike.autoSaveTilesEnabled` through `autoSave`, so toggling
@@ -538,7 +515,7 @@ private extension HikeDetailView {
         }
     }
 
-    private var canDownload: Bool { activeProvider.supportsBulkDownload && hike.pointCount > 1 }
+    private var canDownload: Bool { activeProvider.supportsBulkDownload && line.pointCount > 1 }
     /// `renderable`, not `provider`: this drives whether a bulk download is
     /// offered at all, so it has to name the source the map is really drawing.
     private var activeProvider: TileProvider { .renderable(id: tileProviderID, entitlement: entitlement.state) }
@@ -620,7 +597,7 @@ private extension HikeDetailView {
     /// Always drawn, on every hike: the strip when there are photos, and the
     /// offer to go and find some either way. See ``HikePhotoSection``.
     private var photoSection: some View {
-        HikePhotoSection(hike: hike, onOpen: onOpenPhoto)
+        HikePhotoSection(hike: hike, line: line, onOpen: onOpenPhoto)
     }
 
     /// The places marked along this trail, and the pins that draw them.
@@ -628,7 +605,7 @@ private extension HikeDetailView {
     /// Its own view for the reason every other section here is one — see
     /// ``HikePlaceSection``.
     private var placeSection: some View {
-        HikePlaceSection(hike: hike, mapPins: placePins, onFindPlaces: onFindPlaces, onOpen: onOpenPlace)
+        HikePlaceSection(hike: hike, mapPins: placePins, line: line, onFindPlaces: onFindPlaces, onOpen: onOpenPlace)
     }
 
     // MARK: Trail data
@@ -659,11 +636,18 @@ private extension HikeDetailView {
     /// the screen exactly as it was; the next open tries again.
     private func loadTrailBreakdowns() async {
         guard let trailGraphProvider, hike.needsTrailBreakdowns else { return }
+        let read = line.show(hike, selection: selectedLine, followedBy: lineStoreWatch)
         let breakdowns = await HikeTrailAnalysis.breakdowns(
-            route: hike.route,
+            route: await read.route,
             provider: trailGraphProvider
         )
-        guard !Task.isCancelled, !breakdowns.isEmpty else { return }
+        // Nor for a line replaced while it was measured. What is measured is
+        // stored on the hike, and the new line moves this task's key only once
+        // it has been read: kept, an answer that landed before then stood for
+        // the new line, whose own task found it stored and measured nothing.
+        // A line saved elsewhere replaces the read once the store watch has
+        // compared it — see ``SelectedLine/refresh()``.
+        guard !Task.isCancelled, !read.isReplaced, !breakdowns.isEmpty else { return }
         // No transition and no curve of our own: SwiftUI's default animation
         // and default insertion — a fade — are what every other section that
         // appears late on this screen already uses.
@@ -746,7 +730,7 @@ private extension HikeDetailView {
                 }
             )
         } else {
-            HikeElevationPlaceholder(hike: hike)
+            HikeElevationPlaceholder(hike: hike, line: line)
         }
     }
 
@@ -776,6 +760,65 @@ private extension HikeDetailView {
         }
     }
 
+    // MARK: The line
+
+    /// Builds the profile and the statistics from the line on screen, then
+    /// follows the hiker along it: the work a new line restarts.
+    ///
+    /// The line is ``line``'s, read off the main actor and shared with the
+    /// map while this hike is the selected one. Nothing here reads
+    /// `hike.route`, which after any save to the store decoded the whole
+    /// line on the main actor again.
+    private func prepareLine() async {
+        let read = line.show(hike, selection: selectedLine, followedBy: lineStoreWatch)
+        let revision = line.revision
+        // The handlers below match fixes against whatever `profile`
+        // holds, so a profile of the old line must not outlive the edit
+        // while the new one is built. Only when the line has changed:
+        // coming back from a pushed screen restarts this task too, and
+        // blanking the chart for that would be a flicker for nothing.
+        if preparedLine?.revision != revision {
+            profile = nil
+        }
+        let prepared: HikeDetailPreparedContent
+        do throws(CancellationError) {
+            prepared = try await HikeDetailPreparation.prepare(reading: read)
+        } catch {
+            return
+        }
+        // The build can finish just as a newer line cancels it, and must
+        // not then overwrite what the newer run is about to write.
+        guard !Task.isCancelled else { return }
+        let built = prepared.profile
+        let along = PreparedLine(revision: revision, line: prepared.line, walkRevision: prepared.walkRevision)
+        // With what was built from it, so the card is drawn once for both.
+        line.land(prepared.line, from: read)
+        profile = built
+        preparedLine = along
+        statItems = prepared.stats
+        // Place the tracker at the start of the track, on both graph and map.
+        tracker.trackerDistance = 0
+        tracker.liveTrackerDistance = nil
+        follow.anchor = nil
+        follow.search = OffRouteSearchPolicy()
+        highlight.move(to: built.coordinate(atDistance: 0))
+        refreshStoredBytes(along: prepared.line.route)
+        // Auto-save follows the hike the map draws. When that is no longer
+        // this one — an import or a recording took the selection with this
+        // screen up — announcing it would point auto-save at the wrong tiles
+        // and take the map's read of the line for this hike.
+        if lineStoreWatch.follows(hike) {
+            autoSave.hikeSelectionChanged(to: hike)
+        }
+        // The maker's save lands here, and a hiker standing still sends
+        // no fix to notice the edit by: a walk along the old line must not
+        // be shown against the new one.
+        walkSession.endIfRouteChanged(knowing: (hike, prepared.walkRevision))
+        // Keep the first live fix from racing the widget's initial trail snapshot.
+        await backgroundTracker.waitForSelectionPublish()
+        await followLocation(profile: built, along: along)
+    }
+
     // MARK: Auto-follow
 
     /// Projects each published fix onto the route while following is on or
@@ -789,13 +832,13 @@ private extension HikeDetailView {
     /// through every rest stop. The two moments that used to depend on
     /// the next tick — a scrub ending, and auto-follow being switched on —
     /// are handled by the `onChange` handlers in `body`.
-    private func followLocation(profile: RouteProfile) async {
+    private func followLocation(profile: RouteProfile, along prepared: PreparedLine) async {
         for await _ in locationManager.fixes {
-            updateLiveFollow(profile: profile)
+            updateLiveFollow(profile: profile, along: prepared)
         }
     }
 
-    /// The no-match half of ``updateLiveFollow(profile:)``: clears the live dot
+    /// The no-match half of ``updateLiveFollow(profile:along:)``: clears the live dot
     /// and tells the widget feed what became of the fix, which decides with
     /// its own thresholds whether there is anything to show.
     ///
@@ -807,6 +850,7 @@ private extension HikeDetailView {
     ///   nothing about where the hiker is — see ``OffTrailWatch``.
     private func clearLiveFollow(
         profile: RouteProfile,
+        along prepared: PreparedLine,
         offRoute: (distanceAlongRoute: Double, offRouteMeters: Double)? = nil
     ) {
         // Guarded so a run of off-route fixes (nil already) doesn't write
@@ -822,12 +866,16 @@ private extension HikeDetailView {
                 hike: hike,
                 profile: profile,
                 match: offRoute,
+                line: prepared.line,
                 walk: walkSession.payload(for: hike.id)
             )
         }
     }
 
-    private func updateLiveFollow(profile: RouteProfile) {
+    /// Matches the latest fix against `profile`, and hands the walk and the
+    /// widget the line `prepared` holds, which `profile` was built from, so
+    /// that neither reads it from the hike — see ``ShownLine``.
+    private func updateLiveFollow(profile: RouteProfile, along prepared: PreparedLine) {
         // Split from the match below so only a fix that actually reached the
         // matcher feeds the search policy: a fix too inaccurate to match says
         // nothing about where the hiker is relative to the route, and must
@@ -852,7 +900,7 @@ private extension HikeDetailView {
             scope: searchScope
         )
         guard let fix else {
-            clearLiveFollow(profile: profile)
+            clearLiveFollow(profile: profile, along: prepared)
             return
         }
         let onRoute = (match?.offRouteMeters ?? .greatestFiniteMagnitude)
@@ -862,7 +910,7 @@ private extension HikeDetailView {
             // Leaving the route is what rearms auto-start after an End: the
             // hiker is off this trail, so coming back to it is a new walk.
             walkSession.recordOffRoute(hikeID: hike.id)
-            clearLiveFollow(profile: profile, offRoute: match)
+            clearLiveFollow(profile: profile, along: prepared, offRoute: match)
             return
         }
         // The walk is proposed here, on the first matched fix with following
@@ -873,6 +921,7 @@ private extension HikeDetailView {
             hike: hike,
             profile: profile,
             distance: match.distanceAlongRoute,
+            revision: prepared.walkRevision,
             at: fix.timestamp
         )
         if hike.autoFollowEnabled {
@@ -887,6 +936,7 @@ private extension HikeDetailView {
             hike: hike,
             profile: profile,
             match: match,
+            line: prepared.line,
             walk: walkSession.payload(for: hike.id)
         )
     }

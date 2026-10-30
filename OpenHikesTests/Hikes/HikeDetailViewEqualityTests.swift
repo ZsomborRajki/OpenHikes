@@ -32,6 +32,8 @@ struct HikeDetailViewEqualityTests {
         let settings: StoredSettings
         let locationManager = LocationManager()
         let backgroundTracker: BackgroundTrailTracker
+        let selectedLine = SelectedLine()
+        let lineStoreWatch = SelectedLineStoreWatch { /* nothing saved here */ }
         let walkSession: TrailWalkSession
 
         init() throws {
@@ -67,6 +69,8 @@ struct HikeDetailViewEqualityTests {
                 settings: settings,
                 locationManager: locationManager,
                 backgroundTracker: backgroundTracker,
+                selectedLine: selectedLine,
+                lineStoreWatch: lineStoreWatch,
                 walkSession: walkSession,
                 onOpenPhoto: onOpenPhoto,
                 onZoomToRoute: { /* never tapped */ },
@@ -107,7 +111,7 @@ struct HikeDetailViewEqualityTests {
     /// The inputs `==` compares, by name.
     private static let compared: Set = [
         "hike", "isSheetCompact", "highlight", "mapController", "autoSave", "entitlement",
-        "settings", "locationManager", "backgroundTracker", "walkSession",
+        "settings", "locationManager", "backgroundTracker", "selectedLine", "lineStoreWatch", "walkSession",
         "photoCapture", "photoPins", "placePins", "trailMaker",
     ]
     /// The inputs it leaves out, each for the reason

@@ -45,6 +45,12 @@ struct HikePlaceSection: View {
     /// section — see ``HikePlacePinClaim``. `nil` in a preview, and in a test
     /// that has no map, and then there is no switch.
     var mapPins: TrailPlacePinController?
+    /// The hike's line as a saved hike's screen read it, off the main actor —
+    /// see ``ShownLine``. This body is drawn again by every save to the
+    /// store, and measuring along `hike.route` here decoded the whole line on
+    /// the main actor each time (#1252). `nil` on the recording screen, whose
+    /// draft has no line to decode.
+    var line: ShownLine?
     /// Opens *Places Around Trail*, or `nil` where it is not offered — the
     /// recording screen, which has *Add Place* instead.
     var onFindPlaces: (() -> Void)?
@@ -56,7 +62,7 @@ struct HikePlaceSection: View {
     /// ``OpenHikesModel/makeTrailPointSource()``.
     private var canSearch: Bool {
         guard onFindPlaces != nil, mapPins?.around.finder.isAvailable == true, hike.isAttached else { return false }
-        return hike.pointCount > 1 && !hike.isRecording
+        return (line?.pointCount ?? hike.pointCount) > 1 && !hike.isRecording
     }
 
     @ViewBuilder var body: some View {
@@ -64,7 +70,11 @@ struct HikePlaceSection: View {
         // its photographs once, and through ``HikePlaceRows``: this re-runs
         // for every photograph added, and none of them moves a place along
         // the line.
-        let rows = hike.orderedPlaces(preparedBy: mapPins?.placeRows)
+        let rows = if let line {
+            hike.orderedPlaces(along: line.current?.route ?? [], preparedBy: mapPins?.placeRows)
+        } else {
+            hike.orderedPlaces(preparedBy: mapPins?.placeRows)
+        }
         if !rows.isEmpty || canSearch {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {

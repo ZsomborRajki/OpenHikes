@@ -10,7 +10,9 @@
 //
 //  Its own file, alongside `+RouteDistance` and the others, because
 //  `BackgroundTrailTracker.swift` is at its `file_length` limit, and this piece
-//  opens nothing up but the two members it needs (#1232).
+//  opens nothing up but the two members it needs (#1232). So is the line a
+//  live fix from the hike's screen is published with, which is the screen's
+//  own read of it rather than the hike's column (#1252).
 //
 
 import Foundation
@@ -46,6 +48,16 @@ extension BackgroundTrailTracker {
         let route = await line.route
         guard route.count > 1 else { return nil }
         return columns.replacingRoute(with: route, distanceMeters: await line.distanceMeters)
+    }
+
+    /// What a live fix is published with: `hike`'s columns, read where it
+    /// lives, with `line`, the line its screen read off the main actor and
+    /// the length stored beside it, from one save of the row. Without one —
+    /// a suite with no screen — the hike's own, whose line on the main actor
+    /// decodes all of it once a save has refreshed the hike (#1252).
+    static func liveFixInput(of hike: Hike, line: SelectedLine.Line?) -> HikeRouteInput {
+        guard let line else { return HikeRouteInput(hike: hike) }
+        return HikeRouteInput(columnsOf: hike).replacingRoute(with: line.route, distanceMeters: line.distanceMeters)
     }
 
     /// Publishes a line written under the selected hike as the hike selected

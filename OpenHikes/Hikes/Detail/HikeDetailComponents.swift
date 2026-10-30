@@ -305,10 +305,16 @@ struct HikeTrailProgress: View {
 /// A hike with no heights at all is one OpenHikes Pro fills in: without the
 /// subscription the card is a way to it, and with it the heights are read
 /// once and saved onto the hike — see ``HikeElevationFill``. The chart then
-/// takes this card's place, because the route the detail screen keys its
+/// takes this card's place, because the line the detail screen keys its
 /// profile on has changed.
+///
+/// Whether the line has heights is asked of the line the screen read off the
+/// main actor (``ShownLine``), and not of `hike.route`: this card is up on
+/// every hike while its profile is being built, and reading the column here
+/// decoded the whole line on the main actor on every open (#1252).
 struct HikeElevationPlaceholder: View {
     let hike: Hike
+    let line: ShownLine
 
     @Environment(OpenHikesModel.self) private var appModel
     @Environment(\.modelContext) private var context
@@ -316,9 +322,11 @@ struct HikeElevationPlaceholder: View {
 
     var body: some View {
         let entitlement = appModel.entitlement
-        let entitled = entitlement.isEntitled
+        // Nothing to fill until the line has landed and turned out to have no
+        // heights.
+        let fillable = line.current.map { HikeElevationFill.canFill(hike, along: $0.route) } ?? false
         Group {
-            if entitlement.state == .notEntitled, HikeElevationFill.canFill(hike) {
+            if entitlement.state == .notEntitled, fillable {
                 ElevationProPrompt(tint: hike.tintOpaque, message: Self.message)
             } else {
                 ElevationPlaceholderView(
@@ -328,9 +336,10 @@ struct HikeElevationPlaceholder: View {
             }
         }
         // Keyed on the subscription, so a purchase made from the card asks at
-        // once rather than the next time the hike is opened.
-        .task(id: entitled) {
-            guard entitled, HikeElevationFill.canFill(hike),
+        // once rather than the next time the hike is opened, and on the line
+        // turning out to need heights.
+        .task(id: entitlement.isEntitled && fillable) {
+            guard entitlement.isEntitled, fillable,
                   let source = OpenHikesModel.makeTrailElevationSource() else { return }
             isReading = true
             defer { isReading = false }

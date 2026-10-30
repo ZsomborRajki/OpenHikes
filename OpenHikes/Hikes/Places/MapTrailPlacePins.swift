@@ -300,6 +300,10 @@ private struct TrailPlacePinsModifier: ViewModifier {
 struct HikePlacePinClaim: View {
     let hike: Hike
     let controller: TrailPlacePinController?
+    /// The hike's line as its screen read it, off the main actor, on a saved
+    /// hike's own screen — see ``ShownLine``. `nil` elsewhere, which measures
+    /// along the hike's own line.
+    var line: ShownLine?
     var placeholder: TrailPlaceRow?
     var onOpen: ((UUID) -> Void)?
 
@@ -308,10 +312,15 @@ struct HikePlacePinClaim: View {
             .accessibilityHidden(true)
             .trailPlacePins(
                 controller,
-                rows: hike.orderedPlaces(preparedBy: controller?.placeRows),
+                rows: rows,
                 placeholder: placeholder,
                 onOpen: onOpen
             )
+    }
+
+    private var rows: [TrailPlaceRow] {
+        guard let line else { return hike.orderedPlaces(preparedBy: controller?.placeRows) }
+        return hike.orderedPlaces(along: line.current?.route ?? [], preparedBy: controller?.placeRows)
     }
 }
 

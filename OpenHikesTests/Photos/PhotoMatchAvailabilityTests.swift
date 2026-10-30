@@ -41,9 +41,9 @@ struct PhotoMatchAvailabilityTests {
         var asked: Int { tally.count }
 
         init() {
-            availability = PhotoMatchAvailability { [tally] hike in
+            availability = PhotoMatchAvailability { [tally] hike, route in
                 tally.count += 1
-                return hike.canMatchLibraryPhotos
+                return hike.canMatchLibraryPhotos(along: route)
             }
         }
     }
@@ -77,7 +77,7 @@ struct PhotoMatchAvailabilityTests {
         let counted = Counted()
 
         for _ in 0..<Self.passes {
-            #expect(counted.availability.canMatchLibraryPhotos(hike))
+            #expect(counted.availability.canMatchLibraryPhotos(hike, along: hike.route))
             hike.photos.append(HikePhoto(pathExtension: "heic"))
         }
 
@@ -92,11 +92,11 @@ struct PhotoMatchAvailabilityTests {
         let hike = Fixture.hike(in: context, route: PhotoDiscoveryFixture.unstampedRoute)
         Self.addWalk(to: hike, in: context)
         let counted = Counted()
-        _ = counted.availability.canMatchLibraryPhotos(hike)
+        _ = counted.availability.canMatchLibraryPhotos(hike, along: hike.route)
 
         hike.replaceRoute(with: hike.route.map(\.self))
 
-        #expect(counted.availability.canMatchLibraryPhotos(hike))
+        #expect(counted.availability.canMatchLibraryPhotos(hike, along: hike.route))
         #expect(counted.asked == 1)
     }
 
@@ -109,12 +109,12 @@ struct PhotoMatchAvailabilityTests {
         let hike = Fixture.hike(in: context, route: PhotoDiscoveryFixture.unstampedRoute)
         Self.addWalk(to: hike, in: context)
         let counted = Counted()
-        #expect(counted.availability.canMatchLibraryPhotos(hike))
+        #expect(counted.availability.canMatchLibraryPhotos(hike, along: hike.route))
 
         hike.replaceRoute(with: Array(hike.route.reversed()))
 
-        #expect(!counted.availability.canMatchLibraryPhotos(hike))
-        #expect(!counted.availability.canMatchLibraryPhotos(hike))
+        #expect(!counted.availability.canMatchLibraryPhotos(hike, along: hike.route))
+        #expect(!counted.availability.canMatchLibraryPhotos(hike, along: hike.route))
         #expect(counted.asked == 2)
     }
 
@@ -125,12 +125,12 @@ struct PhotoMatchAvailabilityTests {
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context, route: PhotoDiscoveryFixture.unstampedRoute)
         let counted = Counted()
-        #expect(!counted.availability.canMatchLibraryPhotos(hike))
+        #expect(!counted.availability.canMatchLibraryPhotos(hike, along: hike.route))
 
         Self.addWalk(to: hike, in: context)
 
-        #expect(counted.availability.canMatchLibraryPhotos(hike))
-        #expect(counted.availability.canMatchLibraryPhotos(hike))
+        #expect(counted.availability.canMatchLibraryPhotos(hike, along: hike.route))
+        #expect(counted.availability.canMatchLibraryPhotos(hike, along: hike.route))
         #expect(counted.asked == 2)
     }
 }

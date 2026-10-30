@@ -38,6 +38,8 @@ struct HikeDetailStorageRefreshTests {
                 defaults: defaults,
                 clock: time.read
             ),
+            selectedLine: SelectedLine(),
+            lineStoreWatch: SelectedLineStoreWatch { /* nothing saved here */ },
             walkSession: TrailWalkSession(context: context, clock: time.read)
         )
     }

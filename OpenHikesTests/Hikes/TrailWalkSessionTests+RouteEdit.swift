@@ -163,6 +163,51 @@ extension TrailWalkSessionTests {
         #expect(try walks(of: hike).first?.endReason == .routeChanged)
     }
 
+    /// The hike's screen hands each match the line it read off the main
+    /// actor, as a walk names it, so nothing reads the hike's own line on the
+    /// main actor for it (#1252). Handed one, the session answers from it,
+    /// not from the hike: here the hike's line has moved and the screen's has
+    /// not yet, so the walk goes on until the screen hands the new one.
+    @Test("a match handed the screen's line checks the walk against that line, not the hike's")
+    func aMatchWithTheScreensLineReadsNothingOfTheHikes() throws {
+        let session = session()
+        let hike = hike()
+        let profile = RouteProfile(route: hike.route)
+        let shown = TrailWalkRecord.routeRevision(of: hike.route)
+        startWalk(session, hike: hike, profile: profile)
+        var moved = hike.route
+        moved[3].longitude += 0.0005
+        hike.replaceRoute(with: moved)
+
+        clock.advance(by: 60)
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[4], revision: shown)
+        #expect(session.walkedHikeID == hike.id, "the line the screen holds is still the walk's")
+
+        session.endIfRouteChanged(knowing: (hike, TrailWalkRecord.routeRevision(of: moved)))
+        #expect(session.walkedHikeID == nil, "and the screen's new line ends it")
+        #expect(try walks(of: hike).first?.endReason == .routeChanged)
+    }
+
+    /// The same for the two ways a walk begins: the line it is named for is
+    /// the one the screen handed in.
+    @Test("a walk begun from the screen is named for the screen's line")
+    func aWalkBegunFromTheScreenIsAlongItsLine() {
+        let tapped = hike()
+        let profile = RouteProfile(route: tapped.route)
+        let shown = "the screen's line"
+
+        let started = session()
+        #expect(started.start(hike: tapped, profile: profile, revision: shown))
+        #expect(started.record?.routeRevision == shown, "Start")
+
+        let matched = hike(title: "Other")
+        let proposed = session()
+        for distance in profile.distances.prefix(3) {
+            proposed.recordForegroundMatch(hike: matched, profile: profile, distance: distance, revision: shown)
+        }
+        #expect(proposed.record?.routeRevision == shown, "a start the matches confirmed")
+    }
+
     /// A record written before revisions were kept has nothing to compare, so
     /// it is taken to be along the line it is found with — and an edit after
     /// that is noticed like any other.

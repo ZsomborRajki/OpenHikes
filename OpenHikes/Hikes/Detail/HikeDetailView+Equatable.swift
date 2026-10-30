@@ -41,6 +41,8 @@ extension HikeDetailView: Equatable {
             && lhs.settings === rhs.settings
             && lhs.locationManager === rhs.locationManager
             && lhs.backgroundTracker === rhs.backgroundTracker
+            && lhs.selectedLine === rhs.selectedLine
+            && lhs.lineStoreWatch === rhs.lineStoreWatch
             && lhs.walkSession === rhs.walkSession
             && lhs.photoCapture === rhs.photoCapture
             && lhs.photoPins === rhs.photoPins

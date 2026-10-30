@@ -16,12 +16,16 @@
 //  So the answer is kept with what it was worked out from — the route and the
 //  finished walks — and worked out again only when one of those differs. The
 //  comparison is the cost of a read: `Array`'s `==` stops at shared storage,
-//  for the reason ``HikeDetailRouteKey`` holds the route itself rather than a
-//  digest of it, and a route written back unchanged still compares equal,
-//  which matters because a `@Model` filters no same-value write. Synchronous
-//  rather than prepared in a `.task`, so the first frame already says the
+//  and a route written back unchanged still compares equal, which matters
+//  because a `@Model` filters no same-value write. Synchronous rather than
+//  prepared in a `.task`, so the pass that has the line already says the
 //  right thing: the one pass that pays is the one whose inputs moved, which is
 //  what it cost on every pass before.
+//
+//  The route is the one the hike's screen read off the main actor
+//  (``ShownLine``), handed in, rather than the hike's own column: after any
+//  save to the store, reading that column on the main actor decoded all of it
+//  again (#1252).
 //
 //  The revision guard is untouched. A route edit changes the route the inputs
 //  hold, so a walk along the old line is dropped by the same
@@ -55,9 +59,9 @@ final class PhotoMatchAvailability {
         let walks: [Walk]
 
         @MainActor
-        init(_ hike: Hike) {
+        init(_ hike: Hike, along route: [RouteCoordinate]) {
             hikeID = hike.id
-            route = hike.route
+            self.route = route
             walks = (hike.walks ?? []).map { walk in
                 Walk(
                     id: walk.id,
@@ -73,18 +77,18 @@ final class PhotoMatchAvailability {
 
     private var prepared: (inputs: Inputs, canMatch: Bool)?
     /// The real question unless a suite counts how often it is asked.
-    private let evaluate: (Hike) -> Bool
+    private let evaluate: (Hike, [RouteCoordinate]) -> Bool
 
-    init(evaluate: @escaping (Hike) -> Bool = \.canMatchLibraryPhotos) {
+    init(evaluate: @escaping (Hike, [RouteCoordinate]) -> Bool = { $0.canMatchLibraryPhotos(along: $1) }) {
         self.evaluate = evaluate
     }
 
-    /// ``Hike/canMatchLibraryPhotos``, worked out again only when the route
-    /// or the finished walks differ from the last time it was.
-    func canMatchLibraryPhotos(_ hike: Hike) -> Bool {
-        let inputs = Inputs(hike)
+    /// ``Hike/canMatchLibraryPhotos(along:)``, worked out again only when the
+    /// route or the finished walks differ from the last time it was.
+    func canMatchLibraryPhotos(_ hike: Hike, along route: [RouteCoordinate]) -> Bool {
+        let inputs = Inputs(hike, along: route)
         if let prepared, prepared.inputs == inputs { return prepared.canMatch }
-        let canMatch = evaluate(hike)
+        let canMatch = evaluate(hike, route)
         prepared = (inputs, canMatch)
         return canMatch
     }

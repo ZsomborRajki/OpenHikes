@@ -158,7 +158,7 @@ extension HikeDetailView {
                 // is being sent. And never to an upload that already left:
                 // finishing it or asking for it back must stay reachable.
                 .disabled(
-                    unfinished == nil && hike.pointCount < 2 && !eligibility.offersPhotographs
+                    unfinished == nil && line.pointCount < 2 && !eligibility.offersPhotographs
                 )
                 // Asks once per appearance, and only for a hike that has been
                 // sent and not yet seen live — see

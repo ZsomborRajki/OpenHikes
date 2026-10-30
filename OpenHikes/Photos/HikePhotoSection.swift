@@ -38,6 +38,11 @@ import SwiftUI
 
 struct HikePhotoSection: View {
     let hike: Hike
+    /// The hike's line as its screen read it, off the main actor, which the
+    /// caption's question is asked of — see ``ShownLine``. This body is drawn
+    /// again by every save to the store, and reading `hike.route` here decoded
+    /// the whole line on the main actor each time (#1252).
+    let line: ShownLine
     var store: HikePhotoStore = .shared
     /// Opens the viewer at a photo.
     var onOpen: (HikePhoto) -> Void
@@ -78,9 +83,14 @@ struct HikePhotoSection: View {
 
             discoverButton
 
-            Text(caption(for: photos, canMatch: availability.canMatchLibraryPhotos(hike)))
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+            // Once the line has landed: until then there is no telling
+            // whether it can be matched, and a caption saying it could not
+            // would be wrong as often as not.
+            if let route = line.current?.route {
+                Text(caption(for: photos, canMatch: availability.canMatchLibraryPhotos(hike, along: route)))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
         }
         // Inside the sheet, like every other modal this app presents: the
         // bottom sheet is never taken down, and a view can only have one

@@ -260,22 +260,29 @@ final class TrailWalkSession {
     ///   — which is the whole of what orders this feed against the background
     ///   one. `nil` for a caller with no fix time to hand, where the clock is
     ///   the honest answer.
+    /// - Parameter revision: the line `profile` was built from, as a walk
+    ///   names it — ``TrailWalkRecord/routeRevision(of:)`` — which the hike's
+    ///   screen works out off the main actor. Asking it of `hike` instead
+    ///   reads the line on the main actor, which decodes all of it once any
+    ///   save has refreshed the hike, and hashes it on every fix (#1252).
+    ///   `nil` asks the hike, for a caller that has no screen's line.
     @discardableResult func recordForegroundMatch(
         hike: Hike,
         profile: RouteProfile,
         distance: Double,
+        revision: String? = nil,
         at timestamp: Date? = nil
     ) -> Bool {
         let now = clock()
         let matchedAt = timestamp ?? now
         discardWalkIfHikeGone()
-        endIfRouteChanged()
+        endIfRouteChanged(knowing: revision.map { (hike, $0) })
         // Asked of the clock rather than of the fix: whether anything has been
         // seen for six hours is a question about now, and a walk must not
         // outlive its bound because the fix that closed it was taken early.
         endIfAbandoned(at: now)
         if record == nil {
-            proposeOrConfirmStart(hike: hike, profile: profile, distance: distance, at: matchedAt)
+            proposeOrConfirmStart(hike: hike, profile: profile, revision: revision, distance: distance, at: matchedAt)
         }
         if record?.hikeID == hike.id { walkedProfile = profile }
         return recordMatch(hikeID: hike.id, distance: distance, at: matchedAt)
@@ -414,8 +421,9 @@ final class TrailWalkSession {
     private func adopt(_ walk: TrailWalkRecord, hike: Hike) {
         // A record from before revisions were kept is taken to be along the
         // line it finds, which is the best evidence there is. Stamped in
-        // memory; the next write carries it.
-        record = walk.stamped(along: hike.route)
+        // memory; the next write carries it. One that names its line keeps
+        // it, and reads nothing of the hike's.
+        record = walk.routeRevision == nil ? walk.stamped(along: hike.route) : walk
         walkedHike = hike
         endedHikeIDs.remove(hike.id)
         pendingStart = nil
@@ -729,15 +737,18 @@ extension TrailWalkSession {
     /// is news of a start nobody asked for, and this one was asked for.
     ///
     /// - Returns: whether a walk started. A refused first write is not a
-    ///   refused start, for the reason ``confirmPendingStartIfDue(at:)``
+    ///   refused start, for the reason ``confirmPendingStartIfDue(at:along:)``
     ///   gives: the walk is under way in memory, and the next fix writes it.
-    @discardableResult func start(hike: Hike, profile: RouteProfile) -> Bool {
+    /// - Parameter revision: the line `profile` was built from, as a walk
+    ///   names it, for the reason ``recordForegroundMatch(hike:profile:distance:revision:at:)``
+    ///   takes it. `nil` asks the hike.
+    @discardableResult func start(hike: Hike, profile: RouteProfile, revision: String? = nil) -> Bool {
         let now = clock()
         discardWalkIfHikeGone()
         endIfAbandoned(at: now)
-        endIfRouteChanged()
+        endIfRouteChanged(knowing: revision.map { (hike, $0) })
         guard canStartByHand(hike), profile.totalDistanceMeters > 0 else { return false }
-        let started = Self.record(starting: hike, profile: profile, at: now)
+        let started = Self.record(starting: hike, profile: profile, revision: revision, at: now)
         adopt(started, hike: hike)
         walkedProfile = profile
         persist(started, at: now)
@@ -766,12 +777,18 @@ private extension TrailWalkSession {
     ///
     /// A proposal for another hike, another line, or one gone quiet for
     /// ``PendingWalkStart/expiresAfter`` is replaced by one starting here.
-    func proposeOrConfirmStart(hike: Hike, profile: RouteProfile, distance: Double, at now: Date) {
+    func proposeOrConfirmStart(
+        hike: Hike,
+        profile: RouteProfile,
+        revision known: String?,
+        distance: Double,
+        at now: Date
+    ) {
         guard canStart(hike), profile.totalDistanceMeters > 0 else {
             if pendingStart?.walk.hikeID == hike.id { pendingStart = nil }
             return
         }
-        let revision = TrailWalkRecord.routeRevision(of: hike.route)
+        let revision = known ?? TrailWalkRecord.routeRevision(of: hike.route)
         if var proposed = pendingStart,
            proposed.walk.hikeID == hike.id,
            proposed.walk.record.routeRevision == revision,
@@ -788,7 +805,7 @@ private extension TrailWalkSession {
             )
             pendingStart = ProposedWalk(walk: walk, hike: hike, profile: profile)
         }
-        confirmPendingStartIfDue(at: now)
+        confirmPendingStartIfDue(at: now, along: known)
     }
 
     /// Carries a proposal forward on a background match. Never makes one:
@@ -809,11 +826,18 @@ private extension TrailWalkSession {
     /// ``canStart(_:)`` is asked again here because the background feed
     /// confirms with no hike in hand, and an End, a saved recording, following
     /// switched off or a deletion can all land between a proposal and this.
-    func confirmPendingStartIfDue(at now: Date) {
+    ///
+    /// - Parameter revision: the line the proposed hike has now, as its
+    ///   screen read it, from the foreground feed — see
+    ///   ``recordForegroundMatch(hike:profile:distance:revision:at:)``. `nil`
+    ///   asks the hike, which is what the background feed does.
+    func confirmPendingStartIfDue(at now: Date, along revision: String? = nil) {
         guard let proposed = pendingStart, proposed.walk.isConfirmed else { return }
         pendingStart = nil
         let hike = proposed.hike
-        guard canStart(hike), proposed.walk.record.isAlong(hike.route) else { return }
+        let isAlong = revision.map { proposed.walk.record.isAlong(revision: $0) }
+            ?? proposed.walk.record.isAlong(hike.route)
+        guard canStart(hike), isAlong else { return }
         let started = proposed.walk.confirmedRecord
         adopt(started, hike: hike)
         walkedProfile = proposed.profile
@@ -867,18 +891,35 @@ extension TrailWalkSession {
     /// ``TrailWalkRecord/routeDistanceMeters`` is kept for — and the next
     /// walk waits for what an End waits for. A hiker still on the trail who
     /// wants the new line walked taps Start, which does not wait.
-    func endIfRouteChanged(at now: Date? = nil) {
-        guard let record, let walkedHike, walkedHike.isAttached, !record.isAlong(walkedHike.route) else { return }
+    ///
+    /// - Parameter known: a hike and the line it has now, as its screen read
+    ///   it off the main actor (#1252). A walk along that hike is checked
+    ///   against it, without reading the hike's line on the main actor; any
+    ///   other walk is asked of its hike.
+    func endIfRouteChanged(at now: Date? = nil, knowing known: (hike: Hike, revision: String)? = nil) {
+        guard let record, let walkedHike, walkedHike.isAttached else { return }
+        let isAlong = if let known, known.hike === walkedHike {
+            record.isAlong(revision: known.revision)
+        } else {
+            record.isAlong(walkedHike.route)
+        }
+        guard !isAlong else { return }
         finish(reason: .routeChanged, at: now ?? clock())
     }
 
-    /// A walk beginning now along `hike`, measured along the line it has now.
-    private static func record(starting hike: Hike, profile: RouteProfile, at now: Date) -> TrailWalkRecord {
+    /// A walk beginning now along `hike`, measured along the line it has now
+    /// — `revision`, as its screen read it, or the hike's own.
+    private static func record(
+        starting hike: Hike,
+        profile: RouteProfile,
+        revision: String?,
+        at now: Date
+    ) -> TrailWalkRecord {
         TrailWalkRecord(
             hikeID: hike.id,
             routeDistanceMeters: profile.totalDistanceMeters,
             startedAt: now,
-            routeRevision: TrailWalkRecord.routeRevision(of: hike.route)
+            routeRevision: revision ?? TrailWalkRecord.routeRevision(of: hike.route)
         )
     }
 }
