@@ -94,6 +94,7 @@ enum MirroredCloudKitSchema {
                 "osmElementID",
                 "osmElementType",
                 "osmFacts",
+                "osmWikidata",
                 "symbolID",
             ],
             relationships: ["hike"]

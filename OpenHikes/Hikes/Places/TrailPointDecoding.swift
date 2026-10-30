@@ -82,7 +82,10 @@ nonisolated enum TrailPointDecoding {
             osm: TrailPlaceOSM(
                 elementType: type,
                 elementID: id,
-                facts: TrailPlaceFact.facts(in: element.tags)
+                facts: TrailPlaceFact.facts(in: element.tags),
+                // What the place card asks Wikipedia about — see
+                // ``WikidataPlaceLookup``.
+                wikidata: TrailPlaceOSM.wikidataItem(fromTag: element.tags["wikidata"])
             )
         )
     }

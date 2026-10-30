@@ -95,7 +95,8 @@ struct HikePlaceView: View {
                 TrailPlaceFactsAndLocation(
                     facts: card.facts,
                     coordinate: card.coordinate,
-                    openStreetMapURL: card.openStreetMapURL
+                    openStreetMapURL: card.openStreetMapURL,
+                    wikidataItem: card.wikidataItem
                 )
                 removeButton
             }

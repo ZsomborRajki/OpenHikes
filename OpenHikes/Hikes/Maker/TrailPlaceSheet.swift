@@ -128,7 +128,8 @@ private struct TrailPlaceCardView: View {
                     facts: card.facts,
                     address: address,
                     coordinate: card.coordinate,
-                    openStreetMapURL: card.openStreetMapURL
+                    openStreetMapURL: card.openStreetMapURL,
+                    wikidataItem: card.wikidataItem
                 )
             }
             .padding(.horizontal)

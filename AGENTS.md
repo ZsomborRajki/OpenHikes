@@ -132,6 +132,16 @@ script tests and the page check.
 
 - **None of them is a required check.** `main`'s branch protection has no
   `required_status_checks`, so a red run reports a problem but blocks nothing.
+- **A merged branch's runs are cancelled for it.** `concurrency` cancels a run
+  only when a newer push to the same ref supersedes it, and neither a merge nor
+  a branch deletion is a push, so a merged branch's queued runs used to sit on
+  macOS runners while the branches still open waited behind them.
+  `.github/workflows/cancel-superseded-runs.yml` hands the branch to
+  `Scripts/cancel-branch-runs.sh` on a `delete` event and on a closed pull
+  request, which takes down every unfinished run that a push or the pull
+  request started on it, leaving alone a dispatched run (a TestFlight upload)
+  and a reopened pull request's. It refuses the default branch: a queued run
+  there is the only thing that will ever say whether that commit compiles.
 - **Documentation-only pull requests skip the jobs.** The `changes` job runs
   everything unless every changed path is `*.md`, `LICENSE` or under `docs/`. It
   is a job-level `if:` rather than `paths-ignore:`, because a skipped job
@@ -1134,7 +1144,8 @@ in its source header. Do not weaken one without a measurement.
   that the development export has it, and promote both.
 - **Deployment state, checked 2026-10-25.** Development and production export
   the same schema, `md5 a3ab9849bf6af7d5bf89fb03d667682f`, with a column for
-  every attribute in `MirroredCloudKitSchema.recordTypes`.
+  every attribute in `MirroredCloudKitSchema.recordTypes` except
+  `TrailPoint.osmWikidata`, which neither environment has yet.
   The only live columns the contract does not
   name are SwiftData's own `CD_entityName` and the to-one reference columns
   that the contract lists as relationships. Re-export before believing these
@@ -1291,6 +1302,18 @@ is world-readable, because browsing needs no account.
     (`CommonsPhotoQuery.imageHosts`), sending `TileCache.userAgent`.
   - Make one API request at a time, and fetch nothing in Low Data Mode.
   - Never offer one for community sharing: `HikePhoto.isOwn` is false.
+- **Wikipedia on a place's card** (`Hikes/Places/Wikidata/`). A place from
+  OpenStreetMap keeps its `wikidata` tag (`TrailPlaceOSM.wikidata`, mirrored
+  as `TrailPoint.osmWikidata`), and its card asks Wikidata for the article in
+  the device's languages and the item's photograph (`WikidataPlaceSource`,
+  live only from the composition root).
+  - Ask when a card opens, never for a list, and fetch nothing in Low Data
+    Mode.
+  - Keep what comes back in memory only (`WikidataPlaceLookup`). The words are
+    Wikipedia's, under CC BY-SA, so they are shown with their credit and link
+    and never written to the device, copied into a hike or shared.
+  - The photograph passes the checks every Commons file does
+    (`CommonsPhotoQuery.files(from:)`).
 - **Shared hikes draw as lines and pins.** `CommunityRouteOutline` is a polyline
   of about 1 KB on the submission, so a page's outlines arrive in one
   `desiredKeys` fetch. MapKit never hit-tests overlays, so the app does

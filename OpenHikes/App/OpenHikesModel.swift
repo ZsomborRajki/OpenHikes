@@ -122,6 +122,11 @@ final class OpenHikesModel {
     /// hike, such as an edit mirrored in from the hiker's other device, which
     /// nothing in this context is told of reliably (#1228).
     let selectedLineStoreWatch: SelectedLineStoreWatch
+    /// What the place cards ask Wikipedia through, and what it has answered
+    /// this launch, or `nil` for a launch that must not ask. Made beside its
+    /// declaration rather than in `init`, which is at its length limit. See
+    /// ``makeWikidataLookup()``.
+    let wikidataLookup: WikidataPlaceLookup? = OpenHikesModel.makeWikidataLookup()
 
     /// Where the app asks OpenStreetMap what is on a trail — the maker's
     /// *Search this area*, a saved hike's *Places Around Trail* and the

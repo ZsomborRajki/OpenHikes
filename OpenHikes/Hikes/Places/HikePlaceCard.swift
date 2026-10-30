@@ -24,6 +24,8 @@ struct HikePlaceCard: Equatable {
     var distanceAlongRouteMeters: Double?
     var facts: [TrailPlaceFact]
     var openStreetMapURL: URL?
+    /// The Wikidata item the place links to — see ``WikidataPlaceSection``.
+    var wikidataItem: String?
     /// Whether the hiker may rename, re-kind and annotate it — only a place
     /// that is their own. See ``TrailPlace/isHikersOwn``.
     var isEditable: Bool
@@ -63,6 +65,7 @@ struct HikePlaceCard: Equatable {
         )
         facts = row.place.osm?.facts ?? []
         openStreetMapURL = row.place.osm?.url
+        wikidataItem = row.place.osm?.wikidata
         isEditable = row.place.isHikersOwn
     }
 }
