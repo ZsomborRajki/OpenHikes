@@ -28,20 +28,24 @@
 //  in history too, so a line written here is named twice and validated once.
 //  The revision is what still names it while history cannot be read.
 //
-//  One thing at a time, and nothing late lands. After each pass the task asks
-//  what changed while it measured, before it publishes. A hike whose line was
-//  written or saved meanwhile is measured again, and its figures from the
-//  line before are dropped. The first look at history reads from the moment
-//  the first pass began, because a save before then is in that pass and one
-//  after it may not be. Each later look reads from the newest transaction the
-//  one before saw. A task cancelled at any point, as switching the list to
-//  another order cancels it, measures and publishes nothing more.
+//  One thing at a time, and figures from a line already replaced are not
+//  kept. After each pass the task asks what changed while it measured, before
+//  it publishes. A hike whose line was written or saved meanwhile is measured
+//  again, and its figures from the line before are dropped. A save in the
+//  moment between that look and the publication gets past it: those figures
+//  land, and the next look names the hike, so they are measured again at
+//  once. The first look at history reads from the moment the first pass
+//  began, because a save before then is in that pass and one after it may
+//  not be. Each later look reads from the newest transaction the one before
+//  saw. A task cancelled at any point, as switching the list to another order
+//  cancels it, measures and publishes nothing more.
 //
 //  A look that cannot read history names no row, where the selected line's
 //  watch takes it as naming its hike. Here that would mean every listed
 //  route, the pass this file exists to avoid, and a failure that held would
 //  ask for one after every look. The next look reads from the first pass
-//  again, which covers whatever this one could not name.
+//  again, which covers whatever this one could not name while history still
+//  holds it. Nothing in the app prunes history.
 //
 //  All of it stays in the list's task, never its body. Routes are read,
 //  fingerprinted and measured in a context of their own, publication reads
@@ -101,8 +105,9 @@ nonisolated extension HikeListMetrics {
         private let hikes: [Hike]
         private let container: ModelContainer
         private let checking: StoreHistoryCheck.Making
-        /// The store the listed hikes live in, or `nil` while none of them is
-        /// saved: a row the store has not had is no row another context saves.
+        /// The store the listed hikes live in, read when the task starts.
+        /// `nil` if none of them had been saved by then, which a list never
+        /// meets: the app saves every hike in the turn that inserts it.
         private let storeID: String?
         /// When the first pass began: where the first look at history reads
         /// from, and any look after one that could not read it.
