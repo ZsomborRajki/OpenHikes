@@ -1,6 +1,6 @@
 # OpenHikes
 
-https://apps.apple.com/us/app/openhikes/id6787467479
+[![Download on the App Store](docs/images/app-store-badge.svg)](https://apps.apple.com/app/openhikes/id6787467479)
 
 OpenHikes is a local-first SwiftUI and SwiftData trail viewer for iPhone, with a companion app for Apple Watch. It imports GPX tracks, records live hikes, displays them on a MapKit map, provides route statistics and an interactive elevation profile, and keeps selected map areas available offline.
 
