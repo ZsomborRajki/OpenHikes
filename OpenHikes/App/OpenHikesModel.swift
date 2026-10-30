@@ -118,6 +118,10 @@ final class OpenHikesModel {
     /// ``SelectedLine``. Owned here because three of the four are, and the
     /// root view hands it to the fourth.
     let selectedLine: SelectedLine
+    /// Has those readers look again when another context saves the selected
+    /// hike, such as an edit mirrored in from the hiker's other device, which
+    /// nothing in this context is told of reliably (#1228).
+    let selectedLineStoreWatch: SelectedLineStoreWatch
     /// What the place cards ask Wikipedia through, and what it has answered
     /// this launch, or `nil` for a launch that must not ask. Made beside its
     /// declaration rather than in `init`, which is at its length limit. See
@@ -238,6 +242,7 @@ final class OpenHikesModel {
         )
         placePins = Self.makePlacePins(defaults: defaults, maker: trailMaker)
         self.selectedLine = selectedLine
+        selectedLineStoreWatch = SelectedLineStoreWatch { selectedLine.refresh() }
         routeShading = RouteShading(provider: trailGraphProvider, defaults: defaults, lines: selectedLine)
         watchLink = Self.makeWatchLink(container: container, recorder: hikeRecorder, defaults: defaults)
         communityBlocks = CommunityBlockList(defaults: defaults)
@@ -333,6 +338,12 @@ final class OpenHikesModel {
         routeShading.follow(finishedHike)
         if !AppLaunchEnvironment.isRunningTests {
             backgroundTracker.hikeSelectionChanged(to: finishedHike)
+        }
+        // After the readers, whose asking started the read it watches from.
+        if let finishedHike {
+            selectedLineStoreWatch.follow(finishedHike, since: selectedLine.readBegan(for: finishedHike) ?? .now)
+        } else {
+            selectedLineStoreWatch.stopFollowing()
         }
         defaults.set(
             finishedHike?.id.uuidString,

@@ -44,20 +44,21 @@
 //  The readers watch the line too, each to do its own work again, and every
 //  one of those watches is armed here, by ``watch(_:onChange:)``, so what
 //  counts as a new line is decided in one place, ``trackLine(of:hearingRefreshes:)``.
-//  Today that is any write to `route` this context is told of, which while
-//  the hikes list is up includes the refresh every save of any hike gives
-//  every hike's line (#1228): the drawn line and its colours are made again
-//  for it, as they were before this type, and auto-save and the widget, which
-//  compare before they rebuild, keep what they have.
+//  That is ``Hike/lineRevision``, which only a line written through the
+//  hike's own context moves, and not `route` itself. While the hikes list is
+//  up, every save of any hike refreshes every hike in this context, and that
+//  refresh notifies `route` whether or not the line changed (#1228). Watched
+//  there, every rename or tint saved anywhere made the drawn line and its
+//  colours again.
 //
 //  ## A line another context saved
 //
-//  Whether this context hears of a line another context saved depends on
-//  what else is up: with the hikes list's query in a window, the save
-//  refreshes every hike and the watches hear it; with none, nothing does
-//  (#1228). ``refresh()`` is for when one may have gone unheard — it reads
-//  the line again from the store, and when that is not the line handed out,
-//  every watch hears it as it hears a write.
+//  A line another context saved, such as an edit mirrored in from the
+//  hiker's other device, moves no revision here. ``SelectedLineStoreWatch``
+//  notices it in the store's history, refreshes the hike in its own context,
+//  and calls ``refresh()``. That reads the line again from the store, and
+//  when it is not the line handed out, every watch hears it as it hears a
+//  write.
 //
 
 import Foundation
@@ -88,11 +89,15 @@ final class SelectedLine {
     /// off-main work each reader does with the line can wait for it there.
     nonisolated final class Read: Sendable {
         let hikeID: UUID
+        /// When the read was started: a line saved after this may not be in
+        /// it, and one saved before it is.
+        let began: Date
         private let line: Task<Line, Never>
         private let replacement: Write
 
-        init(hikeID: UUID, replacement: Write, line: Task<Line, Never>) {
+        init(hikeID: UUID, began: Date, replacement: Write, line: Task<Line, Never>) {
             self.hikeID = hikeID
+            self.began = began
             self.replacement = replacement
             self.line = line
         }
@@ -169,9 +174,12 @@ final class SelectedLine {
     /// line the store holds and the current read does not. Read only inside
     /// the watches ``watch(_:onChange:)`` arms, never by a body.
     private var refreshes = 0
-    /// The comparison a ``refresh()`` is making, if any. Readable so a suite
-    /// can wait on the effect rather than on a duration.
+    /// The comparison a ``refresh()`` is making, if any, and any asked for
+    /// while it was out, made after it under the same task. Readable so a
+    /// suite can wait on the effect rather than on a duration.
     @ObservationIgnored private(set) var refreshing: Task<Void, Never>?
+    /// Whether a ``refresh()`` was asked for while one was being made.
+    @ObservationIgnored private var refreshesAgain = false
     /// How a saved row is fetched, as a seam so a suite can see which thread
     /// it ran on. ``fetchHike(_:_:)`` everywhere else.
     @ObservationIgnored private let fetch: @Sendable (ModelContext, PersistentIdentifier) throws -> Hike?
@@ -193,6 +201,13 @@ final class SelectedLine {
         return read
     }
 
+    /// When the read handed out for `hike` began, or `nil` while none is.
+    /// Asks without starting one, as ``read(of:)`` would.
+    func readBegan(for hike: Hike) -> Date? {
+        guard let current, currentHike === hike else { return nil }
+        return current.began
+    }
+
     /// Watches `hike`'s line for a reader: the flag it returns is raised
     /// synchronously by the first change to the line — a write, or a
     /// ``refresh()`` that found a new one — and `onChange` is called on the
@@ -211,16 +226,19 @@ final class SelectedLine {
     }
 
     /// Registers what a new line is, inside a `withObservationTracking`: a
-    /// write to `hike`'s line, without decoding it
-    /// (``Hike/trackRouteChanges()``), and, for a reader, a ``refresh()``
-    /// that found one. The one place a selected hike's line is registered,
-    /// for the reads and the readers alike, so what counts as a new line is
-    /// changed here and nowhere else (#1228).
+    /// line written through `hike`'s context (``Hike/trackLineReplacements()``),
+    /// and, for a reader, a ``refresh()`` that found one. The one place a
+    /// selected hike's line is registered, for the reads and the readers
+    /// alike, so what counts as a new line is decided here and nowhere else.
+    ///
+    /// Not `route`. While the hikes list is up, a refresh after any save
+    /// notifies it for every hike, changed or not (#1228). The line revision
+    /// is not stored, so no refresh reaches it.
     ///
     /// A read's own watch does not hear refreshes: the refresh that installs
     /// a read is not a change to the line that read holds.
     private func trackLine(of hike: Hike, hearingRefreshes: Bool) {
-        hike.trackRouteChanges()
+        hike.trackLineReplacements()
         if hearingRefreshes { _ = refreshes }
     }
 
@@ -231,17 +249,32 @@ final class SelectedLine {
     /// it does after a write.
     ///
     /// For a line another context may have saved — see the file header.
-    /// Nothing calls it yet; #1228's import of a line from the hiker's other
-    /// device is what it is for. A hike with edits the store has not had is
-    /// read where it is, as always, so a refresh then finds nothing new.
+    /// ``SelectedLineStoreWatch`` calls it once the store's history says the
+    /// selected hike's row was saved, and once the hike's own context holds
+    /// what the store does. A hike with edits the store has not had is read
+    /// where it is, as always, so a refresh then finds nothing new.
+    ///
+    /// One comparison at a time. Two at once compared against the same read,
+    /// so the first to land left the other nothing to replace, and a line
+    /// saved while the one before it was being compared was dropped for that
+    /// one. A refresh asked for meanwhile is made once the comparison out has
+    /// landed, against the read it left current.
     func refresh() {
-        guard let previous = current, let hike = currentHike else { return }
-        let fresh = start(hike)
+        guard refreshing == nil else {
+            refreshesAgain = true
+            return
+        }
         refreshing = Task { [weak self] in
-            guard await Self.differ(previous, fresh), let self, current === previous else { return }
-            current = fresh
-            previous.markReplaced()
-            refreshes &+= 1
+            repeat {
+                guard let self, let previous = current, let hike = currentHike else { break }
+                refreshesAgain = false
+                let fresh = start(hike)
+                guard await Self.differ(previous, fresh), current === previous else { continue }
+                current = fresh
+                previous.markReplaced()
+                refreshes &+= 1
+            } while self?.refreshesAgain == true
+            self?.refreshing = nil
         }
     }
 
@@ -257,6 +290,7 @@ final class SelectedLine {
         }
         return Read(
             hikeID: hike.id,
+            began: .now,
             replacement: replacement,
             line: Self.reading(Source(hike), fetch: fetch)
         )

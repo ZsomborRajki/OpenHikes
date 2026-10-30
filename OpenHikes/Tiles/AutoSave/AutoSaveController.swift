@@ -300,10 +300,8 @@ final class AutoSaveController {
             // A new read of the same hike's line, which may be an edited line
             // — its tiles stay its own, but the corridor has to follow it, or
             // it would refuse every tile around a section moved or added
-            // outside the old bounds until the hike was selected again. More
-            // often it is not: the hikes list's query is always live, and a
-            // save of any hike tells every hike's line watch its line was
-            // written (#1228).
+            // outside the old bounds until the hike was selected again. It
+            // need not be: a line can be written back as it was.
             // So the corridor up now stays up until the new line is compared
             // with the one it was built from, and an unchanged line keeps it.
             cancelPendingActivation()

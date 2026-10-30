@@ -126,7 +126,7 @@ struct DisplayedRoute: Equatable {
 /// not immutable: *Edit Route* keeps the hike's id and replaces its line,
 /// heights filled onto a line replace it, and mirroring delivers either to a
 /// device where the hike is selected. So every projection watches the hike's
-/// `route`, and a write projects the line again through the same
+/// line (see ``SelectedLine``), and a write projects the line again through the same
 /// ``project(_:)``, from a hop rather than from the body, from a new read of
 /// the line rather than the one the write made stale. Each projection
 /// carries the generation it was started under as its
@@ -136,18 +136,16 @@ struct DisplayedRoute: Equatable {
 /// A write is noticed through observation rather than by comparing the line,
 /// because reading `route` after any save of the hike decodes the whole
 /// externally stored value again — measured at 30 to 200 milliseconds for
-/// twenty thousand points on a Mac. ``Hike/trackRouteChanges()`` registers the
-/// dependency without decoding. The body registers nothing of the line: the
+/// twenty thousand points on a Mac. ``Hike/trackLineReplacements()`` registers
+/// the dependency without decoding anything. The body registers nothing of the line: the
 /// new line's landing is what re-runs it, so a registration there would only
 /// add a pass that is handed the old line again.
 ///
-/// Only a write that notifies the hike object handed in is noticed. A sibling
-/// context's save was measured not to (see `HikeListMetrics+Observation.swift`):
-/// the main context's hike took the new line only when a fetch refreshed it,
-/// and nothing observing it was told. So an edit mirrored in from another
-/// device is redrawn only if its import notifies the main context's hike,
-/// which nobody has watched on a device, or once something asks
-/// ``SelectedLine/refresh()`` to look (#1228): the watch hears that too.
+/// Only a line written through the hike's own context moves its revision. A
+/// sibling context's save does not, and neither does the refresh the hikes
+/// list's query gives every hike after any save (#1228). An edit mirrored in
+/// from another device is noticed in the store by ``SelectedLineStoreWatch``,
+/// which asks ``SelectedLine/refresh()`` to look, and the watch hears that.
 @Observable
 final class DisplayedRouteCoordinateCache {
     /// Non-isolated so releasing the last reference never requires proving

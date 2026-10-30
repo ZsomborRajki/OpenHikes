@@ -350,6 +350,10 @@ public final class Hike {
     /// context-attachment and deletion checks in ``Hike/resolveLocalState()``.
     @Transient public var cachedLocalState: HikeLocalState?
 
+    /// How many times this instance's line has been replaced — read through
+    /// ``lineRevision``, which says why it is not a column.
+    @Transient private var lineReplacements = 0
+
     public init(
         title: String,
         distanceMeters: Double,
@@ -404,16 +408,47 @@ public extension Hike {
         access(keyPath: \.route)
     }
 
-    /// Replaces the route, and the duration stored from it.
+    /// How many times this instance's line has been replaced through
+    /// ``replaceRoute(with:)``.
+    ///
+    /// This, rather than ``route``, is what a reader of the line watches
+    /// (#1228). With a `@Query` live in a window, every save to the store —
+    /// any context's, of any hike — refreshes every registered hike and
+    /// notifies every observer of every persisted property, `route`
+    /// included, whether or not anything about it changed. That was measured
+    /// on iOS 18.6 and 27 for a save of another hike's tint, a rename in
+    /// another context, and a Core Data context on SwiftData's own
+    /// coordinator standing in for the mirroring import. A registration on
+    /// `route` therefore cannot tell a new line from a rename two rows down.
+    /// This counter is `@Transient`, so no store and no refresh reaches it: it
+    /// moves only when this context writes a line. A line another context
+    /// saved is the app's to notice, which `SelectedLineStoreWatch` does for
+    /// the selected hike.
+    var lineRevision: Int {
+        access(keyPath: \.lineRevision)
+        return lineReplacements
+    }
+
+    /// Registers ``lineRevision`` as an observation dependency, which is all
+    /// a reader that re-reads the line on its own terms needs.
+    func trackLineReplacements() {
+        access(keyPath: \.lineRevision)
+    }
+
+    /// Replaces the route, and the duration stored from it, and moves
+    /// ``lineRevision``.
     ///
     /// The one way to write ``route`` once the hike exists, and here, in the
     /// file that declares it, because its setter is private: a recording's
     /// save, *Edit Route*, heights filled onto a line, and every rollback that
     /// puts a line back all come through here, so none of them can leave
-    /// ``durationSeconds`` describing the line before.
+    /// ``durationSeconds`` describing the line before, or a reader of
+    /// ``lineRevision`` drawing it. The revision moves last, so whoever it
+    /// notifies finds the new line already in place.
     func replaceRoute(with route: [RouteCoordinate]) {
         self.route = route
         durationSeconds = HikeRouteStatistics.duration(of: route)
+        withMutation(keyPath: \.lineRevision) { lineReplacements &+= 1 }
     }
 }
 

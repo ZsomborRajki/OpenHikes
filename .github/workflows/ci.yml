@@ -648,11 +648,11 @@ jobs:
       # A mistyped identifier here is silently ignored rather than rejected, so
       # a suite added to this list and never run looks exactly like one that
       # passes. Nested suites need their enclosing type — hence
-      # `WidgetFeedSuites`, which is the enclosing type for eleven suites that
-      # share the App Group file, and which is why 56 entries resolve to 67
+      # `WidgetFeedSuites`, which is the enclosing type for the suites that
+      # share the App Group file, and which is why 56 entries resolve to 68
       # suites rather than 56.
       #
-      # 67 is the guard, and the step after the run is what enforces it: an
+      # 68 is the guard, and the step after the run is what enforces it: an
       # identifier that resolves to nothing changes nothing about the exit
       # status, so the count has to be read out of the result bundle or it is
       # not a guard at all. Deliberately not the *test* count, which rises
@@ -801,9 +801,10 @@ jobs:
       # suite written into an `extension WidgetFeedSuites` — as the nested
       # Trail walk end boundary, background delivery, background tracking
       # selection, proximity, region gate, foreground off-trail feed and
-      # selected line suites all are — is selected by a line that is already
-      # there. Selecting that one parent runs twelve of the 67 suites, so adding
-      # a nested suite moves this number with no change to the list at all.
+      # selected line and selected line import suites all are — is selected by
+      # a line that is already there. Selecting that one parent runs thirteen
+      # of the 68 suites, so adding a nested suite moves this number with no
+      # change to the list at all.
       #
       # Tests are a floor for the reason the comment above gives: some 700 run
       # today, and 659 sits far enough below that removing a test does not
@@ -811,7 +812,7 @@ jobs:
       # that still resolves does. Raise it when the measured number rises.
       - name: Check the sanitized selection actually ran
         env:
-          EXPECTED_SUITES: "67"
+          EXPECTED_SUITES: "68"
           TEST_FLOOR: "659"
         run: |
           set -o pipefail
