@@ -261,28 +261,13 @@ struct OpenHikesView: View {
                             WeatherBadge.leadingPadding
                                 + (usesSidePanel ? MapSidePanelLayout.mapInset : 0)
                         )
-                        // And at the top of the map in landscape rather than a
-                        // Dynamic Island's height down it.
-                        //
-                        // ``WeatherBadge/topPadding`` is measured from the
-                        // screen's own edge and is what clears the island in
-                        // *portrait*, where the island is at the top. Turned
-                        // sideways the island is on a side edge, the status bar
-                        // is gone, and 98 points is a quarter of the height the
-                        // badge is supposed to be at the top of — so the reading
-                        // ended up floating in the middle of the map.
-                        //
-                        // So landscape stays inside the safe area and takes
-                        // ``MapSidePanel``'s own margin, which is what puts the
-                        // badge's top edge level with the panel's rather than at
-                        // a number of its own. Portrait keeps measuring from the
-                        // screen edge, which is what `topPadding` is for.
-                        .padding(
-                            .top,
-                            usesSidePanel ? MapSidePanelLayout.margin : WeatherBadge.topPadding
-                        )
+                        // Under *Search this area* in both shapes, measured
+                        // inside the safe area as the pill's strip is. That
+                        // puts it under the Dynamic Island in portrait and at
+                        // the top of the map in landscape, where the island is
+                        // on a side edge. See ``WeatherBadge/topPadding``.
+                        .padding(.top, WeatherBadge.topPadding)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                        .ignoresSafeArea(.container, edges: usesSidePanel ? [] : .vertical)
                 }
             }
             // Handed the session and never reading it — see ``WalkStartedPill``.
@@ -468,9 +453,11 @@ struct OpenHikesView: View {
             // `OpenHikesModel` filters it out of the rest.
             .onChange(of: selectedHikeState) { _, _ in
                 importSelectionGate.invalidate()
-                // First, so the projection is under way before anything
-                // else here spends the main actor's time.
-                displayedRouteCoordinateCache.prepare(for: selectedHike)
+                // First, so the line is being read, and then projected, off
+                // the main actor before anything else here spends its time.
+                // Auto-save, the colours and the widget below are handed the
+                // same read — see ``SelectedLine``.
+                displayedRouteCoordinateCache.prepare(for: selectedHike, from: appModel.selectedLine)
                 // A covered stretch belongs to the route it was drawn over.
                 walkHighlight.clear()
                 // Hands the map the new route's appearance, and re-points the

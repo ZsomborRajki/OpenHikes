@@ -58,11 +58,6 @@ struct MapTipCardState {
     /// view so a suite can stand one in: the real card's content is TipKit's
     /// own view, and a suite never reaches TipKit's store (``TipLaunch``).
     weak var card: UIView?
-    /// What holds a card under *Search this area* clear of the weather badge,
-    /// while there is one. Held because the badge moves beside ``MapSidePanel``
-    /// when the panel comes up, and the map moves this with it — see
-    /// ``MapView/Coordinator/placeAreaSearch(besidePanel:)``.
-    weak var badgeClearance: NSLayoutConstraint?
     #endif
 }
 
@@ -264,7 +259,7 @@ private extension MapView.Coordinator {
 
     /// Under *Search this area* and centered on it, with the arrow pointing up
     /// at it — and below the weather badge, as the pill's own caption is, since
-    /// the strip the pill sits in is beside the badge rather than under it.
+    /// the badge sits directly under the strip the pill is in.
     ///
     /// Below the badge and the compass, nothing holds the card to that strip's
     /// width, so it takes the width every control on the map is laid out in:
@@ -276,14 +271,12 @@ private extension MapView.Coordinator {
         fill.priority = .defaultHigh
         let snug = card.topAnchor.constraint(equalTo: control.bottomAnchor, constant: Self.tipCardSpacing)
         snug.priority = .defaultLow
-        // The badge is over the top of the map only while no panel is beside
-        // it, so this follows the panel rather than the size class: an
-        // unfolded iPhone Duo has the panel at a regular height.
+        // From the guide's top, the safe area's, which is where the badge is
+        // placed in both of the screen's shapes.
         let badge = card.topAnchor.constraint(
-            greaterThanOrEqualTo: mapView.topAnchor,
-            constant: MapAreaSearchView.badgeClearance(besidePanel: sidePanelInset > 0)
+            greaterThanOrEqualTo: guide.topAnchor,
+            constant: MapAreaSearchView.badgeClearance
         )
-        tipCards.badgeClearance = badge
         NSLayoutConstraint.activate([
             card.centerXAnchor.constraint(equalTo: control.centerXAnchor),
             card.leadingAnchor.constraint(greaterThanOrEqualTo: guide.leadingAnchor, constant: MapView.controlInset),
@@ -299,7 +292,6 @@ private extension MapView.Coordinator {
         let card = tipCards.card
         tipCards.card = nil
         tipCards.shown = nil
-        tipCards.badgeClearance = nil
         guard let card else { return }
         // Interaction goes at once, as a fading map control's does — see
         // `MapControlFade.swift`.

@@ -39,8 +39,8 @@ struct WalkStartedPill: View {
     private static let cornerRadius = AccessibilityMetrics.minimumTapTarget / 2
 
     let session: TrailWalkSession
-    /// Landscape's side panel, which moves the badge — and so this — into the
-    /// safe area and against the panel's top margin.
+    /// Landscape's side panel, which moves the badge — and so this — off the
+    /// map's leading edge to beside the panel.
     let usesSidePanel: Bool
     let onOpen: (UUID) -> Void
 
@@ -52,20 +52,16 @@ struct WalkStartedPill: View {
             }
         }
         .animation(.snappy, value: session.startNotice)
-        .padding(.top, topPadding)
+        .padding(.top, Self.topPadding)
         .padding(.horizontal, Self.sideMargin)
         .padding(.leading, usesSidePanel ? MapSidePanelLayout.mapInset : 0)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        // Measured from the screen's edge in portrait, as the badge is.
-        .ignoresSafeArea(.container, edges: usesSidePanel ? [] : .vertical)
     }
 
-    /// Past the bottom of the weather badge, wherever the badge is.
-    private var topPadding: CGFloat {
-        (usesSidePanel ? MapSidePanelLayout.margin : WeatherBadge.topPadding)
-            + AccessibilityMetrics.minimumTapTarget
-            + Self.badgeSpacing
-    }
+    /// Past the bottom of the weather badge, inside the safe area as the badge
+    /// is.
+    private static let topPadding =
+        WeatherBadge.topPadding + AccessibilityMetrics.minimumTapTarget + badgeSpacing
 
     private func pill(for notice: TrailWalkStartNotice) -> some View {
         HStack(spacing: Self.contentSpacing) {

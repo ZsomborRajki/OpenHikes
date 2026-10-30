@@ -63,17 +63,28 @@ nonisolated final class TileOverlay: MKTileOverlay, @unchecked Sendable {
         return offerToAutoSave(result, key: key, path: path)
     }
 
-    /// The tile from memory or from a current copy on disk, or `nil` when only
-    /// a request can answer: a tile on no disk, or saved coverage past its
-    /// age, which is refreshed before it is drawn. Only ``cacheTile(at:)``
-    /// asks a server for either.
+    /// The tile from memory or from a current copy on disk, or saved coverage
+    /// past its age, which comes back `.stale`: in memory and drawn as it is,
+    /// its refresh left to ``refreshStaleTile(at:)``. `nil` when only a
+    /// request can answer, which only ``cacheTile(at:)`` makes.
     ///
     /// What the renderer asks before it waits for a ``TileLoadGate`` slot, so
-    /// that a tile already on disk is not held up behind requests for the
-    /// tiles around it; see ``CachingTileOverlayRenderer``.
+    /// that a tile already on disk, however old, is not held up behind
+    /// requests for the tiles around it; see ``CachingTileOverlayRenderer``.
     func loadStoredTile(at path: MKTileOverlayPath) async -> TileLoadDisposition? {
         let key = cacheKey(for: path)
         guard let result = await cache.loadStoredTileResult(forKey: key) else { return nil }
+        return offerToAutoSave(result, key: key, path: path)
+    }
+
+    /// Asks a server for a fresh copy of saved coverage that
+    /// ``loadStoredTile(at:)`` came back with `.stale`, and says what the
+    /// request came to. The saved copy stays drawn unless this is `.loaded`.
+    /// The renderer calls it under a ``TileLoadGate`` slot, as it does
+    /// ``cacheTile(at:)``.
+    func refreshStaleTile(at path: MKTileOverlayPath) async -> TileLoadDisposition {
+        let key = cacheKey(for: path)
+        let result = await cache.refreshStaleTileResult(forKey: key, url: url(forTilePath: path))
         return offerToAutoSave(result, key: key, path: path)
     }
 
@@ -82,7 +93,7 @@ nonisolated final class TileOverlay: MKTileOverlay, @unchecked Sendable {
         key: String,
         path: MKTileOverlayPath
     ) -> TileLoadDisposition {
-        guard case .loaded = result else { return result.disposition }
+        guard result.image != nil else { return result.disposition }
 
         // Opportunistically keep tiles the user actually views — never a
         // synthetic prefetch, just what MapKit already asked for. Runs for
@@ -93,7 +104,7 @@ nonisolated final class TileOverlay: MKTileOverlay, @unchecked Sendable {
         // in the cache the load that found it just populated, and get moved,
         // not re-encoded.
         autoSaveStore.considerPersisting(key: key, z: path.z, x: path.x, y: path.y)
-        return .loaded
+        return result.disposition
     }
 
     /// When the tile server last said this tile may be asked for again, if it

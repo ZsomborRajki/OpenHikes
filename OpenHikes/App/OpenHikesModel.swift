@@ -113,6 +113,11 @@ final class OpenHikesModel {
     /// hiker chose, and it needs ``trailGraphProvider`` — see
     /// ``RouteShading``.
     let routeShading: RouteShading
+    /// Where the selected hike's line is read, once and off the main actor,
+    /// for the map's projection and colours, auto-save and the widget — see
+    /// ``SelectedLine``. Owned here because three of the four are, and the
+    /// root view hands it to the fourth.
+    let selectedLine: SelectedLine
 
     /// Where the app asks OpenStreetMap what is on a trail — the maker's
     /// *Search this area*, a saved hike's *Places Around Trail* and the
@@ -196,6 +201,7 @@ final class OpenHikesModel {
         movementReminders: MovementReminderController? = nil,
         walkSession: TrailWalkSession? = nil,
         communityTransport: (any CommunityTransporting)? = nil,
+        selectedLine: SelectedLine = SelectedLine(),
         defaults: UserDefaults = .standard,
         startupIssue: StorageStartupIssue? = nil,
         isSyncingThisLaunch: Bool = false
@@ -226,7 +232,8 @@ final class OpenHikesModel {
             entitlement: store
         )
         placePins = Self.makePlacePins(defaults: defaults, maker: trailMaker)
-        routeShading = RouteShading(provider: trailGraphProvider, defaults: defaults)
+        self.selectedLine = selectedLine
+        routeShading = RouteShading(provider: trailGraphProvider, defaults: defaults, lines: selectedLine)
         watchLink = Self.makeWatchLink(container: container, recorder: hikeRecorder, defaults: defaults)
         communityBlocks = CommunityBlockList(defaults: defaults)
         community = Self.makeCommunityBrowser(transport: communityTransport, blocks: communityBlocks, maker: trailMaker)

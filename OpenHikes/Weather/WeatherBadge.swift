@@ -67,16 +67,23 @@ struct WeatherBadge: View {
     /// places this one reads both: the badge is drawn in `OpenHikesView`'s
     /// overlay rather than inside this file.
     ///
-    /// Measured from the map's *own* top edge, not its safe area: the map
-    /// `.ignoresSafeArea()`, so this overlay is aligned to the full screen and
-    /// the padding is what clears the Dynamic Island.
+    /// Under the strip *Search this area* is centred in, on every phone and in
+    /// both of the screen's shapes, because beside it there is no room: a
+    /// badge about a hundred points wide and a pill about two hundred
+    /// overlapped by a few points on a 6.3-inch phone, upright and turned.
     ///
-    /// **Portrait's number.** It is a Dynamic Island's height, and the island
-    /// is only at the top in portrait; landscape lays the badge out inside the
-    /// safe area against ``MapSidePanel``'s margin instead. The placing view
-    /// picks between them — see `OpenHikesView`, which reads this one.
-    static let topPadding: CGFloat = 98
+    /// Measured from the safe area, as the strip is: its control inset, a
+    /// pill's height, then ``stripSpacing``. The pill's height is a tap
+    /// target's, ``MapGlassPill/controlSize``. This used to be a fixed 98
+    /// points from the screen's edge, a Dynamic Island's height, which ran into
+    /// the pill on a phone with one and left a gap above the badge on a phone
+    /// without one.
+    static let topPadding: CGFloat =
+        MapView.controlInset + AccessibilityMetrics.minimumTapTarget + stripSpacing
     static let leadingPadding: CGFloat = 16
+    /// The gap between the strip and the badge, the same one the strip's own
+    /// caption keeps from the pill.
+    private static let stripSpacing: CGFloat = 6
     private static let verticalPadding: CGFloat = 8
 
     /// The text style that decides the capsule's height. The symbol and the
@@ -110,12 +117,19 @@ struct WeatherBadge: View {
             // be, so a temperature over a snowfield and one over forest were
             // two different badges. Glass keeps its own legibility over both.
             //
+            // The clear kind rather than the regular one. The badge stands
+            // over the map rather than over another control, and the regular
+            // glass frosted out whatever it covered, MapKit's scale included
+            // when the two met at the top of a short map. A multicolour
+            // symbol and a headline temperature read through clear glass, and
+            // the map stays visible behind them.
+            //
             // `interactive()` now that it is a control: the press response is
             // the only thing telling a sighted user the capsule answers a tap.
             //
             // Inside the button's label rather than around it, the way every
             // other glass control here is built.
-            .glassSurface(.regular.interactive(), in: .capsule)
+            .glassSurface(.clear.interactive(), in: .capsule)
             .minimumTapTarget()
         }
         .buttonStyle(.plain)

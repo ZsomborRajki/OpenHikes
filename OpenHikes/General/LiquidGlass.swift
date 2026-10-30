@@ -65,8 +65,21 @@ struct GlassSurface: Equatable {
     /// over map imagery, a chart, or a plain background.
     static let regular = Self()
 
+    /// The see-through surface, for a small control over map imagery where
+    /// what is under it matters as much as what is on it. It frosts far less
+    /// than ``regular``, so its contents need to be bold enough to read over
+    /// whatever the map draws there.
+    static let clear = Self(isClear: true)
+
+    private let isClear: Bool
     private var tintColor: Color?
     private var isInteractive = false
+
+    /// ``regular`` and ``clear`` are the two starting points; everything else
+    /// is a modifier on one of them.
+    private init(isClear: Bool = false) {
+        self.isClear = isClear
+    }
 
     /// Colours the glass without making it opaque. Use it to carry a meaning
     /// the shape already has — a recording's red, a warning's orange — not for
@@ -89,7 +102,7 @@ struct GlassSurface: Equatable {
     #if !os(visionOS)
     /// The SwiftUI value this stands for. Only reachable where `Glass` exists.
     @available(iOS 26.0, *) var resolved: Glass {
-        var glass: Glass = .regular
+        var glass: Glass = isClear ? .clear : .regular
         if let tintColor {
             glass = glass.tint(tintColor)
         }
@@ -101,11 +114,11 @@ struct GlassSurface: Equatable {
     #endif
 
     /// What stands in for the glass where there is none: the regular
-    /// material, and the tint washed over it, so a recording's red and a
-    /// warning's orange still say what they say.
+    /// material, or the ultra-thin one for ``clear``, and the tint washed over
+    /// it, so a recording's red and a warning's orange still say what they say.
     func earlierBackground(in shape: some Shape) -> some View {
         ZStack {
-            shape.fill(.regularMaterial)
+            shape.fill(isClear ? .ultraThinMaterial : .regularMaterial)
             if let tintColor {
                 shape.fill(tintColor.opacity(Self.earlierTintOpacity))
             }
