@@ -34,11 +34,14 @@ jobs:
     # and `github.event.ref` for a deleted tag is a name no run ever had.
     # And a pull request whose head is in this repository only: a fork's
     # `closed` event carries a token that cannot write to Actions, so the job
-    # would do nothing but go red on somebody else's pull request.
+    # would do nothing but go red on somebody else's pull request. Nor one
+    # whose head is the default branch, which the script refuses, so that
+    # closing a pull request from `main` into another branch is no red run.
     if: >-
       (github.event_name == 'delete' && github.event.ref_type == 'branch') ||
       (github.event_name == 'pull_request' &&
-       github.event.pull_request.head.repo.full_name == github.repository)
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.pull_request.head.ref != github.event.repository.default_branch)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -52,8 +55,9 @@ jobs:
       # The default branch rather than the event's ref: `pull_request` would
       # otherwise check out `refs/pull/<n>/merge`, which no longer exists once
       # the pull request is merged, and `delete` names a branch that has gone.
-      # It also means the program that runs is the one on `main`, never a
-      # version a pull request wrote.
+      # It also means the script that runs is the one on `main`, never a
+      # version a pull request wrote, although a pull request closed without
+      # merging reads this file itself from its own merge commit.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
@@ -64,9 +68,15 @@ jobs:
           # `delete` carries the branch's name in `ref`; a pull request carries
           # it on its head. Neither is prefixed with refs/heads/.
           BRANCH: ${{ github.event.ref || github.event.pull_request.head.ref }}
+          # Empty on `delete`: a pull request whose branch has gone cannot be
+          # reopened, so no run after the event needs sparing.
+          CLOSED_AT: ${{ github.event.pull_request.closed_at }}
         # This workflow's own runs are spared. A closed pull request's run
         # carries the pull request's head branch, so this run is on the list it
         # reads, and cancelling itself first would stop the cancels behind it.
+        # The runs created after the close are spared too, because reopening
+        # the pull request starts them.
         run: >-
           Scripts/cancel-branch-runs.sh --branch "$BRANCH"
           --spare-workflow "$GITHUB_WORKFLOW"
+          ${CLOSED_AT:+--created-before "$CLOSED_AT"}
