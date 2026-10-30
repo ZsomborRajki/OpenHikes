@@ -453,9 +453,11 @@ struct OpenHikesView: View {
             // `OpenHikesModel` filters it out of the rest.
             .onChange(of: selectedHikeState) { _, _ in
                 importSelectionGate.invalidate()
-                // First, so the projection is under way before anything
-                // else here spends the main actor's time.
-                displayedRouteCoordinateCache.prepare(for: selectedHike)
+                // First, so the line is being read, and then projected, off
+                // the main actor before anything else here spends its time.
+                // Auto-save, the colours and the widget below are handed the
+                // same read — see ``SelectedLine``.
+                displayedRouteCoordinateCache.prepare(for: selectedHike, from: appModel.selectedLine)
                 // A covered stretch belongs to the route it was drawn over.
                 walkHighlight.clear()
                 // Hands the map the new route's appearance, and re-points the

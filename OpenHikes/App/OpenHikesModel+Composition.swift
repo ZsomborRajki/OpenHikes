@@ -84,6 +84,7 @@ extension OpenHikesModel {
             trailGraphProvider: parts.graphProvider,
             movementReminders: parts.reminders,
             communityTransport: parts.communityTransport,
+            selectedLine: parts.selectedLine,
             defaults: launchDefaults,
             startupIssue: load.startupIssue,
             isSyncingThisLaunch: syncsToCloud
@@ -120,6 +121,7 @@ extension OpenHikesModel {
             // called it. The feature was unreachable from automation by
             // composition rather than by policy.
             communityTransport: parts.communityTransport,
+            selectedLine: parts.selectedLine,
             defaults: uiTestingDefaults
         )
     }
@@ -661,8 +663,8 @@ private extension OpenHikesModel {
     /// instead of inheriting whatever the host app has stored. Read on each
     /// call rather than captured once, so a change made in Settings takes
     /// effect on the next selection without rebuilding anything.
-    static func makeAutoSaveController(defaults: UserDefaults) -> AutoSaveController {
-        AutoSaveController {
+    static func makeAutoSaveController(defaults: UserDefaults, lines: SelectedLine) -> AutoSaveController {
+        AutoSaveController(lines: lines) {
             !TileProvider.selected(in: defaults).usesSystemBaseMap
                 || TileLayer.selected(in: defaults) != nil
         }
@@ -739,6 +741,9 @@ private extension OpenHikesModel {
         let weatherManager: WeatherManager
         let significantLocations: SignificantLocationFeed
         let communityTransport: (any CommunityTransporting)?
+        /// The selected hike's line, read once for the tracker, auto-save and
+        /// the map — see ``SelectedLine``.
+        let selectedLine: SelectedLine
     }
 
     static func makeDependencies(
@@ -760,6 +765,9 @@ private extension OpenHikesModel {
         let liveActivities = Self.makeLiveActivityController(defaults: defaults)
         let reminders = Self.makeMovementReminderController(defaults: defaults)
         let significantLocationRegistration = Self.makeSignificantLocationRegistration()
+        // One for every reader of the selected line, so the selection reads
+        // it once rather than once each.
+        let selectedLine = SelectedLine()
         let backgroundTracker = BackgroundTrailTracker(
             container: container,
             monitor: significantLocationRegistration.client(
@@ -767,9 +775,10 @@ private extension OpenHikesModel {
                 monitor: Self.dormantLocationSource()
             ),
             defaults: defaults,
-            liveActivityController: liveActivities
+            liveActivityController: liveActivities,
+            lines: selectedLine
         )
-        let autoSave = Self.makeAutoSaveController(defaults: defaults)
+        let autoSave = Self.makeAutoSaveController(defaults: defaults, lines: selectedLine)
         // The geocoder is passed here and deliberately *not* on the
         // UI-testing path below: naming a forecast's place reaches MapKit's
         // network, and a launch that must not do that heads the detail sheet
@@ -823,7 +832,8 @@ private extension OpenHikesModel {
             locationManager: locationManager,
             weatherManager: weatherManager,
             significantLocations: significantLocations,
-            communityTransport: communityTransport
+            communityTransport: communityTransport,
+            selectedLine: selectedLine
         )
     }
 
@@ -846,6 +856,9 @@ private extension OpenHikesModel {
             }
         let liveActivities = Self.makeLiveActivityController(defaults: defaults)
         let significantLocationRegistration = Self.makeSignificantLocationRegistration()
+        // One for every reader of the selected line, so the selection reads
+        // it once rather than once each.
+        let selectedLine = SelectedLine()
         let backgroundTracker = BackgroundTrailTracker(
             container: container,
             monitor: significantLocationRegistration.client(
@@ -853,9 +866,10 @@ private extension OpenHikesModel {
                 monitor: Self.dormantLocationSource()
             ),
             defaults: defaults,
-            liveActivityController: liveActivities
+            liveActivityController: liveActivities,
+            lines: selectedLine
         )
-        let autoSave = Self.makeAutoSaveController(defaults: defaults)
+        let autoSave = Self.makeAutoSaveController(defaults: defaults, lines: selectedLine)
         let recorder = HikeRecorder(
             container: container,
             saveModelContext: Self.uiTestingSave(),
@@ -892,7 +906,8 @@ private extension OpenHikesModel {
             locationManager: locationManager,
             weatherManager: weatherManager,
             significantLocations: significantLocations,
-            communityTransport: communityTransport
+            communityTransport: communityTransport,
+            selectedLine: selectedLine
         )
     }
 
@@ -905,6 +920,9 @@ private extension OpenHikesModel {
         let weatherManager: WeatherManager
         let significantLocations: SignificantLocationFeed
         let communityTransport: (any CommunityTransporting)?
+        /// The selected hike's line, read once for the tracker, auto-save and
+        /// the map — see ``SelectedLine``.
+        let selectedLine: SelectedLine
     }
 }
 
