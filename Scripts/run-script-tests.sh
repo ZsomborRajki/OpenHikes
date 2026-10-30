@@ -36,6 +36,14 @@
 # Catalog in the repository on each sync and must only ever reorder one, and
 # Scripts/lib/fit-screenshot.swift, which rewrites every App Store frame and
 # must never write one back on its side.
+# Scripts/cancel-branch-runs.sh is here because it is the one script that
+# cancels work: it is handed a branch name by a `delete` event and takes down
+# every run against it, so what it will not touch — the default branch, a run
+# that has already finished, the cleanup run itself — matters as much as what
+# it will, and nothing about any of them is visible until a run that was the
+# only record of a commit is gone, or the cancels behind a cancelled cleanup
+# were never sent. A refused cancel is asserted too, because a green job that cancelled
+# nothing leaves the queue exactly as full as it was.
 # Scripts/sim-pool.sh is here because what it decides — which device a session
 # lands on, and whether that device is erased first — is invisible until two
 # sessions' tests collide on one simulator or somebody's device is wiped.
@@ -312,6 +320,53 @@ if [[ " $* " == *" set "* && " $* " != *" -t 0 "* && -n "${STUB_HINGE_ANGLE_FAIL
     echo "hinge_helper: the hinge angle did not reach $degrees.0 within 1.0 s" >&2
     exit 1
 fi
+STUB
+
+# Answers the four gh subcommands Scripts/cancel-branch-runs.sh makes, and
+# records every one. STUB_GH_DEFAULT_BRANCH is what `gh repo view` reports.
+# STUB_GH_RUNS names a file of the TSV rows `gh run list` prints for the branch
+# it was asked about, completed runs included, because deciding which of them
+# is still worth cancelling is the script's job and not the API's.
+# STUB_GH_CONFLICT, STUB_GH_CANCEL_REFUSES and STUB_GH_COMPLETED each name run
+# ids. A cancel of the first is answered in the words gh 2.103.3 prints for the
+# API's 409, which carry no status code; of the second, as a token with no
+# Actions scope is. `gh run view` reports the third `completed` and every other
+# run still in progress.
+cat > "$stub_bin/gh" <<'STUB'
+#!/usr/bin/env bash
+printf 'gh %s\n' "$*" >> "$STUB_CALL_LOG"
+case "${1:-} ${2:-}" in
+    "repo view")
+        printf '%s\n' "${STUB_GH_DEFAULT_BRANCH:-main}"
+        ;;
+    "run list")
+        [[ -z "${STUB_GH_RUNS:-}" ]] || cat "$STUB_GH_RUNS"
+        ;;
+    "run cancel")
+        id="${3:-}"
+        if [[ " ${STUB_GH_CONFLICT:-} " == *" $id "* ]]; then
+            echo "Cannot cancel a workflow run that is completed" >&2
+            exit 1
+        fi
+        if [[ " ${STUB_GH_CANCEL_REFUSES:-} " == *" $id "* ]]; then
+            echo "HTTP 403: Resource not accessible by integration" >&2
+            exit 1
+        fi
+        echo "Request to cancel workflow $id submitted."
+        ;;
+    "run view")
+        id="${3:-}"
+        if [[ " ${STUB_GH_COMPLETED:-} " == *" $id "* ]]; then
+            echo "completed"
+        else
+            echo "in_progress"
+        fi
+        ;;
+    *)
+        echo "stub gh: no answer for '$*'" >&2
+        exit 64
+        ;;
+esac
 STUB
 
 chmod +x "$stub_bin"/*
@@ -3868,6 +3923,223 @@ if expect_status 2 \
     && expect_contains "$output" "already holds a recording" "the error" \
     && expect_absent "$calls" "xctrace record" "the recorded calls" \
     && expect_absent "$calls" "xcodebuild" "the recorded calls"; then
+    pass
+fi
+
+echo "Superseded run cancellation"
+
+cancel_runs="$repository_root/Scripts/cancel-branch-runs.sh"
+cancel_branch="fix/weather-badge-under-area-search"
+
+# What `gh run list` prints for a branch whose pull request has just merged: a
+# run still waiting for a macOS runner, one already building, and the pass that
+# reported the pull request green.
+cat > "$work/gh-runs-merged.tsv" <<'EOF'
+41017637698	queued	pull_request	2026-10-29T21:40:12Z	CI
+41017637709	in_progress	pull_request	2026-10-29T21:40:12Z	CodeQL
+41017600000	completed	pull_request	2026-10-29T21:02:51Z	CI
+EOF
+
+: > "$work/gh-runs-none.tsv"
+
+STUB_GH_RUNS="$work/gh-runs-merged.tsv" \
+    run_script "cancel-branch-runs takes down the queued and the building work" \
+        "$cancel_runs" --branch "$cancel_branch"
+if expect_status 0 \
+    && expect_contains "$calls" "repo view --json" "the recorded calls" \
+    && expect_contains "$calls" "run cancel 41017637698" "the recorded calls" \
+    && expect_contains "$calls" "run cancel 41017637709" "the recorded calls" \
+    && expect_absent "$calls" "run cancel 41017600000" "the recorded calls" \
+    && expect_contains "$output" "Cancelled CI run 41017637698" "the report" \
+    && expect_contains "$calls" "--branch $cancel_branch" "the recorded calls"; then
+    pass
+fi
+
+# The one branch it must never touch. A queued run on the default branch is the
+# only thing that will say whether that commit compiles, and five unverified
+# merges have already hidden behind a wall of cancelled runs there.
+STUB_GH_RUNS="$work/gh-runs-merged.tsv" \
+    run_script "cancel-branch-runs refuses the default branch" \
+        "$cancel_runs" --branch main
+if expect_status 2 \
+    && expect_contains "$output" "default branch" "the error" \
+    && expect_absent "$calls" "run list" "the recorded calls" \
+    && expect_absent "$calls" "run cancel" "the recorded calls"; then
+    pass
+fi
+
+# A default branch that is not called main is still the default branch.
+STUB_GH_DEFAULT_BRANCH=trunk STUB_GH_RUNS="$work/gh-runs-merged.tsv" \
+    run_script "cancel-branch-runs refuses whatever the default branch is called" \
+        "$cancel_runs" --branch trunk
+if expect_status 2 \
+    && expect_contains "$output" "default branch" "the error" \
+    && expect_absent "$calls" "run cancel" "the recorded calls"; then
+    pass
+fi
+
+STUB_GH_RUNS="$work/gh-runs-none.tsv" \
+    run_script "cancel-branch-runs says so when nothing was left to cancel" \
+        "$cancel_runs" --branch "$cancel_branch"
+if expect_status 0 \
+    && expect_contains "$output" "Nothing was left to cancel" "the report" \
+    && expect_absent "$calls" "run cancel" "the recorded calls"; then
+    pass
+fi
+
+# What it lists when a closed pull request's cleanup is the caller: that run
+# carries the pull request's head branch, so it is on the list, newest and in
+# progress. (A `delete` event's run carries the default branch, so it is never
+# listed; when it is the caller, it is this run that it finds, waiting.)
+cat > "$work/gh-runs-cleanup.tsv" <<'EOF'
+101	in_progress	pull_request	2026-10-30T07:41:01Z	Cancel superseded runs
+100	queued	pull_request	2026-10-30T07:12:40Z	CI
+99	in_progress	pull_request	2026-10-30T07:12:40Z	CodeQL
+EOF
+
+# Cancelled first, the cleanup would be stopped before it sent the cancels
+# behind it, and a merge that keeps its branch has no `delete` to send them.
+STUB_GH_RUNS="$work/gh-runs-cleanup.tsv" \
+    run_script "cancel-branch-runs spares the workflow that calls it" \
+        "$cancel_runs" --branch "$cancel_branch" \
+        --spare-workflow "Cancel superseded runs"
+if expect_status 0 \
+    && expect_absent "$calls" "run cancel 101" "the recorded calls" \
+    && expect_contains "$calls" "run cancel 100" "the recorded calls" \
+    && expect_contains "$calls" "run cancel 99" "the recorded calls"; then
+    pass
+fi
+
+run_script "cancel-branch-runs needs a value with --spare-workflow" \
+    "$cancel_runs" --branch "$cancel_branch" --spare-workflow
+if expect_status 2 \
+    && expect_contains "$output" "missing value" "the error" \
+    && expect_absent "$calls" "gh" "the recorded calls"; then
+    pass
+fi
+
+# A release is somebody's deliberate request, and the TestFlight workflow runs
+# from any branch: merging that branch mid-archive must not take it down. A
+# reopened pull request's checks start after the close, carry the same branch,
+# and are the ones that pull request now waits on.
+cat > "$work/gh-runs-kept.tsv" <<'EOF'
+300	queued	pull_request	2026-10-30T08:00:05Z	CI
+299	in_progress	workflow_dispatch	2026-10-30T07:30:00Z	TestFlight
+298	queued	pull_request	2026-10-30T07:12:40Z	CI
+EOF
+
+STUB_GH_RUNS="$work/gh-runs-kept.tsv" \
+    run_script "cancel-branch-runs leaves a dispatched run and a reopened pull request's alone" \
+        "$cancel_runs" --branch "$cancel_branch" \
+        --created-before 2026-10-30T07:59:58Z
+if expect_status 0 \
+    && expect_absent "$calls" "run cancel 300" "the recorded calls" \
+    && expect_absent "$calls" "run cancel 299" "the recorded calls" \
+    && expect_contains "$calls" "run cancel 298" "the recorded calls"; then
+    pass
+fi
+
+run_script "cancel-branch-runs rejects a time that is not GitHub's spelling" \
+    "$cancel_runs" --branch "$cancel_branch" --created-before "30 Oct 2026 08:00"
+if expect_status 2 \
+    && expect_contains "$output" "UTC time" "the error" \
+    && expect_absent "$calls" "gh" "the recorded calls"; then
+    pass
+fi
+
+# --repo has to reach `gh repo view` by name, because that subcommand ignores
+# GH_REPO and would read the checkout's own default branch.
+STUB_GH_RUNS="$work/gh-runs-none.tsv" \
+    run_script "cancel-branch-runs reads the default branch of the repository it is given" \
+        "$cancel_runs" --branch "$cancel_branch" --repo octo/elsewhere
+if expect_status 0 \
+    && expect_contains "$calls" "repo view octo/elsewhere --json" "the recorded calls"; then
+    pass
+fi
+
+# The script's own race: the list is a moment old, and a run can finish inside
+# it. gh words the API's 409 without its code, and that sentence is not a
+# failure.
+STUB_GH_RUNS="$work/gh-runs-merged.tsv" STUB_GH_CONFLICT=41017637709 \
+    STUB_GH_COMPLETED=41017637709 \
+    run_script "cancel-branch-runs reads gh's 409 as the run having finished under it" \
+        "$cancel_runs" --branch "$cancel_branch"
+if expect_status 0 \
+    && expect_contains "$output" "had already finished" "the report" \
+    && expect_contains "$output" "Cancelled CI run 41017637698" "the report"; then
+    pass
+fi
+
+# The second of a merge's two cleanups can reach a run the first one's cancel
+# is still tearing down: answered the same way, though it reads in progress.
+STUB_GH_RUNS="$work/gh-runs-merged.tsv" STUB_GH_CONFLICT=41017637709 \
+    run_script "cancel-branch-runs reads gh's 409 on a run still stopping as nothing to do" \
+        "$cancel_runs" --branch "$cancel_branch"
+if expect_status 0 \
+    && expect_contains "$output" "had already finished" "the report"; then
+    pass
+fi
+
+# Should gh ever word that answer differently, the run's own status still says
+# it finished.
+STUB_GH_RUNS="$work/gh-runs-merged.tsv" STUB_GH_CANCEL_REFUSES=41017637709 \
+    STUB_GH_COMPLETED=41017637709 \
+    run_script "cancel-branch-runs reads a failed cancel of a completed run as finished" \
+        "$cancel_runs" --branch "$cancel_branch"
+if expect_status 0 \
+    && expect_contains "$calls" "run view 41017637709" "the recorded calls" \
+    && expect_contains "$output" "had already finished" "the report"; then
+    pass
+fi
+
+# Anything else a cancel reports is the token's refusal, and the queue is as
+# full as it was. A job that went green on it would be the failure.
+STUB_GH_RUNS="$work/gh-runs-merged.tsv" STUB_GH_CANCEL_REFUSES=41017637698 \
+    run_script "cancel-branch-runs fails on a refused cancel" \
+        "$cancel_runs" --branch "$cancel_branch"
+if expect_status 1 \
+    && expect_contains "$output" "403" "the error" \
+    && expect_contains "$calls" "run view 41017637698" "the recorded calls" \
+    && expect_contains "$calls" "run cancel 41017637709" "the recorded calls"; then
+    pass
+fi
+
+STUB_GH_RUNS="$work/gh-runs-merged.tsv" \
+    run_script "cancel-branch-runs cancels nothing on a dry run" \
+        "$cancel_runs" --branch "$cancel_branch" --dry-run
+if expect_status 0 \
+    && expect_contains "$output" "Would cancel CI run 41017637698" "the report" \
+    && expect_absent "$calls" "run cancel" "the recorded calls"; then
+    pass
+fi
+
+run_script "cancel-branch-runs needs a branch" "$cancel_runs"
+if expect_status 2 \
+    && expect_contains "$output" "no branch given" "the error" \
+    && expect_absent "$calls" "gh" "the recorded calls"; then
+    pass
+fi
+
+run_script "cancel-branch-runs needs a value with --branch" "$cancel_runs" --branch
+if expect_status 2 \
+    && expect_contains "$output" "missing value" "the error" \
+    && expect_absent "$calls" "gh" "the recorded calls"; then
+    pass
+fi
+
+run_script "cancel-branch-runs rejects an option it does not understand" \
+    "$cancel_runs" --branch "$cancel_branch" --force
+if expect_status 2 \
+    && expect_contains "$output" "unknown option" "the error" \
+    && expect_absent "$calls" "gh" "the recorded calls"; then
+    pass
+fi
+
+run_script "cancel-branch-runs rejects a limit that is not a count" \
+    "$cancel_runs" --branch "$cancel_branch" --limit none
+if expect_status 2 \
+    && expect_contains "$output" "positive whole number" "the error" \
+    && expect_absent "$calls" "gh" "the recorded calls"; then
     pass
 fi
 

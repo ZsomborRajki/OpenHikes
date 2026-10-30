@@ -132,6 +132,16 @@ script tests and the page check.
 
 - **None of them is a required check.** `main`'s branch protection has no
   `required_status_checks`, so a red run reports a problem but blocks nothing.
+- **A merged branch's runs are cancelled for it.** `concurrency` cancels a run
+  only when a newer push to the same ref supersedes it, and neither a merge nor
+  a branch deletion is a push, so a merged branch's queued runs used to sit on
+  macOS runners while the branches still open waited behind them.
+  `.github/workflows/cancel-superseded-runs.yml` hands the branch to
+  `Scripts/cancel-branch-runs.sh` on a `delete` event and on a closed pull
+  request, which takes down every unfinished run that a push or the pull
+  request started on it, leaving alone a dispatched run (a TestFlight upload)
+  and a reopened pull request's. It refuses the default branch: a queued run
+  there is the only thing that will ever say whether that commit compiles.
 - **Documentation-only pull requests skip the jobs.** The `changes` job runs
   everything unless every changed path is `*.md`, `LICENSE` or under `docs/`. It
   is a job-level `if:` rather than `paths-ignore:`, because a skipped job
