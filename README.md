@@ -1,6 +1,6 @@
 # OpenHikes
 
-https://apps.apple.com/us/app/openhikes/id6787467479
+[![Download on the App Store](docs/images/app-store-badge.svg)](https://apps.apple.com/app/openhikes/id6787467479)
 
 OpenHikes is a local-first SwiftUI and SwiftData trail viewer for iPhone, with a companion app for Apple Watch. It imports GPX tracks, records live hikes, displays them on a MapKit map, provides route statistics and an interactive elevation profile, and keeps selected map areas available offline.
 
@@ -146,7 +146,7 @@ Following Apple's [Food Truck](https://github.com/apple/sample-food-truck) and [
 | `OpenHikesUITests/` | Simulator UI automation, location spoofing, launch metrics. |
 | `Scripts/` | The gates and tools a contributor runs by hand: lint, the UI-test runner and its render trace, the simulated hike, the App Store screenshot capture and its photo stamper, and the checks CI runs beside them. |
 | `Screenshots/` | The App Store screenshot set: what each frame has to say, how it is captured, and where its photographs come from. |
-| `docs/` | The published GitHub Pages site — the privacy, terms and support pages the App Store listing links. Not a documentation folder. |
+| `docs/` | The published GitHub Pages site — a home page, and the privacy, terms and support pages the App Store listing links. Not a documentation folder. |
 
 ## License
 
