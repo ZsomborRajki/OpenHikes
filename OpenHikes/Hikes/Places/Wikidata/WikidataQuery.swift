@@ -59,9 +59,6 @@ nonisolated enum WikidataQuery {
     /// the fallback.
     static let preferredLanguageLimit = 2
 
-    /// The statement read off the item: its image.
-    static let imageProperty = "P18"
-
     /// The error code Wikidata answers an item that no longer exists with.
     static let missingItemCode = "no-such-entity"
 
