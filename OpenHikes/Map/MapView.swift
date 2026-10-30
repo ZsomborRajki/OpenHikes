@@ -634,9 +634,6 @@ struct MapView: MapViewRepresentable, Equatable {
     ///
     /// Directional anchors already mirror the inset in a right-to-left layout.
     /// Written only when it changes, since a constraint write requests layout.
-    ///
-    /// The *Search this area* pills hear about the panel from here too — see
-    /// ``MapView/Coordinator/placeAreaSearch(besidePanel:)``.
     private func applySidePanelInset(_ coordinator: Coordinator) {
         #if canImport(UIKit)
         coordinator.sidePanelInset = sidePanelInset
@@ -645,7 +642,6 @@ struct MapView: MapViewRepresentable, Equatable {
         if coordinator.controlsLeadingConstraint?.constant != sidePanelInset {
             coordinator.controlsLeadingConstraint?.constant = sidePanelInset
         }
-        coordinator.placeAreaSearch(besidePanel: sidePanelInset > 0)
         #endif
     }
 
