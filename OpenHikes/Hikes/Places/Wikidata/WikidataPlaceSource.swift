@@ -20,11 +20,17 @@
 //  An item with neither an article in the hiker's languages nor a picture
 //  costs one request and answers `nil`, which ``WikidataPlaceLookup`` keeps
 //  for the launch. An article that has gone since the item linked it is no
-//  article. A picture that cannot be shown — no image, a licence this app
-//  cannot honour, a file that is not a photograph, a thumbnail that did not
-//  arrive — is no picture, and the article is shown without it. Only a
-//  failure of the item or of the article throws, and is asked again the next
-//  time the card opens.
+//  article. A picture that may not be shown — no image, a licence this app
+//  cannot honour, a file that is not a photograph, bytes that are not a
+//  picture — is no picture, and the article is shown without it.
+//
+//  A failure is not an answer, and is asked again the next time the card
+//  opens. The item or the article failing throws. The picture failing —
+//  Commons busy, the download cut off by a card closed before it arrived —
+//  costs the picture this once: beside an article, the article is answered in
+//  an answer marked incomplete, so the lookup asks again rather than keeping
+//  it; alone, it throws like the rest, because answered as `nil` it would be
+//  kept as *nothing to show* and hide the section for the launch.
 //
 //  ## What is sent
 //
@@ -84,7 +90,16 @@ nonisolated struct WikidataPlaceSource: WikidataPlaceSourcing {
         let entity = try await WikidataQuery.entity(from: body(of: WikidataQuery.entity(item, languages: languages)))
         async let picture = photo(named: entity.image)
         let summary = try await article(in: entity)
-        return WikidataPlace(item: item, article: summary, photo: await picture)
+        do {
+            return WikidataPlace(item: item, article: summary, photo: try await picture)
+        } catch {
+            // A picture that could not be had is not a picture there is none
+            // of. With no article it was the whole answer — see this file's
+            // header.
+            guard let summary else { throw error }
+            Self.logger.info("A place's photograph failed: \(String(describing: error), privacy: .public)")
+            return WikidataPlace(item: item, article: summary, photo: nil, isComplete: false)
+        }
     }
 
     /// The summary of the first article `entity` links in ``languages``, or
@@ -103,26 +118,22 @@ nonisolated struct WikidataPlaceSource: WikidataPlaceSourcing {
     }
 
     /// The photograph named `name`, with its credit, or `nil` for no name
-    /// and for every way a picture can fail to be one this app shows. Never
-    /// throws: the article is worth showing without it.
-    private func photo(named name: String?) async -> WikidataPhoto? {
+    /// and for every way a picture can fail to be one this app shows.
+    ///
+    /// Throws when the picture could not be had at all — Commons busy or out
+    /// of reach, the download cut off — which ``place(_:)`` tells apart from
+    /// a picture there is none of.
+    private func photo(named name: String?) async throws -> WikidataPhoto? {
         guard let name else { return nil }
-        do {
-            let files = try await CommonsPhotoQuery.files(
-                from: commonsBody(of: CommonsPhotoQuery.imageInfo(ofFileTitled: name))
-            )
-            // `files(from:)` has already left out what may not be shown —
-            // the licence, the type, the size and the host are checked there.
-            guard let file = files.first else { return nil }
-            let image = try await commonsBody(of: CommonsPhotoQuery.download(file.thumbnailURL))
-            guard ImageDataFormat.detect(in: image) != nil else { return nil }
-            return WikidataPhoto(credit: file.credit, imageData: image)
-        } catch is CancellationError {
-            return nil
-        } catch {
-            Self.logger.info("A place's photograph failed: \(String(describing: error), privacy: .public)")
-            return nil
-        }
+        let files = try await CommonsPhotoQuery.files(
+            from: commonsBody(of: CommonsPhotoQuery.imageInfo(ofFileTitled: name))
+        )
+        // `files(from:)` has already left out what may not be shown — the
+        // licence, the type, the size and the host are checked there.
+        guard let file = files.first else { return nil }
+        let image = try await commonsBody(of: CommonsPhotoQuery.download(file.thumbnailURL))
+        guard ImageDataFormat.detect(in: image) != nil else { return nil }
+        return WikidataPhoto(credit: file.credit, imageData: image)
     }
 
     private func body(of request: URLRequest) async throws -> Data {
@@ -132,7 +143,7 @@ nonisolated struct WikidataPlaceSource: WikidataPlaceSourcing {
 
     /// A Commons answer, read the way every other one is. There is no second
     /// try after a busy one here, as there is for a route's photographs: the
-    /// picture is the one part of the section that may be left out.
+    /// next card to open asks again instead.
     private func commonsBody(of request: URLRequest) async throws -> Data {
         let (data, statusCode) = try await transport(request)
         return try CommonsPhotoQuery.body(of: data, statusCode: statusCode)

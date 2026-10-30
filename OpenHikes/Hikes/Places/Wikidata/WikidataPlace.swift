@@ -53,7 +53,8 @@ import Foundation
 
 /// What a place card shows from Wikimedia: the article OpenStreetMap's link
 /// leads to, the item's photograph, or both — never neither, which is no
-/// answer to show and is `nil` instead. See ``init(item:article:photo:)``.
+/// answer to show and is `nil` instead. See
+/// ``init(item:article:photo:isComplete:)``.
 nonisolated struct WikidataPlace: Equatable, Sendable {
     /// The Wikidata item asked about — `Q` and a number — which is what a
     /// card holds this answer against.
@@ -63,13 +64,19 @@ nonisolated struct WikidataPlace: Equatable, Sendable {
     /// `nil` for an item that names no image, names one this app may not
     /// show, or whose picture did not arrive.
     let photo: WikidataPhoto?
+    /// `false` when the item names a photograph that could not be had — a
+    /// failure, not a picture this app may not show — so the answer is drawn
+    /// and asked for again rather than kept as it is. See
+    /// ``WikidataPlaceLookup``.
+    let isComplete: Bool
 
     /// What there is to show about `item`, or `nil` when there is nothing.
-    init?(item: String, article: WikipediaArticle?, photo: WikidataPhoto?) {
+    init?(item: String, article: WikipediaArticle?, photo: WikidataPhoto?, isComplete: Bool = true) {
         guard article != nil || photo != nil else { return nil }
         self.item = item
         self.article = article
         self.photo = photo
+        self.isComplete = isComplete
     }
 
     /// The section's heading: where what it shows comes from, the way a
@@ -92,7 +99,8 @@ nonisolated struct WikipediaArticle: Equatable, Sendable {
     var extract: String
     /// The article itself, on the Wikipedia it was read from.
     var url: URL
-    /// The language code of that Wikipedia — `de` for de.wikipedia.org.
+    /// The code of that Wikipedia, which is its host name — `de` for
+    /// de.wikipedia.org, `zh-yue` for Cantonese's.
     var language: String
 }
 
@@ -116,9 +124,13 @@ nonisolated protocol WikidataPlaceSourcing: Sendable {
     /// for nor a photograph this app may show, or an item that no longer
     /// exists.
     ///
-    /// Throws when the answer could not be had at all — offline, refused,
-    /// busy. The difference is what ``WikidataPlaceLookup`` keeps: `nil` is an
-    /// answer, and a failure is asked again the next time the card opens.
+    /// Throws when the answer could not be had — offline, refused, busy —
+    /// and that includes a photograph that failed with no article beside it,
+    /// which as `nil` would be *nothing to show*. One that failed beside an
+    /// article is answered with the article alone, in an answer that is not
+    /// ``WikidataPlace/isComplete``. The difference is what
+    /// ``WikidataPlaceLookup`` keeps: `nil` and a complete answer are
+    /// answers, and the rest is asked again the next time the card opens.
     @concurrent
     func place(_ item: String) async throws -> WikidataPlace?
 }

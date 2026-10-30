@@ -32,6 +32,13 @@
 //  links both the German and the English article; a hut's often links only
 //  the German one.
 //
+//  A Wikipedia's code is not always its language's. Cantonese's is at
+//  zh-yue.wikipedia.org, and Wikidata files its articles as `zh_yuewiki`: a
+//  phone in Cantonese that asked for `yuewiki` would be answered about
+//  English alone — Hong Kong's item did exactly that on 2026-10-30 — and read
+//  the English article over its own. So the codes go through the exceptions
+//  Wikimedia lists, and the site id is spelled the way Wikidata spells it.
+//
 
 import Foundation
 import OpenHikesData
@@ -69,8 +76,19 @@ nonisolated enum WikidataQuery {
     private static let articleType = "standard"
 
     /// Where a language's Wikipedia is not at its own code: Bokmål is written
-    /// at no.wikipedia.org.
-    private static let renamedLanguages = ["nb": "no"]
+    /// at no.wikipedia.org, and the rest are the ones Wikimedia's *Special
+    /// language codes* lists, as its site matrix had them on 2026-10-30.
+    private static let renamedLanguages = [
+        "bho": "bh", // Bhojpuri
+        "gsw": "als", // Alemannic
+        "lzh": "zh-classical", // Classical Chinese
+        "nan": "zh-min-nan", // Min Nan
+        "nb": "no", // Norwegian Bokmål
+        "rup": "roa-rup", // Aromanian
+        "sgs": "bat-smg", // Samogitian
+        "vro": "fiu-vro", // Võro
+        "yue": "zh-yue", // Cantonese
+    ]
 
     /// The characters of a title left as they are in a summary's path. A
     /// slash is a character of some titles and a separator of the path, so it
@@ -98,16 +116,20 @@ nonisolated enum WikidataQuery {
         return languages
     }
 
-    /// The site id Wikidata files a language's Wikipedia under — `dewiki`.
+    /// The site id Wikidata files a Wikipedia under: its code, with `_` for
+    /// `-`, and `wiki` — `dewiki`, `zh_yuewiki`. The one Wikipedia the rule
+    /// misses, `be-tarask`, is at a code no device's language becomes.
     static func site(for language: String) -> String {
-        "\(language)wiki"
+        "\(language.replacingOccurrences(of: "-", with: "_"))wiki"
     }
 
     /// Whether `code` can stand as a Wikipedia's host name: two or three
-    /// lowercase letters. Checked rather than trusted because it becomes part
-    /// of an address this app connects to.
+    /// lowercase letters, or one of the codes ``renamedLanguages`` writes.
+    /// Checked rather than trusted because it becomes part of an address this
+    /// app connects to.
     static func isWikipediaLanguage(_ code: String) -> Bool {
-        (2...3).contains(code.count) && code.allSatisfy { $0.isASCII && $0.isLowercase }
+        renamedLanguages.values.contains(code)
+            || ((2...3).contains(code.count) && code.allSatisfy { $0.isASCII && $0.isLowercase })
     }
 
     private static func wikipediaCode(for identifier: String) -> String? {

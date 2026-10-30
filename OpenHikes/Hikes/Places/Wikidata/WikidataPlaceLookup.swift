@@ -16,7 +16,11 @@
 //  An answer of *nothing to show* is kept as well: it is an answer, and the
 //  same item will give it again. A failure is not kept — offline in a valley
 //  is the commonest one, and the next card opened on a better signal should
-//  ask.
+//  ask. Nor is what a question cut short answered: a card closed before its
+//  photograph arrived would otherwise leave *nothing to show* kept for a place
+//  that has a photograph. An article whose photograph failed is the one kept
+//  in between — drawn by the next card at once, and asked for again, so that
+//  card can add the photograph.
 //
 //  Set once, at the root, as the environment's ``EnvironmentValues/wikidataLookup``,
 //  for the reason ``AppTips`` is: the maker's place card, a saved hike's place
@@ -37,7 +41,8 @@ final class WikidataPlaceLookup {
     private static let logger = Logger(subsystem: "OpenHikes", category: "Places")
 
     private let source: any WikidataPlaceSourcing
-    /// Every answer kept, `nil` for *nothing to show*.
+    /// Every answer kept, `nil` for *nothing to show*. One that is not
+    /// ``WikidataPlace/isComplete`` is kept to be drawn, and asked again.
     private var answers: [String: WikidataPlace?] = [:]
     /// The kept items, oldest first, which is the order they go in.
     private var kept: [String] = []
@@ -74,17 +79,22 @@ final class WikidataPlaceLookup {
         return Image(decorative: cgImage, scale: 1)
     }
 
-    /// What there is to show about `item`, asked once per launch.
+    /// What there is to show about `item`, asked once per launch — and again
+    /// while its photograph has failed.
     ///
-    /// `nil` for nothing to show, and for a question that failed — which is
-    /// logged, not kept, and asked again the next time.
+    /// `nil` for nothing to show, and for a question that failed or was cut
+    /// short — which is not kept, and is asked again the next time. Only a
+    /// failure is logged: a cancelled question is a card that closed.
     func place(_ item: String) async -> WikidataPlace? {
-        if let answered = answers[item] { return answered }
+        if let answered = answers[item], answered?.isComplete ?? true { return answered }
         do {
             let place = try await source.place(item)
+            // Cancelled by a card that closed, so it may be less than there
+            // is — a picture cut off — and nobody is waiting for it.
+            guard !Task.isCancelled else { return nil }
             keep(place, for: item)
             return place
-        } catch is CancellationError {
+        } catch where Task.isCancelled || error is CancellationError {
             return nil
         } catch {
             Self.logger.info(

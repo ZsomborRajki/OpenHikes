@@ -3,8 +3,9 @@
 //  OpenHikesTests
 //
 //  What Wikidata, Wikipedia and Commons answered about the Watzmann
-//  (Q163919) on 2026-10-30, cut down to the keys read and a few beside them,
-//  for the suites that read those answers and the one that asks for them.
+//  (Q163919) and Hong Kong (Q8646) on 2026-10-30, cut down to the keys read
+//  and a few beside them, for the suites that read those answers and the one
+//  that asks for them.
 //
 
 import Foundation
@@ -31,6 +32,28 @@ nonisolated enum WikidataFixture {
     "sitelinks":{"dewiki":{"site":"dewiki","title":"Watzmann","badges":["Q17437798"]}},
     "claims":{"P18":[{"mainsnak":{"snaktype":"value","property":"P18","datavalue":{"value":"Watzmann von Norden.jpg",
     "type":"string"},"datatype":"commonsMedia"},"type":"statement","rank":"normal"}]}}},"success":1}
+    """#.utf8)
+
+    /// Hong Kong (Q8646), asked about Cantonese and English: Cantonese's
+    /// Wikipedia is filed as `zh_yuewiki`, not under its language's code.
+    static let hongKong = Data(#"""
+    {"entities":{"Q8646":{"type":"item","id":"Q8646",
+    "sitelinks":{"enwiki":{"site":"enwiki","title":"Hong Kong","badges":["Q17437798"]},
+    "zh_yuewiki":{"site":"zh_yuewiki","title":"香港","badges":["Q17437796"]}},
+    "claims":{"P18":[{"mainsnak":{"snaktype":"value","property":"P18","datavalue":{"value":
+    "Hong Kong from Victoria Peak1.jpg","type":"string"},"datatype":"commonsMedia"},"type":"statement",
+    "rank":"normal"}]}}},"success":1}
+    """#.utf8)
+
+    /// The Cantonese article's summary, from zh-yue.wikipedia.org — whose
+    /// own `lang` is `yue`, which is not its host name.
+    static let hongKongInCantonese = Data(#"""
+    {"type":"standard","title":"香港",
+    "titles":{"canonical":"香港","normalized":"香港","display":"香港"},
+    "wikibase_item":"Q8646","lang":"yue","dir":"ltr",
+    "extract":"香港，全名香港特別行政區 係中華人民共和國嘅一個特別行政區。",
+    "content_urls":{"desktop":{"page":"https://zh-yue.wikipedia.org/wiki/%E9%A6%99%E6%B8%AF"},
+    "mobile":{"page":"https://zh-yue.wikipedia.org/wiki/%E9%A6%99%E6%B8%AF"}}}
     """#.utf8)
 
     /// The German article's summary.

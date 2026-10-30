@@ -37,6 +37,7 @@ struct WikidataPlaceSourceTests {
         private struct State {
             var requests: [URLRequest] = []
             var answers: [Service: (Data, Int)] = [:]
+            var failures: [Service: any Error] = [:]
         }
 
         private let state: Mutex<State>
@@ -60,10 +61,16 @@ struct WikidataPlaceSourceTests {
             state.withLock { $0.answers[service] = (data, status) }
         }
 
+        /// `service`'s requests end without an answer, as one cut off does.
+        func fail(_ service: Service, with error: any Error) {
+            state.withLock { $0.failures[service] = error }
+        }
+
         var transport: WikidataPlaceSource.Transport {
             { [self] request in
-                state.withLock { current in
+                try state.withLock { current in
                     current.requests.append(request)
+                    if let failure = current.failures[Self.service(of: request)] { throw failure }
                     return current.answers[Self.service(of: request)] ?? (Data(), 404)
                 }
             }
@@ -126,6 +133,24 @@ struct WikidataPlaceSourceTests {
         )
     }
 
+    /// Cantonese's Wikipedia is zh-yue.wikipedia.org, filed by Wikidata as
+    /// `zh_yuewiki`. Asked for under its language's own code, Hong Kong's
+    /// item answered about English alone on 2026-10-30.
+    @Test("a phone in Cantonese reads the Cantonese article, from its own Wikipedia")
+    func aPhoneInCantoneseReadsCantonese() async throws {
+        let stub = StubWikimedia()
+        stub.answer(.wikidata, with: WikidataFixture.hongKong)
+        stub.answer(.wikipedia, with: WikidataFixture.hongKongInCantonese)
+        let languages = WikidataQuery.languages(preferring: ["yue-Hant-HK"])
+
+        let place = try await Self.source(stub, languages: languages).place("Q8646")
+
+        #expect(place?.article?.title == "香港")
+        #expect(place?.article?.language == "zh-yue")
+        #expect(stub.asked(.wikipedia).first?.url?.host() == "zh-yue.wikipedia.org")
+        #expect(stub.asked(.wikidata).first?.url?.query()?.contains("sitefilter=zh_yuewiki") == true)
+    }
+
     /// Measured on 2026-10-30: of nine huts' items in the Berchtesgaden box,
     /// eight linked a German article, none an English one, and all nine named
     /// a photograph. A card that needed both would show a hiker reading in
@@ -176,6 +201,7 @@ struct WikidataPlaceSourceTests {
 
         #expect(place.photo == nil)
         #expect(place.article != nil)
+        #expect(place.isComplete, "a picture this app may not show is an answer")
         #expect(stub.asked(.images).isEmpty, "nothing is downloaded for a file that will not be shown")
     }
 
@@ -188,9 +214,12 @@ struct WikidataPlaceSourceTests {
 
         #expect(place.photo == nil)
         #expect(place.article != nil)
+        #expect(place.isComplete)
     }
 
-    @Test("a busy Commons costs the picture, and is not asked twice")
+    // MARK: - A picture that failed is not one there is none of
+
+    @Test("a busy Commons costs the picture this once, and is not asked twice")
     func aBusyCommonsCostsThePicture() async throws {
         let stub = StubWikimedia()
         stub.answer(.commons, with: Data(), status: 429)
@@ -198,7 +227,37 @@ struct WikidataPlaceSourceTests {
         let place = try #require(try await Self.source(stub).place("Q163919"))
 
         #expect(place.photo == nil)
+        #expect(place.article != nil)
+        #expect(!place.isComplete, "so the next card asks for the picture again")
         #expect(stub.asked(.commons).count == 1)
+    }
+
+    /// The huts' shape read in English: the photograph is the whole section,
+    /// and answered as `nil` its failure would be kept as *nothing to show*.
+    @Test("a photograph that failed with no article beside it throws")
+    func aFailedPhotographAloneThrows() async {
+        let stub = StubWikimedia()
+        stub.answer(.wikidata, with: WikidataFixture.watzmannInGermanOnly)
+        stub.answer(.commons, with: Data(), status: 429)
+
+        await #expect(throws: CommonsPhotoFailure.busy) {
+            try await Self.source(stub, languages: ["en"]).place("Q163919")
+        }
+    }
+
+    /// A card closed while its picture is on the way cuts the download off,
+    /// which `URLSession` reports as its own cancellation.
+    @Test("a download cut short with no article beside it throws")
+    func aCutShortPhotographAloneThrows() async {
+        let stub = StubWikimedia()
+        stub.answer(.wikidata, with: WikidataFixture.watzmannInGermanOnly)
+        stub.fail(.images, with: URLError(.cancelled))
+
+        let error = await #expect(throws: URLError.self) {
+            try await Self.source(stub, languages: ["en"]).place("Q163919")
+        }
+
+        #expect(error?.code == .cancelled)
     }
 
     // MARK: - What is worth asking again

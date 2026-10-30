@@ -50,14 +50,28 @@ struct WikidataQueryTests {
             (["de-DE", "en-US"], ["de", "en"]),
             (["en-GB", "en-US"], ["en"]),
             (["hu-HU", "de-AT", "fr-FR"], ["hu", "de", "en"]),
-            // Bokmål's Wikipedia is not at its own code.
+            // Bokmål's Wikipedia is not at its own code, and nor are the
+            // ones Wikimedia lists under *Special language codes*.
             (["nb-NO"], ["no", "en"]),
+            (["yue-Hant-HK", "zh-Hant-HK"], ["zh-yue", "zh", "en"]),
+            (["gsw-CH"], ["als", "en"]),
+            (["nan-Hant-TW"], ["zh-min-nan", "en"]),
             (["zh-Hans-CN"], ["zh", "en"]),
             ([], ["en"]),
         ]
     )
     func theDevicesLanguagesComeFirst(preferred: [String], languages: [String]) {
         #expect(WikidataQuery.languages(preferring: preferred) == languages)
+    }
+
+    /// Wikidata writes a Wikipedia's code with `_` for `-`. Asked for
+    /// `yuewiki` on 2026-10-30, Hong Kong's item answered about English alone.
+    @Test(
+        "a Wikipedia is asked for by the site id Wikidata files it under",
+        arguments: [("de", "dewiki"), ("no", "nowiki"), ("zh-yue", "zh_yuewiki"), ("zh-min-nan", "zh_min_nanwiki")]
+    )
+    func aWikipediaIsAskedForByItsSiteID(language: String, site: String) {
+        #expect(WikidataQuery.site(for: language) == site)
     }
 
     // MARK: - The requests
@@ -82,9 +96,15 @@ struct WikidataQueryTests {
     @Test("a summary is asked of the article's own Wikipedia")
     func aSummaryIsAskedOfItsWikipedia() throws {
         let request = try #require(WikidataQuery.summary(of: "Watzmann", language: "de"))
+        let cantonese = try #require(WikidataQuery.summary(of: "香港", language: "zh-yue"))
 
         #expect(request.url?.absoluteString == "https://de.wikipedia.org/api/rest_v1/page/summary/Watzmann")
         #expect(request.value(forHTTPHeaderField: "User-Agent") == TileCache.userAgent)
+        #expect(
+            cantonese.url?.absoluteString
+                == "https://zh-yue.wikipedia.org/api/rest_v1/page/summary/%E9%A6%99%E6%B8%AF",
+            "a Wikipedia whose code is not two or three letters is still one"
+        )
     }
 
     /// A slash is a character of some titles and a separator of the path, so
@@ -100,7 +120,7 @@ struct WikidataQueryTests {
     /// code is let into it.
     @Test(
         "a language that cannot be a host name asks nothing",
-        arguments: ["", "d", "EN", "deu1", "de.evil", "de/x"]
+        arguments: ["", "d", "EN", "deu1", "de.evil", "de/x", "zh-evil"]
     )
     func aLanguageThatIsNotOneAsksNothing(language: String) {
         #expect(WikidataQuery.summary(of: "Watzmann", language: language) == nil)
@@ -129,12 +149,14 @@ struct WikidataQueryTests {
     }
 
     @Test("the article read is the first language that has one")
-    func theFirstLanguageWithAnArticleIsRead() {
+    func theFirstLanguageWithAnArticleIsRead() throws {
         let entity = WikidataEntity(articles: ["dewiki": "Kärlingerhaus"])
+        let hongKong = try WikidataQuery.entity(from: WikidataFixture.hongKong)
 
         #expect(entity.article(in: ["en", "de"])?.language == "de")
         #expect(entity.article(in: ["en", "de"])?.title == "Kärlingerhaus")
         #expect(entity.article(in: ["en", "fr"]) == nil)
+        #expect(hongKong.article(in: ["zh-yue", "en"])?.title == "香港", "not the English article after it")
     }
 
     /// Wikidata's own ranking: a preferred statement before a normal one,

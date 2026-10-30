@@ -23,6 +23,7 @@ struct WikidataPlaceLookupTests {
         private struct State {
             var asked: [String] = []
             var failures = 0
+            var incomplete = 0
         }
 
         private let state = Mutex(State())
@@ -32,19 +33,32 @@ struct WikidataPlaceLookupTests {
         /// The next `count` questions fail, the way an offline one does.
         func fail(times count: Int) { state.withLock { $0.failures = count } }
 
+        /// The next `count` answers come without the photograph they name,
+        /// the way one does whose picture failed.
+        func leaveOutPhotograph(times count: Int) { state.withLock { $0.incomplete = count } }
+
         @concurrent
         func place(_ item: String) async throws -> WikidataPlace? {
-            let fails = state.withLock { current in
+            let (fails, isComplete) = state.withLock { current in
                 current.asked.append(item)
-                guard current.failures > 0 else { return false }
-                current.failures -= 1
-                return true
+                if current.failures > 0 {
+                    current.failures -= 1
+                    return (true, true)
+                }
+                guard current.incomplete > 0 else { return (false, true) }
+                current.incomplete -= 1
+                return (false, false)
             }
             if fails { throw URLError(.notConnectedToInternet) }
             // An item named `none` has nothing to show; every other one has
             // an article.
             guard item != "none" else { return nil }
-            return WikidataPlace(item: item, article: WikidataPlaceLookupTests.article, photo: nil)
+            return WikidataPlace(
+                item: item,
+                article: WikidataPlaceLookupTests.article,
+                photo: nil,
+                isComplete: isComplete
+            )
         }
     }
 
@@ -96,6 +110,63 @@ struct WikidataPlaceLookupTests {
 
         #expect(failed == nil)
         #expect(retried?.article == Self.article)
+        #expect(source.asked == ["Q163919", "Q163919"])
+    }
+
+    /// A card closed while its question was out cancels it, and a question
+    /// cut short may have answered with less than there is — a photograph-only
+    /// place without its photograph is *nothing to show*.
+    @Test("what a question cut short answered is not kept, and the next card asks again")
+    func aCutShortAnswerIsNotKept() async {
+        let source = CountingSource()
+        let lookup = WikidataPlaceLookup(source: source)
+
+        // Cancelled before it starts: the task is the main actor's, and
+        // cannot run until this test suspends.
+        let closed = Task { await lookup.place("Q163919") }
+        closed.cancel()
+        let cutShort = await closed.value
+        let reopened = await lookup.place("Q163919")
+
+        #expect(cutShort == nil)
+        #expect(reopened?.article == Self.article)
+        #expect(source.asked == ["Q163919", "Q163919"])
+    }
+
+    /// An article whose photograph failed: the article is worth drawing at
+    /// once, and the photograph worth asking for again.
+    @Test("an answer whose photograph failed is drawn by the next card, and asked again")
+    func anIncompleteAnswerIsAskedAgain() async {
+        let source = CountingSource()
+        source.leaveOutPhotograph(times: 1)
+        let lookup = WikidataPlaceLookup(source: source)
+
+        let first = await lookup.place("Q163919")
+        #expect(first?.isComplete == false)
+        #expect(lookup.answered("Q163919") == first, "the next card draws it before it asks")
+
+        let second = await lookup.place("Q163919")
+        let third = await lookup.place("Q163919")
+
+        #expect(second?.isComplete == true)
+        #expect(third == second)
+        #expect(source.asked == ["Q163919", "Q163919"])
+    }
+
+    /// Asked again and failed again, an answer whose photograph failed is
+    /// still the best there is to draw.
+    @Test("an answer whose photograph failed outlasts a failed second question")
+    func anIncompleteAnswerOutlastsAFailure() async {
+        let source = CountingSource()
+        source.leaveOutPhotograph(times: 1)
+        let lookup = WikidataPlaceLookup(source: source)
+
+        let first = await lookup.place("Q163919")
+        source.fail(times: 1)
+        let failed = await lookup.place("Q163919")
+
+        #expect(failed == nil)
+        #expect(lookup.answered("Q163919") == first)
         #expect(source.asked == ["Q163919", "Q163919"])
     }
 
