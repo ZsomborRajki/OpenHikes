@@ -61,10 +61,9 @@
 //  the pill, and carries an *x*. Both are about the same thing: this is the one
 //  piece of the control whose size is a sentence's, so it is the one that
 //  reaches other people's corners of the map and the one a hiker may want gone.
-//  The badge is a SwiftUI overlay measured from the screen's own top edge while
-//  this control hangs off the safe area, so there is no anchor between them and
-//  no fixed gap that clears it on every phone — the caption keeps its distance
-//  from the map's top edge instead, in the same space the badge is placed in.
+//  The badge sits directly under this strip, in another hierarchy, so the
+//  caption is not anchored to it. It keeps the badge's distance from the top
+//  of the safe area instead, the space both are placed in.
 //  Dismissing is a write to ``CommunityBrowser/curatedNotice`` rather than a
 //  flag here, which is what makes the next refusal say so again: the caption
 //  describes the last search, and there is always a next search.
@@ -179,27 +178,22 @@ final class MapAreaSearchView: UIView {
     /// How close under the pill the caption may sit.
     ///
     /// A floor rather than the gap. What the caption actually clears is the
-    /// weather badge — see ``noticeBadgeClearance`` — and this is what is left
+    /// weather badge — see ``badgeClearance`` — and this is what is left
     /// when there is no badge in the way.
     private static let noticeSpacing: CGFloat = 6
-    /// How far down the map the caption starts, so as to clear the weather
-    /// badge, measured from the map's own top edge.
+    /// How far down the safe area anything hung under this pill has to start
+    /// to clear the weather badge under the strip: the caption, and the
+    /// first-run tip about the pill (see `MapTipCards.swift`).
     ///
     /// Built from the two numbers that place the badge rather than agreed with
     /// it, because the badge is a SwiftUI overlay in another hierarchy and
-    /// there is nothing here to constrain against: ``WeatherBadge/topPadding``,
-    /// which is measured from the screen's edge because the map ignores its
-    /// safe area, and the tap target that decides the capsule's height. Then
-    /// the same gap the caption would have kept from the pill.
+    /// there is nothing here to constrain against: ``WeatherBadge/topPadding``
+    /// and the tap target that decides the capsule's height. Then the same gap
+    /// the caption would have kept from the pill.
     ///
-    /// Measured from the *map* and not from this control on purpose. This one
-    /// hangs off the safe area, which is most of a badge's height further down
-    /// on a phone with a Dynamic Island than on one without — so a gap under
-    /// the pill would clear the badge on some phones and overlap it on others.
-    ///
-    /// Portrait's number, like the padding it is built from; see
-    /// ``applyNoticeClearance()``.
-    private static let noticeBadgeClearance =
+    /// The same in both of the screen's shapes, because the badge is under
+    /// the strip in both.
+    static let badgeClearance =
         WeatherBadge.topPadding + AccessibilityMetrics.minimumTapTarget + noticeSpacing
     private static let noticePadding: CGFloat = 10
     private static let noticeVerticalPadding: CGFloat = 5
@@ -222,21 +216,6 @@ final class MapAreaSearchView: UIView {
     private var noticeIcon: UIImageView?
     /// The caption's *x*. Held for the hit test, which widens it to a finger.
     private var dismissButton: MapNoticeDismissButton?
-    /// What holds the caption clear of the weather badge. Held because the
-    /// badge is only over the top of the map in one of the screen's two shapes
-    /// — see ``applyNoticeClearance()`` — and because it is made by the placing
-    /// code, which is the half of this that knows the map.
-    private var noticeClearanceConstraint: NSLayoutConstraint?
-
-    /// Whether ``MapSidePanel`` is up beside the map, which moves the weather
-    /// badge out of this caption's way. Told by the map, which hears it with
-    /// the panel's width — see `MapView`'s `applySidePanelInset`.
-    var isBesidePanel = false {
-        didSet {
-            guard isBesidePanel != oldValue else { return }
-            applyNoticeClearance()
-        }
-    }
 
     init(
         identifiers: Identifiers,
@@ -395,45 +374,17 @@ final class MapAreaSearchView: UIView {
         fingerSized(convert(dismiss.bounds, from: dismiss))
     }
 
-    /// Holds the caption clear of the weather badge, which is drawn over the
-    /// same corner of the map from another hierarchy.
+    /// Holds the caption clear of the weather badge, which is drawn under the
+    /// strip from another hierarchy.
     ///
-    /// Takes the map's own top edge, because that is the space the badge is
-    /// placed in — see ``noticeBadgeClearance`` for why no gap under the pill
-    /// can do this job. Made by the placing code and applied here, since where
-    /// the badge *is* depends on the screen's shape and the constant therefore
-    /// changes.
-    func keepNoticeClear(of mapTop: NSLayoutYAxisAnchor) {
-        guard let noticeView, noticeClearanceConstraint == nil else { return }
-        let clearance = noticeView.topAnchor.constraint(greaterThanOrEqualTo: mapTop)
-        noticeClearanceConstraint = clearance
-        clearance.isActive = true
-        applyNoticeClearance()
-    }
-
-    /// How much room the badge needs, which is none at all beside the panel.
-    ///
-    /// With ``MapSidePanel`` up the badge moves inside the safe area and
-    /// against the panel's leading margin — see `OpenHikesView` — where it is
-    /// nowhere near a caption centred over what is left of the map. Holding
-    /// the sheet's room there would leave the caption floating in the middle
-    /// of a map a third the height.
-    ///
-    /// The panel's own flag rather than the vertical size class this used to
-    /// read. The two agreed while only a compact height took the panel; an
-    /// unfolded iPhone Duo takes it at a regular one — see ``SheetLayout`` —
-    /// and the size class then held the sheet's room under a badge that had
-    /// moved.
-    private func applyNoticeClearance() {
-        noticeClearanceConstraint?.constant = Self.badgeClearance(besidePanel: isBesidePanel)
-    }
-
-    /// How far down the map anything hung under this pill has to start to
-    /// clear the weather badge — the caption, and the first-run tip about the
-    /// pill (see `MapTipCards.swift`) — with ``MapSidePanel`` up beside the map
-    /// or not: none beside it, for the reason ``applyNoticeClearance()`` gives.
-    static func badgeClearance(besidePanel: Bool) -> CGFloat {
-        besidePanel ? 0 : noticeBadgeClearance
+    /// Takes the top of the safe area, because that is the space the badge is
+    /// placed in — see ``badgeClearance``. Made by the placing code, which is
+    /// the half of this that knows the map.
+    func keepNoticeClear(of safeAreaTop: NSLayoutYAxisAnchor) {
+        noticeView?.topAnchor.constraint(
+            greaterThanOrEqualTo: safeAreaTop,
+            constant: Self.badgeClearance
+        ).isActive = true
     }
 
     private func buildHierarchy() {
@@ -780,13 +731,12 @@ extension MapView.Coordinator {
 extension MapView {
     /// How much room a *Search this area* pill leaves on each side.
     ///
-    /// Enough for MapKit's compass on the trailing edge and the weather badge
-    /// on the leading one, both of which live in the same strip and neither of
-    /// which can be anchored against — the compass belongs to MapKit and the
-    /// badge is a SwiftUI overlay in another hierarchy. It is what a long
-    /// localisation truncates against and what a caption wraps against, and it
-    /// clears the badge *sideways* only: the badge hangs lower than this strip,
-    /// which is what ``MapAreaSearchView`` drops the caption past.
+    /// Enough for MapKit's compass on the trailing edge, which lives in the
+    /// same strip and belongs to MapKit, so it cannot be anchored against. The
+    /// leading edge takes the same, so the pill stays centred on the map. It
+    /// is what a long localisation truncates against and what a caption wraps
+    /// against. The weather badge is not in this strip; it sits under it, and
+    /// ``MapAreaSearchView`` drops the caption past it.
     private static let areaSearchSideClearance: CGFloat = 56
 
     /// *Search this area*, centred at the top of the map.
@@ -840,9 +790,9 @@ extension MapView {
     /// nobody can explain. The top inset is the one every floating control on
     /// this map sits in by, ``controlInset``.
     ///
-    /// Held clear of MapKit's compass and of the weather badge by the side
-    /// clearances rather than by a fixed width, so a long localisation
-    /// truncates instead of sliding underneath either. The control is the
+    /// Held clear of MapKit's compass by the side clearances rather than by a
+    /// fixed width, so a long localisation truncates instead of sliding
+    /// underneath it. The control is the
     /// whole of that strip and its contents are centred in it — the pill and
     /// the caption are each their own size, and what the strip decides is
     /// where either of them runs out of room.
@@ -867,34 +817,10 @@ extension MapView {
                 constant: -Self.areaSearchSideClearance
             ),
         ])
-        // The map's own top edge, not the guide's: the badge the caption is
-        // being kept clear of is measured from the screen's, and the map
-        // ignores its safe area. See ``MapAreaSearchView/keepNoticeClear(of:)``.
-        control.keepNoticeClear(of: mapView.topAnchor)
-    }
-}
-#endif
-
-#if canImport(UIKit)
-extension MapView.Coordinator {
-    /// Tells the three *Search this area* pills whether ``MapSidePanel`` is up
-    /// beside the map: the weather badge moves beside it, and their captions
-    /// stop keeping clear of a badge that is no longer over them — see
-    /// ``MapAreaSearchView/isBesidePanel`` — and so does a first-run tip card
-    /// hung under the pill (``MapTipCardState/badgeClearance``). Each pill
-    /// ignores a repeat and the card's constraint is written only when it
-    /// moves, so this can run on every update pass the panel's width is
-    /// applied on.
-    func placeAreaSearch(besidePanel: Bool) {
-        for control in [areaSearchControl, trailPointSearchControl, placesAroundMap.searchControl] {
-            control?.isBesidePanel = besidePanel
-        }
-        #if os(iOS)
-        let clearance = MapAreaSearchView.badgeClearance(besidePanel: besidePanel)
-        if let badge = tipCards.badgeClearance, badge.constant != clearance {
-            badge.constant = clearance
-        }
-        #endif
+        // The guide's top, which is the safe area's: the badge the caption is
+        // kept clear of is placed inside it. See
+        // ``MapAreaSearchView/keepNoticeClear(of:)``.
+        control.keepNoticeClear(of: guide.topAnchor)
     }
 }
 #endif

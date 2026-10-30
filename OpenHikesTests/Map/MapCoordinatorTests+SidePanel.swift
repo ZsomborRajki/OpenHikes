@@ -227,33 +227,4 @@ extension MapCoordinatorTests {
         #expect(!map.accessibilityElementsHidden, "and the map is back once the panel narrows")
         #endif
     }
-
-    /// The weather badge moves beside the panel when it comes up, so a
-    /// first-run tip card hung under *Search this area* stops keeping clear of
-    /// it, as the pill's own caption does. Told by the panel's width rather
-    /// than by the size class: an unfolded iPhone Duo has the panel at a
-    /// regular height, where the size class still said "keep clear".
-    @Test("the panel coming and going moves a tip card's room under the weather badge")
-    func panelMovesTheTipCardsBadgeClearance() {
-        #if os(iOS)
-        let coordinator = MapView.Coordinator()
-        let map = makeMap(mapView(), coordinator)
-        defer { detach(map) }
-        let card = UIView()
-        card.translatesAutoresizingMaskIntoConstraints = false
-        map.addSubview(card)
-        let sheetsRoom = MapAreaSearchView.badgeClearance(besidePanel: false)
-        let badge = card.topAnchor.constraint(greaterThanOrEqualTo: map.topAnchor, constant: sheetsRoom)
-        badge.isActive = true
-        coordinator.tipCards.badgeClearance = badge
-        #expect(sheetsRoom > 0, "precondition: over the sheet the badge is over the top of the map")
-
-        mapView(sidePanelInset: MapSidePanelLayout.mapInset).update(map, coordinator)
-        #expect(badge.constant == MapAreaSearchView.badgeClearance(besidePanel: true))
-        #expect(badge.constant == 0)
-
-        mapView().update(map, coordinator)
-        #expect(badge.constant == sheetsRoom, "and the room comes back with the sheet")
-        #endif
-    }
 }

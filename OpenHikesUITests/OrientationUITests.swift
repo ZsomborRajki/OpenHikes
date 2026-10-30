@@ -26,11 +26,11 @@ nonisolated final class OrientationUITests: XCTestCase {
     /// reach. A landscape window shows two rows of it at a time.
     private static let formSwipes = 6
 
-    /// How far below the panel's top edge the weather badge may sit before it
-    /// has stopped being at the top of the map. Generous — the badge asks for
-    /// the panel's own margin — and its job is to catch a portrait-sized drop,
-    /// not to pin a padding.
-    private static let maximumBadgeDropBelowThePanel: CGFloat = 40
+    /// How far under *Search this area* the weather badge may sit before it
+    /// has stopped being directly under it. Generous — the badge asks for a
+    /// few points — and its job is to catch a drop down the map, such as a
+    /// Dynamic Island's height in landscape, not to pin a padding.
+    private static let maximumBadgeGapUnderThePill: CGFloat = 24
 
     /// How far above the bottom of the window the credit line may sit in
     /// landscape. Room for the line's own height and its spacing, and nothing
@@ -293,24 +293,47 @@ nonisolated final class OrientationUITests: XCTestCase {
             XCTAssertGreaterThanOrEqual(badge.frame.minX, panel.frame.maxX)
             XCTAssertLessThanOrEqual(badge.frame.maxX, app.frame.maxX)
             XCTAssertTrue(badge.isHittable)
+            // How far down the map it sits is held against *Search this area*
+            // — see ``testWeatherSitsUnderSearchThisArea()``.
+        }
+    }
 
-            // And at the top of the map, level with the panel beside it.
-            //
-            // The badge's own top padding is a Dynamic Island's height, which
-            // is the right number in portrait and a quarter of the screen here
-            // — it left the reading floating in the middle of the map. Held
-            // against the panel rather than against a figure, because the
-            // margin that decides both belongs to the app and this bundle runs
-            // out of process: what is asserted is that they line up.
-            XCTAssertGreaterThanOrEqual(
-                badge.frame.minY,
-                panel.frame.minY,
-                "the badge should not climb above the panel it sits beside"
-            )
-            XCTAssertLessThan(
-                badge.frame.minY - panel.frame.minY,
-                Self.maximumBadgeDropBelowThePanel,
-                "in landscape the badge belongs at the top, not a notch's height down the map"
+    /// The weather badge sits under *Search this area*, upright and turned.
+    ///
+    /// Side by side they overlapped by a few points on a 6.3-inch phone in
+    /// both shapes: upright the badge was a Dynamic Island's height down the
+    /// screen, level with the bottom half of the pill, and turned it was level
+    /// with all of it. Held against the pill rather than against a figure,
+    /// because the numbers that place both belong to the app and this bundle
+    /// runs out of process: what is asserted is the order they stack in.
+    @MainActor
+    func testWeatherSitsUnderSearchThisArea() {
+        addTeardownBlock {
+            await MainActor.run { XCUIDevice.shared.orientation = .portrait }
+        }
+        XCUIDevice.shared.orientation = .portrait
+        let app = launchCommunity(scenario: .published, extraArguments: ["--ui-test-weather"])
+        XCTAssertTrue(waitForPortrait(app), "the app should have started upright")
+        selectCommunityTab(in: app)
+        let badge = element("weather-badge", in: app)
+        let pill = element("community-search-this-area", in: app)
+        XCTAssertTrue(badge.waitForExistence(timeout: UITestTimeout.navigation))
+        XCTAssertTrue(pill.waitForExistence(timeout: UITestTimeout.navigation))
+
+        for orientation in [UIDeviceOrientation.portrait, .landscapeLeft] {
+            XCUIDevice.shared.orientation = orientation
+            XCTAssertTrue(orientation.isPortrait ? waitForPortrait(app) : waitForLandscape(app))
+            // Waited on rather than read once: the tree can answer with the
+            // last orientation's frames for a moment after the window turns.
+            XCTAssertTrue(
+                waitUntil(timeout: UITestTimeout.navigation) {
+                    let gap = badge.frame.minY - pill.frame.maxY
+                    return gap >= 0 && gap < Self.maximumBadgeGapUnderThePill
+                },
+                """
+                \(orientation.isPortrait ? "upright" : "turned"), the badge should sit directly under \
+                Search this area, not beside it (badge \(badge.frame), pill \(pill.frame))
+                """
             )
         }
     }
