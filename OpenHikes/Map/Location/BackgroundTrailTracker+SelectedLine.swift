@@ -3,12 +3,14 @@
 //  OpenHikes
 //
 //  Following the selected hike's line, so a line replaced under the same
-//  hike — *Edit Route*, heights filled in, or a line ``SelectedLine/refresh()``
-//  found new in the store — reaches the widget without a change of selection.
+//  hike while it stays selected — heights filled in, or a line
+//  ``SelectedLine/refresh()`` found new in the store — reaches the widget
+//  without a change of selection. *Edit Route* needs none of this: opening
+//  the maker lets go of the selection, and the saved drawing selects itself.
 //
 //  Its own file, alongside `+RouteDistance` and the others, because
 //  `BackgroundTrailTracker.swift` is at its `file_length` limit, and this piece
-//  opens nothing up but the two members it alone uses (#1232).
+//  opens nothing up but the two members it needs (#1232).
 //
 
 import Foundation
@@ -33,6 +35,19 @@ extension BackgroundTrailTracker {
         return FollowedLine(hike: hike, read: lines.read(of: hike), write: write)
     }
 
+    /// What a selection publishes once its line is read: `columns`, read
+    /// where the hike lives, with the line and the length stored beside it
+    /// from the one read — of the same save of the row as each other, however
+    /// much later that is than the columns, so the widget never measures a
+    /// new line by an old length. `nil` for no selection, and for a line of
+    /// one point or none: both are nothing to draw.
+    static func selectionInput(_ columns: HikeRouteInput?, reading line: SelectedLine.Read?) async -> HikeRouteInput? {
+        guard let columns, let line else { return nil }
+        let route = await line.route
+        guard route.count > 1 else { return nil }
+        return columns.replacingRoute(with: route, distanceMeters: await line.distanceMeters)
+    }
+
     /// Publishes a line written under the selected hike as the hike selected
     /// again, which draws it on the widget and registers its region — once it
     /// has been compared, off the main actor, with the line the widget has. A
@@ -47,10 +62,15 @@ extension BackgroundTrailTracker {
         let next = followLine(of: hike)
         var following = FollowedLine(hike: hike, read: followed.read, write: next.write)
         following.check = Task { [weak self] in
-            guard await SelectedLine.differ(followed.read, next.read),
-                  let self,
-                  followedLine?.write === next.write
-            else { return }
+            let differs = await SelectedLine.differ(followed.read, next.read)
+            guard let self, followedLine?.write === next.write else { return }
+            guard differs else {
+                // The widget's line, read again: followed from here on as the
+                // read the other readers now share, so that the copy it was
+                // published from is let go rather than kept beside it.
+                followedLine = next
+                return
+            }
             hikeSelectionChanged(to: hike)
         }
         followedLine = following

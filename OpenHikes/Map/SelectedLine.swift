@@ -72,14 +72,26 @@ final class SelectedLine {
     /// we're on the main actor — see ``RouteStyle``'s deinit for why.
     nonisolated deinit { /* intentionally empty */ }
 
+    /// What a read takes from one save of the row: the line, and the length
+    /// stored beside it. Read together, because a context of its own can see
+    /// a later save than the main context holds, and a line measured by
+    /// another save's length would give the widget a wrong distance left.
+    nonisolated struct Line: Sendable {
+        let route: [RouteCoordinate]
+        let distanceMeters: Double
+
+        /// What a row the store no longer holds reads as.
+        static let nothing = Self(route: [], distanceMeters: 0)
+    }
+
     /// One read of one hike's line, under way or landed. `Sendable`, so the
     /// off-main work each reader does with the line can wait for it there.
     nonisolated final class Read: Sendable {
         let hikeID: UUID
-        private let line: Task<[RouteCoordinate], Never>
+        private let line: Task<Line, Never>
         private let replacement: Write
 
-        init(hikeID: UUID, replacement: Write, line: Task<[RouteCoordinate], Never>) {
+        init(hikeID: UUID, replacement: Write, line: Task<Line, Never>) {
             self.hikeID = hikeID
             self.replacement = replacement
             self.line = line
@@ -89,7 +101,13 @@ final class SelectedLine {
         /// a hike deleted on another device that this one has not merged
         /// yet, or one it cannot read — which has nothing to draw.
         var route: [RouteCoordinate] {
-            get async { await line.value }
+            get async { await line.value.route }
+        }
+
+        /// The length stored beside ``route``, from the same save of the row.
+        /// Zero for a row the store no longer holds.
+        var distanceMeters: Double {
+            get async { await line.value.distanceMeters }
         }
 
         /// Whether the hike's line has been replaced since this read named
@@ -119,14 +137,14 @@ final class SelectedLine {
     }
 
     /// Where a read takes the line from — the two cases of
-    /// ``HikePhotoSearchPlan/SourceRead``, for the line alone.
+    /// ``HikePhotoSearchPlan/SourceRead``, for the line and its length alone.
     nonisolated enum Source: Sendable {
         /// A row its context has saved, fetched by its identifier into a
         /// context of the read's own.
         case saved(PersistentIdentifier, in: ModelContainer)
         /// The line itself, read off a hike holding edits its store has not
         /// had yet.
-        case unsaved([RouteCoordinate])
+        case unsaved(Line)
 
         /// From the store when `hike`'s context has written every edit to
         /// it, and from `hike`, here, when it has not. The hike's own flag
@@ -138,7 +156,7 @@ final class SelectedLine {
             if !hike.hasChanges, let container = hike.modelContext?.container {
                 self = .saved(hike.persistentModelID, in: container)
             } else {
-                self = .unsaved(hike.route)
+                self = .unsaved(Line(route: hike.route, distanceMeters: hike.distanceMeters))
             }
         }
     }
@@ -250,13 +268,14 @@ final class SelectedLine {
     nonisolated private static func reading(
         _ source: Source,
         fetch: @escaping @Sendable (ModelContext, PersistentIdentifier) throws -> Hike?
-    ) -> Task<[RouteCoordinate], Never> {
+    ) -> Task<Line, Never> {
         Task { await readOffMain(source, fetch: fetch) }
     }
 
     /// Fetches and reads a saved row in a context made here and dropped on
     /// return, and hands an unsaved hike's line straight back. Only the line
-    /// leaves: empty for a row the store did not hand back.
+    /// and its length leave: ``Line/nothing`` for a row the store did not
+    /// hand back.
     ///
     /// `@concurrent`, because a `nonisolated async` function runs on its
     /// caller's executor.
@@ -264,14 +283,14 @@ final class SelectedLine {
     nonisolated private static func readOffMain(
         _ source: Source,
         fetch: @Sendable (ModelContext, PersistentIdentifier) throws -> Hike?
-    ) async -> [RouteCoordinate] {
+    ) async -> Line {
         assertOffMainThread("Reading the selected hike's line must stay off the main thread")
         switch source {
         case let .saved(id, container):
-            guard let hike = try? fetch(ModelContext(container), id) else { return [] }
-            return hike.route
-        case let .unsaved(route):
-            return route
+            guard let hike = try? fetch(ModelContext(container), id) else { return .nothing }
+            return Line(route: hike.route, distanceMeters: hike.distanceMeters)
+        case let .unsaved(line):
+            return line
         }
     }
 

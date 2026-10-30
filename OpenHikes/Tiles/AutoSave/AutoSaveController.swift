@@ -297,12 +297,13 @@ final class AutoSaveController {
                 store.resumePersisting(for: hike.id)
             }
             guard line !== activeLine else { return }
-            // A new read of the same hike's line, which is usually an edited
-            // line — its tiles stay its own, but the corridor has to follow
-            // it, or it would refuse every tile around a section moved or
-            // added outside the old bounds until the hike was selected again.
-            // Usually, not always: while the hikes list is up, a save of any
-            // hike tells every hike's line watch its line was written (#1228).
+            // A new read of the same hike's line, which may be an edited line
+            // — its tiles stay its own, but the corridor has to follow it, or
+            // it would refuse every tile around a section moved or added
+            // outside the old bounds until the hike was selected again. More
+            // often it is not: the hikes list's query is always live, and a
+            // save of any hike tells every hike's line watch its line was
+            // written (#1228).
             // So the corridor up now stays up until the new line is compared
             // with the one it was built from, and an unchanged line keeps it.
             cancelPendingActivation()
@@ -329,8 +330,13 @@ final class AutoSaveController {
     /// which takes the new read, compares it and rebuilds the corridor only
     /// for a line that differs — and defers all of it while the scene is
     /// inactive, as any announcement is.
+    ///
+    /// Unless a selection is already waiting for the scene: that one replaces
+    /// this hike when it is applied, and reads its own line then, so the hike
+    /// being left is not put back in its place — the rule
+    /// ``standDownShortLine()`` follows too.
     private func lineDidChange(_ write: SelectedLine.Write) {
-        guard write === lineWrite, let hike = activeHike else { return }
+        guard write === lineWrite, let hike = activeHike, !hasDeferredSelectionChange else { return }
         hikeSelectionChanged(to: hike)
     }
 

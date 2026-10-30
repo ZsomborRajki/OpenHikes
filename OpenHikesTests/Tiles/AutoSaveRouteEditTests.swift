@@ -16,29 +16,10 @@ import Foundation
 @testable import OpenHikes
 import OpenHikesData
 import SwiftData
-import Synchronization
 import Testing
 
 @Suite("Auto-save after a route edit")
 struct AutoSaveRouteEditTests {
-    /// The store's fetch of a line, held at its second call until the test
-    /// opens it, so the comparison that read starts cannot land first.
-    nonisolated final class HeldFetch: Sendable {
-        private let calls = Mutex(0)
-        private let release = DispatchSemaphore(value: 0)
-
-        func fetch(_ context: ModelContext, _ id: PersistentIdentifier) throws -> Hike? {
-            let call = calls.withLock { count in
-                count += 1
-                return count
-            }
-            if call == 2 { release.wait() }
-            return try SelectedLine.fetchHike(context, id)
-        }
-
-        func open() { release.signal() }
-    }
-
     private let sandbox = TileSandbox()
     private let context: ModelContext
 
@@ -133,7 +114,7 @@ struct AutoSaveRouteEditTests {
     /// still held at its fetch is claimed.
     @Test("a line written again unchanged keeps the corridor while it is compared")
     func rewrittenUnchangedRouteKeepsTheCorridor() async throws {
-        let held = HeldFetch()
+        let held = HeldLineFetch(holding: 2)
         defer { held.open() }
         let controller = AutoSaveController(
             store: sandbox.store,
@@ -155,6 +136,34 @@ struct AutoSaveRouteEditTests {
 
         controller.flushPendingKeys()
         #expect(hike.autoSavedTileKeys == [key], "the corridor in place should still be claiming")
+    }
+
+    /// A selection made while the scene is inactive waits for it to come
+    /// back — another hike, or none. A line written meanwhile to the hike
+    /// being left — any save, while the hikes list is up (#1228) — is no
+    /// reason to put that hike back in the selection's place.
+    @Test(
+        "a line written while another selection waits for the scene leaves that selection to it",
+        arguments: [false, true]
+    )
+    func lineWrittenUnderADeferredSelectionKeepsIt(deselecting: Bool) async {
+        let controller = makeController()
+        let left = Fixture.hike(in: context, title: "Left")
+        let next = Fixture.hike(in: context, title: "Next")
+        controller.hikeSelectionChanged(to: left)
+        await controller.waitForActivation()
+
+        controller.sceneWillResignActive { /* nothing to save */ }
+        controller.hikeSelectionChanged(to: deselecting ? nil : next)
+        left.replaceRoute(with: Self.movedRoute)
+        // Ordered after the hop the line's watch enqueued at the write, which
+        // is what announced `left` again: there is no effect of its own to
+        // wait for once it no longer does.
+        await settleDelegateHop()
+        controller.sceneDidBecomeActive()
+        await controller.waitForActivation()
+
+        #expect(controller.currentHike?.id == (deselecting ? nil : next.id))
     }
 
     /// A second edit landing before the first one's corridor is ready: only

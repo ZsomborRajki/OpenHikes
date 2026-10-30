@@ -286,6 +286,11 @@ final class BackgroundTrailTracker: NSObject {
         // walk. The selection is remembered and applied at the end.
         if walkedHikeID != nil {
             deferredSelection = DeferredSelection(hike: hike)
+            // The line followed is the one being left, and the selection
+            // applied at the end follows its own: a write to the old one, or
+            // a comparison of it still in flight, must not be announced over
+            // this one.
+            followedLine = nil
             return
         }
         // Before the id changes, so the activity that comes down is the one
@@ -312,21 +317,21 @@ final class BackgroundTrailTracker: NSObject {
         selectionPublishTask?.cancel()
 
         // The line, read once off the main actor for this and the map's other
-        // readers, and the rest read here, where the hike lives. The points
-        // are counted once the line lands: counting reads `route`, which on
-        // the main actor decodes all of it (#1232). No selection, and a line
-        // of one point or none, are both nothing to draw.
+        // readers, with the length stored beside it, and the rest read here,
+        // where the hike lives. The points are counted once the line lands:
+        // counting reads `route`, which on the main actor decodes all of it
+        // (#1232). No selection, and a line of one point or none, are both
+        // nothing to draw — see ``selectionInput(_:reading:)``.
         followedLine = hike.map(followLine(of:))
         let line = followedLine?.read
         let columns = hike.map(HikeRouteInput.init(columnsOf:))
         selectionPublishTask = Task { [weak self] in
             defer { self?.finishSelectionPublish(revision: revision) }
-            let route = await line?.route ?? []
-            guard let columns, route.count > 1 else {
+            guard let input = await Self.selectionInput(columns, reading: line) else {
                 await self?.clearSelection(columns?.hikeID, revision: revision)
                 return
             }
-            await self?.publishSelection(columns.replacingRoute(with: route), revision: revision)
+            await self?.publishSelection(input, revision: revision)
         }
     }
 
@@ -660,10 +665,6 @@ final class BackgroundTrailTracker: NSObject {
     }
 }
 
-/// Redrawing the widget's basemaps. In an extension in this same file for
-/// the reason the proximity members below are: the class body is at the
-/// limit SwiftLint enforces, and everything here is main-actor state on the
-/// tracker itself.
 /// The two ends a selection's publication comes to: a trail to draw, or
 /// nothing — no selection, or a line of one point or none. In an extension in
 /// this same file for the reason the write path below is: the class body is at
@@ -692,7 +693,12 @@ extension BackgroundTrailTracker {
         // nothing registered to take down and asking costs a
         // `CLLocationManager` and an XPC connection for an answer that cannot
         // be anything else — see ``syncTrailRegion()``.
-        if wantsTrailRegion {
+        //
+        // And skipped for a selection since replaced, as registering is: its
+        // line is read off the main actor, that read is not cancelled with
+        // this publication, and by the time it lands the newer selection may
+        // have registered a region of its own (#1232).
+        if wantsTrailRegion, !Task.isCancelled, selectionRevision == revision {
             await regionMonitor.setRegion(nil)
         }
         guard await snapshotWriter.clear(ifCurrent: revision),
@@ -748,6 +754,10 @@ extension BackgroundTrailTracker {
     }
 }
 
+/// Redrawing the widget's basemaps. In an extension in this same file for
+/// the reason the proximity members below are: the class body is at the
+/// limit SwiftLint enforces, and everything here is main-actor state on the
+/// tracker itself.
 extension BackgroundTrailTracker {
     // MARK: Widget basemaps
 

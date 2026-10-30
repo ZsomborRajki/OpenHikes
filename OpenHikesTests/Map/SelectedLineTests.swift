@@ -26,6 +26,7 @@ import Foundation
 @testable import OpenHikes
 import OpenHikesData
 import OpenHikesShared
+import RealModule
 import SwiftData
 import Synchronization
 import Testing
@@ -86,6 +87,9 @@ final class SelectedLineTests {
         return moved
     }
 
+    /// Its length, as a writer of the line would store it.
+    private static let movedLength = RouteProfile(route: movedRoute).totalDistanceMeters
+
     private static func isOnMovedRoute(_ coordinate: CLLocationCoordinate2D?) -> Bool {
         (coordinate?.latitude ?? 0) > (Fixture.ridgeRoute.last?.latitude ?? 0) + 0.4
     }
@@ -95,14 +99,19 @@ final class SelectedLineTests {
         snapshot?.polyline.first.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
     }
 
-    private func readers(reading lines: SelectedLine) -> Readers {
+    private func readers(
+        reading lines: SelectedLine,
+        monitor: StubLocationMonitor = StubLocationMonitor(),
+        regionMonitor: FakeTrailRegionMonitor? = nil
+    ) -> Readers {
         Readers(
             cache: DisplayedRouteCoordinateCache(),
             shading: RouteShading(provider: nil, defaults: defaults, lines: lines),
             autoSave: AutoSaveController(store: sandbox.store, drainInterval: nil, lines: lines),
             tracker: BackgroundTrailTracker(
                 container: container,
-                monitor: StubLocationMonitor(),
+                monitor: monitor,
+                regionMonitor: regionMonitor,
                 defaults: defaults,
                 widgetReload: reloads.reload,
                 lines: lines
@@ -134,7 +143,9 @@ final class SelectedLineTests {
     }
 
     /// A saved hike of one point whose line the store has replaced behind
-    /// the main context's back, which still holds the point decoded.
+    /// the main context's back, which still holds the point decoded — and
+    /// its length of nothing, where the store has the new line's, saved
+    /// beside it as every writer of a line saves it.
     private func hikeWhoseStoreMovedOn() throws -> Hike {
         let hike = Fixture.hike(in: context, route: Array(Fixture.ridgeRoute.prefix(1)))
         try context.save()
@@ -143,6 +154,7 @@ final class SelectedLineTests {
         let id = hike.id
         let stored = try #require(try sibling.fetch(FetchDescriptor<Hike>(predicate: #Predicate { $0.id == id })).first)
         stored.replaceRoute(with: Self.movedRoute)
+        stored.distanceMeters = Self.movedLength
         try sibling.save()
         return hike
     }
@@ -171,6 +183,60 @@ final class SelectedLineTests {
         let onOriginal = try await claims(Fixture.ridgeRoute[2], for: hike, key: "selected-line/17/original@2.0")
         #expect(onMoved && !onOriginal, "the corridor")
         #expect(Self.isOnMovedRoute(Self.start(of: SharedStore.load())), "the widget")
+    }
+
+    /// A line another context saved comes with the length saved beside it,
+    /// and the widget measures the line it draws by that length. The one the
+    /// main context's copy still holds belongs to another save, and the
+    /// distance left and the progress would be read against it.
+    @Test("the widget measures the line it draws by the length saved with it")
+    func theWidgetMeasuresTheStoredLine() async throws {
+        let hike = try hikeWhoseStoreMovedOn()
+        try #require(
+            !hike.distanceMeters.isApproximatelyEqual(to: Self.movedLength, absoluteTolerance: 1),
+            "the premise: the main context's copy still holds another save's length"
+        )
+        let lines = SelectedLine()
+
+        await select(hike, into: readers(reading: lines), from: lines)
+
+        let snapshot = try #require(SharedStore.load())
+        #expect(Self.isOnMovedRoute(Self.start(of: snapshot)))
+        #expect(snapshot.totalDistanceMeters.isApproximatelyEqual(to: Self.movedLength, absoluteTolerance: 0.001))
+    }
+
+    /// A selection's read is not cancelled with its publication. One that
+    /// lands after the next selection has registered its region still ends
+    /// that publication — a line of one point is nothing to draw — and that
+    /// end must not take down the region the newer selection registered.
+    @Test("a read that lands after the next selection leaves that one's region alone")
+    func aLateReadKeepsTheNewerRegion() async throws {
+        defaults.set(true, forKey: SettingsKey.backgroundTrackingEnabled)
+        defaults.set(true, forKey: SettingsKey.trailRegionCleared)
+        let monitor = StubLocationMonitor()
+        monitor.authorization = .always
+        let regionMonitor = FakeTrailRegionMonitor()
+        let held = HeldLineFetch(holding: 1)
+        defer { held.open() }
+        let lines = SelectedLine(fetch: held.fetch)
+        let tracker = readers(reading: lines, monitor: monitor, regionMonitor: regionMonitor).tracker
+        let point = Fixture.hike(in: context, title: "One Point", route: Array(Fixture.ridgeRoute.prefix(1)))
+        let ridge = Fixture.hike(in: context, title: "Ridge")
+        try context.save()
+
+        tracker.hikeSelectionChanged(to: point)
+        // Started, and let run until it waits, while the held read's
+        // publication is still the latest: the next selection replaces that
+        // publication without stopping it, and this outlasts both.
+        let leftBehind = Task { await tracker.waitForSelectionPublish() }
+        await settleDelegateHop()
+        tracker.hikeSelectionChanged(to: ridge)
+        await tracker.waitForSelectionPublish()
+        try #require(await regionMonitor.registeredRegion != nil, "the premise: the newer selection's region")
+
+        held.open()
+        await leftBehind.value
+        #expect(await regionMonitor.registeredRegion != nil)
     }
 
     /// One fetch for four readers, and none of it on the main thread: the
@@ -225,10 +291,10 @@ final class SelectedLineTests {
         #expect(log.ranOnMainThread.isEmpty)
     }
 
-    /// *Edit Route* and heights filled onto a line write it and save at once,
-    /// with no change of selection to announce it. Each of the four follows
-    /// the line on its own, through the watch ``SelectedLine`` arms for it,
-    /// and all four take the new line from one new read, off the main thread.
+    /// Heights filled onto a line write it and save at once, with no change
+    /// of selection to announce it. Each of the four follows the line on its
+    /// own, through the watch ``SelectedLine`` arms for it, and all four take
+    /// the new line from one new read, off the main thread.
     @Test("a line written to the selected hike reaches all four readers from one new read")
     func aWrittenLineReachesEveryReader() async throws {
         let hike = Fixture.hike(in: context)
@@ -282,6 +348,7 @@ final class SelectedLineTests {
 
         #expect(kept, "the corridor stayed up for the same line")
         #expect(reloads.count == published, "the same line is not published again")
+        #expect(readers.tracker.followedLine?.read === lines.read(of: hike), "not a second copy of the same line")
     }
 
     /// A line another context saved need not be told to this one, so the
@@ -324,6 +391,36 @@ final class SelectedLineTests {
         await readers.autoSave.waitForActivation()
         #expect(readers.shading.describesCurrentLine)
         #expect(try await claims(Self.movedRoute[2], for: hike, key: "selected-line/17/refreshed@2.0"))
+    }
+
+    /// A selection made during a walk waits for the walk to end. A line
+    /// written meanwhile to the hike being walked is not a selection, and must
+    /// not take that one's place: once the walk is over, the widget goes to
+    /// the hike selected during it.
+    @Test("a line written during a walk leaves the selection made meanwhile to it")
+    func aWalkKeepsTheSelectionMadeDuringIt() async throws {
+        let walked = Fixture.hike(in: context, title: "Walked")
+        let next = Fixture.hike(in: context, title: "Next", route: Fixture.loopRoute)
+        try context.save()
+        let tracker = readers(reading: SelectedLine()).tracker
+        tracker.hikeSelectionChanged(to: walked)
+        await tracker.waitForSelectionPublish()
+        tracker.walkDidStart(hikeID: walked.id)
+        tracker.hikeSelectionChanged(to: next)
+
+        walked.replaceRoute(with: Self.movedRoute)
+        try context.save()
+        // Ordered after the hop the line's watch enqueued at the write, and
+        // then after the comparison that hop may have started.
+        await settleDelegateHop()
+        await tracker.followedLine?.check?.value
+        tracker.walkDidEnd(final: nil)
+        await settleDelegateHop(until: "the selection made during the walk is applied") {
+            tracker.trackedHikeID == next.id
+        }
+        await tracker.waitForSelectionPublish()
+
+        #expect(SharedStore.load()?.hikeID == next.id)
     }
 
     /// A hike deleted through another context is still held by this one until
