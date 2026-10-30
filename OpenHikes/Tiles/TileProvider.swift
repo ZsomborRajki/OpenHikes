@@ -448,11 +448,12 @@ enum MapBase: Equatable {
     /// Whether the controls over this base take the light appearance in
     /// either one.
     ///
-    /// Every raster provider draws a light page at every hour, so chrome
-    /// resolved dark over it is light-on-light. MapKit's own maps turn over
-    /// with the phone, and so does their chrome. The UIKit controls take this
-    /// through the map view's `overrideUserInterfaceStyle`; the weather badge,
-    /// which is SwiftUI over the map rather than inside it, through its
-    /// colour scheme.
+    /// Yes over raster tiles, every one of which draws a light page at every
+    /// hour. No over Apple's maps, whose chrome follows the phone, the
+    /// satellite map's included. `MapView.applyTileSource(to:_:)` has the
+    /// argument and the measurement, and the UIKit controls inside the map
+    /// take this through the override it sets there. SwiftUI drawn over the
+    /// map rather than inside it, the weather badge and the walk-started
+    /// pill, takes it as its colour scheme.
     var keepsChromeLight: Bool { tileSource != nil }
 }

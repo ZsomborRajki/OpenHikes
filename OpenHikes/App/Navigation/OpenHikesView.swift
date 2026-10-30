@@ -276,7 +276,11 @@ struct OpenHikesView: View {
             // Handed the session and never reading it — see ``WalkStartedPill``.
             .overlay {
                 if !panelCoversMap {
-                    WalkStartedPill(session: appModel.walkSession, usesSidePanel: usesSidePanel) { openHike(id: $0) }
+                    WalkStartedPill(
+                        session: appModel.walkSession,
+                        usesSidePanel: usesSidePanel,
+                        keepsLight: activeBase.keepsChromeLight
+                    ) { openHike(id: $0) }
                 }
             }
             // Draws nothing. It is where the vertical size class is read —
