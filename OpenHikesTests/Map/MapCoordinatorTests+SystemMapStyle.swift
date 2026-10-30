@@ -48,7 +48,8 @@ extension MapCoordinatorTests {
     }
 
     /// Under tiles the map is what it always was: flat, so the overlay is
-    /// drawn as it always has been.
+    /// drawn as it always has been, with the chrome over it as light as the
+    /// tiles are.
     @Test("a tile source is drawn over a flat standard map")
     func tilesKeepAFlatMapUnderneath() throws {
         let coordinator = MapView.Coordinator()
@@ -59,6 +60,9 @@ extension MapCoordinatorTests {
         #expect(standard.elevationStyle == .flat)
         #expect(standard.pointOfInterestFilter == .includingAll)
         #expect(coordinator.tileOverlay != nil)
+        #if os(iOS)
+        #expect(map.overrideUserInterfaceStyle == .light, "the chrome stays light over tiles in either appearance")
+        #endif
     }
 
     /// The choice is made in Settings while the map is up, and taken back the

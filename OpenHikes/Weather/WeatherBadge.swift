@@ -99,11 +99,12 @@ struct WeatherBadge: View {
     /// it, so it is handed the same answer instead. Without it, dark mode
     /// drew a white temperature and white cloud on clear glass over light
     /// tiles.
+    ///
+    /// Over Apple's satellite imagery it follows the phone, as the tracking
+    /// button does: the clear glass veils the imagery in its own appearance,
+    /// so a black reading in light mode still reads over dark forest.
     var keepsLight = false
     let onTap: () -> Void
-
-    /// The phone's own appearance, which the badge keeps over MapKit's maps.
-    @Environment(\.colorScheme) private var colorScheme
 
     /// Whether the reading has passed ``WeatherPollingPolicy/stalenessInterval``.
     ///
@@ -146,8 +147,12 @@ struct WeatherBadge: View {
         // Around the glass as well as the contents, as the map's override is
         // around the tracking button's: the clear glass resolves its own
         // light and dark, and the temperature and the symbol are the
-        // primary colour of whichever it is.
-        .environment(\.colorScheme, keepsLight ? .light : colorScheme)
+        // primary colour of whichever it is. A transform rather than a value,
+        // so that over Apple's maps the phone's own appearance passes through
+        // untouched, as it does past the override's `.unspecified`.
+        .transformEnvironment(\.colorScheme) { scheme in
+            if keepsLight { scheme = .light }
+        }
         .task(id: state.snapshot?.capturedAt) { await trackStaleness() }
         // A symbol and a number that only mean anything together, and the
         // number needs its unit spelled out to be spoken as a temperature.
