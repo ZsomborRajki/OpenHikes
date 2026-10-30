@@ -539,13 +539,14 @@ private extension MapSheetHikes {
         .scrollContentBackground(.hidden)
         .environment(\.editMode, $editMode)
         // Hilliest validates cached relief against the stored route each time
-        // this task starts, and again whenever a route is written through this
-        // context. A write through another context, which is how an edit from
-        // another device lands, is not known to notify a hike here, so it is
-        // validated the next time the task starts. At `.utility`: the
-        // measuring half inherits the priority, so walking a library's routes
-        // does not compete with the hiker's taps. The observation read and all
-        // route work stay outside this body.
+        // this task starts, and afterwards only for a hike whose line may
+        // have been written: through this context, or saved by any, which is
+        // how an edit from another device lands. Not on every save, which
+        // under this view's own `@Query` refreshes every hike: see
+        // `HikeListMetrics+Observation.swift`. At `.utility`: the measuring
+        // half inherits the priority, so walking a library's routes does not
+        // compete with the hiker's taps. The observation and all route work
+        // stay outside this body.
         .task(id: TaskKey(sort: sort, hikeIDs: hikes.map(\.id)), priority: .utility) {
             let candidates = HikeListOrder.hikesForElevationValidation(in: hikes, for: sort)
             guard !candidates.isEmpty else { return }

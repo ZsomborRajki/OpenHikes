@@ -17,8 +17,8 @@
 //  and would insert a second sidecar whose empty claims hide the real ones.
 //  A route fingerprint kept beside the figures includes heights and pauses,
 //  so an edit arriving from another device cannot keep its old local relief.
-//  Afterwards the sort reads two `Double`s. Route observation belongs to the
-//  list's task, never its body: see `HikeListMetrics+Observation.swift`.
+//  Afterwards the sort reads two `Double`s. Noticing a new line belongs to
+//  the list's task, never its body: see `HikeListMetrics+Observation.swift`.
 //
 //  It runs against a background context rather than the main one for the reason
 //  every other sweep here does: it may touch every hike in the library, and a
@@ -126,8 +126,9 @@ nonisolated enum HikeListMetrics {
     /// stays resident in this context afterwards. An edit that lands while
     /// the routes are being measured can publish figures for the line before
     /// it, but they carry that line's revision, so the next validation
-    /// measures again. A write through this context starts that validation at
-    /// once: see `HikeListMetrics+Observation.swift`.
+    /// measures again. The list's task asks what was written or saved while
+    /// it measured before it publishes, and drops those figures: see
+    /// `HikeListMetrics+Observation.swift`.
     @MainActor
     @discardableResult static func cacheElevation(
         _ measurements: [ElevationMeasurement],

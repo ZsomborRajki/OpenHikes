@@ -100,7 +100,7 @@ struct SelectedLineStoreWatchTests {
     /// saves it. `holding` names the selected line's fetches to hold, the
     /// selection's own read being the first.
     private func stage(
-        making: SelectedLineStoreCheck.Making? = nil,
+        making: StoreHistoryCheck.Making? = nil,
         holding: Set<Int> = []
     ) async throws -> Stage {
         let container = try Self.container()
@@ -114,7 +114,7 @@ struct SelectedLineStoreWatchTests {
         let reader = StoreWatchReader(lines, reading: hike)
         _ = await reader.line
         let looks = LookCount()
-        let watch = SelectedLineStoreWatch(making: making ?? SelectedLineStoreCheck.answer) {
+        let watch = SelectedLineStoreWatch(making: making ?? StoreHistoryCheck.answer) {
             looks.record()
             lines.refresh()
         }
@@ -487,12 +487,12 @@ nonisolated private final class HeldStoreCheck: Sendable {
 
     func arm() { arrivals.withLock { $0 = 0 } }
 
-    func making(_ request: SelectedLineStoreCheck.Request) async -> SelectedLineStoreCheck.Answer {
+    func making(_ request: StoreHistoryCheck.Request) async -> StoreHistoryCheck.Answer {
         let isArmed = arrivals.withLock { count in
             count = count.map { $0 + 1 }
             return count != nil
         }
-        guard isArmed else { return await SelectedLineStoreCheck.answer(request) }
+        guard isArmed else { return await StoreHistoryCheck.answer(request) }
         await withCheckedContinuation { continuation in
             let isOpen = gate.withLock { state in
                 if !state.isOpen { state.waiting.append(continuation) }
@@ -500,7 +500,7 @@ nonisolated private final class HeldStoreCheck: Sendable {
             }
             if isOpen { continuation.resume() }
         }
-        return await SelectedLineStoreCheck.answer(request)
+        return await StoreHistoryCheck.answer(request)
     }
 
     func open() {

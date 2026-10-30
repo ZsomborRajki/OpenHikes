@@ -27,7 +27,7 @@
 //  `ModelContext.didSave`. A save of the other store (tile claims, the walk
 //  in progress) is dropped on the thread that posted it, before any hop here.
 //  A save of the hike's own store costs one look at history
-//  (`SelectedLineStoreCheck`), and so does following a hike: a hike selected
+//  (`StoreHistoryCheck`), and so does following a hike: a hike selected
 //  again is handed the read it had, which a line saved while it was let go
 //  has not replaced, so the first check runs at once, from that read.
 //
@@ -42,7 +42,7 @@
 //  the main context would change every transaction it writes, and what
 //  mirroring's export makes of that could not be checked here. Until an
 //  import gives the watch its first token, a check reads only what the import
-//  wrote, which leaves those saves out (see `SelectedLineStoreCheck`). After
+//  wrote, which leaves those saves out (see `StoreHistoryCheck`). After
 //  that, a line written here, such as heights filled in, costs one more
 //  refresh, which finds the line its readers already have.
 //
@@ -86,7 +86,7 @@ final class SelectedLineStoreWatch {
         var token: DefaultHistoryToken?
     }
 
-    private let making: SelectedLineStoreCheck.Making
+    private let making: StoreHistoryCheck.Making
     private let lineMayHaveChanged: () -> Void
     private let filter = StoreFilter()
     /// Removed by the `isolated deinit` below. SE-0371 hops that deinit back
@@ -115,7 +115,7 @@ final class SelectedLineStoreWatch {
     ///   copy holds what the store does, after a save of its row: the app's
     ///   is ``SelectedLine/refresh()``.
     init(
-        making: @escaping SelectedLineStoreCheck.Making = SelectedLineStoreCheck.answer,
+        making: @escaping StoreHistoryCheck.Making = StoreHistoryCheck.answer,
         lineMayHaveChanged: @escaping () -> Void
     ) {
         self.making = making
@@ -166,14 +166,9 @@ final class SelectedLineStoreWatch {
             // Whichever thread posted it. That was never the main one when
             // measured, not even for the main context's own saves, but
             // `onMainActor` copes either way.
-            guard let storeID = Self.storeID(of: notification), admitted.admits(storeID) else { return }
+            guard let storeID = StoreHistoryCheck.storeID(of: notification), admitted.admits(storeID) else { return }
             onMainActor { [weak self] in self?.storeDidChange(storeID) }
         }
-    }
-
-    nonisolated private static func storeID(of notification: Notification) -> String? {
-        let value = notification.userInfo?[NSStoreUUIDKey]
-        return (value as? String) ?? (value as? UUID)?.uuidString
     }
 
     private func storeDidChange(_ storeID: String) {
@@ -188,9 +183,9 @@ final class SelectedLineStoreWatch {
             return
         }
         guard let followed else { return }
-        let request = SelectedLineStoreCheck.Request(
+        let request = StoreHistoryCheck.Request(
             container: followed.container,
-            persistentID: followed.hike.persistentModelID,
+            rows: [followed.hike.persistentModelID],
             storeID: followed.storeID,
             since: followed.since,
             token: followed.token
@@ -203,13 +198,13 @@ final class SelectedLineStoreWatch {
         }
     }
 
-    private func land(_ answer: SelectedLineStoreCheck.Answer, generation: Int) {
+    private func land(_ answer: StoreHistoryCheck.Answer, generation: Int) {
         check = nil
         completedChecks &+= 1
         if var current = followed, current.generation == generation {
             current.token = answer.token
             followed = current
-            if answer.savedRow { refresh(current.hike) }
+            if !answer.savedRows.isEmpty { refresh(current.hike) }
         }
         if checksAgain {
             checksAgain = false
