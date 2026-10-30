@@ -21,10 +21,23 @@ final class AutoSaveController {
     /// selected-hike state, the pushed detail view); this controller shouldn't
     /// be the thing keeping a deleted hike around.
     private weak var activeHike: Hike?
-    /// The line ``activeHike``'s corridor was asked for. Edit Route saves into
-    /// the same hike, so its ID alone cannot tell a re-selection from a new
-    /// route — the same reason `HikeDetailRouteKey` holds the route itself.
-    @ObservationIgnored private var activeRoute: [RouteCoordinate] = []
+    /// The read of the line ``activeHike``'s corridor was last asked for.
+    /// Edit Route saves into the same hike, so its ID alone cannot tell a
+    /// re-selection from a new route — the same reason `HikeDetailRouteKey`
+    /// holds the route itself. ``SelectedLine`` hands out the same read for
+    /// as long as nothing has written the line, so the same one again is a
+    /// re-selection; a new one is compared — see ``activate(_:)``.
+    @ObservationIgnored private var activeLine: SelectedLine.Read?
+    /// The read whose line the store's corridor was built from, so a new
+    /// read that holds the same line keeps the corridor. `nil` until the
+    /// hike's first corridor lands.
+    @ObservationIgnored private var corridorLine: SelectedLine.Read?
+    /// The watch on ``activeHike``'s line, so a line written under it is
+    /// followed without the hike being announced again.
+    @ObservationIgnored private var lineWrite: SelectedLine.Write?
+    /// Where a hike's line is read — off the main actor, and once for this
+    /// and the other readers the selection hands it to.
+    @ObservationIgnored private let lines: SelectedLine
     /// Not UI state, so excluded from observation tracking. Ordinary isolated
     /// storage: the `isolated deinit` below is what cancels them, and SE-0371
     /// hops that deinit back to the main actor before it runs, so these are
@@ -79,9 +92,11 @@ final class AutoSaveController {
     init(
         store: AutoSaveTileStore = .shared,
         drainInterval: Duration? = .seconds(2),
+        lines: SelectedLine = SelectedLine(),
         mapRendersTiles: @escaping () -> Bool = { true }
     ) {
         self.store = store
+        self.lines = lines
         self.mapRendersTiles = mapRendersTiles
         guard let drainInterval else { return }
         drainTask = Task { [weak self, store] in
@@ -145,10 +160,17 @@ final class AutoSaveController {
         }
     }
 
-    /// Whether `hike` should be auto-saving right now: it has to want to, have
-    /// a route worth a corridor, and be drawn on a map that fetches tiles.
+    /// Whether `hike` should be auto-saving right now: it has to want to, and
+    /// be drawn on a map that fetches tiles.
+    ///
+    /// It also needs a route worth a corridor, but that is asked once the
+    /// line is read rather than here: counting the points reads `route`, and
+    /// on the main actor that decodes the whole of it (#1232). Until then the
+    /// store has the empty corridor ``AutoSaveTileStore/beginActiveHike(id:knownKeys:acceptsNewClaims:)``
+    /// starts with, which claims nothing, and a line of one point or none
+    /// stands the hike down — see ``prepareCorridor(for:line:)``.
     private func isEligible(_ hike: Hike) -> Bool {
-        hike.autoSaveTilesEnabled && hike.pointCount > 1 && mapRendersTiles()
+        hike.autoSaveTilesEnabled && mapRendersTiles()
     }
 
     func isCapReached(for hike: Hike) -> Bool {
@@ -262,24 +284,28 @@ final class AutoSaveController {
     }
 
     private func activate(_ hike: Hike) {
-        let route = hike.route
+        let line = lines.read(of: hike)
         if activeHike?.id == hike.id {
-            // Re-selecting the hike that is already active must not rebuild
-            // its corridor — that installs an empty one, which would stop
-            // claims until the rebuild lands. It does still have to put the
-            // store back into an accepting state: a selection deferred while
-            // the scene was inactive resolves through here, and
-            // `sceneWillResignActive` left the store suspended.
+            // Re-selecting the hike that is already active, with the line it
+            // already has, must not rebuild its corridor: the build is
+            // route-sized work for an answer the store already holds. It does
+            // still have to put the store back into an accepting state: a
+            // selection deferred while the scene was inactive resolves
+            // through here, and `sceneWillResignActive` left the store
+            // suspended.
             if !isSuspended {
                 store.resumePersisting(for: hike.id)
             }
-            guard route != activeRoute else { return }
-            // The same hike with an edited line. Its tiles stay its own, but
-            // the corridor has to follow the new route: kept, it would refuse
-            // every tile around a section moved or added outside the old
-            // bounds until the hike was selected again.
+            guard line !== activeLine else { return }
+            // A new read of the same hike's line, which is usually an edited
+            // line — its tiles stay its own, but the corridor has to follow
+            // it, or it would refuse every tile around a section moved or
+            // added outside the old bounds until the hike was selected again.
+            // Usually, not always: while the hikes list is up, a save of any
+            // hike tells every hike's line watch its line was written (#1228).
+            // So the corridor up now stays up until the new line is compared
+            // with the one it was built from, and an unchanged line keeps it.
             cancelPendingActivation()
-            store.beginPreparingCorridor(for: hike.id)
         } else {
             // Hand the outgoing hike its tiles back first: `beginActiveHike`
             // replaces the store's state wholesale, pending set included, and
@@ -287,49 +313,109 @@ final class AutoSaveController {
             flushPendingKeys()
             cancelPendingActivation()
             activeHike = hike
+            corridorLine = nil
             store.beginActiveHike(
                 id: hike.id,
                 knownKeys: Set(hike.autoSavedTileKeys),
                 acceptsNewClaims: !isSuspended
             )
         }
-        activeRoute = route
-        prepareCorridor(for: hike.id, route: route)
+        lineWrite = lines.watch(hike) { [weak self] write in self?.lineDidChange(write) }
+        activeLine = line
+        prepareCorridor(for: hike.id, line: line)
     }
 
-    /// Builds `route`'s corridor off the main actor and hands it to the store,
-    /// unless a newer activation — another hike, or another edit of this
-    /// one — has superseded it by the time it is ready.
-    private func prepareCorridor(for hikeID: UUID, route: [RouteCoordinate]) {
+    /// A line written under the active hike is announced as the hike again,
+    /// which takes the new read, compares it and rebuilds the corridor only
+    /// for a line that differs — and defers all of it while the scene is
+    /// inactive, as any announcement is.
+    private func lineDidChange(_ write: SelectedLine.Write) {
+        guard write === lineWrite, let hike = activeHike else { return }
+        hikeSelectionChanged(to: hike)
+    }
+
+    /// What a corridor build came back with.
+    nonisolated private enum PreparedCorridor: Sendable {
+        case corridor(TileCorridor)
+        /// The line the installed corridor was built from, read again.
+        case unchanged
+        /// One point or none: no corridor worth the name.
+        case tooShort
+    }
+
+    /// Builds the corridor of `line` off the main actor once it is read and
+    /// hands it to the store, unless a newer activation — another hike, or
+    /// another edit of this one — has superseded it by the time it is ready.
+    ///
+    /// A line of one point or none has no corridor worth the name, so it
+    /// stands the hike down instead: the toggle is disabled for one in the
+    /// UI, and the empty corridor the store held meanwhile claimed nothing.
+    private func prepareCorridor(for hikeID: UUID, line: SelectedLine.Read) {
         activationRevision &+= 1
         let revision = activationRevision
+        let installed = corridorLine
         activationTask = Task(priority: .utility) { [weak self] in
-            guard let corridor = try? await Self.preparedCorridor(for: route) else { return }
+            let prepared: PreparedCorridor
+            do throws(CancellationError) {
+                prepared = try await Self.preparedCorridor(for: line, unlessBuiltFrom: installed)
+            } catch {
+                return
+            }
             guard let self,
                   !Task.isCancelled,
                   activationRevision == revision,
                   activeHike?.id == hikeID else { return }
-            store.updateCorridor(corridor, for: hikeID)
+            switch prepared {
+            case .tooShort:
+                standDownShortLine()
+                return
+            case .unchanged:
+                break
+            case let .corridor(corridor):
+                store.updateCorridor(corridor, for: hikeID)
+            }
+            corridorLine = line
             activationTask = nil
         }
     }
 
-    /// Converts the persisted route and builds its corridor on the concurrent
-    /// executor. `@concurrent` keeps this inside `activationTask`, so
+    /// Lets go of a hike whose line turned out too short for a corridor, the
+    /// way deselecting it would: at once, or when the scene is back if it is
+    /// inactive — unless a selection made meanwhile is already waiting to
+    /// replace this one, which it will.
+    private func standDownShortLine() {
+        guard isSuspended else {
+            deactivate()
+            return
+        }
+        guard !hasDeferredSelectionChange else { return }
+        deferredHike = nil
+        hasDeferredSelectionChange = true
+    }
+
+    /// Waits for the line, compares it with the one the installed corridor
+    /// was built from, and otherwise converts it and builds its corridor, all
+    /// on the concurrent executor: a long route is a long comparison as well
+    /// as a long build. `@concurrent` keeps this inside `activationTask`, so
     /// ``cancelPendingActivation()`` stops it without a detached worker.
     @concurrent
     private static func preparedCorridor(
-        for route: [RouteCoordinate]
-    ) async throws(CancellationError) -> TileCorridor {
+        for line: SelectedLine.Read,
+        unlessBuiltFrom installed: SelectedLine.Read?
+    ) async throws(CancellationError) -> PreparedCorridor {
         assertOffMainThread(
             "Auto-save route preparation must stay off the main thread"
         )
+        let route = await line.route
+        guard route.count > 1 else { return .tooShort }
+        if let installed, await installed.route == route { return .unchanged }
+        guard !Task.isCancelled else { throw CancellationError() }
         let coordinates = try route.clCoordinates()
         guard !Task.isCancelled else { throw CancellationError() }
-        return TileCorridor(
+        return .corridor(TileCorridor(
             route: coordinates,
             bufferMeters: AutoSaveTileStore.corridorBufferMeters
-        )
+        ))
     }
 
     /// - Returns: the keys folded into the outgoing hike's manifest on the way
@@ -342,7 +428,9 @@ final class AutoSaveController {
             : flushPendingKeys()
         cancelPendingActivation()
         activeHike = nil
-        activeRoute = []
+        activeLine = nil
+        corridorLine = nil
+        lineWrite = nil
         store.clearActiveHike()
         return folded
     }

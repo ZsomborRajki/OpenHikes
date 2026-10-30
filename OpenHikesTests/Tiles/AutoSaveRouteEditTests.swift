@@ -6,6 +6,9 @@
 //  hike ID announced again with a different line. Its corridor has to follow
 //  that line — keyed on the ID alone, it kept the old one and refused every
 //  tile around a moved or added section until the hike was selected again.
+//  And it has to keep the corridor for the same line announced again, even
+//  as a new read of it: while the hikes list is up, any save tells the line's
+//  watch it was written (#1228).
 //
 
 import CoreLocation
@@ -13,10 +16,29 @@ import Foundation
 @testable import OpenHikes
 import OpenHikesData
 import SwiftData
+import Synchronization
 import Testing
 
 @Suite("Auto-save after a route edit")
 struct AutoSaveRouteEditTests {
+    /// The store's fetch of a line, held at its second call until the test
+    /// opens it, so the comparison that read starts cannot land first.
+    nonisolated final class HeldFetch: Sendable {
+        private let calls = Mutex(0)
+        private let release = DispatchSemaphore(value: 0)
+
+        func fetch(_ context: ModelContext, _ id: PersistentIdentifier) throws -> Hike? {
+            let call = calls.withLock { count in
+                count += 1
+                return count
+            }
+            if call == 2 { release.wait() }
+            return try SelectedLine.fetchHike(context, id)
+        }
+
+        func open() { release.signal() }
+    }
+
     private let sandbox = TileSandbox()
     private let context: ModelContext
 
@@ -103,6 +125,36 @@ struct AutoSaveRouteEditTests {
         try await persist(key: key, on: Fixture.ridgeRoute[2])
         controller.flushPendingKeys()
         #expect(hike.autoSavedTileKeys == [key], "the prepared corridor should still be claiming")
+    }
+
+    /// A write of the line it already had, as a save's refresh tells it, is a
+    /// new read and not a new line. Compared before anything is rebuilt, the
+    /// corridor stays up meanwhile: a tile drawn while the second read is
+    /// still held at its fetch is claimed.
+    @Test("a line written again unchanged keeps the corridor while it is compared")
+    func rewrittenUnchangedRouteKeepsTheCorridor() async throws {
+        let held = HeldFetch()
+        defer { held.open() }
+        let controller = AutoSaveController(
+            store: sandbox.store,
+            drainInterval: nil,
+            lines: SelectedLine(fetch: held.fetch)
+        )
+        let hike = Fixture.hike(in: context)
+        try context.save()
+        controller.hikeSelectionChanged(to: hike)
+        await controller.waitForActivation()
+
+        hike.replaceRoute(with: hike.route)
+        try context.save()
+        controller.hikeSelectionChanged(to: hike)
+        let key = "autosave-route-edit/17/rewritten@2.0"
+        try await persist(key: key, on: Fixture.ridgeRoute[2])
+        held.open()
+        await controller.waitForActivation()
+
+        controller.flushPendingKeys()
+        #expect(hike.autoSavedTileKeys == [key], "the corridor in place should still be claiming")
     }
 
     /// A second edit landing before the first one's corridor is ready: only
