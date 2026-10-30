@@ -20,7 +20,9 @@
 //  once and kept (see `Hike.surfaceMetersByCategory`), so a change to the
 //  analyzer, or newer tagging once the cached graph refreshes, can set the
 //  two apart. Steepness is cheaper still: the route carries its
-//  own heights, and ``RouteSteepness`` reads them in one pass.
+//  own heights, and ``RouteSteepness`` reads them in one pass. Either way the
+//  line is read off the main actor, once for these stretches and the map's
+//  other readers of the selection — see ``SelectedLine``.
 //
 //  Held in a reference type the map observes directly, for the reason
 //  ``WalkHighlight`` is: the answer is a handful of polylines for MapKit, and
@@ -31,7 +33,6 @@ import CoreLocation
 import Foundation
 import Observation
 import OpenHikesData
-import Synchronization
 
 /// What the selected hike's line is coloured by. One setting for every hike
 /// rather than a column on each, because it is a way of reading the map and
@@ -82,6 +83,10 @@ final class RouteShading {
 
     @ObservationIgnored private let provider: (any TrailGraphProviding)?
     @ObservationIgnored private let defaults: UserDefaults
+    /// Where the followed hike's line is read: off the main actor, and once
+    /// for this and the other readers the selection hands it to — see
+    /// ``SelectedLine``.
+    @ObservationIgnored private let lines: SelectedLine
     @ObservationIgnored private var followed: Hike?
     /// Identifies the current measurement, so one that was cancelled but had
     /// already got its answer drops it rather than publishing it over the one
@@ -93,17 +98,8 @@ final class RouteShading {
     /// ``DisplayedRouteCoordinateCache`` keeps for the drawn line, and raised
     /// synchronously for the same reason: the map can draw the new line
     /// before a hop lands, and must not hand it the old one's colours. One per
-    /// measurement, so a registration left from an earlier one raises a flag
-    /// nothing reads.
-    nonisolated private final class LineWrite: Sendable {
-        private let raised = Mutex(false)
-
-        var isRaised: Bool { raised.withLock { $0 } }
-
-        func raise() { raised.withLock { $0 = true } }
-    }
-
-    @ObservationIgnored private var lineWrite = LineWrite()
+    /// measurement — see ``SelectedLine/Write``.
+    @ObservationIgnored private var lineWrite = SelectedLine.Write()
 
     /// Whether ``stretches`` were measured along the followed hike's line as
     /// it is now: false from the first write to that line until the hop after
@@ -115,9 +111,14 @@ final class RouteShading {
     /// `provider` is `nil` exactly where ``OpenHikesModel/trailGraphProvider``
     /// is, and then no grade is ever measured and the line keeps its colour
     /// under `difficulty`. Steepness needs no provider.
-    init(provider: (any TrailGraphProviding)?, defaults: UserDefaults = .standard) {
+    init(
+        provider: (any TrailGraphProviding)?,
+        defaults: UserDefaults = .standard,
+        lines: SelectedLine = SelectedLine()
+    ) {
         self.provider = provider
         self.defaults = defaults
+        self.lines = lines
         coloring = Self.storedColoring(in: defaults)
     }
 
@@ -182,18 +183,20 @@ final class RouteShading {
             publish(hikeID: nil, stretches: [])
             return
         }
-        let route = hike.route
+        let line = lines.read(of: hike)
         start(for: hike.id) {
-            await HikeTrailAnalysis.difficultyRuns(route: route, provider: provider).compactMap { run in
+            let route = await line.route
+            return await HikeTrailAnalysis.difficultyRuns(route: route, provider: provider).compactMap { run in
                 run.category.shade.map { Stretch(shade: $0, coordinates: run.coordinates) }
             }
         }
     }
 
     private func measureSteepness(of hike: Hike) {
-        let route = hike.route
+        let line = lines.read(of: hike)
         start(for: hike.id) {
-            await RouteSteepness.measuredRuns(route: route).map { run in
+            let route = await line.route
+            return await RouteSteepness.measuredRuns(route: route).map { run in
                 Stretch(shade: run.shade, coordinates: run.coordinates)
             }
         }
@@ -201,24 +204,16 @@ final class RouteShading {
 
     /// Measures the line again when it is replaced under the same hike, which
     /// no change of selection announces. Armed before the line is read, so a
-    /// write that lands after the read is a new line; and only `route` is
+    /// write that lands after the read is a new line; and only the line is
     /// registered, so a colour or width write is not.
     private func watchLine(of hike: Hike) {
-        let write = LineWrite()
-        lineWrite = write
-        withObservationTracking {
-            hike.trackRouteChanges()
-        } onChange: { [weak self] in
-            write.raise()
-            let shading = self
-            Task { @MainActor in shading?.lineDidChange(write) }
-        }
+        lineWrite = lines.watch(hike) { [weak self] write in self?.lineDidChange(write) }
     }
 
     /// Takes the old line's colours off, then measures the new line. The
     /// colours go at once, as they do for another hike: they were measured
     /// along ground the line no longer covers.
-    private func lineDidChange(_ write: LineWrite) {
+    private func lineDidChange(_ write: SelectedLine.Write) {
         guard write === lineWrite else { return }
         publish(hikeID: nil, stretches: [])
         measure()

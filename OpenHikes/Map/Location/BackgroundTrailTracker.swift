@@ -121,6 +121,13 @@ final class BackgroundTrailTracker: NSObject {
     /// test can step across a 45-second window rather than wait it out.
     let clock: @Sendable () -> Date
     private let container: ModelContainer
+    /// Where the selected hike's line is read for its snapshot: off the main
+    /// actor, once for this and the map's other readers — see ``SelectedLine``.
+    /// Internal, with the one below, for `BackgroundTrailTracker+SelectedLine.swift`.
+    let lines: SelectedLine
+    /// The line the selection's snapshot was published from, watched so a
+    /// line written under the same hike is published too.
+    var followedLine: FollowedLine?
     /// The hike background delivery should match fixes against. Seeded at
     /// launch from `SettingsKey.lastSelectedHikeID` (written by `OpenHikesModel`)
     /// since a background relaunch has no in-memory selection to read.
@@ -230,6 +237,8 @@ final class BackgroundTrailTracker: NSObject {
     ///     that a call site going back to `WidgetCenter` directly — and so
     ///     bypassing the recording gate — fails a test instead of quietly
     ///     spending the reload budget. See ``TrailWidgetReload``.
+    ///   - lines: where a selected hike's line is read. The app hands every
+    ///     reader of the selection the same one.
     init(
         container: ModelContainer,
         monitor: (any SignificantLocationMonitor)? = nil,
@@ -237,10 +246,12 @@ final class BackgroundTrailTracker: NSObject {
         defaults: UserDefaults = .standard,
         liveActivityController: HikeLiveActivityController? = nil,
         clock: @escaping @Sendable () -> Date = { Date() },
-        widgetReload: TrailWidgetReload = .system
+        widgetReload: TrailWidgetReload = .system,
+        lines: SelectedLine = SelectedLine()
     ) {
         let initialGeneration = SelectionGeneration()
         self.container = container
+        self.lines = lines
         self.monitor = monitor ?? CLLocationManager()
         self.regionMonitor = regionMonitor ?? SystemTrailRegionMonitor.shared
         self.defaults = defaults
@@ -267,13 +278,19 @@ final class BackgroundTrailTracker: NSObject {
 
     /// Called whenever the app's selected hike changes. Snapshots the SwiftData
     /// values on-main, then prepares and writes the widget payload off-main so
-    /// a long GPX cannot consume most of the tap's frame.
+    /// a long GPX cannot consume most of the tap's frame — the line included,
+    /// which is read off the main actor too, by ``SelectedLine``.
     func hikeSelectionChanged(to hike: Hike?) {
         // A walk holds the tracked hike, the widget and the Lock Screen until
         // it ends — opening another trail to compare it is not leaving the
         // walk. The selection is remembered and applied at the end.
         if walkedHikeID != nil {
             deferredSelection = DeferredSelection(hike: hike)
+            // The line followed is the one being left, and the selection
+            // applied at the end follows its own: a write to the old one, or
+            // a comparison of it still in flight, must not be announced over
+            // this one.
+            followedLine = nil
             return
         }
         // Before the id changes, so the activity that comes down is the one
@@ -299,86 +316,22 @@ final class BackgroundTrailTracker: NSObject {
         selectionGeneration.update(to: revision)
         selectionPublishTask?.cancel()
 
-        guard let hike, hike.pointCount > 1 else {
-            // Not necessarily `nil`: a hike with one point or none is also
-            // nothing to draw, and it is still the selection. Comparing
-            // against the id captured here rather than against `nil` is what
-            // lets that case finish — guarding on `trackedHikeID == nil`
-            // returned early for it, leaving the widget on the *previous*
-            // trail (cleared from the store but never reloaded), the old
-            // basemaps un-invalidated, and `selectionPublishTask` non-nil,
-            // which shuts off `publishLiveFix` for as long as it is selected.
-            let clearedSelectionID = hike?.id
-            selectionPublishTask = Task { [weak self] in
-                defer { self?.finishSelectionPublish(revision: revision) }
-                // Nothing left to be near. Before the guard below, so the
-                // condition comes down whether or not the store write lands:
-                // a registration for a trail nobody has open is exactly the
-                // standing wake this gate exists to end.
-                //
-                // Skipped outright when the feature is off, because then there
-                // is nothing registered to take down and asking costs a
-                // `CLLocationManager` and an XPC connection for an answer that
-                // cannot be anything else — see ``syncTrailRegion()``.
-                if self?.wantsTrailRegion == true {
-                    await self?.regionMonitor.setRegion(nil)
-                }
-                guard let self,
-                      await snapshotWriter.clear(ifCurrent: revision),
-                      selectionRevision == revision,
-                      trackedHikeID == clearedSelectionID
-                else { return }
-                await TrailBasemapRenderer.shared.invalidate()
-                guard selectionRevision == revision else { return }
-                await snapshotWriter.reloadWidget()
-            }
-            return
-        }
-        let input = HikeRouteInput(hike: hike)
+        // The line, read once off the main actor for this and the map's other
+        // readers, with the length stored beside it, and the rest read here,
+        // where the hike lives. The points are counted once the line lands:
+        // counting reads `route`, which on the main actor decodes all of it
+        // (#1232). No selection, and a line of one point or none, are both
+        // nothing to draw — see ``selectionInput(_:reading:)``.
+        followedLine = hike.map(followLine(of:))
+        let line = followedLine?.read
+        let columns = hike.map(HikeRouteInput.init(columnsOf:))
         selectionPublishTask = Task { [weak self] in
             defer { self?.finishSelectionPublish(revision: revision) }
-            guard !Task.isCancelled else { return }
-            // Before the snapshot, because it is the cheaper half and the one
-            // a *launch* depends on: the region registered here is what the
-            // next process asks the system about, instead of asking where the
-            // phone is. Off the main actor for the same reason the snapshot is
-            // — the enclosing box over a five-hour recording's twenty thousand
-            // points is a sort, and the tap that selected the trail has a
-            // frame to make.
-            //
-            // Only while the feature is on, and the whole block is skipped
-            // rather than only its `setRegion` call: the condition exists to
-            // answer one question — may background matching stand down? — and
-            // with the toggle off there is no background matching to stand
-            // down. Registering one then buys nothing and costs a standing
-            // geofence that survives a force-quit and can relaunch the app.
-            // Selecting a trail is not consent to that; the switch in Settings
-            // is. The snapshot below is not conditional on any of it — the
-            // widget draws the selected trail whatever the toggle says.
-            if self?.wantsTrailRegion == true {
-                let region = await Self.offMainThread { TrailRegion(route: input.route.map(\.clCoordinate)) }
-                if let self, !Task.isCancelled, selectionRevision == revision, trackedHikeID == input.hikeID {
-                    await regionMonitor.setRegion(region)
-                    defaults.set(false, forKey: SettingsKey.trailRegionCleared)
-                    // The system starts a freshly registered condition at
-                    // unknown whatever it said about the last one, and so
-                    // does this.
-                    regionState = .unknown
-                    syncMonitoring()
-                }
+            guard let input = await Self.selectionInput(columns, reading: line) else {
+                await self?.clearSelection(columns?.hikeID, revision: revision)
+                return
             }
-            let snapshot = await Self.buildSnapshotOffMain(from: input, liveFix: nil)
-            guard let snapshot,
-                  let self,
-                  !Task.isCancelled,
-                  selectionRevision == revision,
-                  trackedHikeID == input.hikeID,
-                  await snapshotWriter.save(snapshot, ifCurrent: revision),
-                  selectionRevision == revision,
-                  trackedHikeID == input.hikeID
-            else { return }
-            await snapshotWriter.reloadWidget()
-            refreshBasemaps(for: snapshot)
+            await self?.publishSelection(input, revision: revision)
         }
     }
 
@@ -709,6 +662,95 @@ final class BackgroundTrailTracker: NSObject {
             guard let snapshot else { return }
             self?.publishFollowActivity(snapshot)
         }
+    }
+}
+
+/// The two ends a selection's publication comes to: a trail to draw, or
+/// nothing — no selection, or a line of one point or none. In an extension in
+/// this same file for the reason the write path below is: the class body is at
+/// the limit SwiftLint enforces.
+extension BackgroundTrailTracker {
+    // MARK: Selection publication
+
+    /// Takes the widget off the trail being left.
+    ///
+    /// - Parameter clearedSelectionID: the selection this clears for. Not
+    ///   necessarily `nil`: a hike with one point or none is also nothing to
+    ///   draw, and it is still the selection. Comparing against the id
+    ///   captured at the selection rather than against `nil` is what lets
+    ///   that case finish — guarding on `trackedHikeID == nil` returned early
+    ///   for it, leaving the widget on the *previous* trail (cleared from the
+    ///   store but never reloaded), the old basemaps un-invalidated, and
+    ///   `selectionPublishTask` non-nil, which shuts off `publishLiveFix` for
+    ///   as long as it is selected.
+    private func clearSelection(_ clearedSelectionID: UUID?, revision: UInt64) async {
+        // Nothing left to be near. Before the guard below, so the condition
+        // comes down whether or not the store write lands: a registration for
+        // a trail nobody has open is exactly the standing wake this gate
+        // exists to end.
+        //
+        // Skipped outright when the feature is off, because then there is
+        // nothing registered to take down and asking costs a
+        // `CLLocationManager` and an XPC connection for an answer that cannot
+        // be anything else — see ``syncTrailRegion()``.
+        //
+        // And skipped for a selection since replaced, as registering is: its
+        // line is read off the main actor, that read is not cancelled with
+        // this publication, and by the time it lands the newer selection may
+        // have registered a region of its own (#1232).
+        if wantsTrailRegion, !Task.isCancelled, selectionRevision == revision {
+            await regionMonitor.setRegion(nil)
+        }
+        guard await snapshotWriter.clear(ifCurrent: revision),
+              selectionRevision == revision,
+              trackedHikeID == clearedSelectionID
+        else { return }
+        await TrailBasemapRenderer.shared.invalidate()
+        guard selectionRevision == revision else { return }
+        await snapshotWriter.reloadWidget()
+    }
+
+    /// Registers the selected trail's region and writes its snapshot.
+    private func publishSelection(_ input: HikeRouteInput, revision: UInt64) async {
+        guard !Task.isCancelled else { return }
+        // Before the snapshot, because it is the cheaper half and the one a
+        // *launch* depends on: the region registered here is what the next
+        // process asks the system about, instead of asking where the phone
+        // is. Off the main actor for the same reason the snapshot is — the
+        // enclosing box over a five-hour recording's twenty thousand points is
+        // a sort, and the tap that selected the trail has a frame to make.
+        //
+        // Only while the feature is on, and the whole block is skipped rather
+        // than only its `setRegion` call: the condition exists to answer one
+        // question — may background matching stand down? — and with the
+        // toggle off there is no background matching to stand down.
+        // Registering one then buys nothing and costs a standing geofence
+        // that survives a force-quit and can relaunch the app. Selecting a
+        // trail is not consent to that; the switch in Settings is. The
+        // snapshot below is not conditional on any of it — the widget draws
+        // the selected trail whatever the toggle says.
+        if wantsTrailRegion {
+            let region = await Self.offMainThread { TrailRegion(route: input.route.map(\.clCoordinate)) }
+            if !Task.isCancelled, selectionRevision == revision, trackedHikeID == input.hikeID {
+                await regionMonitor.setRegion(region)
+                defaults.set(false, forKey: SettingsKey.trailRegionCleared)
+                // The system starts a freshly registered condition at unknown
+                // whatever it said about the last one, and so does this.
+                regionState = .unknown
+                syncMonitoring()
+            }
+        }
+        let snapshot = await Self.buildSnapshotOffMain(from: input, liveFix: nil)
+        guard let snapshot,
+              !Task.isCancelled,
+              selectionRevision == revision,
+              trackedHikeID == input.hikeID,
+              await snapshotWriter.save(snapshot, ifCurrent: revision),
+              selectionRevision == revision,
+              trackedHikeID == input.hikeID
+        else { return }
+        await snapshotWriter.reloadWidget()
+        refreshBasemaps(for: snapshot)
     }
 }
 

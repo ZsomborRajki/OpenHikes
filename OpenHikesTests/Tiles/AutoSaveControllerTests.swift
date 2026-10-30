@@ -84,15 +84,19 @@ struct AutoSaveControllerTests {
     }
 
     /// A one-point hike has no corridor worth speaking of, and the toggle is
-    /// disabled for it in the UI.
-    @Test("a hike with fewer than two points is never activated")
-    func degenerateHikeIsNotActivated() {
+    /// disabled for it in the UI. Its points are counted once its line has
+    /// been read, off the main actor, rather than as it is selected: counting
+    /// them there decoded the whole route on the main thread (#1232).
+    @Test("a hike with fewer than two points is let go once its line is read")
+    func degenerateHikeIsNotActivated() async {
         let controller = makeController()
         let hike = Fixture.hike(
             in: context,
             route: [RouteCoordinate(latitude: 47.63, longitude: 12.86)]
         ) { $0.autoSavedTileKeys = (0..<AutoSaveTileStore.tileCap).map { "saved/\($0)" } }
         controller.hikeSelectionChanged(to: hike)
+        await controller.waitForActivation()
+        #expect(controller.currentHike == nil)
         #expect(!controller.isCapReached(for: hike))
     }
 
