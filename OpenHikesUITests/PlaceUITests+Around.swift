@@ -75,6 +75,31 @@ extension PlaceUITests {
         XCTAssertFalse(element("hike-place-screen", in: app).exists, "and nothing was pushed over the screen")
     }
 
+    /// The summit is the one seeded place OpenStreetMap links to Wikidata, so
+    /// its card opens with what Wikipedia says about it — the words, the
+    /// photograph with its credit, and the ways to the article and the licence.
+    @MainActor
+    func testAPlaceCardOpensWithWhatWikipediaSays() {
+        let app = openPlacesAround()
+        XCTAssertTrue(element("places-around-nearby", in: app).waitForExistence(timeout: UITestTimeout.navigation))
+        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", Self.nearbySummit)).firstMatch
+        scrollToTap(row, in: app)
+
+        let extract = element("wikidata-place-extract", in: app)
+        XCTAssertTrue(
+            extract.waitForExistence(timeout: UITestTimeout.navigation),
+            "the summit's card opens with the opening of its Wikipedia article"
+        )
+        XCTAssertTrue(extract.label.hasPrefix("Thumsee Kopf is a wooded summit"))
+        XCTAssertTrue(app.staticTexts["From Wikipedia"].exists, "under a heading that says where the words come from")
+        XCTAssertTrue(element("wikidata-place-photo", in: app).exists, "with the item's photograph")
+        XCTAssertTrue(
+            app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Lena Gruber")).firstMatch.exists,
+            "and the photograph's credit"
+        )
+        XCTAssertTrue(element("wikidata-place-article-link", in: app).exists, "and the way to the whole article")
+    }
+
     @MainActor
     func testAPlaceOnTheHikeOpensItsCardRatherThanAScreen() {
         let app = openPlacesAround()

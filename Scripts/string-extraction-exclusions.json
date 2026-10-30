@@ -256,6 +256,13 @@
     ]
   },
   {
+    "path": "OpenHikes/Hikes/Places/Wikidata/WikidataPlaceSection.swift",
+    "reason": "The name of the license Wikipedia's text is shared under, which is the license's own and is shown untranslated, as Commons' license names are.",
+    "literals": [
+      "\"CC BY-SA 4.0\""
+    ]
+  },
+  {
     "path": "OpenHikes/Hikes/Walks/TrailWalkSession.swift",
     "reason": "A save operation’s diagnostic context; user-facing failure messages are localized by the caller.",
     "literals": [

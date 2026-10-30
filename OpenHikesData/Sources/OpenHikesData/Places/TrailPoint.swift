@@ -78,6 +78,16 @@ public final class TrailPoint {
     /// whether the water is drinkable. A few short strings, so a value column
     /// rather than rows, the way ``Hike/photos`` is one.
     public var osmFacts: [TrailPlaceFact] = []
+    /// The Wikidata item OpenStreetMap linked the place to when it was found,
+    /// or `nil` — see ``TrailPlaceOSM/wikidata``.
+    ///
+    /// Kept so a saved trail's place card can say what the maker's said about
+    /// the place, on every device. Optional rather than empty, unlike the
+    /// element's own columns: it was added after the production schema was
+    /// deployed, the way ``Hike/durationSeconds`` was, and `nil` is what every
+    /// row saved before it reads as. Nothing converts those rows — see
+    /// AGENTS.md *Schema and migration policy*.
+    public var osmWikidata: String?
     /// When it was marked. Read by nothing today; kept because it is the one
     /// fact about a place that cannot be recovered afterwards, and because it
     /// is what orders two places a GPX round-trip gave the same everything
@@ -95,6 +105,7 @@ public final class TrailPoint {
         osmElementType = place.osm?.elementType ?? ""
         osmElementID = place.osm?.elementID ?? 0
         osmFacts = place.osm?.facts ?? []
+        osmWikidata = place.osm?.wikidata
         self.createdAt = createdAt
     }
 }
@@ -114,9 +125,17 @@ extension TrailPoint {
     }
 
     /// The OpenStreetMap element this place is, or `nil` for one a hiker made.
+    ///
+    /// The item is read the way the tag it came from was: a mirrored column
+    /// is written by whichever device saved the row, so it is input here too.
     private var osm: TrailPlaceOSM? {
         guard TrailPlaceOSM.elementTypes.contains(osmElementType), osmElementID > 0 else { return nil }
-        return TrailPlaceOSM(elementType: osmElementType, elementID: osmElementID, facts: osmFacts)
+        return TrailPlaceOSM(
+            elementType: osmElementType,
+            elementID: osmElementID,
+            facts: osmFacts,
+            wikidata: TrailPlaceOSM.wikidataItem(fromTag: osmWikidata)
+        )
     }
 
     /// Writes the three things a hiker may change about a place they made.

@@ -4566,6 +4566,26 @@
         }
       }
     },
+    "From Wikimedia Commons" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aus Wikimedia Commons"
+          }
+        }
+      }
+    },
+    "From Wikipedia" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aus Wikipedia"
+          }
+        }
+      }
+    },
     "Full mountaineering equipment required" : {
       "localizations" : {
         "de" : {
@@ -8156,6 +8176,16 @@
         }
       }
     },
+    "Photo of %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto: %@"
+          }
+        }
+      }
+    },
     "Photo taken %@" : {
       "localizations" : {
         "de" : {
@@ -8794,6 +8824,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Beende OpenHikes und öffne es erneut, um die Änderung dieser Einstellung abzuschließen."
+          }
+        }
+      }
+    },
+    "Read on Wikipedia" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf Wikipedia lesen"
           }
         }
       }
@@ -11055,6 +11095,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Text"
+          }
+        }
+      }
+    },
+    "Text License" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Textlizenz"
           }
         }
       }

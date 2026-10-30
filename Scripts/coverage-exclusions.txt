@@ -183,6 +183,13 @@
 # whether a launch has tips at all is `TipLaunch` (`TipLaunchTests`), and where
 # the map draws its own is `MapTipPlacement` (`MapTipPlacementTests`).
 #
+# `WikidataPlaceSection` arrived on 2026-10-30: what Wikipedia and Commons say
+# about a place, at the head of its card, entirely body code. What it decides
+# is measured where it is decided: which answer a card draws and the decode of
+# its photograph are `WikidataPlaceLookup`'s (`WikidataPlaceLookupTests`), its
+# heading is `WikidataPlace`'s, and what is asked and read is
+# `WikidataPlaceSource` and `WikidataQuery`, each with a suite of its own.
+#
 # The UI suites still exist and still run locally:
 #
 #   Scripts/run-ui-tests.sh --all
@@ -274,6 +281,7 @@ OpenHikes/Hikes/Places/PlacesAroundScreen.swift
 OpenHikes/Hikes/Places/TrailPlaceKindChips.swift
 OpenHikes/Hikes/Places/HikePlaceAroundCard.swift
 OpenHikes/Hikes/Places/TrailPlaceCardParts.swift
+OpenHikes/Hikes/Places/Wikidata/WikidataPlaceSection.swift
 OpenHikes/Recording/RecordingPlaceSheet.swift
 OpenHikes/Map/MapSheet+Places.swift
 OpenHikes/Community/Publishing/CommunityFinishSendingSection.swift

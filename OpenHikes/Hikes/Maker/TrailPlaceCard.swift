@@ -35,6 +35,8 @@ struct TrailPlaceCard: Equatable {
     var longitude: Double
     var facts: [TrailPlaceFact] = []
     var openStreetMapURL: URL?
+    /// The Wikidata item the place links to — see ``WikidataPlaceSection``.
+    var wikidataItem: String?
     var primary: Primary
     /// The place's id when *Remove* takes it off the trail; `nil` for the
     /// dropped pin, whose *Remove Pin* takes the pin off the map.
@@ -87,6 +89,7 @@ struct TrailPlaceCard: Equatable {
             longitude = place.longitude
             facts = place.osm?.facts ?? []
             openStreetMapURL = place.osm?.url
+            wikidataItem = place.osm?.wikidata
             primary = .addStop(name: place.displayName, preferredLeg: nil)
             removablePlace = id
         case .stop(let id):

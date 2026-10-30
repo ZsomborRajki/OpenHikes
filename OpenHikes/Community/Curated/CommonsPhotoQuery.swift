@@ -130,14 +130,28 @@ nonisolated enum CommonsPhotoQuery {
     /// ``imageInfoBatch`` files.
     static func imageInfo(of pageIDs: [Int]) -> URLRequest {
         let ids = pageIDs.prefix(imageInfoBatch).map(String.init).joined(separator: "|")
-        let fields = Metadata.allCases.map(\.rawValue).joined(separator: "|")
-        return get([
-            URLQueryItem(name: "pageids", value: ids),
+        return get([URLQueryItem(name: "pageids", value: ids)] + imageInfoFields)
+    }
+
+    /// The same details of the one file named `title` — the way a Wikidata
+    /// item names its image, without the namespace. See
+    /// ``WikidataPlaceSource``. The answer is read by ``files(from:timeZone:)``
+    /// like any other, so the file has to pass every check a geotagged one does.
+    static func imageInfo(ofFileTitled title: String) -> URLRequest {
+        get([URLQueryItem(name: "titles", value: "File:\(title)")] + imageInfoFields)
+    }
+
+    /// What every `imageinfo` question asks for about a file.
+    private static var imageInfoFields: [URLQueryItem] {
+        [
             URLQueryItem(name: "prop", value: "imageinfo"),
             URLQueryItem(name: "iiprop", value: "url|mime|size|timestamp|extmetadata"),
             URLQueryItem(name: "iiurlwidth", value: String(thumbnailWidth)),
-            URLQueryItem(name: "iiextmetadatafilter", value: fields),
-        ])
+            URLQueryItem(
+                name: "iiextmetadatafilter",
+                value: Metadata.allCases.map(\.rawValue).joined(separator: "|")
+            ),
+        ]
     }
 
     /// A thumbnail's bytes, asked for the way every other request here is.

@@ -134,6 +134,27 @@ struct TrailPointSourceTests {
         #expect(asViewpoint.map(\.symbol) == [.viewpoint])
     }
 
+    /// What the place card asks Wikipedia about — see ``WikidataPlaceLookup``.
+    /// A list in the tag is two places rather than one, and names neither.
+    @Test("a place keeps the one Wikidata item its element names")
+    func aPlaceKeepsItsWikidataItem() async throws {
+        let tagged = """
+        {"elements": [
+        {"type": "node", "id": 1, "lat": 47.60, "lon": 12.95, \
+        "tags": {"natural": "peak", "name": "Watzmann", "wikidata": "Q163919"}},
+        {"type": "way", "id": 3, "center": {"lat": 47.62, "lon": 12.97}, \
+        "tags": {"tourism": "alpine_hut", "name": "Kärlingerhaus", "wikidata": "Q1;Q2"}},
+        {"type": "node", "id": 2, "lat": 47.61, "lon": 12.96, \
+        "tags": {"waterway": "waterfall"}}
+        ]}
+        """
+        let (source, _) = Self.makeSource([Self.ok(tagged)])
+
+        let places = try await source.places(near: Self.area)
+
+        #expect(places.map(\.osm?.wikidata) == ["Q163919", nil, nil])
+    }
+
     /// A hut is routinely a building rather than a node, which is why the
     /// query asks `nwr` for it — and a way has no `lat`, only the `center`
     /// that `out center` puts on it.

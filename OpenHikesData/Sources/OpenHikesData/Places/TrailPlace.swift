@@ -196,10 +196,44 @@ nonisolated public struct TrailPlaceOSM: Codable, Hashable, Sendable {
     public let elementType: String
     public let elementID: Int64
     public var facts: [TrailPlaceFact] = []
+    /// The Wikidata item the element's `wikidata` tag names — `Q` and a number
+    /// — or `nil` for an element that names none, or names something that is
+    /// not one item. See ``wikidataItem(fromTag:)``.
+    ///
+    /// A link rather than a fact: nothing here is shown as it stands. It is
+    /// what the place card asks Wikidata about, for the Wikipedia article and
+    /// the photograph the item points to.
+    public var wikidata: String?
 
     /// The three element types Overpass answers with. Anything else read back
     /// off a stored row or a shared file is no element at all.
     public static let elementTypes: Set<String> = ["node", "way", "relation"]
+
+    /// The longest item number read. Wikidata's run to nine digits today, so
+    /// twelve leaves room for every item there will be and still refuses a
+    /// number nothing could name.
+    private static let maximumItemDigits = 12
+
+    /// The one Wikidata item a `wikidata` tag names, as `Q` and its number,
+    /// or `nil` for a tag that does not name exactly one.
+    ///
+    /// The tag arrives off the wire, and OpenStreetMap's own validators find
+    /// the same few shapes in it: a lowercase `q`, padding, and lists such as
+    /// `Q1;Q2`. The first two are one item written loosely, and are read as
+    /// it. A list is not one item, and a card that picked one of them would be
+    /// guessing which place it describes. Anything else — a URL, a label —
+    /// names nothing.
+    public static func wikidataItem(fromTag tag: String?) -> String? {
+        guard let trimmed = tag?.trimmingCharacters(in: .whitespacesAndNewlines),
+              let first = trimmed.first, first == "Q" || first == "q"
+        else { return nil }
+        let digits = trimmed.dropFirst()
+        guard (1...maximumItemDigits).contains(digits.count),
+              digits.first != "0",
+              digits.allSatisfy({ $0.isASCII && $0.isNumber })
+        else { return nil }
+        return "Q\(digits)"
+    }
 
     /// The element a place-page link names, read back — what a GPX `<link>`
     /// written by ``url`` carries. `nil` for any other URL.
@@ -211,10 +245,11 @@ nonisolated public struct TrailPlaceOSM: Codable, Hashable, Sendable {
         self.init(elementType: parts[0], elementID: id)
     }
 
-    public init(elementType: String, elementID: Int64, facts: [TrailPlaceFact] = []) {
+    public init(elementType: String, elementID: Int64, facts: [TrailPlaceFact] = [], wikidata: String? = nil) {
         self.elementType = elementType
         self.elementID = elementID
         self.facts = facts
+        self.wikidata = wikidata
     }
 
     /// Whether two places are the same OpenStreetMap element.

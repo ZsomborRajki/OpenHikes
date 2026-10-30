@@ -34,6 +34,24 @@ struct TrailPlaceCardTests {
         #expect(text.hasSuffix("° \(east)"))
     }
 
+    /// What the card's Wikipedia section is asked for — see
+    /// ``TrailPlaceFactsAndLocation``. A place the hiker made has no element,
+    /// and so no item.
+    @Test("A place's card carries the Wikidata item its element names")
+    func aCardCarriesItsWikidataItem() {
+        let summit = CLLocationCoordinate2D(latitude: 47.5546, longitude: 12.9223)
+        let linked = TrailPlace(
+            coordinate: summit,
+            name: "Watzmann",
+            symbol: .summit,
+            osm: TrailPlaceOSM(elementType: "node", elementID: 26_862_633, wikidata: "Q163919")
+        )
+        let own = TrailPlace(coordinate: summit, name: "Lunch")
+
+        #expect(HikePlaceCard(row: TrailPlaceRow(place: linked)).wikidataItem == "Q163919")
+        #expect(HikePlaceCard(row: TrailPlaceRow(place: own)).wikidataItem == nil)
+    }
+
     @Test("A shared place links to Apple Maps at the spot, under its name")
     func mapsLink() throws {
         let url = TrailPlaceCoordinates.mapsURL(Self.bartholomae, named: "St. Bartholomä")
