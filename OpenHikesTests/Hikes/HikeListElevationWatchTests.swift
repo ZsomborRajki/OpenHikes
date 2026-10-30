@@ -4,11 +4,12 @@
 //
 //  While a Hilliest list is up, a save validates the listed hikes whose line
 //  may have been written, and no other (#1253): a line written here, or a
-//  row saved by any context, such as an edit mirrored in from another
-//  device. Before, under the hikes list's always-live `@Query`, every save
-//  to the store read every listed route again, and with no `@Query` up a
-//  line saved elsewhere was not validated until the list's task started
-//  again.
+//  row history names, which is an import's, such as an edit mirrored in from
+//  another device, and any context's once a look holds a token. Before,
+//  under the hikes list's always-live `@Query`, every save to the store read
+//  every listed route again, and with no `@Query` up a line saved elsewhere
+//  was not validated until the list's task started again. A walk, which
+//  saves the device-local store too, traps no look.
 //
 //  Which hikes a save validated is read off their cached fingerprints. A
 //  fingerprint no line has is planted beside a hike's figures, and any
@@ -68,6 +69,8 @@ struct HikeListElevationWatchTests {
         #expect(!stage.wasValidated(tinted))
         #expect(!stage.wasValidated(untouched))
 
+        // Read because the import gave the list its token: a look with none
+        // reads only imports.
         tinted.tintHex = "#FF00FF"
         try stage.container.mainContext.save()
         await settleDelegateHop(until: "the tinted hike is validated") { stage.publications == 3 }
@@ -104,6 +107,67 @@ struct HikeListElevationWatchTests {
 
         #expect(stage.has(edited, climbing: 500))
         #expect(!stage.wasValidated(other))
+        observing.cancel()
+        await observing.value
+    }
+
+    /// A walk keeps its progress in its hike's device-local row and ends in
+    /// one save of both stores, which wakes the list. A look with no token
+    /// read both stores by time until #1261, and SwiftData traps building a
+    /// walk's write: see `StoreHistoryCheck`. After an import, the look reads
+    /// by token.
+    @Test(
+        "a walk saved while the list is up traps no look, and a line saved elsewhere then is measured",
+        arguments: [false, true]
+    )
+    func aWalkTrapsNoLook(afterAnImport: Bool) async throws {
+        let stage = try await HikeListElevationStage(hostingTheList: true)
+        defer { stage.close() }
+        let observing = observe(stage)
+        defer { observing.cancel() }
+        await settleDelegateHop(until: "the first pass is published") { stage.publications == 1 }
+        let walked = stage.hikes[1]
+        let edited = stage.hikes[2]
+        if afterAnImport {
+            try await stage.plantStaleFingerprints(on: [walked])
+            try await SelectedLineStoreWatchTests.saveElsewhere(walked.id, in: stage.container) { hike in
+                hike.title = "Renamed elsewhere"
+            }
+            await settleDelegateHop(until: "the import is looked at, and gives the list its token") {
+                stage.wasValidated(walked)
+            }
+        }
+        let main = stage.container.mainContext
+        var walk = TrailWalkRecord(hikeID: walked.id, routeDistanceMeters: 600, startedAt: .now)
+        walked.walkInProgress = walk
+        try main.save()
+        walk.phase = .paused
+        walked.walkInProgress = walk
+        try main.save()
+        let ended = HikeWalk(
+            hikeID: walked.id,
+            startedAt: walk.startedAt,
+            endedAt: .now,
+            activeSeconds: 60,
+            coveredIntervals: [0, 300],
+            furthestDistanceMeters: 300,
+            routeDistanceMeters: 600,
+            endReason: .ended
+        )
+        main.insert(ended)
+        ended.hike = walked
+        walked.walkInProgress = nil
+        try main.save()
+        let published = stage.publications
+
+        try await SelectedLineStoreWatchTests.saveElsewhere(edited.id, in: stage.container) { hike in
+            hike.replaceRoute(with: HikeListElevationStage.line(2, climb: 500))
+        }
+        await settleDelegateHop(until: "the line saved after the walk is measured") {
+            stage.has(edited, climbing: 500)
+        }
+
+        #expect(stage.publications > published)
         observing.cancel()
         await observing.value
     }
