@@ -164,14 +164,9 @@ final class SelectedLineStoreWatch {
             // Whichever thread posted it. That was never the main one when
             // measured, not even for the main context's own saves, but
             // `onMainActor` copes either way.
-            guard let storeID = Self.storeID(of: notification), admitted.admits(storeID) else { return }
+            guard let storeID = StoreHistoryCheck.storeID(of: notification), admitted.admits(storeID) else { return }
             onMainActor { [weak self] in self?.storeDidChange(storeID) }
         }
-    }
-
-    nonisolated private static func storeID(of notification: Notification) -> String? {
-        let value = notification.userInfo?[NSStoreUUIDKey]
-        return (value as? String) ?? (value as? UUID)?.uuidString
     }
 
     private func storeDidChange(_ storeID: String) {
@@ -188,7 +183,7 @@ final class SelectedLineStoreWatch {
         guard let followed else { return }
         let request = StoreHistoryCheck.Request(
             container: followed.container,
-            persistentID: followed.hike.persistentModelID,
+            rows: [followed.hike.persistentModelID],
             storeID: followed.storeID,
             since: followed.since,
             token: followed.token
@@ -207,7 +202,7 @@ final class SelectedLineStoreWatch {
         if var current = followed, current.generation == generation {
             current.token = answer.token
             followed = current
-            if answer.savedRow { refresh(current.hike) }
+            if !answer.savedRows.isEmpty { refresh(current.hike) }
         }
         if checksAgain {
             checksAgain = false
