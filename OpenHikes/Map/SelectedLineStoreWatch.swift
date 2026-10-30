@@ -40,9 +40,11 @@
 //
 //  The main context's own saves are not told apart by author. An author on
 //  the main context would change every transaction it writes, and what
-//  mirroring's export makes of that could not be checked here. So a line
-//  written here, such as heights filled in, costs one more refresh, which
-//  finds the line its readers already have.
+//  mirroring's export makes of that could not be checked here. Until an
+//  import gives the watch its first token, a check reads only what the import
+//  wrote, which leaves those saves out (see `SelectedLineStoreCheck`). After
+//  that, a line written here, such as heights filled in, costs one more
+//  refresh, which finds the line its readers already have.
 //
 //  A hike with unsaved changes cannot take a refresh. A fetch keeps its
 //  snapshot, and its next save writes that snapshot's line back over the one
