@@ -82,6 +82,9 @@ final class ShownLine {
 
     /// The read ``current`` came from, or the one it is waiting for.
     @ObservationIgnored private(set) var read: SelectedLine.Read?
+    /// The read whose line has landed, by its own landing or by
+    /// ``land(_:from:)``, so it lands once.
+    @ObservationIgnored private var landedRead: SelectedLine.Read?
     /// The landing in flight, if any. Readable so a suite can wait on the
     /// effect rather than on a duration.
     @ObservationIgnored private(set) var landing: Task<Void, Never>?
@@ -133,11 +136,26 @@ final class ShownLine {
             stopOwnLines()
             watchedLines = nil
             read = nil
+            landedRead = nil
             landing = nil
             if current != nil { current = nil }
             watchSaves(of: hike)
         }
         return follow(hike, rearming: false)
+    }
+
+    /// Lands `line`, the line `read` holds, from the work the screen built
+    /// from it, in the same turn as that work. The screen then draws the line
+    /// and what it made of it in one pass. Left to its own landing, which
+    /// waits for the same read and then compares it off the main actor, the
+    /// line arrived a turn apart and the whole card was drawn once more for
+    /// it. That landing then changes nothing.
+    ///
+    /// Nothing for a read no longer in force, or one whose line has landed.
+    func land(_ line: SelectedLine.Line, from read: SelectedLine.Read) {
+        guard read === self.read, landedRead !== read else { return }
+        landedRead = read
+        current = line
     }
 
     /// Reads `hike`'s line through the reader in force now, arming the watch
@@ -207,6 +225,10 @@ final class ShownLine {
     /// Makes `next` the read in force, and the line on screen once it lands,
     /// unless a newer read has replaced it by then. It moves ``revision``
     /// only when its line is not the one on screen.
+    ///
+    /// The same line read again leaves ``current`` as it is: a new value of
+    /// it would draw every reader of it again for nothing, which is what
+    /// switching between the selection's reader and the screen's own did.
     private func install(_ next: SelectedLine.Read) {
         guard next !== read else { return }
         let replacing = read != nil
@@ -216,7 +238,10 @@ final class ShownLine {
             let line = await Self.line(of: next)
             let isNew = await Self.isNew(line, replacing: shown)
             guard let self, read === next else { return }
-            current = line
+            if landedRead !== next {
+                landedRead = next
+                if isNew { current = line }
+            }
             if replacing, isNew { revision &+= 1 }
         }
     }

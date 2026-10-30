@@ -89,12 +89,12 @@ final class ShownLineTests {
 
     /// The selection's reader and the watch that follows the selected hike
     /// in the store, wired the way the model wires them.
-    private struct Selection {
+    struct Selection {
         let lines: SelectedLine
         let watch: SelectedLineStoreWatch
     }
 
-    private let container: ModelContainer
+    let container: ModelContainer
 
     init() throws {
         let directory = FileManager.default.temporaryDirectory
@@ -108,7 +108,7 @@ final class ShownLineTests {
     }
 
     /// The ridge moved half a degree north, with its heights.
-    private static let movedRoute = Fixture.ridgeRoute.map { point in
+    static let movedRoute = Fixture.ridgeRoute.map { point in
         var moved = point
         moved.latitude += 0.5
         return moved
@@ -121,7 +121,7 @@ final class ShownLineTests {
         return moved
     }
 
-    private static func selection(
+    static func selection(
         fetch: @escaping @Sendable (ModelContext, PersistentIdentifier) throws -> Hike? = SelectedLine.fetchHike
     ) -> Selection {
         let lines = SelectedLine(fetch: fetch)
@@ -130,13 +130,13 @@ final class ShownLineTests {
 
     /// What the model does with a selected finished hike: its readers ask
     /// for the line, and then the watch follows it from when that read began.
-    private func select(_ hike: Hike, in selection: Selection) async throws {
+    func select(_ hike: Hike, in selection: Selection) async throws {
         _ = selection.lines.read(of: hike)
         selection.watch.follow(hike, since: try #require(selection.lines.readBegan(for: hike)))
         await settleDelegateHop(until: "the watch has caught up with the hike") { selection.watch.isSettled }
     }
 
-    private func saved(_ title: String, route: [RouteCoordinate] = Fixture.ridgeRoute) async throws -> Hike {
+    func saved(_ title: String, route: [RouteCoordinate] = Fixture.ridgeRoute) async throws -> Hike {
         let hike = Fixture.hike(in: container.mainContext, title: title, route: route)
         try await RemoteChangeLog.save(container.mainContext, settling: hike)
         return hike

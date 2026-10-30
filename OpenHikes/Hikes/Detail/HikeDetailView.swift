@@ -785,6 +785,8 @@ private extension HikeDetailView {
         guard !Task.isCancelled else { return }
         let built = prepared.profile
         let along = PreparedLine(revision: revision, line: prepared.line, walkRevision: prepared.walkRevision)
+        // With what was built from it, so the card is drawn once for both.
+        line.land(prepared.line, from: read)
         profile = built
         preparedLine = along
         statItems = prepared.stats
