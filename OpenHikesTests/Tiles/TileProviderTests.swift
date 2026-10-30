@@ -206,6 +206,7 @@ struct TileProviderTests {
         #expect(apple.renderedSource == nil)
         let style = try #require(apple.systemStyle)
         #expect(apple.renderedBase == .system(style))
+        #expect(!apple.renderedBase.keepsChromeLight)
         #expect(!TileProvider.rasterSources.contains(apple))
     }
 
@@ -226,6 +227,7 @@ struct TileProviderTests {
         #expect(provider.renderedSource != nil)
         #expect(provider.renderedSource?.providerID == provider.id)
         #expect(provider.renderedBase.tileSource == provider.renderedSource)
+        #expect(provider.renderedBase.keepsChromeLight)
     }
 
     /// Its position is a product decision — the cheapest map sits directly

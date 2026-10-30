@@ -315,7 +315,7 @@ struct MapView: MapViewRepresentable, Equatable {
         // also the one whose chrome should. `appleSatellite` draws dark
         // imagery at every hour, and its chrome follows the phone all the
         // same, as Apple Maps' does, rather than being forced dark.
-        mapView.overrideUserInterfaceStyle = tileSource == nil ? .unspecified : .light
+        mapView.overrideUserInterfaceStyle = base.keepsChromeLight ? .light : .unspecified
         #endif
 
         // Before the early return below: the system base map is a change of
