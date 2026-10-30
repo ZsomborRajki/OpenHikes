@@ -2,46 +2,53 @@
 //  SelectedLineStoreWatch.swift
 //  OpenHikes
 //
-//  Notices that the store holds a new line for the selected hike that nobody
-//  wrote through the main context (an edit mirrored in from another device),
-//  brings it into the main context's copy of the hike, and says so (#1228).
+//  Notices that another context saved the selected hike, such as an edit
+//  mirrored in from the hiker's other device, and has the selection's readers
+//  look at its line again (#1228).
 //
-//  Observation cannot say so on its own. The main context's hike hears its
-//  own writes. A line saved through any other context reaches it only through
-//  a refresh, and there are two cases, both measured on iOS 18.6 and 27:
+//  Observation cannot tell them on its own. The readers watch
+//  `Hike.lineRevision`, which only a line written through the main context
+//  moves (see `SelectedLine`). A line saved through any other context reaches
+//  the main context's copy of the hike only through a refresh, and there are
+//  two cases, both measured on iOS 18.6 and 27:
 //  - With a `@Query` live in a window, every save to the store refreshes
-//    every registered hike and notifies every observer of every persisted
-//    property, whether or not anything changed.
+//    every registered hike and notifies every persisted property, changed or
+//    not. That is too much to redraw on, and no revision moves for it.
 //  - With no live `@Query`, nothing refreshes the hike, and it keeps the old
 //    line until something fetches it.
 //  The saves measured were a sibling context's, a save of another hike, and a
 //  Core Data context on SwiftData's own coordinator standing in for the
-//  mirroring import. The first case is too much to redraw on and the second
-//  too little. So a reader of the line watches `Hike.lineRevision`, which no
-//  refresh reaches, and this watch is what moves it for a line written
-//  elsewhere.
+//  mirroring import.
 //
-//  What it listens to is the store's remote-change notification. SwiftData
-//  turns it on for both stores, along with the persistent history the check
-//  reads, and it is posted once for every save of a store by every context.
-//  That includes the import stand-in, which posted no `ModelContext.didSave`.
-//  A save of the other store (tile claims, the walk in progress) is dropped on
-//  the thread that posted it, before any hop here. What a save of the hike's
-//  own store costs is `SelectedLineStoreCheck`'s to say.
+//  What the watch listens to is the store's remote-change notification.
+//  SwiftData turns it on for both stores, along with the persistent history
+//  the check reads, and it is posted once for every save of a store, by every
+//  context. That includes the import stand-in, which posted no
+//  `ModelContext.didSave`. A save of the other store (tile claims, the walk
+//  in progress) is dropped on the thread that posted it, before any hop here.
+//  A save of the hike's own store costs one look at history
+//  (`SelectedLineStoreCheck`).
 //
-//  The main context's own writes are not told apart by author. An author on
+//  A save of the selected hike's row costs a refresh. The watch fetches the
+//  hike where it lives, which brings the stored row into the main context's
+//  copy, so a later save there cannot write the old line back and the
+//  readers' columns match the stored line. Then it calls
+//  `SelectedLine.refresh()`, which compares the stored line off the main
+//  actor with the one the readers hold and hands it out only if it differs.
+//
+//  The main context's own saves are not told apart by author. An author on
 //  the main context would change every transaction it writes, and what
 //  mirroring's export makes of that could not be checked here. So a local
-//  *Edit Route* is read and compared once more, then dropped as overtaken; see
-//  `take(_:)`.
+//  *Edit Route* costs one more refresh, which finds the line its readers
+//  already have.
 //
 //  A hike with unsaved changes cannot take a refresh. A fetch keeps its
 //  snapshot, and its next save writes that snapshot's line back over the one
 //  received, measured on both. That is the last writer winning, as AGENTS.md
 //  *Persistence and sync* has it: SwiftData owns sync, a save re-uploads the
 //  whole row, and nothing here tries to save the other device's line. So the
-//  watch waits for that save, which posts a remote change of its own, and
-//  compares again. The map follows whatever line the store ends up holding.
+//  watch waits for that save. It saves the row too, and the check it starts
+//  refreshes then. The map follows whatever line the store ends up holding.
 //
 
 import CoreData
@@ -72,18 +79,11 @@ final class SelectedLineStoreWatch {
         let storeID: String
         let since: Date
         let generation: Int
-        /// The line the readers hold, and the hike's ``Hike/lineRevision``
-        /// when they read it.
-        var line: [RouteCoordinate]
-        var lineRevision: Int
         var token: DefaultHistoryToken?
-        /// The store's line differed from ``line`` and could not be taken
-        /// yet: the next check compares whatever history says.
-        var differs = false
     }
 
-    private let read: SelectedLineStoreCheck.LineRead
-    private let lineReplaced: (Hike) -> Void
+    private let making: SelectedLineStoreCheck.Making
+    private let lineMayHaveChanged: () -> Void
     private let filter = StoreFilter()
     /// Removed by the `isolated deinit` below. SE-0371 hops that deinit back
     /// to the main actor, so this is only ever touched where it was written.
@@ -107,50 +107,36 @@ final class SelectedLineStoreWatch {
     private(set) var deliveredChanges = 0
     var isSettled: Bool { check == nil && !checksAgain }
 
-    /// - Parameter lineReplaced: Called once the followed hike holds a new
-    ///   line from the store and its ``Hike/lineRevision`` has moved. It is
-    ///   for the readers that do not watch the revision.
+    /// - Parameter lineMayHaveChanged: Called once the followed hike's own
+    ///   copy holds what the store does, after a save of its row: the app's
+    ///   is ``SelectedLine/refresh()``.
     init(
-        read: @escaping SelectedLineStoreCheck.LineRead = SelectedLineStoreCheck.storedLine,
-        lineReplaced: @escaping (Hike) -> Void = { _ in /* nobody to tell */ }
+        making: @escaping SelectedLineStoreCheck.Making = SelectedLineStoreCheck.answer,
+        lineMayHaveChanged: @escaping () -> Void
     ) {
-        self.read = read
-        self.lineReplaced = lineReplaced
+        self.making = making
+        self.lineMayHaveChanged = lineMayHaveChanged
     }
 
     isolated deinit {
         if let observer { NotificationCenter.default.removeObserver(observer) }
     }
 
-    /// Follows `hike`, whose readers hold `line` from a read that began at
-    /// `readAt`.
-    ///
-    /// Called again after every read, including the reads this watch's own
-    /// reports cause. A write through the main context moves the hike's
-    /// revision past the one recorded here, and the watch stays quiet about
-    /// that hike until it is told what the readers made of the write. A hike
-    /// that is not saved yet has no store to watch.
-    func follow(_ hike: Hike, holding line: [RouteCoordinate], readAt: Date) {
+    /// Follows `hike`, whose readers hold a line from a read that began at
+    /// `since`. A hike that is not saved yet has no store to watch.
+    func follow(_ hike: Hike, since: Date) {
         guard let container = hike.modelContext?.container,
               let storeID = hike.persistentModelID.storeIdentifier else {
             stopFollowing()
             return
         }
         generation &+= 1
-        followed = Followed(
-            hike: hike,
-            container: container,
-            storeID: storeID,
-            since: readAt,
-            generation: generation,
-            line: line,
-            lineRevision: hike.lineRevision
-        )
+        followed = Followed(hike: hike, container: container, storeID: storeID, since: since, generation: generation)
         filter.admit(storeID)
         observeIfNeeded()
     }
 
-    /// Follows nothing: no save wakes the watch until the next ``follow(_:holding:readAt:)``.
+    /// Follows nothing: no save wakes the watch until the next ``follow(_:since:)``.
     func stopFollowing() {
         generation &+= 1
         followed = nil
@@ -192,18 +178,15 @@ final class SelectedLineStoreWatch {
         guard let followed else { return }
         let request = SelectedLineStoreCheck.Request(
             container: followed.container,
-            hikeID: followed.hike.id,
             persistentID: followed.hike.persistentModelID,
             storeID: followed.storeID,
             since: followed.since,
-            token: followed.token,
-            held: followed.line,
-            comparesRegardless: followed.differs
+            token: followed.token
         )
         let started = followed.generation
-        let reading = read
+        let make = making
         check = Task { [weak self] in
-            let answer = await SelectedLineStoreCheck.answer(request, read: reading)
+            let answer = await make(request)
             self?.land(answer, generation: started)
         }
     }
@@ -213,9 +196,8 @@ final class SelectedLineStoreWatch {
         completedChecks &+= 1
         if var current = followed, current.generation == generation {
             current.token = answer.token
-            current.differs = false
             followed = current
-            if case .newLine(let replacement) = answer.finding { take(replacement) }
+            if answer.savedRow { refresh(current.hike) }
         }
         if checksAgain {
             checksAgain = false
@@ -223,47 +205,24 @@ final class SelectedLineStoreWatch {
         }
     }
 
-    /// Brings a line the store holds, and the readers do not, into the main
-    /// context's hike, and says so.
-    private func take(_ replacement: [RouteCoordinate]) {
-        guard var current = followed else { return }
-        let hike = current.hike
-        // Written through this instance since the readers' line was read. They
-        // are reading the write now, and will say what they hold. This is also
-        // where a local *Edit Route* lands, read and compared once more,
-        // because the main context writes under no author of its own.
-        guard hike.lineRevision == current.lineRevision else { return }
-        // A fetch keeps an unsaved hike's snapshot, and that hike's next save
-        // decides which line the store keeps. That save posts a remote change
-        // of its own, and the check it starts compares regardless.
-        guard !hike.hasChanges, refresh(hike) else {
-            current.differs = true
-            followed = current
-            return
-        }
-        hike.lineWasReplacedInStore()
-        current.line = replacement
-        current.lineRevision = hike.lineRevision
-        followed = current
-        lineReplaced(hike)
-    }
-
-    /// Fetches the hike again where it lives, which is what brings the stored
-    /// line into this instance. It does so silently, which is why the revision
-    /// moves after it.
-    private func refresh(_ hike: Hike) -> Bool {
-        guard let context = hike.modelContext else { return false }
-        let hikeID = hike.id
-        var descriptor = FetchDescriptor<Hike>(predicate: #Predicate { $0.id == hikeID })
-        descriptor.fetchLimit = 1
+    /// Brings the stored row into the hike's own copy, then has the readers
+    /// look at its line. The fetch does it silently, which is why they are
+    /// told.
+    ///
+    /// Not while the hike holds unsaved changes. A fetch keeps that snapshot,
+    /// and the save that follows decides which line the store keeps. That
+    /// save posts a remote change of its own, for this row, and the check it
+    /// starts comes back here.
+    private func refresh(_ hike: Hike) {
+        guard !hike.hasChanges, let context = hike.modelContext else { return }
         do {
-            _ = try context.fetch(descriptor)
-            return true
+            _ = try SelectedLine.fetchHike(context, hike.persistentModelID)
         } catch {
             Self.logger.error(
                 "Could not refresh the selected hike: \(error.localizedDescription, privacy: .public)"
             )
-            return false
+            return
         }
+        lineMayHaveChanged()
     }
 }

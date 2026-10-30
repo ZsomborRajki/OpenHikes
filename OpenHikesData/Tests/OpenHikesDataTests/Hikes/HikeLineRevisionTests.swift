@@ -3,11 +3,11 @@
 //  OpenHikesDataTests
 //
 //  The line revision is what a reader of a hike's line watches: it moves when
-//  the line is replaced through this instance, or when something says the
-//  store holds a new one, and at no other write. A refresh after another
-//  context's save notifies every persisted property of a registered hike, so
-//  the revision being unpersisted is the whole point. The refresh itself
-//  needs a live `@Query` and is measured by the app's suites.
+//  the line is replaced through this instance, and at no other write. A
+//  refresh after another context's save notifies every persisted property of
+//  a registered hike, so the revision being unpersisted is the whole point.
+//  The refresh itself needs a live `@Query` and is measured by the app's
+//  suites.
 //
 
 import Observation
@@ -52,17 +52,6 @@ struct HikeLineRevisionTests {
         #expect(hike.route == Self.newLine, "the line is in place before the revision moves")
     }
 
-    @Test("a line replaced in the store moves it the same way")
-    func aLineReplacedInTheStoreMovesTheRevision() {
-        let hike = Hike(title: "Trail", distanceMeters: 0)
-        let changes = Self.watching(hike)
-
-        hike.lineWasReplacedInStore()
-
-        #expect(changes.count == 1)
-        #expect(hike.lineRevision == 1)
-    }
-
     @Test("a write to anything but the line leaves the revision alone")
     func otherWritesLeaveTheRevisionAlone() {
         let hike = Hike(title: "Trail", distanceMeters: 0)
@@ -88,10 +77,10 @@ struct HikeLineRevisionTests {
         }
 
         hike.replaceRoute(with: Self.newLine)
-        hike.lineWasReplacedInStore()
+        hike.replaceRoute(with: Self.newLine)
         hike.replaceRoute(with: [])
 
-        #expect(hike.lineRevision == 3)
-        #expect(routeChanges.count == 1, "a one-shot registration; the store's word is not a write to route")
+        #expect(hike.lineRevision == 3, "an identical line counts too: the readers compare before they rebuild")
+        #expect(routeChanges.count == 1, "a one-shot registration")
     }
 }

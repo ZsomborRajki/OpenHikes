@@ -408,9 +408,8 @@ public extension Hike {
         access(keyPath: \.route)
     }
 
-    /// How many times this instance has been handed a new line: once for
-    /// every ``replaceRoute(with:)``, and once for every
-    /// ``lineWasReplacedInStore()``.
+    /// How many times this instance's line has been replaced through
+    /// ``replaceRoute(with:)``.
     ///
     /// This, rather than ``route``, is what a reader of the line watches
     /// (#1228). With a `@Query` live in a window, every save to the store —
@@ -422,7 +421,9 @@ public extension Hike {
     /// coordinator standing in for the mirroring import. A registration on
     /// `route` therefore cannot tell a new line from a rename two rows down.
     /// This counter is `@Transient`, so no store and no refresh reaches it: it
-    /// moves only when something says the line is new.
+    /// moves only when this context writes a line. A line another context
+    /// saved is the app's to notice, which `SelectedLineStoreWatch` does for
+    /// the selected hike.
     var lineRevision: Int {
         access(keyPath: \.lineRevision)
         return lineReplacements
@@ -432,17 +433,6 @@ public extension Hike {
     /// a reader that re-reads the line on its own terms needs.
     func trackLineReplacements() {
         access(keyPath: \.lineRevision)
-    }
-
-    /// Says that this instance holds a new line nobody wrote through it: one
-    /// another context saved — an edit mirrored in from another device — that
-    /// a refresh has since brought into this instance.
-    ///
-    /// Moves ``lineRevision`` exactly as ``replaceRoute(with:)`` does, so a
-    /// reader cannot tell the two apart, and need not: either way its line is
-    /// the old one.
-    func lineWasReplacedInStore() {
-        withMutation(keyPath: \.lineRevision) { lineReplacements &+= 1 }
     }
 
     /// Replaces the route, and the duration stored from it, and moves

@@ -51,9 +51,8 @@ extension BackgroundTrailTracker {
     /// Publishes a line written under the selected hike as the hike selected
     /// again, which draws it on the widget and registers its region — once it
     /// has been compared, off the main actor, with the line the widget has. A
-    /// new read is not always a new line: while the hikes list is up, every
-    /// save of any hike tells this watch it was written (#1228), and a
-    /// publication spends a widget reload.
+    /// new read is not always a new line: a line can be written back as it
+    /// was, and a publication spends a widget reload.
     private func lineDidChange(_ write: SelectedLine.Write) {
         guard let followed = followedLine, write === followed.write, let hike = followed.hike,
               hike.id == trackedHikeID else { return }
