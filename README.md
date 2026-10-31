@@ -23,7 +23,7 @@ There is no OpenHikes account and no server holding your hikes: they live on the
 - **iCloud sync** across your devices, through your private CloudKit database. Photo files and saved map tiles stay on the device that made them.
 - **Health**: a finished hike can be saved as a workout, behind a switch that starts off.
 - **Community**: browse what others published, with no account needed, and publish your own, which a person reviews before anyone else sees it. Waymarked routes from OpenStreetMap, with photos from Wikimedia Commons, fill the same list.
-- **English and German**, following the device's language.
+- **English, German and French**, following the device's language.
 
 **OpenHikes Pro**, a monthly subscription, unlocks the paid map styles (Stadia Outdoors, Stamen Terrain and Thunderforest Outdoors), offline Stadia maps (Thunderforest's can't be downloaded ahead) and Stadia elevation for trails that have none. Everything else is free, the community included.
 

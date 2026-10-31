@@ -21,8 +21,8 @@
 # The two other kinds of catalog, InfoPlist.xcstrings (the app's and the
 # watch's) and OpenHikes/AppShortcuts.xcstrings, are not synced here. They are
 # edited by hand alongside an Info.plist purpose string or a Siri phrase, and
-# OpenHikesTests/General/StringCatalogTests+German.swift holds each to its
-# source.
+# OpenHikesTests/General/StringCatalogTests+Translations.swift holds each to
+# its source.
 #
 # Build first (any build of the OpenHikes scheme compiles all four targets),
 # then point this at the same derived data:

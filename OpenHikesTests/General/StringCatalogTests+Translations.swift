@@ -1,49 +1,62 @@
 //
-//  StringCatalogTests+German.swift
+//  StringCatalogTests+Translations.swift
 //  OpenHikesTests
 //
-//  German, read out of the source tree like the rest of this suite. A key
-//  with no German falls back to English without a word, and a German value
-//  that drops or retypes a placeholder formats the wrong argument. Neither
-//  shows anywhere else, because the hosted tests run in English.
+//  The translations, German and French, read out of the source tree like the
+//  rest of this suite. A key with no translation falls back to English
+//  without a word, and a translated value that drops or retypes a
+//  placeholder formats the wrong argument. Neither shows anywhere else,
+//  because the hosted tests run in English.
 //
 //  The Info.plist and App Shortcuts catalogs have no sync to keep them
 //  current: the IDE extracts into them, `xcodebuild` does not, and
 //  `Scripts/sync-string-catalogs.sh` covers the `Localizable` tables only.
-//  So the last two tests hold each one to what it translates, and a
-//  permission prompt or a Siri phrase edited without its catalog fails here.
+//  So two tests hold each one to what it translates, and a permission prompt
+//  or a Siri phrase edited without its catalog fails here.
+//
+//  Every check runs once per language in ``translations``, so a language
+//  added there is held to everything German is.
 //
 
 import Foundation
 import Testing
 
 extension StringCatalogTests {
-    @Test("every catalogued string has German", arguments: Self.catalogFolders)
-    func everyStringHasGerman(folder: String) throws {
-        let missing = try Self.untranslated(in: Self.catalog(in: folder))
-        #expect(missing.isEmpty, "no German in \(folder) for: \(missing.sorted())")
+    /// The languages the app ships besides English, its development language.
+    nonisolated static let translations = ["de", "fr"]
+
+    @Test("every catalogued string is translated", arguments: Self.catalogFolders, Self.translations)
+    func everyStringIsTranslated(folder: String, language: String) throws {
+        let missing = try Self.untranslated(into: language, in: Self.catalog(in: folder))
+        #expect(missing.isEmpty, "no \(language) in \(folder) for: \(missing.sorted())")
     }
 
     /// An Info.plist catalog holds more than the prompts checked below: the
     /// IDE extracts the bundle's name into it, and the name Files shows for a
-    /// GPX file. Each needs German, or to be marked as not translated.
-    @Test("every Info.plist string has German", arguments: ["OpenHikes", "OpenHikesWatch"])
-    func everyInfoPlistStringHasGerman(folder: String) throws {
-        let missing = try Self.untranslated(in: Self.catalog(in: folder, table: "InfoPlist"))
-        #expect(missing.isEmpty, "no German in \(folder)/InfoPlist.xcstrings for: \(missing.sorted())")
+    /// GPX file. Each needs a translation, or to be marked as not translated.
+    @Test(
+        "every Info.plist string is translated",
+        arguments: ["OpenHikes", "OpenHikesWatch"], Self.translations
+    )
+    func everyInfoPlistStringIsTranslated(folder: String, language: String) throws {
+        let missing = try Self.untranslated(into: language, in: Self.catalog(in: folder, table: "InfoPlist"))
+        #expect(missing.isEmpty, "no \(language) in \(folder)/InfoPlist.xcstrings for: \(missing.sorted())")
     }
 
-    @Test("German keeps the placeholders its English is handed", arguments: Self.catalogFolders)
-    func germanKeepsThePlaceholders(folder: String) throws {
+    @Test(
+        "a translation keeps the placeholders its English is handed",
+        arguments: Self.catalogFolders, Self.translations
+    )
+    func translationKeepsThePlaceholders(folder: String, language: String) throws {
         var offenders: [String] = []
         for (key, value) in try Self.catalog(in: folder) {
             let entry = value as? [String: Any] ?? [:]
-            let german = Self.localization("de", of: entry)
-            if german.isEmpty { continue }
+            let translated = Self.localization(language, of: entry)
+            if translated.isEmpty { continue }
             let english = Self.placeholders(in: key)
-            let forms = Self.forms(of: german)
+            let forms = Self.forms(of: translated)
             let isPlural = Self.localization("en", of: entry)["variations"] != nil
-            if forms.isEmpty || (isPlural && german["variations"] == nil) {
+            if forms.isEmpty || (isPlural && translated["variations"] == nil) {
                 offenders.append(key)
             }
             for (form, text) in forms {
@@ -53,13 +66,35 @@ extension StringCatalogTests {
                 if !fits { offenders.append("\(key) → \(text)") }
             }
         }
-        #expect(offenders.isEmpty, "German in \(folder) its English cannot fill: \(offenders.sorted())")
+        #expect(offenders.isEmpty, "\(language) in \(folder) its English cannot fill: \(offenders.sorted())")
     }
 
-    @Test("every permission prompt has German, for the English its Info.plist has", arguments: [
-        "OpenHikes", "OpenHikesWatch",
-    ])
-    func permissionPromptsHaveGerman(folder: String) throws {
+    /// French reads zero as singular, so its `one` form is handed 0 as well
+    /// as 1, and a singular that spells out the count as a word, as English
+    /// "One photo goes on %2$@" does, would tell a hiker with no photos that
+    /// one goes. Its singular keeps the number.
+    @Test("a French singular keeps its count, because French reads zero as one", arguments: Self.catalogFolders)
+    func frenchSingularKeepsTheCount(folder: String) throws {
+        var offenders: [String] = []
+        for (key, value) in try Self.catalog(in: folder) {
+            let entry = value as? [String: Any] ?? [:]
+            let french = Self.localization("fr", of: entry)
+            guard french["variations"] != nil else { continue }
+            let counts = Set(Self.placeholders(in: key).filter { !$0.hasSuffix(":@") && !$0.hasSuffix(":f") })
+            for (form, text) in Self.forms(of: french) where form == "one" {
+                if !counts.isSubset(of: Set(Self.placeholders(in: text))) {
+                    offenders.append("\(key) → \(text)")
+                }
+            }
+        }
+        #expect(offenders.isEmpty, "French singulars in \(folder) that drop their count: \(offenders.sorted())")
+    }
+
+    @Test(
+        "every permission prompt is translated, for the English its Info.plist has",
+        arguments: ["OpenHikes", "OpenHikesWatch"], Self.translations
+    )
+    func permissionPromptsAreTranslated(folder: String, language: String) throws {
         let data = try Data(contentsOf: Self.sourceRoot.appending(path: "\(folder)/Info.plist"))
         let plist = try PropertyListSerialization.propertyList(from: data, format: nil)
         let info = try #require(plist as? [String: Any])
@@ -74,13 +109,13 @@ extension StringCatalogTests {
             let entry = strings[key] as? [String: Any] ?? [:]
             let listed = Self.forms(of: Self.localization("en", of: entry)).first?.text
             #expect(listed == english, "\(folder)/InfoPlist.xcstrings has other English for \(key)")
-            let german = Self.forms(of: Self.localization("de", of: entry)).first?.text
-            #expect(german?.isEmpty == false, "no German for \(key) in \(folder)")
+            let translated = Self.forms(of: Self.localization(language, of: entry)).first?.text
+            #expect(translated?.isEmpty == false, "no \(language) for \(key) in \(folder)")
         }
     }
 
-    @Test("every Siri phrase has German that names the app once")
-    func siriPhrasesHaveGerman() throws {
+    @Test("every Siri phrase is translated, naming the app once", arguments: Self.translations)
+    func siriPhrasesAreTranslated(language: String) throws {
         let source = try String(
             contentsOf: Self.sourceRoot.appending(path: "OpenHikes/Intents/OpenHikesShortcuts.swift"),
             encoding: .utf8
@@ -97,11 +132,11 @@ extension StringCatalogTests {
             let entry = value as? [String: Any] ?? [:]
             let englishPhrases = Self.phrases(in: Self.localization("en", of: entry))
             let english = englishPhrases.isEmpty ? [key] : englishPhrases
-            let german = Self.phrases(in: Self.localization("de", of: entry))
+            let translated = Self.phrases(in: Self.localization(language, of: entry))
             listed.formUnion(english)
-            #expect(!german.isEmpty, "no German Siri phrases for \(key)")
+            #expect(!translated.isEmpty, "no \(language) Siri phrases for \(key)")
             let parameters = Set(english.flatMap(Self.parameters(of:)))
-            for phrase in german {
+            for phrase in translated {
                 let names = phrase.components(separatedBy: "${applicationName}").count - 1
                 #expect(names == 1, "\(phrase) names the app \(names) times")
                 let ownParameters = Set(Self.parameters(of: phrase)).subtracting(parameters)
@@ -117,11 +152,12 @@ extension StringCatalogTests {
         (entry["localizations"] as? [String: Any])?[language] as? [String: Any] ?? [:]
     }
 
-    /// The keys of `strings` a translator has words in that have no German.
-    static func untranslated(in strings: [String: Any]) -> [String] {
+    /// The keys of `strings` a translator has words in that have no
+    /// `language` localization.
+    static func untranslated(into language: String, in strings: [String: Any]) -> [String] {
         strings.compactMap { key, value -> String? in
             guard let entry = value as? [String: Any], needsTranslation(key, entry) else { return nil }
-            return localization("de", of: entry).isEmpty ? key : nil
+            return localization(language, of: entry).isEmpty ? key : nil
         }
     }
 
