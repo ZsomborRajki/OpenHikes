@@ -21,6 +21,12 @@
             "state" : "translated",
             "value" : "GPX-Datei"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fichier GPX"
+          }
         }
       }
     },
@@ -38,6 +44,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "OpenHikes uses the camera so you can photograph a hike while you are on it. Photos are kept with that hike, and pinned to the point on the trail you had selected."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes utilise l’appareil photo pour que vous puissiez photographier une randonnée en cours. Les photos sont conservées avec cette randonnée et placées au point du sentier que vous aviez sélectionné."
           }
         }
       }
@@ -57,6 +69,12 @@
             "state" : "new",
             "value" : "OpenHikes connects to Health to save your finished hikes as workouts, including distance and route, when you turn on Save Hikes to Health. OpenHikes reads nothing from Health on your iPhone."
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes se connecte à Santé pour enregistrer vos randonnées terminées comme entraînements, avec leur distance et leur itinéraire, lorsque vous activez « Enregistrer les randonnées dans Santé ». OpenHikes ne lit rien dans Santé sur votre iPhone."
+          }
         }
       }
     },
@@ -74,6 +92,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "OpenHikes saves your finished hikes to Health as hiking workouts, with their distance and route, when you turn on Save Hikes to Health. OpenHikes reads nothing from Health on your iPhone."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes enregistre vos randonnées terminées dans Santé comme entraînements de randonnée, avec leur distance et leur itinéraire, lorsque vous activez « Enregistrer les randonnées dans Santé ». OpenHikes ne lit rien dans Santé sur votre iPhone."
           }
         }
       }
@@ -93,6 +117,12 @@
             "state" : "new",
             "value" : "OpenHikes uses Always location, only when you turn on Background Trail Tracking in Settings, to keep your Home Screen widget and Live Activity showing your progress along the trail while the app isn’t open."
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes utilise l’accès « Toujours » à la position, seulement si vous activez « Suivi du sentier en arrière-plan » dans les réglages de l’app, pour que votre widget de l’écran d’accueil et votre Activité en direct continuent d’afficher votre progression sur le sentier lorsque l’app n’est pas ouverte."
+          }
         }
       }
     },
@@ -110,6 +140,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "OpenHikes uses your location to show where you are on the map and record hikes you choose to start."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes utilise votre position pour indiquer où vous êtes sur la carte et pour enregistrer les randonnées que vous choisissez de démarrer."
           }
         }
       }
@@ -129,6 +165,12 @@
             "state" : "new",
             "value" : "OpenHikes uses motion sensors to improve recorded elevation and infer the trail hiked through GPS gaps."
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes utilise les capteurs de mouvement pour améliorer l’altitude enregistrée et reconstituer le sentier parcouru pendant les interruptions du GPS."
+          }
         }
       }
     },
@@ -146,6 +188,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Turn on “Also Save to Photos” to keep a copy of each hike photo in your photo library, stamped with when and where it was taken."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activez « Enregistrer aussi dans Photos » pour conserver une copie de chaque photo de randonnée dans votre photothèque, avec la date et le lieu de la prise de vue."
           }
         }
       }
@@ -165,6 +213,12 @@
             "state" : "new",
             "value" : "OpenHikes looks through your photo library for pictures you took while on a hike, so it can pin each one to the point on the trail you were standing on. It only reads photos taken during that hike."
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes parcourt votre photothèque à la recherche des photos prises pendant une randonnée, afin de placer chacune au point du sentier où vous vous trouviez. Seules les photos prises pendant cette randonnée sont lues."
+          }
         }
       }
     },
@@ -182,6 +236,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes needs your precise location to record the trail you hike."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes a besoin de votre position exacte pour enregistrer le sentier que vous parcourez."
           }
         }
       }

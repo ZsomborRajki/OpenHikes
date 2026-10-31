@@ -9,6 +9,12 @@
             "state" : "translated",
             "value" : "Abbrechen"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annuler"
+          }
         }
       }
     },
@@ -19,6 +25,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fertig"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
           }
         }
       }
@@ -31,12 +43,24 @@
             "state" : "translated",
             "value" : "Wanderung"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Randonnée"
+          }
         }
       }
     },
     "OpenHikes" : {
       "localizations" : {
         "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes"
+          }
+        },
+        "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes"
@@ -52,6 +76,12 @@
             "state" : "translated",
             "value" : "OpenHikes braucht deinen Standort, bevor es eine Wanderung aufzeichnen kann."
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes a besoin de votre position avant de pouvoir enregistrer une randonnée."
+          }
         }
       }
     },
@@ -63,6 +93,12 @@
             "state" : "translated",
             "value" : "Wanderung pausieren"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mettre la randonnée en pause"
+          }
         }
       }
     },
@@ -73,6 +109,12 @@
             "state" : "translated",
             "value" : "Pausiert"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En pause"
+          }
         }
       }
     },
@@ -82,6 +124,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pausiert, %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En pause, %@"
           }
         }
       }
@@ -94,6 +142,12 @@
             "state" : "translated",
             "value" : "Pausiert die aufgezeichnete Wanderung über ihre Anzeige auf dem Sperrbildschirm."
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Met en pause la randonnée en cours d’enregistrement, depuis son panneau sur l’écran verrouillé."
+          }
         }
       }
     },
@@ -104,6 +158,12 @@
             "state" : "translated",
             "value" : "Aufzeichnung"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrement"
+          }
         }
       }
     },
@@ -113,6 +173,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aufzeichnung, %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrement, %@"
           }
         }
       }
@@ -125,6 +191,12 @@
             "state" : "translated",
             "value" : "Wanderung fortsetzen"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reprendre la randonnée"
+          }
         }
       }
     },
@@ -135,6 +207,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Setzt die pausierte Wanderung über ihre Anzeige auf dem Sperrbildschirm fort."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reprend la randonnée en pause, depuis son panneau sur l’écran verrouillé."
           }
         }
       }
@@ -147,6 +225,12 @@
             "state" : "translated",
             "value" : "Zeigt einen Weg deiner Wahl, deinen ausgewählten Weg oder eine Wanderung, die gerade aufgezeichnet wird."
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Affiche un sentier de votre choix, le sentier sélectionné ou une randonnée en cours d’enregistrement."
+          }
         }
       }
     },
@@ -157,6 +241,12 @@
             "state" : "translated",
             "value" : "Starte eine Aufzeichnung oder sieh dir die laufende an."
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Démarrez un enregistrement ou consultez celui en cours."
+          }
         }
       }
     },
@@ -166,6 +256,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tippen, um eine Wanderung aufzuzeichnen"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Touchez pour enregistrer une randonnée"
           }
         }
       }
@@ -178,6 +274,12 @@
             "state" : "translated",
             "value" : "Wanderaufzeichnung umschalten"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activer/désactiver l’enregistrement"
+          }
         }
       }
     },
@@ -188,6 +290,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Weg"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sentier"
           }
         }
       }
