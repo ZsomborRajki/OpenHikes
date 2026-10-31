@@ -938,6 +938,13 @@ a change to recording, the map, the sheet or the render path; the PR template,
     *une* photo for none (`frenchSingularKeepsTheCount`). Each French plural
     also carries `many`, the form CLDR gives large round numbers, worded as
     `other`.
+  - **One English word that a translation splits takes a second key.** A
+    catalog holds one entry per key, so where English uses one word for two
+    things a translation names apart, the call site that differs reads
+    `String(localized: "<area>.<meaning>", defaultValue: "…")` with the same
+    English. French says « Départ » for a route's start and « Démarrer » on
+    the record button (`recording.start`), and agrees *None* with a place's
+    kind (`place.kind.none`).
   - **A sentence never changes the case of a catalogued word**, because German
     capitalizes every noun. A sentence that names something is passed whole
     (`CommunityMailOutcomeSections.handoffDetail`).
@@ -1288,11 +1295,11 @@ is world-readable, because browsing needs no account.
 - **What is sent is stated, and the statements move together.**
   `CommunityShareDisclosureTests` holds the share footer to the payload. The
   privacy manifest, `docs/privacy/` and `docs/terms/`, with their German and
-  French copies under `docs/de/` and `docs/fr/`, change whenever what is sent changes, what a reviewer may
-  do changes, the removal, *Check Whether It's Still Live*, reset or *Finish
-  Sending* flows change, what the Commons requests ask for or keep changes, or
-  `CommunityPublisher.maximumPhotos` (36) changes. That limit is the first
-  number to lower if storage costs bite.
+  French copies under `docs/de/` and `docs/fr/`, change whenever what is sent
+  changes, what a reviewer may do changes, the removal, *Check Whether It's
+  Still Live*, reset or *Finish Sending* flows change, what the Commons
+  requests ask for or keep changes, or `CommunityPublisher.maximumPhotos` (36)
+  changes. That limit is the first number to lower if storage costs bite.
   App Store Connect's own privacy answers are separate, and the manifest does
   not update them.
 

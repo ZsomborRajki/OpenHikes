@@ -27,7 +27,7 @@
             "state" : "translated",
             "values" : [
               "Quelle distance ai-je parcourue aujourd’hui dans ${applicationName}",
-              "Ma distance ${applicationName} aujourd’hui"
+              "Ma distance du jour dans ${applicationName}"
             ]
           }
         }

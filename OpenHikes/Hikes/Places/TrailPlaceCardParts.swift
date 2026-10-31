@@ -99,7 +99,10 @@ struct TrailPlaceKindPicker: View {
 
     var body: some View {
         Picker("Kind", selection: $selection) {
-            Text("None").tag(TrailPlaceSymbol?.none)
+            // A key of its own for the "None" that other pickers and counts
+            // also read, because French agrees it with the word for a kind:
+            // « Aucun » here, « Aucune » for a coloring, an alert or a photo.
+            Text(String(localized: "place.kind.none", defaultValue: "None")).tag(TrailPlaceSymbol?.none)
             ForEach(TrailPlaceSymbol.allCases, id: \.self) { kind in
                 Label(kind.label, systemImage: kind.systemImageName).tag(Optional(kind))
             }
