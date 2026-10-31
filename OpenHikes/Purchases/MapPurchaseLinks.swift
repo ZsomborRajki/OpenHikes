@@ -14,8 +14,8 @@
 //
 //  ## In the language the app speaks
 //
-//  Those two are published in English and in German, and the app opens the
-//  copy in its own language (``PageLanguage``). A German screen that says
+//  Those two are published in English, German and French, and the app opens
+//  the copy in its own language (``PageLanguage``). A German screen that says
 //  *Datenschutzerklärung* and opens an English page fails the reader the
 //  policy is written for: the GDPR asks for information its audience can
 //  understand, and the transparency guidelines the EDPB endorsed ask for a
@@ -24,6 +24,9 @@
 //  language they cannot be expected to read — the Kammergericht held
 //  WhatsApp's English-only terms void for exactly that (KG Berlin,
 //  5 U 156/14) — and the licence a hiker grants by tapping Share is in them.
+//  France asks for the same in statute: the Toubon law (loi n° 94-665)
+//  requires French for the description and the terms of a service offered
+//  there, so the French app opens French pages too.
 //
 //  Apple's EULA stays one URL, because it is Apple's text and not this app's
 //  to translate.
@@ -40,17 +43,20 @@ enum MapPurchaseLinks {
     /// The languages the privacy policy and the terms are published in, and
     /// the one the app opens them in.
     ///
-    /// English is the site's root and German is `docs/de/`, page for page:
-    /// `docs/de/privacy/index.html` translates `docs/privacy/index.html`, and
-    /// `docs/de/terms/index.html` translates `docs/terms/index.html`. Each
-    /// translation carries its original's effective date, so an English
-    /// change that bumps the date fails `Scripts/check-legal-pages.sh` until
-    /// the German says the same. That script finds the pages by reading the
-    /// quoted URLs below, so spell each one out. A language the app ships has
-    /// to be a case here with a folder there; `MapPurchaseLinksTests` fails
-    /// on one that is not a case, and the script on a folder that is missing.
+    /// English is the site's root, and each translation is a folder named
+    /// for its language, page for page: German is `docs/de/` and French is
+    /// `docs/fr/`, so `docs/fr/privacy/index.html` translates
+    /// `docs/privacy/index.html`, and `docs/fr/terms/index.html` translates
+    /// `docs/terms/index.html`. Each translation carries its original's
+    /// effective date, so an English change that bumps the date fails
+    /// `Scripts/check-legal-pages.sh` until every translation says the same.
+    /// That script finds the pages by reading the quoted URLs below, so spell
+    /// each one out. A language the app ships has to be a case here with a
+    /// folder there; `MapPurchaseLinksTests` fails on one that is not a case,
+    /// and the script on a folder that is missing.
     nonisolated enum PageLanguage: String, CaseIterable, Sendable {
         case english = "en"
+        case french = "fr"
         case german = "de"
 
         /// The language the app is running in: the localization the bundle
@@ -62,7 +68,8 @@ enum MapPurchaseLinks {
         /// English unless the localization's language has pages of its own,
         /// because English is the development language and the pages at the
         /// site's root are English. A regional variant reads its language's
-        /// pages, so `de-AT` and `de-CH` open the German ones.
+        /// pages, so `de-AT` and `de-CH` open the German ones, and `fr-CA` and
+        /// `fr-CH` the French ones.
         init(localization: String?) {
             let code = localization.flatMap { Locale.Language(identifier: $0).languageCode?.identifier }
             self = code.flatMap(Self.init(rawValue:)) ?? .english
@@ -71,6 +78,7 @@ enum MapPurchaseLinks {
         var privacyPolicy: URL {
             switch self {
             case .english: URL(string: "https://zsomborrajki.github.io/OpenHikes/privacy/")!
+            case .french: URL(string: "https://zsomborrajki.github.io/OpenHikes/fr/privacy/")!
             case .german: URL(string: "https://zsomborrajki.github.io/OpenHikes/de/privacy/")!
             }
         }
@@ -78,6 +86,7 @@ enum MapPurchaseLinks {
         var termsAndConditions: URL {
             switch self {
             case .english: URL(string: "https://zsomborrajki.github.io/OpenHikes/terms/")!
+            case .french: URL(string: "https://zsomborrajki.github.io/OpenHikes/fr/terms/")!
             case .german: URL(string: "https://zsomborrajki.github.io/OpenHikes/de/terms/")!
             }
         }
@@ -99,10 +108,12 @@ enum MapPurchaseLinks {
     ///   review for the whole binary rather than just the purchase. It is also
     ///   the URL that goes in the App Privacy section of App Store Connect,
     ///   and the two are expected to match — the English page for the English
-    ///   localization there, the German page for the German one.
+    ///   localization there, the German page for the German one, the French
+    ///   page for the French one.
     ///
     ///   The page is served from this repository: `docs/privacy/index.html`,
-    ///   or `docs/de/privacy/index.html` in German, published by GitHub Pages
+    ///   or `docs/de/privacy/index.html` in German and
+    ///   `docs/fr/privacy/index.html` in French, published by GitHub Pages
     ///   from `main`. Edit the policy there rather than pointing this somewhere
     ///   else, so the text a reviewer opens and the text in the repository
     ///   cannot drift apart.
@@ -120,10 +131,11 @@ enum MapPurchaseLinks {
     /// they tapped it on.
     ///
     /// Served from this repository — `docs/terms/index.html`, or
-    /// `docs/de/terms/index.html` in German, published by GitHub Pages from
-    /// `main` — for the reason ``privacyPolicy`` is: edit the page there
-    /// rather than pointing this somewhere else, so the text a reviewer opens
-    /// and the text in the repository cannot drift.
+    /// `docs/de/terms/index.html` in German and `docs/fr/terms/index.html` in
+    /// French, published by GitHub Pages from `main` — for the reason
+    /// ``privacyPolicy`` is: edit the page there rather than pointing this
+    /// somewhere else, so the text a reviewer opens and the text in the
+    /// repository cannot drift.
     static let termsAndConditions = PageLanguage.app.termsAndConditions
 
     // swiftlint:enable force_unwrapping

@@ -3,8 +3,8 @@
 //  OpenHikesTests
 //
 //  What the app's String Catalog changes at run time in English, the
-//  development language (#32). The German is held to the English in
-//  `StringCatalogTests+German.swift`.
+//  development language (#32). The German and French are held to the English
+//  in `StringCatalogTests+Translations.swift`.
 //
 //  Not whether every string is *in* it. An English key with no English entry
 //  of its own is not compiled into the bundle at all — the key is the
