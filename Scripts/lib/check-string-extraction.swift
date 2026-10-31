@@ -109,7 +109,7 @@ private final class ExtractionCheck: SyntaxVisitor {
            let call = argument.parent?.parent?.as(FunctionCallExprSyntax.self) {
             let name = callName(call)
             let label = argument.label?.text ?? "_"
-            if name == "String", ["localized", "comment"].contains(label) { return true }
+            if name == "String", ["localized", "defaultValue", "comment"].contains(label) { return true }
             if ["LocalizedStringKey", "LocalizedStringResource"].contains(name) { return true }
             if parameters[name]?.contains(label) == true { return true }
         }
@@ -243,6 +243,7 @@ private func selfTest() -> Int? {
         (#"Text(verbatim: "A sentence hidden from extraction.")"#, 1),
         (#"Text("A sentence the compiler extracts.")"#, 0),
         (#"String(localized: "A sentence the compiler extracts.")"#, 0),
+        (#"String(localized: "recording.start", defaultValue: "Start")"#, 0),
         (#"struct Figure { let title: LocalizedStringKey }; Figure(title: "Current Speed")"#, 0),
         (#"func caption(_ title: LocalizedStringKey) {}; caption("Current Speed")"#, 0),
         (#"var title: LocalizedStringResource { "Current Speed" }"#, 0),
