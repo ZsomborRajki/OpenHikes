@@ -23,23 +23,25 @@
 //  on the hiker's map, and the map already belongs to something — a selected
 //  route, drawn in a colour they chose, possibly with a walk highlighted along
 //  it. A shared hike must be legible without ever competing with that, so it
-//  is drawn at half strength and underneath the hiker's own route. Where the
-//  two cross, theirs wins.
+//  is drawn faded and underneath the hiker's own route. Where the two cross,
+//  theirs wins. The rest of the hiker's library is drawn faded too, and a
+//  little less so, over these: a hike they keep is theirs, whether or not it
+//  came from here — see `MapLibraryLines.swift`.
 //
 //  *Underneath* is a position within one level rather than a level of its
 //  own: everything this app draws is at ``MKOverlayLevel/aboveLabels``, and a
 //  shared line put below that is buried rather than faint. The order there is
-//  the ground, then these, then the hiker's route — see
-//  ``applyCommunityRoutes(_:on:)``, which explains what the opaque tile
-//  overlay does to anything drawn beneath it.
+//  the ground, then these, then the hiker's library, then their selected
+//  route — see ``applyCommunityRoutes(_:on:)``, which explains what the
+//  opaque tile overlay does to anything drawn beneath it.
 //
 //  Each is outlined as every other line on this map is — a hike's own, the
 //  trail being drawn, a recording — in the black a hike's line wears until
 //  its owner picks a colour (``RouteStyle/defaultBorder``), so a shared trail
 //  over a green valley does not disappear into it. Faded with the line: an
-//  opaque outline round a half-strength line would be the one part of it
-//  drawn at full strength. And not the hiker's own border colour, which
-//  belongs to their route for the reason its tint does.
+//  opaque outline round a faded line would be the one part of it drawn at
+//  full strength. And not the hiker's own border colour, which belongs to
+//  their route for the reason its tint does.
 //
 //  The outline costs these lines their being thinner. A faded line is 5.8 pt
 //  across with it, against 5 for a hike's own line at its default width, so
@@ -96,9 +98,12 @@ struct CommunityRouteDrawing {
 // MARK: - Shared hikes as lines on the map
 
 extension MapView.Coordinator {
-    /// Half strength, which is what makes a shared hike read as somebody
-    /// else's without making it hard to see.
-    private static let communityRouteAlpha: CGFloat = 0.5
+    /// Under half strength, which is what makes a shared hike read as
+    /// somebody else's without making it hard to see — and fainter than the
+    /// hiker's own hikes, ``libraryLineAlpha``, which are drawn the same way
+    /// and could otherwise be mistaken for these. Internal so a suite can hold
+    /// the two apart.
+    static let communityRouteAlpha: CGFloat = 0.4
     private static let communityRouteWidth: CGFloat = 3.5
     /// The open preview's own line: full strength and a little wider, because
     /// its screen no longer draws the route anywhere else.
@@ -175,9 +180,10 @@ extension MapView.Coordinator {
     /// Being underneath is therefore a position within that level rather than
     /// a level of its own: each line goes just above the tile overlays — the
     /// map's, and the hiking-route layer's when it is on, which is what
-    /// ``groundOverlay`` names — the bottom of everything the app draws.
-    /// `MapView`'s own route anchors on the topmost of these in turn, so
-    /// theirs stays on top however the two arrive.
+    /// ``groundOverlay`` names — the bottom of everything the app draws. The
+    /// library's lines go on over the topmost of these, and `MapView`'s own
+    /// route over those, so the hiker's stay on top however they arrive — see
+    /// `MapLibraryLines.swift`.
     ///
     /// The position is computed rather than timed, which is the second half of
     /// the same bug: `makeMapView` starts these observations *before* it

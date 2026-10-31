@@ -365,6 +365,10 @@ extension MapView {
         /// — see `MapCommunityRoutes.swift`, which owns everything that reads
         /// this.
         var communityRoutes: [CommunityRouteDrawing] = []
+        /// The hiker's own hikes' lines, drawn faded over those and beneath
+        /// the selected route — see `MapLibraryLines.swift`, which owns
+        /// everything that reads this.
+        var libraryMap = LibraryLinesMapState()
         /// The dot on the open preview's line that stands for its elevation
         /// chart's marker — see `MapCommunityPreviewHighlight.swift`, which
         /// owns everything that reads this. `nil` whenever no preview is
@@ -911,6 +915,11 @@ extension MapView.Coordinator {
     func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
         if let matchedTileOverlay = overlay as? TileOverlay {
             return CachingTileOverlayRenderer(overlay: matchedTileOverlay)
+        }
+        // Every hike in the library but the selected one, in one overlay —
+        // see `LibraryLinesRenderer.swift`.
+        if let library = overlay as? LibraryLinesOverlay {
+            return libraryLinesRenderer(for: library)
         }
         if let polyline = overlay as? MKPolyline {
             if let renderer = walkHighlightRenderer(for: polyline) {

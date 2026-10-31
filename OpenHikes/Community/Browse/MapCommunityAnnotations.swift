@@ -147,10 +147,14 @@ extension MapView.Coordinator {
     /// Guarded on a change, because the maker's pass calls this on every
     /// frame of a drag. Re-applied from the browser rather than remembered,
     /// so what comes back is whatever the tab holds by then.
+    ///
+    /// The hiker's own hikes go and come back with them, for the same reason —
+    /// see `MapLibraryLines.swift`.
     func withdrawCommunityForDrawing(_ drawing: Bool, on mapView: MKMapView) {
         guard isDrawingTrail != drawing else { return }
         // The flag every half reads, set by the pill's rule.
         withdrawAreaSearchForDrawing(drawing)
+        applyLibraryLines(on: mapView)
         guard let community else { return }
         applyCommunityAnswer(community, on: mapView)
         applyCommunityRoutes(drawnCommunityRoutes(of: community), on: mapView)
@@ -188,7 +192,7 @@ extension MapView.Coordinator {
     ///
     /// Still not the hiker's *own* route tint, which is a different thing
     /// entirely and belongs to the hike they selected. These stay underneath
-    /// it and at half strength — see ``MapCommunityRoutes``.
+    /// it, faded — see ``MapCommunityRoutes``.
     func communityAnnotationView(
         for annotation: CommunityMapAnnotation,
         on mapView: MKMapView

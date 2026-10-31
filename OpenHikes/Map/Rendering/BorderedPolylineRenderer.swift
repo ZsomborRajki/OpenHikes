@@ -85,8 +85,8 @@ nonisolated final class BorderedPolylineRenderer: MKPolylineRenderer {
     /// that makes the border's copy a ring clears the *map* under the line
     /// too. An opaque line paints all of it back; a translucent one is laid
     /// over the empty grid behind the tiles, which shows white, instead of
-    /// over the map — a shared hike's half-strength line came out a flat
-    /// pale stripe, the street names under it gone. Inside a layer the clear
+    /// over the map — a shared hike's faded line came out a flat pale
+    /// stripe, the street names under it gone. Inside a layer the clear
     /// reaches only the copy this draw put there, and the layer is laid over
     /// the map as one.
     ///

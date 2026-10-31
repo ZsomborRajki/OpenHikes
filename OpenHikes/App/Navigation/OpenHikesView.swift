@@ -319,6 +319,7 @@ struct OpenHikesView: View {
             recordingEntry: appModel.recordingEntry,
             community: appModel.community,
             searchCompleter: appModel.searchCompleter,
+            libraryLines: appModel.libraryLines,
             // Keeps the credit line and the camera pill beside the landscape
             // panel instead of behind it.
             sidePanelInset: usesSidePanel ? MapSidePanelLayout.mapInset : 0,
@@ -371,6 +372,16 @@ struct OpenHikesView: View {
             .task {
                 if !AppLaunchEnvironment.isRunningTests {
                     await appModel.pollWeather()
+                }
+            }
+            // Every hike's line, read off the main actor and kept current for
+            // as long as the map is up — see ``LibraryLines``. At `.utility`,
+            // which the reads inherit, so a long library does not compete
+            // with the hiker's taps. Not for a hosted suite, whose host opens
+            // the developer's own store.
+            .task(priority: .utility) {
+                if !AppLaunchEnvironment.isHostingTests {
+                    await appModel.libraryLines.follow(in: modelContext.container)
                 }
             }
             .task { await importRequestedGPXFixture() }

@@ -6,18 +6,20 @@
 //
 //  MapKit hit-tests annotations and never overlays: a polyline is drawn pixels
 //  with no view behind it, so without a recognizer of our own every line on
-//  this map is scenery. There are two kinds drawn — the hiker's own selected
-//  route, and the shared hikes faded beneath it — and this file is here
-//  because *one* recognizer has to answer for both.
+//  this map is scenery. There are three kinds drawn — the hiker's own selected
+//  route, the rest of their library faded beneath it, and the shared hikes
+//  faded beneath those — and this file is here because *one* recognizer has
+//  to answer for all three.
 //
-//  Two would not. They would both recognize the same tap (they have to; see
+//  More would not. They would all recognize the same tap (they have to; see
 //  `shouldRecognizeSimultaneouslyWith` below), so a thumb where the lines
 //  cross would open a hike *and* somebody else's preview, and which of them
 //  ended up on top would be gesture-resolution order rather than a decision
 //  anybody made. So the gesture, the check that nothing above the map has a
-//  better claim to the touch, and the order the two hit-tests are asked in all
+//  better claim to the touch, and the order the hit-tests are asked in all
 //  live here, and each kind of line keeps only the part that knows what it is:
-//  ``communityListing(forTapAt:in:)`` in `MapCommunityRoutes.swift`, and
+//  ``communityListing(forTapAt:in:)`` in `MapCommunityRoutes.swift`,
+//  ``libraryHikeID(forTapAt:in:)`` in `MapLibraryLines.swift`, and
 //  ``isTapOnDrawnRoute(at:in:)`` below.
 //
 //  ## While the trail maker is up
@@ -31,17 +33,20 @@
 //  ## The hiker's own line wins
 //
 //  It is drawn on top, it is drawn at full strength and the hiker chose its
-//  colour, so it is the one they can see under their thumb where the two
-//  overlap. Asking it first is the whole of that rule.
+//  colour, so it is the one they can see under their thumb where the lines
+//  overlap. Asking it first is the whole of that rule, and the rest are asked
+//  in the order they are drawn, top down: the library's, then the shared
+//  hikes'.
 //
 //  ## What a tap costs
 //
-//  Both hit-tests project their points through the map, because the tolerance
+//  Every hit-test projects its points through the map, because the tolerance
 //  is a fingertip and a fingertip is a distance on the glass — see
 //  ``RouteHitTest``. A page of shared lines is bounded by an outline's point
-//  budget, but the hiker's own route is not bounded by anything: a six-hour
-//  recording is twenty thousand points, measured at 2.2 ms to project and
-//  0.05 ms to then measure against.
+//  budget, and so is each line of the library, which asks each run's bounding
+//  rectangle first for the reason below. The hiker's own route is not bounded
+//  by anything: a six-hour recording is twenty thousand points, measured at
+//  2.2 ms to project and 0.05 ms to then measure against.
 //
 //  Which is why the drawn route is asked for its bounding rectangle first.
 //  MapKit converts that rectangle in one call, whatever the camera is doing to
@@ -61,15 +66,19 @@ import UIKit
 /// An enumeration rather than two optionals, because the point of asking once
 /// is that the answer is one thing.
 enum RouteTapTarget: Equatable {
-    /// A published hike, drawn faded beneath the hiker's own route.
+    /// A published hike, drawn faded beneath the hiker's own routes.
     case communityListing(CommunityListing)
-    /// The hiker's own drawn route — the selected hike's, and the only one of
-    /// theirs the map ever draws.
+    /// The hiker's own drawn route — the selected hike's, the one of theirs
+    /// the map draws properly.
     case drawnRoute
+    /// One of the hiker's own hikes that is not selected, drawn faded beneath
+    /// the selected route — see `MapLibraryLines.swift`.
+    case libraryHike(UUID)
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         switch (lhs, rhs) {
         case let (.communityListing(left), .communityListing(right)): left.id == right.id
+        case let (.libraryHike(left), .libraryHike(right)): left == right
         case (.drawnRoute, .drawnRoute): true
         default: false
         }
@@ -226,6 +235,7 @@ extension MapView.Coordinator: UIGestureRecognizerDelegate {
         if target != nil { HapticMoment.targetHit.play() }
         switch target {
         case .drawnRoute: drawnRouteTap?.open()
+        case let .libraryHike(hikeID): libraryMap.library?.open(hikeID: hikeID)
         case let .communityListing(listing): community?.open(listing)
         case nil: break
         }
@@ -324,6 +334,7 @@ extension MapView.Coordinator: UIGestureRecognizerDelegate {
     func routeTapTarget(at point: CGPoint, in mapView: MKMapView) -> RouteTapTarget? {
         guard !isTapClaimed(at: point, in: mapView) else { return nil }
         if isTapOnDrawnRoute(at: point, in: mapView) { return .drawnRoute }
+        if let hikeID = libraryHikeID(forTapAt: point, in: mapView) { return .libraryHike(hikeID) }
         return communityListing(forTapAt: point, in: mapView).map(RouteTapTarget.communityListing)
     }
 

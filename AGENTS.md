@@ -533,6 +533,15 @@ a change to recording, the map, the sheet or the render path; the PR template,
   observes stable controllers and updates `MKMapView` directly. Tiles flow
   through `CachingTileOverlayRenderer` into `TileCache`, auto-saves through
   `AutoSaveTileStore`, and bulk downloads through `OfflineTileDownloader`.
+- **Every hike in the library is on the map** (`LibraryLines`), faded
+  beneath the selected route, which it leaves out, and over the shared
+  hikes' lines.
+  - A line is read once, off the main actor, and thinned to a budget
+    (`LibraryLineOutline`). It is read again only when its row is saved:
+    `ModelContext.didSave` names the main context's saves, the store's
+    history an import's. Never by observing `route`.
+  - One overlay and one renderer draw them all (`LibraryLinesRenderer`), so
+    hikes over the same trail do not stack into a solid line.
 - **A drawn trail is an ordinary `Hike`.** `TrailDraftSave` writes the same row
   a GPX import does, plus `Hike.drawnRouteData` (a `DrawnRoute`), which is what
   *Edit Route* reads. That column is `nil` on recordings and imports.

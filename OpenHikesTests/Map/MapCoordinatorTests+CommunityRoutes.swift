@@ -139,8 +139,8 @@ extension MapCoordinatorTests {
         #expect(restored.allSatisfy { polyline in map.overlays.contains { $0 === polyline } })
     }
 
-    /// Somebody else's trail at half strength, so it is legible without ever
-    /// competing with the route the hiker chose a colour for.
+    /// Somebody else's trail, faded, so it is legible without ever competing
+    /// with the route the hiker chose a colour for.
     @Test("a shared hike's line is drawn faded")
     func aSharedLineIsFaded() async throws {
         let browser = await browserWithLines(
