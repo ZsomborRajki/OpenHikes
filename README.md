@@ -14,7 +14,7 @@ There is no OpenHikes account and no server holding your hikes: they live on the
 - **Places** along a trail: huts, springs and waterfalls from OpenStreetMap, or places of your own, with your photographs and, where OpenStreetMap links one, the start of the place's Wikipedia article.
 - **Walking a saved trail**, with progress along it, a history of past walks and a shareable photo card.
 - **Statistics**: an interactive elevation profile, overall and moving average speed, surface and Swiss Alpine Club difficulty from OpenStreetMap, and yearly and all-time totals.
-- **Maps**: OpenStreetMap, Apple's standard and satellite maps, Stadia Outdoors, Stamen Terrain and Thunderforest Outdoors, with an optional Waymarked Trails layer. Tiles you browse are saved as you go, and a route's map can be downloaded where the provider allows it.
+- **Maps**: OpenStreetMap, Apple's standard and satellite maps, Stadia Outdoors, Stamen Terrain and Thunderforest Outdoors, with an optional Waymarked Trails layer and every hike in your library drawn faintly on top. Tiles you browse are saved as you go, and a route's map can be downloaded where the provider allows it.
 - **Photos** taken on a walk or picked from the library, pinned to where on the trail they were taken.
 - **Weather** from WeatherKit: now, the next twelve hours and the week ahead.
 - **Widget and Live Activity**: the trail, or the recording in progress, on the Home Screen, the Lock Screen and in the Dynamic Island.

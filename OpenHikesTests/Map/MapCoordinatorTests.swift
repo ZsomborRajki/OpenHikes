@@ -121,7 +121,11 @@ struct MapCoordinatorTests {
         placePins: TrailPlacePinController? = nil,
         // And for the reason `trailMaker` is: the suite's own has no trail
         // graph to measure a route against.
-        routeShading: RouteShading? = nil
+        routeShading: RouteShading? = nil,
+        // And for the reason `community` is: one file's worth of tests needs
+        // the hiker's other hikes on the map — see
+        // `MapCoordinatorTests+LibraryLines.swift`.
+        libraryLines: LibraryLines? = nil
     ) -> MapView {
         MapView(
             locationManager: locationManager ?? self.locationManager,
@@ -144,6 +148,7 @@ struct MapCoordinatorTests {
             recordingEntry: recordingEntry,
             community: community,
             searchCompleter: searchCompleter,
+            libraryLines: libraryLines ?? LibraryLines(openRequests: openRequests),
             sidePanelInset: sidePanelInset,
             isCoveredByPanel: isCoveredByPanel
         )

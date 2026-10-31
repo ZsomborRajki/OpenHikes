@@ -97,6 +97,11 @@ final class OpenHikesModel {
         walkSession: walkSession,
         openRequests: hikeOpenRequests
     )
+    /// Every hike in the library, as the map draws it faded beneath the
+    /// selected one, read off the main actor by the task the map's view
+    /// starts. Built on first use for the reason ``recordingEntry`` is; a tap
+    /// on one opens through ``hikeOpenRequests``. See ``LibraryLines``.
+    @ObservationIgnored private(set) lazy var libraryLines = LibraryLines(openRequests: hikeOpenRequests)
     /// The first-run tips, or `nil` for a launch that shows none. Loaded by
     /// ``startTips()`` rather than in `init`, which is at its length limit and
     /// runs for suites that build their own model — see ``AppTips``.

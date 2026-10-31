@@ -163,11 +163,10 @@ struct BorderedPolylineRendererTests {
         #expect(bordered.pixel(x: 100, row: row) == plain.pixel(x: 100, row: row))
     }
 
-    /// The shared hikes' lines are half strength, outlined at half strength.
-    /// The ring is cut by clearing the line's stroke out of the copy under
-    /// it. Drawn straight into the tile, that clear took the map out from
-    /// under the line as well, and the half-strength line was laid over
-    /// nothing.
+    /// The shared hikes' lines are faded, and outlined faded too. The ring
+    /// is cut by clearing the line's stroke out of the copy under it. Drawn
+    /// straight into the tile, that clear took the map out from under the
+    /// line as well, and the faded line was laid over nothing.
     @Test("a translucent bordered line leaves the map under it")
     func translucentBorderedLineKeepsTheMap() throws {
         let polyline = DirectionalPolylineRendererTests.line()

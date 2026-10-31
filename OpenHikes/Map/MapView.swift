@@ -146,6 +146,11 @@ struct MapView: MapViewRepresentable, Equatable {
     /// reason ``community`` is — see ``SearchCompleter/regionDidSettle(_:)``.
     var searchCompleter: SearchCompleter
 
+    /// Every other hike in the library, drawn faded beneath the selected one.
+    /// Observed directly by the map (not via SwiftUI) so a line landing adds
+    /// it to MapKit and re-renders no view — see ``LibraryLines``.
+    var libraryLines: LibraryLines
+
     /// How far the landscape side panel reaches in from the leading edge, or
     /// zero in portrait where there is no panel and the sheet is over the map
     /// instead.
@@ -219,6 +224,9 @@ struct MapView: MapViewRepresentable, Equatable {
         // here — theirs and the hiker's own — would be scenery. One
         // recognizer answers for both; see `MapCoordinator+RouteTap.swift`.
         coordinator.observeCommunityRoutes(community, on: mapView)
+        // And the hiker's own hikes, over those and under the selected one —
+        // see `MapLibraryLines.swift`. The same recognizer answers for them.
+        coordinator.observeLibraryLines(libraryLines, on: mapView)
         #if canImport(UIKit)
         coordinator.installRouteTap(on: mapView)
         // And the press that moves a point already down. A separate
@@ -559,6 +567,10 @@ struct MapView: MapViewRepresentable, Equatable {
         guard isNewHike || coordinator.routeRevision != route?.revision else { return }
         coordinator.routeID = route?.id
         coordinator.routeRevision = route?.revision
+        // The library draws every hike but the one drawn here — see
+        // `MapLibraryLines.swift`. Asked on every way out below, a route
+        // taken away included.
+        coordinator.applyLibraryLines(on: mapView)
 
         if let existing = coordinator.routeOverlay {
             mapView.removeOverlay(existing)
@@ -597,12 +609,15 @@ struct MapView: MapViewRepresentable, Equatable {
         // from that call on.
         coordinator.cutRoute(route)
         if let ground = coordinator.groundOverlay {
-            // Above the shared hikes' lines when any are drawn, rather than
-            // above the tiles they are anchored on: both sit in this level,
-            // and naming the tile overlay here would slide this line
-            // underneath theirs. See `MapCommunityRoutes.swift`, which keeps
-            // the topmost of them last.
-            let below: any MKOverlay = coordinator.communityRoutes.last?.polyline ?? ground
+            // Above the library's lines and the shared hikes' when any are
+            // drawn, rather than above the tiles they are anchored on: all of
+            // them sit in this level, and naming the tile overlay here would
+            // slide this line underneath theirs. See `MapLibraryLines.swift`,
+            // which puts its overlay over the topmost of the shared ones,
+            // which `MapCommunityRoutes.swift` keeps last.
+            let below: any MKOverlay = coordinator.libraryMap.overlay
+                ?? coordinator.communityRoutes.last?.polyline
+                ?? ground
             mapView.insertOverlay(polyline, above: below)
         } else {
             mapView.addOverlay(polyline, level: .aboveLabels)
@@ -852,6 +867,7 @@ extension MapView {
             && lhs.recordingEntry === rhs.recordingEntry
             && lhs.community === rhs.community
             && lhs.searchCompleter === rhs.searchCompleter
+            && lhs.libraryLines === rhs.libraryLines
             && lhs.sidePanelInset == rhs.sidePanelInset
             && lhs.isCoveredByPanel == rhs.isCoveredByPanel
     }
