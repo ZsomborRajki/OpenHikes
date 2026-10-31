@@ -930,7 +930,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
     (*Réglages*, *Santé*, *Plans*), and people are named without a gender
     where French allows it (*une autre personne*). Quotes are « … », a no-break
     space goes before : ; ? ! and %, the apostrophe is ’, a dash is a spaced –,
-    and an ellipsis follows the word with no space.
+    and an ellipsis follows the word with no space. The Siri phrases are what
+    the hiker says to Siri, so they take the imperative people speak to it in
+    (*Démarre une randonnée dans OpenHikes*).
   - **A French singular keeps its number.** French uses the `one` form for 0
     as well as 1, so a singular that spells the count out as a word would say
     *une* photo for none (`frenchSingularKeepsTheCount`). Each French plural

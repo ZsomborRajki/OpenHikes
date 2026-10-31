@@ -18,6 +18,12 @@
             "state" : "translated",
             "value" : "%@ insgesamt"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ au total"
+          }
         }
       }
     },
@@ -33,6 +39,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@ of climb, %2$@ of descent"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ de dénivelé positif, %2$@ de dénivelé négatif"
           }
         }
       }
@@ -74,6 +86,30 @@
               }
             }
           }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld randonnées en attente de votre iPhone"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld randonnée en attente de votre iPhone"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld randonnées en attente de votre iPhone"
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -83,6 +119,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld Prozent"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld pour cent"
           }
         }
       }
@@ -94,6 +136,12 @@
             "state" : "translated",
             "value" : "Eine Wanderung wurde unterbrochen – siehe „Aufzeichnen“"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Randonnée interrompue – voir « Enregistrer »"
+          }
         }
       }
     },
@@ -103,6 +151,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ein Training konnte nicht gestartet werden, daher würde eine Aufzeichnung das Ausschalten des Bildschirms nicht überstehen."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de démarrer un entraînement : un enregistrement ne survivrait pas à la mise en veille de l’écran."
           }
         }
       }
@@ -114,6 +168,12 @@
             "state" : "translated",
             "value" : "Dein iPhone wird nach deinen Wegen gefragt …"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demande de vos sentiers à votre iPhone…"
+          }
         }
       }
     },
@@ -123,6 +183,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Durchschnittsgeschwindigkeit"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vitesse moyenne"
           }
         }
       }
@@ -134,6 +200,12 @@
             "state" : "translated",
             "value" : "Ø Geschw."
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vitesse moy."
+          }
         }
       }
     },
@@ -143,6 +215,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bring dein iPhone mit installiertem OpenHikes in die Nähe, um deine Wege zu übertragen."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Approchez votre iPhone, avec OpenHikes installé, pour transférer vos sentiers."
           }
         }
       }
@@ -155,6 +233,12 @@
             "state" : "translated",
             "value" : "Abbrechen"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annuler"
+          }
         }
       }
     },
@@ -164,6 +248,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aufstieg"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dénivelé +"
           }
         }
       }
@@ -175,6 +265,12 @@
             "state" : "translated",
             "value" : "Weiter"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continuer"
+          }
         }
       }
     },
@@ -184,6 +280,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Verwerfen"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer"
           }
         }
       }
@@ -195,6 +297,12 @@
             "state" : "translated",
             "value" : "Wanderung verwerfen"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer la randonnée"
+          }
         }
       }
     },
@@ -204,6 +312,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Diese Wanderung verwerfen?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer cette randonnée ?"
           }
         }
       }
@@ -215,6 +329,12 @@
             "state" : "translated",
             "value" : "Distanz"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Distance"
+          }
         }
       }
     },
@@ -224,6 +344,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fertig"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terminé"
           }
         }
       }
@@ -235,6 +361,12 @@
             "state" : "translated",
             "value" : "Dieser Weg wird von deinem iPhone geladen …"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Récupération de ce sentier depuis votre iPhone…"
+          }
         }
       }
     },
@@ -244,6 +376,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Deine Position auf dem Weg wird gesucht …"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recherche de votre position sur le sentier…"
           }
         }
       }
@@ -255,6 +393,12 @@
             "state" : "translated",
             "value" : "Deine Position wird gesucht …"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recherche de votre position…"
+          }
         }
       }
     },
@@ -264,6 +408,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ziel"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrivée"
           }
         }
       }
@@ -275,6 +425,12 @@
             "state" : "translated",
             "value" : "Deinem Standort folgen"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suivre votre position"
+          }
         }
       }
     },
@@ -284,6 +440,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Puls"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pouls"
           }
         }
       }
@@ -296,6 +458,12 @@
             "state" : "translated",
             "value" : "Wanderung"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Randonnée"
+          }
         }
       }
     },
@@ -305,6 +473,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wanderung unterbrochen"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Randonnée interrompue"
           }
         }
       }
@@ -316,6 +490,12 @@
             "state" : "translated",
             "value" : "Wanderung behalten"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Randonnée conservée"
+          }
         }
       }
     },
@@ -325,6 +505,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wanderung nicht gespeichert"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Randonnée non enregistrée"
           }
         }
       }
@@ -336,6 +522,12 @@
             "state" : "translated",
             "value" : "Importiere eine GPX-Datei oder zeichne eine Wanderung auf deinem iPhone auf, dann erscheint sie hier."
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importez un fichier GPX ou enregistrez une randonnée sur votre iPhone, et elle apparaîtra ici."
+          }
         }
       }
     },
@@ -345,6 +537,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Installiere OpenHikes auf dem iPhone, das mit dieser Watch gekoppelt ist, um Wege zu übertragen."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Installez OpenHikes sur l’iPhone jumelé à cette montre pour transférer des sentiers."
           }
         }
       }
@@ -356,6 +554,12 @@
             "state" : "translated",
             "value" : "Sie wurde nirgends gespeichert und kann daher nicht wiederhergestellt werden."
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elle n’a été enregistrée nulle part et ne peut donc pas être récupérée."
+          }
         }
       }
     },
@@ -365,6 +569,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Letzte Wanderung nicht gespeichert"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dernière randonnée non enregistrée"
           }
         }
       }
@@ -376,6 +586,12 @@
             "state" : "translated",
             "value" : "Zuletzt auf %@"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dernièrement sur %@"
+          }
         }
       }
     },
@@ -385,6 +601,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Übrig"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restant"
           }
         }
       }
@@ -396,6 +618,12 @@
             "state" : "translated",
             "value" : "Der Standort ist deaktiviert, daher wird deine Position nicht angezeigt."
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Localisation désactivée : votre position n’est pas affichée."
+          }
         }
       }
     },
@@ -405,6 +633,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Karte von %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Carte de %@"
           }
         }
       }
@@ -416,6 +650,12 @@
             "state" : "translated",
             "value" : "Kein OpenHikes auf deinem iPhone"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes absent de votre iPhone"
+          }
         }
       }
     },
@@ -425,6 +665,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Noch keine Wege"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun sentier pour l’instant"
           }
         }
       }
@@ -436,6 +682,12 @@
             "state" : "translated",
             "value" : "Keine Aufzeichnung"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrement impossible"
+          }
         }
       }
     },
@@ -445,6 +697,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Abseits"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Écart"
           }
         }
       }
@@ -457,6 +715,12 @@
             "state" : "translated",
             "value" : "Auf Kurs"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun"
+          }
         }
       }
     },
@@ -466,6 +730,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Auf deinem iPhone"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sur votre iPhone"
           }
         }
       }
@@ -477,6 +747,12 @@
             "state" : "translated",
             "value" : "OpenHikes braucht Standortzugriff, um eine Wanderung aufzuzeichnen."
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes a besoin d’accéder à votre position pour enregistrer une randonnée."
+          }
         }
       }
     },
@@ -486,6 +762,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes braucht die Erlaubnis, ein Training zu starten – nur so läuft eine Aufzeichnung weiter."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes a besoin de votre autorisation pour démarrer un entraînement, ce qui permet à l’enregistrement de continuer."
           }
         }
       }
@@ -498,6 +780,12 @@
             "state" : "translated",
             "value" : "OpenHikes braucht deinen Standort, bevor es eine Wanderung aufzeichnen kann."
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes a besoin de votre position avant de pouvoir enregistrer une randonnée."
+          }
         }
       }
     },
@@ -507,6 +795,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pausieren"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pause"
           }
         }
       }
@@ -519,6 +813,12 @@
             "state" : "translated",
             "value" : "Wanderung pausieren"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mettre la randonnée en pause"
+          }
         }
       }
     },
@@ -528,6 +828,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aufzeichnung pausieren"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mettre l’enregistrement en pause"
           }
         }
       }
@@ -539,6 +845,12 @@
             "state" : "translated",
             "value" : "Aufzeichnung auf deinem iPhone pausieren"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mettre l’enregistrement en pause sur votre iPhone"
+          }
         }
       }
     },
@@ -548,6 +860,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pausiert. Die Strecke, die du jetzt zurücklegst, gehört nicht zur Wanderung."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En pause. La distance que vous parcourez maintenant ne compte pas dans la randonnée."
           }
         }
       }
@@ -560,6 +878,12 @@
             "state" : "translated",
             "value" : "Pausiert die aufgezeichnete Wanderung über ihre Anzeige auf dem Sperrbildschirm."
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Met en pause la randonnée en cours d’enregistrement, depuis son panneau sur l’écran verrouillé."
+          }
         }
       }
     },
@@ -569,6 +893,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fortschritt entlang des Weges"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Progression sur le sentier"
           }
         }
       }
@@ -580,6 +910,12 @@
             "state" : "translated",
             "value" : "Aufzeichnen"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrer"
+          }
         }
       }
     },
@@ -589,6 +925,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Diese Wanderung aufzeichnen"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrer cette randonnée"
           }
         }
       }
@@ -600,6 +942,12 @@
             "state" : "translated",
             "value" : "Aufzeichnung"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrement"
+          }
         }
       }
     },
@@ -609,6 +957,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aufzeichnung um %@ beendet. Alles davor bleibt erhalten."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrement arrêté à %@. Tout ce qui précède est conservé."
           }
         }
       }
@@ -620,6 +974,12 @@
             "state" : "translated",
             "value" : "Zeichnet auf dieser Watch auf, mit oder ohne dein iPhone. Die Wanderung geht an dein iPhone, sobald es wieder in Reichweite ist."
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistre sur cette montre, avec ou sans votre iPhone. La randonnée est envoyée à votre iPhone dès qu’il est de nouveau à portée."
+          }
         }
       }
     },
@@ -629,6 +989,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fortsetzen"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reprendre"
           }
         }
       }
@@ -641,6 +1007,12 @@
             "state" : "translated",
             "value" : "Wanderung fortsetzen"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reprendre la randonnée"
+          }
         }
       }
     },
@@ -651,6 +1023,12 @@
             "state" : "translated",
             "value" : "Aufzeichnung fortsetzen"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reprendre l’enregistrement"
+          }
         }
       }
     },
@@ -660,6 +1038,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aufzeichnung auf deinem iPhone fortsetzen"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reprendre l’enregistrement sur votre iPhone"
           }
         }
       }
@@ -672,6 +1056,12 @@
             "state" : "translated",
             "value" : "Setzt die pausierte Wanderung über ihre Anzeige auf dem Sperrbildschirm fort."
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reprend la randonnée en pause, depuis son panneau sur l’écran verrouillé."
+          }
         }
       }
     },
@@ -681,6 +1071,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wanderung speichern"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrer la randonnée"
           }
         }
       }
@@ -692,6 +1088,12 @@
             "state" : "translated",
             "value" : "Wird gespeichert …"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sauvegarde…"
+          }
         }
       }
     },
@@ -701,6 +1103,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "An dein iPhone gesendet."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Envoyée à votre iPhone."
           }
         }
       }
@@ -713,6 +1121,12 @@
             "state" : "translated",
             "value" : "Zeigt einen Weg deiner Wahl, deinen ausgewählten Weg oder eine Wanderung, die gerade aufgezeichnet wird."
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Affiche un sentier de votre choix, le sentier sélectionné ou une randonnée en cours d’enregistrement."
+          }
         }
       }
     },
@@ -722,6 +1136,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Start"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Départ"
           }
         }
       }
@@ -733,6 +1153,12 @@
             "state" : "translated",
             "value" : "Wanderung starten"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Démarrer une randonnée"
+          }
         }
       }
     },
@@ -742,6 +1168,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wird gestartet …"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Démarrage…"
           }
         }
       }
@@ -753,6 +1185,12 @@
             "state" : "translated",
             "value" : "Beenden"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrêter"
+          }
         }
       }
     },
@@ -762,6 +1200,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Deinem Standort nicht mehr folgen"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ne plus suivre votre position"
           }
         }
       }
@@ -773,6 +1217,12 @@
             "state" : "translated",
             "value" : "Aufzeichnung beenden"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrêter l’enregistrement"
+          }
         }
       }
     },
@@ -782,6 +1232,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aufzeichnung auf deinem iPhone beenden"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrêter l’enregistrement sur votre iPhone"
           }
         }
       }
@@ -793,6 +1249,12 @@
             "state" : "translated",
             "value" : "Das hat dein iPhone nicht erreicht."
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La demande n’a pas atteint votre iPhone."
+          }
         }
       }
     },
@@ -802,6 +1264,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Diese Wanderung war zu kurz, um sie zu behalten."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette randonnée était trop courte pour être conservée."
           }
         }
       }
@@ -813,6 +1281,12 @@
             "state" : "translated",
             "value" : "Diese Watch kann kein Training starten, daher könnte eine Aufzeichnung nicht weiterlaufen."
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette montre ne peut pas démarrer d’entraînement : un enregistrement ne pourrait donc pas continuer."
+          }
         }
       }
     },
@@ -823,6 +1297,12 @@
             "state" : "translated",
             "value" : "Der Speicher dieser Watch ist voll. Gib etwas Speicherplatz frei und versuche es dann erneut."
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le stockage de cette montre est saturé. Libérez de l’espace, puis réessayez."
+          }
         }
       }
     },
@@ -832,6 +1312,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wanderzeit"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Temps de randonnée"
           }
         }
       }
@@ -844,6 +1330,12 @@
             "state" : "translated",
             "value" : "Wanderaufzeichnung umschalten"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activer/désactiver l’enregistrement"
+          }
         }
       }
     },
@@ -853,6 +1345,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Weg"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sentier"
           }
         }
       }
@@ -864,6 +1362,12 @@
             "state" : "translated",
             "value" : "Werte des Weges"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Données du sentier"
+          }
         }
       }
     },
@@ -873,6 +1377,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wege"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sentiers"
           }
         }
       }
@@ -884,6 +1394,12 @@
             "state" : "translated",
             "value" : "Erneut versuchen"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réessayer"
+          }
         }
       }
     },
@@ -893,6 +1409,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Karte beim Wandern drehen"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Faire pivoter la carte en marchant"
           }
         }
       }
@@ -904,6 +1426,12 @@
             "state" : "translated",
             "value" : "Warten auf dein iPhone"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En attente de votre iPhone"
+          }
         }
       }
     },
@@ -913,6 +1441,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Warten, bis dein iPhone wieder in Reichweite ist …"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En attente que votre iPhone soit à portée…"
           }
         }
       }
@@ -924,6 +1458,12 @@
             "state" : "translated",
             "value" : "Warten auf dein iPhone. Die Übertragung erfolgt von selbst."
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En attente de votre iPhone. Le transfert se fera automatiquement."
+          }
         }
       }
     },
@@ -933,6 +1473,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dein iPhone konnte darauf nicht antworten."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre iPhone n’a pas pu répondre."
           }
         }
       }
@@ -944,6 +1490,12 @@
             "state" : "translated",
             "value" : "Dein iPhone ist außer Reichweite."
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre iPhone est hors de portée."
+          }
         }
       }
     },
@@ -953,6 +1505,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dein iPhone zeichnet auf"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre iPhone enregistre"
           }
         }
       }

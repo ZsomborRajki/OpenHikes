@@ -18,6 +18,12 @@
             "state" : "translated",
             "value" : "%@ gewandert"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ parcourus"
+          }
         }
       }
     },
@@ -27,6 +33,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ lang"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ de long"
           }
         }
       }
@@ -38,6 +50,12 @@
             "state" : "translated",
             "value" : "%@ Prozent abgeschlossen"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ pour cent effectués"
+          }
         }
       }
     },
@@ -48,6 +66,12 @@
             "state" : "translated",
             "value" : "%@ Prozent gewandert"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ pour cent parcourus"
+          }
         }
       }
     },
@@ -57,6 +81,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "noch %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "il reste %@"
           }
         }
       }
@@ -73,6 +103,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@%2$@ · %3$@ left"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@%2$@ · encore %3$@"
           }
         }
       }
@@ -114,6 +150,30 @@
               }
             }
           }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld pts"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld pt"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld pts"
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -130,6 +190,12 @@
             "state" : "new",
             "value" : "%1$lld%% · %2$@ left"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld %% · encore %2$@"
+          }
         }
       }
     },
@@ -139,6 +205,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld%% gewandert"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld %% parcourus"
           }
         }
       }
@@ -150,6 +222,12 @@
             "state" : "translated",
             "value" : "Aufstieg"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dénivelé +"
+          }
         }
       }
     },
@@ -159,6 +237,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Durchschnittsgeschwindigkeit"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vitesse moyenne"
           }
         }
       }
@@ -171,6 +255,12 @@
             "state" : "translated",
             "value" : "Abbrechen"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annuler"
+          }
         }
       }
     },
@@ -181,6 +271,12 @@
             "state" : "translated",
             "value" : "Abgeschlossen"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Effectué"
+          }
         }
       }
     },
@@ -190,6 +286,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Distanz"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Distance"
           }
         }
       }
@@ -202,6 +304,12 @@
             "state" : "translated",
             "value" : "Fertig"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
+          }
         }
       }
     },
@@ -211,6 +319,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Verstrichen"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Écoulé"
           }
         }
       }
@@ -222,6 +336,12 @@
             "state" : "translated",
             "value" : "Höhe"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Altitude"
+          }
         }
       }
     },
@@ -231,6 +351,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Beendet"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terminé"
           }
         }
       }
@@ -243,6 +369,12 @@
             "state" : "translated",
             "value" : "Wanderung"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Randonnée"
+          }
         }
       }
     },
@@ -252,6 +384,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wanderaufzeichnung"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrement de randonnée"
           }
         }
       }
@@ -263,6 +401,12 @@
             "state" : "translated",
             "value" : "Gewandert"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parcouru"
+          }
         }
       }
     },
@@ -272,6 +416,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Länge"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Longueur"
           }
         }
       }
@@ -283,12 +433,24 @@
             "state" : "translated",
             "value" : "Abseits des Weges"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hors sentier"
+          }
         }
       }
     },
     "OpenHikes" : {
       "localizations" : {
         "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes"
+          }
+        },
+        "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes"
@@ -303,6 +465,12 @@
             "state" : "translated",
             "value" : "OpenHikes konnte das nicht ausführen."
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes n’a pas pu effectuer cette action."
+          }
         }
       }
     },
@@ -314,6 +482,12 @@
             "state" : "translated",
             "value" : "OpenHikes braucht deinen Standort, bevor es eine Wanderung aufzeichnen kann."
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes a besoin de votre position avant de pouvoir enregistrer une randonnée."
+          }
         }
       }
     },
@@ -323,6 +497,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pausieren"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pause"
           }
         }
       }
@@ -335,6 +515,12 @@
             "state" : "translated",
             "value" : "Wanderung pausieren"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mettre la randonnée en pause"
+          }
         }
       }
     },
@@ -345,6 +531,12 @@
             "state" : "translated",
             "value" : "Pausiert"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En pause"
+          }
         }
       }
     },
@@ -354,6 +546,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pausiert · "
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En pause · "
           }
         }
       }
@@ -366,6 +564,12 @@
             "state" : "translated",
             "value" : "Pausiert die aufgezeichnete Wanderung über ihre Anzeige auf dem Sperrbildschirm."
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Met en pause la randonnée en cours d’enregistrement, depuis son panneau sur l’écran verrouillé."
+          }
         }
       }
     },
@@ -377,6 +581,12 @@
             "state" : "translated",
             "value" : "Aufzeichnung"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrement"
+          }
         }
       }
     },
@@ -386,6 +596,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wanderung wird aufgezeichnet"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrement en cours"
           }
         }
       }
@@ -397,6 +613,12 @@
             "state" : "translated",
             "value" : "Aufzeichnung pausiert"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrement en pause"
+          }
         }
       }
     },
@@ -407,6 +629,12 @@
             "state" : "translated",
             "value" : "Verbleibend"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restant"
+          }
         }
       }
     },
@@ -416,6 +644,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fortsetzen"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reprendre"
           }
         }
       }
@@ -428,6 +662,12 @@
             "state" : "translated",
             "value" : "Wanderung fortsetzen"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reprendre la randonnée"
+          }
         }
       }
     },
@@ -439,6 +679,12 @@
             "state" : "translated",
             "value" : "Setzt die pausierte Wanderung über ihre Anzeige auf dem Sperrbildschirm fort."
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reprend la randonnée en pause, depuis son panneau sur l’écran verrouillé."
+          }
         }
       }
     },
@@ -449,6 +695,12 @@
             "state" : "translated",
             "value" : "Wähle einen Weg"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisissez un sentier"
+          }
         }
       }
     },
@@ -458,6 +710,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wähle einen Weg in OpenHikes"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisissez un sentier dans OpenHikes"
           }
         }
       }
@@ -470,6 +728,12 @@
             "state" : "translated",
             "value" : "Zeigt einen Weg deiner Wahl, deinen ausgewählten Weg oder eine Wanderung, die gerade aufgezeichnet wird."
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Affiche un sentier de votre choix, le sentier sélectionné ou une randonnée en cours d’enregistrement."
+          }
         }
       }
     },
@@ -479,6 +743,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zeigt deinen ausgewählten Weg oder eine Wanderung, die gerade aufgezeichnet wird."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Affiche votre sentier sélectionné ou une randonnée en cours d’enregistrement."
           }
         }
       }
@@ -490,6 +760,12 @@
             "state" : "translated",
             "value" : "Wanderung starten"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Démarrer une randonnée"
+          }
         }
       }
     },
@@ -499,6 +775,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Starte oder beende die Aufzeichnung einer Wanderung."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Démarrez ou arrêtez l’enregistrement d’une randonnée."
           }
         }
       }
@@ -510,6 +792,12 @@
             "state" : "translated",
             "value" : "Wanderung beenden"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrêter la randonnée"
+          }
         }
       }
     },
@@ -520,6 +808,12 @@
             "state" : "translated",
             "value" : "Diese Wanderung wird nicht mehr aufgezeichnet."
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette randonnée n’est plus en cours d’enregistrement."
+          }
         }
       }
     },
@@ -529,6 +823,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Verbleibende Zeit"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Temps restant"
           }
         }
       }
@@ -541,6 +841,12 @@
             "state" : "translated",
             "value" : "Wanderaufzeichnung umschalten"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activer/désactiver l’enregistrement"
+          }
         }
       }
     },
@@ -550,6 +856,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Trackpunkte"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Points de trace"
           }
         }
       }
@@ -561,6 +873,12 @@
             "state" : "translated",
             "value" : "Weg"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sentier"
+          }
         }
       }
     },
@@ -571,6 +889,12 @@
             "state" : "translated",
             "value" : "Weglänge"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Longueur du sentier"
+          }
         }
       }
     },
@@ -580,6 +904,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aktiviere „Genauer Standort“ in den Einstellungen, um fortzufahren."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activez « Position exacte » dans Réglages pour continuer."
           }
         }
       }

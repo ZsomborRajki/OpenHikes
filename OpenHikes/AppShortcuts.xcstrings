@@ -21,6 +21,15 @@
               "My ${applicationName} distance today"
             ]
           }
+        },
+        "fr" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Quelle distance ai-je parcourue aujourd’hui dans ${applicationName}",
+              "Ma distance ${applicationName} aujourd’hui"
+            ]
+          }
         }
       }
     },
@@ -42,6 +51,15 @@
             "values" : [
               "How far have I hiked in ${applicationName}",
               "How is my ${applicationName} hike going"
+            ]
+          }
+        },
+        "fr" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Quelle distance ai-je parcourue dans ${applicationName}",
+              "Où en est ma randonnée dans ${applicationName}"
             ]
           }
         }
@@ -67,6 +85,16 @@
               "How long was my hike in ${applicationName}",
               "How far was my hike in ${applicationName}",
               "Summarize a hike in ${applicationName}"
+            ]
+          }
+        },
+        "fr" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Combien de temps a duré ma randonnée dans ${applicationName}",
+              "Quelle distance faisait ma randonnée dans ${applicationName}",
+              "Résume une randonnée dans ${applicationName}"
             ]
           }
         }
@@ -96,6 +124,17 @@
               "Show me ${hike} in ${applicationName}"
             ]
           }
+        },
+        "fr" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Ouvre une randonnée dans ${applicationName}",
+              "Affiche une randonnée dans ${applicationName}",
+              "Ouvre ${hike} dans ${applicationName}",
+              "Montre-moi ${hike} dans ${applicationName}"
+            ]
+          }
         }
       }
     },
@@ -117,6 +156,15 @@
             "values" : [
               "Pause my hike in ${applicationName}",
               "Pause my ${applicationName} recording"
+            ]
+          }
+        },
+        "fr" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Mets ma randonnée en pause dans ${applicationName}",
+              "Mets mon enregistrement en pause dans ${applicationName}"
             ]
           }
         }
@@ -144,6 +192,16 @@
               "Hike ${hike} with ${applicationName}"
             ]
           }
+        },
+        "fr" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Enregistre le long d’un sentier dans ${applicationName}",
+              "Lance l’enregistrement le long de ${hike} dans ${applicationName}",
+              "Parcours ${hike} avec ${applicationName}"
+            ]
+          }
         }
       }
     },
@@ -165,6 +223,15 @@
             "values" : [
               "Resume my hike in ${applicationName}",
               "Resume my ${applicationName} recording"
+            ]
+          }
+        },
+        "fr" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Reprends ma randonnée dans ${applicationName}",
+              "Reprends mon enregistrement dans ${applicationName}"
             ]
           }
         }
@@ -192,6 +259,16 @@
               "Record a hike with ${applicationName}"
             ]
           }
+        },
+        "fr" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Démarre une randonnée dans ${applicationName}",
+              "Lance l’enregistrement d’une randonnée dans ${applicationName}",
+              "Enregistre une randonnée avec ${applicationName}"
+            ]
+          }
         }
       }
     },
@@ -217,6 +294,16 @@
               "Save my hike in ${applicationName}"
             ]
           }
+        },
+        "fr" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Arrête ma randonnée dans ${applicationName}",
+              "Termine ma randonnée dans ${applicationName}",
+              "Sauvegarde ma randonnée dans ${applicationName}"
+            ]
+          }
         }
       }
     },
@@ -238,6 +325,15 @@
             "values" : [
               "What was my last hike in ${applicationName}",
               "Show my last hike in ${applicationName}"
+            ]
+          }
+        },
+        "fr" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Quelle était ma dernière randonnée dans ${applicationName}",
+              "Affiche ma dernière randonnée dans ${applicationName}"
             ]
           }
         }
