@@ -102,7 +102,10 @@ struct RecordingCard: View {
     @ViewBuilder private var titleControls: some View {
         switch recorder.phase {
         case .idle:
-            Button("Start", systemImage: "record.circle") {
+            // A key of its own for the "Start" that a route's first stop and
+            // a hike's start time also read in English, because French names
+            // those « Départ » and this button « Démarrer ».
+            Button(String(localized: "recording.start", defaultValue: "Start"), systemImage: "record.circle") {
                 Task { await recorder.start() }
             }
             .prominentGlassButtonStyle()

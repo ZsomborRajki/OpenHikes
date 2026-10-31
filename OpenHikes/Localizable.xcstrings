@@ -14260,6 +14260,29 @@
         }
       }
     },
+    "recording.start" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Start"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Démarrer"
+          }
+        }
+      }
+    },
     "Recordings, GPX files with times and hikes along saved trails count. A trail you drew or saved counts once you hike it." : {
       "localizations" : {
         "de" : {
