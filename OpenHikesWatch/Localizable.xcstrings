@@ -510,7 +510,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Randonnée non enregistrée"
+            "value" : "Randonnée non sauvegardée"
           }
         }
       }
@@ -558,7 +558,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Elle n’a été enregistrée nulle part et ne peut donc pas être récupérée."
+            "value" : "Elle n’a été sauvegardée nulle part et ne peut donc pas être récupérée."
           }
         }
       }
@@ -574,7 +574,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dernière randonnée non enregistrée"
+            "value" : "Dernière randonnée non sauvegardée"
           }
         }
       }
@@ -590,7 +590,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dernièrement sur %@"
+            "value" : "Dernière position sur %@"
           }
         }
       }
@@ -1076,7 +1076,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enregistrer la randonnée"
+            "value" : "Sauvegarder la randonnée"
           }
         }
       }

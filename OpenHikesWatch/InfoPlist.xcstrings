@@ -70,7 +70,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenHikes démarre un entraînement de randonnée dans Santé pendant que vous enregistrez sur votre montre : c’est ce qui maintient l’enregistrement actif écran éteint. L’entraînement lui-même n’est pas enregistré – votre iPhone enregistre la randonnée terminée."
+            "value" : "OpenHikes démarre un entraînement de randonnée dans Santé pendant que vous enregistrez sur votre montre : c’est ce qui maintient l’enregistrement actif écran éteint. L’entraînement lui-même n’est pas sauvegardé – c’est votre iPhone qui sauvegarde la randonnée terminée."
           }
         }
       }

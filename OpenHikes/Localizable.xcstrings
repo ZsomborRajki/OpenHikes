@@ -464,7 +464,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ l’a partagée"
+            "value" : "%@ l’a partagé"
           }
         }
       }
@@ -878,7 +878,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@, elle ne peut donc pas être republiée sous votre nom. Vous pouvez ajouter vos propres photos au sentier qui figure déjà dans la liste."
+            "value" : "%@, il ne peut donc pas être republié sous votre nom. Vous pouvez ajouter vos propres photos au sentier qui figure déjà dans la liste."
           }
         }
       }
@@ -1974,19 +1974,19 @@
               "many" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%1$lld photos vont sur %2$@, chacune avec son emplacement sur le sentier et l’heure de la prise de vue"
+                  "value" : "%1$lld photos seront ajoutées à « %2$@ », chacune avec son emplacement sur le sentier et l’heure de la prise de vue"
                 }
               },
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%1$lld photo va sur %2$@, avec son emplacement sur le sentier et l’heure de la prise de vue"
+                  "value" : "%1$lld photo sera ajoutée à « %2$@ », avec son emplacement sur le sentier et l’heure de la prise de vue"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%1$lld photos vont sur %2$@, chacune avec son emplacement sur le sentier et l’heure de la prise de vue"
+                  "value" : "%1$lld photos seront ajoutées à « %2$@ », chacune avec son emplacement sur le sentier et l’heure de la prise de vue"
                 }
               }
             }
@@ -2432,7 +2432,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Un sentier issu d’OpenStreetMap, qui n’a pas de photos propres."
+            "value" : "Un sentier issu d’OpenStreetMap, qui n’a pas ses propres photos."
           }
         }
       }
@@ -3190,7 +3190,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Une autre personne l’a partagée"
+            "value" : "Une autre personne l’a partagé"
           }
         }
       }
@@ -3206,7 +3206,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Autre motif"
+            "value" : "Précisions"
           }
         }
       }
@@ -3844,7 +3844,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Noir"
+            "value" : "noir"
           }
         }
       }
@@ -3972,7 +3972,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bleu"
+            "value" : "bleu"
           }
         }
       }
@@ -4084,7 +4084,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Marron"
+            "value" : "marron"
           }
         }
       }
@@ -4276,7 +4276,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Danger"
+            "value" : "Attention"
           }
         }
       }
@@ -6475,7 +6475,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Terminer et enregistrer la randonnée"
+            "value" : "Terminer et sauvegarder la randonnée"
           }
         }
       }
@@ -6491,7 +6491,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Terminer la randonnée et enregistrer"
+            "value" : "Terminer la randonnée et lancer l’enregistrement"
           }
         }
       }
@@ -7307,7 +7307,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gris"
+            "value" : "gris"
           }
         }
       }
@@ -7323,7 +7323,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Vert"
+            "value" : "vert"
           }
         }
       }
@@ -7682,7 +7682,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Parcouru"
+            "value" : "Date de la randonnée"
           }
         }
       }
@@ -8194,7 +8194,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ses données n’ont pas pu être enregistrées, la randonnée est donc toujours en cours. Essayez à nouveau de la terminer."
+            "value" : "Ses données n’ont pas pu être sauvegardées, la randonnée est donc toujours en cours. Essayez à nouveau de la terminer."
           }
         }
       }
@@ -9273,7 +9273,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cartes"
+            "value" : "Plans"
           }
         }
       }
@@ -10345,7 +10345,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "N’est plus publiée"
+            "value" : "Plus publiée"
           }
         }
       }
@@ -12336,7 +12336,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Orange"
+            "value" : "orange"
           }
         }
       }
@@ -12641,7 +12641,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La mise en pause n’a pas pu être enregistrée, la randonnée est donc toujours en cours. Réessayez de la mettre en pause."
+            "value" : "La mise en pause n’a pas pu être sauvegardée, la randonnée est donc toujours en cours. Réessayez de la mettre en pause."
           }
         }
       }
@@ -13284,6 +13284,29 @@
         }
       }
     },
+    "place.kind.none" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "None"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun"
+          }
+        }
+      }
+    },
     "placed by how far your hike had got" : {
       "localizations" : {
         "de" : {
@@ -13887,7 +13910,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Violet"
+            "value" : "violet"
           }
         }
       }
@@ -14143,7 +14166,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enregistrée"
+            "value" : "Enregistré"
           }
         }
       }
@@ -14294,7 +14317,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Les enregistrements, les fichiers GPX horodatés et les randonnées le long de sentiers enregistrés sont pris en compte. Un sentier que vous avez dessiné ou enregistré compte dès que vous le parcourez."
+            "value" : "Les enregistrements, les fichiers GPX horodatés et les randonnées le long de sentiers sauvegardés sont pris en compte. Un sentier que vous avez dessiné ou sauvegardé compte dès que vous le parcourez."
           }
         }
       }
@@ -14358,7 +14381,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Rouge"
+            "value" : "rouge"
           }
         }
       }
@@ -14678,7 +14701,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Indique la distance et la durée d’une randonnée que vous avez enregistrée."
+            "value" : "Indique la distance et la durée d’une randonnée que vous avez sauvegardée."
           }
         }
       }
@@ -14854,7 +14877,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Reprenez-le, arrêtez-le pour l’enregistrer ou supprimez-le ci-dessous."
+            "value" : "Reprenez-le, arrêtez-le pour le sauvegarder ou supprimez-le ci-dessous."
           }
         }
       }
@@ -14903,7 +14926,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Réessayer d’enregistrer"
+            "value" : "Réessayer la sauvegarde"
           }
         }
       }
@@ -14967,7 +14990,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Droite"
+            "value" : "À droite"
           }
         }
       }
@@ -15191,7 +15214,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enregistrer la randonnée vérifiée"
+            "value" : "Sauvegarder la randonnée vérifiée"
           }
         }
       }
@@ -15239,7 +15262,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Randonnée enregistrée. %@"
+            "value" : "Randonnée sauvegardée. %@"
           }
         }
       }
@@ -16761,7 +16784,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Démarre l’enregistrement d’une randonnée en suivant l’un de vos sentiers enregistrés."
+            "value" : "Démarre l’enregistrement d’une randonnée en suivant l’un de vos sentiers sauvegardés."
           }
         }
       }
@@ -17909,7 +17932,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La randonnée n’a pas pu être enregistrée."
+            "value" : "La randonnée n’a pas pu être sauvegardée."
           }
         }
       }
@@ -17973,7 +17996,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Le service de recherche de cartes est occupé. Réessayez dans un instant."
+            "value" : "Le service de recherche de lieux est saturé. Réessayez dans un instant."
           }
         }
       }
@@ -18261,7 +18284,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La copie partagée montre l’itinéraire avant votre modification. Demandez son retrait, puis partagez celle-ci."
+            "value" : "La copie partagée montre l’itinéraire avant votre modification. Demandez son retrait, puis partagez la nouvelle version."
           }
         }
       }
@@ -18613,7 +18636,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Impossible d’enregistrer cette randonnée."
+            "value" : "Impossible de sauvegarder cette randonnée."
           }
         }
       }
@@ -18709,7 +18732,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cette randonnée ne figure plus dans la liste de la communauté. La réinitialiser vous permet de la partager à nouveau, mais efface les informations nécessaires pour demander son retrait."
+            "value" : "Cette randonnée ne figure plus dans la liste de la communauté. Réinitialiser vous permet de la partager à nouveau, mais efface les informations nécessaires pour demander son retrait."
           }
         }
       }
@@ -19576,7 +19599,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Activez l’enregistrement automatique, puis déplacez la carte et zoomez autour du sentier afin d’en enregistrer les tuiles pour une utilisation hors ligne."
+            "value" : "Activez « Enregistrement automatique des tuiles », puis déplacez la carte et zoomez autour du sentier afin d’en enregistrer les tuiles pour une utilisation hors ligne."
           }
         }
       }
@@ -20504,7 +20527,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Blanc"
+            "value" : "blanc"
           }
         }
       }
@@ -20664,7 +20687,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Jaune"
+            "value" : "jaune"
           }
         }
       }
@@ -21006,7 +21029,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Impossible d’enregistrer votre randonnée."
+            "value" : "Impossible de sauvegarder votre randonnée."
           }
         }
       }
@@ -21038,7 +21061,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Votre randonnée est enregistrée, mais vous devez choisir le sentier que vous avez suivi."
+            "value" : "Votre randonnée est sauvegardée, mais vous devez choisir le sentier que vous avez suivi."
           }
         }
       }
@@ -21150,7 +21173,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Votre ordre"
+            "value" : "Ordre personnalisé"
           }
         }
       }
@@ -21166,7 +21189,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Votre ordre"
+            "value" : "Ordre personnalisé"
           }
         }
       }
