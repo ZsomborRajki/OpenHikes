@@ -46,6 +46,7 @@
 //  of its ends.
 //
 
+import Algorithms
 import CoreLocation
 import HeapModule
 import OpenHikesData
@@ -97,9 +98,9 @@ nonisolated enum LibraryLineOutline {
             let gap = RouteGeometry.distanceMeters(from: route[leg].clCoordinate, to: route[leg + 1].clCoordinate)
             return gap.isFinite ? gap : 0
         }
+        // Ranked so the earlier of two equal gaps is the greater.
         let kept = runs.pausedLegs.indices
-            .sorted { gaps[$0] != gaps[$1] ? gaps[$0] > gaps[$1] : $0 < $1 }
-            .prefix(max(0, pauseBudget))
+            .max(count: max(0, pauseBudget)) { gaps[$0] != gaps[$1] ? gaps[$0] < gaps[$1] : $0 > $1 }
             // The point each kept pause arrives at, which is what a pause is
             // named by — see ``TrailRuns``.
             .map { runs.pausedLegs[$0] + 1 }
@@ -151,8 +152,8 @@ nonisolated enum LibraryLineOutline {
                 spans.insert(right)
             }
         }
-        return runs.indices.map { run in
-            runs[run].indices.compactMap { keep[run][$0] ? runs[run][$0] : nil }
+        return zip(runs, keep).map { run, kept in
+            zip(run, kept).compactMap { point, isKept in isKept ? point : nil }
         }
     }
 }

@@ -43,6 +43,7 @@
 //  `MapCoordinator+RouteTap.swift`.
 //
 
+import Algorithms
 import MapKit
 import OpenHikesData
 import SwiftUI
@@ -124,8 +125,7 @@ extension MapView.Coordinator {
     func applyLibraryLines(on mapView: MKMapView) {
         let shown = isDrawingTrail ? [] : (libraryMap.library?.lines ?? []).filter { $0.hikeID != routeID }
         guard shown != libraryMap.drawings.map(\.line) else { return }
-        var kept: [UUID: LibraryLineDrawing] = [:]
-        for drawing in libraryMap.drawings { kept[drawing.line.hikeID] = drawing }
+        let kept = libraryMap.drawings.keyed(by: \.line.hikeID)
         libraryMap.drawings = shown.map { line in
             if let drawing = kept[line.hikeID], drawing.line == line { return drawing }
             return LibraryLineDrawing(line: line)

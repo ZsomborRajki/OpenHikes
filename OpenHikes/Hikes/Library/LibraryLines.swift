@@ -43,6 +43,7 @@
 //  read here.
 //
 
+import Algorithms
 import CoreData
 import CoreLocation
 import Foundation
@@ -168,17 +169,14 @@ final class LibraryLines {
             // Before any read, so a deleted hike or a new colour is on the map
             // at once rather than after the lines that are due.
             publish(listed)
-            var start = due.startIndex
-            while start < due.endIndex {
-                let end = min(start + Self.batchSize, due.endIndex)
-                let read = await reading(Array(due[start..<end]), container)
+            for batch in due.chunks(ofCount: Self.batchSize) {
+                let read = await reading(Array(batch), container)
                 guard !Task.isCancelled else { return }
                 for (hikeID, runs) in read {
                     reads += 1
                     outlines[hikeID] = Outline(runs: runs, revision: reads)
                 }
                 publish(listed)
-                start = end
             }
         }
     }
