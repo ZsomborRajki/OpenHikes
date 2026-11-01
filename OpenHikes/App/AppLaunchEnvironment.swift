@@ -38,6 +38,9 @@ nonisolated enum AppLaunchEnvironment {
         /// How many bare hikes a launch asked for — see
         /// ``AppLaunchEnvironment/seededLibraryHikeCount``.
         let seededLibraryHikeCount: Int
+        /// Whether a launch asked for three trails side by side — see
+        /// ``AppLaunchEnvironment/seedsNearbyTrails``.
+        let seedsNearbyTrails: Bool
         /// `nil` unless a launch asked for a walk fixture — see
         /// ``AppLaunchEnvironment/seededWalkFixtureName``.
         let seededWalkFixtureName: String?
@@ -98,6 +101,7 @@ nonisolated enum AppLaunchEnvironment {
             seededPhotoCount = 0
             omitsSeededPhotoFiles = false
             seededLibraryHikeCount = 0
+            seedsNearbyTrails = false
             seededWalkFixtureName = nil
             seededRecordingFixtureName = nil
             routeHue = nil
@@ -126,6 +130,7 @@ nonisolated enum AppLaunchEnvironment {
         private static let seedPhotosPrefix = "--ui-test-seed-photos="
         private static let omitPhotoFilesArgument = "--ui-test-omit-photo-files"
         private static let seedHikesPrefix = "--ui-test-seed-hikes="
+        private static let nearbyTrailsArgument = "--ui-test-seed-nearby-trails"
         private static let seedWalksPrefix = "--ui-test-seed-walks="
         private static let seedRecordingPrefix = "--ui-test-seed-recording="
         private static let routeHuePrefix = "--ui-test-route-hue="
@@ -199,6 +204,7 @@ nonisolated enum AppLaunchEnvironment {
                 isUITesting: isUITesting,
                 limit: Self.maximumSeededLibraryHikes
             )
+            seedsNearbyTrails = isUITesting && arguments.contains(Self.nearbyTrailsArgument)
             seededWalkFixtureName = Self.fixtureName(
                 in: arguments, prefix: Self.seedWalksPrefix, isUITesting: isUITesting
             )
@@ -399,13 +405,6 @@ nonisolated enum AppLaunchEnvironment {
     /// Leaves the seeded gallery's metadata in place without its files, as
     /// it appears on another device after the hike syncs.
     static let omitsSeededPhotoFiles = configuration.omitsSeededPhotoFiles
-    /// How many plain hikes to put in the library before anything else runs.
-    ///
-    /// A list scenario needs *several* hikes and does not care what is in
-    /// them — the GPX fixture makes exactly one, and importing it repeatedly
-    /// would spend a scenario's budget parsing the same file. See
-    /// ``SeededLibraryFixture``.
-    static let seededLibraryHikeCount = configuration.seededLibraryHikeCount
 
     /// The name of a walk fixture to attach to the hike a launch imports, or
     /// `nil` for none — see `SeededWalkFixture` for the names.
@@ -636,4 +635,26 @@ nonisolated enum AppLaunchEnvironment {
                 isDirectory: true
             )
     }
+}
+
+// MARK: - The seeded library
+
+/// In an extension, which the type's length limit leaves out, to make room in
+/// the enum for the arguments' parsing.
+nonisolated extension AppLaunchEnvironment {
+    /// How many plain hikes to put in the library before anything else runs.
+    ///
+    /// A list scenario needs *several* hikes and does not care what is in
+    /// them — the GPX fixture makes exactly one, and importing it repeatedly
+    /// would spend a scenario's budget parsing the same file. See
+    /// ``SeededLibraryFixture``.
+    static let seededLibraryHikeCount = configuration.seededLibraryHikeCount
+
+    /// Whether to put three trails that start near one another in the
+    /// library, each with its own line and colour — see
+    /// ``SeededLibraryFixture/seedNearbyTrails(in:)``.
+    ///
+    /// For the map rather than the list: the bare hikes above all walk one
+    /// route, which the map draws as one line however many of them there are.
+    static let seedsNearbyTrails = configuration.seedsNearbyTrails
 }

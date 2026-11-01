@@ -178,12 +178,14 @@ struct AppLaunchEnvironmentTests {
                 "--ui-test-seed-photos=8",
                 "--ui-test-omit-photo-files",
                 "--ui-test-seed-hikes=999",
+                "--ui-test-seed-nearby-trails",
                 "--ui-test-seed-walks=HalfLoop",
             ]
         )
 
         #expect(configuration.seededPhotoCount == 8)
         #expect(configuration.omitsSeededPhotoFiles)
+        #expect(configuration.seedsNearbyTrails)
         #expect(configuration.seededWalkFixtureName == "HalfLoop")
         // Clamped rather than honoured: a scenario asking for a thousand
         // hikes is a typo, and seeding them would be all the scenario did.
@@ -332,6 +334,7 @@ struct AppLaunchEnvironmentTests {
                 "--ui-test-seed-photos=8",
                 "--ui-test-omit-photo-files",
                 "--ui-test-seed-hikes=2",
+                "--ui-test-seed-nearby-trails",
                 "--ui-test-fail-first-save",
                 "--ui-test-refuse-trail-photo-copy",
                 "--ui-test-refuse-publication-reset",
@@ -349,6 +352,7 @@ struct AppLaunchEnvironmentTests {
         #expect(configuration.seededPhotoCount == 0)
         #expect(!configuration.omitsSeededPhotoFiles)
         #expect(configuration.seededLibraryHikeCount == 0)
+        #expect(!configuration.seedsNearbyTrails)
         #expect(!configuration.failsFirstSave)
         #expect(!configuration.refusesTrailPhotoCopy)
         #expect(!configuration.refusesPublicationReset)
