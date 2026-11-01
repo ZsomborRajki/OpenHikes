@@ -287,7 +287,7 @@ private final class LibrarySaves {
 
     /// Narrows the store's saves to the listed hikes' store.
     func watch(storeOf listed: [LibraryLines.ListedHike]) {
-        storeID.set(listed.lazy.compactMap(\.row.storeIdentifier).first)
+        storeID.set(listed.firstNonNil(\.row.storeIdentifier))
     }
 
     func wake() {
@@ -351,7 +351,7 @@ private struct LibraryHistory {
         among listed: [LibraryLines.ListedHike],
         waking saves: LibrarySaves
     ) async -> Set<PersistentIdentifier> {
-        guard let storeID = listed.lazy.compactMap(\.row.storeIdentifier).first else { return [] }
+        guard let storeID = listed.firstNonNil(\.row.storeIdentifier) else { return [] }
         let answer = await checking(StoreHistoryCheck.Request(
             container: container,
             rows: Set(listed.map(\.row)),
