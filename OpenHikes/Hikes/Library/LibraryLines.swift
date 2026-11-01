@@ -27,10 +27,11 @@
 //  - **Again only when the row may have been saved**: by the main context,
 //    which `ModelContext.didSave` names, or by an import, such as an edit
 //    mirrored in from the hiker's other device, which the store's history
-//    names (`StoreHistoryCheck`). Never by observing `route`, which every
-//    save of any hike notifies while the hikes list's `@Query` is up (#1228,
-//    #1253). Like the Hilliest list, it filters on the row: a rename or a tint
-//    costs that one hike a read.
+//    names. The wakes and the history are the ones the Hilliest list keeps
+//    its figures true by (`StoreSaves`). Never by observing `route`, which
+//    every save of any hike notifies while the hikes list's `@Query` is up
+//    (#1228, #1253). Like the Hilliest list, it filters on the row: a rename
+//    or a tint costs that one hike a read.
 //
 //  Who is in the library is asked off the main actor too, of the columns that
 //  are not the line, each time the hikes' store is saved.
@@ -44,14 +45,12 @@
 //
 
 import Algorithms
-import CoreData
 import CoreLocation
 import Foundation
 import Observation
 import OpenHikesData
 import os
 import SwiftData
-import Synchronization
 
 /// One hike's line, as the map draws it when the hike is not selected.
 nonisolated struct LibraryLine: Identifiable, Equatable, Sendable {
@@ -140,8 +139,8 @@ final class LibraryLines {
         reading: Reading = LibraryLines.readLines,
         checking: @escaping StoreHistoryCheck.Making = StoreHistoryCheck.answer
     ) async {
-        let saves = LibrarySaves(of: container.mainContext)
-        var history = LibraryHistory(container: container, since: .now, checking: checking)
+        let saves = StoreSaves(in: container, checking: checking)
+        let savedHere = RowsSavedHere(by: container.mainContext, waking: saves)
         var isFirstPass = true
         for await _ in saves.changes {
             let listed: [ListedHike]
@@ -153,9 +152,9 @@ final class LibraryLines {
                 continue
             }
             guard !Task.isCancelled else { return }
-            saves.watch(storeOf: listed)
-            var saved = saves.takeSavedRows()
-            saved.formUnion(await history.savedRows(among: listed, waking: saves))
+            saves.watch(store: listed.firstNonNil(\.row.storeIdentifier))
+            var saved = savedHere.take()
+            saved.formUnion(await saves.savedRows(among: Set(listed.map(\.row))))
             guard !Task.isCancelled else { return }
             let listedIDs = Set(listed.map(\.id))
             outlines = outlines.filter { listedIDs.contains($0.key) }
@@ -233,70 +232,47 @@ nonisolated extension LibraryLines {
     }
 }
 
-// MARK: - Noticing a save
+// MARK: - Noticing a save here
 
-/// What wakes ``LibraryLines/follow(in:listing:reading:checking:)``, and the
-/// rows the main context saved since it last asked. Made when the task
-/// starts and gone when it ends, observers and all.
+/// The hikes the main context saved since the task last asked, which a look
+/// at the store's history leaves out until it holds a token (see
+/// `StoreSaves.swift`). Each such save wakes the task, as a save by any other
+/// context does. Made when the task starts and gone when it ends, observer
+/// and all.
 @MainActor
-private final class LibrarySaves {
-    /// One element at once, for the first pass, then one after each save,
-    /// however many arrive while the task is busy.
-    let changes: AsyncStream<Void>
-    private let wakeUp: AsyncStream<Void>.Continuation
-    /// The hikes' store, once a listing has named it: a save of the
-    /// device-local one is dropped on the thread that posted it.
-    private let storeID = StoreIdentity()
-    private var savedRows: Set<PersistentIdentifier> = []
+private final class RowsSavedHere {
+    private let saves: StoreSaves
+    private var rows: Set<PersistentIdentifier> = []
     /// Removed by the `isolated deinit` below, on the main actor.
-    private var observers: [any NSObjectProtocol] = []
+    private var observer: (any NSObjectProtocol)?
 
-    init(of mainContext: ModelContext) {
-        (changes, wakeUp) = AsyncStream.makeStream(of: Void.self, bufferingPolicy: .bufferingNewest(1))
-        let wake = wakeUp
-        let store = storeID
-        let center = NotificationCenter.default
-        observers = [
-            // The main context's own saves, named by row, which a look at the
-            // store's history leaves out until it holds a token.
-            center.addObserver(forName: ModelContext.didSave, object: mainContext, queue: nil) { [weak self] note in
-                let rows = Self.hikeRows(savedIn: note)
-                guard !rows.isEmpty else { return }
-                let saves = self
-                onMainActor { saves?.didSave(rows) }
-            },
-            // Every save of the store by any context, an import's included.
-            center.addObserver(forName: .NSPersistentStoreRemoteChange, object: nil, queue: nil) { note in
-                guard store.admits(StoreHistoryCheck.storeID(of: note)) else { return }
-                wake.yield()
-            },
-        ]
-        wakeUp.yield()
+    init(by mainContext: ModelContext, waking saves: StoreSaves) {
+        self.saves = saves
+        observer = NotificationCenter.default.addObserver(
+            forName: ModelContext.didSave,
+            object: mainContext,
+            queue: nil
+        ) { [weak self] note in
+            let hikes = Self.hikeRows(savedIn: note)
+            guard !hikes.isEmpty else { return }
+            let owner = self
+            onMainActor { owner?.didSave(hikes) }
+        }
     }
 
     isolated deinit {
-        for observer in observers { NotificationCenter.default.removeObserver(observer) }
-        wakeUp.finish()
+        if let observer { NotificationCenter.default.removeObserver(observer) }
     }
 
-    /// Hands over the rows the main context saved since the last call.
-    func takeSavedRows() -> Set<PersistentIdentifier> {
-        defer { savedRows = [] }
-        return savedRows
+    /// Hands over the rows saved since the last call.
+    func take() -> Set<PersistentIdentifier> {
+        defer { rows = [] }
+        return rows
     }
 
-    /// Narrows the store's saves to the listed hikes' store.
-    func watch(storeOf listed: [LibraryLines.ListedHike]) {
-        storeID.set(listed.firstNonNil(\.row.storeIdentifier))
-    }
-
-    func wake() {
-        wakeUp.yield()
-    }
-
-    private func didSave(_ rows: Set<PersistentIdentifier>) {
-        savedRows.formUnion(rows)
-        wakeUp.yield()
+    private func didSave(_ saved: Set<PersistentIdentifier>) {
+        rows.formUnion(saved)
+        saves.wake()
     }
 
     /// The hikes a save inserted, updated or deleted. Read on the thread that
@@ -307,65 +283,5 @@ private final class LibrarySaves {
         return Set(keys.flatMap { key in
             (note.userInfo?[key.rawValue] as? [PersistentIdentifier] ?? []).filter { $0.entityName == hike }
         })
-    }
-}
-
-/// The hikes' store, read on whichever thread posts a remote change.
-nonisolated private final class StoreIdentity: Sendable {
-    private let value = Mutex<String?>(nil)
-
-    func set(_ storeID: String?) {
-        guard let storeID else { return }
-        value.withLock { $0 = storeID }
-    }
-
-    /// Whether a save of `storeID` may be the hikes' store: every store until
-    /// a listing has named one.
-    func admits(_ storeID: String?) -> Bool {
-        value.withLock { known in known == nil || known == storeID }
-    }
-}
-
-/// The store's history, looked at once per wake: which listed rows another
-/// context saved since the last look.
-///
-/// A look that cannot read history names no row, as the Hilliest list's does
-/// (`HikeListMetrics+Observation.swift`): naming every row would read every
-/// line again. The first look of such a run asks for one more at once, which
-/// reads from the start again, and the rest wait for the next save.
-private struct LibraryHistory {
-    let container: ModelContainer
-    let since: Date
-    let checking: StoreHistoryCheck.Making
-    private var token: DefaultHistoryToken?
-    private var lookFailed = false
-
-    init(container: ModelContainer, since: Date, checking: @escaping StoreHistoryCheck.Making) {
-        self.container = container
-        self.since = since
-        self.checking = checking
-    }
-
-    @MainActor
-    mutating func savedRows(
-        among listed: [LibraryLines.ListedHike],
-        waking saves: LibrarySaves
-    ) async -> Set<PersistentIdentifier> {
-        guard let storeID = listed.firstNonNil(\.row.storeIdentifier) else { return [] }
-        let answer = await checking(StoreHistoryCheck.Request(
-            container: container,
-            rows: Set(listed.map(\.row)),
-            storeID: storeID,
-            since: since,
-            token: token
-        ))
-        token = answer.token
-        guard answer.wasRead else {
-            if !lookFailed { saves.wake() }
-            lookFailed = true
-            return []
-        }
-        lookFailed = false
-        return answer.savedRows
     }
 }

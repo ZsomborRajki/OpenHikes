@@ -46,24 +46,18 @@
 //  saw. A task cancelled at any point, as switching the list to another order
 //  cancels it, measures and publishes nothing more.
 //
-//  A look that cannot read history names no row, where the selected line's
-//  watch takes it as naming its hike. Here that would mean every listed
-//  route, the pass this file exists to avoid, and a failure that held would
-//  ask for one after every look. Nor can it leave the rest to the next save:
-//  it took the wake of the save it was looking for, and another may never
-//  come. So the first look to fail asks for one more at once. That one reads
-//  the imports since the first pass began, which an expired token cannot
-//  stop, and names any the failed look could not, while history still holds
-//  it; a line written here needs no history. A failure that holds asks for
-//  nothing more until a look reads history again. Nothing in the app prunes
-//  history.
+//  A look that cannot read history names no row, and the first such look
+//  asks for one more at once; a line written here needs no history. The
+//  wakes and the looks are the ones the library's lines on the map are kept
+//  true by too, and `StoreSaves.swift` says why a failed look is read that
+//  way.
 //
 //  All of it stays in the list's task, never its body. Routes are read,
 //  fingerprinted and measured in a context of their own, publication reads
 //  no route, and the sort keeps reading only its cached scalar figures.
 //
 
-import CoreData
+import Algorithms
 import Foundation
 import OpenHikesData
 import SwiftData
@@ -111,46 +105,27 @@ nonisolated extension HikeListMetrics {
     private final class ListedLines {
         /// One element at once, for the first pass, then one after each
         /// change, however many arrive while the task is busy.
-        let changes: AsyncStream<Void>
-        private let wake: AsyncStream<Void>.Continuation
+        var changes: AsyncStream<Void> { saves.changes }
         private let hikes: [Hike]
-        private let container: ModelContainer
-        private let checking: StoreHistoryCheck.Making
-        /// The store the listed hikes live in, read when the task starts.
-        /// `nil` if none of them had been saved by then, which a list never
-        /// meets: the app saves every hike in the turn that inserts it.
-        private let storeID: String?
-        /// When the first pass began: where a look with no token reads imports
-        /// from, as the first does, and any after one that could not read
-        /// history.
-        private let since: Date
-        private var token: DefaultHistoryToken?
-        /// Whether the last look could not read history. The first look of
-        /// such a run asks for one more at once, and the rest ask for nothing:
-        /// see the file header.
-        private var lookFailed = false
+        /// The saves of the listed hikes' store, which wake the task, and its
+        /// history: see ``StoreSaves``.
+        private let saves: StoreSaves
         /// Each listed hike's line revision when last read, in `hikes`' order.
         private var revisions: [Int] = []
         /// The hikes whose revision moved since the last look.
         private var written: Set<UUID> = []
-        /// Removed by the `isolated deinit` below, on the main actor.
-        private var observer: (any NSObjectProtocol)?
 
         init(_ hikes: [Hike], container: ModelContainer, checking: @escaping StoreHistoryCheck.Making) {
-            (changes, wake) = AsyncStream.makeStream(of: Void.self, bufferingPolicy: .bufferingNewest(1))
             self.hikes = hikes
-            self.container = container
-            self.checking = checking
-            storeID = hikes.lazy.compactMap(\.persistentModelID.storeIdentifier).first
-            since = .now
+            // The store the listed hikes live in, read when the task starts.
+            // None if none of them had been saved by then, which a list never
+            // meets: the app saves every hike in the turn that inserts it.
+            saves = StoreSaves(
+                in: container,
+                store: hikes.firstNonNil(\.persistentModelID.storeIdentifier),
+                checking: checking
+            )
             revisions = trackLines()
-            observer = Self.observe(storeID, waking: wake)
-            wake.yield()
-        }
-
-        isolated deinit {
-            if let observer { NotificationCenter.default.removeObserver(observer) }
-            wake.finish()
         }
 
         /// The listed hikes whose line may have changed since the last look:
@@ -158,7 +133,10 @@ nonisolated extension HikeListMetrics {
         func changedSinceLastLook() async -> Set<UUID> {
             var changed = written
             written = []
-            changed.formUnion(await savedRows())
+            var ids: [PersistentIdentifier: UUID] = [:]
+            for hike in hikes { ids[hike.persistentModelID] = hike.id }
+            let saved = await saves.savedRows(among: Set(ids.keys))
+            changed.formUnion(saved.compactMap { ids[$0] })
             return changed
         }
 
@@ -182,50 +160,7 @@ nonisolated extension HikeListMetrics {
                 written.insert(hike.id)
             }
             revisions = current
-            if !written.isEmpty { wake.yield() }
-        }
-
-        /// The listed hikes whose row a transaction since the last look
-        /// updated, by the store's history. None when history could not be
-        /// read, and then the first such look asks for another: see the file
-        /// header.
-        private func savedRows() async -> Set<UUID> {
-            guard let storeID else { return [] }
-            var ids: [PersistentIdentifier: UUID] = [:]
-            for hike in hikes { ids[hike.persistentModelID] = hike.id }
-            let answer = await checking(StoreHistoryCheck.Request(
-                container: container,
-                rows: Set(ids.keys),
-                storeID: storeID,
-                since: since,
-                token: token
-            ))
-            token = answer.token
-            guard answer.wasRead else {
-                if !lookFailed { wake.yield() }
-                lookFailed = true
-                return []
-            }
-            lookFailed = false
-            return Set(answer.savedRows.compactMap { ids[$0] })
-        }
-
-        /// Wakes the task for each save of the hikes' store, on whichever
-        /// thread posted it. A save of the other store (tile claims, the walk
-        /// in progress, the figures this list publishes) is dropped there.
-        private static func observe(
-            _ storeID: String?,
-            waking wake: AsyncStream<Void>.Continuation
-        ) -> (any NSObjectProtocol)? {
-            guard let storeID else { return nil }
-            return NotificationCenter.default.addObserver(
-                forName: .NSPersistentStoreRemoteChange,
-                object: nil,
-                queue: nil
-            ) { notification in
-                guard StoreHistoryCheck.storeID(of: notification) == storeID else { return }
-                wake.yield()
-            }
+            if !written.isEmpty { saves.wake() }
         }
     }
 }
