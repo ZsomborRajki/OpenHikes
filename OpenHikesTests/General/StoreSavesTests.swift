@@ -15,6 +15,11 @@
 //  SwiftData posts one. The observer reads it on the posting thread, so by
 //  the time the post returns it has been counted or dropped.
 //
+//  A test that counts wakes exactly names a store first, one no real store
+//  is. SwiftData posts a real store's remote change from a thread of its
+//  own, so the one for an earlier test's save can still arrive in the middle
+//  of a later test, and with no store named it would be counted there.
+//
 
 import CoreData
 import Foundation
@@ -46,9 +51,44 @@ struct StoreSavesTests {
         return (container, hike.persistentModelID)
     }
 
+    /// Where a store on disk goes: emptied once per run, never during one —
+    /// see `StoreSandbox` for why.
+    private static let sandbox: URL = {
+        let root = FileManager.default.temporaryDirectory
+            .appending(path: "store-saves", directoryHint: .isDirectory)
+        try? FileManager.default.removeItem(at: root)
+        return root
+    }()
+
+    /// A token, which only a store's history makes: the one a look hands back
+    /// once an import has saved a hike, as the app's first token comes. Both
+    /// stores are on disk, as the app opens them.
+    private static func importToken() async throws -> DefaultHistoryToken {
+        let directory = sandbox.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let container = try ModelContainer.openHikes(
+            url: directory.appending(path: "OpenHikes.store"),
+            localURL: directory.appending(path: "OpenHikesLocal.store")
+        )
+        let hike = Fixture.hike(in: container.mainContext)
+        try container.mainContext.save()
+        let row = hike.persistentModelID
+        let storeID = try #require(row.storeIdentifier)
+        let since = Date.now
+        try await SelectedLineStoreWatchTests.saveElsewhere(hike.id, in: container) { $0.title = "Imported" }
+        let answer = await StoreHistoryCheck.answer(StoreHistoryCheck.Request(
+            container: container,
+            rows: [row],
+            storeID: storeID,
+            since: since,
+            token: nil
+        ))
+        return try #require(answer.token)
+    }
+
     @Test("the first pass is woken at once")
     func theFirstPassIsWoken() async throws {
-        let saves = StoreSaves(in: try Fixture.modelContainer(), checking: Looks().look)
+        let saves = StoreSaves(in: try Fixture.modelContainer(), store: Self.hikesStore, checking: Looks().look)
         var changes = saves.changes.makeAsyncIterator()
         #expect(await changes.next() != nil)
         #expect(saves.wakes == 1)
@@ -56,8 +96,8 @@ struct StoreSavesTests {
 
     /// Any store's, until one is named: the library names its store from the
     /// hikes it lists, and a library that held nothing at first still has to
-    /// hear its first import. A save from outside this suite can wake it too
-    /// meanwhile, so that half asks only that this one did.
+    /// hear its first import. A real store's save can wake it too meanwhile,
+    /// so that half asks only that this one did.
     @Test("every store's saves wake the task until one is named, and then only its own")
     func onlyTheNamedStoreWakes() throws {
         let saves = StoreSaves(in: try Fixture.modelContainer(), checking: Looks().look)
@@ -123,6 +163,23 @@ struct StoreSavesTests {
         #expect(saves.wakes == woken + 2, "a look that read history starts the run again")
     }
 
+    /// The look after a failed one starts from when the task began, never
+    /// from the token held before: an expired token is one reason history
+    /// cannot be read, and it would fail every look after it. See the file
+    /// header of `StoreSaves.swift`.
+    @Test("a look starts from the last look's token, and one after a failed look from when the task began")
+    func aLookStartsFromTheLastToken() async throws {
+        let (container, row) = try Self.row()
+        let token = try await Self.importToken()
+        let looks = Looks(reads: [true, true, false, true], token: token)
+        let saves = StoreSaves(in: container, store: Self.hikesStore, checking: looks.look)
+
+        for _ in 0..<4 { _ = await saves.savedRows(among: [row]) }
+
+        #expect(looks.requests.map(\.token) == [nil, token, token, nil])
+        #expect(Set(looks.requests.map(\.since)).count == 1, "every look reads imports from the same moment")
+    }
+
     @Test("letting the saves go ends the task's stream")
     func lettingGoEndsTheStream() async throws {
         var saves: StoreSaves? = StoreSaves(in: try Fixture.modelContainer(), checking: Looks().look)
@@ -135,14 +192,17 @@ struct StoreSavesTests {
 
 /// A store's history as a test scripts it: whether each look can read it, in
 /// turn, and every request it was asked. A look it reads names every row it
-/// was asked about. One it cannot read hands them back too, as
-/// `StoreHistoryCheck` does, for the caller to leave unnamed.
+/// was asked about, and hands back `token`. One it cannot read hands the
+/// rows back too and no token, as `StoreHistoryCheck` does, for the caller
+/// to leave unnamed.
 nonisolated private final class Looks: Sendable {
     private let reads: Mutex<[Bool]>
+    private let token: DefaultHistoryToken?
     private let asked = Mutex<[StoreHistoryCheck.Request]>([])
 
-    init(reads: [Bool] = []) {
+    init(reads: [Bool] = [], token: DefaultHistoryToken? = nil) {
         self.reads = Mutex(reads)
+        self.token = token
     }
 
     var requests: [StoreHistoryCheck.Request] { asked.withLock { $0 } }
@@ -151,6 +211,6 @@ nonisolated private final class Looks: Sendable {
     func look(_ request: StoreHistoryCheck.Request) async -> StoreHistoryCheck.Answer {
         asked.withLock { $0.append(request) }
         let wasRead = reads.withLock { $0.isEmpty ? true : $0.removeFirst() }
-        return StoreHistoryCheck.Answer(token: nil, savedRows: request.rows, wasRead: wasRead)
+        return StoreHistoryCheck.Answer(token: wasRead ? token : nil, savedRows: request.rows, wasRead: wasRead)
     }
 }

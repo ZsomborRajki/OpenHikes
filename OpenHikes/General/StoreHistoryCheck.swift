@@ -58,15 +58,16 @@
 //  trap, in about half a millisecond three thousand transactions deep. The
 //  newest import such a check finds is the first token, and every later check
 //  reads from the newest token it has seen, which returns that store's saves
-//  by any author. Until then, from the start of a follow or of the list's
-//  task, or from a read that failed, no check has one.
+//  by any author. Until then, from the start of a follow or of a
+//  `StoreSaves` task, or from a read that failed, no check has one.
 //
 //  What a check with no token leaves out is every save under another author.
 //  In the app, the only context that saves a hike already in the store is the
-//  main context, and its writes of a line move the revision that both the
-//  selection's readers and the list watch. If the import's author ever
-//  changes, such a check finds nothing: a line received from another device
-//  is missed, and nothing traps.
+//  main context, and each caller hears its saves another way: its writes of
+//  a line move the revision that the selection's readers and the list watch,
+//  and the library's lines hear each of its saves (`ModelContext.didSave`).
+//  If the import's author ever changes, such a check finds nothing: a line
+//  received from another device is missed, and nothing traps.
 //
 
 import CoreData
