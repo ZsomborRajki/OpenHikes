@@ -31,9 +31,10 @@
 //  *Underneath* is a position within one level rather than a level of its
 //  own: everything this app draws is at ``MKOverlayLevel/aboveLabels``, and a
 //  shared line put below that is buried rather than faint. The order there is
-//  the ground, then these, then the hiker's library, then their selected
-//  route — see ``applyCommunityRoutes(_:on:)``, which explains what the
-//  opaque tile overlay does to anything drawn beneath it.
+//  the ground, then these, then the hiker's library, then the open preview's
+//  own line, then their selected route — see ``applyCommunityRoutes(_:on:)``,
+//  which explains what the opaque tile overlay does to anything drawn beneath
+//  it.
 //
 //  Each is outlined as every other line on this map is — a hike's own, the
 //  trail being drawn, a recording — in the black a hike's line wears until
@@ -156,7 +157,7 @@ extension MapView.Coordinator {
         if !lines.isEmpty {
             let drawings = lines.map(CommunityRouteDrawing.init)
             communityRoutes = drawings
-            addCommunityOverlays(drawings.map(\.polyline), on: mapView)
+            addCommunityOverlays(drawings, on: mapView)
         }
         // Also on the way to nothing drawn, which is what disarms the fit: an
         // early return here would leave the last preview's id standing, and
@@ -183,7 +184,9 @@ extension MapView.Coordinator {
     /// ``groundOverlay`` names — the bottom of everything the app draws. The
     /// library's lines go on over the topmost of these, and `MapView`'s own
     /// route over those, so the hiker's stay on top however they arrive — see
-    /// `MapLibraryLines.swift`.
+    /// `MapLibraryLines.swift`. All but one: the open preview's own line,
+    /// drawn at full strength because it is what the hiker is looking at, goes
+    /// over the library and under the route.
     ///
     /// The position is computed rather than timed, which is the second half of
     /// the same bug: `makeMapView` starts these observations *before* it
@@ -198,14 +201,23 @@ extension MapView.Coordinator {
     /// order, which `addInferredOverlays` documents the trap for: `above:`
     /// inserts *just* above what it is given, so naming one base repeatedly
     /// stacks them in reverse — and the previewed line is last precisely so it
-    /// draws on top.
-    private func addCommunityOverlays(_ polylines: [MKPolyline], on mapView: MKMapView) {
+    /// draws on top. It is the one named as a base: there is one of it, and
+    /// the library's overlay it goes over is one too.
+    private func addCommunityOverlays(_ drawings: [CommunityRouteDrawing], on mapView: MKMapView) {
         let drawn = mapView.overlays(in: .aboveLabels)
         let floor = groundOverlay
             .flatMap { tiles in drawn.firstIndex { $0 === tiles } }
             .map { $0 + 1 } ?? 0
-        for (offset, polyline) in polylines.enumerated() {
-            mapView.insertOverlay(polyline, at: floor + offset, level: .aboveLabels)
+        let faded = drawings.filter { !$0.line.isPreviewed }
+        for (offset, drawing) in faded.enumerated() {
+            mapView.insertOverlay(drawing.polyline, at: floor + offset, level: .aboveLabels)
+        }
+        for previewed in drawings where previewed.line.isPreviewed {
+            if let library = libraryMap.overlay {
+                mapView.insertOverlay(previewed.polyline, above: library)
+            } else {
+                mapView.insertOverlay(previewed.polyline, at: floor + faded.count, level: .aboveLabels)
+            }
         }
     }
 
@@ -279,10 +291,12 @@ extension MapView.Coordinator {
 
 #if canImport(UIKit)
 extension MapView.Coordinator {
-    /// The shared hike a tap at `point` landed on, if any.
+    /// The shared hike a tap at `point` landed on, if any, among the lines
+    /// `among` picks.
     ///
     /// Asked by ``routeTapTarget(at:in:)``, which owns the recognizer, the
-    /// claim check and the order the two kinds of line are asked in — see
+    /// claim check and the order the kinds of line are asked in — the open
+    /// preview's line above the library's, the rest below them — see
     /// `MapCoordinator+RouteTap.swift`. This half is the one that knows what a
     /// shared hike is, and it is the half worth asserting on: a
     /// `UITapGestureRecognizer`'s state and location are read-only and set by
@@ -290,13 +304,15 @@ extension MapView.Coordinator {
     /// UIKit rather than the map.
     func communityListing(
         forTapAt point: CGPoint,
-        in mapView: MKMapView
+        in mapView: MKMapView,
+        among isAsked: (CommunityRouteDrawing) -> Bool = { _ in true }
     ) -> CommunityListing? {
-        guard !communityRoutes.isEmpty else { return nil }
+        let asked = communityRoutes.filter(isAsked)
+        guard !asked.isEmpty else { return nil }
         // At most a page of lines, each at most an outline's point budget —
         // see ``RouteHitTest``, which is sized against exactly that.
         // The previewed line is the one that can be longer, and it is one.
-        let projected = communityRoutes.map { drawing in
+        let projected = asked.map { drawing in
             drawing.coordinates.map { mapView.convert($0, toPointTo: mapView) }
         }
         guard let index = RouteHitTest.nearest(
@@ -304,7 +320,7 @@ extension MapView.Coordinator {
             among: projected,
             tolerance: Self.lineTapTolerancePoints
         ) else { return nil }
-        return communityRoutes[index].line.listing
+        return asked[index].line.listing
     }
 }
 #endif

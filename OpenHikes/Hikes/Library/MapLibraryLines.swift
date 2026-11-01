@@ -22,8 +22,11 @@
 //  in both tabs.
 //
 //  The order within the one level everything here is drawn at is the ground,
-//  the shared hikes' lines, these, then the selected route and everything
-//  drawn over it.
+//  the shared hikes' faded lines, these, the open preview's own line, then the
+//  selected route and everything drawn over it. The preview's line is over
+//  these for the reason the selected route is: it is drawn at full strength
+//  because it is what the hiker is looking at, and a faded hike laid over it
+//  would fade it too wherever the two follow the same path.
 //
 //  ## What is left out
 //
@@ -38,9 +41,15 @@
 //
 //  Opens the hike, as its row does: selected, drawn properly, its screen
 //  pushed — through ``HikeOpenRequests``, so there is one way in for a widget,
-//  Siri and this. The selected route is asked first, then these, then the
-//  shared hikes' lines: the order they are drawn in, top down. See
-//  `MapCoordinator+RouteTap.swift`.
+//  Siri and this. The selected route is asked first, then the open preview's
+//  line, then these, then the other shared hikes' lines: the order they are
+//  drawn in, top down. See `MapCoordinator+RouteTap.swift`.
+//
+//  **Not while a recording is under way.** The live line cannot be tapped and
+//  is drawn over these, and a hiker walking a trail they have walked before
+//  has its faded copy right under it — so a thumb on their own track would
+//  land here, and the jump to that hike would take them off the recording.
+//  The lines stay drawn, and the list still opens any of them.
 //
 
 import Algorithms
@@ -79,6 +88,9 @@ struct LibraryLineDrawing {
 /// What the map has drawn of the library — see ``MapView/Coordinator/libraryMap``.
 struct LibraryLinesMapState {
     weak var library: LibraryLines?
+    /// Whether a recording is under way, which takes the lines' taps away —
+    /// see the file header.
+    weak var recording: RecordingEntry?
     var isObserving = false
     /// One per hike drawn, newest first.
     var drawings: [LibraryLineDrawing] = []
@@ -98,10 +110,11 @@ extension MapView.Coordinator {
     /// SwiftUI view.
     ///
     /// Idempotent, like every other registration here.
-    func observeLibraryLines(_ library: LibraryLines, on mapView: MKMapView) {
+    func observeLibraryLines(_ library: LibraryLines, recording: RecordingEntry, on mapView: MKMapView) {
         guard !libraryMap.isObserving else { return }
         libraryMap.isObserving = true
         libraryMap.library = library
+        libraryMap.recording = recording
         trackLibraryLines(library, on: mapView)
     }
 
@@ -146,16 +159,17 @@ extension MapView.Coordinator {
         insertLibraryOverlay(overlay, on: mapView)
     }
 
-    /// Puts the library's overlay over the ground and the shared hikes' lines,
-    /// and under everything else.
+    /// Puts the library's overlay over the ground and the shared hikes' faded
+    /// lines, and under everything else, the open preview's line included.
     ///
     /// By index, for the reason ``addCommunityOverlays(_:on:)`` gives: what it
     /// goes above is computed when it goes on, not assumed from what was
-    /// added first. The shared lines go on just above the ground, which is
-    /// beneath this, however the two arrive.
+    /// added first. The faded shared lines go on just above the ground, which
+    /// is beneath this, and the preview's line just above this, however they
+    /// arrive.
     private func insertLibraryOverlay(_ overlay: LibraryLinesOverlay, on mapView: MKMapView) {
         let drawn = mapView.overlays(in: .aboveLabels)
-        let below: (any MKOverlay)? = communityRoutes.last?.polyline ?? groundOverlay
+        let below: (any MKOverlay)? = communityRoutes.last { !$0.line.isPreviewed }?.polyline ?? groundOverlay
         let floor = below
             .flatMap { below in drawn.firstIndex { $0 === below } }
             .map { $0 + 1 } ?? 0
@@ -190,8 +204,10 @@ extension MapView.Coordinator {
     /// nowhere near a thumb, and a run that is costs its own points and no
     /// more — at most ``LibraryLineOutline/maximumPoints`` a hike. Nearest
     /// wins, so a thumb between two trails opens the one under it.
+    ///
+    /// Nothing while a recording is under way — see the file header.
     func libraryHikeID(forTapAt point: CGPoint, in mapView: MKMapView) -> UUID? {
-        guard !libraryMap.drawings.isEmpty else { return nil }
+        guard !libraryMap.drawings.isEmpty, libraryMap.recording?.isRecording != true else { return nil }
         let tolerance = Self.lineTapTolerancePoints
         var hikes: [UUID] = []
         var projected: [[CGPoint]] = []
