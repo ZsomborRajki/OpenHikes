@@ -71,7 +71,11 @@ struct LibraryLinesTests {
             stage.library.line(of: later.id) != nil
         }
         #expect(stage.reads.count(of: kept.id) == 1, "a delete names no other row")
-        #expect(stage.reads.count(of: deleted.id) == 1, "nor the hike it took")
+        // Asked for again it can be: a pass already under way when the delete
+        // is saved can have listed the library before it and take the deleted
+        // row as saved after it, as one did on a busy runner. By then the row
+        // is gone, so nothing comes back.
+        #expect(stage.reads.linesRead(of: deleted.id) == 1, "nor is the hike it took read again")
     }
 
     /// Heights filled in, *Edit Route*, a recording finished: written and
@@ -285,17 +289,27 @@ private extension LibraryLines {
     }
 }
 
-/// Every call the lines were read through, and the hikes each read.
+/// Every call the lines were read through, the hikes each asked for, and the
+/// lines that came back.
 nonisolated private final class ReadLog: Sendable {
     private let log = Mutex<[[UUID]]>([])
+    /// The hikes a read came back with a line for: a hike deleted since the
+    /// pass listed it has no row left to read.
+    private let found = Mutex<[UUID]>([])
     /// What the next read waits on, once ``hold()`` asks for one to wait.
     private let held = Mutex<AsyncStream<Void>?>(nil)
     private let opener = Mutex<AsyncStream<Void>.Continuation?>(nil)
 
     var calls: [[UUID]] { log.withLock { $0 } }
 
+    /// How many times `hikeID`'s line was asked for.
     func count(of hikeID: UUID) -> Int {
         calls.joined().count { $0 == hikeID }
+    }
+
+    /// How many times `hikeID`'s line was read: asked for, and there.
+    func linesRead(of hikeID: UUID) -> Int {
+        found.withLock { $0.count { $0 == hikeID } }
     }
 
     /// Makes the next read wait, logged but not yet read, until
@@ -323,7 +337,9 @@ nonisolated private final class ReadLog: Sendable {
         if let gate {
             for await _ in gate { /* nothing is sent: finishing it is the release */ }
         }
-        return await LibraryLines.readLines(hikeIDs, in: container)
+        let lines = await LibraryLines.readLines(hikeIDs, in: container)
+        found.withLock { $0.append(contentsOf: lines.keys) }
+        return lines
     }
 }
 
