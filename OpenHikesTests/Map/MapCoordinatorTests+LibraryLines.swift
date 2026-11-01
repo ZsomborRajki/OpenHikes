@@ -176,6 +176,60 @@ extension MapCoordinatorTests {
         #expect(library < route)
     }
 
+    /// Whichever reaches the map first: here the library, then the preview.
+    @Test("a preview opened over the library's lines is drawn over them, and under the selected route")
+    func aPreviewOpenedLaterIsOverTheLibrary() async throws {
+        let followed = try await followedLibrary([Self.ridge(east: Valley.eastOffset)])
+        defer { followed.stop() }
+        let browser = await browserWithALine()
+        let coordinator = MapView.Coordinator()
+        let view = mapView(
+            route: Self.route(coordinates: Self.ridge()),
+            community: browser,
+            libraryLines: followed.library
+        )
+        let map = makeMap(view, coordinator)
+        defer { detach(map) }
+        view.update(map, coordinator)
+        await settle(until: "the shared hike's line is drawn") { !coordinator.communityRoutes.isEmpty }
+
+        let previewed = CommunityListing.stub(id: "previewed")
+        browser.previewOpened(previewed)
+        browser.previewLoaded(Self.ridge(), of: previewed)
+        await settle(until: "the preview's line is drawn") {
+            coordinator.communityRoutes.contains(where: \.line.isPreviewed)
+        }
+        try expectPreviewOverTheLibrary(on: map, coordinator)
+    }
+
+    /// And here the preview, then the library's lines.
+    @Test("the library's lines landing under an open preview go beneath its line")
+    func theLibraryLandsUnderAnOpenPreview() async throws {
+        let browser = await browserPreviewing()
+        let library = LibraryLines(openRequests: openRequests)
+        let coordinator = MapView.Coordinator()
+        let view = mapView(
+            route: Self.route(coordinates: Self.ridge()),
+            community: browser,
+            libraryLines: library
+        )
+        let map = makeMap(view, coordinator)
+        defer { detach(map) }
+        view.update(map, coordinator)
+        await settle(until: "the preview's line is drawn") {
+            coordinator.communityRoutes.contains(where: \.line.isPreviewed)
+        }
+
+        let followed = try FollowedLibrary(
+            routes: [Self.ridge(east: Valley.eastOffset)],
+            openRequests: openRequests,
+            library: library
+        )
+        defer { followed.stop() }
+        await settle(until: "the library's line lands on the map") { coordinator.libraryMap.overlay != nil }
+        try expectPreviewOverTheLibrary(on: map, coordinator)
+    }
+
     /// The maker's map is the trail being drawn, for the hiker's own hikes as
     /// for the shared ones.
     @Test("drawing a trail takes the library off the map, and closing the maker brings it back")
@@ -253,7 +307,79 @@ extension MapCoordinatorTests {
         #endif
     }
 
+    /// Drawn over the library at full strength, so it is the line the hiker
+    /// sees under their thumb where the two follow the same path.
+    @Test("the open preview's line wins a tap where it runs over a library line")
+    func thePreviewWinsTheTap() async throws {
+        #if os(iOS)
+        let followed = try await followedLibrary([Self.ridge()])
+        defer { followed.stop() }
+        let previewed = CommunityListing.stub(id: "previewed")
+        let browser = CommunityBrowser(transport: nil, blockList: .scratch())
+        browser.previewOpened(previewed)
+        browser.previewLoaded(Self.ridge(), of: previewed)
+        let coordinator = MapView.Coordinator()
+        let view = mapView(community: browser, libraryLines: followed.library)
+        let map = makeMap(view, coordinator)
+        defer { detach(map) }
+        view.update(map, coordinator)
+        map.setRegion(Self.valleyRegion(), animated: false)
+        #expect(coordinator.libraryMap.drawings.count == 1, "the hiker's own hike over the same ground")
+
+        let onBoth = point(atLongitude: Valley.longitude, in: map)
+        #expect(coordinator.routeTapTarget(at: onBoth, in: map) == .communityListing(previewed))
+        #endif
+    }
+
+    /// The live line cannot be tapped and is drawn over these, so a thumb on
+    /// the hiker's own track would open the faded hike under it and take them
+    /// off the recording.
+    @Test("a library line opens nothing while a recording is under way, and is still drawn")
+    func noLibraryTapWhileRecording() async throws {
+        #if os(iOS)
+        let followed = try await followedLibrary([Self.ridge()])
+        defer { followed.stop() }
+        let coordinator = MapView.Coordinator()
+        let (_, map) = mapOverTheValley(coordinator, library: followed.library)
+        defer { detach(map) }
+        let onTheLine = point(atLongitude: Valley.longitude, in: map)
+
+        recordingState.isLive = true
+        #expect(coordinator.routeTapTarget(at: onTheLine, in: map) == nil)
+        #expect(coordinator.libraryMap.drawings.count == 1)
+        recordingState.isLive = false
+        #expect(coordinator.routeTapTarget(at: onTheLine, in: map) == .libraryHike(followed.hikeIDs[0]))
+        #endif
+    }
+
     // MARK: - Helpers
+
+    /// The ground, the shared hike's faded line, the library, the open
+    /// preview's line and the selected route, in that order from the bottom.
+    private func expectPreviewOverTheLibrary(on map: MKMapView, _ coordinator: MapView.Coordinator) throws {
+        let drawn = map.overlays(in: .aboveLabels)
+        func position(of overlay: (any MKOverlay)?) throws -> Int {
+            try #require(drawn.firstIndex { $0 === overlay })
+        }
+        let ground = try position(of: coordinator.groundOverlay)
+        let shared = try position(of: coordinator.communityRoutes.first { !$0.line.isPreviewed }?.polyline)
+        let library = try position(of: coordinator.libraryMap.overlay)
+        let preview = try position(of: coordinator.communityRoutes.first(where: \.line.isPreviewed)?.polyline)
+        let route = try position(of: coordinator.routeOverlay)
+        #expect(ground < shared)
+        #expect(shared < library)
+        #expect(library < preview, "the preview's line is what the hiker is looking at")
+        #expect(preview < route)
+    }
+
+    /// `browserWithALine()`, with another hike's preview open over it.
+    private func browserPreviewing() async -> CommunityBrowser {
+        let browser = await browserWithALine()
+        let previewed = CommunityListing.stub(id: "previewed")
+        browser.previewOpened(previewed)
+        browser.previewLoaded(Self.ridge(), of: previewed)
+        return browser
+    }
 
     /// A browser holding one shared hike's line, with nothing on a network.
     private func browserWithALine() async -> CommunityBrowser {

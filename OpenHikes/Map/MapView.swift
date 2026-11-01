@@ -226,7 +226,7 @@ struct MapView: MapViewRepresentable, Equatable {
         coordinator.observeCommunityRoutes(community, on: mapView)
         // And the hiker's own hikes, over those and under the selected one —
         // see `MapLibraryLines.swift`. The same recognizer answers for them.
-        coordinator.observeLibraryLines(libraryLines, on: mapView)
+        coordinator.observeLibraryLines(libraryLines, recording: recordingEntry, on: mapView)
         #if canImport(UIKit)
         coordinator.installRouteTap(on: mapView)
         // And the press that moves a point already down. A separate
@@ -612,10 +612,12 @@ struct MapView: MapViewRepresentable, Equatable {
             // Above the library's lines and the shared hikes' when any are
             // drawn, rather than above the tiles they are anchored on: all of
             // them sit in this level, and naming the tile overlay here would
-            // slide this line underneath theirs. See `MapLibraryLines.swift`,
-            // which puts its overlay over the topmost of the shared ones,
-            // which `MapCommunityRoutes.swift` keeps last.
-            let below: any MKOverlay = coordinator.libraryMap.overlay
+            // slide this line underneath theirs. The topmost of them is the
+            // open preview's line, which `MapCommunityRoutes.swift` puts over
+            // the library, then the library, which `MapLibraryLines.swift`
+            // puts over the faded shared lines.
+            let below: any MKOverlay = coordinator.communityRoutes.last(where: \.line.isPreviewed)?.polyline
+                ?? coordinator.libraryMap.overlay
                 ?? coordinator.communityRoutes.last?.polyline
                 ?? ground
             mapView.insertOverlay(polyline, above: below)

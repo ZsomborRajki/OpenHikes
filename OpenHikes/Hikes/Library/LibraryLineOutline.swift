@@ -78,7 +78,10 @@ nonisolated enum LibraryLineOutline {
         maximumPoints: Int = Self.maximumPoints,
         pauseBudget: Int = Self.pauseBudget
     ) -> [[CLLocationCoordinate2D]] {
-        let spaced = keptRuns(of: route, pauseBudget: pauseBudget).compactMap { range in
+        // Every run keeps both of its ends, so no more breaks than the points
+        // can pay for, as in the watch's package.
+        let affordable = max(0, min(pauseBudget, (maximumPoints - 2) / 2))
+        let spaced = keptRuns(of: route, pauseBudget: affordable).compactMap { range in
             let points = spacedOut(route[range])
             return points.count > 1 ? points : nil
         }

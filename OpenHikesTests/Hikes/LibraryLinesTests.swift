@@ -63,7 +63,15 @@ struct LibraryLinesTests {
         await settleDelegateHop(until: "the deleted hike's line goes") {
             stage.library.lines.map(\.hikeID) == [kept.id]
         }
-        #expect(stage.reads.count(of: kept.id) == 1)
+        // The line goes before that pass reads anything, and passes run one
+        // at a time, so a hike saved afterwards is what says it is over.
+        let later = Fixture.hike(in: main, title: "Later")
+        try main.save()
+        await settleDelegateHop(until: "a hike saved afterwards is drawn") {
+            stage.library.line(of: later.id) != nil
+        }
+        #expect(stage.reads.count(of: kept.id) == 1, "a delete names no other row")
+        #expect(stage.reads.count(of: deleted.id) == 1, "nor the hike it took")
     }
 
     /// Heights filled in, *Edit Route*, a recording finished: written and
@@ -172,6 +180,14 @@ struct LibraryLinesTests {
         await settleDelegateHop(until: "both hikes are drawn and a second look has failed") {
             stage.library.lines.count == 2 && looks.count >= 2
         }
+        // The second look's pass decides what to read only after the look,
+        // and right, it reads nothing to show for it: a hike saved afterwards
+        // is what says that pass is over.
+        let later = Fixture.hike(in: main, title: "Later")
+        try main.save()
+        await settleDelegateHop(until: "a hike saved afterwards is drawn") {
+            stage.library.line(of: later.id) != nil
+        }
         #expect(hikes.allSatisfy { stage.reads.count(of: $0.id) == 1 })
     }
 
@@ -189,9 +205,14 @@ struct LibraryLinesTests {
         stage.stop()
         let before = stage.library.lines.map(\.revision)
 
+        // The new follow publishes what it listed before it reads, so its
+        // read is held while that publication is looked at.
+        stage.reads.hold()
         stage.start()
         defer { stage.stop() }
-        #expect(stage.library.lines.count == 2, "what was drawn stays drawn")
+        await settleDelegateHop(until: "the new follow is reading") { stage.reads.calls.count == 2 }
+        #expect(stage.library.lines.map(\.revision) == before, "what was drawn stays drawn")
+        stage.reads.release()
         await settleDelegateHop(until: "every line is read again") {
             hikes.allSatisfy { stage.reads.count(of: $0.id) == 2 }
                 && stage.library.lines.map(\.revision) != before
@@ -267,6 +288,9 @@ private extension LibraryLines {
 /// Every call the lines were read through, and the hikes each read.
 nonisolated private final class ReadLog: Sendable {
     private let log = Mutex<[[UUID]]>([])
+    /// What the next read waits on, once ``hold()`` asks for one to wait.
+    private let held = Mutex<AsyncStream<Void>?>(nil)
+    private let opener = Mutex<AsyncStream<Void>.Continuation?>(nil)
 
     var calls: [[UUID]] { log.withLock { $0 } }
 
@@ -274,9 +298,31 @@ nonisolated private final class ReadLog: Sendable {
         calls.joined().count { $0 == hikeID }
     }
 
+    /// Makes the next read wait, logged but not yet read, until
+    /// ``release()``. A cancelled task stops waiting too.
+    func hold() {
+        let (stream, continuation) = AsyncStream.makeStream(of: Void.self)
+        held.withLock { $0 = stream }
+        opener.withLock { $0 = continuation }
+    }
+
+    func release() {
+        opener.withLock { continuation in
+            continuation?.finish()
+            continuation = nil
+        }
+    }
+
     @concurrent
     func read(_ hikeIDs: [UUID], in container: ModelContainer) async -> [UUID: [[CLLocationCoordinate2D]]] {
         log.withLock { $0.append(hikeIDs) }
+        let gate = held.withLock { waiting in
+            defer { waiting = nil }
+            return waiting
+        }
+        if let gate {
+            for await _ in gate { /* nothing is sent: finishing it is the release */ }
+        }
         return await LibraryLines.readLines(hikeIDs, in: container)
     }
 }

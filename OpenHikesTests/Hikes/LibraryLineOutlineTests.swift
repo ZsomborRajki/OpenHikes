@@ -143,6 +143,27 @@ struct LibraryLineOutlineTests {
         #expect(runs.dropFirst().map(\.count) == [3, 3, 3])
     }
 
+    /// Every run keeps both of its ends, so a break costs two points whatever
+    /// the pause budget allows: a point budget smaller than that keeps only
+    /// the breaks it can pay for, as the watch's package does (#1023).
+    @Test("a point budget too small for the pause budget is still a bound")
+    func aSmallPointBudgetBoundsTheBreaks() {
+        // Ten segments of three points, every break the same length, so the
+        // earliest ones are the breaks kept.
+        var route: [RouteCoordinate] = []
+        var north = 0.0
+        for segment in 0..<10 {
+            north += 100
+            for index in 0..<3 {
+                route.append(Self.point(north: north, boundary: segment > 0 && index == 0 ? .paused : nil))
+                north += 10
+            }
+        }
+        let runs = LibraryLineOutline.runs(of: route, maximumPoints: 8)
+        #expect(Self.count(runs) <= 8)
+        #expect(runs.count == 4, "eight points pay for three breaks")
+    }
+
     @Test("a point that is not a place on Earth is left out")
     func invalidPointsAreDropped() throws {
         var route = Self.straight(points: 10, spacing: 10)

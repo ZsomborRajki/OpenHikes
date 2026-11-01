@@ -18,7 +18,7 @@
 //  anybody made. So the gesture, the check that nothing above the map has a
 //  better claim to the touch, and the order the hit-tests are asked in all
 //  live here, and each kind of line keeps only the part that knows what it is:
-//  ``communityListing(forTapAt:in:)`` in `MapCommunityRoutes.swift`,
+//  ``communityListing(forTapAt:in:among:)`` in `MapCommunityRoutes.swift`,
 //  ``libraryHikeID(forTapAt:in:)`` in `MapLibraryLines.swift`, and
 //  ``isTapOnDrawnRoute(at:in:)`` below.
 //
@@ -35,8 +35,8 @@
 //  It is drawn on top, it is drawn at full strength and the hiker chose its
 //  colour, so it is the one they can see under their thumb where the lines
 //  overlap. Asking it first is the whole of that rule, and the rest are asked
-//  in the order they are drawn, top down: the library's, then the shared
-//  hikes'.
+//  in the order they are drawn, top down: the open preview's own line, at full
+//  strength, then the library's, then the other shared hikes'.
 //
 //  ## What a tap costs
 //
@@ -334,8 +334,12 @@ extension MapView.Coordinator: UIGestureRecognizerDelegate {
     func routeTapTarget(at point: CGPoint, in mapView: MKMapView) -> RouteTapTarget? {
         guard !isTapClaimed(at: point, in: mapView) else { return nil }
         if isTapOnDrawnRoute(at: point, in: mapView) { return .drawnRoute }
+        if let previewed = communityListing(forTapAt: point, in: mapView, among: \.line.isPreviewed) {
+            return .communityListing(previewed)
+        }
         if let hikeID = libraryHikeID(forTapAt: point, in: mapView) { return .libraryHike(hikeID) }
-        return communityListing(forTapAt: point, in: mapView).map(RouteTapTarget.communityListing)
+        return communityListing(forTapAt: point, in: mapView) { !$0.line.isPreviewed }
+            .map(RouteTapTarget.communityListing)
     }
 
     /// Whether a tap at `point` landed on the hiker's own drawn route.
