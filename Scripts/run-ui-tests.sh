@@ -18,6 +18,7 @@ bundle="OpenHikesUITests"
 suites=(
   OpenHikesUITests
   HikeOrderUITests
+  LibraryLinesUITests
   MapScreenAlertUITests
   OrientationUITests
   RecordingUITests

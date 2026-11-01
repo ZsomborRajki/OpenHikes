@@ -18,6 +18,12 @@
 //  order knowable from the titles alone: *Seeded Trail 1* is the newest, so it
 //  is the row a date-ordered list draws first.
 //
+//  The map needs the opposite: hikes that differ in where they go. All of the
+//  bare hikes walk one route, which the map draws as one line however many of
+//  them there are, so `--ui-test-seed-nearby-trails` puts three different
+//  trails in the library instead, each from its own GPX and in its own colour,
+//  starting within a kilometre of one another at the Königssee.
+//
 
 import Foundation
 import OpenHikesData
@@ -63,6 +69,34 @@ nonisolated enum SeededLibraryFixture {
             // be on top is a test that can agree with a bug.
             hike.date = Self.date(daysAgo: index)
             context.insert(hike)
+        }
+        try? context.save()
+    }
+
+    /// The trails ``seedNearbyTrails(in:)`` adds, newest first: the bundled
+    /// GPX each walks, and its title. The same files the *Community* tab's
+    /// showcase draws (`SeededCommunityShowcase`).
+    static let nearbyTrails: [(fixture: String, title: String)] = [
+        ("KoenigsseeMalerwinkel", "Malerwinkel Loop"),
+        ("KoenigsseeRinnkendlsteig", "Rinnkendlsteig"),
+        ("KoenigsseeGotzenalm", "Gotzenalm"),
+    ]
+
+    /// Adds the ``nearbyTrails``, dated a day apart like the bare hikes and
+    /// coloured a third of the palette's wheel apart, so no two of the lines
+    /// can be taken for one another.
+    @MainActor
+    static func seedNearbyTrails(in context: ModelContext) {
+        for (index, trail) in nearbyTrails.enumerated() {
+            guard let url = Bundle.main.url(forResource: trail.fixture, withExtension: "gpx"),
+                  let track = try? GPXImport.load(from: url) else { continue }
+            context.insert(Hike(
+                title: trail.title,
+                distanceMeters: track.distanceMeters,
+                date: Self.date(daysAgo: index),
+                tintHex: RouteTint.color(hue: Double(index) / Double(nearbyTrails.count)).hexRGBA,
+                route: track.route
+            ))
         }
         try? context.save()
     }

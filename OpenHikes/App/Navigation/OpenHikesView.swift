@@ -798,7 +798,8 @@ extension OpenHikesView {
     }
 
     /// The launch fixtures that belong to no imported hike: a library of bare
-    /// hikes, a weather reading and a recording under way.
+    /// hikes or of trails side by side, a weather reading and a recording
+    /// under way.
     ///
     /// Separate from the GPX task because none of them depends on an import
     /// having happened, and making them wait on a fixture they do not use
@@ -811,6 +812,9 @@ extension OpenHikesView {
             count: AppLaunchEnvironment.seededLibraryHikeCount,
             in: modelContext
         )
+        if AppLaunchEnvironment.seedsNearbyTrails {
+            SeededLibraryFixture.seedNearbyTrails(in: modelContext)
+        }
         if AppLaunchEnvironment.stubsWeather {
             appModel.weatherManager.applyUITestSnapshot()
         }
