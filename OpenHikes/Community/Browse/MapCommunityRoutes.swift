@@ -70,6 +70,7 @@
 //  same thing at different sizes.
 //
 
+import Algorithms
 import MapKit
 import OpenHikesData
 import SwiftUI
@@ -208,15 +209,17 @@ extension MapView.Coordinator {
         let floor = groundOverlay
             .flatMap { tiles in drawn.firstIndex { $0 === tiles } }
             .map { $0 + 1 } ?? 0
-        let faded = drawings.filter { !$0.line.isPreviewed }
+        // `partitioned(by:)` answers (does not satisfy, satisfies), and each
+        // half keeps the order it was given in.
+        let (faded, previewed) = drawings.partitioned(by: \.line.isPreviewed)
         for (offset, drawing) in faded.enumerated() {
             mapView.insertOverlay(drawing.polyline, at: floor + offset, level: .aboveLabels)
         }
-        for previewed in drawings where previewed.line.isPreviewed {
+        for drawing in previewed {
             if let library = libraryMap.overlay {
-                mapView.insertOverlay(previewed.polyline, above: library)
+                mapView.insertOverlay(drawing.polyline, above: library)
             } else {
-                mapView.insertOverlay(previewed.polyline, at: floor + faded.count, level: .aboveLabels)
+                mapView.insertOverlay(drawing.polyline, at: floor + faded.count, level: .aboveLabels)
             }
         }
     }
