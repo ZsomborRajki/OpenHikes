@@ -125,7 +125,11 @@ struct MapCoordinatorTests {
         // And for the reason `community` is: one file's worth of tests needs
         // the hiker's other hikes on the map — see
         // `MapCoordinatorTests+LibraryLines.swift`.
-        libraryLines: LibraryLines? = nil
+        libraryLines: LibraryLines? = nil,
+        // And for the same reason: one file's worth of tests needs a trail
+        // shown under a recording — see
+        // `MapCoordinatorTests+RecordingGuide.swift`.
+        recordingGuide: RecordingGuide? = nil
     ) -> MapView {
         MapView(
             locationManager: locationManager ?? self.locationManager,
@@ -149,6 +153,7 @@ struct MapCoordinatorTests {
             community: community,
             searchCompleter: searchCompleter,
             libraryLines: libraryLines ?? LibraryLines(openRequests: openRequests),
+            recordingGuide: recordingGuide,
             sidePanelInset: sidePanelInset,
             isCoveredByPanel: isCoveredByPanel
         )

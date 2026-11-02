@@ -67,6 +67,10 @@ struct HikeDetailView: View {
     /// The maker, for *Edit Route* on a trail drawn in it — see
     /// ``HikeRouteEditButton``. `nil` withholds the button.
     var trailMaker: TrailDraftController?
+    /// The trail shown under the recording under way, for *Show While
+    /// Recording* in the bar — see ``RecordingGuideButton``. `nil` withholds
+    /// the button.
+    var recordingGuide: RecordingGuide?
     /// Pushes the full-space viewer for a tapped thumbnail.
     var onOpenPhoto: (HikePhoto) -> Void = { _ in /* no-op default */ }
     /// Pushes one of this hike's places. See ``HikePlaceView``.
@@ -219,12 +223,15 @@ struct HikeDetailView: View {
         // Start / Pause in the bar, which is still showing at the sheet's
         // smallest detent — see ``WalkToggleButton``. Handed the session as a
         // reference, like ``WalkControls`` below: this closure is inlined
-        // into the body, and neither dereferences it.
+        // into the body, and neither dereferences it. While a recording is
+        // under way, which no walk starts beside, the same place offers to
+        // show this trail under it instead — see ``RecordingGuideButton``.
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 WalkToggleButton(
                     hike: hike, profile: profile, walkRevision: preparedLine?.walkRevision, session: walkSession
                 )
+                RecordingGuideButton(hike: hike, guide: recordingGuide)
             }
         }
         // On the container rather than on the Details face, so flipping to

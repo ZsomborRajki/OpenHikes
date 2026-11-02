@@ -20,6 +20,9 @@ struct RecordingCard: View {
     let recorder: HikeRecorder
     var onSaved: (Hike) -> Void
     var onDiscarded: (UUID?) -> Void
+    /// The trail shown under the recording, named above the figures — see
+    /// ``RecordingGuideRow``. `nil` names nothing.
+    var guide: RecordingGuide?
 
     @State private var showDiscardConfirmation = false
     @State private var showStopAlert = false
@@ -57,6 +60,12 @@ struct RecordingCard: View {
             phaseContent
             RecordingRecoveryNotice(recorder: recorder)
             RecordingConditionsNotice(recorder: recorder)
+            // Above the figures, so it is in view at the sheet's middle
+            // height, where the map it is about is too. Its own view, so
+            // this body reads nothing of the guide.
+            if let guide {
+                RecordingGuideRow(guide: guide)
+            }
             RecordingStatsSection(recorder: recorder)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

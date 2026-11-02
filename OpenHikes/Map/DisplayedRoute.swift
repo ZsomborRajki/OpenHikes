@@ -218,7 +218,13 @@ final class DisplayedRouteCoordinateCache {
     /// and nothing until then. A new line for the same hike replaces the
     /// old one only when its own projection lands.
     func drawnRoute(for hike: Hike) -> DrawnRoute? {
-        guard let prepared, prepared.hikeID == hike.id else { return nil }
+        drawnRoute(forHikeID: hike.id)
+    }
+
+    /// The same, by the hike's id, for a reader that keeps the id rather than
+    /// the hike — see ``RecordingGuide``.
+    func drawnRoute(forHikeID hikeID: UUID) -> DrawnRoute? {
+        guard let prepared, prepared.hikeID == hikeID else { return nil }
         return prepared.route
     }
 

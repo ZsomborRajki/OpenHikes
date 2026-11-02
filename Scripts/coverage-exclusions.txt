@@ -190,6 +190,12 @@
 # heading is `WikidataPlace`'s, and what is asked and read is
 # `WikidataPlaceSource` and `WikidataQuery`, each with a suite of its own.
 #
+# `RecordingGuideRow` and `RecordingGuideButton` arrived on 2026-11-02: the
+# trail shown under a recording, named on the recording screen and offered on
+# the trail's own, entirely body code. What they decide is `RecordingGuide`'s
+# (`RecordingGuideTests`), and what the map draws is `MapRecordingGuide`'s
+# (`MapCoordinatorTests+RecordingGuide`).
+#
 # The UI suites still exist and still run locally:
 #
 #   Scripts/run-ui-tests.sh --all
@@ -286,3 +292,5 @@ OpenHikes/Recording/RecordingPlaceSheet.swift
 OpenHikes/Map/MapSheet+Places.swift
 OpenHikes/Community/Publishing/CommunityFinishSendingSection.swift
 OpenHikes/Tips/CommunityTabTipView.swift
+OpenHikes/Recording/RecordingGuideRow.swift
+OpenHikes/Recording/RecordingGuideButton.swift

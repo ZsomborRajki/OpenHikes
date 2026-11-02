@@ -32,7 +32,8 @@
 //
 //  - **The selected hike**, which the map draws properly. Its faded copy
 //    under the real line would show through a dashed or translucent route,
-//    and beside it wherever the outline cut a corner.
+//    and beside it wherever the outline cut a corner. The trail shown under
+//    a recording is left out for the same reason (`MapRecordingGuide.swift`).
 //  - **Everything while a trail is being drawn**, for the reason the shared
 //    hikes are withdrawn then (``withdrawCommunityForDrawing(_:on:)``): the
 //    maker's map is the trail being drawn.
@@ -128,7 +129,8 @@ extension MapView.Coordinator {
     }
 
     /// Brings the drawn lines up to the library: every line but the selected
-    /// hike's, and none while a trail is being drawn.
+    /// hike's and the one shown under a recording (`MapRecordingGuide.swift`),
+    /// and none while a trail is being drawn.
     ///
     /// Asked again when a line lands, when the selection's route is drawn or
     /// taken away (`MapView.updateRoute`) and when the maker opens or closes.
@@ -136,7 +138,9 @@ extension MapView.Coordinator {
     /// and a line that did not change keeps its polylines, so the renderer
     /// keeps its strokes.
     func applyLibraryLines(on mapView: MKMapView) {
-        let shown = isDrawingTrail ? [] : (libraryMap.library?.lines ?? []).filter { $0.hikeID != routeID }
+        let shown = isDrawingTrail
+            ? []
+            : (libraryMap.library?.lines ?? []).filter { $0.hikeID != routeID && $0.hikeID != guideMap.hikeID }
         guard shown != libraryMap.drawings.map(\.line) else { return }
         let kept = libraryMap.drawings.keyed(by: \.line.hikeID)
         libraryMap.drawings = shown.map { line in

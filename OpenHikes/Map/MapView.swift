@@ -151,6 +151,13 @@ struct MapView: MapViewRepresentable, Equatable {
     /// it to MapKit and re-renders no view — see ``LibraryLines``.
     var libraryLines: LibraryLines
 
+    /// The trail shown under the recording, if any, drawn at full strength
+    /// beneath the live line. Observed directly by the map (not via SwiftUI)
+    /// so choosing one or the recording ending moves MapKit and re-renders no
+    /// view — see ``RecordingGuide``. Optional so a suite can build a map
+    /// without one.
+    var recordingGuide: RecordingGuide?
+
     /// How far the landscape side panel reaches in from the leading edge, or
     /// zero in portrait where there is no panel and the sheet is over the map
     /// instead.
@@ -227,6 +234,11 @@ struct MapView: MapViewRepresentable, Equatable {
         // And the hiker's own hikes, over those and under the selected one —
         // see `MapLibraryLines.swift`. The same recognizer answers for them.
         coordinator.observeLibraryLines(libraryLines, recording: recordingEntry, on: mapView)
+        // And the trail shown under a recording, over all of those and under
+        // the live line — see `MapRecordingGuide.swift`. Not tappable.
+        if let recordingGuide {
+            coordinator.observeRecordingGuide(recordingGuide, on: mapView)
+        }
         #if canImport(UIKit)
         coordinator.installRouteTap(on: mapView)
         // And the press that moves a point already down. A separate
@@ -571,6 +583,9 @@ struct MapView: MapViewRepresentable, Equatable {
         // `MapLibraryLines.swift`. Asked on every way out below, a route
         // taken away included.
         coordinator.applyLibraryLines(on: mapView)
+        // And the trail shown under a recording, which is left to the line
+        // drawn here when the two are the same hike.
+        coordinator.applyRecordingGuide(on: mapView)
 
         if let existing = coordinator.routeOverlay {
             mapView.removeOverlay(existing)
@@ -613,10 +628,13 @@ struct MapView: MapViewRepresentable, Equatable {
             // drawn, rather than above the tiles they are anchored on: all of
             // them sit in this level, and naming the tile overlay here would
             // slide this line underneath theirs. The topmost of them is the
-            // open preview's line, which `MapCommunityRoutes.swift` puts over
-            // the library, then the library, which `MapLibraryLines.swift`
-            // puts over the faded shared lines.
-            let below: any MKOverlay = coordinator.communityRoutes.last(where: \.line.isPreviewed)?.polyline
+            // trail shown under a recording, which `MapRecordingGuide.swift`
+            // puts over the rest, then the open preview's line, which
+            // `MapCommunityRoutes.swift` puts over the library, then the
+            // library, which `MapLibraryLines.swift` puts over the faded
+            // shared lines.
+            let below: any MKOverlay = coordinator.guideMap.overlay
+                ?? coordinator.communityRoutes.last(where: \.line.isPreviewed)?.polyline
                 ?? coordinator.libraryMap.overlay
                 ?? coordinator.communityRoutes.last?.polyline
                 ?? ground
@@ -870,6 +888,7 @@ extension MapView {
             && lhs.community === rhs.community
             && lhs.searchCompleter === rhs.searchCompleter
             && lhs.libraryLines === rhs.libraryLines
+            && lhs.recordingGuide === rhs.recordingGuide
             && lhs.sidePanelInset == rhs.sidePanelInset
             && lhs.isCoveredByPanel == rhs.isCoveredByPanel
     }

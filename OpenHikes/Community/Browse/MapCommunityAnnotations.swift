@@ -149,12 +149,14 @@ extension MapView.Coordinator {
     /// so what comes back is whatever the tab holds by then.
     ///
     /// The hiker's own hikes go and come back with them, for the same reason —
-    /// see `MapLibraryLines.swift`.
+    /// see `MapLibraryLines.swift` — and so does a trail shown under a
+    /// recording (`MapRecordingGuide.swift`).
     func withdrawCommunityForDrawing(_ drawing: Bool, on mapView: MKMapView) {
         guard isDrawingTrail != drawing else { return }
         // The flag every half reads, set by the pill's rule.
         withdrawAreaSearchForDrawing(drawing)
         applyLibraryLines(on: mapView)
+        applyRecordingGuide(on: mapView)
         guard let community else { return }
         applyCommunityAnswer(community, on: mapView)
         applyCommunityRoutes(drawnCommunityRoutes(of: community), on: mapView)

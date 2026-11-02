@@ -10,7 +10,7 @@ There is no OpenHikes account and no server holding your hikes: they live on the
 
 - **Recording** in the background, with pause and resume, crash recovery and barometric elevation. The track is matched to OpenStreetMap's paths, and any stretch the matcher moved waits for your review before the hike is saved.
 - **GPX import and export**: open files from Files, AirDrop or any share sheet, one hike per track, and share any hike back as GPX, with its places as waypoints.
-- **Drawing a trail**: press and hold to drop stops, or search for them by name. Each leg follows the paths OpenStreetMap has mapped.
+- **Drawing a trail**: press and hold to drop stops, or search for them by name. Each leg follows the paths OpenStreetMap has mapped. A trail drawn or chosen mid-recording can be shown under the recording.
 - **Places** along a trail: huts, springs and waterfalls from OpenStreetMap, or places of your own, with your photographs and, where OpenStreetMap links one, the start of the place's Wikipedia article.
 - **Walking a saved trail**, with progress along it, a history of past walks and a shareable photo card.
 - **Statistics**: an interactive elevation profile, overall and moving average speed, surface and Swiss Alpine Club difficulty from OpenStreetMap, and yearly and all-time totals.

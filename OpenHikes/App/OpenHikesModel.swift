@@ -102,6 +102,14 @@ final class OpenHikesModel {
     /// starts. Built on first use for the reason ``recordingEntry`` is; a tap
     /// on one opens through ``hikeOpenRequests``. See ``LibraryLines``.
     @ObservationIgnored private(set) lazy var libraryLines = LibraryLines(openRequests: hikeOpenRequests)
+    /// The trail shown under the recording under way, drawn by the map and
+    /// named by the recording screen. Built on first use for the reason
+    /// ``recordingEntry`` is; the recorder stays the single authority on which
+    /// recording is under way. See ``RecordingGuide``.
+    @ObservationIgnored private(set) lazy var recordingGuide = RecordingGuide(
+        recorder: hikeRecorder,
+        openRequests: hikeOpenRequests
+    )
     /// The first-run tips, or `nil` for a launch that shows none. Loaded by
     /// ``startTips()`` rather than in `init`, which is at its length limit and
     /// runs for suites that build their own model — see ``AppTips``.

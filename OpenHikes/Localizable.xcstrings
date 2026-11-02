@@ -16273,6 +16273,22 @@
         }
       }
     },
+    "Show While Recording" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Während der Aufzeichnung zeigen"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher pendant l’enregistrement"
+          }
+        }
+      }
+    },
     "Shown publicly beside your photos, so others can tell them apart. You can leave it blank." : {
       "localizations" : {
         "de" : {
@@ -16993,6 +17009,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Arrêter l’enregistrement de la randonnée"
+          }
+        }
+      }
+    },
+    "Stop Showing" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht mehr zeigen"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ne plus afficher"
+          }
+        }
+      }
+    },
+    "Stop Showing While Recording" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Während der Aufzeichnung nicht mehr zeigen"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ne plus afficher pendant l’enregistrement"
           }
         }
       }
@@ -19424,6 +19472,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Distance du sentier"
+          }
+        }
+      }
+    },
+    "Trail on the Map" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weg auf der Karte"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sentier sur la carte"
           }
         }
       }

@@ -31,6 +31,10 @@ struct RecordingView: View {
     /// Where *Add Place* asks OpenStreetMap what is here, or `nil` for a
     /// launch that must not ask.
     var placeSource: (any TrailPointSourcing)?
+    /// The trail shown under this recording, named in the card with a way to
+    /// stop showing it — see ``RecordingGuideRow``. Optional so previews and
+    /// tests can build this view without one.
+    var recordingGuide: RecordingGuide?
     /// Pushes one of the walk's places, where its photographs are taken.
     var onOpenPlace: (Hike, UUID) -> Void = { _, _ in /* no-op default */ }
     /// Pushes *Add Place* for a place of the hiker's own at where they stood —
@@ -70,7 +74,8 @@ struct RecordingView: View {
                 RecordingCard(
                     recorder: recorder,
                     onSaved: onSaved,
-                    onDiscarded: onDiscarded
+                    onDiscarded: onDiscarded,
+                    guide: recordingGuide
                 )
                 .padding()
                 .id(Self.cardID)

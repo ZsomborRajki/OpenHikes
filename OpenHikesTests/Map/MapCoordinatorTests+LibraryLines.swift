@@ -407,7 +407,7 @@ extension MapCoordinatorTests {
 /// A library on an in-memory store, its lines followed until the test stops
 /// it.
 @MainActor
-private final class FollowedLibrary {
+final class FollowedLibrary {
     let container: ModelContainer
     let library: LibraryLines
     /// Newest first, the order the lines are drawn in.

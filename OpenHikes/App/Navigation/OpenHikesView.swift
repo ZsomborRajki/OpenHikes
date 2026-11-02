@@ -320,6 +320,7 @@ struct OpenHikesView: View {
             community: appModel.community,
             searchCompleter: appModel.searchCompleter,
             libraryLines: appModel.libraryLines,
+            recordingGuide: appModel.recordingGuide,
             // Keeps the credit line and the camera pill beside the landscape
             // panel instead of behind it.
             sidePanelInset: usesSidePanel ? MapSidePanelLayout.mapInset : 0,

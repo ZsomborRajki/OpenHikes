@@ -48,5 +48,6 @@ extension HikeDetailView: Equatable {
             && lhs.photoPins === rhs.photoPins
             && lhs.placePins === rhs.placePins
             && lhs.trailMaker === rhs.trailMaker
+            && lhs.recordingGuide === rhs.recordingGuide
     }
 }

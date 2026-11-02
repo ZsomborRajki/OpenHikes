@@ -583,6 +583,16 @@ a change to recording, the map, the sheet or the render path; the PR template,
   the next fix, and a recording is not. Three places hold the rule and must
   agree: `TrailWidgetEntry.init`, `HikeLiveActivityController.accepts(_:)` and
   `HikeRecordingControlState.init(snapshot:)`.
+- **A trail shown under a recording is not a walk** (`RecordingGuide`). A
+  hiker walks a trail or records one, never both, so during a recording a
+  trail's screen offers *Show While Recording* where Start Hike would be.
+  - The map draws the trail's whole line at full strength, over the library
+    and under the live line (`MapRecordingGuide.swift`), and the recording
+    card names it with Stop Showing.
+  - Nothing matches against it or keeps a distance left, and it reaches no
+    widget, Live Activity or watch.
+  - It ends with the recording, and lives in memory only, so a recovered
+    recording has none.
 - **App Intents perform through `HikeIntentCoordinator`.** The system can launch
   the process just to run an intent, so no view state is reachable.
   `OpenHikesApp.init()` registers the coordinator, and each intent makes one

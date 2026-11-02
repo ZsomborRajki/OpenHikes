@@ -493,37 +493,7 @@ struct MapSheet: View {
     @ViewBuilder
     private func navigationDestinationView(for route: SheetRoute) -> some View {
         switch route {
-        case .hike(let hike):
-            HikeDetailView(
-                hike: hike,
-                highlight: highlight,
-                mapController: mapController,
-                autoSave: appModel.autoSaveController,
-                entitlement: appModel.entitlement,
-                settings: appModel.storedSettings,
-                locationManager: appModel.locationManager,
-                backgroundTracker: appModel.backgroundTracker,
-                selectedLine: appModel.selectedLine,
-                lineStoreWatch: appModel.selectedLineStoreWatch,
-                trailGraphProvider: appModel.trailGraphProvider,
-                walkSession: appModel.walkSession,
-                photoCapture: photoCapture,
-                photoPins: photoPins,
-                placePins: placePins,
-                communityTransport: appModel.communityTransport,
-                trailMaker: trailMaker,
-                onOpenPhoto: { photo in presentation.path.append(.photo(hike, photo.id)) },
-                onOpenPlace: { placeID in openPlace(placeID, of: hike) },
-                onFindPlaces: { presentation.path.append(.placesAround(hike)) },
-                onOpenWalk: { walk in presentation.path.append(.walk(walk)) },
-                onZoomToRoute: presentation.makeRoomForTheMap,
-                isSheetCompact: presentation.isCompact,
-                interaction: presentation.hikeInteraction(for: hike)
-            )
-            // A push over the hike runs this builder again, and the closures
-            // above make every copy a new view — see
-            // `HikeDetailView+Equatable.swift`.
-            .equatable()
+        case .hike(let hike): hikeDestination(hike)
         case .commonsGallery, .commonsPhoto, .commonsPhotos:
             commonsDestination(for: route, among: appModel.community.areaPhotos)
         case .communityHike, .communityPhoto, .pendingSubmission, .pendingPhotos:
@@ -549,6 +519,48 @@ struct MapSheet: View {
     }
 }
 
+// MARK: - A hike
+
+private extension MapSheet {
+    /// A hike's own screen.
+    ///
+    /// Its own method for the reason ``recordingDestination`` is: the switch
+    /// it came out of is at the length the linter allows.
+    func hikeDestination(_ hike: Hike) -> some View {
+        HikeDetailView(
+            hike: hike,
+            highlight: highlight,
+            mapController: mapController,
+            autoSave: appModel.autoSaveController,
+            entitlement: appModel.entitlement,
+            settings: appModel.storedSettings,
+            locationManager: appModel.locationManager,
+            backgroundTracker: appModel.backgroundTracker,
+            selectedLine: appModel.selectedLine,
+            lineStoreWatch: appModel.selectedLineStoreWatch,
+            trailGraphProvider: appModel.trailGraphProvider,
+            walkSession: appModel.walkSession,
+            photoCapture: photoCapture,
+            photoPins: photoPins,
+            placePins: placePins,
+            communityTransport: appModel.communityTransport,
+            trailMaker: trailMaker,
+            recordingGuide: appModel.recordingGuide,
+            onOpenPhoto: { photo in presentation.path.append(.photo(hike, photo.id)) },
+            onOpenPlace: { placeID in openPlace(placeID, of: hike) },
+            onFindPlaces: { presentation.path.append(.placesAround(hike)) },
+            onOpenWalk: { walk in presentation.path.append(.walk(walk)) },
+            onZoomToRoute: presentation.makeRoomForTheMap,
+            isSheetCompact: presentation.isCompact,
+            interaction: presentation.hikeInteraction(for: hike)
+        )
+        // A push over the hike runs this builder again, and the closures
+        // above make every copy a new view — see
+        // `HikeDetailView+Equatable.swift`.
+        .equatable()
+    }
+}
+
 // MARK: - The recorder
 
 private extension MapSheet {
@@ -571,6 +583,7 @@ private extension MapSheet {
             },
             placePins: placePins,
             placeSource: appModel.placeSource,
+            recordingGuide: appModel.recordingGuide,
             onOpenPlace: { hike, placeID in openPlace(placeID, of: hike) },
             onAddOwnPlace: { hike, coordinate in
                 presentation.makeRoomForTheMap()
@@ -661,6 +674,8 @@ private func delete(_ hike: Hike, among hikes: [Hike]) {
     // After the commit: the sidecar column went with the hike, and what is
     // left is the session's memory of it and the pin on the tracker.
     appModel.walkSession.discardWalk(forDeletedHike: hike.id)
+    // And a recording shown the deleted trail draws it no more.
+    appModel.recordingGuide.forget([hike.id])
 
     if let deletionPlan {
         // Enumerating a route's tile grid is real CPU work, per download

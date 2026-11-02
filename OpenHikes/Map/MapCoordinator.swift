@@ -369,6 +369,10 @@ extension MapView {
         /// the selected route — see `MapLibraryLines.swift`, which owns
         /// everything that reads this.
         var libraryMap = LibraryLinesMapState()
+        /// The trail shown under a recording, drawn over the library and
+        /// beneath the live line — see `MapRecordingGuide.swift`, which owns
+        /// everything that reads this.
+        var guideMap = RecordingGuideMapState()
         /// The dot on the open preview's line that stands for its elevation
         /// chart's marker — see `MapCommunityPreviewHighlight.swift`, which
         /// owns everything that reads this. `nil` whenever no preview is
@@ -917,9 +921,11 @@ extension MapView.Coordinator {
             return CachingTileOverlayRenderer(overlay: matchedTileOverlay)
         }
         // Every hike in the library but the selected one, in one overlay —
-        // see `LibraryLinesRenderer.swift`.
-        if let library = overlay as? LibraryLinesOverlay {
-            return libraryLinesRenderer(for: library)
+        // see `LibraryLinesRenderer.swift` — and the trail shown under a
+        // recording, drawn the same way in one of its own
+        // (`MapRecordingGuide.swift`).
+        if let lines = overlay as? LibraryLinesOverlay {
+            return linesRenderer(for: lines)
         }
         if let polyline = overlay as? MKPolyline {
             if let renderer = walkHighlightRenderer(for: polyline) {
