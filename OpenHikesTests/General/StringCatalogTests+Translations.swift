@@ -2,9 +2,9 @@
 //  StringCatalogTests+Translations.swift
 //  OpenHikesTests
 //
-//  The translations, German and French, read out of the source tree like the
-//  rest of this suite. A key with no translation falls back to English
-//  without a word, and a translated value that drops or retypes a
+//  The translations, German, French and Spanish, read out of the source tree
+//  like the rest of this suite. A key with no translation falls back to
+//  English without a word, and a translated value that drops or retypes a
 //  placeholder formats the wrong argument. Neither shows anywhere else,
 //  because the hosted tests run in English.
 //
@@ -23,7 +23,7 @@ import Testing
 
 extension StringCatalogTests {
     /// The languages the app ships besides English, its development language.
-    nonisolated static let translations = ["de", "fr"]
+    nonisolated static let translations = ["de", "fr", "es"]
 
     @Test("every catalogued string is translated", arguments: Self.catalogFolders, Self.translations)
     func everyStringIsTranslated(folder: String, language: String) throws {
