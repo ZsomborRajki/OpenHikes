@@ -1184,15 +1184,15 @@ in its source header. Do not weaken one without a measurement.
   once before promoting. An `@Attribute(.externalStorage)` column, such as
   `Hike.route`, also mirrors through a `CD_<name>_ckAsset` asset field: check
   that the development export has it, and promote both.
-- **Deployment state, checked 2026-10-25.** Development and production export
-  the same schema, `md5 a3ab9849bf6af7d5bf89fb03d667682f`, with a column for
-  every attribute in `MirroredCloudKitSchema.recordTypes` except
-  `TrailPoint.osmWikidata`, which neither environment has yet.
-  The only live columns the contract does not
-  name are SwiftData's own `CD_entityName` and the to-one reference columns
-  that the contract lists as relationships. Re-export before believing these
-  numbers, and update this paragraph when they move. Deployment facts live
-  here, not in code.
+- **Deployment state, checked 2026-11-03.** Development and production export
+  the same schema, `md5 81e928147a7c881fabb32ee3e1270fcd`, with a column for
+  every attribute in `MirroredCloudKitSchema.recordTypes`. The only live
+  columns the contract does not name are SwiftData's own `CD_entityName`, the
+  to-one reference columns that the contract lists as relationships, and the
+  `CD_route_ckAsset` and `CD_rawRoute_ckAsset` asset fields of the two
+  external-storage attributes. Re-export before believing these numbers, and
+  update this paragraph when they move. Deployment facts live here, not in
+  code.
 
 ## The community feature
 
