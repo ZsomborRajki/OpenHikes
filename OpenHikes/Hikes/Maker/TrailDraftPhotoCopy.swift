@@ -65,16 +65,25 @@ final class TrailDraftPhotoCopy {
 
     nonisolated deinit { /* intentionally empty */ }
 
-    /// Copies `handOff` onto `hike`, and holds whatever it misses for the
-    /// alert.
+    /// Copies the photographs in `found` that `route` passes onto `hike`, and
+    /// holds whatever it misses for the alert.
     ///
     /// Answers the task so a suite can wait on it; the save that calls this
     /// does not. Attempts run in order, including retries: two attempts for
     /// the same hike must not both pass its duplicate check before either
-    /// has committed the photograph.
-    @discardableResult func attach(_ handOff: TrailDraftPhotoHandOff, to hike: Hike) -> Task<Void, Never> {
+    /// has committed the photograph. Which ones the line passes is worked out
+    /// in the same turn, off the main actor — see
+    /// ``TrailDraftPhotoHandOff/placed(along:)`` — and the files of those it
+    /// passes by are deleted there.
+    @discardableResult func attach(
+        _ found: TrailDraftPhotoHandOff,
+        along route: [RouteCoordinate],
+        to hike: Hike
+    ) -> Task<Void, Never> {
         enqueue {
-            guard let failed = await self.copy(handOff, to: hike) else { return }
+            guard let handOff = await found.placed(along: route),
+                  let failed = await self.copy(handOff, to: hike)
+            else { return }
             // Each trail keeps its sources until the hiker answers it. A
             // later save is not permission to abandon the earlier one's.
             self.pending.append(failed)
