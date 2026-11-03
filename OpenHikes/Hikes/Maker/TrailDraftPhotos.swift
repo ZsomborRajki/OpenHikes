@@ -175,17 +175,19 @@ final class TrailDraftPhotos {
         }
     }
 
-    /// Hands the photographs the saved line passes to whatever copies them
-    /// into the hike, and forgets them here without deleting their files —
-    /// the hand-off owns those now. `nil` when the line passes none.
+    /// Hands every photograph found to whatever copies the ones the saved
+    /// line passes into the hike, and forgets them here without deleting
+    /// their files — the hand-off owns those now. `nil` when there are none.
     ///
     /// Taken before the drawing is discarded, which is what would otherwise
-    /// delete the files mid-copy.
-    func handOff(along route: [RouteCoordinate]) -> TrailDraftPhotoHandOff? {
+    /// delete the files mid-copy. Which of them the line passes is left to
+    /// ``TrailDraftPhotoHandOff/placed(along:)``, off the main actor: that
+    /// takes the whole line's ``RouteProfile``, and a save with no
+    /// photographs, which is most of them, must not even read the line.
+    func handOff() -> TrailDraftPhotoHandOff? {
         cancelSearch()
-        let kept = Self.onTrail(photos, along: route)
-        guard !kept.isEmpty else { return nil }
-        let handOff = TrailDraftPhotoHandOff(photos: kept, directory: directory)
+        guard !photos.isEmpty else { return nil }
+        let handOff = TrailDraftPhotoHandOff(photos: photos, directory: directory)
         photos = []
         directory = StagedFiles.freshDirectory(in: root)
         return handOff
@@ -196,7 +198,6 @@ final class TrailDraftPhotos {
     /// line, in walking order — how a curated route's are placed, so a
     /// photograph saved from either reads the same on the hike.
     nonisolated static func onTrail(_ photos: [CommonsPhoto], along route: [RouteCoordinate]) -> [CommonsPhoto] {
-        guard route.count > 1 else { return [] }
         // Each photograph stands in by its position in the list, which is the
         // one identity the placement needs: it only reads it back.
         let candidates = photos.indices.compactMap { index in
@@ -204,6 +205,8 @@ final class TrailDraftPhotos {
                 CommonsPhotoCandidate(pageID: index, latitude: coordinate.latitude, longitude: coordinate.longitude)
             }
         }
+        // Before the profile, which indexes the whole line to place nothing.
+        guard route.count > 1, !candidates.isEmpty else { return [] }
         return CommonsTrailPhotos.placed(candidates, on: RouteProfile(route: route))
             .sorted { $0.distanceAlongRoute < $1.distanceAlongRoute }
             .map { placed in
@@ -252,6 +255,24 @@ nonisolated struct TrailDraftPhotoHandOff: Sendable {
     let photos: [CommonsPhoto]
     /// Where their files are, deleted once they are copied or let go.
     let directory: URL
+
+    /// The photographs `route` passes, pinned onto it — see
+    /// ``TrailDraftPhotos/onTrail(_:along:)`` — in a hand-off that keeps
+    /// this one's files, or `nil`, with the files deleted, when it passes
+    /// none.
+    ///
+    /// Off the main actor, because placing them indexes the whole line, and
+    /// on a long drawing that costs frames the screen that saved it is still
+    /// drawing.
+    @concurrent
+    func placed(along route: [RouteCoordinate]) async -> Self? {
+        let kept = TrailDraftPhotos.onTrail(photos, along: route)
+        guard !kept.isEmpty else {
+            discard()
+            return nil
+        }
+        return Self(photos: kept, directory: directory)
+    }
 
     /// Copies each photograph onto `hike` that it does not already hold.
     /// Answers the ones the store or the save refused, as a hand-off of their

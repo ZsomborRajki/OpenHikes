@@ -189,23 +189,37 @@ struct TrailDraftPhotosTests {
         let photos = TrailDraftPhotos(source: StubSource([Self.onTheLine, Self.offTheLine]), root: root.url)
         await Self.searched(photos)
 
-        let handOff = try #require(photos.handOff(along: Fixture.ridgeRoute))
+        let handOff = try #require(photos.handOff())
         photos.clear()
+        let placed = try #require(await handOff.placed(along: Fixture.ridgeRoute))
 
-        #expect(handOff.photos.count == 1)
+        #expect(placed.photos.map(\.credit.author) == ["Hiker 0"], "only the one the line passes")
+        #expect(placed.directory == handOff.directory)
         #expect(photos.photos.isEmpty)
         #expect(handOff.directory != photos.directory)
-        let kept = try #require(handOff.photos.first)
+        let kept = try #require(placed.photos.first)
         #expect(FileManager.default.fileExists(atPath: kept.fileURL.path))
     }
 
-    @Test("a line that passes none hands nothing over")
-    func nothingToHandOff() async {
+    /// The save of an ordinary drawing: no search was asked, so there is
+    /// nothing to place, and the line it saved is never read for it.
+    @Test("a drawing with no photographs hands nothing over")
+    func nothingFoundNothingHanded() {
+        let photos = TrailDraftPhotos(source: StubSource([Self.onTheLine]), root: Root().url)
+
+        #expect(photos.handOff() == nil)
+    }
+
+    @Test("a line that passes none places nothing, and the files go")
+    func nothingOnTheLine() async throws {
         let photos = TrailDraftPhotos(source: StubSource([Self.offTheLine]), root: Root().url)
         await Self.searched(photos)
+        let handOff = try #require(photos.handOff())
 
-        #expect(photos.handOff(along: Fixture.ridgeRoute) == nil)
-        #expect(photos.photos.count == 1, "nothing handed over, nothing forgotten")
+        #expect(await handOff.placed(along: Fixture.ridgeRoute) == nil)
+        await settleDelegateHop(until: "the hand-off directory was deleted") {
+            !FileManager.default.fileExists(atPath: handOff.directory.path)
+        }
     }
 
     @Test("the copies are credited, licensed, never the hiker's own, and not copied twice")
@@ -216,7 +230,7 @@ struct TrailDraftPhotosTests {
         await Self.searched(photos)
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context)
-        let handOff = try #require(photos.handOff(along: hike.route))
+        let handOff = try #require(await photos.handOff()?.placed(along: hike.route))
 
         let missed = await handOff.attach(to: hike, store: sandbox.store, libraryWriter: StubPhotoLibraryWriter())
         let again = await handOff.attach(to: hike, store: sandbox.store, libraryWriter: StubPhotoLibraryWriter())
