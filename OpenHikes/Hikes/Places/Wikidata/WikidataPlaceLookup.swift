@@ -28,6 +28,7 @@
 //  share, and none of them should have to be handed it.
 //
 
+import OrderedCollections
 import os
 import SwiftUI
 
@@ -41,11 +42,10 @@ final class WikidataPlaceLookup {
     private static let logger = Logger(subsystem: "OpenHikes", category: "Places")
 
     private let source: any WikidataPlaceSourcing
-    /// Every answer kept, `nil` for *nothing to show*. One that is not
-    /// ``WikidataPlace/isComplete`` is kept to be drawn, and asked again.
-    private var answers: [String: WikidataPlace?] = [:]
-    /// The kept items, oldest first, which is the order they go in.
-    private var kept: [String] = []
+    /// Every answer kept, `nil` for *nothing to show*, oldest first, which is
+    /// the order they go in. One that is not ``WikidataPlace/isComplete`` is
+    /// kept to be drawn, and asked again.
+    private var answers: OrderedDictionary<String, WikidataPlace?> = [:]
 
     init(source: any WikidataPlaceSourcing) {
         self.source = source
@@ -105,13 +105,14 @@ final class WikidataPlaceLookup {
     }
 
     private func keep(_ place: WikidataPlace?, for item: String) {
-        // Two cards asking at once both land here; the second answer is the
-        // same answer, and is not a second entry.
-        if answers.updateValue(place, forKey: item) == nil {
-            kept.append(item)
-        }
-        while kept.count > Self.capacity {
-            answers[kept.removeFirst()] = nil
+        // Two cards asking at once both land here, and so does the answer
+        // that replaces one whose photograph failed: either way the item
+        // keeps the place it was first kept at, so it goes when it would
+        // have. `updateValue` keeps a `nil` for *nothing to show*, which the
+        // subscript would read as a removal.
+        answers.updateValue(place, forKey: item)
+        if answers.count > Self.capacity {
+            answers.removeFirst()
         }
     }
 }
