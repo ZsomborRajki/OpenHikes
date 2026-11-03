@@ -75,10 +75,27 @@ struct TrailDraftPhotoCopyTests {
         let hike = Fixture.hike(in: context)
         let handOff = try Self.handOff(of: 2)
 
-        await copy.attach(handOff, to: hike).value
+        await copy.attach(handOff, along: hike.route, to: hike).value
 
         #expect(hike.photos.count == 2)
         #expect(copy.missed == nil)
+        await Self.gone(handOff.directory)
+    }
+
+    /// The hand-off is everything the drawing's searches found; which of
+    /// them the saved line passes is settled in the copy's own turn.
+    @Test("photographs the saved line does not pass are not copied, and their files go")
+    func offTheLineIsLeftOut() async throws {
+        let sandbox = PhotoStoreSandbox()
+        let copy = TrailDraftPhotoCopy(store: sandbox.store, libraryWriter: StubPhotoLibraryWriter())
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context, route: Fixture.loopRoute)
+        let handOff = try Self.handOff(of: 2)
+
+        await copy.attach(handOff, along: hike.route, to: hike).value
+
+        #expect(hike.photos.isEmpty)
+        #expect(copy.missed == nil, "nothing was missed: nothing was on the line")
         await Self.gone(handOff.directory)
     }
 
@@ -93,7 +110,7 @@ struct TrailDraftPhotoCopyTests {
         let hike = Fixture.hike(in: context, title: "Ridge Loop")
         let handOff = try Self.handOff(of: 2)
 
-        await copy.attach(handOff, to: hike).value
+        await copy.attach(handOff, along: hike.route, to: hike).value
 
         #expect(hike.photos.map(\.importedAuthorName) == ["Hiker 0"])
         let missed = try #require(copy.missed)
@@ -113,7 +130,7 @@ struct TrailDraftPhotoCopyTests {
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context)
         let handOff = try Self.handOff(of: 2)
-        await copy.attach(handOff, to: hike).value
+        await copy.attach(handOff, along: hike.route, to: hike).value
         let savesBeforeRetry = saves.count
 
         await copy.retry()?.value
@@ -134,7 +151,7 @@ struct TrailDraftPhotoCopyTests {
         defer { copy.skip() }
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context)
-        await copy.attach(try Self.handOff(of: 1), to: hike).value
+        await copy.attach(try Self.handOff(of: 1), along: hike.route, to: hike).value
 
         await copy.retry()?.value
 
@@ -151,7 +168,7 @@ struct TrailDraftPhotoCopyTests {
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context)
         let handOff = try Self.handOff(of: 1)
-        await copy.attach(handOff, to: hike).value
+        await copy.attach(handOff, along: hike.route, to: hike).value
         #expect(copy.missed != nil)
 
         copy.skip()
@@ -170,7 +187,7 @@ struct TrailDraftPhotoCopyTests {
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context)
         let handOff = try Self.handOff(of: 1)
-        await copy.attach(handOff, to: hike).value
+        await copy.attach(handOff, along: hike.route, to: hike).value
 
         context.delete(hike)
         try context.save()
@@ -188,10 +205,12 @@ struct TrailDraftPhotoCopyTests {
         let copy = TrailDraftPhotoCopy(store: sandbox.store, libraryWriter: StubPhotoLibraryWriter(), save: saves.save)
         let context = try Fixture.modelContext()
         let first = try Self.handOff(of: 1)
-        await copy.attach(first, to: Fixture.hike(in: context, title: "First")).value
+        let firstHike = Fixture.hike(in: context, title: "First")
+        await copy.attach(first, along: firstHike.route, to: firstHike).value
 
         let second = try Self.handOff(of: 1)
-        await copy.attach(second, to: Fixture.hike(in: context, title: "Second")).value
+        let secondHike = Fixture.hike(in: context, title: "Second")
+        await copy.attach(second, along: secondHike.route, to: secondHike).value
 
         #expect(copy.missed?.hikeTitle == "First")
         #expect(FileManager.default.fileExists(atPath: first.directory.path))
@@ -216,7 +235,7 @@ struct TrailDraftPhotoCopyTests {
         let file = try #require(handOff.photos.first?.fileURL)
         try FileManager.default.removeItem(at: file)
 
-        await copy.attach(handOff, to: hike).value
+        await copy.attach(handOff, along: hike.route, to: hike).value
 
         #expect(hike.photos.count == 1)
         let missed = try #require(copy.missed)
@@ -238,11 +257,11 @@ struct TrailDraftPhotoCopyTests {
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context)
         let first = try Self.handOff(of: 1)
-        await copy.attach(first, to: hike).value
+        await copy.attach(first, along: hike.route, to: hike).value
         let second = try Self.handOff(of: 1)
 
         let retry = try #require(copy.retry())
-        let later = copy.attach(second, to: hike)
+        let later = copy.attach(second, along: hike.route, to: hike)
         await retry.value
         await later.value
 

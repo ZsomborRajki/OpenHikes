@@ -8,6 +8,7 @@
 
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import SwiftUI
 import Testing
 
@@ -27,12 +28,14 @@ extension TrailDraftPhotoCopyTests {
         await host.settle(until: "the alert host rendered") { counter.count > 0 }
         let before = counter.count
 
-        await copy.attach(try Self.handOff(of: 1), to: Fixture.hike(in: context, title: "First")).value
+        let first = Fixture.hike(in: context, title: "First")
+        await copy.attach(try Self.handOff(of: 1), along: first.route, to: first).value
         await host.settle(until: "the first trail's alert appeared") {
             host.message?.contains("First") == true
         }
         let firstAlert = host.alert
-        await copy.attach(try Self.handOff(of: 1), to: Fixture.hike(in: context, title: "Second")).value
+        let second = Fixture.hike(in: context, title: "Second")
+        await copy.attach(try Self.handOff(of: 1), along: second.route, to: second).value
         #expect(host.alert === firstAlert, "a later failure must not replace an unanswered alert")
 
         copy.skip()
@@ -69,7 +72,8 @@ extension TrailDraftPhotoCopyTests {
         blocker.modalPresentationStyle = .pageSheet
         await host.present(blocker)
 
-        await copy.attach(try Self.handOff(of: 1), to: Fixture.hike(in: context, title: "Covered")).value
+        let covered = Fixture.hike(in: context, title: "Covered")
+        await copy.attach(try Self.handOff(of: 1), along: covered.route, to: covered).value
         await host.settle(until: "the alert appeared over the sheet") {
             host.message?.contains("Covered") == true
         }
@@ -78,7 +82,8 @@ extension TrailDraftPhotoCopyTests {
         await host.settle(until: "the covering alert closed") { host.alert == nil }
 
         host.root.dismiss(animated: true)
-        await copy.attach(try Self.handOff(of: 1), to: Fixture.hike(in: context, title: "Closing")).value
+        let closing = Fixture.hike(in: context, title: "Closing")
+        await copy.attach(try Self.handOff(of: 1), along: closing.route, to: closing).value
         await host.settle(until: "the alert appeared once the sheet had closed") {
             host.message?.contains("Closing") == true
         }
