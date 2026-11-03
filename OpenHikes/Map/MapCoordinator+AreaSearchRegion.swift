@@ -54,6 +54,7 @@
 //  instead, through the same ``obstructionInsets(in:)`` the camera uses.
 //
 
+import Algorithms
 import MapKit
 import OpenHikesData
 
@@ -176,8 +177,8 @@ private extension MapView.Coordinator {
         let longitudeOffsets = corners.map { corner in
             RouteGeometry.normalizedLongitudeDelta(corner.longitude - middle.longitude)
         }
-        guard let south = latitudes.min(), let north = latitudes.max(),
-              let west = longitudeOffsets.min(), let east = longitudeOffsets.max(),
+        guard let (south, north) = latitudes.minAndMax(),
+              let (west, east) = longitudeOffsets.minAndMax(),
               north > south, east > west
         else { return nil }
         return MKCoordinateRegion(

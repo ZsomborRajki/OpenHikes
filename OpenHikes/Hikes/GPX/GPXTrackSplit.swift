@@ -180,8 +180,8 @@ nonisolated enum GPXTrackSplit {
                 longitude += RouteGeometry.normalizedLongitudeDelta(end.longitude - start.longitude)
                 longitudes.append(longitude)
             }
-            guard let south = route.lazy.map(\.latitude).min(), let north = route.lazy.map(\.latitude).max(),
-                  let west = longitudes.min(), let east = longitudes.max() else { return }
+            guard let (south, north) = route.lazy.map(\.latitude).minAndMax(),
+                  let (west, east) = longitudes.minAndMax() else { return }
             let widest = max(abs(south), abs(north))
             guard east - west + 2 * GPXTrackSplit.longitudeMargin(near: widest) < GPXTrackSplit.halfTurn else {
                 return
