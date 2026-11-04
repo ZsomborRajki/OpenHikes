@@ -42,24 +42,28 @@ final class SystemMovementReminderNotifier: MovementReminderNotifying {
     /// that runs at every pause.
     private var hasRegisteredCategories = false
 
+    #if canImport(UserNotifications)
+    private let center: any ReminderNotificationCenter
+
+    /// - Parameter center: the system's own everywhere but a suite — see
+    ///   ``ReminderNotificationCenter``.
+    init(center: any ReminderNotificationCenter = UNUserNotificationCenter.current()) {
+        self.center = center
+    }
+    #endif
+
     func authorize() async -> Bool {
         #if canImport(UserNotifications)
-        let center = UNUserNotificationCenter.current()
-        registerCategoriesIfNeeded(with: center)
-        let status = await center.notificationSettings().authorizationStatus
-        switch status {
-        case .authorized, .ephemeral, .provisional: return true
-        case .denied: return false
-        case .notDetermined:
-            do {
-                return try await center.requestAuthorization(options: [.alert, .sound])
-            } catch {
-                Self.logger.error(
-                    "Notification authorization failed: \(error.localizedDescription, privacy: .public)"
-                )
-                return false
-            }
-        @unknown default: return false
+        registerCategoriesIfNeeded()
+        let status = await center.authorizationStatus()
+        guard status == .notDetermined else { return Self.delivers(status) }
+        do {
+            return try await center.requestAuthorization(options: [.alert, .sound])
+        } catch {
+            Self.logger.error(
+                "Notification authorization failed: \(error.localizedDescription, privacy: .public)"
+            )
+            return false
         }
         #else
         return false
@@ -68,14 +72,18 @@ final class SystemMovementReminderNotifier: MovementReminderNotifying {
 
     /// The same question ``authorize()`` asks, with nothing put on screen.
     ///
+    /// And the same answers, so a question still open is a no here where
+    /// ``authorize()`` would ask it. A request that failed leaves it open,
+    /// and a post on it is a banner iOS never shows — which would spend a
+    /// reminder held back for permission on nobody.
+    ///
     /// No category registration either: this runs on every return to the
     /// foreground, and there is nothing to register categories *for* until a
     /// reminder is posted — every path that posts one has run ``authorize()``
     /// first.
     func canPost() async -> Bool {
         #if canImport(UserNotifications)
-        let center = UNUserNotificationCenter.current()
-        return await center.notificationSettings().authorizationStatus != .denied
+        return Self.delivers(await center.authorizationStatus())
         #else
         return false
         #endif
@@ -101,7 +109,7 @@ final class SystemMovementReminderNotifier: MovementReminderNotifying {
             trigger: nil
         )
         do {
-            try await UNUserNotificationCenter.current().add(request)
+            try await center.add(request)
         } catch {
             let kind = reminder.kind.rawValue
             Self.logger.error(
@@ -113,7 +121,6 @@ final class SystemMovementReminderNotifier: MovementReminderNotifying {
 
     func withdraw(_ kind: MovementReminderKind) {
         #if canImport(UserNotifications)
-        let center = UNUserNotificationCenter.current()
         let identifiers = [kind.notificationIdentifier]
         center.removePendingNotificationRequests(withIdentifiers: identifiers)
         center.removeDeliveredNotifications(withIdentifiers: identifiers)
@@ -121,7 +128,18 @@ final class SystemMovementReminderNotifier: MovementReminderNotifying {
     }
 
     #if canImport(UserNotifications)
-    private func registerCategoriesIfNeeded(with center: UNUserNotificationCenter) {
+    /// Whether an answer already given lets a banner through. One function for
+    /// both questions, so the silent one cannot count as allowed what the one
+    /// that asks would not.
+    private static func delivers(_ status: UNAuthorizationStatus) -> Bool {
+        switch status {
+        case .authorized, .ephemeral, .provisional: true
+        case .denied, .notDetermined: false
+        @unknown default: false
+        }
+    }
+
+    private func registerCategoriesIfNeeded() {
         guard !hasRegisteredCategories else { return }
         hasRegisteredCategories = true
         let categories = MovementReminderKind.allCases.map { kind in
