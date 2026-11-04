@@ -51,8 +51,7 @@ let package = Package(
             dependencies: [
                 "OpenHikesShared",
                 .product(name: "Algorithms", package: "swift-algorithms"),
-                .product(name: "DequeModule", package: "swift-collections"),
-                .product(name: "OrderedCollections", package: "swift-collections")
+                .product(name: "DequeModule", package: "swift-collections")
             ],
             swiftSettings: .data
         ),

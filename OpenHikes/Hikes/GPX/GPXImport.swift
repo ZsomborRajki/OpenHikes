@@ -637,9 +637,14 @@ nonisolated private extension GPXImport {
         private var currentRouteIndex = -1
         /// Whether a run is open to append to, per flavour. A `<trkseg>` or
         /// `<rte>` start opens one and its end tag closes it; a point that
-        /// arrives with none open opens one implicitly, which is what keeps
-        /// `<trk><trkpt/></trk>` — legal GPX, and what a stray `</trkseg>`
-        /// leaves behind — from being dropped for want of a container.
+        /// arrives with none open opens one implicitly. That is a tolerance,
+        /// not the format: GPX 1.1 allows a `<trkpt>` only inside a
+        /// `<trkseg>`, but files in the wild write `<trk><trkpt/></trk>`,
+        /// which is well-formed XML if not valid GPX, and its points still
+        /// belong to the track rather than being dropped for want of a
+        /// container. It recovers nothing from a file that is not well-formed:
+        /// a stray `</trkseg>` fails the parse, and `document(at:limits:)`
+        /// refuses a failed parse whatever was read before the error.
         private var hasOpenTrackSegment = false
         private var hasOpenRouteSegment = false
         private var pendingPoint: PendingPoint?
@@ -675,9 +680,10 @@ nonisolated private extension GPXImport {
             switch elementName {
             case Element.track:
                 currentTrackIndex += 1
-                // A `<trk>` opening mid-track means the previous one never
-                // closed. Its run ends here either way; what must not happen
-                // is the next track's points landing in it.
+                // A `<trk>` opening mid-track is nested in the previous one:
+                // not valid GPX, but well-formed XML, where one left unclosed
+                // would fail the parse. The outer track's run ends here; what
+                // must not happen is the nested track's points landing in it.
                 hasOpenTrackSegment = false
             case Element.trackSegment: openTrackSegment()
             case Element.route:

@@ -14,6 +14,7 @@
 //  through a bare `String` was drawn verbatim and listed nowhere (#1028).
 //
 
+import Algorithms
 import SwiftUI
 
 nonisolated struct Stat: Identifiable, Sendable {
@@ -24,7 +25,7 @@ nonisolated struct Stat: Identifiable, Sendable {
     /// "Average Speed" for "Avg Speed" (*Settled decisions* in the repository
     /// instructions). `nil` reads ``label``.
     let spokenLabel: String?
-    /// Drawn in the card's strip rather than its list — see ``StatSummary``.
+    /// Drawn in the card's strip rather than its list — see ``StatHalves``.
     let isHeadline: Bool
 
     init(
@@ -40,6 +41,25 @@ nonisolated struct Stat: Identifiable, Sendable {
     }
 }
 
+/// A screen's ``Stat``s sorted into the place card's two halves: the headline
+/// figures for its strip and the rest for its list, each half in the order the
+/// stats were given.
+///
+/// The one place that sorts them. ``StatSummary`` draws the halves together,
+/// and the hike detail apart, with its sections between them — so a screen
+/// keeps one of these, built once per set of stats, rather than filtering the
+/// same array twice in its body.
+nonisolated struct StatHalves: Sendable {
+    let headline: [Stat]
+    let details: [Stat]
+
+    init(_ stats: [Stat]) {
+        // `partitioned(by:)` answers (does not satisfy, satisfies), and each
+        // half keeps the given order.
+        (details, headline) = stats.partitioned(by: \.isHeadline)
+    }
+}
+
 /// A screen's numbers the way an Apple Maps place card draws a place's: the
 /// few that answer "how big is it" in a strip across the top, and the rest in
 /// one grouped list under a heading.
@@ -52,19 +72,18 @@ struct StatSummary: View {
     let stats: [Stat]
 
     var body: some View {
-        let headline = stats.filter(\.isHeadline)
-        let details = stats.filter { !$0.isHeadline }
+        let halves = StatHalves(stats)
         VStack(alignment: .leading, spacing: StatCardMetrics.sectionSpacing) {
-            if !headline.isEmpty {
+            if !halves.headline.isEmpty {
                 StatStrip {
-                    ForEach(headline) { stat in
+                    ForEach(halves.headline) { stat in
                         StatFigure(stat)
                     }
                 }
             }
-            if !details.isEmpty {
+            if !halves.details.isEmpty {
                 StatList {
-                    ForEach(details) { stat in
+                    ForEach(halves.details) { stat in
                         StatRow(stat)
                     }
                 }

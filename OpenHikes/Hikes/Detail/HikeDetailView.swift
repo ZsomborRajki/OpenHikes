@@ -172,9 +172,10 @@ struct HikeDetailView: View {
     /// points in O(log n).
     @State private var profile: RouteProfile?
     /// Stat tiles, computed once per line with the route profile off the main
-    /// actor so navigation does not pay the route-sized work.
-    @State private var statItems: [Stat] = []
-    /// The line ``profile`` and ``statItems`` were built from, so a restart
+    /// actor so navigation does not pay the route-sized work, and sorted into
+    /// the strip's and the list's as they land.
+    @State private var stats = StatHalves([])
+    /// The line ``profile`` and ``stats`` were built from, so a restart
     /// of the preparation task can tell a new line from the same one again,
     /// and so the follow loop can hand the line on with each fix.
     @State private var preparedLine: PreparedLine?
@@ -570,10 +571,9 @@ private extension HikeDetailView {
     /// because the place card puts its sections between the two, the way the
     /// recording screen does.
     @ViewBuilder private var headlineStats: some View {
-        let figures = statItems.filter(\.isHeadline)
-        if !figures.isEmpty {
+        if !stats.headline.isEmpty {
             StatStrip {
-                ForEach(figures) { stat in
+                ForEach(stats.headline) { stat in
                     StatFigure(stat)
                 }
             }
@@ -582,10 +582,9 @@ private extension HikeDetailView {
 
     /// Every other figure, as ``StatSummary``'s list.
     @ViewBuilder private var statList: some View {
-        let rows = statItems.filter { !$0.isHeadline }
-        if !rows.isEmpty {
+        if !stats.details.isEmpty {
             StatList {
-                ForEach(rows) { stat in
+                ForEach(stats.details) { stat in
                     StatRow(stat)
                 }
             }
@@ -795,7 +794,7 @@ private extension HikeDetailView {
         line.land(prepared.line, from: read)
         profile = built
         preparedLine = along
-        statItems = prepared.stats
+        stats = StatHalves(prepared.stats)
         // Place the tracker at the start of the track, on both graph and map.
         tracker.trackerDistance = 0
         tracker.liveTrackerDistance = nil

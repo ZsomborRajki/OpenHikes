@@ -185,6 +185,29 @@ struct WikidataPlaceLookupTests {
         #expect(lookup.answered(items[items.count - 1]) != nil)
     }
 
+    /// The kept answers go in the order they were first kept: an answer whose
+    /// photograph failed, replaced by the whole one, does not start again as
+    /// the newest.
+    @Test("a replaced answer keeps its place in the order")
+    func aReplacedAnswerKeepsItsPlace() async {
+        let source = CountingSource()
+        source.leaveOutPhotograph(times: 1)
+        let lookup = WikidataPlaceLookup(source: source)
+        let items = (0...WikidataPlaceLookup.capacity).map { "Q\($0 + 1)" }
+
+        for item in items.dropLast() {
+            _ = await lookup.place(item)
+        }
+        let replaced = await lookup.place(items[0])
+        #expect(replaced?.isComplete == true)
+        _ = await lookup.place(items[items.count - 1])
+
+        #expect(lookup.answered(items[0]) == nil, "the first kept is still the oldest")
+        #expect(lookup.answered(items[1]) != nil)
+        #expect(lookup.answered(items[items.count - 1]) != nil)
+        #expect(source.asked.count == items.count + 1, "the replaced answer was asked for twice")
+    }
+
     /// The maker hands a card another place and keeps its state, so the
     /// answer a card was handed may be about the last place it showed.
     @Test("a card draws the answer about its own place, never the last one's")

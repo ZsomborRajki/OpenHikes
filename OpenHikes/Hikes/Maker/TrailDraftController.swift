@@ -131,7 +131,7 @@ final class TrailDraftController {
     ///
     /// Held here for the reason ``finder`` is and on its terms: nothing it
     /// holds is written down or restored. What a save takes from it is handed
-    /// over rather than read — see ``TrailDraftPhotos/handOff(along:)``.
+    /// over rather than read — see ``TrailDraftPhotos/handOff()``.
     let photos: TrailDraftPhotos
 
     /// What the line climbs and drops, asked for once the drawing settles.
@@ -680,8 +680,8 @@ final class TrailDraftController {
         // places down as a new one, which the next opening would restore.
         finder.clear()
         // And the photographs go with the drawing they were found for — a
-        // save has already taken the ones it keeps. See
-        // ``TrailDraftPhotos/handOff(along:)``.
+        // save has already taken any it might keep. See
+        // ``TrailDraftPhotos/handOff()``.
         photos.clear()
         draft.clear()
         store?.clear()
