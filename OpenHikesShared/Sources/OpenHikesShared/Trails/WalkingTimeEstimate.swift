@@ -27,9 +27,22 @@
 //  together. It is the time a fit adult takes with no breaks, which is also
 //  what the signposts say.
 //
-//  In this package rather than in the app because the widget, the Live
-//  Activity and the watch are the surfaces a walk is followed on, and "how
-//  long is left" has to mean the same thing on all of them.
+//  ## Where it is worked out
+//
+//  In the app, and nowhere else. `WalkTimeLeft` scales it to the hiker's own
+//  pace for the time left on a followed trail, which the hike's screen shows
+//  while the walk is under way. A route with no clock shows it on its hike's
+//  screen as an estimated time, and the trail maker counts a drawn line's
+//  climb with it. The time left reaches the widget and the Live Activity as
+//  seconds the app worked out, carried in ``SharedTrailSnapshot`` and the
+//  activity's content, so neither extension computes it and both show the
+//  app's figure. The watch shows no time left.
+//
+//  Nothing outside the app calls this, then. It stays in this package because
+//  it reads nothing but its three numbers, and here its tests run under
+//  `swift test` with the package's other arithmetic; moved into the app they
+//  would run only in the hosted bundle. Every caller imports this package for
+//  other things already.
 //
 
 import Foundation
