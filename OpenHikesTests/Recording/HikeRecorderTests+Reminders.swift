@@ -24,6 +24,12 @@ extension HikeRecorderTests {
     /// close enough that nothing else in the recorder treats it as a jump.
     private static let trailheadLatitude = 47.63
     private static let downTheValleyLatitude = 47.6354
+    /// A second track point twenty metres up the path, ten seconds on, so a
+    /// Stop has a route to save.
+    private static let upThePathLatitude = 47.6302
+    private static let upThePathAfter: TimeInterval = 10
+    /// How long the hiker stays paused before setting off without Resume.
+    private static let pausedFor: TimeInterval = 1800
 
     /// A recorder recording, with a reminder controller behind it.
     private func recordingRecorder(
@@ -254,5 +260,70 @@ extension HikeRecorderTests {
 
         #expect(source.movementWatchStops >= 1)
         #expect(harness.notifier.withdrawn.contains(.resumeRecording))
+    }
+
+    /// Stop waits on the widget's fixes and the journal before it releases
+    /// the sensors. A permission answer landing in those waits must find the
+    /// pause already over, as `discard()` leaves it, or the reminder goes out
+    /// and the withdrawal queued behind it takes it straight back down.
+    @Test("a permission answer landing while Stop waits posts nothing")
+    func aPermissionAnswerDuringStopPostsNothing() async throws {
+        let harness = MovementReminderHarness.harness()
+        guard let hikeRecorder = await recorderHoldingAReminder(harness) else { return }
+        let write = TestGate()
+        hikeRecorder.journalQueue.enqueue { await write.wait() }
+
+        let stopping = Task { try await hikeRecorder.stop() }
+        await settleDelegateHop(until: "Stop to start saving") { hikeRecorder.phase == .saving }
+        harness.notifier.answerPrompt(allowing: true)
+        await harness.controller.settle()
+        write.open()
+        _ = try await stopping.value
+
+        #expect(harness.notifier.posted.isEmpty, "the recording was over before the answer came")
+        #expect(harness.notifier.withdrawn.contains(.resumeRecording))
+    }
+
+    /// Resume's half of the same race, held in the precision sheet it can put
+    /// up before reopening the journal, for as long as the hiker leaves it.
+    @Test("a permission answer landing while Resume waits posts nothing")
+    func aPermissionAnswerDuringResumePostsNothing() async {
+        let harness = MovementReminderHarness.harness()
+        guard let hikeRecorder = await recorderHoldingAReminder(harness) else { return }
+        source.hasFullAccuracy = false
+        source.holdsFullAccuracyRequests = true
+
+        let resuming = Task { await hikeRecorder.resume() }
+        await settleDelegateHop(until: "Resume to ask for precise location") {
+            self.source.fullAccuracyRequests == 1
+        }
+        harness.notifier.answerPrompt(allowing: true)
+        await harness.controller.settle()
+        source.answerFullAccuracyRequests(granted: true)
+        await resuming.value
+
+        #expect(hikeRecorder.phase == .recording, "precondition: the hiker resumed")
+        #expect(harness.notifier.posted.isEmpty, "the recording was running again before the answer came")
+    }
+
+    /// A recorder paused two points into its track with a Resume reminder
+    /// earned, and that reminder's permission prompt left on screen.
+    ///
+    /// - Returns: `nil` when the prompt never arrived, which is already a
+    ///   failure.
+    private func recorderHoldingAReminder(
+        _ harness: MovementReminderHarness.Harness
+    ) async -> HikeRecorder? {
+        let hikeRecorder = await recordingRecorder(harness)
+        clock.advance(by: Self.upThePathAfter)
+        source.deliver(fix(latitude: Self.upThePathLatitude))
+        hikeRecorder.pause()
+        await hikeRecorder.journalQueue.drain()
+        await harness.controller.settle()
+        harness.notifier.holdsThePrompt = true
+        clock.advance(by: Self.pausedFor)
+        source.deliver(fix(latitude: Self.downTheValleyLatitude, accuracy: 30))
+        guard await harness.notifier.awaitPrompt() else { return nil }
+        return hikeRecorder
     }
 }
