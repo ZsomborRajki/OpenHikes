@@ -233,7 +233,7 @@ extension HikeRecorder {
         // becomes part of the track and none of it applies to one that is
         // only evidence the hiker has moved.
         if phase == .paused {
-            movementReminders?.recordingObserved(location, at: clock())
+            movementReminders?.recordingObserved(location)
             return
         }
         guard phase == .waitingForFix || phase == .recording else { return }

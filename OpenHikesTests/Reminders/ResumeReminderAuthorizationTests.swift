@@ -10,6 +10,8 @@
 //
 //  ``MovementWarningAuthorizationTests`` asks the same question of the
 //  once-only warnings, which belong to a condition rather than to a pause.
+//  What a reminder that did not go out costs its pause is in
+//  `ResumeReminderAuthorizationTests+Allowance.swift`.
 //
 
 import Foundation
@@ -19,7 +21,7 @@ import Testing
 @MainActor
 @Suite("Resume reminders across notification authorization")
 struct ResumeReminderAuthorizationTests {
-    private final class RecordingState {
+    final class RecordingState {
         var isActive = false
     }
 
@@ -34,7 +36,7 @@ struct ResumeReminderAuthorizationTests {
         }
     }
 
-    private let start = MovementReminderHarness.start
+    let start = MovementReminderHarness.start
 
     /// The boundary rather than a mute: everything below stops a post, and
     /// each would pass against a controller that never posted at all.
@@ -188,7 +190,7 @@ struct ResumeReminderAuthorizationTests {
         return await harness.notifier.awaitPrompt()
     }
 
-    private func pause(
+    func pause(
         _ subject: Subject,
         in harness: MovementReminderHarness.Harness,
         after seconds: TimeInterval = 0,
@@ -214,15 +216,14 @@ struct ResumeReminderAuthorizationTests {
         switch subject {
         case .recording:
             harness.controller.recordingObserved(
-                MovementReminderHarness.fix(northOfAnchorBy: moved, takenAt: now),
-                at: now
+                MovementReminderHarness.fix(northOfAnchorBy: moved, takenAt: now)
             )
         case .walk:
             harness.controller.walkObserved(distanceAlongRoute: moved, at: now)
         }
     }
 
-    private func resume(_ subject: Subject, in harness: MovementReminderHarness.Harness) {
+    func resume(_ subject: Subject, in harness: MovementReminderHarness.Harness) {
         switch subject {
         case .recording: harness.controller.recordingDidResume()
         case .walk: harness.controller.walkDidResumeOrEnd()
