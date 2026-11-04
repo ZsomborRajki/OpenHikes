@@ -304,7 +304,7 @@ nonisolated final class WalkUITests: XCTestCase {
         XCTAssertNotEqual(
             advanced?.components(separatedBy: ", ").last,
             remainingBefore,
-            "remaining distance must advance with coverage while the chart is parked"
+            "remaining distance must advance with the walk while the chart is parked"
         )
         XCTAssertEqual(chart.value as? String, parked, "coverage moves, the manual tracker stays put")
         expectPhase(phase, contains: "Active")

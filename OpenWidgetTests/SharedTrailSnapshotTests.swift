@@ -116,14 +116,16 @@ struct SharedTrailSnapshotTests {
 
     private static func walk(
         state: SharedTrailSnapshot.Walk.State = .active,
-        covered: Double = 0.5
+        covered: Double = 0.5,
+        metersLeft: Double? = nil
     ) -> SharedTrailSnapshot.Walk {
         SharedTrailSnapshot.Walk(
             state: state,
             coveredFraction: covered,
             furthestDistanceMeters: 5000,
             activeSeconds: 1800,
-            startedAt: Date(timeIntervalSince1970: 1_000_000)
+            startedAt: Date(timeIntervalSince1970: 1_000_000),
+            metersLeft: metersLeft
         )
     }
 
@@ -139,6 +141,17 @@ struct SharedTrailSnapshotTests {
         #expect(!status.contains("62%"))
         #expect(snapshot.progressFraction == 0.5, "and the bar draws the same number")
         #expect(snapshot.fractionComplete == 0.62, "position is still there for whoever asks for it")
+    }
+
+    /// Turned back at 8 km of 10 and now at 6.2: the way left is the 6.2 km
+    /// back to the start, which the app worked out from the walk's matches.
+    /// The position alone reads the 3.8 km beyond the hiker (#1304).
+    @Test("a walk's distance left is the walk's own, to the end it is going for")
+    func walkDistanceLeftIsTheWalks() {
+        var snapshot = Self.snapshot(total: 10_000, along: 6200)
+        snapshot.walk = Self.walk(covered: 0.8, metersLeft: 6200)
+        #expect(snapshot.remainingDistanceMeters == 6200)
+        #expect(snapshot.statusText == "80% hiked · \(WidgetFormat.length(meters: 6200)) left")
     }
 
     @Test("a paused walk says so before its coverage")
@@ -177,7 +190,7 @@ struct SharedTrailSnapshotTests {
     @Test("a walk survives the round trip through the App Group")
     func walkRoundTrips() throws {
         var snapshot = Self.snapshot(total: 8000, along: 1234)
-        snapshot.walk = Self.walk(state: .paused, covered: 0.4)
+        snapshot.walk = Self.walk(state: .paused, covered: 0.4, metersLeft: 1234)
         let decoded = try JSONDecoder().decode(
             SharedTrailSnapshot.self,
             from: JSONEncoder().encode(snapshot)

@@ -83,6 +83,19 @@ struct WalkPresentationTests {
         #expect(presentation.accessibilityValue.contains("Time left"))
     }
 
+    /// The chip beside the time left says the distance that time is for: the
+    /// walk's own, to the end it is going for, and not the position's to the
+    /// trail's stored end — 6.2 km back, not 3.8 km on (#1304).
+    @Test("a walk's distance left is the one its time left is for")
+    func distanceLeftIsTheWalks() {
+        var state = Self.walking
+        state.secondsLeft = 70 * 60
+        state.metersLeft = 6200
+        let presentation = Self.presentation(state)
+        let remaining = presentation.metrics.first { $0.kind == .remaining }
+        #expect(remaining?.value == WidgetFormat.length(meters: 6200, locale: Self.locale))
+    }
+
     /// The app had nothing honest to say, or no walk is under way: no chip.
     @Test("no time left, or no walk, draws no chip")
     func noTimeLeftNoChip() {

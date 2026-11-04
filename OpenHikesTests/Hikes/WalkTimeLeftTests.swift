@@ -58,7 +58,6 @@ struct WalkTimeLeftTests {
         let seconds = try #require(WalkTimeLeft.seconds(
             profile: Self.profile,
             position: 0,
-            remainingMeters: total,
             coverage: TrailWalkCoverage(),
             activeSeconds: 0
         ))
@@ -93,7 +92,6 @@ struct WalkTimeLeftTests {
         let left = try #require(WalkTimeLeft.seconds(
             profile: Self.profile,
             position: total / 2,
-            remainingMeters: total / 2,
             coverage: covered,
             activeSeconds: signposts * 1.5
         ))
@@ -116,7 +114,6 @@ struct WalkTimeLeftTests {
         let seconds = try #require(WalkTimeLeft.seconds(
             profile: Self.profile,
             position: turn,
-            remainingMeters: turn,
             coverage: covered,
             activeSeconds: 0
         ))
@@ -208,23 +205,28 @@ struct WalkTimeLeftTests {
         let flat = RouteProfile(route: (0...10).map { step in
             RouteCoordinate(latitude: 47.0 + Double(step) * 0.001, longitude: 11.0)
         })
-        let total = flat.totalDistanceMeters
         #expect(WalkTimeLeft.seconds(
             profile: flat,
             position: 0,
-            remainingMeters: total,
             coverage: TrailWalkCoverage(),
             activeSeconds: 0
         ) == nil)
     }
 
+    /// At the end the walk was going for, whichever end that is.
     @Test("nothing left is no time left")
     func nothingLeftIsNothing() {
+        let total = Self.profile.totalDistanceMeters
         #expect(WalkTimeLeft.seconds(
             profile: Self.profile,
-            position: Self.profile.totalDistanceMeters,
-            remainingMeters: 0,
-            coverage: TrailWalkCoverage(),
+            position: total,
+            coverage: Self.walked(0, total),
+            activeSeconds: 0
+        ) == nil)
+        #expect(WalkTimeLeft.seconds(
+            profile: Self.profile,
+            position: 0,
+            coverage: Self.walked(total, 0),
             activeSeconds: 0
         ) == nil)
     }

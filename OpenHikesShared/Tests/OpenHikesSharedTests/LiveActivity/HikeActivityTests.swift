@@ -52,14 +52,16 @@ struct HikeActivityPayloadTests {
     private static func walk(
         state: SharedTrailSnapshot.Walk.State = .active,
         covered: Double = 0.5,
-        activeSeconds: TimeInterval = 2700
+        activeSeconds: TimeInterval = 2700,
+        metersLeft: Double? = nil
     ) -> SharedTrailSnapshot.Walk {
         SharedTrailSnapshot.Walk(
             state: state,
             coveredFraction: covered,
             furthestDistanceMeters: 6200,
             activeSeconds: activeSeconds,
-            startedAt: Date(timeIntervalSince1970: 1_000_000)
+            startedAt: Date(timeIntervalSince1970: 1_000_000),
+            metersLeft: metersLeft
         )
     }
 
@@ -197,6 +199,7 @@ struct HikeActivityPayloadTests {
         )
         let decoded = try JSONDecoder().decode(HikeActivityAttributes.ContentState.self, from: data)
         #expect(decoded.coveredFractionComplete == nil)
+        #expect(decoded.metersLeft == nil)
         #expect(decoded.runState == .running)
         #expect(decoded.distanceMeters == 6200)
     }
@@ -214,6 +217,28 @@ struct HikeActivityPayloadTests {
             attributes.remainingDistanceMeters(for: state)
                 == snapshot.remainingDistanceMeters
         )
+    }
+
+    /// A walk that turned back at 8 km of 10 and is now at 6.2: the way back
+    /// is 6.2 km, which the position alone would read as the 3.8 km beyond it.
+    /// The Lock Screen's chip says the walk's own figure, as the widget does
+    /// (#1304).
+    @Test("a walk's distance left is its own, on the Lock Screen as on the widget")
+    func aWalksDistanceLeftIsItsOwn() {
+        var snapshot = Self.trailSnapshot(liveFix: Self.liveFix())
+        snapshot.walk = Self.walk(covered: 0.8, metersLeft: 6200)
+        let attributes = HikeActivityAttributes.following(from: snapshot)
+        let state = HikeActivityAttributes.ContentState(following: snapshot)
+
+        #expect(state.metersLeft == 6200)
+        #expect(snapshot.remainingDistanceMeters == 6200)
+        #expect(attributes.remainingDistanceMeters(for: state) == snapshot.remainingDistanceMeters)
+
+        // Off the trail, the position is withheld and so is the distance from it.
+        snapshot.liveFix = nil
+        let off = HikeActivityAttributes.ContentState(following: snapshot)
+        #expect(attributes.remainingDistanceMeters(for: off) == nil)
+        #expect(snapshot.remainingDistanceMeters == nil)
     }
 
     @Test("progress is absent without a fix and clamped past the end")
@@ -337,6 +362,8 @@ struct HikeActivityPayloadTests {
         pointCount: Int.max,
         offRouteMeters: 3456.789012345678,
         coveredFractionComplete: 0.12345678901234567,
+        secondsLeft: 34_567.890123456789,
+        metersLeft: 23_456.789012345678,
         runState: .finished,
         elapsedSeconds: 456_789.01234567891,
         updatedAt: Date(timeIntervalSinceReferenceDate: 781_234_567.8912345)

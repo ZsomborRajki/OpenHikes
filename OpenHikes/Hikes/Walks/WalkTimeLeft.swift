@@ -8,13 +8,13 @@
 //  ## The signposts first, then the hiker
 //
 //  The rest of the route is estimated the way a planned one is — DIN 33466,
-//  ``WalkingTimeEstimate`` — over the distance left and what the line climbs
-//  and drops between the hiker and its end. Then, once the walk has covered
-//  enough to say, it is scaled by how this hiker compares with the signposts
-//  *today*: the active time they have spent over what the same rule says the
-//  covered stretches should have taken. The hiker's own pace beats any
-//  formula, and it beats it most on exactly the days — tired, heavily laden,
-//  in snow — when the time left matters.
+//  ``WalkingTimeEstimate`` — over the distance from the hiker to the end they
+//  are going for, and what the line climbs and drops on the way there. Then,
+//  once the walk has covered enough to say, it is scaled by how this hiker
+//  compares with the signposts *today*: the active time they have spent over
+//  what the same rule says the covered stretches should have taken. The
+//  hiker's own pace beats any formula, and it beats it most on exactly the
+//  days — tired, heavily laden, in snow — when the time left matters.
 //
 //  The scale is bounded both ways. A hiker who sprinted the first kilometre,
 //  or stood at a viewpoint for twenty minutes of it, is not going to walk the
@@ -46,6 +46,16 @@
 //  nothing better than the coverage, and there it is behind the hiker
 //  whichever way they set off.
 //
+//  The way ahead is the distance as well as the climb —
+//  ``metersAhead(position:coverage:routeMeters:)`` — and not the ground the
+//  walk has yet to cover. The same hiker, turned back at 8 km of 10 and now
+//  at 6.5 km, has 6.5 km to the start and none of the 2 km beyond the turn:
+//  timed over those 2 km, the signposts said 40 minutes for a walk of 107,
+//  and the after-dark warning, which reads this figure, could stay quiet for
+//  a hiker who will be out after dark (#1304). The readout beside the figure
+//  states the same distance, ``TrailWalkSession/metersLeft``, and leaves the
+//  coverage to the percentage hiked.
+//
 //  What is behind needs no guess. The coverage keeps which way each stretch
 //  was walked (#1012), so the calibration measures the signposts' time for
 //  each one the way the hiker climbed it — ``RouteProfile/climb(walking:)``,
@@ -70,24 +80,27 @@ nonisolated enum WalkTimeLeft {
     /// signposts'.
     static let paceFactorBounds = 0.5...2.0
 
-    /// Seconds to the end of the route, or `nil` when there is nothing honest
-    /// to say — see the file header.
+    /// Seconds to the end the walk is going for, or `nil` when there is
+    /// nothing honest to say — see the file header.
     ///
     /// - Parameters:
     ///   - position: where the hiker was last matched, in metres along the
-    ///     route. The climb still to come is measured from here to the end.
-    ///   - remainingMeters: the distance left, as the readout beside this
-    ///     figure states it — coverage rather than position, for a walk.
+    ///     route. The distance and the climb still to come are both measured
+    ///     from here to the end the walk is going for.
     ///   - coverage: the stretches this walk has actually spanned, each the
     ///     way it was walked, and the way it is going now.
     ///   - activeSeconds: the walk's clock with its pauses taken out.
     static func seconds(
         profile: RouteProfile,
         position: Double,
-        remainingMeters: Double,
         coverage: TrailWalkCoverage,
         activeSeconds: TimeInterval
     ) -> TimeInterval? {
+        let remainingMeters = metersAhead(
+            position: position,
+            coverage: coverage,
+            routeMeters: profile.totalDistanceMeters
+        )
         guard remainingMeters.isFinite, remainingMeters > 0 else { return nil }
         let ahead = climbAhead(profile: profile, position: position, coverage: coverage)
         let pace = paceFactor(profile: profile, coverage: coverage, activeSeconds: activeSeconds)
@@ -110,14 +123,26 @@ nonisolated enum WalkTimeLeft {
         position: Double,
         coverage: TrailWalkCoverage
     ) -> (gainMeters: Double, lossMeters: Double)? {
-        let reversed = coverage.direction.map { $0 == .towardsStart } ?? isReversed(
-            position: position,
-            covered: coverage.ranges,
-            routeMeters: profile.totalDistanceMeters
-        )
-        return reversed
+        isGoingToStart(position: position, coverage: coverage, routeMeters: profile.totalDistanceMeters)
             ? climb(profile, from: 0, to: position, reversed: true)
             : climb(profile, from: position, to: profile.totalDistanceMeters, reversed: false)
+    }
+
+    /// How far it is along the route from `position` to the end the walk is
+    /// going for: the distance the time left is for, and the one the readout
+    /// beside it states — see the file header.
+    static func metersAhead(position: Double, coverage: TrailWalkCoverage, routeMeters: Double) -> Double {
+        max(0, isGoingToStart(position: position, coverage: coverage, routeMeters: routeMeters)
+            ? position
+            : routeMeters - position)
+    }
+
+    /// Whether the end the walk is going for is the route's stored start:
+    /// ``TrailWalkCoverage/direction`` once the matches have said, and
+    /// ``isReversed(position:covered:routeMeters:)``'s guess until then.
+    static func isGoingToStart(position: Double, coverage: TrailWalkCoverage, routeMeters: Double) -> Bool {
+        coverage.direction.map { $0 == .towardsStart }
+            ?? isReversed(position: position, covered: coverage.ranges, routeMeters: routeMeters)
     }
 
     /// How this walk compares with the signposts so far, as a factor on their

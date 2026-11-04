@@ -3,9 +3,10 @@
 //  OpenHikesTests
 //
 //  Which end of the trail the time left is timing, once a walk's matches have
-//  said which way it is going. Each test asserts the climb the estimate chose
-//  as well as the time it came to: a figure alone can be right for the wrong
-//  end (#1195).
+//  said which way it is going. Each test asserts the climb and the distance
+//  the estimate chose as well as the time it came to: a figure alone can be
+//  right for the wrong end (#1195), and a climb to one end can be timed over
+//  the length of something else (#1304).
 //
 
 import Foundation
@@ -56,26 +57,33 @@ struct WalkTimeLeftDirectionTests {
         try #require(profile.climb(from: position, to: profile.totalDistanceMeters))
     }
 
-    /// Holds the estimate at `position` to `expected`: the climb it chose,
-    /// and the signposts' time for that climb over the distance left, with
-    /// calibration out of it. The distance is the walk's own figure, ground
-    /// not yet covered, whichever way the walk is going.
+    /// Holds the estimate at `position` to the end `heading` names: the climb
+    /// it chose, the distance, and the signposts' time for that climb over
+    /// that distance, with calibration out of it. Both are the stretch from
+    /// the hiker to that end, whatever the walk has covered (#1304).
     private func expectEstimate(
         at position: Double,
         coverage: TrailWalkCoverage,
-        chooses expected: (gainMeters: Double, lossMeters: Double)
+        heading: TrailWalkDirection
     ) throws {
+        let towardsStart = heading == .towardsStart
+        let expected = try towardsStart ? Self.climbToStart(from: position) : Self.climbToEnd(from: position)
         let ahead = try #require(
             WalkTimeLeft.climbAhead(profile: Self.profile, position: position, coverage: coverage)
         )
         #expect(ahead.gainMeters.isApproximatelyEqual(to: expected.gainMeters, absoluteTolerance: 0.001))
         #expect(ahead.lossMeters.isApproximatelyEqual(to: expected.lossMeters, absoluteTolerance: 0.001))
 
-        let remaining = Self.profile.totalDistanceMeters - coverage.coveredMeters
+        let remaining = towardsStart ? position : Self.profile.totalDistanceMeters - position
+        let meters = WalkTimeLeft.metersAhead(
+            position: position,
+            coverage: coverage,
+            routeMeters: Self.profile.totalDistanceMeters
+        )
+        #expect(meters.isApproximatelyEqual(to: remaining, absoluteTolerance: 0.001))
         let seconds = try #require(WalkTimeLeft.seconds(
             profile: Self.profile,
             position: position,
-            remainingMeters: remaining,
             coverage: coverage,
             activeSeconds: 0
         ))
@@ -98,7 +106,7 @@ struct WalkTimeLeftDirectionTests {
         let ahead = try Self.climbToStart(from: position)
         #expect(ahead.gainMeters.isApproximatelyEqual(to: 0, absoluteTolerance: 0.001))
         #expect(ahead.lossMeters.isApproximatelyEqual(to: 162.5, absoluteTolerance: 1))
-        try expectEstimate(at: position, coverage: coverage, chooses: ahead)
+        try expectEstimate(at: position, coverage: coverage, heading: .towardsStart)
     }
 
     /// The same walk the other way up. Down from the stored end to the 3 km
@@ -111,7 +119,7 @@ struct WalkTimeLeftDirectionTests {
 
         let ahead = try Self.climbToEnd(from: position)
         #expect(ahead.gainMeters > 1000)
-        try expectEstimate(at: position, coverage: coverage, chooses: ahead)
+        try expectEstimate(at: position, coverage: coverage, heading: .towardsEnd)
     }
 
     /// One union and one position, and only the order of the matches differs.
@@ -122,28 +130,20 @@ struct WalkTimeLeftDirectionTests {
         let position = Self.profile.distances[65]
         #expect(turned.ranges == onward.ranges)
 
-        try expectEstimate(at: position, coverage: turned, chooses: Self.climbToStart(from: position))
-        try expectEstimate(at: position, coverage: onward, chooses: Self.climbToEnd(from: position))
+        try expectEstimate(at: position, coverage: turned, heading: .towardsStart)
+        try expectEstimate(at: position, coverage: onward, heading: .towardsEnd)
     }
 
     @Test("a walk set off from the start is timed to the end")
     func aForwardStart() throws {
         let position = Self.profile.distances[20]
-        try expectEstimate(
-            at: position,
-            coverage: Self.walked(Self.leg(0, 20)),
-            chooses: Self.climbToEnd(from: position)
-        )
+        try expectEstimate(at: position, coverage: Self.walked(Self.leg(0, 20)), heading: .towardsEnd)
     }
 
     @Test("a walk set off from the stored end is timed to the start")
     func aReverseStart() throws {
         let position = Self.profile.distances[80]
-        try expectEstimate(
-            at: position,
-            coverage: Self.walked(Self.leg(100, 80)),
-            chooses: Self.climbToStart(from: position)
-        )
+        try expectEstimate(at: position, coverage: Self.walked(Self.leg(100, 80)), heading: .towardsStart)
     }
 
     /// From the middle, where the nearer end says nothing about which way
@@ -154,7 +154,7 @@ struct WalkTimeLeftDirectionTests {
         try expectEstimate(
             at: position,
             coverage: Self.walked(Self.leg(start, end)),
-            chooses: end < start ? Self.climbToStart(from: position) : Self.climbToEnd(from: position)
+            heading: end < start ? .towardsStart : .towardsEnd
         )
     }
 
@@ -165,12 +165,12 @@ struct WalkTimeLeftDirectionTests {
         var onward = Self.walked(Self.leg(0, 20))
         let behind = Self.profile.distances[20] - 40
         onward.record(distance: behind)
-        try expectEstimate(at: behind, coverage: onward, chooses: Self.climbToEnd(from: behind))
+        try expectEstimate(at: behind, coverage: onward, heading: .towardsEnd)
 
         var back = Self.walked(Self.leg(100, 80))
         let ahead = Self.profile.distances[80] + 40
         back.record(distance: ahead)
-        try expectEstimate(at: ahead, coverage: back, chooses: Self.climbToStart(from: ahead))
+        try expectEstimate(at: ahead, coverage: back, heading: .towardsStart)
     }
 
     /// A pause or a fix off the route says nothing about which way the hiker
@@ -182,6 +182,6 @@ struct WalkTimeLeftDirectionTests {
         let position = Self.profile.distances[50]
         coverage.record(distance: position)
 
-        try expectEstimate(at: position, coverage: coverage, chooses: Self.climbToEnd(from: position))
+        try expectEstimate(at: position, coverage: coverage, heading: .towardsEnd)
     }
 }
