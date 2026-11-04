@@ -157,4 +157,10 @@ nonisolated extension MKTileOverlayPath {
         while path.z > targetZoom { path = path.parent }
         return path
     }
+
+    /// The ground this tile covers, and with it every tile cropped from it.
+    var mapRect: MKMapRect {
+        let side = MKMapSize.world.width / Double(1 << z)
+        return MKMapRect(x: Double(x) * side, y: Double(y) * side, width: side, height: side)
+    }
 }
