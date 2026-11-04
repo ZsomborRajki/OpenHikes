@@ -58,7 +58,8 @@ final class MovementReminderController {
         /// Tells this pause apart from any later one. The answer to a
         /// permission prompt arrives whenever the hiker gets round to
         /// reading it, and by then this may not be the pause that asked —
-        /// see ``reconcileWithAuthorization(prompting:)``.
+        /// see ``reconcileWithAuthorization(prompting:)`` and
+        /// ``postResume(_:)``.
         let id = UUID()
         let anchor: CLLocationCoordinate2D
         let pausedAt: Date
@@ -71,6 +72,9 @@ final class MovementReminderController {
     /// this exists for whether they went up it or back down it — which is why
     /// the displacement below is taken as an absolute value.
     private struct PausedWalk {
+        /// Tells this pause apart from any later one, for the reason
+        /// ``PausedRecording/id`` does.
+        let id = UUID()
         let trailTitle: String
         let anchorDistance: Double
         /// When the walk was paused, which is the far side of the boundary a
@@ -78,6 +82,14 @@ final class MovementReminderController {
         /// ``isMeasurable(_:since:)``.
         let pausedAt: Date
         var watch = MovementWatch()
+    }
+
+    /// A Resume reminder one pause has earned, on its way to the notification
+    /// centre. Bound to that pause, which can be over by the time permission
+    /// answers — see ``postResume(_:)``.
+    private struct ResumeAttempt {
+        let pauseID: UUID
+        let reminder: MovementReminder
     }
 
     private let notifier: any MovementReminderNotifying
@@ -217,10 +229,13 @@ extension MovementReminderController {
         )
         pausedRecording = paused
         guard shouldRemind else { return }
-        post(
-            MovementReminderWording.resumeRecording(
-                movedMeters: moved,
-                pausedFor: date.timeIntervalSince(paused.pausedAt)
+        postResume(
+            ResumeAttempt(
+                pauseID: paused.id,
+                reminder: MovementReminderWording.resumeRecording(
+                    movedMeters: moved,
+                    pausedFor: date.timeIntervalSince(paused.pausedAt)
+                )
             )
         )
     }
@@ -331,10 +346,13 @@ extension MovementReminderController {
         let shouldRemind = paused.watch.observe(awayMeters: moved, at: date)
         pausedWalk = paused
         guard shouldRemind else { return }
-        post(
-            MovementReminderWording.resumeWalk(
-                trailTitle: paused.trailTitle,
-                movedMeters: moved
+        postResume(
+            ResumeAttempt(
+                pauseID: paused.id,
+                reminder: MovementReminderWording.resumeWalk(
+                    trailTitle: paused.trailTitle,
+                    movedMeters: moved
+                )
             )
         )
     }
@@ -471,10 +489,30 @@ extension MovementReminderController {
         )
     }
 
-    private func post(_ reminder: MovementReminder) {
+    /// A Resume reminder belongs to the pause that earned it, and permission
+    /// can outlast that pause. Check the attempt before the ask, so a finished
+    /// pause puts up no prompt, and again after it, immediately before posting,
+    /// so the answer cannot post for a pause that ended, was replaced or was
+    /// outranked while it waited. Both run on the queue, so the withdrawal
+    /// that ended the pause still lands after this attempt.
+    private func postResume(_ attempt: ResumeAttempt) {
         enqueue { [weak self] in
-            guard let self, await notifier.authorize() else { return }
-            await notifier.post(reminder)
+            guard let self, mayPostResume(attempt), await notifier.authorize() else { return }
+            await postAuthorizedResume(attempt)
+        }
+    }
+
+    private func postAuthorizedResume(_ attempt: ResumeAttempt) async {
+        guard mayPostResume(attempt) else { return }
+        await notifier.post(attempt.reminder)
+    }
+
+    private func mayPostResume(_ attempt: ResumeAttempt) -> Bool {
+        guard isEnabled else { return false }
+        switch attempt.reminder.kind {
+        case .resumeRecording: return pausedRecording?.id == attempt.pauseID
+        case .resumeWalk: return pausedWalk?.id == attempt.pauseID && !hasActiveRecording()
+        default: return false
         }
     }
 
