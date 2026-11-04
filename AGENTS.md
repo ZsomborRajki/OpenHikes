@@ -1012,8 +1012,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
     lists**, because App Review checks both directions. Today that is the paid
     map styles (Stadia Outdoors, Stamen Terrain, Thunderforest Outdoors), offline
     Stadia maps, and Stadia elevation where a trail has none. A change updates
-    the paywall, `OpenHikes.storekit`, `docs/terms/` in both languages, the
-    support and home pages in `docs/`, the README and App Store Connect
+    the paywall, `OpenHikes.storekit`, `docs/terms/` and `docs/support/` in
+    every language, the home page in `docs/`, the README and App Store Connect
     together.
   - Everything else is free, the community included.
   - The paywall stays reachable from About even when no keys are bundled.
