@@ -380,7 +380,8 @@ final class WeatherManager {
     /// revisiting a fresh subject keeps both its reading and request history.
     @ObservationIgnored private var cache: OrderedDictionary<String, StoredWeatherReading> = [:]
 
-    @ObservationIgnored private let service = WeatherService.shared
+    /// Where a reading comes from — see ``WeatherReadingFetching``.
+    @ObservationIgnored private let readings: any WeatherReadingFetching
     /// The transport a severe-weather banner goes out through, or `nil` for a
     /// launch that must not post one — which is every test launch, exactly as
     /// ``OpenHikesModel/makeMovementReminderController(defaults:)`` decides
@@ -496,12 +497,14 @@ final class WeatherManager {
         store: WeatherReadingStore? = nil,
         placeNames: (any WeatherPlaceNaming)? = nil,
         notifier: (any MovementReminderNotifying)? = nil,
-        widgetPublisher: WeatherWidgetPublisher = .system
+        widgetPublisher: WeatherWidgetPublisher = .system,
+        readings: any WeatherReadingFetching = WeatherKitReadings()
     ) {
         self.store = store
         self.placeNames = placeNames
         self.notifier = notifier
         self.widgetPublisher = widgetPublisher
+        self.readings = readings
     }
 
     /// Looks up the city the current subject's forecast is for, and its time
@@ -636,54 +639,29 @@ final class WeatherManager {
     ///
     /// Returns whether the request succeeded, which is what the poll loop
     /// records against the subject's backoff.
+    ///
+    /// **A cancelled attempt says nothing, whatever the request came back
+    /// with.** The poll belongs to a SwiftUI `.task` and this manager outlives
+    /// it, so a request can still answer or throw after the loop that
+    /// replaced the one waiting on it has moved the badge. Nothing of it
+    /// reaches the badge, the cache, the store or the widget. A spinner left
+    /// behind is the next loop's, whose first pass asks again, and the `false`
+    /// goes nowhere: the backoff it would count against ends with its loop.
+    ///
+    /// Asked of the task rather than of the error, because a cancelled request
+    /// may still succeed, and WeatherKit need not fail one with Swift's own
+    /// error. That error from a loop still running is an ordinary failure:
+    /// the loop is there to back off, and its badge has to stop spinning.
     func update(for subject: WeatherSubject) async -> Bool {
-        let coordinate = subject.coordinate
-        let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
         do {
-            // One round trip, four datasets. `weather(for:including:)` is
-            // variadic and answers all of them from the same request, so the
-            // strip, the week, the daylight row and the alerts cost what the
-            // badge was already spending — see ``WeatherHourSummary``,
-            // ``WeatherDaySummary``, ``WeatherDaylight`` and
-            // ``WeatherAlerts``.
-            let (reading, forecast, daily, alerts) = try await service.weather(
-                for: location,
-                including: .current,
-                .hourly,
-                .daily,
-                .alerts
-            )
-            let snapshot = WeatherSnapshot(
-                reading,
-                hourly: WeatherHourSummary.summaries(
-                    from: forecast,
-                    notBefore: reading.metadata.date
-                ),
-                // The next two are the same ten days read twice: the week a
-                // walk is chosen from, and the one day's sun that ends the
-                // walk already chosen. Both are anchored against the reading's
-                // own date rather than `Date.now`, for the reason
-                // ``WeatherSnapshot/capturedAt`` gives: WeatherKit serves
-                // cached payloads, and a response that arrives at 00:05 may be
-                // a reading taken yesterday.
-                days: WeatherDaySummary.summaries(
-                    from: daily,
-                    notBefore: reading.metadata.date
-                ),
-                daylight: WeatherDaylight.forDay(
-                    of: reading.metadata.date,
-                    in: daily
-                ),
-                // The `nil` is carried rather than defaulted away: it is the
-                // difference between nobody watching this place and nothing to
-                // report, and it is the one this app must not get wrong.
-                alerts: WeatherAlerts(alerts)
-            )
+            let snapshot = try await readings.reading(at: subject.coordinate)
+            try Task.checkCancellation()
             remember(snapshot, for: subject)
             publish(.reading(snapshot, subject: subject))
             store?.save(snapshot: snapshot, subject: subject)
             return true
         } catch {
+            guard !Task.isCancelled else { return false }
             // WeatherKit's failure modes are the opaque ones — a missing
             // entitlement, a token fetch that failed, a rate limit, an
             // unsupported region — and they are indistinguishable from a
