@@ -10,6 +10,12 @@
             "value" : "Abbrechen"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancelar"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -25,6 +31,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fertig"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
           }
         },
         "fr" : {
@@ -44,6 +56,12 @@
             "value" : "Wanderung"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Excursión"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -55,6 +73,12 @@
     "OpenHikes" : {
       "localizations" : {
         "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes"
+          }
+        },
+        "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes"
@@ -77,6 +101,12 @@
             "value" : "OpenHikes braucht deinen Standort, bevor es eine Wanderung aufzeichnen kann."
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes necesita tu ubicación para poder grabar una excursión."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -92,6 +122,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wanderung pausieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pausar excursión"
           }
         },
         "fr" : {
@@ -110,6 +146,12 @@
             "value" : "Pausiert"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En pausa"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -124,6 +166,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pausiert, %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En pausa, %@"
           }
         },
         "fr" : {
@@ -143,6 +191,12 @@
             "value" : "Pausiert die aufgezeichnete Wanderung über ihre Anzeige auf dem Sperrbildschirm."
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pausa la excursión que se está grabando, desde su panel en la pantalla bloqueada."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -159,6 +213,12 @@
             "value" : "Aufzeichnung"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grabando"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -173,6 +233,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aufzeichnung, %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grabando, %@"
           }
         },
         "fr" : {
@@ -192,6 +258,12 @@
             "value" : "Wanderung fortsetzen"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reanudar excursión"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -207,6 +279,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Setzt die pausierte Wanderung über ihre Anzeige auf dem Sperrbildschirm fort."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reanuda la excursión en pausa, desde su panel en la pantalla bloqueada."
           }
         },
         "fr" : {
@@ -226,6 +304,12 @@
             "value" : "Zeigt einen Weg deiner Wahl, deinen ausgewählten Weg oder eine Wanderung, die gerade aufgezeichnet wird."
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Muestra un sendero que elijas, el sendero seleccionado o una excursión que se esté grabando."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -242,6 +326,12 @@
             "value" : "Starte eine Aufzeichnung oder sieh dir die laufende an."
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inicia una grabación o consulta la que está en curso."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -256,6 +346,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tippen, um eine Wanderung aufzuzeichnen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toca para grabar una excursión"
           }
         },
         "fr" : {
@@ -275,6 +371,12 @@
             "value" : "Wanderaufzeichnung umschalten"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activar/desactivar grabación"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -290,6 +392,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Weg"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sendero"
           }
         },
         "fr" : {

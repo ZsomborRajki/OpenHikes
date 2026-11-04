@@ -43,6 +43,12 @@
             "value" : "OpenHikes reads your heart rate from Health while you are recording a hike, so the watch can show it as you hike. Nothing else in Health is read."
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes lee tu frecuencia cardiaca de Salud mientras grabas una excursión, para que el reloj pueda mostrarla mientras caminas. No lee nada más de Salud."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -65,6 +71,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "OpenHikes starts a hiking workout in Health while you record on your watch, which is what keeps the recording running with the screen off. The workout itself is not saved — your iPhone saves the finished hike."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes inicia un entrenamiento de senderismo en Salud mientras grabas en el reloj, que es lo que mantiene la grabación en marcha con la pantalla apagada. El entrenamiento en sí no se guarda: tu iPhone guarda la excursión terminada."
           }
         },
         "fr" : {
@@ -91,6 +103,12 @@
             "value" : "OpenHikes uses your location to show where you are on the trail you are following, and to record your hike."
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes usa tu ubicación para mostrar dónde estás en el sendero que sigues y para grabar tu excursión."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -113,6 +131,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "OpenHikes uses motion sensors to improve the elevation recorded on your hike."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes usa los sensores de movimiento para mejorar la altitud grabada en tu excursión."
           }
         },
         "fr" : {
