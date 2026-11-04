@@ -100,8 +100,13 @@ struct TrailWalkDirectionTests {
             intervals: coverage.intervals,
             furthestDistanceMeters: coverage.furthestDistanceMeters
         )
-        #expect(rebuilt == coverage.withoutContinuity)
+        #expect(rebuilt.intervals == coverage.intervals)
+        #expect(rebuilt.furthestDistanceMeters == coverage.furthestDistanceMeters)
         #expect(rebuilt.walkedTowardsStart == [200...400, 700...900])
+        // A row keeps the union and the furthest point, never where the last
+        // match landed or which way the walk was going.
+        #expect(rebuilt.lastMatchedDistance == nil)
+        #expect(rebuilt.direction == nil)
     }
 
     /// A pair written low to high is the way the route's distances run, which
@@ -177,15 +182,5 @@ struct TrailWalkDirectionTests {
     func noStretchNoClimb() {
         #expect(Self.hill.climb(walking: TrailWalkCoverage()) == nil)
         #expect(Self.hill.climb(walking: walk([50])) == nil)
-    }
-}
-
-private extension TrailWalkCoverage {
-    /// This coverage as a stored row reads it back: a row keeps the union and
-    /// the furthest point, never where the last match landed.
-    var withoutContinuity: Self {
-        var copy = self
-        copy.breakContinuity()
-        return copy
     }
 }
