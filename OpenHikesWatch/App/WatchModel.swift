@@ -21,9 +21,11 @@
 //  anything is on screen: a hiker finishes a walk, the phone is out of range,
 //  and the walk has to go the moment it is back. ``PhoneLink`` reports
 //  reachability changes as deliveries for exactly this, and the drain is also
-//  run at launch, which covers the watch having been rebooted in between, and
-//  whenever the app comes to the front, which covers a phone that refused a
-//  walk and then stayed in range.
+//  run when the session finishes activating, which covers the watch having
+//  been rebooted in between, and whenever the app comes to the front, which
+//  covers a phone that refused a walk and then stayed in range. The one run
+//  at launch is there for the count: nothing can be offered until activation
+//  has completed.
 //
 //  Every queue call is awaited on ``WatchWalkQueue``, off the main actor. The
 //  count comes from file names and a walk is read only when the link is about
@@ -134,7 +136,12 @@ final class WatchModel {
     }
     #endif
 
-    /// Starts the link and sends whatever is already waiting.
+    /// Starts the link and counts whatever is already waiting.
+    ///
+    /// The session is still activating when this returns, so a library
+    /// request waits in the link and the drain is there for the count. What
+    /// neither can send yet goes when ``PhoneDelivery/activated(isReachable:)``
+    /// arrives.
     func start() {
         isStarted = true
         link.activate { [weak self] delivery in self?.apply(delivery) }
@@ -147,10 +154,14 @@ final class WatchModel {
     ///
     /// The drain matters for a phone that refused a walk and never left
     /// range — no reachability change will come to retry it, and a hiker
-    /// opening the app to look at a walk still waiting is the moment to.
+    /// opening the app to look at a walk still waiting is the moment to. The
+    /// same goes for a session that failed to activate, which nothing else
+    /// would try again before the next launch.
     func cameToFront() {
         askForLibraryIfEmpty()
-        if isStarted { drainQueue() }
+        guard isStarted else { return }
+        link.retryActivation()
+        drainQueue()
     }
 
     /// Asks the phone for the library, but only when there is nothing to show.
@@ -475,23 +486,42 @@ final class WatchModel {
             // phone's recorder, so a running hike stays on screen and keeps
             // ``isPhoneRecording`` guarding against a second one.
             phoneRecording = answer.reading(holding: phoneRecording)
+        case .activated(let isReachable):
+            linkActivated(isReachable: isReachable)
         case .reachabilityChanged(let isReachable):
-            // The phone is back. If this watch still has no trails, this is
-            // the moment to ask again rather than to keep waiting for a push
-            // that may have nothing to push.
-            if isReachable {
-                askForLibraryIfEmpty()
-                drainQueue()
-            } else {
-                // Out of range is not idle. Keeping the last reading and
-                // drawing it as current would be a stopwatch running on a
-                // screen whose phone might have stopped ten minutes ago; the
-                // screen says "out of range" from the link instead.
-                phoneRecording = nil
-                commandWait.phoneLost()
-                applyCommandWait()
-            }
+            reachabilityChanged(to: isReachable)
         }
+    }
+
+    /// The first moment a walk can go, and the drain a launch out of range
+    /// depends on: no reachability change is coming, and a transfer queued now
+    /// crosses by itself when the phone is back. The link has already sent the
+    /// requests that waited for this.
+    private func linkActivated(isReachable: Bool) {
+        drainQueue()
+        if !isReachable { phoneLost() }
+    }
+
+    /// The phone is back or gone. If this watch still has no trails, its
+    /// return is the moment to ask again rather than to keep waiting for a
+    /// push that may have nothing to push.
+    private func reachabilityChanged(to isReachable: Bool) {
+        guard isReachable else {
+            phoneLost()
+            return
+        }
+        askForLibraryIfEmpty()
+        drainQueue()
+    }
+
+    /// Out of range is not idle. Keeping the last reading and drawing it as
+    /// current would be a stopwatch running on a screen whose phone might have
+    /// stopped ten minutes ago; the screen says "out of range" from the link
+    /// instead.
+    private func phoneLost() {
+        phoneRecording = nil
+        commandWait.phoneLost()
+        applyCommandWait()
     }
 
     /// Takes a reading, unless it is older than the one already held.
