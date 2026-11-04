@@ -547,8 +547,8 @@ final class WatchModel {
         let queued = await store.walks.pending()
         apply(queued)
         guard !queued.isEmpty else { return }
-        Self.logger.debug("Offering \(queued.count, privacy: .public) queued walk(s) to the phone")
         var isAnyUnread = false
+        var offered = 0
         for sessionID in queued.sessionIDs where link.isDue(sessionID) {
             // One at a time, and only a walk the link will take: the read is
             // the whole recording.
@@ -556,7 +556,14 @@ final class WatchModel {
                 isAnyUnread = true
                 continue
             }
-            link.send(walk)
+            if link.send(walk) { offered += 1 }
+        }
+        // Counted from what the session took, so a drain that the activation
+        // gate or a retry delay turned away says nothing.
+        if offered > 0 {
+            Self.logger.debug(
+                "Offered \(offered, privacy: .public) of \(queued.count, privacy: .public) queued walk(s) to the phone"
+            )
         }
         // A walk that does not decode leaves the queue's count — see
         // ``WatchWalkQueue/walk(_:)`` — and the screen should say so. One
