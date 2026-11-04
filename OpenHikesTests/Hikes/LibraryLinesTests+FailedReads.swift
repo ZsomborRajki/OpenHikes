@@ -126,6 +126,28 @@ extension LibraryLinesTests {
         #expect(stage.reads.count(of: refresh.untouched.id) == 1, "a save never reads the whole library")
     }
 
+    /// Every pass asks for what is owed, so a hike still owed once its line
+    /// had landed would cost every later save of the store a read of it.
+    @Test("a line read after a failure is owed nothing more")
+    func aLineReadAfterAFailureIsOwedNothing() async throws {
+        let refresh = try await Self.refresh { reads, edited, _ in
+            reads.answer(edited, with: .failed, reads: 1)
+        }
+        let stage = refresh.stage
+        defer { stage.stop() }
+        await settleDelegateHop(until: "the pass the failure asked for draws the new line") {
+            Self.draws(Fixture.outAndBackRoute, for: refresh.edited.id, in: stage)
+        }
+        let asked = stage.reads.count(of: refresh.edited.id)
+
+        refresh.other.replaceRoute(with: Fixture.ridgeRoute)
+        try stage.container.mainContext.save()
+        await settleDelegateHop(until: "the other hike's new line is drawn") {
+            Self.draws(Fixture.ridgeRoute, for: refresh.other.id, in: stage)
+        }
+        #expect(stage.reads.count(of: refresh.edited.id) == asked, "a save of another row asks for it no more")
+    }
+
     /// Listed still, as a hike deleted just after a listing is: whether the
     /// line is drawn is the next listing's to say, and a read of a row that
     /// is not there owes nothing.
