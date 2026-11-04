@@ -5,7 +5,8 @@
 //  The rules that keep a share card's boxes on the card: never off an edge,
 //  never over the wordmark, pulled onto the middle when close to it, and a
 //  stats box that holds between one and four figures whatever the menu does.
-//  And the layout's memory, which has to survive a value it cannot read.
+//  And the layout's memory, which has to survive a value it cannot read, and
+//  the names its line colours are offered by, in every language.
 //
 
 import CoreGraphics
@@ -146,5 +147,21 @@ struct WalkShareLayoutTests {
         let restored = WalkShareLayout.remembered(in: defaults)
         #expect(restored.route.scale == WalkShareWidgetPlacement.scaleRange.upperBound)
         #expect(restored.shownStats == WalkShareStat.defaultShown)
+    }
+
+    /// Resolved in each language the app ships, because the hosted tests run
+    /// in English, where every option begins with a capital anyway.
+    @Test(
+        "the picker offers each line colour as a word of its own, in every language",
+        arguments: StringCatalogTests.translations
+    )
+    func lineColorsAreNamedOnTheirOwn(language: String) {
+        for color in WalkShareLineColor.allCases {
+            var label = color.label
+            label.locale = Locale(identifier: language)
+            let name = String(localized: label)
+            #expect(name != String(localized: color.label), "\(color) has no \(language) name")
+            #expect(name.first?.isUppercase == true, "\(color) is offered as “\(name)” in \(language)")
+        }
     }
 }
