@@ -1393,6 +1393,12 @@ this before changing `OpenHikesWatch/`, `OpenHikes/Watch/` or the shared
   request, goes by `transferUserInfo`, because `sendMessage` fails out of range.
   `WatchLink` is the only encoder, with one function pair per
   `WatchMessageKind`.
+- **No transfer leaves before activation completes**, because
+  `transferUserInfo` on a session that has not activated is a programmer
+  error (`WatchLinkActivation`). A launch's requests wait for the callback, and
+  a walk stays on the disk queue, not marked as crossing, for the drain that
+  follows it. A failed activation is tried again when the app comes to the
+  front.
 - **A recorded walk is written before it is sent.**
   - `WatchStore` queues it on disk and drops it only on a `WatchWalkReceipt`.
   - The phone's import is idempotent on `HikeLocalState.watchSessionID`.

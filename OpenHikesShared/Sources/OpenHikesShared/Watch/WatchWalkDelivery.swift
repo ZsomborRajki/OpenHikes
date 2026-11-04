@@ -36,6 +36,10 @@
 //  too, and offering everything once after one is the retry the disk queue is
 //  for.
 //
+//  Before the session has activated a walk is in none of those states, because
+//  nothing can be offered yet. It is turned away unmarked, and
+//  ``WatchLinkActivation`` says when the drain that takes it comes.
+//
 
 import Foundation
 
@@ -79,6 +83,52 @@ public struct WatchWalkDelivery: Sendable {
     /// asking `WCSession` whether a previous process left it crossing.
     public func hasNeverOffered(_ sessionID: UUID) -> Bool {
         attempts[sessionID] == nil
+    }
+
+    /// Whether a drain at `now` should read this walk and offer it.
+    ///
+    /// Never before activation has completed: nothing can be offered yet, so
+    /// a walk is not read and `WCSession`'s queue is not searched for it.
+    /// After that, the first offer in a process may find the last one's
+    /// transfer still queued, because `WCSession` keeps it across the relaunch
+    /// this record did not survive. It is adopted rather than duplicated, and
+    /// its finish arrives like any other.
+    ///
+    /// - Parameter isCrossing: whether `WCSession` still holds a transfer of
+    ///   this walk. Decodes each queued walk to read its ID, so it is asked
+    ///   once per walk per process rather than on every drain.
+    public mutating func isDue(
+        _ sessionID: UUID,
+        at now: Date,
+        on activation: WatchLinkActivation,
+        isCrossing: () -> Bool
+    ) -> Bool {
+        guard activation.allowsTransfers else { return false }
+        if hasNeverOffered(sessionID), isCrossing() {
+            handedOver(sessionID)
+            return false
+        }
+        return shouldOffer(sessionID, at: now)
+    }
+
+    /// Hands the walk to `transfer` if it is due, and answers whether the
+    /// system took it.
+    ///
+    /// Marked only once it has. A walk recorded as crossing on the strength of
+    /// an attempt that never reached an active session would sit on the disk
+    /// queue unoffered until the app was relaunched.
+    ///
+    /// - Parameter transfer: submits the walk, answering whether it went.
+    public mutating func offer(
+        _ sessionID: UUID,
+        at now: Date,
+        on activation: WatchLinkActivation,
+        isCrossing: () -> Bool,
+        transfer: () -> Bool
+    ) -> Bool {
+        guard isDue(sessionID, at: now, on: activation, isCrossing: isCrossing), transfer() else { return false }
+        handedOver(sessionID)
+        return true
     }
 
     /// Records that `WCSession` took the walk, whether from this process's
