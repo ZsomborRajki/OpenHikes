@@ -27,15 +27,21 @@ struct WatchFigure: View {
     /// free to wrap rather than shrink at the largest sizes.
     @ScaledMetric(relativeTo: .caption2) private var captionSize = 10.0
 
-    /// A key rather than a `String`, so that a caption written as a literal
-    /// at the call site is extracted into the String Catalog. A `String`
-    /// reached the verbatim `Text` and `accessibilityLabel` overloads, which
-    /// draw it and list it nowhere (#1028).
-    let title: LocalizedStringKey
+    let title: Text
     let value: String
     /// What VoiceOver reads the figure by, where ``title`` is shortened to fit
     /// the tile. `nil` reads ``title``.
-    var spokenTitle: LocalizedStringKey?
+    var spokenTitle: Text?
+
+    /// The caption is a key rather than a `String`, so that a caption written
+    /// as a literal at the call site is extracted into the String Catalog. A
+    /// `String` reached the verbatim `Text` and `accessibilityLabel`
+    /// overloads, which draw it and list it nowhere (#1028).
+    init(title: LocalizedStringKey, value: String, spokenTitle: LocalizedStringKey? = nil) {
+        self.title = Text(title)
+        self.value = value
+        self.spokenTitle = spokenTitle.map { Text($0) }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -43,7 +49,7 @@ struct WatchFigure: View {
                 .font(.headline.monospacedDigit())
                 .minimumScaleFactor(Self.minimumScale)
                 .lineLimit(1)
-            Text(title)
+            title
                 .font(.system(size: captionSize))
                 .foregroundStyle(.secondary)
         }
@@ -59,5 +65,14 @@ extension WatchFigure {
     /// package — see ``WatchRecordingFigures``.
     init(_ figure: WatchRecordingFigures.Figure) {
         self.init(title: figure.caption.label, value: figure.value, spokenTitle: figure.caption.spokenLabel)
+    }
+
+    /// A figure whose caption was looked up under a key of its own, because a
+    /// translation names it apart from another use of the same English word
+    /// (*One English word that a translation splits takes a second key* in
+    /// the repository instructions).
+    init(caption: String, value: String) {
+        title = Text(verbatim: caption)
+        self.value = value
     }
 }

@@ -887,11 +887,11 @@ a change to recording, the map, the sheet or the render path; the PR template,
   the `Info.plist` purpose strings, the Background Trail Tracking footer, and
   App Review's notes in App Store Connect. Always access is for the widget and
   the Live Activity; the `location` background mode is for the recorder. Their
-  German and French must agree too: the prompts in
+  German, French and Spanish must agree too: the prompts in
   `OpenHikes/InfoPlist.xcstrings`, the footer in the app's catalog.
-- **Strings live in String Catalogs, in English, German and French.** English
-  is the development language. The app, the widget, the watch, Siri and the
-  permission prompts all follow the device's language.
+- **Strings live in String Catalogs, in English, German, French and Spanish.**
+  English is the development language. The app, the widget, the watch, Siri and
+  the permission prompts all follow the device's language.
   - `xcodebuild` does not merge extracted strings the way the IDE does. After
     changing text, build, then run
     `Scripts/sync-string-catalogs.sh <derived-data>`. CI's `--check` exits 2
@@ -916,14 +916,15 @@ a change to recording, the map, the sheet or the render path; the PR template,
     comments, or on the support page when a hiker needs them. A switch is
     named for everything it controls. `StringCatalogTests` holds every English
     value under a length ceiling.
-  - **Every string gets its German and French in the same change.** Sync the
-    new key into its catalog, then give it a `de` and an `fr` localization
-    with `"state" : "translated"`. `StringCatalogTests+Translations.swift`
-    fails on a key missing either, and on a translation that drops or retypes
-    a placeholder (a singular may leave the count out, as the English one
-    does, except in French). The shared App Intent and `RoleButton` wording
-    sits in all four catalogs, so it is translated in all four. A new language
-    joins `StringCatalogTests.translations`, `knownRegions` in the project,
+  - **Every string gets its German, French and Spanish in the same change.**
+    Sync the new key into its catalog, then give it a `de`, an `fr` and an `es`
+    localization with `"state" : "translated"`.
+    `StringCatalogTests+Translations.swift` fails on a key missing any of them,
+    and on a translation that drops or retypes a placeholder (a singular may
+    leave the count out, as the English one does, except in French). The shared
+    App Intent and `RoleButton` wording sits in all four catalogs, so it is
+    translated in all four. A new language joins
+    `StringCatalogTests.translations`, `knownRegions` in the project,
     `MapPurchaseLinks.PageLanguage` with its pages under `docs/`, and the
     archive job's `.lproj` list in `ci.yml`.
   - **The German says *du*, and keeps one word for each thing:** *Wanderung*
@@ -942,6 +943,24 @@ a change to recording, the map, the sheet or the render path; the PR template,
     and an ellipsis follows the word with no space. The Siri phrases are what
     the hiker says to Siri, so they take the imperative people speak to it in
     (*Démarre une randonnée dans OpenHikes*).
+  - **The Spanish says *tú*, and keeps one word for each thing:** *excursión*
+    (hike), *sendero* (trail), *ruta* (route), *lugar* (place), *grabación*
+    (recording), *parada* (a stop on a drawn trail), *tesela* (map tile),
+    *fototeca* (the photo library). Record is *grabar* and save is *guardar*,
+    so the two never meet. One `es` serves every Spanish-speaking region, so
+    it avoids words only one region uses, and Apple's own names are those of
+    Apple's Spanish for Spain (*Ajustes*, *Salud*, *Mapas*, *Actividad en
+    directo*). Buttons and titles are in sentence case, a button is an
+    infinitive (*Guardar excursión*) and an instruction the *tú* imperative
+    (*Activa*), and people are named without a gender where Spanish allows it
+    (*otra persona*, *quien revisa*). Quotes are «…», a question or an
+    exclamation opens with ¿ or ¡, nothing goes before : ; ? !, a no-break
+    space goes before %, an aside sits between rayas with no space inside
+    (—así—), and an ellipsis follows the word with no space. The Siri phrases
+    take the *tú* imperative (*Empieza una excursión en OpenHikes*). Spanish
+    uses the `one` form for 1 alone, so its singular may spell the count out
+    as the English does, and each Spanish plural carries `many` worded as
+    `other`, as the French does.
   - **A French singular keeps its number.** French uses the `one` form for 0
     as well as 1, so a singular that spells the count out as a word would say
     *une* photo for none (`frenchSingularKeepsTheCount`). Each French plural
@@ -953,7 +972,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
     `String(localized: "<area>.<meaning>", defaultValue: "…")` with the same
     English. French says « Départ » for a route's start and « Démarrer » on
     the record button (`recording.start`), and agrees *None* with a place's
-    kind (`place.kind.none`).
+    kind (`place.kind.none`). Spanish calls the watch's share of a trail
+    already walked «Completado» and a close button «OK» (`follow.done`).
   - **A sentence never changes the case of a catalogued word**, because German
     capitalizes every noun. A sentence that names something is passed whole
     (`CommunityMailOutcomeSections.handoffDetail`).
@@ -962,25 +982,26 @@ a change to recording, the map, the sheet or the render path; the PR template,
     `OpenHikes/AppShortcuts.xcstrings`, one entry per shortcut keyed by its
     first phrase. The IDE extracts into both and `xcodebuild` into neither, so
     an edited purpose string or phrase means editing its catalog's English,
-    German and French by hand. The translation tests hold each to its
+    German, French and Spanish by hand. The translation tests hold each to its
     `Info.plist` and to `OpenHikesShortcuts.swift`. The IDE also extracts the
     bundle's name and the GPX type's into `InfoPlist.xcstrings`: a name gets
     its translations, or `"shouldTranslate" : false` when it stays as it is,
     as *OpenHikes* does.
-  - **The privacy policy and the terms are published in German and French
-    too.** `docs/de/privacy/`, `docs/de/terms/`, `docs/fr/privacy/` and
-    `docs/fr/terms/` translate the English pages, and the app opens the copy in
-    its own language (`MapPurchaseLinks.PageLanguage` argues why). An edit to
-    an English page edits its German and French copies in the same change,
-    and all three move their `<time datetime>` together, which
+  - **The privacy policy and the terms are published in German, French and
+    Spanish too.** `docs/de/privacy/`, `docs/de/terms/`, `docs/fr/privacy/`,
+    `docs/fr/terms/`, `docs/es/privacy/` and `docs/es/terms/` translate the
+    English pages, and the app opens the copy in its own language
+    (`MapPurchaseLinks.PageLanguage` argues why). An edit to an English page
+    edits its German, French and Spanish copies in the same change, and all
+    four move their `<time datetime>` together, which
     `Scripts/check-legal-pages.sh` holds them to, on every pull request. It
     reads the pages from the quoted URLs in `MapPurchaseLinks.swift`.
     `MapPurchaseLinksTests` fails on an app language that has no pages of
-    its own. Each page's language menu links the other two.
-  - **So is the support page.** `docs/de/support/` and `docs/fr/support/`
-    translate `docs/support/`, and the German and French App Store listings
-    link them. The app links none of them, so no script holds them together:
-    an edit to one edits the others in the same change.
+    its own. Each page's language menu links the other three.
+  - **So is the support page.** `docs/de/support/`, `docs/fr/support/` and
+    `docs/es/support/` translate `docs/support/`, for the App Store listing in
+    each language to link. The app links none of them, so no script holds
+    them together: an edit to one edits the others in the same change.
   - The hosted tests and the UI suites assert English copy, so they assume a
     simulator whose language is English, as CI's is.
 - **OpenHikes Pro is one monthly subscription.**
@@ -991,8 +1012,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
     lists**, because App Review checks both directions. Today that is the paid
     map styles (Stadia Outdoors, Stamen Terrain, Thunderforest Outdoors), offline
     Stadia maps, and Stadia elevation where a trail has none. A change updates
-    the paywall, `OpenHikes.storekit`, `docs/terms/` in both languages, the
-    support and home pages in `docs/`, the README and App Store Connect
+    the paywall, `OpenHikes.storekit`, `docs/terms/` and `docs/support/` in
+    every language, the home page in `docs/`, the README and App Store Connect
     together.
   - Everything else is free, the community included.
   - The paywall stays reachable from About even when no keys are bundled.
@@ -1303,14 +1324,14 @@ is world-readable, because browsing needs no account.
     contribution form, and one tap puts it back: a default, not a filter.
 - **What is sent is stated, and the statements move together.**
   `CommunityShareDisclosureTests` holds the share footer to the payload. The
-  privacy manifest, `docs/privacy/` and `docs/terms/`, with their German and
-  French copies under `docs/de/` and `docs/fr/`, change whenever what is sent
-  changes, what a reviewer may do changes, the removal, *Check Whether It's
-  Still Live*, reset or *Finish Sending* flows change, what the Commons
-  requests ask for or keep changes, or `CommunityPublisher.maximumPhotos` (36)
-  changes. That limit is the first number to lower if storage costs bite.
-  App Store Connect's own privacy answers are separate, and the manifest does
-  not update them.
+  privacy manifest, `docs/privacy/` and `docs/terms/`, with their German,
+  French and Spanish copies under `docs/de/`, `docs/fr/` and `docs/es/`, change
+  whenever what is sent changes, what a reviewer may do changes, the removal,
+  *Check Whether It's Still Live*, reset or *Finish Sending* flows change, what
+  the Commons requests ask for or keep changes, or
+  `CommunityPublisher.maximumPhotos` (36) changes. That limit is the first
+  number to lower if storage costs bite. App Store Connect's own privacy
+  answers are separate, and the manifest does not update them.
 
 ### OpenStreetMap and Wikimedia Commons
 
@@ -1392,6 +1413,12 @@ this before changing `OpenHikesWatch/`, `OpenHikes/Watch/` or the shared
   request, goes by `transferUserInfo`, because `sendMessage` fails out of range.
   `WatchLink` is the only encoder, with one function pair per
   `WatchMessageKind`.
+- **No transfer leaves before activation completes**, because
+  `transferUserInfo` on a session that has not activated is a programmer
+  error (`WatchLinkActivation`). A launch's requests wait for the callback, and
+  a walk stays on the disk queue, not marked as crossing, for the drain that
+  follows it. A failed activation is tried again when the app comes to the
+  front.
 - **A recorded walk is written before it is sent.**
   - `WatchStore` queues it on disk and drops it only on a `WatchWalkReceipt`.
   - The phone's import is idempotent on `HikeLocalState.watchSessionID`.
