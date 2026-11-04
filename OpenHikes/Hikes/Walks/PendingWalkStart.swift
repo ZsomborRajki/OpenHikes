@@ -16,8 +16,10 @@
 //  moved ``confirmingMeters`` along the route from where it found them, in
 //  more than one fix — dated from when they set off, and carrying the
 //  coverage it saw on the way, so a confirmed walk is the walk it would
-//  always have been. Nothing here is published, persisted or drawn: a
-//  proposal is the session's private business until it confirms.
+//  always have been. From a loop's trailhead, which is both of its ends,
+//  that is measured the shorter way round — see ``meters(fromOrigin:)``.
+//  Nothing here is published, persisted or drawn: a proposal is the
+//  session's private business until it confirms.
 //
 //  A pure value, like ``TrailWalkRecord`` beside it, so every rule here is a
 //  suite with no view, store or clock.
@@ -46,13 +48,19 @@ struct PendingWalkStart: Equatable {
     private(set) var record: TrailWalkRecord
     /// Where along the route the first match put the hiker.
     private let originMeters: Double
+    /// How far apart the route's two ends are, when the first match put the
+    /// hiker within ``stillRadiusMeters`` of one of them, and `nil` when it
+    /// put them anywhere else: the gap the way round, through the ends, has
+    /// to cross — see ``meters(fromOrigin:)``.
+    private let gapThroughEndsMeters: Double?
     /// The last match still within ``stillRadiusMeters`` of that spot: when
     /// the hiker set off, and what a confirmed walk is dated from.
     private var setOffAt: Date
     /// The furthest a match has landed from the origin, either way along the
-    /// route, since the hiker set off — which a hiker standing still does not
-    /// grow, however long they stand. Back to zero whenever a match puts them
-    /// at the origin again, as ``setOffAt`` moves.
+    /// route or round it — see ``meters(fromOrigin:)`` — since the hiker set
+    /// off, which a hiker standing still does not grow, however long they
+    /// stand. Back to zero whenever a match puts them at the origin again, as
+    /// ``setOffAt`` moves.
     private var departureMeters: Double = 0
     /// How many matches since setting off have each landed further from the
     /// origin than any before them.
@@ -64,7 +72,16 @@ struct PendingWalkStart: Equatable {
     /// repeats the same spot rather than moving past it.
     private var stepsOut = 0
 
-    init(hikeID: UUID, routeDistanceMeters: Double, routeRevision: String?, distance: Double, at date: Date) {
+    /// - Parameter endsApartMeters: how far apart the route's two ends are
+    ///   on the ground — see ``endsApartMeters(of:)``.
+    init(
+        hikeID: UUID,
+        routeDistanceMeters: Double,
+        endsApartMeters: Double,
+        routeRevision: String?,
+        distance: Double,
+        at date: Date
+    ) {
         record = TrailWalkRecord(
             hikeID: hikeID,
             routeDistanceMeters: routeDistanceMeters,
@@ -72,9 +89,20 @@ struct PendingWalkStart: Equatable {
             routeRevision: routeRevision
         )
         originMeters = distance
+        let fromNearerEnd = min(distance, routeDistanceMeters - distance)
+        gapThroughEndsMeters = fromNearerEnd <= Self.stillRadiusMeters ? endsApartMeters : nil
         setOffAt = date
         record.coverage.record(distance: distance)
         record.lastFollowedDistanceMeters = distance
+    }
+
+    /// How far apart `profile`'s two ends are on the ground: nothing on a
+    /// loop or an out-and-back, the trail's span on one between two places.
+    static func endsApartMeters(of profile: RouteProfile) -> Double {
+        guard let start = profile.coordinate(atDistance: 0),
+              let end = profile.coordinate(atDistance: profile.totalDistanceMeters)
+        else { return .infinity }
+        return RouteGeometry.distanceMeters(from: start, to: end)
     }
 
     var hikeID: UUID { record.hikeID }
@@ -86,7 +114,7 @@ struct PendingWalkStart: Equatable {
         record.coverage.record(distance: distance)
         record.lastMatchedAt = date
         record.lastFollowedDistanceMeters = distance
-        let fromOrigin = abs(distance - originMeters)
+        let fromOrigin = meters(fromOrigin: distance)
         if fromOrigin <= Self.stillRadiusMeters {
             setOffAt = date
             departureMeters = 0
@@ -95,6 +123,33 @@ struct PendingWalkStart: Equatable {
             departureMeters = fromOrigin
             stepsOut += 1
         }
+    }
+
+    /// How far from where the proposal found the hiker a match at `distance`
+    /// lands, along the route.
+    ///
+    /// The shorter way round, from a trailhead both of the route's ends
+    /// share. A hiker found at a loop's trailhead who sets off the other way
+    /// round from the way it is stored is matched at its start until they are
+    /// out of the start's reach, and then near its end: most of the route
+    /// away read straight along, and every step after that one nearer, so
+    /// the walk never started. Read through the trailhead, each step is as
+    /// far out as it is on the ground. A gap between the ends is crossed as
+    /// the crow flies: a loop recorded a little short of where it began reads
+    /// like one that closes, and the far end of a trail between two places is
+    /// never nearer than the ground between them.
+    ///
+    /// From the trailhead only. Anywhere else on a route whose ends meet, the
+    /// other end can be an out-and-back's other leg, which is the same
+    /// ground: a hiker found standing on the way home is placed on the way
+    /// out, and their first step home moves them to the leg beside it, nearly
+    /// the whole route along. Read through the trailhead, every step home
+    /// after that one would be nearer; read straight along, each one is
+    /// further, as it is on the ground.
+    private func meters(fromOrigin distance: Double) -> Double {
+        let along = abs(distance - originMeters)
+        guard let gap = gapThroughEndsMeters else { return along }
+        return min(along, record.routeDistanceMeters - along + gap)
     }
 
     /// Whether the hiker has walked far enough along the route to be walking

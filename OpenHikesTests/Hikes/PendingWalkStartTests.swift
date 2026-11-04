@@ -16,10 +16,14 @@ import Testing
 struct PendingWalkStartTests {
     private let origin = Date(timeIntervalSince1970: 1_750_000_000)
 
-    private func proposal(at distance: Double = 1000) -> PendingWalkStart {
+    /// A proposal on a five-kilometre route — by default one between two
+    /// places four kilometres apart, `endsApartMeters` 0 for a loop or an
+    /// out-and-back.
+    private func proposal(at distance: Double = 1000, endsApartMeters: Double = 4000) -> PendingWalkStart {
         PendingWalkStart(
             hikeID: UUID(),
             routeDistanceMeters: 5000,
+            endsApartMeters: endsApartMeters,
             routeRevision: nil,
             distance: distance,
             at: origin
@@ -129,5 +133,75 @@ struct PendingWalkStartTests {
         let before = pending
         pending.record(distance: 1200, at: origin.addingTimeInterval(60))
         #expect(pending == before)
+    }
+
+    // MARK: Where the route's ends meet
+
+    /// A loop's trailhead is both of its ends. Set off from it the other way
+    /// round from the way it is stored, and the matches land near its end:
+    /// read straight along, a step of most of the route, and every step after
+    /// it one nearer.
+    @Test("from a loop's trailhead, setting off the other way round confirms")
+    func loopTrailheadConfirmsTheOtherWayRound() {
+        var fromStart = proposal(at: 0, endsApartMeters: 0)
+        fromStart.record(distance: 4940, at: origin.addingTimeInterval(60))
+        fromStart.record(distance: 4880, at: origin.addingTimeInterval(120))
+        #expect(!fromStart.isConfirmed, "60 m covered: the step across the trailhead was not walked")
+        fromStart.record(distance: 4820, at: origin.addingTimeInterval(180))
+        #expect(fromStart.isConfirmed)
+
+        var fromEnd = proposal(at: 5000, endsApartMeters: 0)
+        for (step, distance) in [60.0, 120, 180].enumerated() {
+            fromEnd.record(distance: distance, at: origin.addingTimeInterval(Double(step + 1) * 60))
+        }
+        #expect(fromEnd.isConfirmed)
+    }
+
+    /// Standing at the trailhead, fixes land either side of the join, and
+    /// each of them is where the hiker stands.
+    @Test("standing at a loop's trailhead never confirms, whichever end the fixes land at")
+    func loopTrailheadStandingNeverConfirms() {
+        var pending = proposal(at: 0, endsApartMeters: 0)
+        for minute in 1...61 {
+            let distance = minute.isMultiple(of: 2) ? 30.0 : 4970
+            pending.record(distance: distance, at: origin.addingTimeInterval(Double(minute) * 60))
+        }
+        #expect(!pending.isConfirmed)
+        #expect(
+            pending.confirmedRecord.startedAt == origin.addingTimeInterval(61 * 60),
+            "a fix past the join is not setting off"
+        )
+    }
+
+    /// A loop recorded a little short of where it began: the gap between its
+    /// ends is part of the way round.
+    @Test("a gap between a loop's ends is crossed the way round")
+    func loopGapIsCrossed() {
+        var pending = proposal(at: 0, endsApartMeters: 60)
+        for (step, distance) in [4980.0, 4920, 4860].enumerated() {
+            pending.record(distance: distance, at: origin.addingTimeInterval(Double(step + 1) * 60))
+        }
+        #expect(pending.isConfirmed)
+    }
+
+    /// The far trailhead of a trail between two places is not this one.
+    @Test("at one end of a trail between two places, a match at the other is not standing still")
+    func farTrailheadIsElsewhere() {
+        var pending = proposal(at: 0)
+        pending.record(distance: 4990, at: origin.addingTimeInterval(60))
+        #expect(pending.confirmedRecord.startedAt == origin)
+    }
+
+    /// Away from the trailhead, the other end of a route whose ends meet can
+    /// be an out-and-back's other leg: the same ground, not the way round. A
+    /// hiker found standing on the way home is matched on the way out, and
+    /// their first step home lands on the leg beside it.
+    @Test("away from the trailhead, a step onto an out-and-back's other leg is read straight along")
+    func outAndBackOtherLegIsAlong() {
+        var pending = proposal(at: 1000, endsApartMeters: 0)
+        for step in 0...10 {
+            pending.record(distance: 4010 + Double(step) * 10, at: origin.addingTimeInterval(Double(step + 1) * 8))
+        }
+        #expect(pending.isConfirmed)
     }
 }
