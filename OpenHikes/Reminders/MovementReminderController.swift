@@ -23,8 +23,9 @@
 //    and the distance those carry *is* the measurement. The moment is kept
 //    beside it for both, because a fix taken before the pause is evidence
 //    about the walk that led to it and not about the pause.
-//  * **The watches**, which hold the thresholds, the repeat allowance and the
-//    quiet period. See ``MovementReminderPolicy``.
+//  * **The watches**, which apply ``MovementReminderPolicy``'s thresholds and
+//    hold the repeat allowance, the quiet period and any reminder earned but
+//    not yet heard. See ``MovementWatch``.
 //  * **The hiker's switch**, read on every decision rather than captured, so
 //    turning reminders off mid-hike stops the next one instead of the one
 //    after the next launch.
@@ -58,7 +59,8 @@ final class MovementReminderController {
         /// Tells this pause apart from any later one. The answer to a
         /// permission prompt arrives whenever the hiker gets round to
         /// reading it, and by then this may not be the pause that asked —
-        /// see ``reconcileWithAuthorization(prompting:)``.
+        /// see ``reconcileWithAuthorization(prompting:)`` and
+        /// ``postResume(_:)``.
         let id = UUID()
         let anchor: CLLocationCoordinate2D
         let pausedAt: Date
@@ -71,6 +73,9 @@ final class MovementReminderController {
     /// this exists for whether they went up it or back down it — which is why
     /// the displacement below is taken as an absolute value.
     private struct PausedWalk {
+        /// Tells this pause apart from any later one, for the reason
+        /// ``PausedRecording/id`` does.
+        let id = UUID()
         let trailTitle: String
         let anchorDistance: Double
         /// When the walk was paused, which is the far side of the boundary a
@@ -80,9 +85,20 @@ final class MovementReminderController {
         var watch = MovementWatch()
     }
 
+    /// A Resume reminder one pause has earned, on its way to the notification
+    /// centre. Bound to that pause, which can be over by the time permission
+    /// answers — see ``postResume(_:)``. The words are not here: they are read
+    /// from the watch when the reminder goes out, which a refusal can put off
+    /// for as long as the pause lasts.
+    private struct ResumeAttempt: Equatable {
+        let kind: MovementReminderKind
+        let pauseID: UUID
+    }
+
     private let notifier: any MovementReminderNotifying
     private let defaults: UserDefaults
-    /// Re-read after permission, because dusk may pass while a prompt is up.
+    /// Re-read after permission, because dusk may pass while a prompt is up,
+    /// and because a Resume reminder is timed and worded when it goes out.
     private let clock: @MainActor () -> Date
 
     /// Where the app becoming active is observed. A seam and
@@ -200,11 +216,9 @@ extension MovementReminderController {
 
     /// A fix that arrived while the recording was paused.
     ///
-    /// - Parameter date: now, which is what the banner's "paused for" is
-    ///   measured against. The *watch* is fed `location.timestamp` instead —
-    ///   see ``isMeasurable(_:since:)`` for why the two cannot be the same
-    ///   value here.
-    func recordingObserved(_ location: CLLocation, at date: Date) {
+    /// The watch is fed `location.timestamp` rather than the moment it was
+    /// handed over — see ``isMeasurable(_:since:)`` for why the two differ.
+    func recordingObserved(_ location: CLLocation) {
         guard isEnabled, var paused = pausedRecording else { return }
         guard Self.isMeasurable(location, since: paused.pausedAt) else { return }
         let moved = RouteGeometry.distanceMeters(
@@ -217,12 +231,7 @@ extension MovementReminderController {
         )
         pausedRecording = paused
         guard shouldRemind else { return }
-        post(
-            MovementReminderWording.resumeRecording(
-                movedMeters: moved,
-                pausedFor: date.timeIntervalSince(paused.pausedAt)
-            )
-        )
+        postResume(ResumeAttempt(kind: .resumeRecording, pauseID: paused.id))
     }
 
     /// The running recording's own answer to whether the hiker is moving.
@@ -325,18 +334,19 @@ extension MovementReminderController {
         guard date >= paused.pausedAt else { return }
         // The recording wins outright. It is the walk that would be *lost* —
         // a follow is re-derived from the trail and the next fix — and it is
-        // the one whose reminder the hiker can act on.
-        guard !hasActiveRecording() else { return }
+        // the one whose reminder the hiker can act on. The watch is not shown
+        // this fix, so a reminder it is holding back is no longer known to be
+        // true, and goes without costing the pause anything.
+        guard !hasActiveRecording() else {
+            paused.watch.dropOwedReminder()
+            pausedWalk = paused
+            return
+        }
         let moved = abs(distance - paused.anchorDistance)
         let shouldRemind = paused.watch.observe(awayMeters: moved, at: date)
         pausedWalk = paused
         guard shouldRemind else { return }
-        post(
-            MovementReminderWording.resumeWalk(
-                trailTitle: paused.trailTitle,
-                movedMeters: moved
-            )
-        )
+        postResume(ResumeAttempt(kind: .resumeWalk, pauseID: paused.id))
     }
 
     /// The walk is following again, or is over.
@@ -471,10 +481,65 @@ extension MovementReminderController {
         )
     }
 
-    private func post(_ reminder: MovementReminder) {
+    /// A Resume reminder belongs to the pause that earned it, and permission
+    /// can outlast that pause. Check the attempt before the ask, so a finished
+    /// pause puts up no prompt, and again after it, immediately before posting,
+    /// so the answer cannot post for a pause that ended, was replaced or was
+    /// outranked while it waited. Both run on the queue, so the withdrawal
+    /// that ended the pause still lands after this attempt.
+    ///
+    /// Nothing is spent until both have passed. An attempt that was refused
+    /// or dropped was heard by nobody, so its pause keeps the allowance and
+    /// the reminder stays owed, for ``reconcileWithAuthorization(prompting:)``
+    /// or for the next attempt ``MovementWatch`` allows.
+    private func postResume(_ attempt: ResumeAttempt) {
         enqueue { [weak self] in
-            guard let self, await notifier.authorize() else { return }
-            await notifier.post(reminder)
+            guard let self, mayPostResume(attempt), await notifier.authorize() else { return }
+            await postAuthorizedResume(attempt)
+        }
+    }
+
+    private func postAuthorizedResume(_ attempt: ResumeAttempt) async {
+        guard mayPostResume(attempt), let reminder = takeResume(attempt.kind) else { return }
+        await notifier.post(reminder)
+    }
+
+    private func mayPostResume(_ attempt: ResumeAttempt) -> Bool {
+        guard isEnabled, owedResumes.contains(attempt) else { return false }
+        return attempt.kind != .resumeWalk || !hasActiveRecording()
+    }
+
+    /// What each pause has earned and nobody has heard yet.
+    private var owedResumes: [ResumeAttempt] {
+        var owed: [ResumeAttempt] = []
+        if let paused = pausedRecording, paused.watch.owedMeters != nil {
+            owed.append(ResumeAttempt(kind: .resumeRecording, pauseID: paused.id))
+        }
+        if let paused = pausedWalk, paused.watch.owedMeters != nil {
+            owed.append(ResumeAttempt(kind: .resumeWalk, pauseID: paused.id))
+        }
+        return owed
+    }
+
+    /// Spends the allowance and words the reminder, with no suspension between
+    /// the check before it and the post after it, so a second attempt finds
+    /// nothing left to send.
+    private func takeResume(_ kind: MovementReminderKind) -> MovementReminder? {
+        let now = clock()
+        switch kind {
+        case .resumeRecording:
+            guard var paused = pausedRecording, let moved = paused.watch.spendReminder(at: now) else { return nil }
+            pausedRecording = paused
+            return MovementReminderWording.resumeRecording(
+                movedMeters: moved,
+                pausedFor: now.timeIntervalSince(paused.pausedAt)
+            )
+        case .resumeWalk:
+            guard var paused = pausedWalk, let moved = paused.watch.spendReminder(at: now) else { return nil }
+            pausedWalk = paused
+            return MovementReminderWording.resumeWalk(trailTitle: paused.trailTitle, movedMeters: moved)
+        default:
+            return nil
         }
     }
 
@@ -529,7 +594,10 @@ extension MovementReminderController {
     /// Undelivered once-only warnings also keep their condition, so returning
     /// from Settings with permission enabled can post one that still applies.
     /// Its identity, current eligibility and dusk deadline are checked after
-    /// the silent permission request, just as they are after a prompt.
+    /// the silent permission request, just as they are after a prompt. A Resume
+    /// reminder a refusal held back gets the same retry and the same checks.
+    /// It does not wait out the quiet period, which paces asking again: this
+    /// is a check rather than a question, and the reminder was already owed.
     ///
     /// - Parameter prompting: whether the hiker may be asked. True at a
     ///   pause, which is a question about something they are doing right now;
@@ -557,7 +625,8 @@ extension MovementReminderController {
     func reconcileWithAuthorization(prompting: Bool) {
         let watched = pausedRecording?.id
         let pendingWarnings = warnings.pending
-        guard prompting || watched != nil || !pendingWarnings.isEmpty else { return }
+        let heldBack = owedResumes
+        guard prompting || watched != nil || !pendingWarnings.isEmpty || !heldBack.isEmpty else { return }
         enqueue { [weak self] in
             guard let self else { return }
             let mayPost = prompting
@@ -569,6 +638,9 @@ extension MovementReminderController {
                 // check above; returning from Settings must never prompt.
                 for warning in pendingWarnings {
                     await postAuthorizedWarning(warning.kind, id: warning.id)
+                }
+                for attempt in heldBack {
+                    await postAuthorizedResume(attempt)
                 }
             } else if let watched, pausedRecording?.id == watched {
                 pausedRecording = nil

@@ -160,6 +160,10 @@ enum MovementReminderHarness {
         /// The controller's own defaults suite, so a test can flip the
         /// hiker's switch the way `SettingsView`'s `@AppStorage` does.
         let defaults: UserDefaults
+        /// The name of that suite, for a second `UserDefaults` over it: a
+        /// write through one is a switch the controller's observer, scoped to
+        /// ``defaults``, has not been told about.
+        let suiteName: String
         /// The controller's own notification centre, so a test can drive the
         /// app-becoming-active registration itself. `.default` would work and
         /// is what the app uses, but posting it here would reach every other
@@ -189,8 +193,8 @@ enum MovementReminderHarness {
     /// would change the host app's behaviour for every suite after it.
     static func harness(remindersEnabled: Bool = true, clock: TestClock? = nil) -> Harness {
         let notifier = StubMovementReminderNotifier()
-        let suite = UserDefaults(suiteName: "movement-reminders-\(UUID().uuidString)")
-            ?? .standard
+        let suiteName = "movement-reminders-\(UUID().uuidString)"
+        let suite = UserDefaults(suiteName: suiteName) ?? .standard
         suite.set(remindersEnabled, forKey: SettingsKey.movementRemindersEnabled)
         let center = NotificationCenter()
         let reminderClock = clock ?? TestClock(start)
@@ -203,6 +207,7 @@ enum MovementReminderHarness {
             ),
             notifier: notifier,
             defaults: suite,
+            suiteName: suiteName,
             lifecycleCenter: center,
             clock: reminderClock
         )
