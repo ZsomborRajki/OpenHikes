@@ -36,7 +36,8 @@ struct CommunityPublisherTests {
     }
 
     /// The form hands in the line its screen read off the main actor, so
-    /// that is the line that goes up, with the places in its walking order.
+    /// that is the line that goes up, with the length read beside it and the
+    /// places in its walking order.
     @Test("the line the form read goes up, with the places in the order it meets them")
     func theFormsLineGoesUp() async throws {
         let context = try Fixture.modelContext()
@@ -52,12 +53,13 @@ struct CommunityPublisherTests {
             hike,
             authorName: "Anna",
             transport: transport,
-            line: SelectedLine.Line(route: line, distanceMeters: hike.distanceMeters)
+            line: SelectedLine.Line(route: line, distanceMeters: hike.distanceMeters + 250)
         )
 
         #expect(outcome == .submitted)
         let draft = try #require(transport.recording.submissions.first)
         #expect(draft.route == line)
+        #expect(draft.distanceMeters == hike.distanceMeters + 250, "the length read beside the line")
         #expect(draft.places.map(\.name) == ["End", "Start"])
     }
 

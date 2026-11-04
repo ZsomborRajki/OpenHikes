@@ -163,7 +163,10 @@ nonisolated enum CommunityPublisher {
         line: SelectedLine.Line? = nil,
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) async -> CommunitySendOutcome {
+        // The length from the same read as the line: the form's read can have
+        // seen a later save of the row than the hike here has.
         let route = line?.route ?? hike.route
+        let distanceMeters = line?.distanceMeters ?? hike.distanceMeters
         guard route.count >= 2 else { return .refused(.nothingToShare) }
         // The two rules that need nothing but this hike, re-checked here for
         // the same reason the point floor above is: the form's Share button
@@ -174,7 +177,7 @@ nonisolated enum CommunityPublisher {
         let eligibility = CommunityPublishingEligibility.of(
             importedFromListingID: hike.importedFromListingID,
             importedAuthorName: hike.importedAuthorName,
-            distanceMeters: hike.distanceMeters
+            distanceMeters: distanceMeters
         )
         if let reason = eligibility.reason { return .refused(.notEligible(reason)) }
 
@@ -188,7 +191,7 @@ nonisolated enum CommunityPublisher {
             authorName: authorName,
             trackDescription: hike.trackDescription,
             hikeDate: hike.date,
-            distanceMeters: hike.distanceMeters,
+            distanceMeters: distanceMeters,
             route: route,
             places: hike.places
         )
