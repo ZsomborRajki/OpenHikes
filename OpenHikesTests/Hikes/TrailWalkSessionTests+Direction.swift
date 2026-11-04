@@ -171,4 +171,63 @@ extension TrailWalkSessionTests {
         match(session, hike: walked, profile: profile, at: profile.distances[70] + 80)
         #expect(try #require(session.record).coverage.direction == .towardsEnd)
     }
+
+    /// #1307's early warning. On the way down, the hiker stands at the 1.5 km
+    /// point while fixes good to 60 m swing 55 m either side of them. Each
+    /// swing back up was a turn's length behind the last swing down, and
+    /// turned the walk towards the summit, whose climb ends after dusk: the
+    /// once-a-walk warning went off for a hiker going nowhere, and was spent.
+    /// Settled after every fix, as the seconds between real ones would: the
+    /// next swing down otherwise withdraws the warning before it is posted.
+    @Test("fixes wandering at a standstill on the way down do not warn of dusk")
+    func aStandstillIsNotWarned() async throws {
+        let harness = MovementReminderHarness.harness(clock: clock)
+        let dusk = clock.read().addingTimeInterval(175 * 60)
+        let session = TrailWalkSession(
+            context: context,
+            reminders: harness.controller,
+            clock: clock.read,
+            daylight: { _, _ in WeatherDaylight(civilDusk: dusk) }
+        )
+        let walked = climbingHike()
+        let profile = RouteProfile(route: walked.route)
+        walk(session, hike: walked, profile: profile, from: 30, through: 15)
+
+        for swing in [55.0, -55, 55, -55, 55, -55] {
+            clock.advance(by: 60)
+            session.recordForegroundMatch(
+                hike: walked,
+                profile: profile,
+                distance: profile.distances[15] + swing,
+                accuracy: 60
+            )
+            await harness.controller.settle()
+            #expect(try #require(session.record).coverage.direction == .towardsStart, "at \(swing)")
+        }
+        #expect(harness.notifier.posted.isEmpty)
+    }
+
+    /// A proposal starts a walk once matches have worked outwards from where
+    /// it found the hiker, and that run is the way they are going, however
+    /// good its fixes. From the fix that starts it, a turn is weighed like
+    /// any other: 100 m back on fixes good to 60 m is not one yet.
+    @Test("a walk started on uncertain fixes knows its way, and weighs its first turn against them")
+    func aStartedWalkWeighsItsFirstTurn() throws {
+        let session = session()
+        let walked = climbingHike()
+        let profile = RouteProfile(route: walked.route)
+        let origin = profile.distances[10]
+        for step in [0.0, 80, 110] {
+            clock.advance(by: 60)
+            session.recordForegroundMatch(hike: walked, profile: profile, distance: origin + step, accuracy: 60)
+        }
+        #expect(try #require(session.record, "precondition: the walk started").coverage.direction == .towardsEnd)
+
+        clock.advance(by: 60)
+        session.recordForegroundMatch(hike: walked, profile: profile, distance: origin + 10, accuracy: 60)
+        #expect(try #require(session.record).coverage.direction == .towardsEnd)
+        clock.advance(by: 60)
+        session.recordForegroundMatch(hike: walked, profile: profile, distance: origin - 10, accuracy: 60)
+        #expect(try #require(session.record).coverage.direction == .towardsStart)
+    }
 }

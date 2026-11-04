@@ -921,7 +921,8 @@ private extension HikeDetailView {
             profile: profile,
             distance: match.distanceAlongRoute,
             revision: prepared.walkRevision,
-            at: fix.timestamp
+            at: fix.timestamp,
+            accuracy: fix.horizontalAccuracy
         )
         if hike.autoFollowEnabled {
             updateLiveTracker(distance: match.distanceAlongRoute)

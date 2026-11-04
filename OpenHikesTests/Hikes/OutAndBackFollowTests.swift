@@ -51,6 +51,7 @@ struct OutAndBackFollowTests {
     private static func routeFix(north: Double, second: Double, east: Double = 0, course: Double? = 180) -> RouteFix {
         RouteFix(
             coordinate: point(north: north, east: east),
+            horizontalAccuracy: 5,
             course: course,
             timestamp: Date(timeIntervalSince1970: second)
         )
