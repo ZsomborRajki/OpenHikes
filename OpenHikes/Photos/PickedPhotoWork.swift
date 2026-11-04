@@ -2,8 +2,8 @@
 //  PickedPhotoWork.swift
 //  OpenHikes
 //
-//  The two route-sized steps of filing photographs from the system picker,
-//  and where they run.
+//  The route-sized steps of filing photographs from the system picker, and
+//  where they run.
 //
 //  Building the selection's ``HikePhotoSearchPlan`` indexes the route — its
 //  timeline, its measured legs and, on every trail, a whole ``RouteProfile``,
@@ -23,6 +23,13 @@
 //  yet, which only its own context can read. The hike is named or read on
 //  the main actor before the hop and the photo stored on it after, so no
 //  model crosses.
+//
+//  A selection outlasts the read its plan came from: each photograph waits for
+//  its own bytes first, and that can be a download. A line mirrored in during
+//  those waits left the rest of the selection placed on the line before it
+//  (#1280). So the hike is read again for every photograph, the same way, and
+//  the plan is replaced when it no longer describes what that read finds. A
+//  line that has not moved costs the read and no indexing.
 //
 //  The steps themselves are closures only so a suite can see which thread
 //  they ran on: ``standard`` is the fetch, the plan and the placement as they
@@ -53,8 +60,7 @@ nonisolated struct PickedPhotoWork: Sendable {
         }
     )
 
-    /// The plan a whole selection is placed against, read and built off the
-    /// main actor.
+    /// The plan a selection starts from, read and built off the main actor.
     ///
     /// `nil` for a selection filed under a place, which names no hike — see
     /// ``PhotoCaptureController/Filing/pickerSearchSource`` — and for an
@@ -67,6 +73,21 @@ nonisolated struct PickedPhotoWork: Sendable {
         guard let read, !Task.isCancelled else { return nil }
         assertOffMainThread("Reading and indexing a hike's route for picked photos must stay off the main thread")
         return read.source(fetch: fetchHike).map(buildPlan)
+    }
+
+    /// The plan the next photograph is placed against: `plan`, while it
+    /// still describes the hike `read` names, and otherwise the plan that
+    /// hike supports now, both read and built off the main actor.
+    ///
+    /// `nil` for a hike the store no longer holds, as ``plan(from:)`` is.
+    @concurrent
+    func current(
+        _ plan: HikePhotoSearchPlan,
+        of read: HikePhotoSearchPlan.SourceRead
+    ) async -> HikePhotoSearchPlan? {
+        assertOffMainThread("Reading and indexing a hike's route for picked photos must stay off the main thread")
+        guard let source = read.source(fetch: fetchHike) else { return nil }
+        return source.fingerprint == plan.fingerprint ? plan : buildPlan(source)
     }
 
     /// Where one photograph belongs: its capture time and position read out

@@ -165,13 +165,13 @@ extension PickedPhotoPlacementTests {
                 )
             )
         }
-        let plan = await log.work.plan(from: HikePhotoSearchPlan.SourceRead(hike))
+        var plan = await log.work.plan(from: HikePhotoSearchPlan.SourceRead(hike))
 
         let photo = try #require(
             await HikePhotoImport.addPicked(
                 data,
                 to: hike,
-                plan: plan,
+                plan: &plan,
                 fallback: Self.graphSelection,
                 assetLocalIdentifier: "picked-asset",
                 store: sandbox.store,

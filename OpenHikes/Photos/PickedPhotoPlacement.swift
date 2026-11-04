@@ -188,18 +188,23 @@ extension HikePhotoImport {
     /// ``PickedPhotoPlacement`` says it belongs.
     ///
     /// - Parameters:
-    ///   - plan: Built once for the whole selection by the caller, with its
-    ///     profile and off the main actor — see
+    ///   - plan: What the selection is placed against: built once by the
+    ///     caller, with its profile and off the main actor — see
     ///     ``PickedPhotoWork/plan(from:)`` — because both are route-sized
-    ///     work; `nil` for a photo filed under a place.
-    ///   - fallback: The anchor in force when the picker closed.
+    ///     work, and `nil` for a photo filed under a place. Asked about here,
+    ///     with this photograph's bytes in hand, and replaced if the hike has
+    ///     moved on from it, so the next photograph starts from the new one.
+    ///   - fallback: The anchor in force when the picker closed. It stays
+    ///     whatever happens to `plan`: it is where the hiker pointed, not
+    ///     something worked out from the line, and a line edited since leaves
+    ///     every pin already on the hike where it stands too.
     ///   - work: Replaced only by a suite that watches where the placement
     ///     runs.
     @MainActor
     static func addPicked(
         _ data: Data,
         to hike: Hike,
-        plan: HikePhotoSearchPlan?,
+        plan: inout HikePhotoSearchPlan?,
         fallback: CLLocationCoordinate2D?,
         assetLocalIdentifier: String?,
         placeID: UUID? = nil,
@@ -207,6 +212,9 @@ extension HikePhotoImport {
         work: PickedPhotoWork = .standard,
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) async -> HikePhoto? {
+        if let held = plan, hike.isAttached {
+            plan = await work.current(held, of: HikePhotoSearchPlan.SourceRead(hike))
+        }
         // The read and the placement in one hop: awaiting the read alone
         // brought the placement back here, and its positional tier can
         // project the camera onto the whole route.

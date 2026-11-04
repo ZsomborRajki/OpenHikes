@@ -92,12 +92,13 @@ extension OpenHikesView {
     func attachPickedPhotos(_ items: [PhotosPickerItem]) {
         guard let subject = photoCapture.currentSubject() else { return }
         // Named here, on the hike's actor, and read and indexed off it, once
-        // for the whole selection — see ``PickedPhotoWork``. A hike holding
+        // for the selection and again only if its line moves under the wait
+        // for a photograph's bytes — see ``PickedPhotoWork``. A hike holding
         // unsaved edits is read here instead, and a selection filed under a
         // place reads nothing.
         let source = subject.pickerSearchSource
         photoCapture.runLibraryImport {
-            let plan = await PickedPhotoWork.standard.plan(from: source)
+            var plan = await PickedPhotoWork.standard.plan(from: source)
             for item in items {
                 guard !Task.isCancelled else { return }
                 // The user can pop back and delete the hike while the loader
@@ -111,7 +112,7 @@ extension OpenHikesView {
                 let stored = await HikePhotoImport.addPicked(
                     data,
                     to: subject.hike,
-                    plan: plan,
+                    plan: &plan,
                     fallback: subject.coordinate,
                     assetLocalIdentifier: item.itemIdentifier,
                     placeID: subject.placeID
