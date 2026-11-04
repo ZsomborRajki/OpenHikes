@@ -68,13 +68,13 @@ struct HikeElevationFillTests {
         let (context, hike) = try Self.library(route: Self.route(count: 500))
         let source = RisingSource()
 
-        let filled = await HikeElevationFill.fill(hike, from: source, in: context)
+        let filled = await HikeElevationFill.fill(hike, along: hike.route, from: source, in: context)
 
         #expect(filled)
         #expect(hike.route.allSatisfy { $0.elevation?.isFinite == true })
         #expect(!context.hasChanges, "the heights are saved, not left pending")
-        #expect(!HikeElevationFill.canFill(hike))
-        #expect(await HikeElevationFill.fill(hike, from: source, in: context) == false)
+        #expect(!HikeElevationFill.canFill(hike, along: hike.route))
+        #expect(await HikeElevationFill.fill(hike, along: hike.route, from: source, in: context) == false)
         #expect(source.requests == 1, "a hike that has heights is never asked about again")
     }
 
@@ -85,7 +85,7 @@ struct HikeElevationFillTests {
         let (context, hike) = try Self.library(route: route)
         let source = RisingSource()
 
-        #expect(await HikeElevationFill.fill(hike, from: source, in: context) == false)
+        #expect(await HikeElevationFill.fill(hike, along: hike.route, from: source, in: context) == false)
         #expect(hike.route == route)
         #expect(source.requests == 0)
     }
@@ -96,7 +96,7 @@ struct HikeElevationFillTests {
         hike.isRecording = true
         let source = RisingSource()
 
-        #expect(await HikeElevationFill.fill(hike, from: source, in: context) == false)
+        #expect(await HikeElevationFill.fill(hike, along: hike.route, from: source, in: context) == false)
         #expect(source.requests == 0)
     }
 
@@ -105,7 +105,7 @@ struct HikeElevationFillTests {
         let route = Self.route(count: 10)
         let (context, hike) = try Self.library(route: route)
 
-        #expect(await HikeElevationFill.fill(hike, from: RefusingSource(), in: context) == false)
+        #expect(await HikeElevationFill.fill(hike, along: hike.route, from: RefusingSource(), in: context) == false)
         #expect(hike.route == route)
     }
 
@@ -115,7 +115,9 @@ struct HikeElevationFillTests {
         let route = Self.route(count: 10)
         let (context, hike) = try Self.library(route: route)
 
-        let filled = await HikeElevationFill.fill(hike, from: RisingSource(), in: context) { _ in throw Refused() }
+        let filled = await HikeElevationFill.fill(hike, along: route, from: RisingSource(), in: context) { _ in
+            throw Refused()
+        }
 
         #expect(!filled)
         #expect(hike.route == route)
@@ -131,7 +133,13 @@ struct HikeElevationFillTests {
         defer { gate.open() }
         let saver = ScriptedModelContextSaver(failedSaveNumbers: [1])
         let filling = Task {
-            await HikeElevationFill.fill(hike, from: RisingSource(gate: gate), in: context, save: saver.save)
+            await HikeElevationFill.fill(
+                hike,
+                along: route,
+                from: RisingSource(gate: gate),
+                in: context,
+                save: saver.save
+            )
         }
         await settleDelegateHop(until: "the elevation request to be in flight") { gate.isHolding }
 
@@ -159,6 +167,35 @@ struct HikeElevationFillTests {
         #expect(restored.route == route)
     }
 
+    /// The line is read again from the store, so an edit another device
+    /// saved is seen though the hike's own copy has not heard of it. Writing
+    /// the heights over that copy would have saved the old line back.
+    @Test("a line saved elsewhere while the request was in flight is not written over")
+    func aLineSavedElsewhereMeanwhileIsKept() async throws {
+        let route = Self.route(count: 500)
+        let (context, hike) = try Self.library(route: route)
+        let asked = try #require(CuratedElevationRequest.sampleIndexes(of: route).dropFirst().first)
+        let gate = TestGate()
+        defer { gate.open() }
+        let filling = Task {
+            await HikeElevationFill.fill(hike, along: route, from: RisingSource(gate: gate), in: context)
+        }
+        await settleDelegateHop(until: "the elevation request to be in flight") { gate.isHolding }
+
+        var moved = route
+        moved[asked].longitude += 0.0001
+        let edited = moved
+        try await SelectedLineStoreWatchTests.saveElsewhere(hike.id, in: context.container) { stored in
+            stored.replaceRoute(with: edited)
+        }
+        try #require(hike.route == route, "the premise: this context was not told")
+        gate.open()
+
+        #expect(await filling.value == false)
+        let stored = try #require(try ModelContext(context.container).fetch(FetchDescriptor<Hike>()).first)
+        #expect(stored.route == edited)
+    }
+
     /// The line is read again once the answer is back, and that is the line a
     /// refusal puts back. A point the request asked about, moved meanwhile,
     /// means the answer no longer describes the line and nothing is written; a
@@ -174,7 +211,13 @@ struct HikeElevationFillTests {
         defer { gate.open() }
         let saver = ScriptedModelContextSaver(failedSaveNumbers: [1])
         let filling = Task {
-            await HikeElevationFill.fill(hike, from: RisingSource(gate: gate), in: context, save: saver.save)
+            await HikeElevationFill.fill(
+                hike,
+                along: route,
+                from: RisingSource(gate: gate),
+                in: context,
+                save: saver.save
+            )
         }
         await settleDelegateHop(until: "the elevation request to be in flight") { gate.isHolding }
 

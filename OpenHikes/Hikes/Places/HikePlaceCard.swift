@@ -46,10 +46,12 @@ struct HikePlaceCard: Equatable {
     /// `nil` for a place the hike no longer has — removed here, or on another
     /// device — which closes the screen.
     ///
-    /// Read through `rows` where there is one — see ``HikePlaceRows``.
+    /// Read through `rows` where there is one — see ``HikePlaceRows`` — and
+    /// along `line`, the line the hike's screens read off the main actor —
+    /// see ``ShownLine``.
     @MainActor
-    init?(hike: Hike, placeID: UUID, preparedBy rows: HikePlaceRows? = nil) {
-        guard let row = hike.placeRow(id: placeID, preparedBy: rows) else { return nil }
+    init?(hike: Hike, placeID: UUID, on line: ShownLine? = nil, preparedBy rows: HikePlaceRows? = nil) {
+        guard let row = hike.placeRow(id: placeID, on: line, preparedBy: rows) else { return nil }
         self.init(row: row)
     }
 

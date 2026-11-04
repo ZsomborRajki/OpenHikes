@@ -42,8 +42,10 @@ extension MapSheet {
     /// again — see ``HikePlacesAroundSearch``. *Places Nearby* is kept the
     /// same way.
     func placesAroundDestination(of hike: Hike, search: HikePlacesAroundSearch) -> some View {
-        HikePlacesAroundView(
+        let line = presentation.hikeInteraction(for: hike).line
+        return HikePlacesAroundView(
             hike: hike,
+            line: line,
             around: placePins.around,
             mapController: mapController,
             placePins: placePins,
@@ -57,6 +59,7 @@ extension MapSheet {
                 presentation.path.append(.newPlace(hike, spot))
             }
         )
+        .showing(line, of: hike, in: appModel)
     }
 
     /// *Places Nearby*, over the recording screen: the walk so far and where
@@ -86,9 +89,11 @@ extension MapSheet {
 
     /// One of a hike's places.
     func placeDestination(_ placeID: UUID, of hike: Hike) -> some View {
-        HikePlaceView(
+        let line = presentation.hikeInteraction(for: hike).line
+        return HikePlaceView(
             hike: hike,
             placeID: placeID,
+            line: line,
             mapController: mapController,
             photoCapture: photoCapture,
             photoPins: photoPins,
@@ -97,6 +102,7 @@ extension MapSheet {
             onOpenPhoto: { photo in presentation.path.append(.photo(hike, photo.id)) },
             onOpenPlace: { placeID in openPlace(placeID, of: hike) }
         )
+        .showing(line, of: hike, in: appModel)
     }
 
     /// Pushes one of a hike's places — or, from another place's screen,
@@ -123,8 +129,10 @@ extension MapSheet {
         on hike: Hike,
         session: HikePlaceAdderSession
     ) -> some View {
-        HikePlaceAdder(
+        let line = presentation.hikeInteraction(for: hike).line
+        return HikePlaceAdder(
             hike: hike,
+            line: line,
             spot: spot,
             placePins: placePins,
             session: session,
@@ -137,6 +145,20 @@ extension MapSheet {
                 presentation.path.removeLast()
             }
         )
+        .showing(line, of: hike, in: appModel)
+    }
+}
+
+extension View {
+    /// Has `line` show `hike` from here on, for a screen pushed over a hike's
+    /// own or with none under it, such as a place opened over the recording
+    /// screen. Over a hike's own the line is on screen already, and asking
+    /// again changes nothing — see ``ShownLine/show(_:selection:followedBy:)``.
+    func showing(_ line: ShownLine, of hike: Hike?, in model: OpenHikesModel) -> some View {
+        task {
+            guard let hike else { return }
+            line.show(hike, selection: model.selectedLine, followedBy: model.selectedLineStoreWatch)
+        }
     }
 }
 

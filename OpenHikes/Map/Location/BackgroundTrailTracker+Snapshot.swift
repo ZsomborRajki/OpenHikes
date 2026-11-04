@@ -36,6 +36,11 @@ extension BackgroundTrailTracker {
         /// The hike the fix was matched against, reduced to values off the
         /// main actor so the write path never has to reach back for it.
         let input: HikeRouteInput
+        /// The line the fix was matched against, as a walk names it —
+        /// ``TrailWalkRecord/routeRevision(of:)`` — worked out here, off the
+        /// main actor, where the line has been read anyway. It is what tells
+        /// a walk its line has been edited.
+        let walkRevision: String
         /// Carried so a rebuild of the stored trail doesn't walk the route a
         /// second time to recompute what this pass already has.
         let elevation: RouteElevationSummary
@@ -116,6 +121,7 @@ extension BackgroundTrailTracker {
         guard let hike = (try? context.fetch(descriptor))?.first, hike.pointCount > 1 else { return nil }
         let input = HikeRouteInput(hike: hike)
         let profile = RouteProfile(route: input.route)
+        let walkRevision = TrailWalkRecord.routeRevision(of: input.route)
         // Taken once and read twice: the match decides whether there is a fix
         // to publish, and its distance from the line is worth reporting even
         // when there is not.
@@ -129,6 +135,7 @@ extension BackgroundTrailTracker {
               let matched = profile.coordinate(atDistance: match.distanceAlongRoute) else {
             return BackgroundMatch(
                 input: input,
+                walkRevision: walkRevision,
                 elevation: profile.elevation,
                 fix: nil,
                 matchedDistance: nil,
@@ -138,6 +145,7 @@ extension BackgroundTrailTracker {
         }
         return BackgroundMatch(
             input: input,
+            walkRevision: walkRevision,
             elevation: profile.elevation,
             fix: SharedTrailSnapshot.LiveFix(
                 coordinate: .init(latitude: matched.latitude, longitude: matched.longitude),

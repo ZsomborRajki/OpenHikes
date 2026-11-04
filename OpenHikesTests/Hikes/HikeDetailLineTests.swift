@@ -44,7 +44,7 @@ import Testing
 final class HikeDetailLineTests {
     /// The hikes list's query, and nothing else: what keeps every hike in the
     /// main context refreshed in the app.
-    private struct HikesListStandIn: View {
+    struct HikesListStandIn: View {
         @Query(sort: \Hike.date, order: .reverse) private var hikes: [Hike]
 
         var body: some View {
@@ -128,7 +128,7 @@ final class HikeDetailLineTests {
     }
 
     /// A long trail, a metre or so a point, with heights and a clock.
-    private static func longRoute(points: Int) -> [RouteCoordinate] {
+    static func longRoute(points: Int) -> [RouteCoordinate] {
         (0..<points).map { index in
             let step = Double(index)
             return RouteCoordinate(
@@ -142,7 +142,7 @@ final class HikeDetailLineTests {
 
     /// A hike saved by another context and fetched into the main one, whose
     /// line the main context has never read.
-    private func hikeSavedElsewhere(route: [RouteCoordinate]) throws -> Hike {
+    func hikeSavedElsewhere(route: [RouteCoordinate]) throws -> Hike {
         let id = UUID()
         let elsewhere = ModelContext(container)
         let length = RouteProfile(route: route).totalDistanceMeters
@@ -183,10 +183,15 @@ final class HikeDetailLineTests {
             photoPins: PhotoMapPinController(),
             placePins: model.placePins
         )
-        let root = VStack {
+        return try window(hosting: VStack {
             if withHikesList { HikesListStandIn() }
             NavigationStack { detail }
-        }
+        })
+    }
+
+    /// A window drawing `root` inside the model and the container, as the app
+    /// has it.
+    func window(hosting root: some View) throws -> UIWindow {
         let scene = try #require(
             UIApplication.shared.connectedScenes.lazy.compactMap { $0 as? UIWindowScene }.first,
             "app-hosted tests run inside the app, which has a scene"
@@ -207,7 +212,7 @@ final class HikeDetailLineTests {
     /// Makes `save` and waits for the refresh it gives `hike` in the main
     /// context, then lays the window out, so every body that refresh
     /// invalidated has been evaluated again.
-    private func save(refreshing hike: Hike, in window: UIWindow, _ saving: () async throws -> Void) async throws {
+    func save(refreshing hike: Hike, in window: UIWindow, _ saving: () async throws -> Void) async throws {
         let refreshed = SelectedLine.Write()
         withObservationTracking {
             _ = hike.title
@@ -307,14 +312,14 @@ final class HikeDetailLineTests {
     /// How long the main context takes to read `hike`'s line now: the whole
     /// decode if nothing read it there before, next to nothing if something
     /// did.
-    private static func mainActorRead(of hike: Hike) -> (points: Int, duration: Duration) {
+    static func mainActorRead(of hike: Hike) -> (points: Int, duration: Duration) {
         let clock = ContinuousClock()
         let start = clock.now
         let points = hike.route.count
         return (points, clock.now - start)
     }
 
-    private static let longPoints = 100_000
+    static let longPoints = 100_000
 
     /// From iOS 27, for the reason in the header.
     @available(iOS 27.0, *)

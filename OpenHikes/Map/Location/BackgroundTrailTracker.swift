@@ -530,7 +530,8 @@ final class BackgroundTrailTracker: NSObject {
                 let completedWalk = walkSession?.recordBackgroundMatch(
                     hikeID: hikeID,
                     distance: distance,
-                    at: timestamp
+                    at: timestamp,
+                    revision: matched.walkRevision
                 ) ?? false
                 // A fix that completed the walk is not published: the write
                 // below would carry no walk and start a plain follow over the

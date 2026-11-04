@@ -99,6 +99,11 @@ final class HikePlaceRows {
     /// ``Hike/orderedPlaces`` answers, without measuring again what nothing
     /// has moved.
     ///
+    /// For a screen with no line read off the main actor, which is a
+    /// recording's: its draft has no line until Stop, so reading the column
+    /// costs nothing. Anywhere else that read is a decode on the main actor —
+    /// see ``ShownLine`` and ``Hike/orderedPlaces(on:preparedBy:)``.
+    ///
     /// Empty for a hike that has been deleted or detached, before the route
     /// is read: it is external storage, and faulting it in off a deleted row
     /// traps. See ``Hike/orderedPlaces``.
@@ -261,9 +266,24 @@ extension Hike {
         return rows?.rows(of: places, along: route, for: id) ?? TrailPlaceOrder.ordered(places, along: route)
     }
 
+    /// The same along `line`, the hike's line as a screen about it read it,
+    /// where there is one: every screen about a saved hike. `nil` on a
+    /// recording's, whose draft has no line until Stop.
+    func orderedPlaces(on line: ShownLine?, preparedBy rows: HikePlaceRows?) -> [TrailPlaceRow] {
+        guard let line else { return orderedPlaces(preparedBy: rows) }
+        return orderedPlaces(along: line.current?.route ?? [], preparedBy: rows)
+    }
+
     /// ``placeRow(id:)``, from `rows` where there is one.
     func placeRow(id: UUID, preparedBy rows: HikePlaceRows?) -> TrailPlaceRow? {
         guard let rows else { return placeRow(id: id) }
         return rows.row(id, of: self)
+    }
+
+    /// The same along `line`, for the reason ``orderedPlaces(on:preparedBy:)``
+    /// takes one.
+    func placeRow(id: UUID, on line: ShownLine?, preparedBy rows: HikePlaceRows?) -> TrailPlaceRow? {
+        guard line != nil else { return placeRow(id: id, preparedBy: rows) }
+        return orderedPlaces(on: line, preparedBy: rows).first { $0.id == id }
     }
 }

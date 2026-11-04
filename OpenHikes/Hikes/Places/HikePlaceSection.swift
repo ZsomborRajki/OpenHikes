@@ -70,11 +70,7 @@ struct HikePlaceSection: View {
         // its photographs once, and through ``HikePlaceRows``: this re-runs
         // for every photograph added, and none of them moves a place along
         // the line.
-        let rows = if let line {
-            hike.orderedPlaces(along: line.current?.route ?? [], preparedBy: mapPins?.placeRows)
-        } else {
-            hike.orderedPlaces(preparedBy: mapPins?.placeRows)
-        }
+        let rows = hike.orderedPlaces(on: line, preparedBy: mapPins?.placeRows)
         if !rows.isEmpty || canSearch {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {

@@ -346,6 +346,31 @@ final class BackgroundDeliveryTests {
         session.end()
     }
 
+    /// The feed reads the line off the main actor to match the fix, and that
+    /// read is what tells a walk in a pocket its line has been edited on the
+    /// hiker's other device (#1263). The session's own copy is not told.
+    @Test("a background fix ends a walk along a line saved elsewhere, from the read it matched against")
+    func backgroundFixEndsAWalkAlongALineSavedElsewhere() async throws {
+        let hike = selectedHike()
+        let profile = RouteProfile(route: hike.route)
+        let tracker = relaunchedTracker()
+        let session = TrailWalkSession(context: context, tracker: tracker)
+        for index in 0...2 {
+            session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[index])
+        }
+        try context.save()
+        let original = hike.route
+
+        try await SelectedLineStoreWatchTests.saveElsewhere(hike.id, in: container) { stored in
+            stored.replaceRoute(with: Array(stored.route.dropLast()))
+        }
+        try #require(hike.route == original, "the premise: this context was not told")
+        await deliver(fix(at: profile.coordinates[3]))
+
+        #expect(session.walkedHikeID == nil)
+        #expect(session.lastEndedWalk?.endReason == .routeChanged)
+    }
+
     /// The reported bug. Ending a walk holds the trail closed until the
     /// hiker leaves its route, and leaving used to be reported only by the
     /// detail view's own matcher — so a hiker who tapped End, locked the

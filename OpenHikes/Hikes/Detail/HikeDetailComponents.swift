@@ -339,11 +339,11 @@ struct HikeElevationPlaceholder: View {
         // once rather than the next time the hike is opened, and on the line
         // turning out to need heights.
         .task(id: entitlement.isEntitled && fillable) {
-            guard entitlement.isEntitled, fillable,
+            guard entitlement.isEntitled, fillable, let route = line.current?.route,
                   let source = OpenHikesModel.makeTrailElevationSource() else { return }
             isReading = true
             defer { isReading = false }
-            await HikeElevationFill.fill(hike, from: source, in: context)
+            await HikeElevationFill.fill(hike, along: route, from: source, in: context)
         }
     }
 

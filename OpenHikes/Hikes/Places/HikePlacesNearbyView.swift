@@ -59,6 +59,7 @@ struct HikePlacesNearbyView: View {
         )
         PlacesAroundScreen(
             hike: hike,
+            line: nil,
             around: around,
             mapController: mapController,
             placePins: placePins,

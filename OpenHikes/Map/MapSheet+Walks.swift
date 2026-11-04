@@ -16,13 +16,20 @@ extension MapSheet {
     /// The summary, with the share card it presents kept by the presentation
     /// rather than by the summary, so a rotation does not close it — see
     /// ``WalkShareSession``.
+    ///
+    /// A walk whose hike has gone has no line, as ever: a ``ShownLine`` nothing
+    /// shows lands nothing.
     func walkDestination(_ walk: HikeWalk, route: SheetRoute) -> some View {
-        WalkSummaryView(
+        let hike = walk.hike
+        let line = hike.map { presentation.hikeInteraction(for: $0).line } ?? ShownLine()
+        return WalkSummaryView(
             walk: walk,
+            line: line,
             walkHighlight: walkHighlight,
             mapController: mapController,
             share: presentation.walkShare(for: route),
             onShowOnMap: presentation.makeRoomForTheMap
         )
+        .showing(line, of: hike, in: appModel)
     }
 }

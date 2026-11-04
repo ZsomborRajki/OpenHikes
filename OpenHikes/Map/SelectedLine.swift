@@ -62,6 +62,14 @@
 //  when it is not the line handed out, every watch hears it as it hears a
 //  write.
 //
+//  ## A read of its own
+//
+//  One of these made for one read is how a reader with no screen and nothing
+//  to follow gets a line off the main actor: the walk session asking whether
+//  its line has changed, heights checked against the line they were asked
+//  about, the community's check. The read is armed like any other, so
+//  ``Read/isReplaced`` still says a write overtook it.
+//
 
 import Foundation
 import Observation

@@ -349,21 +349,21 @@ struct CommunityPublicationCheckTests {
     /// retread of itself, so clearing only the listing would leave the hiker
     /// exactly as stuck as the stale *published* did.
     @Test("a forgotten hike stops blocking a re-record of the same walk")
-    func forgottenHikeStopsBlockingARerecord() throws {
+    func forgottenHikeStopsBlockingARerecord() async throws {
         let context = try Fixture.modelContext()
         let published = Self.publishedHike(in: context)
         let fresh = Fixture.hike(in: context)
+        let id = fresh.persistentModelID
+        try context.save()
 
         #expect(
-            !CommunityPublishingCheck.alreadyShared(in: context, excluding: fresh).isEmpty,
+            await !CommunityPublishingCheck.alreadyShared(in: context.container, excluding: id).isEmpty,
             "the published walk is a retread candidate while it remembers its submission"
         )
 
         CommunityPublicationCheck.forgetPublication(published)
 
-        #expect(
-            CommunityPublishingCheck.alreadyShared(in: context, excluding: fresh).isEmpty
-        )
+        #expect(await CommunityPublishingCheck.alreadyShared(in: context.container, excluding: id).isEmpty)
     }
 
     @Test("forgetting a hike that was never shared writes nothing")

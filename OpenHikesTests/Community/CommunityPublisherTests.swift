@@ -35,6 +35,32 @@ struct CommunityPublisherTests {
         #expect(draft.hikeID == hike.id)
     }
 
+    /// The form hands in the line its screen read off the main actor, so
+    /// that is the line that goes up, with the places in its walking order.
+    @Test("the line the form read goes up, with the places in the order it meets them")
+    func theFormsLineGoesUp() async throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        let start = try #require(hike.route.first)
+        let end = try #require(hike.route.last)
+        hike.addPlace(TrailPlace(latitude: start.latitude, longitude: start.longitude, name: "Start"), in: context)
+        hike.addPlace(TrailPlace(latitude: end.latitude, longitude: end.longitude, name: "End"), in: context)
+        let transport = StubCommunityTransport()
+        let line = Array(hike.route.reversed())
+
+        let outcome = await CommunityPublisher.share(
+            hike,
+            authorName: "Anna",
+            transport: transport,
+            line: SelectedLine.Line(route: line, distanceMeters: hike.distanceMeters)
+        )
+
+        #expect(outcome == .submitted)
+        let draft = try #require(transport.recording.submissions.first)
+        #expect(draft.route == line)
+        #expect(draft.places.map(\.name) == ["End", "Start"])
+    }
+
     /// The listing is found by where the walk *starts*, because a hiker
     /// searching near a place is looking for something to set off on.
     @Test("the submission is located at the trailhead")

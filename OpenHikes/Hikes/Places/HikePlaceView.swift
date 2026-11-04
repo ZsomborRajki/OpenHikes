@@ -37,6 +37,10 @@ import SwiftUI
 struct HikePlaceView: View {
     let hike: Hike
     let placeID: UUID
+    /// The hike's line, which the screen under this one has usually read
+    /// already, so the place's distance along it needs no read here — see
+    /// ``ShownLine``.
+    let line: ShownLine
     let mapController: MapController
     var photoCapture: PhotoCaptureController?
     var photoPins: PhotoMapPinController?
@@ -57,7 +61,7 @@ struct HikePlaceView: View {
 
     var body: some View {
         Group {
-            if let card = HikePlaceCard(hike: hike, placeID: placeID, preparedBy: placePins?.placeRows) {
+            if let card = HikePlaceCard(hike: hike, placeID: placeID, on: line, preparedBy: placePins?.placeRows) {
                 content(card)
             } else {
                 // Removed — here, or on another device while this was open.
@@ -72,7 +76,7 @@ struct HikePlaceView: View {
         // open, so the hiker can see where this one sits and tap the next.
         .trailPlacePins(
             placePins,
-            rows: hike.orderedPlaces(preparedBy: placePins?.placeRows),
+            rows: hike.orderedPlaces(on: line, preparedBy: placePins?.placeRows),
             onOpen: onOpenPlace
         )
     }

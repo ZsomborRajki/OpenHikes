@@ -47,6 +47,26 @@ extension ShownLineTests {
         #expect(shown.revision == 0)
     }
 
+    /// What work about to use the line asks: a write is heard at once, where
+    /// the line on screen moves only once the new one has been read.
+    @Test("the line is settled while it is the read in force's, and not from the moment an edit is heard")
+    func settledFollowsTheRead() async throws {
+        let hike = try await saved("Settled")
+        let selection = Self.selection()
+        try await select(hike, in: selection)
+        let shown = ShownLine()
+        #expect(!shown.isSettled, "nothing is on screen yet")
+
+        shown.show(hike, selection: selection.lines, followedBy: selection.watch)
+        await shown.landing?.value
+        #expect(shown.isSettled)
+
+        hike.replaceRoute(with: Self.movedRoute)
+        #expect(!shown.isSettled, "the screen still holds the old line")
+        await settleDelegateHop(until: "the new line has landed") { shown.isSettled }
+        #expect(shown.current?.route == Self.movedRoute)
+    }
+
     /// The preparation of a line can finish after a newer read has been
     /// installed, and must not put its older line back.
     @Test("a line landed from a read no longer in force is not shown")

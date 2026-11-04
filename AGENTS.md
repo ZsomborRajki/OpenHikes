@@ -699,6 +699,12 @@ a change to recording, the map, the sheet or the render path; the PR template,
   Spotlight and the widget's catalogue read instead of decoding every route at
   launch. `route`'s setter is private, so the compiler holds every writer to
   it.
+- **A saved hike's line is read off the main actor.** Reading `route` decodes
+  it whole, and under the list's `@Query` the next read after any save decodes
+  it again. A screen about a hike reads `ShownLine`, which
+  `HikeDetailInteraction` keeps for all of them. A reader with no screen hands
+  on a line it read anyway, or makes a `SelectedLine` for one read. A
+  recording's screens read the column, because a draft has no line until Stop.
 - **`CloudSyncCoordinator` only reports and toggles; SwiftData owns sync.** That
   gives up four things, deliberately:
   - photo pixels on other devices (see *Settled decisions*)

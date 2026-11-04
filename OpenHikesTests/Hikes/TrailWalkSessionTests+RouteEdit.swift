@@ -148,7 +148,7 @@ extension TrailWalkSessionTests {
     /// An edit mirrored from the hiker's other device while this one was not
     /// running is already in the store when the walk is found open.
     @Test("a walk found open along an edited route is ended at launch")
-    func editedRouteEndsTheWalkAtLaunch() throws {
+    func editedRouteEndsTheWalkAtLaunch() async throws {
         let hike = hike()
         walk(session(), hike: hike, profile: RouteProfile(route: hike.route), from: 0, through: 5)
         #expect(hike.walkInProgress != nil)
@@ -157,6 +157,7 @@ extension TrailWalkSessionTests {
 
         let relaunched = session()
         relaunched.restoreAtLaunch()
+        await relaunched.lineCheck?.value
 
         #expect(relaunched.walkedHikeID == nil)
         #expect(hike.walkInProgress == nil, "the column is cleared with the row")
@@ -183,8 +184,173 @@ extension TrailWalkSessionTests {
         session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[4], revision: shown)
         #expect(session.walkedHikeID == hike.id, "the line the screen holds is still the walk's")
 
-        session.endIfRouteChanged(knowing: (hike, TrailWalkRecord.routeRevision(of: moved)))
+        session.endIfRouteChanged(knowing: (hike.id, TrailWalkRecord.routeRevision(of: moved)))
         #expect(session.walkedHikeID == nil, "and the screen's new line ends it")
+        #expect(try walks(of: hike).first?.endReason == .routeChanged)
+    }
+
+    /// The background feed reads the line to match the fix, off the main
+    /// actor, and hands it on the way the screen hands its own. Handed one,
+    /// the session answers from it, not from the hike.
+    @Test("a background match checks the walk against the line the feed read")
+    func aBackgroundMatchChecksTheFeedsLine() throws {
+        let session = session()
+        let hike = hike()
+        let profile = RouteProfile(route: hike.route)
+        let matched = TrailWalkRecord.routeRevision(of: hike.route)
+        startWalk(session, hike: hike, profile: profile)
+        var moved = hike.route
+        moved[3].longitude += 0.0005
+        hike.replaceRoute(with: moved)
+
+        clock.advance(by: 60)
+        session.recordBackgroundMatch(hikeID: hike.id, distance: profile.distances[4], at: clock.now, revision: matched)
+        #expect(session.walkedHikeID == hike.id, "the line the feed read is still the walk's")
+
+        clock.advance(by: 60)
+        session.recordBackgroundMatch(
+            hikeID: hike.id,
+            distance: profile.distances[5],
+            at: clock.now,
+            revision: TrailWalkRecord.routeRevision(of: moved)
+        )
+        #expect(session.walkedHikeID == nil, "and the feed's next read of the new line ends it")
+        #expect(try walks(of: hike).first?.endReason == .routeChanged)
+    }
+
+    /// A proposal the background feed confirms is checked against the line
+    /// the feed read, as a walk under way is, and starts along it.
+    @Test("a background match confirms a proposed walk only along the line the feed read", arguments: [true, false])
+    func aBackgroundMatchConfirmsAlongTheFeedsLine(sameLine: Bool) {
+        let session = session()
+        let hike = hike()
+        let profile = RouteProfile(route: hike.route)
+        let revision = TrailWalkRecord.routeRevision(of: hike.route)
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[0], revision: revision)
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[1], revision: revision)
+
+        session.recordBackgroundMatch(
+            hikeID: hike.id,
+            distance: profile.distances[2],
+            at: clock.now,
+            revision: sameLine ? revision : "another line"
+        )
+
+        #expect((session.walkedHikeID == hike.id) == sameLine)
+    }
+
+    /// The moments with no line in hand: a return to the foreground, a
+    /// launch, a fix matched on another hike's screen. Each reads the walked
+    /// line off the main actor, and the walk ends once that lands.
+    @Test("a look at the walked line ends a walk along a line that has changed")
+    func aLookEndsAWalkAlongAnEditedLine() async throws {
+        let session = session()
+        let hike = hike()
+        walk(session, hike: hike, profile: RouteProfile(route: hike.route), from: 0, through: 5)
+        try context.save()
+        hike.replaceRoute(with: Array(hike.route.dropLast()))
+        try context.save()
+
+        session.checkWalkedLine()
+        #expect(session.walkedHikeID == hike.id, "nothing is read on the spot")
+        await session.lineCheck?.value
+
+        #expect(session.walkedHikeID == nil)
+        #expect(try walks(of: hike).first?.endReason == .routeChanged)
+    }
+
+    @Test("a look at a line that has not changed ends nothing")
+    func aLookAtTheSameLineEndsNothing() async throws {
+        let session = session()
+        let hike = hike()
+        walk(session, hike: hike, profile: RouteProfile(route: hike.route), from: 0, through: 5)
+        try context.save()
+
+        session.checkWalkedLine()
+        await session.lineCheck?.value
+
+        #expect(session.walkedHikeID == hike.id)
+        #expect(session.lastEndedWalk == nil)
+    }
+
+    /// The store's line is what is read, so one saved by another context,
+    /// which is what an edit mirrored in from another device comes to, is
+    /// found though the hike's own copy has not been told of it.
+    @Test("a look finds a line saved elsewhere that the hike's own copy has not heard of")
+    func aLookFindsALineSavedElsewhere() async throws {
+        let session = session()
+        let hike = hike()
+        walk(session, hike: hike, profile: RouteProfile(route: hike.route), from: 0, through: 5)
+        try context.save()
+        let original = hike.route
+
+        try await SelectedLineStoreWatchTests.saveElsewhere(hike.id, in: context.container) { stored in
+            stored.replaceRoute(with: Array(stored.route.dropLast()))
+        }
+        try #require(hike.route == original, "the premise: this context was not told")
+        session.checkWalkedLine()
+        await session.lineCheck?.value
+
+        #expect(session.walkedHikeID == nil)
+    }
+
+    /// A fix matched on another hike's screen comes with that hike's line,
+    /// which says nothing about the walked one, so it is looked at instead
+    /// of being read on the main actor.
+    @Test("a match on another hike's screen looks at the walked line, and reads none of it on the spot")
+    func aMatchOnAnotherHikesScreenLooksAtTheWalkedLine() async throws {
+        let session = session()
+        let walked = hike()
+        let shown = hike(title: "Shown")
+        let profile = RouteProfile(route: walked.route)
+        walk(session, hike: walked, profile: profile, from: 0, through: 5)
+        try context.save()
+        walked.replaceRoute(with: Array(walked.route.dropLast()))
+        try context.save()
+
+        session.recordForegroundMatch(hike: shown, profile: profile, distance: profile.distances[1], revision: "shown")
+        #expect(session.walkedHikeID == walked.id, "nothing is read on the spot")
+        await session.lineCheck?.value
+
+        #expect(session.walkedHikeID == nil)
+        #expect(try walks(of: walked).first?.endReason == .routeChanged)
+    }
+
+    /// Everything here runs on the main actor, so the look cannot land until
+    /// the test awaits it: by then the walk it was about has gone, and the
+    /// line it read is not the one the next walk is along.
+    @Test("a look that lands after its walk has ended says nothing about the next")
+    func aLateLookLeavesTheNextWalkAlone() async throws {
+        let session = session()
+        let hike = hike()
+        let profile = RouteProfile(route: hike.route)
+        walk(session, hike: hike, profile: profile, from: 0, through: 5)
+        try context.save()
+
+        session.checkWalkedLine()
+        let look = session.lineCheck
+        session.end()
+        clock.advance(by: 60)
+        #expect(session.start(hike: hike, profile: profile, revision: "the next walk's line"))
+        await look?.value
+
+        #expect(session.walkedHikeID == hike.id, "the next walk goes on")
+    }
+
+    /// A write while the read is out is a line that read does not hold, and
+    /// a walk that stood still would hear of it from nothing else.
+    @Test("a write that overtakes a look has the line looked at again")
+    func aWriteOvertakingALookLooksAgain() async throws {
+        let session = session()
+        let hike = hike()
+        walk(session, hike: hike, profile: RouteProfile(route: hike.route), from: 0, through: 5)
+        try context.save()
+
+        session.checkWalkedLine()
+        hike.replaceRoute(with: Array(hike.route.dropLast()))
+        try context.save()
+
+        await settleDelegateHop(until: "the second look has ended the walk") { session.walkedHikeID == nil }
         #expect(try walks(of: hike).first?.endReason == .routeChanged)
     }
 

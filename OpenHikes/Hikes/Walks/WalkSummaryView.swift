@@ -19,6 +19,11 @@ import SwiftUI
 
 struct WalkSummaryView: View {
     let walk: HikeWalk
+    /// The hike's line, which the screen under this one has usually read
+    /// already. Nothing here reads `hike.route`: under the hikes list's
+    /// query, that decoded the whole line on the main actor when the summary
+    /// opened and again after every save — see ``ShownLine``.
+    let line: ShownLine
     /// Where *Show on Map* puts the covered stretches — see ``WalkHighlight``.
     let walkHighlight: WalkHighlight
     let mapController: MapController
@@ -48,7 +53,7 @@ struct WalkSummaryView: View {
     private var tint: Color { hike?.tintOpaque ?? .green }
     private var percent: Int { Int((walk.coveredFraction * 100).rounded()) }
     private var profile: RouteProfile? {
-        guard let trail, trail.key == WalkSummaryRouteKey(walk: walk) else { return nil }
+        guard let trail, trail.key == WalkSummaryRouteKey(walk: walk, line: line) else { return nil }
         return trail.profile
     }
     private var ascentMeters: Double? { profile?.elevation.gainMeters }
@@ -61,7 +66,7 @@ struct WalkSummaryView: View {
     /// still being built: there is nothing to draw along yet either way.
     private var routeMatchesWalk: Bool {
         guard let trail else { return false }
-        return trail.matches(walk)
+        return trail.matches(walk, on: line)
     }
 
     /// The same disagreement, once it is known to be one rather than a
@@ -102,15 +107,15 @@ struct WalkSummaryView: View {
         // keeps the hike and replaces its route, here or on another device
         // while this screen is up, and keyed on the walk alone the summary
         // went on drawing the stretches along the line that was replaced.
-        .task(id: WalkSummaryRouteKey(walk: walk)) {
-            let key = WalkSummaryRouteKey(walk: walk)
+        .task(id: WalkSummaryRouteKey(walk: walk, line: line)) {
+            let key = WalkSummaryRouteKey(walk: walk, line: line)
             // Clear an outdated line only when one exists: writing nil over
             // nil rebuilds the summary without changing what it can show.
             if let preparedKey = trail?.key, preparedKey != key { trail = nil }
             guard !key.route.isEmpty else { return }
             guard let prepared = try? await WalkSummaryTrail.prepare(along: key),
                   !Task.isCancelled,
-                  key == WalkSummaryRouteKey(walk: walk) else { return }
+                  key == WalkSummaryRouteKey(walk: walk, line: line) else { return }
             trail = prepared
         }
         // A `.task` rather than the unstructured `Task` the button used to
@@ -238,7 +243,7 @@ struct WalkSummaryView: View {
 
     /// Draws the covered stretches over the route and fits the map to it.
     private func showOnMap() async {
-        guard let trail, let segments = try? await trail.coveredSegments(of: walk) else { return }
+        guard let trail, let segments = try? await trail.coveredSegments(of: walk, on: line) else { return }
         walkHighlight.show(segments)
         mapController.fitToRoute()
         onShowOnMap()
@@ -254,14 +259,17 @@ struct WalkSummaryView: View {
 /// keyed on — the route itself rather than a digest of it, which would walk
 /// the whole line on every body pass, where `Array`'s `==` compares storage
 /// first and stops at the first point that differs.
+///
+/// The line ``ShownLine`` has landed: empty until it does, and the same
+/// storage until a new one lands, whatever is saved meanwhile.
 nonisolated struct WalkSummaryRouteKey: Equatable, Sendable {
     let walkID: UUID
     let route: [RouteCoordinate]
 
     @MainActor
-    init(walk: HikeWalk) {
+    init(walk: HikeWalk, line: ShownLine) {
         walkID = walk.id
-        route = walk.hike?.route ?? []
+        route = line.current?.route ?? []
     }
 }
 
@@ -285,26 +293,32 @@ nonisolated struct WalkSummaryTrail: Sendable {
         )
     }
 
-    /// The prepared line must still be current as well as the walk's own.
-    /// A route edit can arrive before SwiftUI restarts its preparation task.
+    /// The prepared line must still be the one on screen as well as the
+    /// walk's own. A new line can land before SwiftUI restarts its
+    /// preparation task.
     @MainActor
-    func matches(_ walk: HikeWalk) -> Bool {
-        key == WalkSummaryRouteKey(walk: walk) && walk.isAlong(revision: revision)
+    func matches(_ walk: HikeWalk, on line: ShownLine) -> Bool {
+        key == WalkSummaryRouteKey(walk: walk, line: line) && walk.isAlong(revision: revision)
     }
 
     /// An edit during the off-main calculation invalidates the request just
     /// as leaving the summary does. Neither may apply its old geometry or
     /// move the camera to a route the calculation was never about.
+    ///
+    /// Asks ``ShownLine/isSettled`` as well, which a body cannot: it hears an
+    /// edit at once, where the screen's own line moves only once the new one
+    /// has been read.
     @MainActor
     func coveredSegments(
         of walk: HikeWalk,
+        on line: ShownLine,
         using build: ([ClosedRange<Double>], RouteProfile) async -> [[CLLocationCoordinate2D]] = { ranges, profile in
             await WalkHighlight.segments(covering: ranges, along: profile)
         }
     ) async throws(CancellationError) -> [[CLLocationCoordinate2D]] {
-        guard matches(walk) else { throw CancellationError() }
+        guard line.isSettled, matches(walk, on: line) else { throw CancellationError() }
         let segments = await build(walk.coverage.ranges, profile)
-        guard !Task.isCancelled, matches(walk) else { throw CancellationError() }
+        guard !Task.isCancelled, line.isSettled, matches(walk, on: line) else { throw CancellationError() }
         return segments
     }
 }

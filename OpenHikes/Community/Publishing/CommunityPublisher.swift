@@ -59,9 +59,11 @@ nonisolated struct SharedHikeDetails: Sendable {
     var hikeDate: Date
     var distanceMeters: Double
     var route: [RouteCoordinate]
-    /// Every place marked along the route, in walking order. Always all of
-    /// them: a place is part of the trail, as its name is.
-    var places: [CommunityPlace] = []
+    /// Every place marked along the route. Always all of them: a place is
+    /// part of the trail, as its name is. Put in walking order off the main
+    /// actor, with the rest of what is staged, because that projects every
+    /// place onto every segment of the line.
+    var places: [TrailPlace] = []
 }
 
 /// A draft, and which of the hike's photographs actually went into it.
@@ -148,6 +150,9 @@ nonisolated enum CommunityPublisher {
     ///   a picture out should let the next one in rather than simply shorten
     ///   the upload, which is the difference between choosing a full
     ///   ``maximumPhotos`` and getting one fewer than that.
+    /// - Parameter line: `hike`'s line, as the form read it off the main
+    ///   actor — see ``ShownLine``. `nil` asks the hike, for a caller with no
+    ///   screen's line, which decodes all of it on the main actor.
     @MainActor
     static func share(
         _ hike: Hike,
@@ -155,9 +160,11 @@ nonisolated enum CommunityPublisher {
         transport: any CommunityTransporting,
         excludingPhotos excluded: Set<UUID> = [],
         store: HikePhotoStore = .shared,
+        line: SelectedLine.Line? = nil,
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) async -> CommunitySendOutcome {
-        guard hike.pointCount >= 2 else { return .refused(.nothingToShare) }
+        let route = line?.route ?? hike.route
+        guard route.count >= 2 else { return .refused(.nothingToShare) }
         // The two rules that need nothing but this hike, re-checked here for
         // the same reason the point floor above is: the form's Share button
         // holds both, and this is the one function that can actually start an
@@ -182,8 +189,8 @@ nonisolated enum CommunityPublisher {
             trackDescription: hike.trackDescription,
             hikeDate: hike.date,
             distanceMeters: hike.distanceMeters,
-            route: hike.route,
-            places: hike.orderedPlaces.map { CommunityPlace($0.place) }
+            route: route,
+            places: hike.places
         )
         // Still before the first suspension: this reads the hike's photos
         // synchronously and only then asks the disk.
@@ -443,6 +450,7 @@ nonisolated enum CommunityPublisher {
         in directory: URL,
         store: HikePhotoStore
     ) async -> StagedSubmission {
+        let places = TrailPlaceOrder.ordered(details.places, along: details.route).map { CommunityPlace($0.place) }
         // A photograph says which place it is of only when that place is in
         // this share — a link to one removed on another device would name
         // nothing at the other end.
@@ -450,7 +458,7 @@ nonisolated enum CommunityPublisher {
             photos,
             into: directory,
             store: store,
-            places: Set(details.places.map(\.id))
+            places: Set(places.map(\.id))
         )
         let draft = CommunitySubmissionDraft(
             hikeID: details.hikeID,
@@ -460,7 +468,7 @@ nonisolated enum CommunityPublisher {
             hikeDate: details.hikeDate,
             distanceMeters: details.distanceMeters,
             route: details.route,
-            places: details.places,
+            places: places,
             photoPins: staged.pins,
             photoFileURLs: staged.fileURLs,
             stagingDirectory: directory
