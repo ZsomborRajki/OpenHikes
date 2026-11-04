@@ -23,9 +23,9 @@
 //    and the distance those carry *is* the measurement. The moment is kept
 //    beside it for both, because a fix taken before the pause is evidence
 //    about the walk that led to it and not about the pause.
-//  * **The watches**, which hold the thresholds, the repeat allowance, the
-//    quiet period and any reminder earned but not yet heard. See
-//    ``MovementWatch``.
+//  * **The watches**, which apply ``MovementReminderPolicy``'s thresholds and
+//    hold the repeat allowance, the quiet period and any reminder earned but
+//    not yet heard. See ``MovementWatch``.
 //  * **The hiker's switch**, read on every decision rather than captured, so
 //    turning reminders off mid-hike stops the next one instead of the one
 //    after the next launch.
