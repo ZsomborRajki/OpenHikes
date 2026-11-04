@@ -539,7 +539,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
   - A line is read once, off the main actor, and thinned to a budget
     (`LibraryLineOutline`). It is read again only when its row is saved:
     `ModelContext.didSave` names the main context's saves, the store's
-    history an import's. Never by observing `route`.
+    history an import's. Never by observing `route`. A read that fails stays
+    owed, with the old line drawn, until a pass reads it (`LibraryLines.LineRead`).
   - One overlay and one renderer draw them all (`LibraryLinesRenderer`), so
     hikes over the same trail do not stack into a solid line.
 - **A drawn trail is an ordinary `Hike`.** `TrailDraftSave` writes the same row

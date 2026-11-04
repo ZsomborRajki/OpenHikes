@@ -239,7 +239,7 @@ struct LibraryLinesTests {
 
 /// A library on a store of its own, its lines followed while a test runs.
 @MainActor
-private final class LibraryLinesStage {
+final class LibraryLinesStage {
     /// Where on-disk stores go: emptied once per run, never during one, for
     /// the reason `HikeListElevationStage` gives.
     private static let sandbox: URL = {
@@ -283,7 +283,7 @@ private final class LibraryLinesStage {
     }
 }
 
-private extension LibraryLines {
+extension LibraryLines {
     func line(of hikeID: UUID) -> LibraryLine? {
         lines.first { $0.hikeID == hikeID }
     }
@@ -291,7 +291,14 @@ private extension LibraryLines {
 
 /// Every call the lines were read through, the hikes each asked for, and the
 /// lines that came back.
-nonisolated private final class ReadLog: Sendable {
+nonisolated final class ReadLog: Sendable {
+    /// What a read answers for a hike, whatever the store holds.
+    private struct Script: Sendable {
+        let answer: LibraryLines.LineRead
+        var reads: Int
+        let endedBy: UUID?
+    }
+
     private let log = Mutex<[[UUID]]>([])
     /// The hikes a read came back with a line for: a hike deleted since the
     /// pass listed it has no row left to read.
@@ -299,6 +306,8 @@ nonisolated private final class ReadLog: Sendable {
     /// What the next read waits on, once ``hold()`` asks for one to wait.
     private let held = Mutex<AsyncStream<Void>?>(nil)
     private let opener = Mutex<AsyncStream<Void>.Continuation?>(nil)
+    private let scripts = Mutex<[UUID: Script]>([:])
+    private let scripted = Mutex<[UUID]>([])
 
     var calls: [[UUID]] { log.withLock { $0 } }
 
@@ -310,6 +319,22 @@ nonisolated private final class ReadLog: Sendable {
     /// How many times `hikeID`'s line was read: asked for, and there.
     func linesRead(of hikeID: UUID) -> Int {
         found.withLock { $0.count { $0 == hikeID } }
+    }
+
+    /// How many of `hikeID`'s reads were answered by ``answer(_:with:reads:endedBy:)``.
+    func scriptedAnswers(for hikeID: UUID) -> Int {
+        scripted.withLock { $0.count { $0 == hikeID } }
+    }
+
+    /// Answers `hikeID`'s next `reads` reads with `answer`, or fewer if a read
+    /// asks for `endedBy` too, which is then read from the store like the rest.
+    func answer(
+        _ hikeID: UUID,
+        with answer: LibraryLines.LineRead,
+        reads: Int = .max,
+        endedBy: UUID? = nil
+    ) {
+        scripts.withLock { $0[hikeID] = Script(answer: answer, reads: reads, endedBy: endedBy) }
     }
 
     /// Makes the next read wait, logged but not yet read, until
@@ -328,7 +353,7 @@ nonisolated private final class ReadLog: Sendable {
     }
 
     @concurrent
-    func read(_ hikeIDs: [UUID], in container: ModelContainer) async -> [UUID: [[CLLocationCoordinate2D]]] {
+    func read(_ hikeIDs: [UUID], in container: ModelContainer) async -> [UUID: LibraryLines.LineRead] {
         log.withLock { $0.append(hikeIDs) }
         let gate = held.withLock { waiting in
             defer { waiting = nil }
@@ -337,9 +362,35 @@ nonisolated private final class ReadLog: Sendable {
         if let gate {
             for await _ in gate { /* nothing is sent: finishing it is the release */ }
         }
-        let lines = await LibraryLines.readLines(hikeIDs, in: container)
-        found.withLock { $0.append(contentsOf: lines.keys) }
+        var lines = await LibraryLines.readLines(hikeIDs, in: container)
+        for hikeID in hikeIDs {
+            guard let answer = nextScriptedAnswer(for: hikeID, among: hikeIDs) else { continue }
+            lines[hikeID] = answer
+            scripted.withLock { $0.append(hikeID) }
+        }
+        let hikesFound = hikeIDs.filter { lines[$0]?.foundLine == true }
+        found.withLock { $0.append(contentsOf: hikesFound) }
         return lines
+    }
+
+    private func nextScriptedAnswer(for hikeID: UUID, among hikeIDs: [UUID]) -> LibraryLines.LineRead? {
+        scripts.withLock { scripts in
+            guard let script = scripts[hikeID] else { return nil }
+            let isEnded = script.endedBy.map(hikeIDs.contains) ?? false
+            guard script.reads > 0, !isEnded else {
+                scripts[hikeID] = nil
+                return nil
+            }
+            scripts[hikeID]?.reads -= 1
+            return script.answer
+        }
+    }
+}
+
+private extension LibraryLines.LineRead {
+    nonisolated var foundLine: Bool {
+        guard case .line = self else { return false }
+        return true
     }
 }
 
