@@ -35,8 +35,16 @@
 //  ``TrailWalkRecord/reachesEnd(atMatch:)`` finishes either way — and a loop
 //  is walked backwards as often as not. Then what is ahead is the stretch from
 //  the start to the hiker, and its climbs are descents: DIN 33466 times the
-//  two differently, so both have to turn round. Which way is ahead is read
-//  off the coverage, which lies behind the hiker whichever way they walk.
+//  two differently, so both have to turn round. Which way is ahead is
+//  ``TrailWalkCoverage/direction``: the way the walk's matches last moved a
+//  turn's length, in the order they landed.
+//
+//  Not the stretches covered, which keep no order. A hiker who walked 8 km up
+//  and turned back has most of that ground on the side they are walking
+//  towards for kilometres, and it read as carrying on, with the summit still
+//  to climb (#1195). Only a walk that has not yet moved a turn's length has
+//  nothing better than the coverage, and there it is behind the hiker
+//  whichever way they set off.
 //
 //  What is behind needs no guess. The coverage keeps which way each stretch
 //  was walked (#1012), so the calibration measures the signposts' time for
@@ -71,7 +79,7 @@ nonisolated enum WalkTimeLeft {
     ///   - remainingMeters: the distance left, as the readout beside this
     ///     figure states it — coverage rather than position, for a walk.
     ///   - coverage: the stretches this walk has actually spanned, each the
-    ///     way it was walked.
+    ///     way it was walked, and the way it is going now.
     ///   - activeSeconds: the walk's clock with its pauses taken out.
     static func seconds(
         profile: RouteProfile,
@@ -81,14 +89,7 @@ nonisolated enum WalkTimeLeft {
         activeSeconds: TimeInterval
     ) -> TimeInterval? {
         guard remainingMeters.isFinite, remainingMeters > 0 else { return nil }
-        let reversed = isReversed(
-            position: position,
-            covered: coverage.ranges,
-            routeMeters: profile.totalDistanceMeters
-        )
-        let ahead = reversed
-            ? climb(profile, from: 0, to: position, reversed: true)
-            : climb(profile, from: position, to: profile.totalDistanceMeters, reversed: false)
+        let ahead = climbAhead(profile: profile, position: position, coverage: coverage)
         let pace = paceFactor(profile: profile, coverage: coverage, activeSeconds: activeSeconds)
         // Neither heights nor a calibrated pace: a flat figure is the error
         // this exists to correct.
@@ -99,6 +100,24 @@ nonisolated enum WalkTimeLeft {
             descentMeters: ahead?.lossMeters ?? 0
         )
         return signposts * (pace ?? 1)
+    }
+
+    /// What the line climbs and drops between `position` and the end the walk
+    /// is going for, as the hiker will meet it, or `nil` with no heights
+    /// there — see the file header.
+    static func climbAhead(
+        profile: RouteProfile,
+        position: Double,
+        coverage: TrailWalkCoverage
+    ) -> (gainMeters: Double, lossMeters: Double)? {
+        let reversed = coverage.direction.map { $0 == .towardsStart } ?? isReversed(
+            position: position,
+            covered: coverage.ranges,
+            routeMeters: profile.totalDistanceMeters
+        )
+        return reversed
+            ? climb(profile, from: 0, to: position, reversed: true)
+            : climb(profile, from: position, to: profile.totalDistanceMeters, reversed: false)
     }
 
     /// How this walk compares with the signposts so far, as a factor on their
@@ -127,8 +146,9 @@ nonisolated enum WalkTimeLeft {
         return min(max(activeSeconds / expected, paceFactorBounds.lowerBound), paceFactorBounds.upperBound)
     }
 
-    /// Whether the walk is heading for the route's stored start — see the
-    /// file header.
+    /// The best guess at whether a walk is heading for the route's stored
+    /// start, until ``TrailWalkCoverage/direction`` can say — see the file
+    /// header.
     ///
     /// More coverage beyond the hiker than before them means they came from
     /// the far end. With none either side yet, the first fix of a walk, the

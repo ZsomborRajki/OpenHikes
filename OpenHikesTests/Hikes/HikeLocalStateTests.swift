@@ -202,6 +202,37 @@ struct HikeLocalStateTests {
         #expect(stored.routeDistanceMeters == 1000)
     }
 
+    /// A composite column is saved one column per member, so this is the
+    /// store's own answer and not `Codable`'s. The second match after the
+    /// fetch turns the walk only if what a turn is measured from came back
+    /// too: measured from the first, it would be 40 m.
+    @Test("the way a walk is going, and what a turn counts from, round-trip through the sidecar")
+    func walkDirectionRoundTrips() throws {
+        let container = try Fixture.modelContainer()
+        let id: UUID
+        do {
+            let context = ModelContext(container)
+            let hike = Fixture.hike(in: context)
+            id = hike.id
+            var record = TrailWalkRecord(hikeID: hike.id, routeDistanceMeters: 1000, startedAt: .now)
+            record.coverage.record(distance: 900)
+            record.coverage.record(distance: 400)
+            hike.walkInProgress = record
+            try context.save()
+        }
+
+        let context = ModelContext(container)
+        let refetched = try #require(
+            try context.fetch(FetchDescriptor<Hike>(predicate: #Predicate { $0.id == id })).first
+        )
+        var stored = try #require(refetched.walkInProgress)
+        #expect(stored.coverage.direction == .towardsStart)
+        stored.coverage.record(distance: 440)
+        #expect(stored.coverage.direction == .towardsStart)
+        stored.coverage.record(distance: 480)
+        #expect(stored.coverage.direction == .towardsEnd)
+    }
+
     @Test("a hike with nothing walked reports no walk without creating a row")
     func noWalkCreatesNoRow() throws {
         let context = try context()
