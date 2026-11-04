@@ -561,6 +561,7 @@ private extension MapSheet {
     var recordingDestination: some View {
         RecordingView(
             recorder: appModel.hikeRecorder,
+            entry: appModel.recordingEntry,
             mapController: mapController,
             photoCapture: photoCapture,
             photoPins: photoPins,

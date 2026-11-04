@@ -192,6 +192,11 @@ struct RecordingPhotoPinTests {
             window.rootViewController = UIHostingController(
                 rootView: RecordingView(
                     recorder: recorder,
+                    entry: RecordingEntry(
+                        isLive: { false },
+                        start: { /* nothing here taps Start */ },
+                        openRequests: HikeOpenRequests()
+                    ),
                     mapController: MapController(),
                     photoPins: photoPins,
                     onSaved: { _ in /* unused */ },

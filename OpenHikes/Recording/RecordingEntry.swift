@@ -3,7 +3,7 @@
 //  OpenHikes
 //
 //  The record button on the map: whether a recording is live, and what a tap
-//  on the button does.
+//  on the button — or on the recording screen's Start — does.
 //
 //  The button lives in the leading-edge pill under *Make a trail* — see
 //  ``MapTrailDraftControlsView`` — which is UIKit on a map that never
@@ -20,6 +20,13 @@
 //  walk the way End does and then records. A refused End is said the way the
 //  detail's End says it, through ``walkEndRefused``: a menu choice that did
 //  nothing would read as one that was never made.
+//
+//  The recording screen's own Start goes through here as well — see
+//  ``RecordingCard`` — because that screen can be up with nothing recording
+//  on this phone: a row carrying another device's draft opens it. Asking the
+//  recorder from there began a recording beside a paused walk (#1310). Its
+//  request for the screen then asks for the one already up, which a widget
+//  tap on it does too, and which selects the recording just started.
 //
 //  The live state and the start are closures rather than the recorder itself,
 //  so the map's suite can offer a button without building a recorder, a store
