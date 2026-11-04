@@ -110,8 +110,8 @@ private struct WalkShareBoxControls: View {
             "Line Color",
             selection: Binding(get: { model.layout.lineColor }, set: { model.setLineColor($0) })
         ) {
-            Text("White").tag(WalkShareLineColor.white)
-            Text("Trail").tag(WalkShareLineColor.trail)
+            Text(WalkShareLineColor.white.label).tag(WalkShareLineColor.white)
+            Text(WalkShareLineColor.trail.label).tag(WalkShareLineColor.trail)
         }
         .pickerStyle(.segmented)
         .fixedSize()
