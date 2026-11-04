@@ -188,18 +188,24 @@ extension HikePhotoImport {
     /// ``PickedPhotoPlacement`` says it belongs.
     ///
     /// - Parameters:
-    ///   - plan: Built once for the whole selection by the caller, with its
-    ///     profile and off the main actor — see
+    ///   - plan: What the selection is placed against: built once by the
+    ///     caller, with its profile and off the main actor — see
     ///     ``PickedPhotoWork/plan(from:)`` — because both are route-sized
-    ///     work; `nil` for a photo filed under a place.
-    ///   - fallback: The anchor in force when the picker closed.
+    ///     work, and `nil` for a photo filed under a place. Asked about here,
+    ///     once this photograph is placed and on disk, and replaced if the hike
+    ///     has moved on from it: the photograph is placed and written again on
+    ///     the new one, and the next photograph starts from it.
+    ///   - fallback: The anchor in force when the picker closed. It stays
+    ///     whatever happens to `plan`: it is where the hiker pointed, not
+    ///     something worked out from the line, and a line edited since leaves
+    ///     every pin already on the hike where it stands too.
     ///   - work: Replaced only by a suite that watches where the placement
     ///     runs.
     @MainActor
     static func addPicked(
         _ data: Data,
         to hike: Hike,
-        plan: HikePhotoSearchPlan?,
+        plan: inout HikePhotoSearchPlan?,
         fallback: CLLocationCoordinate2D?,
         assetLocalIdentifier: String?,
         placeID: UUID? = nil,
@@ -207,22 +213,40 @@ extension HikePhotoImport {
         work: PickedPhotoWork = .standard,
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) async -> HikePhoto? {
-        // The read and the placement in one hop: awaiting the read alone
-        // brought the placement back here, and its positional tier can
-        // project the camera onto the whole route.
-        let placement = await work.placement(of: data, plan: plan, fallback: fallback)
-        return await add(
-            data,
-            to: hike,
-            coordinate: placement.coordinate,
-            // Never mirrored: the picture is already in the library.
-            savesToPhotoLibrary: false,
-            capturedAt: placement.capturedAt,
-            assetLocalIdentifier: assetLocalIdentifier,
-            matchEvidence: placement.evidence,
-            placeID: placeID,
-            store: store,
-            save: save
-        )
+        // The look comes last, once the photograph is placed and written, so
+        // a line landing in either is one it finds (#1280). Each further pass
+        // follows a look that found the line had moved, and a line that has
+        // not moved reads as itself, so the passes end once lines stop
+        // landing.
+        var photo: HikePhoto?
+        var moved = false
+        repeat {
+            let placedOn = plan
+            // The read and the placement in one hop: awaiting the read alone
+            // brought the placement back here, and its positional tier can
+            // project the camera onto the whole route.
+            let placement = await work.placement(of: data, plan: placedOn, fallback: fallback)
+            moved = false
+            photo = await add(
+                data,
+                to: hike,
+                coordinate: placement.coordinate,
+                // Never mirrored: the picture is already in the library.
+                savesToPhotoLibrary: false,
+                capturedAt: placement.capturedAt,
+                assetLocalIdentifier: assetLocalIdentifier,
+                matchEvidence: placement.evidence,
+                placeID: placeID,
+                pinStillHolds: {
+                    guard let placedOn, hike.isAttached else { return true }
+                    plan = await work.current(placedOn, of: HikePhotoSearchPlan.SourceRead(hike))
+                    moved = plan?.fingerprint != placedOn.fingerprint
+                    return !moved
+                },
+                store: store,
+                save: save
+            )
+        } while moved
+        return photo
     }
 }

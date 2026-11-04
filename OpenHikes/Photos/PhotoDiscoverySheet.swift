@@ -45,6 +45,7 @@ struct PhotoDiscoverySheet: View {
         }
         .task {
             await controller.search(in: hike)
+            await controller.followSaves(of: hike)
         }
         // The search above is cancelled for us — a `.task` is tied to the view
         // that declares it. An import is not: it starts in a button action, in
@@ -451,11 +452,14 @@ private struct DiscoveryAddButton: View {
                 // has finished its job, and leaving it up on its empty state
                 // would read as an import that found nothing rather than as
                 // one that just succeeded. Anything that failed stays in
-                // `matches`, which keeps the sheet open to be retried. No
-                // count means the import was stopped: this sheet went, and
-                // `dismiss` would close one opened since, or a newer import
-                // took over, and its own task decides.
-                if let added, added > 0, controller.matches.isEmpty { dismiss() }
+                // `matches`, which keeps the sheet open to be retried, and a
+                // line that moved during the import has a search under way
+                // for the rest, so it is the phase that says nothing is left,
+                // not an empty list. No count means the import was stopped:
+                // this sheet went, and `dismiss` would close one opened
+                // since, or a newer import took over, and its own task
+                // decides.
+                if let added, added > 0, controller.phase == .empty { dismiss() }
             }
         } label: {
             if count > 0 {

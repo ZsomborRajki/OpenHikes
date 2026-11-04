@@ -56,6 +56,13 @@ nonisolated enum HikePhotoImport {
     ///   the same case. `nil` for every photo the app itself placed.
     /// - Parameter licence: The open licence a Wikimedia Commons photograph was
     ///   copied under — see ``HikePhotoLicense``. `nil` for everything else.
+    /// - Parameter pinStillHolds: Asked last, once the bytes are on disk and
+    ///   before anything is attached, whether `coordinate` still describes the
+    ///   hike. A pin worked out from the hike's line rests on the line as it
+    ///   was read, and every wait since, this write included, is one an edit
+    ///   can land in (#1280). `false` takes the attempt back, file and all, as
+    ///   a hike that went during the write does. A pin that was not worked out
+    ///   from the line holds whatever happens to it.
     /// - Parameter libraryWriter: The seam the mirrored copy goes through, so
     ///   a test can watch what it was handed without a photo library to write
     ///   into.
@@ -64,12 +71,12 @@ nonisolated enum HikePhotoImport {
     ///   disk at the moment the attach lands, or refuse it.
     /// - Returns: The stored photo, or `nil` when the bytes were not an image,
     ///   could not be written, the hike went away while they were being
-    ///   written, or the attach could not be committed. A photo this hike
-    ///   already holds for `assetLocalIdentifier` comes back as-is: the asset
-    ///   is in the walk, which is what the caller asked for, so this is a
-    ///   success and not a failure to report — unless it was to be filed under
-    ///   `placeID` and that move could not be committed, which is `nil` like
-    ///   any other attach the store refused.
+    ///   written, `pinStillHolds` said no, or the attach could not be
+    ///   committed. A photo this hike already holds for `assetLocalIdentifier`
+    ///   comes back as-is: the asset is in the walk, which is what the caller
+    ///   asked for, so this is a success and not a failure to report — unless
+    ///   it was to be filed under `placeID` and that move could not be
+    ///   committed, which is `nil` like any other attach the store refused.
     ///
     /// A returned photo is on disk in both halves — file and row — rather than
     /// merely started. See this file's header for why the commit is here and
@@ -87,6 +94,7 @@ nonisolated enum HikePhotoImport {
         importedAuthorName: String? = nil,
         license: HikePhotoLicense? = nil,
         placeID: UUID? = nil,
+        pinStillHolds: @MainActor () async -> Bool = { true },
         store: HikePhotoStore = .shared,
         libraryWriter: any PhotoLibraryWriting = PhotoLibraryWriter(),
         save: (ModelContext) throws -> Void = { try $0.save() }
@@ -114,11 +122,18 @@ nonisolated enum HikePhotoImport {
             ),
             in: store
         ) else { return nil }
-        // The write above is an `await`, and an import can spend seconds in it
-        // — long enough for the user to pop back to the list and swipe the
-        // hike away. Writing to a hike that is no longer in the store succeeds
-        // and persists nothing, so the file just written would have nothing
-        // left to claim it; it goes with the attempt.
+        // Asked with the bytes on disk, so the write is one more wait behind
+        // the answer rather than one after it, and only this actor's own work
+        // below stands between the answer and the attach.
+        guard await pinStillHolds() else {
+            discardFiles([photo], from: store)
+            return nil
+        }
+        // The write and the look above are each an `await`, and an import can
+        // spend seconds in them — long enough for the user to pop back to the
+        // list and swipe the hike away. Writing to a hike that is no longer in
+        // the store succeeds and persists nothing, so the file just written
+        // would have nothing left to claim it; it goes with the attempt.
         guard hike.isAttached else {
             discardFiles([photo], from: store)
             return nil

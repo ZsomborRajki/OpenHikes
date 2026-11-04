@@ -2,8 +2,7 @@
 //  PhotoDiscoveryWork.swift
 //  OpenHikes
 //
-//  The two route-sized steps of "Find Photos of This Hike", and where they
-//  run.
+//  The route-sized steps of "Find Photos of This Hike", and where they run.
 //
 //  Building a ``HikePhotoSearchPlan`` indexes the route — its timeline, its
 //  measured legs and, when the trail has been walked, a whole
@@ -23,6 +22,11 @@
 //  hike holds edits its store has not had yet, which only its own context
 //  can read. The controller names or reads the hike on the main actor before
 //  the hop and writes what comes back on it after, so no model crosses.
+//
+//  A third step reads the hike the same way, for the controller to ask whether
+//  a plan it is holding still describes it (#1280). The read is the route-sized
+//  part of a plan, and the fingerprint reads every point, so that stays off
+//  the main actor too.
 //
 //  The steps themselves are closures only so a suite can see which thread
 //  they ran on: ``standard`` is the fetch, the plan and the matcher as they
@@ -63,6 +67,16 @@ nonisolated struct PhotoDiscoveryWork: Sendable {
     func plan(for read: HikePhotoSearchPlan.SourceRead) async -> HikePhotoSearchPlan? {
         assertOffMainThread("Reading and indexing a hike's route for a photo search must stay off the main thread")
         return read.source(fetch: fetchHike).map(buildPlan)
+    }
+
+    /// What the hike `read` names holds now, read off the main actor, to set
+    /// beside the ``HikePhotoSearchPlan/fingerprint`` of a plan built earlier.
+    ///
+    /// `nil` for a hike the store no longer holds, which no plan describes.
+    @concurrent
+    func fingerprint(of read: HikePhotoSearchPlan.SourceRead) async -> HikePhotoSearchPlan.Fingerprint? {
+        assertOffMainThread("Reading a hike's route for a photo search must stay off the main thread")
+        return read.source(fetch: fetchHike)?.fingerprint
     }
 
     /// What `plan` makes of `assets`, matched off the main actor.

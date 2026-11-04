@@ -107,7 +107,10 @@ extension PhotoDiscoveryControllerTests {
         let readOnTheMainActor = controller.matches
         await controller.search(in: saved)
 
-        #expect(log.fetchesOnMainThread == [false], "only the saved hike is fetched, and off the main thread")
+        #expect(
+            log.fetchesOnMainThread == [false, false],
+            "only the saved hike is fetched, off the main thread: for its plan, and to look again before writing"
+        )
         #expect(log.plansOnMainThread == [false, false])
         #expect(controller.phase == .results)
         #expect(controller.matches.map(\.id) == ["route", "walk"])

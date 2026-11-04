@@ -274,13 +274,13 @@ struct PickedPhotoPlacementTests {
                 )
             )
         }
-        let plan = await PickedPhotoWork.standard.plan(from: HikePhotoSearchPlan.SourceRead(hike))
+        var plan = await PickedPhotoWork.standard.plan(from: HikePhotoSearchPlan.SourceRead(hike))
 
         let photo = try #require(
             await HikePhotoImport.addPicked(
                 data,
                 to: hike,
-                plan: plan,
+                plan: &plan,
                 fallback: Self.graphSelection,
                 assetLocalIdentifier: "picked-asset",
                 store: sandbox.store
@@ -299,13 +299,13 @@ struct PickedPhotoPlacementTests {
         let sandbox = PhotoStoreSandbox()
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context, route: PhotoDiscoveryFixture.route)
-        let plan = await PickedPhotoWork.standard.plan(from: HikePhotoSearchPlan.SourceRead(hike))
+        var plan = await PickedPhotoWork.standard.plan(from: HikePhotoSearchPlan.SourceRead(hike))
 
         let photo = try #require(
             await HikePhotoImport.addPicked(
                 PhotoDiscoveryFixture.sampleImageData(),
                 to: hike,
-                plan: plan,
+                plan: &plan,
                 fallback: Self.graphSelection,
                 assetLocalIdentifier: "bare-asset",
                 store: sandbox.store
