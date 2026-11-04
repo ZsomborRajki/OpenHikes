@@ -12,6 +12,11 @@
 //  the right anchor, and no fix ever arrives to measure against it because the
 //  pause tore the feed down anyway.
 //
+//  And that Stop and Resume tell the controller the pause is over before they
+//  wait on anything. A permission answer can land in those waits, and one that
+//  still finds the pause held posts a Resume reminder that the withdrawal
+//  behind it takes straight back down.
+//
 
 import CoreLocation
 import Foundation
