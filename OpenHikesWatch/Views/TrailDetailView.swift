@@ -53,7 +53,13 @@ private struct FollowFigures: View {
                 Grid(horizontalSpacing: 8, verticalSpacing: 4) {
                     GridRow {
                         WatchFigure(title: "Left", value: WidgetFormat.length(meters: position.remainingMeters))
-                        WatchFigure(title: "Done", value: "\(Int((position.fractionComplete * 100).rounded()))%")
+                        // A key of its own for the "Done" that a close button
+                        // also reads, because Spanish names this figure
+                        // «Completado» and that button «OK».
+                        WatchFigure(
+                            caption: String(localized: "follow.done", defaultValue: "Done"),
+                            value: "\(Int((position.fractionComplete * 100).rounded()))%"
+                        )
                     }
                     GridRow {
                         WatchFigure(title: "Trail", value: elevationText(position))
