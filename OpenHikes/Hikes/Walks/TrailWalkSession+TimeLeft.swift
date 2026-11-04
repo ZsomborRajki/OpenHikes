@@ -17,7 +17,8 @@ extension TrailWalkSession {
     ///
     /// The distance is the walk's own figure — what the route has not yet
     /// had covered, which is what the readout beside it says is left — and
-    /// the climb is the line's from where the hiker last matched to its end.
+    /// the climb is the line's from where the hiker last matched to the end
+    /// the walk is going for.
     /// Not observable, like ``activeSeconds()``: the leaves that draw it are
     /// already redrawn by every matched fix.
     func secondsLeft(at now: Date) -> TimeInterval? {

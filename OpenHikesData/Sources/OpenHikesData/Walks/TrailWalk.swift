@@ -32,7 +32,8 @@ nonisolated public enum TrailWalkPolicy {
     /// from this long: shorter, inside a stretch of the other way's at least
     /// this long, it is a match that landed behind the one before it. The
     /// slack a match is allowed off the route, read along it — see
-    /// ``TrailWalkCoverage/walkedTowardsStart``.
+    /// ``TrailWalkCoverage/walkedTowardsStart``. The same length turns a walk
+    /// under way round — see ``TrailWalkCoverage/direction``.
     public static let minimumTurnMeters: Double = RouteProfile.followMatchThresholdMeters
     /// Coverage at or above this, with a match this close to *either* end of
     /// the route, is the walk reaching the end on its own.
@@ -107,9 +108,17 @@ nonisolated public enum TrailWalkPhase: String, Codable, Hashable, Sendable {
     case paused = "paused"
 }
 
+/// Which way along the route a walk is going.
+nonisolated public enum TrailWalkDirection: String, Codable, Hashable, Sendable {
+    /// The way the route's distances run.
+    case towardsEnd = "towardsEnd"
+    /// Back towards the route's stored start.
+    case towardsStart = "towardsStart"
+}
+
 /// The union of along-route intervals a walk's consecutive on-route matches
-/// have spanned, which way each was walked, and the furthest point any of
-/// them reached.
+/// have spanned, which way each was walked, the furthest point any of them
+/// reached, and which way the walk is going now.
 ///
 /// Coverage, not position. A hiker who opens the app on the return leg of
 /// an out-and-back and walks to the end covers half the route, and this
@@ -123,6 +132,10 @@ nonisolated public enum TrailWalkPhase: String, Codable, Hashable, Sendable {
 /// trail's ascent on the share card of a hiker who walked down it (#993).
 /// Each way is a union of its own, so a stretch walked there and back is
 /// climbed both ways and still covered once.
+///
+/// Which way now, because the stretches cannot say that. They keep which way
+/// each was walked and not when, so one union is both a walk on its way up
+/// and a walk on its way back down — see ``direction``.
 nonisolated public struct TrailWalkCoverage: Codable, Equatable, Sendable {
     /// Flat pairs in metres along the route, each written the way it was
     /// walked — where the stretch began, then where it ended — so a pair that
@@ -142,6 +155,13 @@ nonisolated public struct TrailWalkCoverage: Codable, Equatable, Sendable {
     /// than ``TrailWalkPolicy/gapBoundMeters``, in which case it only moves
     /// this.
     public private(set) var lastMatchedDistance: Double?
+    /// ``TrailWalkDirection`` by raw value, for the reason every stored enum
+    /// here is. See ``direction``.
+    private var directionID: String?
+    /// How far the matches have got the way the walk is going, which is what
+    /// a turn is measured from; before it has a way, where they began. `nil`
+    /// before the first match, and after a break in continuity.
+    private var furthestThisWayMeters: Double?
 
     public init() {
         // The memberwise initialiser is private, since the union is.
@@ -204,6 +224,7 @@ nonisolated public struct TrailWalkCoverage: Codable, Equatable, Sendable {
     /// Folds in an on-route match at `distance` metres along the route.
     public mutating func record(distance: Double) {
         furthestDistanceMeters = max(furthestDistanceMeters, distance)
+        updateDirection(at: distance)
         defer { lastMatchedDistance = distance }
         guard let last = lastMatchedDistance,
               last != distance,
@@ -223,8 +244,50 @@ nonisolated public struct TrailWalkCoverage: Codable, Equatable, Sendable {
     /// at the col and walking 400 m down the ridge hands the union that
     /// 400 m on the first fix after Resume, and a road shortcut rejoined
     /// inside the bound hands it the section it skipped.
+    ///
+    /// The way the walk was going stands. A hiker who did not walk the
+    /// stretch in between has said nothing about which way they are going by
+    /// coming back behind it, so a turn counts from the next match.
     public mutating func breakContinuity() {
         lastMatchedDistance = nil
+        furthestThisWayMeters = nil
+    }
+
+    /// Which way the walk is going now: the way its matches last moved
+    /// ``TrailWalkPolicy/minimumTurnMeters``, in the order they landed. `nil`
+    /// until they have moved that far.
+    ///
+    /// The deadband ``walkedTowardsStart`` keeps on a stored stretch, kept
+    /// here on the running position. Measured from the furthest the walk has
+    /// got the way it is going, so a match behind the one before it changes
+    /// nothing however often it happens, and a hiker who has turned is
+    /// believed however short their steps.
+    ///
+    /// A match past ``TrailWalkPolicy/gapBoundMeters`` counts. The bound
+    /// refuses the ground in between, not the fact of having got there, and
+    /// every step of a significant-change feed can be past it.
+    ///
+    /// Written with the rest of the coverage, so at the sidecar's cadence and
+    /// never for itself. A relaunch finds what the last write held, what a
+    /// turn is measured from included: a hiker who turned in the fixes that
+    /// write missed is caught by the first fix after it. A row keeps only the
+    /// stretches, and a finished walk is not going anywhere.
+    public var direction: TrailWalkDirection? {
+        directionID.flatMap(TrailWalkDirection.init(rawValue:))
+    }
+
+    /// Moves ``direction`` on for a match at `distance`: further the way the
+    /// walk is going, or a turn's length the other way.
+    private mutating func updateDirection(at distance: Double) {
+        guard let reached = furthestThisWayMeters else {
+            furthestThisWayMeters = distance
+            return
+        }
+        let step = distance - reached
+        let way: TrailWalkDirection = step < 0 ? .towardsStart : .towardsEnd
+        guard way == direction || abs(step) >= TrailWalkPolicy.minimumTurnMeters else { return }
+        directionID = way.rawValue
+        furthestThisWayMeters = distance
     }
 
     /// The union's total length, in metres.
