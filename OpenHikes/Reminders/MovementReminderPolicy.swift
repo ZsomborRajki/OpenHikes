@@ -139,6 +139,23 @@ nonisolated enum MovementReminderPolicy {
 /// A value type with no clock of its own: every decision is a function of what
 /// it has been told, which is what makes the whole policy reachable from a
 /// test without waiting out a quarter of an hour.
+///
+/// **Earning a reminder and spending one are two steps, because permission
+/// sits between them.** ``observe(awayMeters:at:)`` says when to try, and only
+/// ``spendReminder(at:)``, once the notification centre has said yes, counts
+/// anything. So a refused attempt leaves the watch as it found it, apart from
+/// the moment the quiet period began:
+///
+/// * **The allowance stays.** It is for reminders the hiker could have heard,
+///   and a fourth banner is pointless only after three real ones.
+/// * **The baseline stays.** The ground since is still unreported, and moving
+///   the baseline over it would make the hiker cover it all again before the
+///   app could say anything.
+/// * **The quiet period runs.** A departure that earned a reminder goes on
+///   earning one with every fix until something is spent, so without this a
+///   refusal would be asked about again per fix. With it a refusal is asked
+///   about once a quarter of an hour, which also lets a later fix find a
+///   permission given in Settings by a hiker who never reopened the app.
 nonisolated struct MovementWatch: Equatable, Sendable {
     private struct Sample: Equatable, Sendable {
         let awayMeters: Double
@@ -166,7 +183,13 @@ nonisolated struct MovementWatch: Equatable, Sendable {
     /// that.
     private(set) var lastObservedAt: Date?
     private(set) var remindersSent = 0
-    private(set) var lastReminderAt: Date?
+    /// When the quiet period began: the last attempt, whatever became of it,
+    /// or the reminder itself if that went out later.
+    private var quietSince: Date?
+    /// How far from the anchor the hiker is, for as long as that has earned a
+    /// reminder nobody has heard yet. Current rather than frozen, so a
+    /// reminder held back by a refusal says how far they have come by now.
+    private(set) var owedMeters: Double?
 
     /// Whether this pause has already said everything it is allowed to say.
     var isSpent: Bool {
@@ -179,9 +202,10 @@ nonisolated struct MovementWatch: Equatable, Sendable {
     ///   The pace rule is a statement about the hiker's speed, so a batch of
     ///   fixes handed over together must not read as a burst; a reading older
     ///   than one already taken is dropped.
-    /// - Returns: whether this reading is reason to remind them now. Sending
-    ///   the reminder is the caller's job; consuming the allowance is this
-    ///   type's, which is why a `true` is returned exactly once per crossing.
+    /// - Returns: whether to try reminding them now. Sending the reminder is
+    ///   the caller's job, and ``spendReminder(at:)`` is how it says one went
+    ///   out. Whatever earned this stands until then, in ``owedMeters``, so a
+    ///   reading that no longer earns anything is what takes it away.
     mutating func observe(awayMeters: Double, at date: Date) -> Bool {
         if let lastObservedAt, date <= lastObservedAt { return false }
         lastObservedAt = date
@@ -192,23 +216,59 @@ nonisolated struct MovementWatch: Equatable, Sendable {
         // measured across the window rather than against itself.
         let oldest = samples.first
         samples.append(Sample(awayMeters: awayMeters, at: date))
-        guard !isSpent else { return false }
-        if let lastReminderAt,
-           date.timeIntervalSince(lastReminderAt) < MovementReminderPolicy.quietFor {
-            return false
-        }
         let traveled = awayMeters - baselineMeters
         let burst = oldest.map { awayMeters - $0.awayMeters } ?? 0
-        guard traveled >= MovementReminderPolicy.awayMeters
-            || burst >= MovementReminderPolicy.paceMeters else { return false }
+        guard !isSpent,
+              traveled >= MovementReminderPolicy.awayMeters
+                || burst >= MovementReminderPolicy.paceMeters else {
+            owedMeters = nil
+            return false
+        }
+        if let quietSince,
+           date.timeIntervalSince(quietSince) < MovementReminderPolicy.quietFor {
+            // Only a reminder already waiting moves with the hiker. After one
+            // that went out nothing is owed, and this is the quiet period
+            // doing its job.
+            if owedMeters != nil { owedMeters = awayMeters }
+            return false
+        }
+        quietSince = date
+        owedMeters = awayMeters
+        return true
+    }
+
+    /// Spends the allowance on the reminder that is owed, if one still is.
+    ///
+    /// - Parameter date: when it is going out. A reminder held back by a
+    ///   refusal goes out long after the fix that earned it, and the quiet
+    ///   period has to separate banners rather than fixes, or the next fix
+    ///   could post a second one straight after it.
+    /// - Returns: how far from the anchor the reminder is about, or `nil` when
+    ///   nothing is owed any more, which is what stops overlapping attempts
+    ///   posting twice.
+    mutating func spendReminder(at date: Date) -> Double? {
+        guard let owed = owedMeters else { return nil }
+        owedMeters = nil
         remindersSent += 1
-        lastReminderAt = date
-        baselineMeters = awayMeters
+        // The later of the two. `date` is the wall clock and this counts in
+        // fix timestamps, so a post must never be able to move it back.
+        quietSince = max(quietSince ?? date, date)
+        baselineMeters = owed
         // The window belongs to the burst that has just been spent; keeping it
         // would let the same two hundred and fifty metres argue for the next
         // reminder as well.
         samples.removeAll()
-        return true
+        return owed
+    }
+
+    /// Lets go of the reminder that is owed, if one is, and spends nothing.
+    ///
+    /// For a reading the caller kept from this watch, as a recording keeps a
+    /// paused walk's: what is owed was worked out without it, so it may no
+    /// longer be true. The allowance, the baseline and the quiet period stay,
+    /// and the next reading the watch is shown decides afresh.
+    mutating func dropOwedReminder() {
+        owedMeters = nil
     }
 }
 

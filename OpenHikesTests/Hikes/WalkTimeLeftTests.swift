@@ -170,7 +170,7 @@ struct WalkTimeLeftTests {
         #expect(factor.isApproximatelyEqual(to: 1.25, absoluteTolerance: 0.001))
     }
 
-    @Test("the direction is read off the coverage, and off the nearer end before there is any")
+    @Test("until the matches say, the direction is read off the coverage, and off the nearer end before there is any")
     func theDirectionComesFromTheCoverage() {
         let total = 6000.0
         #expect(!WalkTimeLeft.isReversed(position: 2000, covered: [0...2000], routeMeters: total))

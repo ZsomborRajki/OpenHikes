@@ -25,10 +25,15 @@
 //  two windows six years apart, and the span between them is a query for every
 //  photograph the user has ever taken.
 //
+//  A plan is one reading of its hike, and every answer it gives is about that
+//  reading. What was read is kept beside it as a ``Fingerprint``, so whoever
+//  holds a plan through a wait can ask whether the hike has moved on (#1280).
+//
 
 import Algorithms
 import Foundation
 import OpenHikesData
+import OpenHikesShared
 
 nonisolated struct HikePhotoSearchPlan: Sendable {
     /// The route's own time-to-place index, when its points carry timestamps.
@@ -45,6 +50,9 @@ nonisolated struct HikePhotoSearchPlan: Sendable {
     /// the caller asks for it, because building one is route-sized work and
     /// the timeline path has no use for it.
     let profile: RouteProfile?
+    /// What this plan was built from, kept to be set beside what its hike
+    /// holds later.
+    let fingerprint: Fingerprint
 
     /// - Parameter profilesRoute: Build ``profile`` even with no walks. The
     ///   picker wants one on every trail, because it projects a photograph's
@@ -60,6 +68,7 @@ nonisolated struct HikePhotoSearchPlan: Sendable {
         self.route = route
         legs = timeline == nil ? nil : RecordedRouteLegs(route: route)
         profile = walks.isEmpty && !profilesRoute ? nil : RouteProfile(route: route)
+        fingerprint = Fingerprint(route: route, walks: walks)
     }
 
     /// Whether there is anything to search at all. A hike with neither a
@@ -137,6 +146,43 @@ nonisolated extension HikePhotoSearchPlan {
         /// Already narrowed to the walks along `route` — see
         /// ``Hike/walkPhotoTimelines``.
         let walks: [HikeWalkPhotoTimeline]
+
+        /// Reads every point, like building a plan does, so it is worked out
+        /// off the main actor too.
+        var fingerprint: Fingerprint { Fingerprint(route: route, walks: walks) }
+    }
+
+    /// What a plan's answers rest on, small enough to outlive the plan.
+    ///
+    /// Everything that can move a pin, and nothing that cannot: each point's
+    /// position, its clock and what its leg was, and the walks along the
+    /// line. A height is left out, because filling heights in writes a new
+    /// line with every point where it was (``HikeElevationFill``), and a
+    /// review should not be thrown away for that. So is ``RouteMotion``,
+    /// which nothing reads.
+    ///
+    /// By value rather than by a revision: ``Hike/lineRevision`` moves only
+    /// for a line this context wrote, and a walk has no counter at all, while
+    /// this says the same of a line received from the hiker's other device.
+    /// And not ``TrailWalkRecord/routeRevision(of:)``, which names a line by
+    /// where it runs, where a plan reads its clock as well. The hash reads
+    /// bit patterns, so a line always reads as itself.
+    struct Fingerprint: Equatable, Sendable {
+        private let line: UInt64
+        private let walks: [HikeWalkPhotoTimeline]
+
+        init(route: [RouteCoordinate], walks: [HikeWalkPhotoTimeline]) {
+            var hasher = StableHasher()
+            for point in route {
+                hasher.combine(point.latitude)
+                hasher.combine(point.longitude)
+                if let timestamp = point.timestamp { hasher.combine(timestamp.timeIntervalSinceReferenceDate) }
+                if let boundary = point.boundary { hasher.combine(boundary.rawValue) }
+                if let provenance = point.provenance { hasher.combine(provenance.rawValue) }
+            }
+            line = hasher.value
+            self.walks = walks
+        }
     }
 
     /// The plan `source` supports: the route's timeline, its legs and its

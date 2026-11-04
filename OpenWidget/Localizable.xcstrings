@@ -19,6 +19,12 @@
             "value" : "%@ gewandert"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ recorridos"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -33,6 +39,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ lang"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ de largo"
           }
         },
         "fr" : {
@@ -51,6 +63,12 @@
             "value" : "%@ Prozent abgeschlossen"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ por ciento completado"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -67,6 +85,12 @@
             "value" : "%@ Prozent gewandert"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ por ciento recorrido"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -81,6 +105,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "noch %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "quedan %@"
           }
         },
         "fr" : {
@@ -103,6 +133,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@%2$@ · %3$@ left"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@%2$@ · quedan %3$@"
           }
         },
         "fr" : {
@@ -140,6 +176,30 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld pts"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld pts"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld pts"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld pt"
                 }
               },
               "other" : {
@@ -191,6 +251,12 @@
             "value" : "%1$lld%% · %2$@ left"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld %% · quedan %2$@"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -205,6 +271,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld%% gewandert"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld %% recorrido"
           }
         },
         "fr" : {
@@ -223,6 +295,12 @@
             "value" : "Aufstieg"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desnivel +"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -237,6 +315,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Durchschnittsgeschwindigkeit"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Velocidad media"
           }
         },
         "fr" : {
@@ -256,6 +340,12 @@
             "value" : "Abbrechen"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancelar"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -272,6 +362,12 @@
             "value" : "Abgeschlossen"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Completado"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -286,6 +382,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Distanz"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Distancia"
           }
         },
         "fr" : {
@@ -305,6 +407,12 @@
             "value" : "Fertig"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -319,6 +427,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Verstrichen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transcurrido"
           }
         },
         "fr" : {
@@ -337,6 +451,12 @@
             "value" : "Höhe"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Altitud"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -351,6 +471,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Beendet"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terminada"
           }
         },
         "fr" : {
@@ -370,6 +496,12 @@
             "value" : "Wanderung"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Excursión"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -384,6 +516,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wanderaufzeichnung"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grabación de excursión"
           }
         },
         "fr" : {
@@ -402,6 +540,12 @@
             "value" : "Gewandert"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recorrido"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -416,6 +560,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Länge"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Longitud"
           }
         },
         "fr" : {
@@ -434,6 +584,12 @@
             "value" : "Abseits des Weges"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fuera del sendero"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -445,6 +601,12 @@
     "OpenHikes" : {
       "localizations" : {
         "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes"
+          }
+        },
+        "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes"
@@ -466,6 +628,12 @@
             "value" : "OpenHikes konnte das nicht ausführen."
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes no ha podido hacerlo."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -483,6 +651,12 @@
             "value" : "OpenHikes braucht deinen Standort, bevor es eine Wanderung aufzeichnen kann."
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes necesita tu ubicación para poder grabar una excursión."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -497,6 +671,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pausieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pausar"
           }
         },
         "fr" : {
@@ -516,6 +696,12 @@
             "value" : "Wanderung pausieren"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pausar excursión"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -532,6 +718,12 @@
             "value" : "Pausiert"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En pausa"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -546,6 +738,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pausiert · "
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En pausa · "
           }
         },
         "fr" : {
@@ -565,6 +763,12 @@
             "value" : "Pausiert die aufgezeichnete Wanderung über ihre Anzeige auf dem Sperrbildschirm."
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pausa la excursión que se está grabando, desde su panel en la pantalla bloqueada."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -580,6 +784,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aufzeichnung"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grabación"
           }
         },
         "fr" : {
@@ -598,6 +808,12 @@
             "value" : "Wanderung wird aufgezeichnet"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grabando excursión"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -612,6 +828,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aufzeichnung pausiert"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grabación en pausa"
           }
         },
         "fr" : {
@@ -630,6 +852,12 @@
             "value" : "Verbleibend"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restante"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -644,6 +872,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fortsetzen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reanudar"
           }
         },
         "fr" : {
@@ -663,6 +897,12 @@
             "value" : "Wanderung fortsetzen"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reanudar excursión"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -678,6 +918,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Setzt die pausierte Wanderung über ihre Anzeige auf dem Sperrbildschirm fort."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reanuda la excursión en pausa, desde su panel en la pantalla bloqueada."
           }
         },
         "fr" : {
@@ -696,6 +942,12 @@
             "value" : "Wähle einen Weg"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige un sendero"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -710,6 +962,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wähle einen Weg in OpenHikes"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige un sendero en OpenHikes"
           }
         },
         "fr" : {
@@ -729,6 +987,12 @@
             "value" : "Zeigt einen Weg deiner Wahl, deinen ausgewählten Weg oder eine Wanderung, die gerade aufgezeichnet wird."
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Muestra un sendero que elijas, el sendero seleccionado o una excursión que se esté grabando."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -743,6 +1007,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zeigt deinen ausgewählten Weg oder eine Wanderung, die gerade aufgezeichnet wird."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Muestra el sendero seleccionado o una excursión que se esté grabando."
           }
         },
         "fr" : {
@@ -761,6 +1031,12 @@
             "value" : "Wanderung starten"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Iniciar excursión"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -775,6 +1051,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Starte oder beende die Aufzeichnung einer Wanderung."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inicia o detén la grabación de una excursión."
           }
         },
         "fr" : {
@@ -793,6 +1075,12 @@
             "value" : "Wanderung beenden"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detener excursión"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -809,6 +1097,12 @@
             "value" : "Diese Wanderung wird nicht mehr aufgezeichnet."
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esa excursión ya no se está grabando."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -823,6 +1117,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Verbleibende Zeit"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tiempo restante"
           }
         },
         "fr" : {
@@ -842,6 +1142,12 @@
             "value" : "Wanderaufzeichnung umschalten"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activar/desactivar grabación"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -856,6 +1162,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Trackpunkte"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Puntos GPS"
           }
         },
         "fr" : {
@@ -874,6 +1186,12 @@
             "value" : "Weg"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sendero"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -890,6 +1208,12 @@
             "value" : "Weglänge"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Longitud del sendero"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -904,6 +1228,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aktiviere „Genauer Standort“ in den Einstellungen, um fortzufahren."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activa «Ubicación exacta» en Ajustes para continuar."
           }
         },
         "fr" : {

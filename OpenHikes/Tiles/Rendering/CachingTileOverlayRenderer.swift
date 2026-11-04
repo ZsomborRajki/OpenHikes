@@ -112,10 +112,11 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
     /// finishing has recorded its outcome before the next may start.
     private struct Refreshes {
         /// Keys whose refresh is under way, each holding the rects that missed
-        /// on the saved copy and were drawn with it, so the fresh bytes are
-        /// drawn over every one of them. A rect that found the copy in memory
-        /// instead, such as an overzoomed tile cropped from it, is not here,
-        /// and shows the old bytes until MapKit next draws it.
+        /// on the saved copy and were drawn with it. A rect that found the copy
+        /// in memory instead, such as an overzoomed tile cropped from it, is
+        /// not here. The fresh bytes reach it through the tile's own map rect,
+        /// so nothing has to record it; see
+        /// ``CachingTileOverlayRenderer/finishRefresh(_:forKey:at:)``.
         ///
         /// Apart from ``inFlight``, which holds rects with nothing drawn yet.
         /// A refresh can wait a long time for a slot, and its copy's memory
@@ -153,8 +154,9 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
     private let refreshes = Mutex(Refreshes())
 
     #if DEBUG
-    /// Redraws asked for, by tile; see ``redrawCount(at:)``.
-    private let redraws = Mutex([String: Int]())
+    /// Redraws asked for, by tile, and the rects of the latest; see
+    /// ``redrawCount(at:)`` and ``latestRedraw(at:)``.
+    private let redraws = Mutex([String: (count: Int, latest: [MKMapRect])]())
     #endif
 
     /// The pending "a backoff has elapsed, redraw" wake-up, and when it fires.
@@ -526,7 +528,9 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
             for rect in rects { self.setNeedsDisplay(rect) }
         }
         #if DEBUG
-        redraws.withLock { $0[key, default: 0] += 1 }
+        redraws.withLock { redraws in
+            redraws[key] = (redraws[key, default: (0, [])].count + 1, rects)
+        }
         #endif
     }
 
@@ -684,9 +688,19 @@ nonisolated extension CachingTileOverlayRenderer {
         }
     }
 
-    /// Draws the fresh bytes a refresh brought over the rects that drew the
-    /// saved copy for it (see ``Refreshes/underWay``), or backs off the
-    /// refresh that failed. The saved copy stays drawn either way.
+    /// Draws the fresh bytes a refresh brought over everything the saved copy
+    /// was drawn on, or backs off the refresh that failed. The saved copy
+    /// stays drawn either way.
+    ///
+    /// Everything means the tile's whole map rect, not only the rects in
+    /// ``Refreshes/underWay``. Past the source's maximum zoom every screen tile
+    /// is a crop of this one, and a crop drawn once the copy reached memory
+    /// waited for nothing, so no list holds it. They all lie inside the tile
+    /// at any zoom, so one rect reaches every one of them with nothing to
+    /// record in the draw pass and nothing to grow across a long pan, and the
+    /// draws it brings read the fresh bytes from memory. A rect outside the
+    /// tile can only be one drawn past the edge of the world (see `draw`), and
+    /// keeps its own redraw.
     ///
     /// Only `.failed` backs off: the server failed, or had asked through
     /// `Retry-After` to be left alone, and that deadline is the floor here as
@@ -708,7 +722,8 @@ nonisolated extension CachingTileOverlayRenderer {
         }
         guard disposition == .loaded else { return }
         failures.withLock { $0.recordSuccess(key) }
-        await redraw(showing, forKey: key)
+        let tile = fetchPath.mapRect
+        await redraw([tile] + showing.filter { !tile.contains($0) }, forKey: key)
     }
 
     /// The refresh ``load(_:from:through:)`` leaves for saved coverage it came
@@ -758,7 +773,13 @@ nonisolated extension CachingTileOverlayRenderer {
     /// A renderer outside a map view draws nothing, so this is the only
     /// trace a redraw leaves.
     func redrawCount(at path: MKTileOverlayPath) -> Int {
-        redraws.withLock { $0[path.cacheKey, default: 0] }
+        redraws.withLock { $0[path.cacheKey]?.count ?? 0 }
+    }
+
+    /// Test seam: the rects a tile's latest redraw asked MapKit for, which is
+    /// what says whether a screen tile drawn from it will be drawn again.
+    func latestRedraw(at path: MKTileOverlayPath) -> [MKMapRect] {
+        redraws.withLock { $0[path.cacheKey]?.latest ?? [] }
     }
 
     /// Test seam: one tile's worth of what `draw(_:zoomScale:in:)` does on a

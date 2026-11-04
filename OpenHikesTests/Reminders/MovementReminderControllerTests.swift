@@ -58,8 +58,7 @@ struct MovementReminderControllerTests {
             MovementReminderHarness.fix(
                 northOfAnchorBy: 2000,
                 takenAt: start.addingTimeInterval(600)
-            ),
-            at: start.addingTimeInterval(600)
+            )
         )
         await harness.controller.settle()
 
@@ -86,15 +85,13 @@ struct MovementReminderControllerTests {
             MovementReminderHarness.fix(
                 northOfAnchorBy: 100,
                 takenAt: start.addingTimeInterval(300)
-            ),
-            at: start.addingTimeInterval(300)
+            )
         )
         harness.controller.recordingObserved(
             MovementReminderHarness.fix(
                 northOfAnchorBy: 700,
                 takenAt: start.addingTimeInterval(1800)
-            ),
-            at: start.addingTimeInterval(1800)
+            )
         )
         await harness.controller.settle()
 
@@ -119,8 +116,7 @@ struct MovementReminderControllerTests {
                 northOfAnchorBy: 900,
                 accuracy: 800,
                 takenAt: start.addingTimeInterval(600)
-            ),
-            at: start.addingTimeInterval(600)
+            )
         )
         await harness.controller.settle()
 
@@ -139,8 +135,7 @@ struct MovementReminderControllerTests {
             MovementReminderHarness.fix(
                 northOfAnchorBy: 800,
                 takenAt: start.addingTimeInterval(-3600)
-            ),
-            at: start.addingTimeInterval(1)
+            )
         )
         await harness.controller.settle()
 
@@ -155,18 +150,15 @@ struct MovementReminderControllerTests {
     func batchedFixesAreNotAPaceBurst() async {
         let harness = MovementReminderHarness.harness()
         harness.controller.recordingDidPause(at: MovementReminderHarness.anchor, on: start)
-        let deliveredAt = start.addingTimeInterval(1800)
 
         harness.controller.recordingObserved(
-            MovementReminderHarness.fix(northOfAnchorBy: 0, takenAt: start),
-            at: deliveredAt
+            MovementReminderHarness.fix(northOfAnchorBy: 0, takenAt: start)
         )
         harness.controller.recordingObserved(
             MovementReminderHarness.fix(
                 northOfAnchorBy: 300,
                 takenAt: start.addingTimeInterval(1200)
-            ),
-            at: deliveredAt
+            )
         )
         await harness.controller.settle()
 
@@ -183,15 +175,13 @@ struct MovementReminderControllerTests {
         let newest = start.addingTimeInterval(1800)
 
         harness.controller.recordingObserved(
-            MovementReminderHarness.fix(northOfAnchorBy: 100, takenAt: newest),
-            at: newest
+            MovementReminderHarness.fix(northOfAnchorBy: 100, takenAt: newest)
         )
         harness.controller.recordingObserved(
             MovementReminderHarness.fix(
                 northOfAnchorBy: 900,
                 takenAt: start.addingTimeInterval(60)
-            ),
-            at: newest.addingTimeInterval(1)
+            )
         )
         await harness.controller.settle()
 
@@ -212,8 +202,7 @@ struct MovementReminderControllerTests {
             MovementReminderHarness.fix(
                 northOfAnchorBy: 2000,
                 takenAt: start.addingTimeInterval(600)
-            ),
-            at: start.addingTimeInterval(600)
+            )
         )
         await harness.controller.settle()
 
@@ -232,8 +221,7 @@ struct MovementReminderControllerTests {
             MovementReminderHarness.fix(
                 northOfAnchorBy: 5000,
                 takenAt: start.addingTimeInterval(600)
-            ),
-            at: start.addingTimeInterval(600)
+            )
         )
         await harness.controller.settle()
 
@@ -254,8 +242,7 @@ struct MovementReminderControllerTests {
             MovementReminderHarness.fix(
                 northOfAnchorBy: 900,
                 takenAt: start.addingTimeInterval(600)
-            ),
-            at: start.addingTimeInterval(600)
+            )
         )
         await harness.controller.settle()
 

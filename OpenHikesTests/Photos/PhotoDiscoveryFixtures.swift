@@ -17,7 +17,10 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
+import SwiftData
 import Synchronization
+import Testing
 
 #if canImport(UIKit)
 import UIKit
@@ -36,6 +39,8 @@ nonisolated enum PhotoDiscoveryFixture {
     static let epoch = Date(timeIntervalSince1970: epochSeconds)
 
     private static let sampleSide = 8
+    /// Degrees: a tenth of a millimetre, far under a fixture's step.
+    private static let pinTolerance = 1e-9
 
     static let route: [RouteCoordinate] = (0..<stepCount).map { index in
         RouteCoordinate(
@@ -55,6 +60,25 @@ nonisolated enum PhotoDiscoveryFixture {
             elevation: nil,
             timestamp: nil
         )
+    }
+
+    /// The same walk a degree north, on the same clock: what an edit leaves
+    /// a search holding pins from the line before it. Far enough that a pin
+    /// from one is plainly not on the other.
+    static let movedRoute: [RouteCoordinate] = route.map { point in
+        RouteCoordinate(
+            latitude: point.latitude + 1,
+            longitude: point.longitude,
+            elevation: nil,
+            timestamp: point.timestamp
+        )
+    }
+
+    /// Whether `pins` stand on the points `steps` along `route`, in order.
+    static func pins(_ pins: [Double?], stand steps: [Int], on route: [RouteCoordinate]) -> Bool {
+        pins.count == steps.count && zip(pins, steps).allSatisfy { pin, step in
+            pin.map { route[step].latitude.isApproximatelyEqual(to: $0, absoluteTolerance: pinTolerance) } ?? false
+        }
     }
 
     /// The line a fixture walk is along unless a test says otherwise. The same
@@ -135,6 +159,33 @@ nonisolated enum PhotoDiscoveryFixture {
     }
 }
 
+/// How a hike's line is replaced under a photo search.
+///
+/// The two are not the same event. A line written here moves
+/// ``Hike/lineRevision`` and lands in the hike's own copy; a line received
+/// through another context, as an import of an edit from the hiker's other
+/// device is, does neither, and only the store knows of it.
+///
+/// The one thing in this file on the main actor, because it writes through
+/// the hike's own context.
+enum PhotoLineEdit: String, CaseIterable, Sendable {
+    case here = "here"
+    case received = "received"
+
+    func replaceLine(of hike: Hike, with route: [RouteCoordinate]) async throws {
+        let context = try #require(hike.modelContext)
+        switch self {
+        case .here:
+            hike.replaceRoute(with: route)
+            try context.save()
+        case .received:
+            try await SelectedLineStoreWatchTests.saveElsewhere(hike.id, in: context.container) { row in
+                row.replaceRoute(with: route)
+            }
+        }
+    }
+}
+
 /// A photo library that answers whatever it was built with, and remembers what
 /// it was asked.
 ///
@@ -180,6 +231,9 @@ nonisolated final class StubPhotoLibraryFixture: PhotoLibraryReading {
     /// through rather than before or after it. One-shot, like the gate itself
     /// — every read after the first goes straight through.
     private let dataGate: TestGate?
+    /// The one asset ``dataGate`` holds, for a test that wants the photos
+    /// before it to have landed. `nil` holds whichever is read first.
+    private let dataGateIdentifier: String?
     private let state: Mutex<State>
 
     init(
@@ -189,13 +243,15 @@ nonisolated final class StubPhotoLibraryFixture: PhotoLibraryReading {
         assetsSharedByPicker: [PhotoLibraryAsset] = [],
         accessGate: TestGate? = nil,
         fetchGate: TestGate? = nil,
-        dataGate: TestGate? = nil
+        dataGate: TestGate? = nil,
+        dataGateIdentifier: String? = nil
     ) {
         self.unreadable = unreadable
         self.assetsSharedByPicker = assetsSharedByPicker
         self.accessGate = accessGate
         self.fetchGate = fetchGate
         self.dataGate = dataGate
+        self.dataGateIdentifier = dataGateIdentifier
         state = Mutex(State(access: access, assets: assets))
     }
 
@@ -253,7 +309,7 @@ nonisolated final class StubPhotoLibraryFixture: PhotoLibraryReading {
 
     func imageData(for localIdentifier: String) async -> Data? {
         calls.withLock { $0.dataReads += 1 }
-        await dataGate?.wait()
+        if dataGateIdentifier == nil || dataGateIdentifier == localIdentifier { await dataGate?.wait() }
         guard !unreadable.contains(localIdentifier) else { return nil }
         return PhotoDiscoveryFixture.sampleImageData()
     }
@@ -278,4 +334,30 @@ nonisolated final class PhotoStoreSandbox: Sendable {
     }
 
     deinit { try? FileManager.default.removeItem(at: root) }
+}
+
+/// How many photographs a sandbox held on disk each time a photo import read
+/// its hike, so a test can tell whether the read that decides a pin came
+/// after the photograph's bytes were written (#1280).
+nonisolated final class PhotoReadsAgainstDisk: Sendable {
+    private let sandbox: PhotoStoreSandbox
+    private let counts = Mutex<[Int]>([])
+
+    init(_ sandbox: PhotoStoreSandbox) {
+        self.sandbox = sandbox
+    }
+
+    /// One entry per read of the hike, in the order they ran.
+    var photosOnDisk: [Int] { counts.withLock { $0 } }
+
+    /// `fetch`, once the photographs on disk have been counted.
+    func counting(
+        _ fetch: @escaping @Sendable (ModelContext, PersistentIdentifier) throws -> Hike?
+    ) -> @Sendable (ModelContext, PersistentIdentifier) throws -> Hike? {
+        { context, id in
+            let count = HikePhotoImportTests.fileCount(in: self.sandbox.store.directory)
+            self.counts.withLock { $0.append(count) }
+            return try fetch(context, id)
+        }
+    }
 }

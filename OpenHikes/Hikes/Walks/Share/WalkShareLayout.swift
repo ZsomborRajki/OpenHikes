@@ -42,6 +42,18 @@ nonisolated enum WalkShareLineColor: String, CaseIterable, Codable, Sendable {
     /// The hike's own tint, the colour it is drawn in on the map.
     case trail = "trail"
     case white = "white"
+
+    /// What the editor's picker offers the colour as.
+    var label: LocalizedStringResource {
+        switch self {
+        case .trail: "Trail"
+        // A key of its own for the "White" that a waymark's colour also
+        // reads, because French and Spanish agree that one with the word for
+        // a waymark, in lower case (« balisage blanc », «marca blanca»), and
+        // an option standing on its own begins with a capital.
+        case .white: LocalizedStringResource("share.lineColor.white", defaultValue: "White")
+        }
+    }
 }
 
 nonisolated struct WalkShareLayout: Codable, Equatable, Sendable {

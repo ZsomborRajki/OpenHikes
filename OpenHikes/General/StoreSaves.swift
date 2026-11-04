@@ -8,7 +8,8 @@
 //  (`HikeListMetrics+Observation.swift`, #1253) and the library's lines on the
 //  map (`LibraryLines.swift`). Each reads every line once, then only the lines
 //  whose rows may have been saved since, and this is the part of that they
-//  share.
+//  share. Find Photos' sheet takes the wakes alone: it has one hike to look at,
+//  for as long as a sheet is up (`PhotoDiscoveryController.swift`).
 //
 //  ## Waking
 //

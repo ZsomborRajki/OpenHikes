@@ -61,10 +61,11 @@ struct HikePlaceStagedPhoto: Identifiable {
             // Dated by its own file rather than by this call, which for *Add
             // Place* is the tap on *Add* (#1188). No plan: a new pick is
             // pinned at the place, whatever the camera's GPS says.
+            var noPlan: HikePhotoSearchPlan?
             let stored = await HikePhotoImport.addPicked(
                 data,
                 to: hike,
-                plan: nil,
+                plan: &noPlan,
                 fallback: place.clCoordinate,
                 assetLocalIdentifier: identifier,
                 placeID: place.id,

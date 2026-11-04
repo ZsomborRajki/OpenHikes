@@ -36,6 +36,15 @@
 //    ``WatchWalkDelivery`` for when a walk the phone has not acknowledged is
 //    offered again.
 //
+//  ## Nothing transfers before activation
+//
+//  `activate()` answers later, through the delegate, and `transferUserInfo` on
+//  a session that has not activated is a programmer error. A launch asks for
+//  things before that answer has come, so every transfer here goes through
+//  ``WatchLinkActivation``: a request waits for the callback, a walk stays on
+//  the disk queue unmarked, and the callback lets them go. An activation that
+//  fails is tried again the next time the app comes to the front.
+//
 //  ## Isolation
 //
 //  Every `WCSessionDelegate` callback is `nonisolated` and arrives on a
@@ -52,6 +61,12 @@ import WatchConnectivity
 
 /// What the link hands back to the model, already decoded.
 enum PhoneDelivery: Sendable {
+    /// The session finished activating, so transfers can go from here on.
+    /// The link has already sent the requests that waited for this; the walks
+    /// on the disk queue are the model's to offer. Delivered instead of
+    /// ``reachabilityChanged(_:)`` for that one answer, so an activation
+    /// that finds the phone in range drains the queue once.
+    case activated(isReachable: Bool)
     /// The end of a button's wait: the phone's answer, carrying the state
     /// that resulted and the refusal sentence if there was one, or the
     /// watch's own failure to get an answer, which carries no state.
@@ -60,7 +75,7 @@ enum PhoneDelivery: Sendable {
     /// What the phone's own recorder is doing, pushed or answered.
     case phoneRecording(WatchPhoneRecording)
     /// The link's own state changed — reachability, or an activation that
-    /// finished. Carried so the model can drain its queue the moment a phone
+    /// failed. Carried so the model can drain its queue the moment a phone
     /// comes back rather than on a timer.
     case reachabilityChanged(Bool)
     case trail(WatchTrailPackage)
@@ -95,6 +110,9 @@ final class PhoneLink: NSObject {
     /// already crossing, while still letting a walk the phone refused, or
     /// whose transfer failed, be offered again. See ``WatchWalkDelivery``.
     @ObservationIgnored private var delivery = WatchWalkDelivery()
+    /// Whether the session has finished activating, and the requests that
+    /// could not go until it had. See ``WatchLinkActivation``.
+    @ObservationIgnored private var activation = WatchLinkActivation()
 
     /// Starts the session.
     ///
@@ -113,7 +131,14 @@ final class PhoneLink: NSObject {
         let shared = WCSession.default
         session = shared
         shared.delegate = self
-        shared.activate()
+        if activation.begin() { shared.activate() }
+    }
+
+    /// Tries a session that failed to activate again. Does nothing for one
+    /// that has activated, is still activating or was never started.
+    func retryActivation() {
+        guard let session, activation.begin() else { return }
+        session.activate()
     }
 
     /// Asks the phone for a trail's geometry.
@@ -130,6 +155,10 @@ final class PhoneLink: NSObject {
     ///   and the revision held. Kept intact so an answer can be matched to it
     ///   even when a later request needs no answer.
     func requestTrail(_ request: WatchTrailRequest) {
+        guard activation.allowsTransfers else {
+            activation.hold(request)
+            return
+        }
         // Latest wins, the way it does for the library. The watch holds one
         // trail, so a request still queued from an earlier tap asks for
         // something that will be replaced the moment it lands — and a hiker
@@ -145,17 +174,20 @@ final class PhoneLink: NSObject {
     /// Sends a finished walk. Guaranteed delivery, and the receipt is what
     /// takes it off ``WatchStore``'s queue.
     ///
-    /// A no-op for a walk already crossing, or one that went unacknowledged
-    /// too recently to be worth the whole payload again.
-    func send(_ walk: WatchRecordedWalk) {
+    /// A no-op for a walk already crossing, one that went unacknowledged too
+    /// recently to be worth the whole payload again, or any walk at all
+    /// before the session has activated: the disk queue keeps it, and the
+    /// drain that follows activation offers it.
+    ///
+    /// - Returns: whether an active session took it, which is also the only
+    ///   way it is recorded as crossing.
+    @discardableResult func send(_ walk: WatchRecordedWalk) -> Bool {
         let sessionID = walk.sessionID
-        guard isDue(sessionID) else { return }
-        // Marked only once the system has actually taken it. A build that
-        // threw was never handed over, and a walk recorded as crossing on
-        // the strength of an attempt that failed would sit on the disk queue
-        // unoffered until the app was relaunched.
-        guard transfer({ try WatchLink.message(walk) }) else { return }
-        delivery.handedOver(sessionID)
+        return delivery.offer(sessionID, at: .now, on: activation) {
+            isCrossing(sessionID)
+        } transfer: {
+            transfer { try WatchLink.message(walk) }
+        }
     }
 
     /// Whether a queued walk would be sent if it were offered now.
@@ -166,15 +198,7 @@ final class PhoneLink: NSObject {
     /// walk that became due or stopped being due during the read is judged
     /// as it stands then.
     func isDue(_ sessionID: UUID) -> Bool {
-        // The first offer in this process may find the last one's transfer
-        // still queued: `WCSession` keeps it across the relaunch this set
-        // did not survive. Adopted rather than duplicated, and its finish
-        // arrives here like any other.
-        if delivery.hasNeverOffered(sessionID), isCrossing(sessionID) {
-            delivery.handedOver(sessionID)
-            return false
-        }
-        return delivery.shouldOffer(sessionID, at: .now)
+        delivery.isDue(sessionID, at: .now, on: activation) { isCrossing(sessionID) }
     }
 
     /// Forgets that a walk was ever sent.
@@ -224,6 +248,10 @@ final class PhoneLink: NSObject {
     /// day a phone finally appears. One outstanding request already says
     /// everything a second would.
     func requestLibrary() {
+        guard activation.allowsTransfers else {
+            activation.holdLibraryRequest()
+            return
+        }
         guard !hasOutstandingLibraryRequest else { return }
         transfer { try WatchLink.message(WatchLibraryRequest()) }
     }
@@ -300,10 +328,10 @@ final class PhoneLink: NSObject {
     ///
     /// Answers whether the system took it, which is what ``send(_:)`` needs to
     /// decide whether a walk is genuinely crossing: `false` for a session
-    /// that was never started and for a payload that could not be encoded,
+    /// that has not activated and for a payload that could not be encoded,
     /// which are the two ways nothing went.
     @discardableResult private func transfer(_ build: () throws -> [String: Any]) -> Bool {
-        guard let session else { return false }
+        guard let session, activation.allowsTransfers else { return false }
         do {
             session.transferUserInfo(try build())
             return true
@@ -313,6 +341,23 @@ final class PhoneLink: NSObject {
             )
             return false
         }
+    }
+
+    /// The delegate answered, which is the first moment anything can go.
+    ///
+    /// The requests go before the delivery, so the drain it starts finds the
+    /// session already carrying them. A failure sends nothing and lets
+    /// ``WatchLinkActivation`` keep what it holds for
+    /// ``retryActivation()``, and reaches the model as the reachability it
+    /// always was: the walks stay on the disk queue, never marked.
+    private func activationFinished(activated: Bool, reachable: Bool) {
+        guard let release = activation.finished(activated: activated) else {
+            onDelivery?(.reachabilityChanged(reachable))
+            return
+        }
+        if release.asksForLibrary { requestLibrary() }
+        if let request = release.trailRequest { requestTrail(request) }
+        onDelivery?(.activated(isReachable: reachable))
     }
 }
 
@@ -330,12 +375,13 @@ nonisolated extension PhoneLink: WCSessionDelegate {
         if let error {
             Self.logger.error("Session activation failed: \(error.localizedDescription, privacy: .public)")
         }
+        let activated = state == .activated
         let reachable = session.isReachable
         let installed = session.isCompanionAppInstalled
         onMainActor { [weak self] in
             self?.isReachable = reachable
             self?.isCompanionInstalled = installed
-            self?.onDelivery?(.reachabilityChanged(reachable))
+            self?.activationFinished(activated: activated, reachable: reachable)
         }
         // The context that was already waiting, which nothing else will ever
         // hand us. `didReceiveApplicationContext` reports a *change*, and the

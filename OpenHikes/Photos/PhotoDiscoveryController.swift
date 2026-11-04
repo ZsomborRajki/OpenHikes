@@ -60,10 +60,31 @@
 //  shared subset starts another, so an older one still matching must not land
 //  its answer on top of the newer one's.
 //
+//  A plan is one reading of the hike, and everything after that reading is a
+//  wait: the prompt, the library, the matcher, then the hiker with the grid up,
+//  then each photograph's bytes. A line mirrored in from the hiker's other
+//  device, or an edit made here, can land in any of them, and the pins in the
+//  grid would stay the old line's, all the way into Add storing them (#1280).
+//  So what the plan was built from is kept as a fingerprint, and set beside
+//  what the store holds at the three moments that decide anything: before a
+//  search writes what it found, at each save of the store while the sheet is
+//  up (``followSaves(of:)``), and before each photograph is attached, once its
+//  bytes are on disk. The store is what is asked, because only it can answer
+//  for a line received from another device, or for a walk. It is read as the
+//  plan was, off the main actor, and each look costs that read and no
+//  indexing.
+//
+//  A plan the hike has left is replaced rather than only withdrawn. The hiker
+//  asked for these photographs and the question still stands, so the same
+//  question is asked of the new line, the grid comes back, and what they had
+//  unticked stays unticked. What already landed stays where it landed, as
+//  every photo already on a hike stays through an edit.
+//
 
 import Foundation
 import Observation
 import OpenHikesData
+import SwiftData
 import SwiftUI
 
 @Observable
@@ -127,6 +148,12 @@ final class PhotoDiscoveryController {
     /// Counts searches, so one that a newer search has overtaken can tell and
     /// write nothing — see ``search(in:)``.
     @ObservationIgnored private var searchGeneration = 0
+    /// What the plan behind ``matches`` was built from, to set beside what
+    /// the hike holds later. `nil` until a search has a plan.
+    @ObservationIgnored private var fingerprint: HikePhotoSearchPlan.Fingerprint?
+    /// What the hiker has left out of the offers replaced so far, which the
+    /// next one leaves out too — see ``searchAgainIfObsolete(in:)``.
+    @ObservationIgnored private var unticked: Set<String> = []
     /// The one import in flight, held so the sheet can cancel it — see
     /// ``runImport(into:store:)``.
     @ObservationIgnored private var importTask: Task<Int, Never>?
@@ -151,6 +178,11 @@ final class PhotoDiscoveryController {
         return !selection.isEmpty
     }
 
+    private var isImporting: Bool {
+        guard case .importing = phase else { return false }
+        return true
+    }
+
     /// Looks through the library for photographs taken during `hike`.
     ///
     /// Safe to call again on the same controller: a second run re-reads the
@@ -158,7 +190,15 @@ final class PhotoDiscoveryController {
     /// rather than offered twice — and a second run started before the first
     /// has finished is the only one that writes, so a search overtaken while
     /// it was matching drops its answer rather than replacing the newer one.
+    ///
+    /// What it writes describes the hike as it stands: a search whose plan
+    /// the hike has moved on from by the end starts again from the new one.
     func search(in hike: Hike) async {
+        unticked = []
+        await runSearch(in: hike)
+    }
+
+    private func runSearch(in hike: Hike) async {
         searchGeneration += 1
         let generation = searchGeneration
         // This controller outlives its sheet. Withdraw its previous results
@@ -168,12 +208,14 @@ final class PhotoDiscoveryController {
         matches = []
         selection = []
         importFailed = false
+        fingerprint = nil
         // No plan is a hike the store did not hand back, which this context
         // can still hold. It has gone as a detached one has, so nothing is
         // written — see ``PhotoDiscoveryWork/plan(for:)``.
         guard let plan = await work.plan(for: HikePhotoSearchPlan.SourceRead(hike)),
               isCurrent(generation), hike.isAttached
         else { return }
+        fingerprint = plan.fingerprint
         guard !plan.isEmpty else {
             phase = .unsupported
             return
@@ -208,8 +250,17 @@ final class PhotoDiscoveryController {
             alreadyImported: hike.importedPhotoAssetIdentifiers
         )
         guard isCurrent(generation), hike.isAttached else { return }
+
+        // Last, so every wait above is behind it: see this file's header. A
+        // save after this read is the watch's to hear.
+        let current = await work.fingerprint(of: HikePhotoSearchPlan.SourceRead(hike))
+        guard isCurrent(generation), hike.isAttached else { return }
+        guard current == plan.fingerprint else {
+            await runSearch(in: hike)
+            return
+        }
         matches = found
-        selection = Set(found.map(\.id))
+        selection = Set(found.map(\.id)).subtracting(unticked)
         phase = found.isEmpty ? .empty : .results
     }
 
@@ -217,6 +268,45 @@ final class PhotoDiscoveryController {
     /// been cancelled, and no newer search has started since.
     private func isCurrent(_ generation: Int) -> Bool {
         !Task.isCancelled && generation == searchGeneration
+    }
+
+    /// Keeps the offer true to `hike` for as long as the calling task runs,
+    /// by looking again at every save of its store.
+    ///
+    /// The sheet starts this when its first search has ended. Nothing falls
+    /// between the two: ``StoreSaves/changes`` has an element at once, so a
+    /// save since that search's last look is heard here.
+    ///
+    /// A save is the store's own notification rather than a move of
+    /// ``Hike/lineRevision``, because that is the one a line received from
+    /// another device posts as well, and a walk: see `StoreSaves.swift`. Any
+    /// save of the store wakes this, and costs one read off the main actor
+    /// while the sheet is up. Asking history which rows were saved would
+    /// spare that read, and could not name a walk it had never seen.
+    func followSaves(of hike: Hike) async {
+        guard let container = hike.modelContext?.container else { return }
+        let saves = StoreSaves(in: container, store: hike.persistentModelID.storeIdentifier)
+        for await _ in saves.changes {
+            await searchAgainIfObsolete(in: hike)
+        }
+    }
+
+    /// Asks again if the hike no longer holds what the offer was built from.
+    ///
+    /// Nothing while an import runs, which looks for itself before each photo
+    /// and comes back here when it ends, and nothing while a search has no
+    /// plan yet, which looks before it writes.
+    ///
+    /// The hiker's review carries over: results arrive ticked, but one of
+    /// these is a review already under way rather than a new one, and a pin
+    /// that moved is no reason to put back a photo they took out.
+    private func searchAgainIfObsolete(in hike: Hike) async {
+        guard !isImporting, hike.isAttached else { return }
+        let current = await work.fingerprint(of: HikePhotoSearchPlan.SourceRead(hike))
+        guard !Task.isCancelled, !isImporting, hike.isAttached, let fingerprint, current != fingerprint
+        else { return }
+        unticked = unticked.union(matches.map(\.id)).subtracting(selection)
+        await runSearch(in: hike)
     }
 
     /// Everything the library holds in any of `windows`, each asset once.
@@ -369,6 +459,8 @@ final class PhotoDiscoveryController {
         matches = []
         selection = []
         importFailed = false
+        fingerprint = nil
+        unticked = []
     }
 
     /// Copies the chosen photos into `hike`, and returns how many landed.
@@ -381,6 +473,9 @@ final class PhotoDiscoveryController {
     ///
     /// Reached through ``runImport(into:store:)`` in the app, which is what
     /// makes the cancellation checks below something more than decoration.
+    ///
+    /// Stops at the first photograph whose pin the hike has moved on from,
+    /// and asks again for whatever did not land: see this file's header.
     @discardableResult func importSelected(
         into hike: Hike,
         store: HikePhotoStore = .shared
@@ -389,6 +484,10 @@ final class PhotoDiscoveryController {
         guard !chosen.isEmpty else { return 0 }
         importFailed = false
         phase = .importing(completed: 0, total: chosen.count)
+        // Held here, because what these pins rest on is the plan that placed
+        // them. ``reset()`` can clear the property under a stopped import,
+        // and the copy it is part-way through still lands.
+        let offered = fingerprint
 
         var landed: Set<String> = []
         for match in chosen {
@@ -396,15 +495,17 @@ final class PhotoDiscoveryController {
             // The user can pop back and delete the hike while this runs; there
             // is nothing left to attach the rest of the selection to.
             guard hike.isAttached else { break }
-            let stored = await attach(match, to: hike, store: store)
-            if stored { landed.insert(match.id) }
+            let attachment = await attach(match, restingOn: offered, to: hike, store: store)
+            if attachment == .stored { landed.insert(match.id) }
             // Asked again on this side of the copy, because everything below
             // writes state a sheet draws — and a cancelled import has no sheet
             // left to draw it. Whatever replaced it owns those properties now,
             // and a stale counter or a stale failure notice landing on top of
             // a fresh search is the one thing cancelling has to prevent.
             guard !Task.isCancelled else { break }
-            if !stored { importFailed = true }
+            // The rest of the selection was placed on the same plan.
+            guard attachment != .obsolete else { break }
+            if attachment == .failed { importFailed = true }
             phase = .importing(completed: landed.count, total: chosen.count)
         }
 
@@ -415,17 +516,31 @@ final class PhotoDiscoveryController {
         matches.removeAll { landed.contains($0.id) }
         selection = selection.subtracting(landed)
         phase = matches.isEmpty ? .empty : .results
+        // Whatever stayed was placed on the plan, and while this ran the watch
+        // left it to this: a line that came during the last photograph, or
+        // the one that stopped the loop.
+        if !matches.isEmpty { await searchAgainIfObsolete(in: hike) }
         return landed.count
+    }
+
+    /// What became of one photograph of a selection.
+    private enum Attachment {
+        case failed
+        /// Left in the library, because its pin no longer describes the hike.
+        case obsolete
+        case stored
     }
 
     private func attach(
         _ match: LibraryPhotoMatch,
+        restingOn offered: HikePhotoSearchPlan.Fingerprint?,
         to hike: Hike,
         store: HikePhotoStore
-    ) async -> Bool {
+    ) async -> Attachment {
         guard let data = await reader.imageData(
             for: match.asset.localIdentifier
-        ) else { return false }
+        ) else { return .failed }
+        var obsolete = false
         let photo = await HikePhotoImport.add(
             data,
             to: hike,
@@ -439,8 +554,17 @@ final class PhotoDiscoveryController {
             capturedAt: match.asset.createdAt,
             assetLocalIdentifier: match.asset.localIdentifier,
             matchEvidence: match.evidence,
+            // Asked once the bytes are on disk rather than before they are
+            // loaded: loading them can be a download, writing them is a wait
+            // too, and nothing after this answer is one.
+            pinStillHolds: {
+                guard hike.isAttached else { return true }
+                obsolete = await work.fingerprint(of: HikePhotoSearchPlan.SourceRead(hike)) != offered
+                return !obsolete
+            },
             store: store
         )
-        return photo != nil
+        if obsolete { return .obsolete }
+        return photo == nil ? .failed : .stored
     }
 }
