@@ -96,6 +96,37 @@ extension HikePhotoImportTests {
         )
     }
 
+    /// A pin worked out from the hike's line is asked about once the bytes
+    /// are on disk, the last wait before the attach, and one the line has
+    /// moved on from takes the attempt back as a refused commit does (#1280).
+    @Test("a pin that no longer holds keeps neither the row nor the file")
+    func addTakesBackAPinThatNoLongerHolds() async throws {
+        let sandbox = Sandbox()
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+
+        var photosOnDiskWhenAsked: Int?
+        let photo = await HikePhotoImport.add(
+            Self.sampleImageData(),
+            to: hike,
+            coordinate: nil,
+            savesToPhotoLibrary: false,
+            pinStillHolds: {
+                photosOnDiskWhenAsked = Self.fileCount(in: sandbox.store.directory)
+                return false
+            },
+            store: sandbox.store
+        )
+
+        #expect(photosOnDiskWhenAsked == 1)
+        #expect(photo == nil)
+        #expect(hike.photos.isEmpty)
+        await settleDelegateHop(until: "the withdrawn photo's file to be erased") {
+            Self.fileCount(in: sandbox.store.directory) == 0
+        }
+        #expect(Self.fileCount(in: sandbox.store.directory) == 0)
+    }
+
     /// The claim the return value makes, checked against the disk rather than
     /// against the context that was just written to: every store elsewhere in
     /// this suite is in-memory, where an uncommitted attach is indistinguishable

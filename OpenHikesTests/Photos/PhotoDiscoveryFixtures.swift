@@ -335,3 +335,29 @@ nonisolated final class PhotoStoreSandbox: Sendable {
 
     deinit { try? FileManager.default.removeItem(at: root) }
 }
+
+/// How many photographs a sandbox held on disk each time a photo import read
+/// its hike, so a test can tell whether the read that decides a pin came
+/// after the photograph's bytes were written (#1280).
+nonisolated final class PhotoReadsAgainstDisk: Sendable {
+    private let sandbox: PhotoStoreSandbox
+    private let counts = Mutex<[Int]>([])
+
+    init(_ sandbox: PhotoStoreSandbox) {
+        self.sandbox = sandbox
+    }
+
+    /// One entry per read of the hike, in the order they ran.
+    var photosOnDisk: [Int] { counts.withLock { $0 } }
+
+    /// `fetch`, once the photographs on disk have been counted.
+    func counting(
+        _ fetch: @escaping @Sendable (ModelContext, PersistentIdentifier) throws -> Hike?
+    ) -> @Sendable (ModelContext, PersistentIdentifier) throws -> Hike? {
+        { context, id in
+            let count = HikePhotoImportTests.fileCount(in: self.sandbox.store.directory)
+            self.counts.withLock { $0.append(count) }
+            return try fetch(context, id)
+        }
+    }
+}

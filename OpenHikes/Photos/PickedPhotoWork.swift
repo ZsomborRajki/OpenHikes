@@ -25,11 +25,13 @@
 //  model crosses.
 //
 //  A selection outlasts the read its plan came from: each photograph waits for
-//  its own bytes first, and that can be a download. A line mirrored in during
-//  those waits left the rest of the selection placed on the line before it
-//  (#1280). So the hike is read again for every photograph, the same way, and
-//  the plan is replaced when it no longer describes what that read finds. A
-//  line that has not moved costs the read and no indexing.
+//  its own bytes first, and that can be a download, then is placed and
+//  written. A line mirrored in during those waits left the rest of the
+//  selection placed on the line before it (#1280). So the hike is read again
+//  for every photograph, the same way, once it is placed and on disk, the last
+//  wait before it is attached. When the plan no longer describes what that
+//  read finds, it is replaced, and the photograph placed and written again on
+//  the new one. A line that has not moved costs the read and no indexing.
 //
 //  The steps themselves are closures only so a suite can see which thread
 //  they ran on: ``standard`` is the fetch, the plan and the placement as they
@@ -75,7 +77,7 @@ nonisolated struct PickedPhotoWork: Sendable {
         return read.source(fetch: fetchHike).map(buildPlan)
     }
 
-    /// The plan the next photograph is placed against: `plan`, while it
+    /// What photographs are placed against from here on: `plan`, while it
     /// still describes the hike `read` names, and otherwise the plan that
     /// hike supports now, both read and built off the main actor.
     ///

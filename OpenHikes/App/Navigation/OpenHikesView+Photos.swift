@@ -92,10 +92,10 @@ extension OpenHikesView {
     func attachPickedPhotos(_ items: [PhotosPickerItem]) {
         guard let subject = photoCapture.currentSubject() else { return }
         // Named here, on the hike's actor, and read and indexed off it, once
-        // for the selection and again only if its line moves under the wait
-        // for a photograph's bytes — see ``PickedPhotoWork``. A hike holding
-        // unsaved edits is read here instead, and a selection filed under a
-        // place reads nothing.
+        // for the selection and again only if its line moves while a
+        // photograph is loaded, placed or written — see ``PickedPhotoWork``.
+        // A hike holding unsaved edits is read here instead, and a selection
+        // filed under a place reads nothing.
         let source = subject.pickerSearchSource
         photoCapture.runLibraryImport {
             var plan = await PickedPhotoWork.standard.plan(from: source)

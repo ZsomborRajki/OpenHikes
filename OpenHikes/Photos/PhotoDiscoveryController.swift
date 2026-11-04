@@ -68,10 +68,11 @@
 //  So what the plan was built from is kept as a fingerprint, and set beside
 //  what the store holds at the three moments that decide anything: before a
 //  search writes what it found, at each save of the store while the sheet is
-//  up (``followSaves(of:)``), and before each photograph is attached. The
-//  store is what is asked, because only it can answer for a line received
-//  from another device, or for a walk. It is read as the plan was, off the
-//  main actor, and each look costs that read and no indexing.
+//  up (``followSaves(of:)``), and before each photograph is attached, once its
+//  bytes are on disk. The store is what is asked, because only it can answer
+//  for a line received from another device, or for a walk. It is read as the
+//  plan was, off the main actor, and each look costs that read and no
+//  indexing.
 //
 //  A plan the hike has left is replaced rather than only withdrawn. The hiker
 //  asked for these photographs and the question still stands, so the same
@@ -539,12 +540,7 @@ final class PhotoDiscoveryController {
         guard let data = await reader.imageData(
             for: match.asset.localIdentifier
         ) else { return .failed }
-        // Asked with the bytes in hand rather than before them. That wait can
-        // be a download, and it is the last long one before the pin is stored.
-        if hike.isAttached,
-           await work.fingerprint(of: HikePhotoSearchPlan.SourceRead(hike)) != offered {
-            return .obsolete
-        }
+        var obsolete = false
         let photo = await HikePhotoImport.add(
             data,
             to: hike,
@@ -558,8 +554,17 @@ final class PhotoDiscoveryController {
             capturedAt: match.asset.createdAt,
             assetLocalIdentifier: match.asset.localIdentifier,
             matchEvidence: match.evidence,
+            // Asked once the bytes are on disk rather than before they are
+            // loaded: loading them can be a download, writing them is a wait
+            // too, and nothing after this answer is one.
+            pinStillHolds: {
+                guard hike.isAttached else { return true }
+                obsolete = await work.fingerprint(of: HikePhotoSearchPlan.SourceRead(hike)) != offered
+                return !obsolete
+            },
             store: store
         )
+        if obsolete { return .obsolete }
         return photo == nil ? .failed : .stored
     }
 }

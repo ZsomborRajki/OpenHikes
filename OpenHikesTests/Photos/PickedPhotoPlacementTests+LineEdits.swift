@@ -99,6 +99,85 @@ extension PickedPhotoPlacementTests {
         #expect(Self.meters(photo.coordinate, camera) < 1)
     }
 
+    /// Placing a photograph is a wait of its own, after its bytes are in
+    /// hand. The plan used to be asked about before it, so a line landing
+    /// while the photograph was placed went unseen, and the pin was stored on
+    /// the line before it.
+    @Test("a line replaced while a photo is placed takes the photo with it", arguments: PhotoLineEdit.allCases)
+    func lineReplacedWhileAPhotoIsPlaced(edit: PhotoLineEdit) async throws {
+        let step = PhotoDiscoveryControllerTests.HeldStep()
+        defer { step.release() }
+        let work = PickedPhotoWork(
+            fetchHike: PickedPhotoWork.standard.fetchHike,
+            buildPlan: PickedPhotoWork.standard.buildPlan,
+            place: { metadata, plan, fallback in
+                step.pass()
+                return PickedPhotoWork.standard.place(metadata, plan, fallback)
+            }
+        )
+        let sandbox = PhotoStoreSandbox()
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context, route: PhotoDiscoveryFixture.route)
+        try context.save()
+        let plan = await work.plan(from: HikePhotoSearchPlan.SourceRead(hike))
+        let data = try await Self.stampedPhoto(atStep: 2)
+
+        let importing = Task { @MainActor in
+            var selectionPlan = plan
+            return await HikePhotoImport.addPicked(
+                data,
+                to: hike,
+                plan: &selectionPlan,
+                fallback: Self.graphSelection,
+                assetLocalIdentifier: "placed",
+                store: sandbox.store,
+                work: work
+            )
+        }
+        await settleDelegateHop(until: "the photo to be placed") { step.isHolding }
+        try await edit.replaceLine(of: hike, with: PhotoDiscoveryFixture.movedRoute)
+        step.release()
+        let photo = try #require(await importing.value)
+
+        #expect(PhotoDiscoveryFixture.pins([photo.latitude], stand: [2], on: PhotoDiscoveryFixture.movedRoute))
+        #expect(photo.matchEvidence == .time)
+    }
+
+    /// Writing the photograph is the last wait before it is attached, so the
+    /// look that decides its pin comes after it: a line landing in any wait
+    /// before the attach is one the look finds.
+    @Test("a picked photo's line is looked at once the photo is on disk")
+    func lineIsLookedAtOnceThePhotoIsOnDisk() async throws {
+        let sandbox = PhotoStoreSandbox()
+        let reads = PhotoReadsAgainstDisk(sandbox)
+        let work = PickedPhotoWork(
+            fetchHike: reads.counting(PickedPhotoWork.standard.fetchHike),
+            buildPlan: PickedPhotoWork.standard.buildPlan,
+            place: PickedPhotoWork.standard.place
+        )
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context, route: PhotoDiscoveryFixture.route)
+        try context.save()
+        var plan = await work.plan(from: HikePhotoSearchPlan.SourceRead(hike))
+
+        for (asset, step) in [("first", 2.0), ("second", 5.0)] {
+            let data = try await Self.stampedPhoto(atStep: step)
+            _ = try #require(
+                await HikePhotoImport.addPicked(
+                    data,
+                    to: hike,
+                    plan: &plan,
+                    fallback: Self.graphSelection,
+                    assetLocalIdentifier: asset,
+                    store: sandbox.store,
+                    work: work
+                )
+            )
+        }
+
+        #expect(reads.photosOnDisk == [0, 1, 2], "the plan's read, then each photo's once it is written")
+    }
+
     /// The price of asking is one read per photograph, never the plan's
     /// indexes: a line that has not moved is compared and left alone.
     @Test("a line that has not moved is read and not indexed again")

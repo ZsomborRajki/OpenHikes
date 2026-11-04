@@ -425,4 +425,32 @@ extension PhotoDiscoveryControllerTests {
         #expect(log.fetchesOnMainThread == [false, false, false, false], "the plan, the search's look, and one a photo")
         #expect(log.plansOnMainThread == [false], "a line that has not moved is read, and not indexed again")
     }
+
+    /// Writing a photograph is the last wait before it is attached, so the
+    /// look that decides whether its pin still holds comes after it: a line
+    /// landing while the bytes are written is one the look finds.
+    @Test("an import looks at the hike once each photo is on disk")
+    func importLooksOnceEachPhotoIsOnDisk() async throws {
+        let sandbox = PhotoStoreSandbox()
+        let reads = PhotoReadsAgainstDisk(sandbox)
+        let work = PhotoDiscoveryWork(
+            fetchHike: reads.counting(PhotoDiscoveryWork.standard.fetchHike),
+            buildPlan: PhotoDiscoveryWork.standard.buildPlan,
+            matchAssets: PhotoDiscoveryWork.standard.matchAssets
+        )
+        let library = StubPhotoLibraryFixture(
+            assets: [
+                PhotoDiscoveryFixture.asset("a", atStep: 2),
+                PhotoDiscoveryFixture.asset("b", atStep: 5),
+            ]
+        )
+        let controller = PhotoDiscoveryController(reader: library, work: work)
+        let context = try Fixture.modelContext()
+        let hike = try Self.savedHike(in: context)
+        await controller.search(in: hike)
+
+        #expect(await controller.importSelected(into: hike, store: sandbox.store) == 2)
+
+        #expect(reads.photosOnDisk == [0, 0, 1, 2], "the plan, the search's look, then each photo's once it is written")
+    }
 }
