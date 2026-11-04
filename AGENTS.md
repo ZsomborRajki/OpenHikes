@@ -1570,7 +1570,10 @@ Reopening one needs new evidence, not a fresh reading of the same code.
 - **Load-bearing but never observed.**
   - The overzoom path, and the redraw that puts a refreshed tile over the
     saved copy drawn ahead of it, assume MapKit re-enters `draw` after
-    every `setNeedsDisplay(_ mapRect:)`.
+    every `setNeedsDisplay(_ mapRect:)`. Nobody has watched it on a device
+    or on the iOS 18.4 floor. An iOS 27.2 simulator re-entered it at zoom
+    scales 0.0625 to 0.5: at once for the ground on screen, and for a scale
+    drawn earlier when that scale was shown again.
   - Mirroring is assumed to carry `@Attribute(.externalStorage)` routes as
     `CKAsset`s. Nobody has watched a 20,000-point route cross a real container.
 
