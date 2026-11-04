@@ -37,20 +37,23 @@ struct WatchSessionActivationTests {
         return activation
     }
 
-    /// The phone's link as `WatchSessionCoordinator` wires it: a transfer goes
-    /// to the session only when the gate allows it and is held otherwise, and
-    /// each activation that succeeds sends what it released. The session
-    /// counts anything it is handed while it could not take it.
+    /// The phone's link as `WatchSessionCoordinator` wires it, around a
+    /// session whose own state moves the moment a switch begins, before its
+    /// callback has reached the gate. A transfer goes to the session only when
+    /// the gate, asked with that state, allows it, and is held otherwise; each
+    /// activation that succeeds sends what it released. The session counts
+    /// anything it is handed while it could not take it.
     private struct Link {
         var activation = WatchSessionActivation()
         private(set) var sentPackages: [UUID] = []
         private(set) var sentReceipts: [UUID] = []
         private(set) var refused = 0
-        /// What the session itself would say its state is.
+        /// What the session itself says its state is, which is what the
+        /// coordinator reads as `activationState`.
         private var isSessionActivated = false
 
         mutating func send(_ package: WatchTrailPackage) {
-            guard activation.allowsTransfers else {
+            guard activation.allowsTransfers(sessionActivated: isSessionActivated) else {
                 activation.hold(package)
                 return
             }
@@ -58,7 +61,7 @@ struct WatchSessionActivationTests {
         }
 
         mutating func send(_ receipt: WatchWalkReceipt) {
-            guard activation.allowsTransfers else {
+            guard activation.allowsTransfers(sessionActivated: isSessionActivated) else {
                 activation.hold(receipt)
                 return
             }
@@ -72,10 +75,16 @@ struct WatchSessionActivationTests {
             release.receipts.forEach { send($0) }
         }
 
-        /// `sessionDidBecomeInactive`, then `sessionDidDeactivate` and the
-        /// `activate()` it calls.
-        mutating func switchBegan() {
+        /// The session leaves `.activated`, and its `sessionDidBecomeInactive`
+        /// reaches the gate at once or, with `callbackArrived` false, only at
+        /// ``inactiveCallbackArrived()``. `sessionDidDeactivate` and the
+        /// `activate()` it calls change nothing here.
+        mutating func switchBegan(callbackArrived: Bool = true) {
             isSessionActivated = false
+            if callbackArrived { inactiveCallbackArrived() }
+        }
+
+        mutating func inactiveCallbackArrived() {
             activation.becameInactive()
         }
 
@@ -93,8 +102,14 @@ struct WatchSessionActivationTests {
 
     @Test("nothing may be transferred before the session has answered, and anything may after")
     func transfersWaitForTheCallback() {
-        #expect(!WatchSessionActivation().allowsTransfers)
-        #expect(Self.activated().allowsTransfers)
+        #expect(!WatchSessionActivation().allowsTransfers(sessionActivated: true))
+        #expect(Self.activated().allowsTransfers(sessionActivated: true))
+    }
+
+    @Test("nothing may be transferred while the session says it is not activated, whatever the gate last heard")
+    func sessionStateClosesAnOpenGate() {
+        #expect(!Self.activated().allowsTransfers(sessionActivated: false))
+        #expect(!WatchSessionActivation().allowsTransfers(sessionActivated: false))
     }
 
     @Test("a package and a receipt finished before activation reach no session and go when it activates")
@@ -141,9 +156,27 @@ struct WatchSessionActivationTests {
     func switchClosesTheGate() {
         var activation = Self.activated()
         activation.becameInactive()
-        #expect(!activation.allowsTransfers)
+        #expect(!activation.allowsTransfers(sessionActivated: true))
         _ = activation.finished(activated: true)
-        #expect(activation.allowsTransfers)
+        #expect(activation.allowsTransfers(sessionActivated: true))
+    }
+
+    @Test("a package finished after a switch began, before its callback arrived, is held and goes once on reactivation")
+    func heldBeforeTheInactiveCallbackGoesOnce() {
+        var link = Link()
+        link.activationCompleted(activated: true)
+        link.switchBegan(callbackArrived: false)
+
+        let package = Self.package()
+        link.send(package)
+        #expect(link.sentPackages.isEmpty)
+        #expect(link.refused == 0)
+
+        link.inactiveCallbackArrived()
+        link.activationCompleted(activated: true)
+        link.activationCompleted(activated: true)
+        #expect(link.sentPackages == [package.requestID])
+        #expect(link.refused == 0)
     }
 
     @Test("a package and a receipt finished during a switch go to the session once it is back")
@@ -173,7 +206,7 @@ struct WatchSessionActivationTests {
 
         link.activationCompleted(activated: false)
         #expect(link.sentReceipts.isEmpty)
-        #expect(!link.activation.allowsTransfers)
+        #expect(!link.activation.allowsTransfers(sessionActivated: true))
 
         link.activationCompleted(activated: true)
         #expect(link.sentReceipts == [Self.walk])
@@ -204,7 +237,7 @@ struct WatchSessionActivationTests {
         activation.hold(Self.package())
         let release = activation.finished(activated: false)
         #expect(release == nil)
-        #expect(!activation.allowsTransfers)
+        #expect(!activation.allowsTransfers(sessionActivated: true))
     }
 
     @Test("a failure answered after a success stops transfers, whatever came before it")
@@ -212,7 +245,7 @@ struct WatchSessionActivationTests {
         var activation = Self.activated()
         let release = activation.finished(activated: false)
         #expect(release == nil)
-        #expect(!activation.allowsTransfers)
+        #expect(!activation.allowsTransfers(sessionActivated: true))
     }
 
     @Test("an answer repeated after a success releases nothing")
@@ -222,7 +255,7 @@ struct WatchSessionActivationTests {
         _ = activation.finished(activated: true)
         let again = activation.finished(activated: true)
         #expect(again == nil)
-        #expect(activation.allowsTransfers)
+        #expect(activation.allowsTransfers(sessionActivated: true))
     }
 
     @Test("what one activation released is not released again by the next")

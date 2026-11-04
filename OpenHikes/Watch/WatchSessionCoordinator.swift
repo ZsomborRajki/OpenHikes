@@ -373,15 +373,12 @@ final class WatchSessionCoordinator: NSObject {
     }
 
     #if canImport(WatchConnectivity)
-    /// Whether `transferUserInfo` may be called now.
-    ///
-    /// What the delegate last reported, and the session's own state beside
-    /// it. The second covers a switch that has begun and whose callback has
-    /// not reached this actor yet: either one saying no holds the transfer,
-    /// and the activation that ends the switch lets it go.
+    /// Whether `transferUserInfo` may be called now: ``WatchSessionActivation``
+    /// decides, from what the delegate last reported and the session's own
+    /// state, which a switch moves before its callback reaches this actor.
     private var allowsTransfers: Bool {
         guard let session else { return false }
-        return activation.allowsTransfers && session.activationState == .activated
+        return activation.allowsTransfers(sessionActivated: session.activationState == .activated)
     }
 
     /// The session answered `activate()`, at launch or at the end of a

@@ -29,6 +29,15 @@
 //  * **A receipt** waits once per walk. A second receipt for the same walk
 //    says nothing the first does not.
 //
+//  ## Two things say whether a transfer may go
+//
+//  What the delegate last reported, and the session's own state at that
+//  moment. A switch moves the state before `sessionDidBecomeInactive` has
+//  reached the main actor, so the state alone says no in that window. The
+//  report alone says no for the moment after an activation completes and
+//  before its answer has released what waited for it, so nothing sent then
+//  overtakes what was held.
+//
 //  ## How it ends
 //
 //  An activation that succeeds lets everything go, once. One that fails, or
@@ -37,7 +46,10 @@
 //  one the hiker is wearing. A receipt for the other watch's walk is one this
 //  watch has no walk for, and the watch that does offers it again when it is
 //  back: the import is idempotent, so that walk earns a second receipt. A
-//  package goes through the watch's own selection like any other arrival.
+//  package is the trail the hiker last opened on the other watch, and the new
+//  watch takes it in place of the trail it holds, unless it has opened or
+//  received a trail of its own since it launched
+//  (``WatchTrailSelection/accepts(_:replacing:)``).
 //
 //  ## Why it is here
 //
@@ -70,8 +82,16 @@ public struct WatchSessionActivation: Equatable, Sendable {
         // Not activated: nothing may cross and nothing is waiting yet.
     }
 
-    /// Whether `transferUserInfo` may be called.
-    public var allowsTransfers: Bool { isActivated }
+    /// Whether `transferUserInfo` may be called now.
+    ///
+    /// - Parameter sessionActivated: whether the session's own
+    ///   `activationState` is `.activated` at this moment. When it is not and
+    ///   the delegate has not said so yet, a switch has begun: the transfer
+    ///   is held, ``becameInactive()`` follows, and the activation that ends
+    ///   the switch lets it go.
+    public func allowsTransfers(sessionActivated: Bool) -> Bool {
+        isActivated && sessionActivated
+    }
 
     /// Keeps a trail package for the next activation, behind any already
     /// held.
