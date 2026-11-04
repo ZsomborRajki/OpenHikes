@@ -168,12 +168,25 @@ extension Hike {
     /// row* and has no list to rank — the reason the relationship exists at
     /// all beyond its cascade.
     ///
+    /// Two walks that started at the same instant go in id order. The
+    /// relationship hands its rows in no order of its own: the main context
+    /// hands them as they were added, and a context reading the store hands
+    /// them another way. A plan's ``HikePhotoSearchPlan/Fingerprint`` holds
+    /// the walks in this order, and the picker and Find Photos each go on
+    /// until it reads as itself, so a tie left to the relationship would read
+    /// unequal to itself between the two. Each walk is written once by one
+    /// device, so no such pair has been seen, but nothing rules one out.
+    ///
     /// `nonisolated`, because a photo search reads it off the main actor
     /// from a context of its own — see ``HikePhotoSearchPlan/SourceRead``.
     nonisolated var walkPhotoTimelines: [HikeWalkPhotoTimeline] {
         walksAlongCurrentRoute
+            .sorted { lhs, rhs in
+                lhs.startedAt != rhs.startedAt
+                    ? lhs.startedAt < rhs.startedAt
+                    : lhs.id.uuidString < rhs.id.uuidString
+            }
             .compactMap(Self.photoTimeline(of:))
-            .sorted { $0.startedAt < $1.startedAt }
     }
 
     /// Whether ``walkPhotoTimelines`` would hold anything along `route`, the
