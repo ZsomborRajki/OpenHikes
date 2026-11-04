@@ -260,6 +260,16 @@ nonisolated struct MovementWatch: Equatable, Sendable {
         samples.removeAll()
         return owed
     }
+
+    /// Lets go of the reminder that is owed, if one is, and spends nothing.
+    ///
+    /// For a reading the caller kept from this watch, as a recording keeps a
+    /// paused walk's: what is owed was worked out without it, so it may no
+    /// longer be true. The allowance, the baseline and the quiet period stay,
+    /// and the next reading the watch is shown decides afresh.
+    mutating func dropOwedReminder() {
+        owedMeters = nil
+    }
 }
 
 /// A *running* recording's stillness, which is the mirror of the watch above.

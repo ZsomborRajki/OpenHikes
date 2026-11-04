@@ -334,8 +334,14 @@ extension MovementReminderController {
         guard date >= paused.pausedAt else { return }
         // The recording wins outright. It is the walk that would be *lost* —
         // a follow is re-derived from the trail and the next fix — and it is
-        // the one whose reminder the hiker can act on.
-        guard !hasActiveRecording() else { return }
+        // the one whose reminder the hiker can act on. The watch is not shown
+        // this fix, so a reminder it is holding back is no longer known to be
+        // true, and goes without costing the pause anything.
+        guard !hasActiveRecording() else {
+            paused.watch.dropOwedReminder()
+            pausedWalk = paused
+            return
+        }
         let moved = abs(distance - paused.anchorDistance)
         let shouldRemind = paused.watch.observe(awayMeters: moved, at: date)
         pausedWalk = paused

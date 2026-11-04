@@ -252,6 +252,29 @@ extension ResumeReminderAuthorizationTests {
         #expect(harness.notifier.postedKinds == [.resumeWalk])
     }
 
+    /// Held back, and blind while it is: the recording also keeps the walk's
+    /// fixes from its watch. Here the hiker walked back to where they paused
+    /// while recording, so the six hundred metres stopped being true before
+    /// anything could post them. Nothing was heard, so nothing is spent.
+    @Test("a fix the recording kept from the walk takes its held-back reminder away")
+    func aFixDuringARecordingDropsTheWalkReminder() async {
+        let harness = MovementReminderHarness.harness()
+        let recording = RecordingState()
+        harness.controller.hasActiveRecording = { recording.isActive }
+        await settledPause(.walk, in: harness)
+        harness.notifier.isAuthorized = false
+        await move(.walk, meters: leg, after: apart, in: harness)
+
+        recording.isActive = true
+        await move(.walk, meters: 0, after: apart + 600, in: harness)
+        recording.isActive = false
+        await returnFromSettings(in: harness, allowed: true)
+        #expect(harness.notifier.posted.isEmpty, "the hiker is back where they paused")
+
+        await move(.walk, meters: leg, after: apart * 2, in: harness)
+        #expect(harness.notifier.postedKinds == [.resumeWalk], "and the walk still has its reminders")
+    }
+
     /// An answer that arrives after a recording took over posts nothing, and
     /// nobody heard it, so it must cost the walk as little as a refusal does.
     @Test("a walk reminder silenced after its answer spends none of the walk's allowance")
