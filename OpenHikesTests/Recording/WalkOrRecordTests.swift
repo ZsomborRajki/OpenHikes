@@ -4,13 +4,17 @@
 //
 //  A hiker walks a trail or records one, never both, held with a real
 //  recorder and a real walk session rather than with closures standing in for
-//  them: the gap was where the two met.
+//  them: the gaps were where the two met.
 //
-//  It was the recording screen's own Start (#1310). A row carrying
+//  The first was the recording screen's own Start (#1310). A row carrying
 //  another device's draft opens that screen on this phone's idle recorder, and
 //  its Start asked the recorder directly, beside a walk the hiker had paused.
 //  It now goes through ``RecordingEntry``, which is what MapSheet hands it;
 //  the card is SwiftUI, so this holds the path it takes rather than the tap.
+//
+//  The second was the walk session asking whether a draft exists, where the
+//  reminder controller asks whether a recording is under way: a recording
+//  waiting on its permission prompt is the second without the first.
 //
 
 import Foundation
@@ -65,6 +69,7 @@ final class WalkOrRecordTests {
         let session = TrailWalkSession(context: context, clock: clock.read) { [weak authority] in
             authority?.currentHike?.id
         }
+        session.hasActiveRecording = { [weak authority] in authority?.isActive ?? false }
         return session
     }
 
@@ -104,5 +109,29 @@ final class WalkOrRecordTests {
         #expect(started.id != draft.id, "a recording of this phone's own, not the other's draft")
         #expect(sent.received.last == TrailWidgetDeepLink.recordingURL())
         #expect(!entry.walkEndRefused)
+    }
+
+    /// The permission prompt is the clearest of the waits a Start has before
+    /// its draft exists; the precision sheet and the journal's first write
+    /// are the others, and a recovery reading its journal back is a fourth.
+    @Test("a recording still waiting for its draft holds a walk back, by hand or by matched fixes")
+    func recordingWithoutADraftHoldsAWalkBack() async {
+        let hikeRecorder = makeRecorder()
+        let session = walkSession(asking: hikeRecorder)
+        source.authorization = .notDetermined
+        await hikeRecorder.start()
+        #expect(hikeRecorder.isActive, "precondition: a recording under way")
+        #expect(hikeRecorder.currentHike == nil, "precondition: with no draft yet")
+
+        let walked = trail()
+        let profile = RouteProfile(route: walked.route)
+        #expect(!session.start(hike: walked, profile: profile))
+        for point in 0...2 {
+            clock.advance(by: 60)
+            session.recordForegroundMatch(hike: walked, profile: profile, distance: profile.distances[point])
+        }
+
+        #expect(session.walkUnderWayTitle == nil)
+        #expect(walked.walkInProgress == nil)
     }
 }

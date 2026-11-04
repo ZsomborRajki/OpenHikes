@@ -111,11 +111,23 @@ final class TrailWalkSession {
     @ObservationIgnored private let context: ModelContext
     @ObservationIgnored private let tracker: BackgroundTrailTracker?
     @ObservationIgnored private let clock: @Sendable () -> Date
-    /// The recorder's answer to "which hike is the active draft" — and so to
-    /// whether a recording is under way at all, which no walk may start
-    /// beside. A closure rather than the recorder because the recorder is the
-    /// single authority on that and this must not become a second one.
+    /// The recorder's answer to "which hike is the active draft", which no
+    /// walk may be on. A closure rather than the recorder because the recorder
+    /// is the single authority on that and this must not become a second one.
     @ObservationIgnored private let activeRecordingHikeID: () -> UUID?
+    /// The recorder's answer to whether a recording is under way at all,
+    /// which no walk may start beside — the question
+    /// ``MovementReminderController/hasActiveRecording`` asks it too, so the
+    /// two cannot disagree about one recording.
+    ///
+    /// Not inferred from the draft: a Start waiting on the permission prompt,
+    /// the precision sheet or its journal, and a recovery reading its journal
+    /// back, are recordings with no draft yet, and a walk begun in that wait
+    /// would be beside one the moment the draft is written.
+    ///
+    /// Assigned by the composition root, as the controller's is; until it is,
+    /// the draft alone answers, which is all a suite about the walk needs.
+    @ObservationIgnored var hasActiveRecording: () -> Bool = { false }
     /// The reminder a paused walk can produce, when the app has one.
     ///
     /// The same instance the recorder holds, which is what makes "a recording
@@ -194,7 +206,11 @@ final class TrailWalkSession {
     /// two sets of controls for one hiker. So while one records, nothing
     /// starts a walk, and a recording asked for mid-walk ends the walk first
     /// — see ``RecordingEntry``.
-    var isRecording: Bool { activeRecordingHikeID() != nil }
+    ///
+    /// Either of the recorder's answers holds a walk back: whether a recording
+    /// is under way, which is true before its draft exists — see
+    /// ``hasActiveRecording`` — and which hike is its draft.
+    var isRecording: Bool { hasActiveRecording() || activeRecordingHikeID() != nil }
 
     /// The trail being walked, by its title, or `nil` when nothing is — what
     /// a recording asked for now would have to end first.

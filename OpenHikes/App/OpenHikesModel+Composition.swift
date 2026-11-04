@@ -929,9 +929,11 @@ private extension OpenHikesModel {
 // MARK: - Walk composition
 
 extension OpenHikesModel {
-    /// The walk session, asking the recorder which hike is a draft and the
-    /// weather manager what the light is doing — each the single authority
-    /// on its answer, so the session only asks.
+    /// The walk session, asking the recorder which hike is a draft and whether
+    /// a recording is under way, and the weather manager what the light is
+    /// doing — each the single authority on its answer, so the session only
+    /// asks. Under way is `isActive`, the answer the reminder controller is
+    /// given in `init`, so the walk and its reminders agree about a recording.
     static func makeWalkSession(
         _ container: ModelContainer,
         _ tracker: BackgroundTrailTracker,
@@ -939,12 +941,14 @@ extension OpenHikesModel {
         _ recorder: HikeRecorder,
         _ weather: WeatherManager
     ) -> TrailWalkSession {
-        TrailWalkSession(
+        let session = TrailWalkSession(
             context: container.mainContext,
             tracker: tracker,
             reminders: reminders,
             activeRecordingHikeID: { [weak recorder] in recorder?.currentHike?.id },
             daylight: { [weak weather] in weather?.daylight(forWalkOn: $0, at: $1) }
         )
+        session.hasActiveRecording = { [weak recorder] in recorder?.isActive ?? false }
+        return session
     }
 }
