@@ -28,10 +28,10 @@ struct RecordingIntentCategoryTests {
         RecordAlongTrailIntent.description,
     ]
 
-    @Test("every recording action is filed under one heading")
+    @Test("every recording action is filed under the heading's own key")
     func recordingActionsShareOneCategory() {
         let keys = Set(Self.descriptions.map { $0.categoryName?.key })
-        #expect(keys.count == 1 && !keys.contains(nil), "the recording actions are filed under \(keys)")
+        #expect(keys == ["intent.category.recording"], "the recording actions are filed under \(keys)")
     }
 
     @Test("Spanish names the heading for the activity, not with the badge's word")
