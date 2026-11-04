@@ -41,6 +41,33 @@ nonisolated enum HikeListMetrics {
         let revision: String
     }
 
+    /// What measuring listed lines found: the figures to publish, and the
+    /// hikes whose fetch failed. A fetch that failed says nothing about the
+    /// line, so the list's task keeps that hike due: see
+    /// `HikeListMetrics+Observation.swift`.
+    struct ElevationMeasurements: Sendable {
+        /// One for each hike whose cached figures are not its line's.
+        var figures: [ElevationMeasurement] = []
+        /// The hikes whose row, or the figures cached beside it, could not
+        /// be fetched.
+        var failed: Set<UUID> = []
+
+        /// Keeps what `measuring` found of `hikeID`'s line: figures to
+        /// publish, nothing to publish (the row gone, or its figures already
+        /// its line's), or a fetch that threw. Apart from the fetches so that
+        /// a suite can fail one, which a real store does not do on demand.
+        mutating func record(_ hikeID: UUID, measuring: () throws -> ElevationMeasurement?) {
+            do {
+                if let measurement = try measuring() { figures.append(measurement) }
+            } catch {
+                HikeListMetrics.logger.error(
+                    "Could not read a listed line: \(error.localizedDescription, privacy: .public)"
+                )
+                failed.insert(hikeID)
+            }
+        }
+    }
+
     private struct RouteInput {
         let hikeID: UUID
         let route: [RouteCoordinate]
@@ -63,28 +90,34 @@ nonisolated enum HikeListMetrics {
     ) async -> Bool {
         let measurements = await measureElevation(for: hikeIDs, in: container)
         guard !Task.isCancelled else { return false }
-        return cacheElevation(measurements, in: container)
+        return cacheElevation(measurements.figures, in: container)
     }
 
     /// Reads and walks routes away from the UI, without creating or writing
-    /// any sidecar. Only the figures travel back: publication must not read a
-    /// route on the main actor.
+    /// any sidecar. Only the figures travel back, and the hikes a fetch
+    /// failed for: publication must not read a route on the main actor. A
+    /// cancelled measurement leaves the rest out.
     @concurrent
     static func measureElevation(
         for hikeIDs: [UUID],
         in container: ModelContainer
-    ) async -> [ElevationMeasurement] {
-        guard !hikeIDs.isEmpty else { return [] }
+    ) async -> ElevationMeasurements {
+        var measured = ElevationMeasurements()
+        guard !hikeIDs.isEmpty else { return measured }
         let context = ModelContext(container)
-        return hikeIDs.compactMap { hikeID in
-            guard !Task.isCancelled, let hike = hike(hikeID, in: context) else { return nil }
-            return measurement(for: RouteInput(hikeID: hikeID, route: hike.route), in: context)
+        for hikeID in hikeIDs {
+            guard !Task.isCancelled else { break }
+            measured.record(hikeID) {
+                guard let hike = try hike(hikeID, in: context) else { return nil }
+                return try measurement(for: RouteInput(hikeID: hikeID, route: hike.route), in: context)
+            }
         }
+        return measured
     }
 
-    private static func measurement(for input: RouteInput, in context: ModelContext) -> ElevationMeasurement? {
+    private static func measurement(for input: RouteInput, in context: ModelContext) throws -> ElevationMeasurement? {
         let revision = elevationRevision(of: input.route)
-        let state = try? HikeLocalState.fetchExisting(for: input.hikeID, in: context)
+        let state = try HikeLocalState.fetchExisting(for: input.hikeID, in: context)
         if state?.elevationRouteRevision == revision, state?.climbMeters != nil, state?.descentMeters != nil {
             return nil
         }
@@ -138,7 +171,7 @@ nonisolated enum HikeListMetrics {
         let context = container.mainContext
         var changes: [CacheChange] = []
         for measurement in measurements {
-            guard let hike = hike(measurement.hikeID, in: context), !hike.isDeleted else { continue }
+            guard let hike = try? hike(measurement.hikeID, in: context), !hike.isDeleted else { continue }
             do {
                 let existing = try HikeLocalState.fetchExisting(for: hike.id, in: context)
                 if let existing,
@@ -197,10 +230,10 @@ nonisolated enum HikeListMetrics {
         }
     }
 
-    private static func hike(_ hikeID: UUID, in context: ModelContext) -> Hike? {
+    private static func hike(_ hikeID: UUID, in context: ModelContext) throws -> Hike? {
         var descriptor = FetchDescriptor<Hike>(predicate: #Predicate { $0.id == hikeID })
         descriptor.fetchLimit = 1
-        return try? context.fetch(descriptor).first
+        return try context.fetch(descriptor).first
     }
 
     /// Climb and descent over a whole route, measured the way the rest of the

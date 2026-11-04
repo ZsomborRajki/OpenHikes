@@ -52,6 +52,18 @@
 //  true by too, and `StoreSaves.swift` says why a failed look is read that
 //  way.
 //
+//  A measurement fetches each hike's row and the figures cached beside it,
+//  and a fetch can fail. That says nothing about the line, but the change
+//  that named the hike was spent on it, so the hike would keep its old
+//  figures until its line changed again (#1315). So a hike whose fetch
+//  failed stays owed: each wake measures it again, whatever the wake was
+//  for, until a fetch lands. Its first failure asks for one more pass at
+//  once, for the reason a failed look does: the save it took may be the
+//  last. A failure that holds asks for nothing more, and that hike waits
+//  for the next wake. A row that is gone owes nothing: the list's task
+//  starts over when the listed hikes change. The library's lines on the
+//  map treat a failed read the same way (`LibraryLines.swift`).
+//
 //  All of it stays in the list's task, never its body. Routes are read,
 //  fingerprinted and measured in a context of their own, publication reads
 //  no route, and the sort keeps reading only its cached scalar figures.
@@ -65,10 +77,11 @@ import SwiftData
 nonisolated extension HikeListMetrics {
     /// How listed lines are read and measured: ``measureElevation(for:in:)``,
     /// or a stand-in a suite counts and holds.
-    typealias Measuring = @concurrent @Sendable ([UUID], ModelContainer) async -> [ElevationMeasurement]
+    typealias Measuring = @concurrent @Sendable ([UUID], ModelContainer) async -> ElevationMeasurements
 
     /// Keeps the figures of `hikes` true while the calling task runs: every
-    /// one first, then each whose line may have changed. See the file header.
+    /// one first, then each whose line may have changed or whose last fetch
+    /// failed. See the file header.
     ///
     /// - Parameters:
     ///   - measuring: How lines are read and measured. A seam.
@@ -83,18 +96,29 @@ nonisolated extension HikeListMetrics {
         didChange: @MainActor () -> Void
     ) async {
         let lines = ListedLines(hikes, container: container, checking: checking)
-        var due = hikes.map(\.id)
+        let listed = hikes.map(\.id)
+        var due = listed
+        // The hikes whose last fetch failed: see the file header.
+        var owed: Set<UUID> = []
         for await _ in lines.changes {
+            // Each wake asks for what is owed, whatever it was for. Nothing
+            // else is due here but on the first, which asks for every hike.
+            if due.isEmpty { due = listed.filter(owed.contains) }
             repeat {
-                var measured: [ElevationMeasurement] = []
+                var measured = ElevationMeasurements()
                 if !due.isEmpty { measured = await measuring(due, container) }
                 guard !Task.isCancelled else { return }
                 let changed = await lines.changedSinceLastLook()
                 guard !Task.isCancelled else { return }
-                if cacheElevation(measured.filter { !changed.contains($0.hikeID) }, in: container) {
+                if cacheElevation(measured.figures.filter { !changed.contains($0.hikeID) }, in: container) {
                     didChange()
                 }
-                due = hikes.map(\.id).filter(changed.contains)
+                // A hike's first failure asks for one more pass, and one that
+                // holds for none, so a failure that lasts cannot spin.
+                let firstFailures = measured.failed.subtracting(owed)
+                owed.subtract(due)
+                owed.formUnion(measured.failed)
+                due = listed.filter { changed.contains($0) || firstFailures.contains($0) }
             } while !due.isEmpty
         }
     }
