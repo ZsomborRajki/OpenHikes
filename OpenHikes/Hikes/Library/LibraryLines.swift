@@ -36,6 +36,22 @@
 //  Who is in the library is asked off the main actor too, of the columns that
 //  are not the line, each time the hikes' store is saved.
 //
+//  ## A read that fails
+//
+//  A save names its row once, and a fetch can fail. A hike whose read failed
+//  would then keep its old line until it was next saved, however long that
+//  took (#1281), so a read says which of three things it found
+//  (``LibraryLines/LineRead``). A line is kept. A row that is gone asks for
+//  nothing: the next listing takes its outline away, and only a listing ever
+//  does. A fetch that failed says nothing about the row, so the outline stays
+//  drawn and the line stays owed. Every pass asks for what is owed, whatever
+//  woke it, so an unrelated save costs those hikes a read and no others.
+//
+//  Nor can what is owed be left to the next save, for the reason `StoreSaves`
+//  gives of a look: the save it took may be the last. So a hike's first
+//  failure asks for one more pass at once. A failure that holds asks for
+//  nothing more, and that hike waits for whichever pass comes next.
+//
 //  ## What is not drawn
 //
 //  A recording's draft, which has no line until Stop writes one. And the
@@ -87,9 +103,21 @@ final class LibraryLines {
     typealias Listing = @concurrent @Sendable (ModelContainer) async throws -> [ListedHike]
     /// How lines are read and thinned: ``readLines(_:in:)``, or a stand-in a
     /// suite counts.
-    typealias Reading = @concurrent @Sendable ([UUID], ModelContainer) async -> [UUID: [[CLLocationCoordinate2D]]]
+    typealias Reading = @concurrent @Sendable ([UUID], ModelContainer) async -> [UUID: LineRead]
 
-    private static let logger = Logger(subsystem: "OpenHikes", category: "LibraryLines")
+    /// What a read found of one hike's line. A fetch that failed and a row
+    /// that is gone are told apart, because only the first still owes a line:
+    /// see the file header.
+    nonisolated enum LineRead: Sendable {
+        /// The line, thinned and cut at its pauses: see ``LibraryLineOutline``.
+        case line([[CLLocationCoordinate2D]])
+        /// No row: the hike has gone since it was listed.
+        case gone
+        /// The fetch failed, which says nothing about the row.
+        case failed
+    }
+
+    nonisolated private static let logger = Logger(subsystem: "OpenHikes", category: "LibraryLines")
 
     /// How many lines are read between publications: few enough that the
     /// first hikes reach the map in a moment, enough that a long library does
@@ -98,6 +126,11 @@ final class LibraryLines {
 
     /// Every finished hike's line, newest first.
     private(set) var lines: [LibraryLine] = []
+
+    /// How many passes a failed read has asked for. A seam: the pass one asks
+    /// for looks like any other, so without this a failure that kept asking
+    /// would look like a busy store.
+    @ObservationIgnored private(set) var retries = 0
 
     /// What a tap on a line opens: the same way in a widget's tap takes, see
     /// ``HikeOpenRequests``.
@@ -122,8 +155,8 @@ final class LibraryLines {
     }
 
     /// Keeps ``lines`` true for as long as the calling task runs: every line
-    /// first, newest first, then each hike whose row may have been saved. See
-    /// the file header.
+    /// first, newest first, then each hike whose row may have been saved or
+    /// whose last read failed. See the file header.
     ///
     /// Every line first even when an earlier task left some read: what a save
     /// between that task's end and this one's start wrote, nothing here was
@@ -142,6 +175,8 @@ final class LibraryLines {
         let saves = StoreSaves(in: container, checking: checking)
         let savedHere = RowsSavedHere(by: container.mainContext, waking: saves)
         var isFirstPass = true
+        // The hikes whose last read failed: see the file header.
+        var owed: Set<UUID> = []
         for await _ in saves.changes {
             let listed: [ListedHike]
             do {
@@ -162,22 +197,47 @@ final class LibraryLines {
             isFirstPass = false
             let due = listed
                 .filter { hike in
-                    !hike.isRecording && (isStale || outlines[hike.id] == nil || saved.contains(hike.row))
+                    !hike.isRecording
+                        && (isStale || outlines[hike.id] == nil || saved.contains(hike.row) || owed.contains(hike.id))
                 }
                 .map(\.id)
             // Before any read, so a deleted hike or a new colour is on the map
             // at once rather than after the lines that are due.
             publish(listed)
+            var failed: Set<UUID> = []
             for batch in due.chunks(ofCount: Self.batchSize) {
                 let read = await reading(Array(batch), container)
                 guard !Task.isCancelled else { return }
-                for (hikeID, runs) in read {
-                    reads += 1
-                    outlines[hikeID] = Outline(runs: runs, revision: reads)
-                }
+                failed.formUnion(keep(read, of: batch))
                 publish(listed)
             }
+            // A hike's first failure asks for one more pass, and one that
+            // holds for none, so a failure that lasts cannot spin.
+            if !failed.isSubset(of: owed) {
+                retries += 1
+                saves.wake()
+            }
+            owed = failed
         }
+    }
+
+    /// Keeps the lines `read` found of `hikeIDs`, and answers the hikes whose
+    /// reads failed, which keep the outlines they have. A hike it says nothing
+    /// of is one of those: nothing says its line was read.
+    private func keep(_ read: [UUID: LineRead], of hikeIDs: some Sequence<UUID>) -> Set<UUID> {
+        var failed: Set<UUID> = []
+        for hikeID in hikeIDs {
+            switch read[hikeID] {
+            case .line(let runs):
+                reads += 1
+                outlines[hikeID] = Outline(runs: runs, revision: reads)
+            case .gone:
+                break // The next listing takes it off the map.
+            case .failed, nil:
+                failed.insert(hikeID)
+            }
+        }
+        return failed
     }
 
     /// The listed hikes that have a line, in the order they were listed.
@@ -210,25 +270,37 @@ nonisolated extension LibraryLines {
         }
     }
 
-    /// Each of `hikeIDs`' lines, thinned for the map. A hike gone since it was
-    /// listed is left out, and goes from the map at the next listing.
+    /// What was found of each of `hikeIDs`' lines, each thinned for the map.
+    /// A cancelled read leaves the rest out.
     ///
     /// A context per line, let go before the next is read, so the decoded
     /// routes do not pile up in one: see the file header.
     @concurrent
-    static func readLines(_ hikeIDs: [UUID], in container: ModelContainer) async -> [UUID: [[CLLocationCoordinate2D]]] {
+    static func readLines(_ hikeIDs: [UUID], in container: ModelContainer) async -> [UUID: LineRead] {
         assertOffMainThread("Reading the library's lines must stay off the main thread")
-        var read: [UUID: [[CLLocationCoordinate2D]]] = [:]
+        var read: [UUID: LineRead] = [:]
         for hikeID in hikeIDs {
             guard !Task.isCancelled else { break }
             autoreleasepool {
                 var descriptor = FetchDescriptor<Hike>(predicate: #Predicate { $0.id == hikeID })
                 descriptor.fetchLimit = 1
-                guard let hike = try? ModelContext(container).fetch(descriptor).first else { return }
-                read[hikeID] = LibraryLineOutline.runs(of: hike.route)
+                let context = ModelContext(container)
+                read[hikeID] = lineRead { try context.fetch(descriptor).first }
             }
         }
         return read
+    }
+
+    /// What `fetching` a hike's row finds of its line. Apart from the read so
+    /// that a suite can fail a fetch, which a real store does not do on demand.
+    static func lineRead(fetching: () throws -> Hike?) -> LineRead {
+        do {
+            guard let hike = try fetching() else { return .gone }
+            return .line(LibraryLineOutline.runs(of: hike.route))
+        } catch {
+            logger.error("Could not read a library line: \(error.localizedDescription, privacy: .public)")
+            return .failed
+        }
     }
 }
 
