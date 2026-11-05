@@ -18,6 +18,9 @@ struct RecordingCard: View {
     private static let controlGlassSpacing: CGFloat = 8
 
     let recorder: HikeRecorder
+    /// What the idle Start goes through, as the map's record button does — see
+    /// ``RecordingStartButton``.
+    let entry: RecordingEntry
     var onSaved: (Hike) -> Void
     var onDiscarded: (UUID?) -> Void
 
@@ -102,15 +105,7 @@ struct RecordingCard: View {
     @ViewBuilder private var titleControls: some View {
         switch recorder.phase {
         case .idle:
-            // A key of its own for the "Start" that a route's first stop and
-            // a hike's start time also read in English, because French names
-            // those « Départ » and this button « Démarrer ».
-            Button(String(localized: "recording.start", defaultValue: "Start"), systemImage: "record.circle") {
-                Task { await recorder.start() }
-            }
-            .prominentGlassButtonStyle()
-            .tint(.red)
-            .placeCardControl()
+            RecordingStartButton(entry: entry)
         case .recovering, .saving:
             ProgressView()
         case .waitingForFix, .recording:
@@ -251,6 +246,58 @@ struct RecordingCard: View {
                 "Recording save retry failed: \(error.localizedDescription, privacy: .public)"
             )
         }
+    }
+}
+
+/// The idle card's Start, which starts a recording the way the map's record
+/// button does — through ``RecordingEntry`` — rather than asking the recorder.
+///
+/// This screen is up with nothing recording more often than it looks: a row
+/// carrying another device's draft, or one a reinstall left behind, opens it
+/// on this phone's idle recorder, and a Start that asked the recorder itself
+/// began a recording beside a walk the hiker had paused. A hiker walks a trail
+/// or records one, never both, so mid-walk this asks first, with the map
+/// button's menu and words, and *End Hike and Record* ends the walk before
+/// anything records. A refused End is said by the map's alert, which is
+/// attached above this screen — see ``MapScreenAlerts``.
+///
+/// Its own view so that the walk it asks about is read here, rather than in
+/// the card's body, which would otherwise re-run as a walk starts or ends.
+private struct RecordingStartButton: View {
+    let entry: RecordingEntry
+
+    var body: some View {
+        Group {
+            if let trail = entry.walkToEnd {
+                Menu {
+                    // The menu's title, as `UIMenu` gives the map's button one.
+                    Section(String(localized: "End your hike on \(trail) and start recording?")) {
+                        Button("End Hike and Record", systemImage: "record.circle") {
+                            entry.endWalkAndRecord()
+                        }
+                    }
+                } label: {
+                    startLabel
+                }
+            } else {
+                Button {
+                    entry.requestRecording()
+                } label: {
+                    startLabel
+                }
+            }
+        }
+        .menuStyle(.button)
+        .prominentGlassButtonStyle()
+        .tint(.red)
+        .placeCardControl()
+    }
+
+    /// A key of its own for the "Start" that a route's first stop and a
+    /// hike's start time also read in English, because French names those
+    /// « Départ » and this button « Démarrer ».
+    private var startLabel: some View {
+        Label(String(localized: "recording.start", defaultValue: "Start"), systemImage: "record.circle")
     }
 }
 
