@@ -84,6 +84,8 @@ struct SharedPayloadShapeTests {
                 "walk.activeSeconds: number",
                 "walk.coveredFraction: number",
                 "walk.furthestDistanceMeters: number",
+                "walk.metersLeft: number",
+                "walk.secondsLeft: number",
                 "walk.startedAt: number",
                 "walk.state: string",
             ]

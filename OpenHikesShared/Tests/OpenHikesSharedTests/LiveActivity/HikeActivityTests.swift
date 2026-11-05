@@ -288,8 +288,11 @@ struct HikeActivityPayloadTests {
     private static let activityBudgetBytes = 4096
 
     /// What the worst case is allowed to spend of that budget: nine
-    /// thirty-seconds — a quarter, plus the one field a walk added to the
-    /// content state — so well over two thirds of it stay unspent.
+    /// thirty-seconds — a quarter, plus a thirty-second for the three fields a
+    /// walk adds to the content state (its coverage, its time left and its
+    /// distance left) — so well over two thirds of it stay unspent. With all
+    /// three filled, the worst case sits less than forty bytes under this line,
+    /// so the next field to arrive has to raise it.
     ///
     /// The limit itself is the wrong threshold to test against. This payload's
     /// whole reason for existing is that the route polyline was left out of

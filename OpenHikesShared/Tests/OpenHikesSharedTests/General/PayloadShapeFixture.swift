@@ -67,7 +67,9 @@ enum PayloadShapeFixture {
             coveredFraction: 0.25,
             furthestDistanceMeters: 2140.5,
             activeSeconds: 1830.5,
-            startedAt: Date(timeIntervalSince1970: 1_699_998_000)
+            startedAt: Date(timeIntervalSince1970: 1_699_998_000),
+            secondsLeft: 5430.5,
+            metersLeft: 6420.5
         ),
         updatedAt: Date(timeIntervalSince1970: 1_700_000_000)
     )
