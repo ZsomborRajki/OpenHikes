@@ -68,6 +68,21 @@ extension LoadedPhotoImage: @unchecked Sendable {}
 extension CapturedFrame: @unchecked Sendable {}
 #endif
 
+/// What ``HikePhotoLoader`` asks of a photo's files: ``HikePhotoStore``, in
+/// the app.
+///
+/// A protocol for the reason ``PhotoLibraryReading`` is one: a suite can hold
+/// a decode where it is, mid-flight, which no file on disk can be made to do
+/// — and the moment a decode is held mid-flight is the one the loader's
+/// cancellation contract is about.
+nonisolated protocol HikePhotoReading: Sendable {
+    func thumbnail(for photo: HikePhoto) -> PhotoImage?
+    func displayImage(for photo: HikePhoto) -> PhotoImage?
+    func hasImage(for photo: HikePhoto) -> Bool
+}
+
+nonisolated extension HikePhotoStore: HikePhotoReading {}
+
 /// The two reads a photo view makes, each on the concurrent executor.
 ///
 /// `@concurrent` rather than `Task.detached`: these stay part of the caller's
@@ -80,6 +95,14 @@ extension CapturedFrame: @unchecked Sendable {}
 /// so a decode already in flight runs to completion and only its result is
 /// dropped. That is the honest limit of it: the win is a fast scroll not
 /// queueing a decode per tile it passed, not a decode being cut short.
+///
+/// Dropped twice, because there are two windows for a cancellation to arrive
+/// in. The reads ask again once the store is done, so a task cancelled during
+/// a decode is handed ``PhotoDisplay/loading`` rather than the picture. And
+/// the `show:` forms a view reads through ask a last time on the main actor,
+/// after the hop back, which is the second window: until #1335 a view wrote
+/// whatever came back into its state, whichever task owned that state by
+/// then.
 nonisolated enum HikePhotoLoader {
     /// The strip's read, and the map callout's.
     ///
@@ -90,13 +113,13 @@ nonisolated enum HikePhotoLoader {
     @concurrent
     static func thumbnail(
         for photo: HikePhoto,
-        in store: HikePhotoStore
+        in store: some HikePhotoReading
     ) async -> PhotoDisplay {
         guard !Task.isCancelled else { return .loading }
         guard let image = store.thumbnail(for: photo) else {
-            return PhotoDisplay.unavailable(unavailability(of: photo, in: store))
+            return settled(.unavailable(unavailability(of: photo, in: store)))
         }
-        return .ready(LoadedPhotoImage(image: image))
+        return settled(.ready(LoadedPhotoImage(image: image)))
     }
 
     /// The viewer's read: the full picture rather than the strip's square.
@@ -107,13 +130,58 @@ nonisolated enum HikePhotoLoader {
     @concurrent
     static func display(
         for photo: HikePhoto,
-        in store: HikePhotoStore
+        in store: some HikePhotoReading
     ) async -> PhotoDisplay {
         guard !Task.isCancelled else { return .loading }
         guard let image = store.displayImage(for: photo) else {
-            return PhotoDisplay.unavailable(unavailability(of: photo, in: store))
+            return settled(.unavailable(unavailability(of: photo, in: store)))
         }
-        return .ready(LoadedPhotoImage(image: image))
+        return settled(.ready(LoadedPhotoImage(image: image)))
+    }
+
+    /// The strip's read, handed to `show` only while the task that asked
+    /// still owns what it shows.
+    ///
+    /// The form a view's `.task(id:)` uses. SwiftUI cancels the task it
+    /// replaces and starts the next one at once, without waiting, so the
+    /// older answer can come back after the newer one has been drawn — and
+    /// whatever it writes stays, the picture or even a spinner, because the
+    /// newer task has finished. Asked on the main actor, where SwiftUI
+    /// cancels, the check and the write are one step that a cancellation
+    /// cannot come between.
+    @MainActor
+    static func thumbnail(
+        for photo: HikePhoto,
+        in store: some HikePhotoReading,
+        show: (PhotoDisplay) -> Void
+    ) async {
+        let answer = await thumbnail(for: photo, in: store)
+        guard !Task.isCancelled else { return }
+        show(answer)
+    }
+
+    /// The viewer's read, handed to `show` only while the task that asked
+    /// still owns the page. See ``thumbnail(for:in:show:)``.
+    @MainActor
+    static func display(
+        for photo: HikePhoto,
+        in store: some HikePhotoReading,
+        show: (PhotoDisplay) -> Void
+    ) async {
+        let answer = await display(for: photo, in: store)
+        guard !Task.isCancelled else { return }
+        show(answer)
+    }
+
+    /// `answer`, unless the task that asked was cancelled while the store
+    /// worked on it.
+    ///
+    /// Asked again because the decode ran to the end whatever happened
+    /// meanwhile, and this is where its result is dropped: a picture is no
+    /// news to a view that has moved on, and a failure found for it would be
+    /// worse, for the reason ``display(for:in:)`` gives.
+    private static func settled(_ answer: PhotoDisplay) -> PhotoDisplay {
+        Task.isCancelled ? .loading : answer
     }
 
     /// Which of the two empty answers this is, asked only once a decode has
@@ -125,7 +193,7 @@ nonisolated enum HikePhotoLoader {
     /// deserve different words and only one of them can be retried.
     private static func unavailability(
         of photo: HikePhoto,
-        in store: HikePhotoStore
+        in store: some HikePhotoReading
     ) -> PhotoUnavailability {
         // Asked first and answered from the row alone. A place-only row has
         // no file and never had one, so the `fileExists` below would say
@@ -177,8 +245,8 @@ nonisolated enum PhotoUnavailability: Sendable {
 /// it, deleted underneath the app — therefore spun forever, with nothing said
 /// and nothing to press.
 nonisolated enum PhotoDisplay: Sendable {
-    /// A decode is in flight, or was cancelled before it ran. The two states a
-    /// spinner is the honest answer for.
+    /// A decode is in flight, or its task was cancelled before it ran or
+    /// while it did. The states a spinner is the honest answer for.
     case loading
     case ready(LoadedPhotoImage)
     /// The store had nothing to give for a photo the hike still lists, and

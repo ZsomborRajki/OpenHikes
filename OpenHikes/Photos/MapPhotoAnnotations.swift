@@ -114,8 +114,9 @@ final class PhotoCalloutPreview: PhotoCalloutPreviewControl {
                 showPlaceholder(Self.symbol(for: reason))
                 accessibilityLabel = Self.label(for: pin, unavailable: reason)
             case .loading:
-                // Cancelled before it ran — this preview is being recycled
-                // onto another pin, which will set its own placeholder.
+                // Cancelled, before its decode ran or while it did — this
+                // preview is being recycled onto another pin, which will set
+                // its own placeholder.
                 break
             }
         }

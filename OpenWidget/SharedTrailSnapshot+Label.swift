@@ -30,7 +30,11 @@ nonisolated extension SharedTrailSnapshot {
     /// moving here. See ``TrailWidgetSpeech`` in the widget target.
     var progressStatusText: String? {
         if let walk {
-            let covered = String(localized: "\(Self.percent(walk.coveredFraction))% hiked")
+            // A key of its own, because Spanish agrees "hiked" with what was
+            // hiked: «1,4 km recorridos» for the distance the Live Activity
+            // speaks under `%@ hiked`, «62 % recorrido» for this.
+            let percent = WidgetFormat.percent(walk.coveredFraction)
+            let covered = String(localized: "walk.percentHiked", defaultValue: "\(percent) hiked")
             let prefix = walk.state == .paused ? String(localized: "Paused · ") : ""
             guard let remainingDistanceMeters else { return prefix + covered }
             let remaining = WidgetFormat.length(meters: remainingDistanceMeters)
@@ -38,10 +42,6 @@ nonisolated extension SharedTrailSnapshot {
         }
         guard let fractionComplete, let remainingDistanceMeters else { return nil }
         let remaining = WidgetFormat.length(meters: remainingDistanceMeters)
-        return String(localized: "\(Self.percent(fractionComplete))% · \(remaining) left")
-    }
-
-    private static func percent(_ fraction: Double) -> Int {
-        Int((fraction * 100).rounded())
+        return String(localized: "\(WidgetFormat.percent(fractionComplete)) · \(remaining) left")
     }
 }

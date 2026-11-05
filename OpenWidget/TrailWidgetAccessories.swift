@@ -102,7 +102,9 @@ struct AccessoryCircularContent: View {
                 Image(systemName: "figure.hiking")
                     .accessibilityHidden(true)
             } currentValueLabel: {
-                Text(progress, format: .percent.precision(.fractionLength(0)))
+                // The status line's figure, which is what VoiceOver reads
+                // over this ring, so the two cannot round one fraction apart.
+                Text(WidgetFormat.percent(progress))
             }
             // Explicit rather than inherited: `DefaultGaugeStyle` resolves to
             // a *linear* bar on iOS, which in a 40 pt circle is a hairline

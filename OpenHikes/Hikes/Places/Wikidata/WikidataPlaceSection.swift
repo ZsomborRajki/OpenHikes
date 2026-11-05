@@ -112,10 +112,11 @@ struct WikidataPlacePhotoView: View {
             }
             .padding(.vertical, 12)
             // Keyed by the file, so a card handed another place's photograph
-            // never shows the last one's while the new one decodes.
+            // never shows the last one's while the new one decodes, nor after:
+            // the last decode, cancelled, hands over nothing.
             .task(id: photo.credit.license.sourceURL) {
                 image = nil
-                image = await WikidataPlaceLookup.image(from: photo.imageData)
+                await WikidataPlaceLookup.image(from: photo.imageData) { image = $0 }
             }
     }
 

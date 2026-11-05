@@ -589,6 +589,9 @@ nonisolated extension RouteProfile {
     /// The projected coordinate travels with its distance: a stationary
     /// piece after a pause shares its distance with another piece, so
     /// ``coordinate(atDistance:)`` cannot always recover the chosen place.
+    /// A caller that pins something where a projection fell and has no
+    /// stretch to prefer passes `{ _ in false }`, for the plain search's
+    /// answer with its coordinate.
     public func nearestPoint(
         to coordinate: CLLocationCoordinate2D,
         preferring isPreferred: (Double) -> Bool

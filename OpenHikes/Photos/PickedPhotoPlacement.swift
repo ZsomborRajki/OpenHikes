@@ -171,12 +171,17 @@ nonisolated struct PickedPhotoPlacement: Equatable, Sendable {
         // imported or drawn, whose points can be a straight half-kilometre
         // apart — far enough that a camera standing on the trail between two
         // of them would be refused as off it.
+        //
+        // The pin is the projection's own coordinate, never one read back
+        // from its distance: a piece a recording resumed on without moving
+        // has the distance of the fix before the pause, and that read put the
+        // pin a drive away from the camera (#1334). Nothing is preferred, so
+        // the tie goes as the plain search's does.
         if let plan, let camera = metadata.coordinate {
             let profile = plan.profile ?? RouteProfile(route: plan.route)
-            if let nearest = profile.nearestPoint(to: camera),
-               nearest.offRouteMeters <= LibraryPhotoMatcher.maximumOffRouteMeters,
-               let snapped = profile.coordinate(atDistance: nearest.distanceAlongRoute) {
-                return Self(coordinate: snapped, capturedAt: dated, evidence: .place)
+            if let nearest = profile.nearestPoint(to: camera, preferring: { _ in false }),
+               nearest.offRouteMeters <= LibraryPhotoMatcher.maximumOffRouteMeters {
+                return Self(coordinate: nearest.coordinate, capturedAt: dated, evidence: .place)
             }
         }
         return Self(coordinate: fallback, capturedAt: dated, evidence: nil)

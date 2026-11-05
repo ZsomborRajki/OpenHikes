@@ -49,7 +49,7 @@ private struct FollowFigures: View {
                 ProgressView(value: position.fractionComplete)
                     .tint(Color(hex: trail.tintHex) ?? .green)
                     .accessibilityLabel("Progress along the trail")
-                    .accessibilityValue("\(Int((position.fractionComplete * 100).rounded())) percent")
+                    .accessibilityValue("\(WidgetFormat.wholePercent(position.fractionComplete)) percent")
                 Grid(horizontalSpacing: 8, verticalSpacing: 4) {
                     GridRow {
                         WatchFigure(title: "Left", value: WidgetFormat.length(meters: position.remainingMeters))
@@ -58,7 +58,7 @@ private struct FollowFigures: View {
                         // «Completado» and that button «OK».
                         WatchFigure(
                             caption: String(localized: "follow.done", defaultValue: "Done"),
-                            value: "\(Int((position.fractionComplete * 100).rounded()))%"
+                            value: WidgetFormat.percent(position.fractionComplete)
                         )
                     }
                     GridRow {
