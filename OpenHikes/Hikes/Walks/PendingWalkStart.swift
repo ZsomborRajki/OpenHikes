@@ -80,8 +80,13 @@ struct PendingWalkStart: Equatable {
     /// along the route and nearer round it, so read the shorter way alone,
     /// that walk would never start; straight along, it starts as it always
     /// did. And the shorter way, not the way round: a phone at the trailhead
-    /// that snaps a few hundred metres along and drifts back is further round
-    /// each time, which would count as steps out of a walk.
+    /// that snaps a few hundred metres along, less than halfway round, and
+    /// drifts back is further round each time, which would count as steps
+    /// out of a walk. Snapped past halfway, the shorter way is the way round,
+    /// and drifting back does read as stepping out: the hole the straight
+    /// reading has always had for a snap that drifts on, mirrored. On a loop
+    /// long enough for the snap to be past the gap bound, the coverage still
+    /// asks for a hundred metres of that drift.
     ///
     /// From the trailhead only. Anywhere else the way round is the shorter
     /// only for a match more than halfway round, by when the straight reading
