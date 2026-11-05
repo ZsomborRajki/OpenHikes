@@ -79,6 +79,16 @@ final class WikidataPlaceLookup {
         return Image(decorative: cgImage, scale: 1)
     }
 
+    /// The same picture, handed to `show` only while the task that asked
+    /// still owns the card's photograph. A card handed another place's
+    /// photograph starts the next decode without waiting for the last, which
+    /// cannot be cut short; see ``HikePhotoLoader/thumbnail(for:in:show:)``.
+    static func image(from data: Data, show: (Image?) -> Void) async {
+        let image = await image(from: data)
+        guard !Task.isCancelled else { return }
+        show(image)
+    }
+
     /// What there is to show about `item`, asked once per launch — and again
     /// while its photograph has failed.
     ///

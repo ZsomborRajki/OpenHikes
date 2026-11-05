@@ -149,8 +149,14 @@ struct HikePhotoPage: View {
             // must not inherit the last one's answer, and a button offered on
             // a guess is the thing this is here to stop.
             onFileFound(false)
-            display = await HikePhotoLoader.display(for: photo, in: store)
-            onFileFound(Self.hasFile(display))
+            // Both halves of the answer go through the loader's hand-off, so
+            // a load this page has moved on from — overtaken by a retry, or
+            // by the page scrolling away — writes neither the picture nor
+            // the word about the file over the newer load's.
+            await HikePhotoLoader.display(for: photo, in: store) { answer in
+                display = answer
+                onFileFound(Self.hasFile(answer))
+            }
         }
     }
 
