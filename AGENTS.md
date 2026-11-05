@@ -705,9 +705,10 @@ a change to recording, the map, the sheet or the render path; the PR template,
   it again. A screen about a hike reads `ShownLine`, which
   `HikeDetailInteraction` keeps for all of them. A reader with no screen hands
   on a line it read anyway, or makes a `SelectedLine` for one read. A read
-  that fails is not a missing row: the readers keep the line they hold, and it
-  stays owed until a refresh reads it (`SelectedLine.Found`). A
-  recording's screens read the column, because a draft has no line until Stop.
+  that fails is not a missing row: the readers following the line keep the
+  one they hold, and it stays owed until a refresh reads it
+  (`SelectedLine.Found`). A recording's screens read the column, because a
+  draft has no line until Stop.
 - **`CloudSyncCoordinator` only reports and toggles; SwiftData owns sync.** That
   gives up four things, deliberately:
   - photo pixels on other devices (see *Settled decisions*)

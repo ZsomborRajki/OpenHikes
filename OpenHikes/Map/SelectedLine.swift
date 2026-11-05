@@ -89,7 +89,10 @@
 //  to follow gets a line off the main actor: the walk session asking whether
 //  its line has changed, heights checked against the line they were asked
 //  about, the community's check. The read is armed like any other, so
-//  ``Read/isReplaced`` still says a write overtook it.
+//  ``Read/isReplaced`` still says a write overtook it. One that fails is not
+//  read again, because nothing is left to ask for its line: its reader is
+//  handed no line, as for a row the store no longer holds, and
+//  ``Read/failed`` says which it was.
 //
 
 import Foundation
