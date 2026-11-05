@@ -62,6 +62,27 @@
 //  when it is not the line handed out, every watch hears it as it hears a
 //  write.
 //
+//  ## A read that fails
+//
+//  A fetch can fail, and a failure says nothing about the row: the hike
+//  still has its line. A read used to answer a failed fetch as it answers a
+//  row the store no longer holds, with no line at all (#1333). A failed
+//  first read was then kept, and handed again to whoever asked, with nothing
+//  read; a failed ``refresh()`` handed every reader the empty line over the
+//  one they held. So a read says which it found (``Found``).
+//
+//  A failed refresh hands nothing out, and the readers keep the line they
+//  hold. A failed first read has no line to keep, and its readers draw
+//  nothing for now. Either leaves the line owed, and a refresh reads it
+//  again: the one way a line reaches every reader at once, and only a line
+//  they do not hold. The first failure in a row asks for that refresh at
+//  once, as a library line's does (`LibraryLines`), because the selection or
+//  the save it was read for may be the last ask. A failure that holds asks
+//  for nothing more, and the line waits for the next ask of ``read(of:)``,
+//  which the hike's screen makes when a save refreshes its hike, or for the
+//  store watch's refresh at the next save of the row. Nothing tries again
+//  on a timer, for the reason `LibraryLines` gives.
+//
 //  ## A read of its own
 //
 //  One of these made for one read is how a reader with no screen and nothing
@@ -74,6 +95,7 @@
 import Foundation
 import Observation
 import OpenHikesData
+import os
 import SwiftData
 import Synchronization
 
@@ -83,6 +105,8 @@ final class SelectedLine {
     /// we're on the main actor — see ``RouteStyle``'s deinit for why.
     nonisolated deinit { /* intentionally empty */ }
 
+    nonisolated private static let logger = Logger(subsystem: "OpenHikes", category: "SelectedLine")
+
     /// What a read takes from one save of the row: the line, and the length
     /// stored beside it. Read together, because a context of its own can see
     /// a later save than the main context holds, and a line measured by
@@ -91,8 +115,22 @@ final class SelectedLine {
         let route: [RouteCoordinate]
         let distanceMeters: Double
 
-        /// What a row the store no longer holds reads as.
+        /// What a row the store no longer holds reads as, and a fetch that
+        /// failed: nothing to draw.
         static let nothing = Self(route: [], distanceMeters: 0)
+    }
+
+    /// What a read found of the row. A fetch that failed is told from a row
+    /// that is gone, because only the failure leaves the line owed: see
+    /// *A read that fails* in the file header.
+    nonisolated enum Found: Sendable {
+        /// The line, and the length stored beside it.
+        case line(Line)
+        /// No row: a hike deleted on another device that this one has not
+        /// merged yet.
+        case gone
+        /// The fetch failed, which says nothing about the row.
+        case failed
     }
 
     /// One read of one hike's line, under way or landed. `Sendable`, so the
@@ -101,26 +139,44 @@ final class SelectedLine {
         /// When the read was started: a line saved after this may not be in
         /// it, and one saved before it is.
         let began: Date
-        private let line: Task<Line, Never>
+        private let found: Task<Found, Never>
         private let replacement: Write
 
-        init(began: Date, replacement: Write, line: Task<Line, Never>) {
+        init(began: Date, replacement: Write, found: Task<Found, Never>) {
             self.began = began
             self.replacement = replacement
-            self.line = line
+            self.found = found
         }
 
         /// The line, once read. Empty for a row the store no longer holds —
         /// a hike deleted on another device that this one has not merged
-        /// yet, or one it cannot read — which has nothing to draw.
+        /// yet — and for a fetch that failed: neither has anything to draw.
         var route: [RouteCoordinate] {
-            get async { await line.value.route }
+            get async { await line.route }
         }
 
         /// The length stored beside ``route``, from the same save of the row.
-        /// Zero for a row the store no longer holds.
+        /// Zero where ``route`` is empty.
         var distanceMeters: Double {
-            get async { await line.value.distanceMeters }
+            get async { await line.distanceMeters }
+        }
+
+        /// Whether the fetch failed, once the read has landed. Its line is
+        /// then owed — see *A read that fails* in the file header.
+        var failed: Bool {
+            get async {
+                guard case .failed = await found.value else { return false }
+                return true
+            }
+        }
+
+        private var line: Line {
+            get async {
+                switch await found.value {
+                case .line(let line): line
+                case .gone, .failed: .nothing
+                }
+            }
         }
 
         /// Whether the hike's line has been replaced since this read named
@@ -188,6 +244,13 @@ final class SelectedLine {
     @ObservationIgnored private(set) var refreshing: Task<Void, Never>?
     /// Whether a ``refresh()`` was asked for while one was being made.
     @ObservationIgnored private var refreshesAgain = false
+    /// Whether the line of the hike last asked about is owed: the last read
+    /// of it failed, so what its readers hold says nothing of the row. See
+    /// *A read that fails* in the file header.
+    @ObservationIgnored private var owesLine = false
+    /// The look at whether the read ``read(of:)`` started last failed.
+    /// Readable so a suite can wait on the effect rather than on a duration.
+    @ObservationIgnored private(set) var landing: Task<Void, Never>?
     /// How a saved row is fetched, as a seam so a suite can see which thread
     /// it ran on. ``fetchHike(_:_:)`` everywhere else.
     @ObservationIgnored private let fetch: @Sendable (ModelContext, PersistentIdentifier) throws -> Hike?
@@ -202,11 +265,23 @@ final class SelectedLine {
     /// or landed, while nothing has replaced its line since, and a new read
     /// otherwise. What each of the four, and the hike's own screen, reads in
     /// place of `hike.route`.
+    ///
+    /// A read whose fetch failed is still the one handed out, because every
+    /// reader holds it, but its line is owed, so asking makes a ``refresh()``,
+    /// which hands the line to every reader if it finds it.
     func read(of hike: Hike) -> Read {
-        if let current, currentHike === hike, !current.isReplaced { return current }
+        if let current, currentHike === hike, !current.isReplaced {
+            if owesLine { refresh() }
+            return current
+        }
         let read = start(hike)
         current = read
         currentHike = hike
+        owesLine = false
+        landing = Task { [weak self] in
+            guard await read.failed, let self, current === read else { return }
+            oweLine()
+        }
         return read
     }
 
@@ -268,6 +343,11 @@ final class SelectedLine {
     /// saved while the one before it was being compared was dropped for that
     /// one. A refresh asked for meanwhile is made once the comparison out has
     /// landed, against the read it left current.
+    ///
+    /// A read that fails hands nothing out, so the readers keep the line they
+    /// hold, and leaves the line owed: the first such failure in a row asks
+    /// for one more comparison at once — see *A read that fails* in the file
+    /// header.
     func refresh() {
         guard refreshing == nil else {
             refreshesAgain = true
@@ -278,13 +358,31 @@ final class SelectedLine {
                 guard let self, let previous = current, let hike = currentHike else { break }
                 refreshesAgain = false
                 let fresh = start(hike)
-                guard await Self.differ(previous, fresh), current === previous else { continue }
+                if await fresh.failed {
+                    // The readers keep the line they hold.
+                    if current === previous { oweLine() }
+                    continue
+                }
+                let differs = await Self.differ(previous, fresh)
+                guard current === previous else { continue }
+                owesLine = false
+                guard differs else { continue }
                 current = fresh
                 previous.markReplaced()
                 refreshes &+= 1
             } while self?.refreshesAgain == true
             self?.refreshing = nil
         }
+    }
+
+    /// Owes the current read's line, after a read of it failed. Only the
+    /// first failure in a row asks for a ``refresh()``, at once; one that
+    /// holds waits for the next ask — see *A read that fails* in the file
+    /// header.
+    private func oweLine() {
+        guard !owesLine else { return }
+        owesLine = true
+        refresh()
     }
 
     private func start(_ hike: Hike) -> Read {
@@ -300,7 +398,7 @@ final class SelectedLine {
         return Read(
             began: .now,
             replacement: replacement,
-            line: Self.reading(Source(hike), fetch: fetch)
+            found: Self.reading(Source(hike), fetch: fetch)
         )
     }
 
@@ -310,14 +408,14 @@ final class SelectedLine {
     nonisolated private static func reading(
         _ source: Source,
         fetch: @escaping @Sendable (ModelContext, PersistentIdentifier) throws -> Hike?
-    ) -> Task<Line, Never> {
+    ) -> Task<Found, Never> {
         Task { await readOffMain(source, fetch: fetch) }
     }
 
     /// Fetches and reads a saved row in a context made here and dropped on
     /// return, and hands an unsaved hike's line straight back. Only the line
-    /// and its length leave: ``Line/nothing`` for a row the store did not
-    /// hand back.
+    /// and its length leave, or what kept them: a row the store did not hand
+    /// back, or a fetch that failed.
     ///
     /// `@concurrent`, because a `nonisolated async` function runs on its
     /// caller's executor.
@@ -325,14 +423,19 @@ final class SelectedLine {
     nonisolated private static func readOffMain(
         _ source: Source,
         fetch: @Sendable (ModelContext, PersistentIdentifier) throws -> Hike?
-    ) async -> Line {
+    ) async -> Found {
         assertOffMainThread("Reading the selected hike's line must stay off the main thread")
         switch source {
         case let .saved(id, container):
-            guard let hike = try? fetch(ModelContext(container), id) else { return .nothing }
-            return Line(route: hike.route, distanceMeters: hike.distanceMeters)
+            do {
+                guard let hike = try fetch(ModelContext(container), id) else { return .gone }
+                return .line(Line(route: hike.route, distanceMeters: hike.distanceMeters))
+            } catch {
+                logger.error("Could not read the selected hike's line: \(error.localizedDescription, privacy: .public)")
+                return .failed
+            }
         case let .unsaved(line):
-            return line
+            return .line(line)
         }
     }
 

@@ -54,15 +54,15 @@ final class SelectedLineTests {
     }
 
     /// The four things the selection handler hands the line to.
-    private struct Readers {
+    struct Readers {
         let cache: DisplayedRouteCoordinateCache
         let shading: RouteShading
         let autoSave: AutoSaveController
         let tracker: BackgroundTrailTracker
     }
 
-    private let container: ModelContainer
-    private let context: ModelContext
+    let container: ModelContainer
+    let context: ModelContext
     private let defaults: UserDefaults
     private let sandbox = TileSandbox()
     private let reloads = WidgetReloadSpy()
@@ -81,7 +81,7 @@ final class SelectedLineTests {
     /// The ridge moved half a degree north — some 55 km, well clear of the
     /// original's 1.5 km auto-save corridor — with its heights, so it is
     /// coloured by steepness as the original is, somewhere else.
-    private static let movedRoute = Fixture.ridgeRoute.map { point in
+    static let movedRoute = Fixture.ridgeRoute.map { point in
         var moved = point
         moved.latitude += 0.5
         return moved
@@ -90,16 +90,16 @@ final class SelectedLineTests {
     /// Its length, as a writer of the line would store it.
     private static let movedLength = RouteProfile(route: movedRoute).totalDistanceMeters
 
-    private static func isOnMovedRoute(_ coordinate: CLLocationCoordinate2D?) -> Bool {
+    static func isOnMovedRoute(_ coordinate: CLLocationCoordinate2D?) -> Bool {
         (coordinate?.latitude ?? 0) > (Fixture.ridgeRoute.last?.latitude ?? 0) + 0.4
     }
 
     /// Where the widget's line starts.
-    private static func start(of snapshot: SharedTrailSnapshot?) -> CLLocationCoordinate2D? {
+    static func start(of snapshot: SharedTrailSnapshot?) -> CLLocationCoordinate2D? {
         snapshot?.polyline.first.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
     }
 
-    private func readers(
+    func readers(
         reading lines: SelectedLine,
         monitor: StubLocationMonitor = StubLocationMonitor(),
         regionMonitor: FakeTrailRegionMonitor? = nil
@@ -121,7 +121,7 @@ final class SelectedLineTests {
 
     /// What `OpenHikesView`'s selection handler does with a finished hike,
     /// in its order, and then everything that has to land.
-    private func select(_ hike: Hike, into readers: Readers, from lines: SelectedLine) async {
+    func select(_ hike: Hike, into readers: Readers, from lines: SelectedLine) async {
         readers.cache.prepare(for: hike, from: lines)
         readers.shading.follow(hike)
         readers.autoSave.hikeSelectionChanged(to: hike)
@@ -133,7 +133,7 @@ final class SelectedLineTests {
     }
 
     /// Whether a tile drawn on `point` is one auto-save claims for `hike`.
-    private func claims(_ point: RouteCoordinate, for hike: Hike, key: String) async throws -> Bool {
+    func claims(_ point: RouteCoordinate, for hike: Hike, key: String) async throws -> Bool {
         let z = 17
         let x = SlippyTileMath.tileX(point.longitude, z: z)
         let y = SlippyTileMath.tileY(point.latitude, z: z)
