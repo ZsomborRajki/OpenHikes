@@ -2,6 +2,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import SwiftData
 import SwiftUI
 import Testing
@@ -232,6 +233,87 @@ struct SheetDestinationStateTests {
         #expect(presentation.placesNearby(for: route) !== session)
         #expect(presentation.placesNearby(for: route).origin == nil)
         #expect(!presentation.placesNearby(for: route).asked.hasAsked)
+    }
+
+    /// #1336: a turn of the phone builds a shared hike's preview again in the
+    /// other host, which asked for the hike again, downloaded it again and put
+    /// the chart's marker back at the trailhead. So the visit lives here until
+    /// its route is popped — and its downloads go then, and not before,
+    /// whether or not its screen is on top to see itself go.
+    @Test("a shared hike's preview outlives rotation and its gallery, and its downloads go with its route")
+    func communityPreviewFollowsTheNavigationLifetime() async throws {
+        let listing = CommunityListing.stub()
+        let route = SheetRoute.communityHike(listing)
+        let presentation = SheetPresentation()
+        presentation.path = [route]
+        let visit = presentation.communityPreview(of: listing)
+        let scrubbed = 300.0
+        visit.tracker.trackerDistance = scrubbed
+        // An import that saved the hike and missed a photograph, which only
+        // this visit's downloads can supply again.
+        let directory = visit.downloadDirectory
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let photo = directory.appending(path: "photo-0.jpeg")
+        try Data("photo".utf8).write(to: photo)
+        var copy = CommunityPhotoCopy(places: [:])
+        copy.attempted(
+            copy.pending([(CommunityPhotoPin(capturedAt: .now, coordinate: nil), photo)], from: nil),
+            landed: []
+        )
+        visit.photoCopy = copy
+
+        for layout in [SheetLayout.sidePanel, .bottomSheet] {
+            presentation.layout = layout
+            #expect(presentation.communityPreview(of: listing) === visit)
+            #expect(visit.tracker.trackerDistance.isApproximatelyEqual(to: scrubbed), "the chart's marker stays put")
+            #expect(visit.photoCopy?.isComplete == false, "the missed photograph can still be tried again")
+            #expect(!visit.hasEnded && FileManager.default.fileExists(atPath: photo.path))
+        }
+
+        presentation.path.append(.communityPhoto(listing, [], 0))
+        #expect(presentation.communityPreview(of: listing) === visit, "its gallery over it keeps it")
+        #expect(!visit.hasEnded)
+
+        // Taken off the stack from under its gallery, by a tap on one of the
+        // hiker's own hikes, while a retry is still reading the photograph.
+        let gate = AsyncGate()
+        visit.importTask = Task { await gate.wait() }
+        let context = try Fixture.modelContext()
+        presentation.path = [.hike(Fixture.hike(in: context))]
+        #expect(visit.hasEnded)
+        await settleDelegateHop(until: "the discard has had its chance to run")
+        #expect(FileManager.default.fileExists(atPath: photo.path), "the retry reading it holds it")
+        await gate.open()
+        await settleDelegateHop(until: "the downloads to go once nothing is using them") {
+            !FileManager.default.fileExists(atPath: directory.path)
+        }
+
+        presentation.path = [route]
+        let next = presentation.communityPreview(of: listing)
+        #expect(next !== visit && next.visit != visit.visit, "opening it again is a new visit")
+        #expect(next.photoCopy == nil && !next.hasEnded)
+    }
+
+    /// A pop builds the preview it is taking away once more, after the path
+    /// has lost its route. Handed a new visit there, the screen slid out
+    /// showing *Loading route…* rather than the page it had — watched on a
+    /// pool iPhone 18 Pro. It draws the visit it had, ended, and the next
+    /// open is still a new visit.
+    @Test("a popped preview keeps its own visit on the way out, and the next open is a new one")
+    func aPoppedPreviewKeepsItsVisitOnTheWayOut() {
+        let listing = CommunityListing.stub()
+        let presentation = SheetPresentation()
+        presentation.path = [.communityHike(listing)]
+        let visit = presentation.communityPreview(of: listing)
+
+        presentation.path = []
+        #expect(visit.hasEnded)
+        #expect(presentation.communityPreview(of: listing) === visit, "the screen going draws what it had")
+
+        presentation.path = [.communityHike(listing)]
+        let next = presentation.communityPreview(of: listing)
+        #expect(next !== visit && !next.hasEnded, "opening it again is a new visit")
+        #expect(presentation.communityPreview(of: listing) === next)
     }
 }
 

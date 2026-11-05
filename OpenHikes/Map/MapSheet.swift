@@ -364,7 +364,10 @@ struct MapSheet: View {
     private func communityHikeDestination(_ listing: CommunityListing) -> some View {
         if let transport = appModel.communityTransport {
             CommunityHikeView(
-                listing: listing,
+                // The visit to this listing, kept until the route is popped,
+                // so the screen a turn of the phone builds in the other host
+                // is the same visit — see ``CommunityPreviewSession``.
+                session: presentation.communityPreview(of: listing),
                 transport: transport,
                 blockList: appModel.communityBlocks,
                 // Written by the screen, never read by it: it is what puts
@@ -391,15 +394,16 @@ struct MapSheet: View {
                 },
                 // The gallery goes *over* the preview rather than replacing
                 // it, and that is what keeps the pictures alive: the files
-                // belong to the screen underneath, `remainsPushed` below is
-                // what stops it collecting them while it is pushed over, and
-                // popping the gallery lands back on the hike they are of.
+                // belong to the visit underneath, which keeps them for as long
+                // as its route is on the stack, and popping the gallery lands
+                // back on the hike they are of.
                 onOpenPhoto: { photos, index in
                     presentation.path.append(.communityPhoto(listing, photos, index))
                 },
-                // Asked while the screen is going, to tell a push over it from
-                // the hiker leaving: the pop has already taken the route out
-                // of the path by then, and a push has not.
+                // Asked while the screen is going, to tell a push over it or a
+                // turn of the phone from the hiker leaving: the pop has
+                // already taken the route out of the path by then, and the
+                // other two have not.
                 remainsPushed: { presentation.isPresentingCommunityHike(listing) },
                 // The same graph the hiker's own hikes are measured against,
                 // and the same region cache — so a shared trail through a
@@ -413,8 +417,8 @@ struct MapSheet: View {
             // The title followed and nothing else did: the screen's `@State`
             // still held A's detail — its route, its photographs — and its
             // `.task` never ran for B. A new identity is a new visit, which is
-            // what the screen's `previewSession` already assumes one is. See
-            // `CommunityUITests+SwitchingPreviews.swift`.
+            // what B's own ``CommunityPreviewSession`` already assumes one is.
+            // See `CommunityUITests+SwitchingPreviews.swift`.
             .id(listing.id)
         }
     }
