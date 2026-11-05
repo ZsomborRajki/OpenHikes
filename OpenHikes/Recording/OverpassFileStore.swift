@@ -97,8 +97,9 @@ nonisolated protocol OverpassFileEntry: Codable, Sendable {
 ///   out of a listing, so ``values(near:limit:at:)`` can open one. Written in
 ///   part, it does not decode and is skipped; whole but not yet renamed, it
 ///   decodes, and the value being saved can be in the answer twice. The trim
-///   counts it too, though as one of the newest files there it is the last a
-///   trim would pick.
+///   counts it too, though as one of the newest files there it is among the
+///   last a trim would pick. A save killed before the rename leaves its staged
+///   file behind, which nothing here deletes but the trim.
 ///
 /// So an overlap can cost a value left out of an answer or listed twice, a
 /// fresh file deleted, or a re-stamp that lands too late to keep a file from
