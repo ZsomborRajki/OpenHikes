@@ -52,6 +52,20 @@
 //  failure asks for one more pass at once. A failure that holds asks for
 //  nothing more, and that hike waits for whichever pass comes next.
 //
+//  A listing can fail as well, and what is drawn stays drawn. It takes the
+//  wake of the save it was for and nothing else: no look has read history,
+//  and nothing has taken the rows saved here, so the next pass to list still
+//  finds that save (#1314). That pass must not wait for another save either,
+//  so a listing's first failure asks for one more at once too, and one that
+//  holds asks for nothing more.
+//
+//  Neither failure is tried again later, on a timer. A timer needs a clock,
+//  and it wakes the task while nothing changes, which a recording in the
+//  background rules out (*Energy policies in force* in AGENTS.md), for a
+//  failure no store has been seen to make. The next save of the store, by
+//  any context, ends the wait, and so does the next follow, which reads
+//  every line.
+//
 //  ## What is not drawn
 //
 //  A recording's draft, which has no line until Stop writes one. And the
@@ -99,7 +113,8 @@ final class LibraryLines {
     }
 
     /// How the library is listed: ``listHikes(in:)``, or a stand-in. A
-    /// listing that throws keeps what is drawn rather than clearing it.
+    /// listing that throws keeps what is drawn rather than clearing it: see
+    /// the file header.
     typealias Listing = @concurrent @Sendable (ModelContainer) async throws -> [ListedHike]
     /// How lines are read and thinned: ``readLines(_:in:)``, or a stand-in a
     /// suite counts.
@@ -127,9 +142,9 @@ final class LibraryLines {
     /// Every finished hike's line, newest first.
     private(set) var lines: [LibraryLine] = []
 
-    /// How many passes a failed read has asked for. A seam: the pass one asks
-    /// for looks like any other, so without this a failure that kept asking
-    /// would look like a busy store.
+    /// How many passes a failed read or listing has asked for. A seam: the
+    /// pass one asks for looks like any other, so without this a failure that
+    /// kept asking would look like a busy store.
     @ObservationIgnored private(set) var retries = 0
 
     /// What a tap on a line opens: the same way in a widget's tap takes, see
@@ -175,17 +190,25 @@ final class LibraryLines {
         let saves = StoreSaves(in: container, checking: checking)
         let savedHere = RowsSavedHere(by: container.mainContext, waking: saves)
         var isFirstPass = true
-        // The hikes whose last read failed: see the file header.
+        // The hikes whose last read failed, and whether the last listing
+        // did: see the file header.
         var owed: Set<UUID> = []
+        var listingFailed = false
         for await _ in saves.changes {
             let listed: [ListedHike]
             do {
                 listed = try await listing(container)
             } catch {
-                // What is drawn stays drawn, and the next save asks again.
+                // What is drawn stays drawn, and what was saved stays to be
+                // found. A first failure asks for one more pass, as a read's
+                // does, and one that holds for none.
                 Self.logger.error("Could not list the library: \(error.localizedDescription, privacy: .public)")
+                guard !Task.isCancelled else { return }
+                if !listingFailed { askForOneMorePass(of: saves) }
+                listingFailed = true
                 continue
             }
+            listingFailed = false
             guard !Task.isCancelled else { return }
             saves.watch(store: listed.firstNonNil(\.row.storeIdentifier))
             var saved = savedHere.take()
@@ -213,12 +236,15 @@ final class LibraryLines {
             }
             // A hike's first failure asks for one more pass, and one that
             // holds for none, so a failure that lasts cannot spin.
-            if !failed.isSubset(of: owed) {
-                retries += 1
-                saves.wake()
-            }
+            if !failed.isSubset(of: owed) { askForOneMorePass(of: saves) }
             owed = failed
         }
+    }
+
+    /// Wakes the task once more, as a save would, and counts it.
+    private func askForOneMorePass(of saves: StoreSaves) {
+        retries += 1
+        saves.wake()
     }
 
     /// Keeps the lines `read` found of `hikeIDs`, and answers the hikes whose
