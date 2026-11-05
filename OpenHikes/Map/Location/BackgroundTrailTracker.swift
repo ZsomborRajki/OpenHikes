@@ -489,6 +489,7 @@ final class BackgroundTrailTracker: NSObject {
 
         let modelContainer = container
         let coordinate = location.coordinate
+        let accuracy = location.horizontalAccuracy
         let heading = LocationFixPolicy.course(of: location)
         let timestamp = location.timestamp
         let revision = selectionRevision
@@ -530,6 +531,7 @@ final class BackgroundTrailTracker: NSObject {
                 let completedWalk = walkSession?.recordBackgroundMatch(
                     hikeID: hikeID,
                     distance: distance,
+                    accuracy: accuracy,
                     at: timestamp,
                     revision: matched.walkRevision
                 ) ?? false

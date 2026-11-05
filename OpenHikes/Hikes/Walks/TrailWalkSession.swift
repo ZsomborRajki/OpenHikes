@@ -46,33 +46,6 @@ struct TrailWalkStartNotice: Equatable {
     let title: String
 }
 
-/// What ending a walk came to.
-///
-/// Three answers rather than an optional row, because the third one is not a
-/// missing row: a store that refuses the commit leaves the walk *under way*,
-/// and a caller that could not tell it from a walk too short to keep would
-/// take the controls off screen for a walk that is still running.
-enum TrailWalkEnd {
-    /// The walk ended with nothing to keep — under
-    /// ``TrailWalkPolicy/minimumCoverageMeters``, or along a hike that has
-    /// gone away — or there was no walk to end.
-    case discarded
-    /// The walk ended and became this row.
-    case kept(HikeWalk)
-    /// The store refused the commit. Nothing was cleared and nothing was
-    /// written: the walk is still under way and can be ended again.
-    case refused
-}
-
-extension TrailWalkEnd {
-    /// The row the walk became, if it became one. For a caller that has
-    /// nothing to say about a refusal; the one that does switches instead.
-    var walk: HikeWalk? {
-        guard case let .kept(walk) = self else { return nil }
-        return walk
-    }
-}
-
 @MainActor
 @Observable
 final class TrailWalkSession {
@@ -254,7 +227,8 @@ final class TrailWalkSession {
     /// nothing for a hike that is not the walked one.
     ///
     /// - Returns: whether this fix *ended* the walk. A caller that publishes
-    ///   the fix afterwards must not: see ``recordMatch(hikeID:distance:at:)``.
+    ///   the fix afterwards must not: see
+    ///   ``recordMatch(hikeID:distance:accuracy:at:)``.
     ///
     /// - Parameter timestamp: when the receiver *took* the fix, which is not
     ///   when the follow loop got round to it. A fix as much as
@@ -270,10 +244,17 @@ final class TrailWalkSession {
     ///   reads the line on the main actor, which decodes all of it once any
     ///   save has refreshed the hike, and hashes it on every fix (#1252).
     ///   `nil` asks the hike, for a caller that has no screen's line.
+    /// - Parameter accuracy: the fix's horizontal accuracy, which the walk
+    ///   weighs a turn against — see ``TrailWalkCoverage/direction``. No
+    ///   default, so that every feed has to say. A proposal does without it:
+    ///   it starts a walk only once matches have worked outwards from where
+    ///   it found the hiker, and that run is a way to be going whatever their
+    ///   accuracy. The fix that starts the walk hands the walk its own.
     @discardableResult func recordForegroundMatch(
         hike: Hike,
         profile: RouteProfile,
         distance: Double,
+        accuracy: Double,
         revision: String? = nil,
         at timestamp: Date? = nil
     ) -> Bool {
@@ -289,7 +270,7 @@ final class TrailWalkSession {
             proposeOrConfirmStart(hike: hike, profile: profile, revision: revision, distance: distance, at: matchedAt)
         }
         if record?.hikeID == hike.id { walkedProfile = profile }
-        return recordMatch(hikeID: hike.id, distance: distance, at: matchedAt)
+        return recordMatch(hikeID: hike.id, distance: distance, accuracy: accuracy, at: matchedAt)
     }
 
     /// A fix matched on-route by the background feed. Never proposes a walk —
@@ -299,18 +280,19 @@ final class TrailWalkSession {
     /// and keeps one accruing while the phone is in a pocket.
     ///
     /// - Returns: whether this fix ended the walk, as above.
+    /// - Parameter accuracy: the fix's horizontal accuracy, as above.
     /// - Parameter revision: the line the fix was matched against, as a walk
     ///   names it, which the feed read off the main actor to match it: the
-    ///   reason ``recordForegroundMatch(hike:profile:distance:revision:at:)``
+    ///   reason ``recordForegroundMatch(hike:profile:distance:accuracy:revision:at:)``
     ///   takes one, on every fix of a walk in a pocket. `nil` asks the hike.
     @discardableResult func recordBackgroundMatch(
-        hikeID: UUID, distance: Double, at timestamp: Date, revision: String? = nil
+        hikeID: UUID, distance: Double, accuracy: Double, at timestamp: Date, revision: String? = nil
     ) -> Bool {
         discardWalkIfHikeGone()
         endIfRouteChanged(knowing: revision.map { (hikeID, $0) })
         endIfAbandoned(at: clock())
         if record == nil { advancePendingStart(hikeID: hikeID, distance: distance, at: timestamp, along: revision) }
-        return recordMatch(hikeID: hikeID, distance: distance, at: timestamp)
+        return recordMatch(hikeID: hikeID, distance: distance, accuracy: accuracy, at: timestamp)
     }
 
     /// An accepted fix that did not match `hikeID`'s route: the hiker is
@@ -362,7 +344,7 @@ final class TrailWalkSession {
     ///   published: with the record cleared, `publishes(hikeID:)` says yes and
     ///   `payload(for:)` says nothing, so the write would start a fresh plain
     ///   follow over the finished panel ``walkDidEnd(final:)`` just queued.
-    @discardableResult private func recordMatch(hikeID: UUID, distance: Double, at now: Date) -> Bool {
+    private func recordMatch(hikeID: UUID, distance: Double, accuracy: Double, at now: Date) -> Bool {
         guard var current = record, current.hikeID == hikeID else { return false }
         // A fix something newer has already overtaken says nothing that has
         // not been said better since, and it is not this walk's most recent
@@ -392,7 +374,7 @@ final class TrailWalkSession {
             persistIfDue(at: now)
             return false
         }
-        current.coverage.record(distance: distance)
+        current.coverage.record(distance: distance, accuracy: accuracy)
         // The walk's *position*, kept beside the coverage union rather than
         // derived from it: the union's maximum is where the walk has been,
         // and a pause has to be anchored at where the hiker is. See
@@ -750,7 +732,8 @@ extension TrailWalkSession {
     ///   refused start, for the reason ``confirmPendingStartIfDue(at:along:)``
     ///   gives: the walk is under way in memory, and the next fix writes it.
     /// - Parameter revision: the line `profile` was built from, as a walk
-    ///   names it, for the reason ``recordForegroundMatch(hike:profile:distance:revision:at:)``
+    ///   names it, for the reason
+    ///   ``recordForegroundMatch(hike:profile:distance:accuracy:revision:at:)``
     ///   takes it. `nil` asks the hike.
     @discardableResult func start(hike: Hike, profile: RouteProfile, revision: String? = nil) -> Bool {
         let now = clock()
@@ -809,6 +792,7 @@ private extension TrailWalkSession {
             let walk = PendingWalkStart(
                 hikeID: hike.id,
                 routeDistanceMeters: profile.totalDistanceMeters,
+                endsApartMeters: PendingWalkStart.endsApartMeters(of: profile),
                 routeRevision: revision,
                 distance: distance,
                 at: now
@@ -839,8 +823,8 @@ private extension TrailWalkSession {
     ///
     /// - Parameter revision: the line the proposed hike has now, as either
     ///   feed read it off the main actor — see
-    ///   ``recordForegroundMatch(hike:profile:distance:revision:at:)``. `nil`
-    ///   asks the hike.
+    ///   ``recordForegroundMatch(hike:profile:distance:accuracy:revision:at:)``.
+    ///   `nil` asks the hike.
     func confirmPendingStartIfDue(at now: Date, along revision: String? = nil) {
         guard let proposed = pendingStart, proposed.walk.isConfirmed else { return }
         pendingStart = nil

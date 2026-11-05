@@ -123,6 +123,38 @@ final class BackgroundDeliveryTests {
         #expect(snapshot.walk?.coveredFraction == session.coveredFraction)
     }
 
+    /// A pocketed phone's fixes are as uncertain as a hand-held one's, so this
+    /// feed hands the walk each fix's accuracy too (#1307). Ninety metres back
+    /// on fixes good to 60 m is a hiker who may not have moved; 130 m is a
+    /// turn.
+    @Test("a background fix is weighed by its accuracy before it turns the walk")
+    func backgroundFixIsWeighedBeforeATurn() async throws {
+        let walked = Fixture.hike(in: context, title: "Walked", route: Fixture.ridgeRoute)
+        let profile = RouteProfile(route: walked.route)
+        var record = TrailWalkRecord(
+            hikeID: walked.id,
+            routeDistanceMeters: profile.totalDistanceMeters,
+            startedAt: .now
+        )
+        record.coverage.record(distance: profile.distances[0], accuracy: 60)
+        record.coverage.record(distance: profile.distances[2], accuracy: 60)
+        walked.walkInProgress = record
+        try context.save()
+        defaults.set(walked.id.uuidString, forKey: SettingsKey.lastSelectedHikeID)
+        let session = TrailWalkSession(context: context, tracker: relaunchedTracker())
+        session.restoreAtLaunch()
+        try #require(session.record?.coverage.direction == .towardsEnd)
+        let reached = profile.distances[2]
+
+        await deliver(fix(at: try #require(profile.coordinate(atDistance: reached - 90)), accuracy: 60))
+        let matched = try #require(session.record?.coverage.lastMatchedDistance)
+        #expect(matched.isApproximatelyEqual(to: reached - 90, absoluteTolerance: 1), "matched at \(matched)")
+        #expect(session.record?.coverage.direction == .towardsEnd)
+
+        await deliver(fix(at: try #require(profile.coordinate(atDistance: reached - 130)), accuracy: 60))
+        #expect(session.record?.coverage.direction == .towardsStart)
+    }
+
     /// Abandonment used to be checked only inside the matched branch. Once
     /// the hiker left the trail every significant change was unmatched, so
     /// nothing reached the session and the six-hour rule never fired while

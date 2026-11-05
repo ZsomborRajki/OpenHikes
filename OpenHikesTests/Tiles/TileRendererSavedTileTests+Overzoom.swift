@@ -76,8 +76,9 @@ extension TileRendererSavedTileTests {
     }
 
     /// One draw pass over the screen tile at `rect`, which MapKit would make
-    /// at the scale that draws an overlay tile one tile wide. Inset, so the
-    /// pass covers this tile and not its neighbours.
+    /// at the scale that draws an overlay tile one tile wide. Inset, belt and
+    /// braces: a tile-aligned pass covers this tile and not its neighbours
+    /// too (`TileRendererTileRangeTests`).
     private func draw(_ rect: MKMapRect, on renderer: CachingTileOverlayRenderer) throws {
         let context = try #require(CGContext(
             data: nil,

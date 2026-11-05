@@ -920,6 +920,7 @@ private extension HikeDetailView {
             hike: hike,
             profile: profile,
             distance: match.distanceAlongRoute,
+            accuracy: fix.horizontalAccuracy,
             revision: prepared.walkRevision,
             at: fix.timestamp
         )

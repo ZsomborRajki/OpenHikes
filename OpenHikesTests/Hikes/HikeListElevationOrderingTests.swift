@@ -356,7 +356,7 @@ nonisolated private final class HeldMeasurements: Sendable {
     func open() { gate.open() }
 
     @concurrent
-    func measure(_ hikeIDs: [UUID], in container: ModelContainer) async -> [HikeListMetrics.ElevationMeasurement] {
+    func measure(_ hikeIDs: [UUID], in container: ModelContainer) async -> HikeListMetrics.ElevationMeasurements {
         log.withLock { $0.append(hikeIDs) }
         let measured = await HikeListMetrics.measureElevation(for: hikeIDs, in: container)
         if gate.takes() {

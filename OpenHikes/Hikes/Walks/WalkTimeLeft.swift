@@ -57,7 +57,6 @@
 
 import Foundation
 import OpenHikesData
-import OpenHikesShared
 
 nonisolated enum WalkTimeLeft {
     /// How much of the route a walk has to have covered before its own pace

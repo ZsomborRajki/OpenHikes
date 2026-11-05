@@ -60,7 +60,7 @@ struct HikeListMetricsSidecarTests {
         hike.customName = "Keep this edit"
         let other = Fixture.hike(in: context, title: "Keep this insertion")
 
-        let saved = HikeListMetrics.cacheElevation(measured, in: container) { _ in
+        let saved = HikeListMetrics.cacheElevation(measured.figures, in: container) { _ in
             throw RefusedSave.refused
         }
         #expect(!saved)

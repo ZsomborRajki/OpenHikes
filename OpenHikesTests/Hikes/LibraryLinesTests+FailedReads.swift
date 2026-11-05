@@ -46,11 +46,6 @@ extension LibraryLinesTests {
         return Refresh(stage: stage, edited: edited, other: other, untouched: untouched)
     }
 
-    /// Whether `hikeID`'s drawn line starts where `route` does.
-    private static func draws(_ route: [RouteCoordinate], for hikeID: UUID, in stage: LibraryLinesStage) -> Bool {
-        stage.library.line(of: hikeID)?.runs.first?.first?.latitude == route[0].latitude
-    }
-
     /// The save that woke a pass may be the last there is. A save under a
     /// running follow can wake it a second time, which would read the line
     /// whether the failure asked for a pass or not. So this save is over, its
