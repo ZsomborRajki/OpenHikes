@@ -85,22 +85,25 @@ struct TrailProgressView: View {
         // tracker was last left: a scrub, or the start of the trail.
         let live = tracker.liveTrackerDistance
         let distance = live ?? tracker.trackerDistance
-        // While this hike is being walked, the figure is coverage: what the
-        // walk has actually spanned rather than where the hiker stands.
-        let walked = walk.flatMap { session in
-            session.walkedHikeID == hikeID ? session.coveredFraction : nil
-        }
-        // Both figures describe coverage during a walk, including a reverse
-        // walk or one with gaps. The chart's manual position is independent.
-        let remaining = walked.map { (1 - $0) * profile.totalDistanceMeters }
-            ?? profile.remainingDistanceMeters(atDistance: distance)
+        // While this hike is being walked, the percentage is coverage: what
+        // the walk has actually spanned rather than where the hiker stands.
+        let walking = walk.flatMap { session in session.walkedHikeID == hikeID ? session : nil }
+        let walked = walking?.coveredFraction
+        // The distance left is not. It is the walk's own way to the end it is
+        // going for, which is what the time left beside it times: a hiker who
+        // turned back has the way back ahead of them, and none of the ground
+        // beyond the turn they never covered (#1304). Read here for the
+        // reason the coverage is, and it moves on ground already covered,
+        // where the coverage does not. The chart's manual position is
+        // independent.
+        let remaining = walking?.metersLeft ?? profile.remainingDistanceMeters(atDistance: distance)
         let fraction = walked ?? profile.fractionComplete(atDistance: distance) ?? 0
         let percent = Int((fraction * 100).rounded())
         let caption = walked == nil ? "\(percent)%" : String(localized: "\(percent)% hiked")
         // How long that is, while a walk is under way — the rest of the route
         // at this walk's own pace. Read here, per matched fix, for the reason
         // the coverage is: this row and nothing above it redraws.
-        let timeLeft = walked == nil ? nil : walk?.secondsLeft()
+        let timeLeft = walking?.secondsLeft()
         let left = timeLeft.map { String(localized: "\(Self.length(remaining)) · \(HikeFormat.travelTime($0)) left") }
             ?? String(localized: "\(Self.length(remaining)) left")
 

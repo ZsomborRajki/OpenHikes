@@ -71,6 +71,21 @@ extension TrailWalkSessionTests {
         #expect(session.secondsLeft() == nil)
     }
 
+    /// Started by hand at the trailhead, before a fix has said where on the
+    /// trail the hiker is: all of it is still to walk, and the payload says
+    /// so from the tap.
+    @Test("a walk with no match yet has the whole trail left")
+    func anUnmatchedWalkHasTheWholeTrailLeft() {
+        let session = session()
+        let walked = hike()
+        let profile = RouteProfile(route: walked.route)
+        #expect(session.start(hike: walked, profile: profile))
+
+        #expect(session.metersLeft == profile.totalDistanceMeters)
+        #expect(session.payload(for: walked.id)?.metersLeft == profile.totalDistanceMeters)
+        #expect(session.secondsLeft() == nil, "and no time for it until a match says where the hiker is")
+    }
+
     @Test("a walk that will end after dusk posts the reminder")
     func aLateWalkIsWarned() async {
         let harness = MovementReminderHarness.harness()

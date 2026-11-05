@@ -10,8 +10,10 @@ nonisolated extension SharedTrailSnapshot {
     ///
     /// During a walk the percentage is coverage and the caption says
     /// *hiked*, so the return-leg case reads "50% hiked · 0.2 km left"
-    /// rather than a contradiction. A paused walk says so first, because on a
-    /// widget that is the one word that changes what the number means.
+    /// rather than a contradiction. The distance left is the walk's own, to
+    /// the end it is going for — see ``SharedTrailSnapshot/Walk/metersLeft``.
+    /// A paused walk says so first, because on a widget that is the one word
+    /// that changes what the number means.
     var statusText: String {
         progressStatusText ?? WidgetFormat.length(meters: totalDistanceMeters)
     }

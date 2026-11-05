@@ -127,6 +127,7 @@ public extension HikeActivityAttributes.ContentState {
             offRouteMeters: snapshot.liveFix?.offRouteMeters,
             coveredFractionComplete: snapshot.walk?.coveredFraction,
             secondsLeft: snapshot.walk?.secondsLeft,
+            metersLeft: snapshot.walk?.metersLeft,
             runState: snapshot.walk.map { walk in RunState(walkState: walk.state) } ?? .running,
             elapsedSeconds: snapshot.walk?.activeSeconds ?? 0,
             updatedAt: snapshot.updatedAt
@@ -239,11 +240,13 @@ public extension HikeActivityAttributes {
     }
 
     /// Distance left to the end of the followed trail, or `nil` on the same
-    /// terms as ``fractionComplete(for:)``.
+    /// terms as ``fractionComplete(for:)``: to the end a walk under way is
+    /// going for — ``ContentState/metersLeft`` — and otherwise to the trail's
+    /// stored end, as ``SharedTrailSnapshot/remainingDistanceMeters`` reads it.
     func remainingDistanceMeters(for state: ContentState) -> Double? {
         guard state.offRouteMeters != nil, let routeDistanceMeters
         else { return nil }
-        return max(0, routeDistanceMeters - state.distanceMeters)
+        return state.metersLeft ?? max(0, routeDistanceMeters - state.distanceMeters)
     }
 
 }

@@ -88,6 +88,32 @@ struct TrailWalkIsolationTests {
         #expect(fine.count == 0)
     }
 
+    /// Back over ground the walk has already covered, the coverage stands
+    /// still and the distance left does not — so it is what tells the
+    /// progress row that its figures moved, and it tells nobody else (#1304).
+    @Test("a fix on covered ground moves the distance left, and wakes only the progress row")
+    func coveredGroundWakesTheProgressRow() async {
+        for index in 0...4 { match(at: index) }
+        let coarse = ObservationCounter {
+            _ = session.walkedHikeID
+            _ = session.phase
+            _ = session.walkedHikeTitle
+            _ = session.startNotice
+        }
+        let fine = ObservationCounter { _ = session.metersLeft }
+        await coarse.settle()
+
+        let covered = session.coveredFraction
+        let left = session.metersLeft
+        match(at: 3)
+        await fine.settle()
+        #expect(session.coveredFraction == covered, "precondition: nothing new was covered")
+        #expect(session.metersLeft != left)
+
+        #expect(fine.count >= 1, "the progress row is told")
+        #expect(coarse.count == 0, "the controls and the sheet's row are not")
+    }
+
     /// A match that lands where the last one did changes no number, and so
     /// wakes nobody — the same guard `TrackerState`'s writers keep.
     @Test("a repeated match wakes nothing")
