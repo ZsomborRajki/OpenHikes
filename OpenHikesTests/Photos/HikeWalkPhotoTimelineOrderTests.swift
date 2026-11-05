@@ -7,12 +7,12 @@
 //
 //  A plan's ``HikePhotoSearchPlan/Fingerprint`` holds the walks in this order,
 //  and the picker and Find Photos each go on until the fingerprint reads as
-//  itself. The relationship hands its rows in no order of its own: the main
-//  context hands them as they were added, and a context reading the store
-//  hands them another way. Two walks that started at the same instant, left
-//  in its order, read one way on the main actor and the other in the context
-//  a search reads from, and the plan built in one reads as obsolete in the
-//  other.
+//  itself. The relationship promises no order: the main context hands its
+//  rows back as they were added, and a context reading the store hands them
+//  in an order of its own, which can differ. Two walks that started at the
+//  same instant, left in its order, can read one way on the main actor and
+//  the other in the context a search reads from, and then the plan built in
+//  one reads as obsolete in the other.
 //
 
 import Foundation
@@ -32,27 +32,24 @@ struct HikeWalkPhotoTimelineOrderTests {
         RouteProfile(route: PhotoDiscoveryFixture.unstampedRoute).totalDistanceMeters
     }
 
-    /// A finished walk along the fixture route, between two moments in route
-    /// steps. Walks that differ only in their end are walks a plan can tell
-    /// apart, which is what makes their order matter.
+    /// The fixture's finished walk over the first half of the route, between
+    /// two moments in route steps, under `id`. Walks that differ only in their
+    /// end are walks a plan can tell apart, which is what makes their order
+    /// matter.
     @discardableResult private static func addWalk(
         to hike: Hike,
         in context: ModelContext,
         id: UUID,
         steps: ClosedRange<Double>
     ) -> HikeWalk {
-        let walk = HikeWalk(
+        let walk = PhotoDiscoveryFixture.walk(
             hikeID: hike.id,
-            startedAt: PhotoDiscoveryFixture.date(atStep: steps.lowerBound),
-            endedAt: PhotoDiscoveryFixture.date(atStep: steps.upperBound),
-            activeSeconds: (steps.upperBound - steps.lowerBound) * PhotoDiscoveryFixture.stepSeconds,
-            coveredIntervals: [0, routeMeters / 2],
-            furthestDistanceMeters: routeMeters / 2,
-            routeDistanceMeters: routeMeters,
-            endReason: .ended,
-            routeRevision: PhotoDiscoveryFixture.routeRevision,
-            id: id
+            fromStep: steps.lowerBound,
+            toStep: steps.upperBound,
+            covering: 0...(routeMeters / 2),
+            routeDistanceMeters: routeMeters
         )
+        walk.id = id
         context.insert(walk)
         walk.hike = hike
         return walk
