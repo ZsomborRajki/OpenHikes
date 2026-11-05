@@ -462,7 +462,9 @@ extension CuratedTrailSource {
     /// which is not work to do on the executor a search is waiting on — and it
     /// is what the requirement asks for, so an actor-isolated version would be
     /// witnessed by the protocol extension's `[]` instead and this would
-    /// quietly never run. It touches no mutable state: ``store`` is a `let`.
+    /// quietly never run. It touches none of the actor's mutable state —
+    /// ``store`` is a `let` — and the files it reads tolerate the actor
+    /// writing them meanwhile; see ``CuratedTrailStore``.
     @concurrent
     func cachedTrails(near area: CommunitySearchArea, limit: Int) async -> [CuratedTrail] {
         store?.trails(near: area, limit: limit) ?? []

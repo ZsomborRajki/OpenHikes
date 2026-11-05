@@ -76,10 +76,34 @@ nonisolated protocol OverpassFileEntry: Codable, Sendable {
 /// ``OverpassCache/lifetime`` and kept to `maximumFiles` by dropping the least
 /// recently used.
 ///
-/// A value rather than an actor, for the reason both caches built on it are
-/// values: every caller is already off the main actor and inside an isolation
-/// of its own, which is where the serialisation this needs comes from, and an
-/// actor here would add a second hop to every read for nothing.
+/// A value rather than an actor, and with no lock, because these operations
+/// tolerate running at the same time as one another, on the same files — and
+/// they do run that way. The caches built on it call it from wherever they
+/// are, off the main actor: one from inside an actor and from a `@concurrent`
+/// fall-back beside it, the others from `@concurrent` work with no isolation
+/// of its own. An actor here would add a hop to every read and order nothing
+/// that needs ordering. What holds without one:
+///
+/// - **A file is replaced whole.** ``save(_:)`` writes `.atomic`: Foundation
+///   stages the bytes in a file beside the target and renames it into place,
+///   so a reader opening the target gets the old file or the new one, never
+///   part of either. Of two saves of the same name, one whole file is left.
+/// - **A file that vanishes is a miss.** The trim and an expired read delete
+///   by name. A read that comes after fails to open, which `try?` turns into
+///   `nil` or a skipped file, and a re-stamp of a deleted file fails as
+///   quietly. Because the delete is by name, an expired read racing a save of
+///   the same name can take the fresh file with it.
+/// - **The staged file is not hidden.** `.skipsHiddenFiles` does not keep it
+///   out of a listing, so ``values(near:limit:at:)`` can open one. Written in
+///   part, it does not decode and is skipped; whole but not yet renamed, it
+///   decodes, and the value being saved can be in the answer twice. The trim
+///   counts it too, though as one of the newest files there it is among the
+///   last a trim would pick. A save killed before the rename leaves its staged
+///   file behind, which nothing here deletes but the trim.
+///
+/// So an overlap can cost a value left out of an answer or listed twice, a
+/// fresh file deleted, or a re-stamp that lands too late to keep a file from
+/// the trim — a round trip later, at worst — and never a torn or mixed value.
 ///
 /// Failure is silent throughout, and that is deliberate: this is a cache, a
 /// caller writing to it already has the answer in hand, and a hiker has
