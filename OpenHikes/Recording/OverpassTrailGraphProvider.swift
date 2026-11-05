@@ -394,7 +394,7 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
         let cached = CachedGraph(fetchedAt: clock(), graph: graph, format: Self.cacheFormat)
         remember(cached, for: key)
         try write(cached, for: key)
-        OverpassCache.trim(directory, keeping: Self.maximumCacheFiles)
+        OverpassCache.trim(directory, keeping: Self.maximumCacheFiles, at: clock())
     }
 
     private func failFetch(
@@ -576,7 +576,7 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
 
     private func fileURL(for key: TrailGraphRegion) -> URL {
         directory.appendingPathComponent(
-            "\(key.zoom)-\(key.x)-\(key.y).json"
+            "\(key.zoom)-\(key.x)-\(key.y).\(OverpassCache.fileExtension)"
         )
     }
 }

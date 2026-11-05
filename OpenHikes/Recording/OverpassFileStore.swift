@@ -30,29 +30,74 @@ nonisolated enum OverpassCache {
     /// offering a hut that has been demolished.
     static let lifetime: TimeInterval = 30 * 24 * 60 * 60
 
+    /// The extension every file of these caches is named with, and so what
+    /// tells one of their files from anything else in the directory.
+    ///
+    /// Spelled once because the naming and the listing both rest on it: a
+    /// cache that named its files any other way would never find them in a
+    /// listing, and would see the trim delete each one an hour after writing
+    /// it, as the leftover of a write.
+    static let fileExtension = "json"
+
+    /// How long after it was last written something in a directory that is
+    /// not one of the cache's files is taken for the leftover of a write that
+    /// never finished, and deleted.
+    ///
+    /// What sits beside a cache's files is the staged half of an `.atomic`
+    /// write — see ``OverpassFileStore``. A write here is a few megabytes at
+    /// most and done in well under a second, so an hour is far past any that
+    /// is still under way. The one that can be is a write the system
+    /// suspended halfway for that long, and losing its file then is a miss
+    /// like any other: the next search asks again.
+    static let stagedWriteLifetime: TimeInterval = 60 * 60
+
+    /// Whether `url` is one of the cache's own files, rather than the staged
+    /// half of a write beside one.
+    static func isCacheFile(_ url: URL) -> Bool {
+        url.pathExtension == fileExtension
+    }
+
     /// Drops the oldest files in `directory` once there are more than
-    /// `maximumFiles`, by `.contentModificationDateKey`.
+    /// `maximumFiles`, by `.contentModificationDateKey`, and deletes the
+    /// leftovers of writes that never finished.
     ///
     /// Oldest by whatever the cache makes that date mean: *last written* for
     /// the graph tiles, and *last used* for an ``OverpassFileStore``, which
     /// re-stamps what it hands back. `min(count:)` rather than a full sort,
     /// because only the handful over the ceiling need finding.
-    static func trim(_ directory: URL, keeping maximumFiles: Int) {
-        guard let files = try? FileManager.default.contentsOfDirectory(
+    ///
+    /// Only the cache's own files count toward the ceiling. A staged write
+    /// counted there would push a stored answer out to make room for a file
+    /// about to be renamed over another one, or for one a killed save left
+    /// that nothing will ever read. Those leftovers go here instead, once
+    /// they are ``stagedWriteLifetime`` old, so a directory that never
+    /// reaches its ceiling does not keep them for ever. `now` is the caller's
+    /// clock, which in a running app is the file system's too.
+    static func trim(_ directory: URL, keeping maximumFiles: Int, at now: Date) {
+        guard let listed = try? FileManager.default.contentsOfDirectory(
             at: directory,
             includingPropertiesForKeys: [.contentModificationDateKey],
             options: [.skipsHiddenFiles]
-        ), files.count > maximumFiles else { return }
+        ) else { return }
+        // `partitioned(by:)` answers (does not satisfy, satisfies).
+        let (staged, files) = listed.partitioned(by: isCacheFile)
+        let abandoned = now.addingTimeInterval(-stagedWriteLifetime)
+        for url in staged {
+            guard let written = modificationDate(of: url), written < abandoned else { continue }
+            try? FileManager.default.removeItem(at: url)
+        }
+        guard files.count > maximumFiles else { return }
         let dated = files.map { url in
-            let date = (try? url.resourceValues(
-                forKeys: [.contentModificationDateKey]
-            ).contentModificationDate) ?? .distantPast
-            return (url: url, date: date)
+            (url: url, date: modificationDate(of: url) ?? .distantPast)
         }
         let doomed = dated.min(count: files.count - maximumFiles) { $0.date < $1.date }
         for (url, _) in doomed {
             try? FileManager.default.removeItem(at: url)
         }
+    }
+
+    private static func modificationDate(of url: URL) -> Date? {
+        try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
     }
 }
 
@@ -93,17 +138,21 @@ nonisolated protocol OverpassFileEntry: Codable, Sendable {
 ///   `nil` or a skipped file, and a re-stamp of a deleted file fails as
 ///   quietly. Because the delete is by name, an expired read racing a save of
 ///   the same name can take the fresh file with it.
-/// - **The staged file is not hidden.** `.skipsHiddenFiles` does not keep it
-///   out of a listing, so ``values(near:limit:at:)`` can open one. Written in
-///   part, it does not decode and is skipped; whole but not yet renamed, it
-///   decodes, and the value being saved can be in the answer twice. The trim
-///   counts it too, though as one of the newest files there it is among the
-///   last a trim would pick. A save killed before the rename leaves its staged
-///   file behind, which nothing here deletes but the trim.
+/// - **Only the store's own files are read or counted.** The staged file is
+///   not hidden, so `.skipsHiddenFiles` does not keep it out of a listing,
+///   and whole but not yet renamed it decodes. Both listings keep only names
+///   with ``OverpassCache/fileExtension``, which every file here is given and
+///   no staged file is: ``values(near:limit:at:)`` never opens a staged file,
+///   so a value being saved is not in its answer twice, and the trim never
+///   counts one toward the ceiling. A save killed before the rename leaves
+///   its staged file behind, and the trim deletes that once it is
+///   ``OverpassCache/stagedWriteLifetime`` old, sparing a younger one that a
+///   save may still rename into place.
 ///
-/// So an overlap can cost a value left out of an answer or listed twice, a
-/// fresh file deleted, or a re-stamp that lands too late to keep a file from
-/// the trim — a round trip later, at worst — and never a torn or mixed value.
+/// So an overlap can cost a value left out of an answer, a fresh file
+/// deleted, or a re-stamp that lands too late to keep a file from the trim —
+/// a round trip later, at worst — and never a torn or mixed value, nor one
+/// listed twice.
 ///
 /// Failure is silent throughout, and that is deliberate: this is a cache, a
 /// caller writing to it already has the answer in hand, and a hiker has
@@ -172,7 +221,7 @@ nonisolated extension OverpassFileStore {
             // and the file system's.
             touch(url)
         }
-        OverpassCache.trim(directory, keeping: maximumFiles)
+        OverpassCache.trim(directory, keeping: maximumFiles, at: now)
     }
 }
 
@@ -200,12 +249,15 @@ nonisolated extension OverpassFileStore {
         at coordinate: (Entry.Value) -> CLLocationCoordinate2D
     ) -> [Entry.Value] {
         guard limit > 0,
-              let files = try? FileManager.default.contentsOfDirectory(
+              let listed = try? FileManager.default.contentsOfDirectory(
                   at: directory,
                   includingPropertiesForKeys: nil,
                   options: [.skipsHiddenFiles]
               )
         else { return [] }
+        // Only the store's own files, because a staged write decodes as well
+        // as the file it is about to replace — see this type's header.
+        let files = listed.filter(OverpassCache.isCacheFile)
 
         let center = area.coordinate
         // One reading of the clock for the whole pass rather than one per
@@ -235,7 +287,7 @@ nonisolated extension OverpassFileStore {
 
 nonisolated private extension OverpassFileStore {
     func fileURL(named name: String) -> URL {
-        directory.appendingPathComponent("\(name).json")
+        directory.appendingPathComponent("\(name).\(OverpassCache.fileExtension)")
     }
 
     /// Moves `url` to the newest end of the eviction order.
