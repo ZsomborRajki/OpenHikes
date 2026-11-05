@@ -119,6 +119,15 @@ public struct SharedTrailSnapshot: SharedPayload, Equatable {
         /// `WalkTimeLeft` decides. Computed there because the route's heights
         /// are there; carried here so the Lock Screen says the same figure.
         public var secondsLeft: TimeInterval?
+        /// How far the rest of the trail is: from where the walk last matched
+        /// to the end it is going for, which is the distance ``secondsLeft``
+        /// times. Computed by the app because only the walk's matches know
+        /// which end that is, and neither the live fix's position nor the
+        /// coverage can say it: a hiker who turned back has the way back
+        /// ahead of them. `nil` from a writer that sent none, where
+        /// ``SharedTrailSnapshot/remainingDistanceMeters`` falls back to the
+        /// position's distance to the stored end, as for a plain follow.
+        public var metersLeft: Double?
 
         public init(
             state: State,
@@ -126,7 +135,8 @@ public struct SharedTrailSnapshot: SharedPayload, Equatable {
             furthestDistanceMeters: Double,
             activeSeconds: TimeInterval,
             startedAt: Date,
-            secondsLeft: TimeInterval? = nil
+            secondsLeft: TimeInterval? = nil,
+            metersLeft: Double? = nil
         ) {
             self.state = state
             self.coveredFraction = coveredFraction
@@ -134,6 +144,7 @@ public struct SharedTrailSnapshot: SharedPayload, Equatable {
             self.activeSeconds = activeSeconds
             self.startedAt = startedAt
             self.secondsLeft = secondsLeft
+            self.metersLeft = metersLeft
         }
     }
 
@@ -175,10 +186,12 @@ public struct SharedTrailSnapshot: SharedPayload, Equatable {
         }
     }
 
-    /// Distance remaining to the end of the route from the live fix, if any.
+    /// Distance remaining to the end of the route from the live fix, if any:
+    /// to the end a walk under way is going for — ``Walk/metersLeft`` — and
+    /// otherwise to the route's stored end.
     public var remainingDistanceMeters: Double? {
         guard let liveFix else { return nil }
-        return max(0, totalDistanceMeters - liveFix.distanceAlongRouteMeters)
+        return walk?.metersLeft ?? max(0, totalDistanceMeters - liveFix.distanceAlongRouteMeters)
     }
 
     /// Fraction of the route completed so far, 0...1, if there's a live fix.

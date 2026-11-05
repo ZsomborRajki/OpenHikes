@@ -140,6 +140,16 @@ public struct HikeActivityAttributes: Codable, Hashable, Sendable {
         /// Not part of what makes an update worth sending: it moves with the
         /// figures that are, and rides along on their updates.
         public var secondsLeft: TimeInterval?
+        /// Following only: how far the rest of the trail is, to the end the
+        /// walk is going for — see ``SharedTrailSnapshot/Walk/metersLeft``.
+        /// `nil` for a recording and a plain follow, whose distance left is
+        /// the position's, to the trail's stored end.
+        ///
+        /// Not part of what makes an update worth sending either. It moves
+        /// metre for metre with ``distanceMeters``, except where a walk turns
+        /// round: there it jumps with the position hardly moved, and the
+        /// update the next few metres of walking send carries the jump.
+        public var metersLeft: Double?
         /// Whether fixes are being taken, deliberately not, or done with.
         ///
         /// Three cases rather than a paused flag because the third one is
@@ -187,6 +197,7 @@ public struct HikeActivityAttributes: Codable, Hashable, Sendable {
             offRouteMeters: Double? = nil,
             coveredFractionComplete: Double? = nil,
             secondsLeft: TimeInterval? = nil,
+            metersLeft: Double? = nil,
             runState: RunState = .running,
             elapsedSeconds: TimeInterval = 0,
             updatedAt: Date = .now,
@@ -200,6 +211,7 @@ public struct HikeActivityAttributes: Codable, Hashable, Sendable {
             self.offRouteMeters = offRouteMeters
             self.coveredFractionComplete = coveredFractionComplete
             self.secondsLeft = secondsLeft
+            self.metersLeft = metersLeft
             self.runState = runState
             self.elapsedSeconds = elapsedSeconds
             self.updatedAt = updatedAt

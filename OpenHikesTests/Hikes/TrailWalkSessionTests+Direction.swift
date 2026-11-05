@@ -5,7 +5,7 @@
 //  The end of the trail the walk under way is timing, as the session hands it
 //  on: the readout and the payload, the after-dark reminder, and a relaunch,
 //  which finds the way the walk was going where the last write left it
-//  (#1195).
+//  (#1195). The distance as well as the climb is the way to that end (#1304).
 //
 
 import Foundation
@@ -47,8 +47,10 @@ extension TrailWalkSessionTests {
             coverage: record.coverage,
             activeSeconds: record.activeSeconds(at: clock.read())
         ))
+        // The 6.5 km back to the start, not the 2 km beyond the turn the
+        // walk never covered (#1304).
         let signposts = WalkingTimeEstimate.seconds(
-            distanceMeters: record.routeDistanceMeters - record.coverage.coveredMeters,
+            distanceMeters: profile.distances[65],
             ascentMeters: stretch.lossMeters,
             descentMeters: stretch.gainMeters
         )
@@ -56,6 +58,53 @@ extension TrailWalkSessionTests {
         let left = try #require(session.secondsLeft())
         #expect(left.isApproximatelyEqual(to: signposts * pace, absoluteTolerance: 0.001))
         #expect(session.payload(for: walked.id)?.secondsLeft == left)
+        // And the readout beside it, on the detail and on the Lock Screen,
+        // says the distance it times.
+        #expect(session.metersLeft.isApproximatelyEqual(to: profile.distances[65], absoluteTolerance: 0.001))
+        #expect(session.payload(for: walked.id)?.metersLeft == session.metersLeft)
+    }
+
+    /// The issue's walk, against a dusk between the two answers: the 2 km
+    /// the walk never covered end in daylight, and the 6.5 km back to the
+    /// start do not, so only the way back can say so (#1304).
+    @Test("a walk that turned back is warned of a dusk it meets on the way back")
+    func aTurnedWalkIsWarnedOfTheWayBack() async throws {
+        let harness = MovementReminderHarness.harness(clock: clock)
+        var dusk: Date?
+        let session = TrailWalkSession(
+            context: context,
+            reminders: harness.controller,
+            clock: clock.read,
+            daylight: { _, _ in WeatherDaylight(civilDusk: dusk) }
+        )
+        let walked = climbingHike()
+        let profile = RouteProfile(route: walked.route)
+        walk(session, hike: walked, profile: profile, from: 0, through: 80)
+        walk(session, hike: walked, profile: profile, from: 79, through: 65)
+
+        let record = try #require(session.record)
+        let position = profile.distances[65]
+        let pace = try #require(WalkTimeLeft.paceFactor(
+            profile: profile,
+            coverage: record.coverage,
+            activeSeconds: record.activeSeconds(at: clock.read())
+        ))
+        let down = try #require(profile.climb(from: 0, to: position))
+        let atPace = { (meters: Double) in
+            WalkingTimeEstimate.seconds(
+                distanceMeters: meters,
+                ascentMeters: down.lossMeters,
+                descentMeters: down.gainMeters
+            ) * pace
+        }
+        let uncovered = atPace(record.routeDistanceMeters - record.coverage.coveredMeters)
+        let wayBack = atPace(position)
+        #expect(wayBack - uncovered > 20 * 60, "precondition: room for a minute's drift either side of dusk")
+        dusk = clock.read().addingTimeInterval(60 + (uncovered + wayBack) / 2)
+
+        match(session, hike: walked, profile: profile, at: position)
+        await harness.controller.settle()
+        #expect(harness.notifier.postedKinds == [.afterDark])
     }
 
     /// A walk confirmed by movement has moved further than a turn, so the
