@@ -41,6 +41,27 @@ struct SheetDestinationStateTests {
         #expect(presentation.hikeInteraction(for: hike).segment == .details)
     }
 
+    /// #1263: a screen pushed over a hike's own opens on the line that has
+    /// landed there, and a turn of the phone keeps it.
+    @Test("the screens about a hike share its line until the last of them is popped")
+    func theLineFollowsTheHikesScreens() throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        let presentation = SheetPresentation()
+        presentation.path = [.hike(hike)]
+        let line = presentation.hikeInteraction(for: hike).line
+
+        presentation.path.append(.place(hike, UUID()))
+        presentation.layout = .sidePanel
+        #expect(presentation.hikeInteraction(for: hike).line === line)
+
+        presentation.path = [.placesAround(hike)]
+        #expect(presentation.hikeInteraction(for: hike).line === line, "the hike's own screen need not be under it")
+
+        presentation.path = []
+        #expect(presentation.hikeInteraction(for: hike).line !== line)
+    }
+
     /// #795: a turn of the phone replaces the summary that presents the share
     /// card, so the card lives here until the summary is popped.
     @Test("a walk's share card outlives rotation, Share starts it over, and Close lets it go")

@@ -29,6 +29,9 @@ import SwiftUI
 
 struct HikePlacesAroundView: View {
     let hike: Hike
+    /// The hike's line, which the screen under this one has read already: what
+    /// the screen lists its places along and asks about — see ``ShownLine``.
+    let line: ShownLine
     let around: TrailPlacesAround
     let mapController: MapController
     var placePins: TrailPlacePinController?
@@ -43,15 +46,17 @@ struct HikePlacesAroundView: View {
     var onAddPlace: (HikePlaceSpot) -> Void = { _ in /* no-op default */ }
 
     private var filter: TrailPlaceFilter { around.finder.filter }
+    private var route: [RouteCoordinate] { line.current?.route ?? [] }
 
     var body: some View {
         let candidates = search.candidates(showing: filter.shown, held: hike.places)
         let listing = TrailPlaceAroundListing(
-            held: hike.orderedPlaces(preparedBy: placePins?.placeRows),
+            held: hike.orderedPlaces(on: line, preparedBy: placePins?.placeRows),
             candidates: candidates
         )
         PlacesAroundScreen(
             hike: hike,
+            line: line,
             around: around,
             mapController: mapController,
             placePins: placePins,
@@ -65,10 +70,10 @@ struct HikePlacesAroundView: View {
                 searchIfNeeded()
             },
             onSearchArea: {
-                around.finder.search(along: hike.route, avoiding: hike.places)
+                around.finder.search(along: route, avoiding: hike.places)
             },
-            onFound: { [search, hike] places in
-                search.receiveArea(places, along: hike.route)
+            onFound: { [search, line] places in
+                search.receiveArea(places, along: line.current?.route ?? [])
             },
             content: { rows in
                 VStack(alignment: .leading, spacing: StatCardMetrics.sectionSpacing) {
@@ -183,7 +188,7 @@ struct HikePlacesAroundView: View {
 
     private func searchNow() {
         guard let source = around.finder.source, hike.isAttached, !filter.shown.isEmpty else { return }
-        search.search(along: hike.route, from: source, showing: filter.shown)
+        search.search(along: route, from: source, showing: filter.shown)
     }
 }
 

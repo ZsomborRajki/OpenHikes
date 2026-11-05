@@ -354,11 +354,13 @@ enum CommunityPublishingCheck {
         )
         guard cheap.isEligible else { return cheap }
 
-        let route = hike.route
-        let others = alreadyShared(in: context, excluding: hike)
+        // In a read of its own, off the main actor, as the hikes below are:
+        // this runs as a sheet opens.
+        let line = SelectedLine().read(of: hike)
+        let others = await alreadyShared(in: context.container, excluding: hike.persistentModelID)
         guard !others.isEmpty else { return .eligible }
 
-        guard let retread = await firstRetread(of: route, among: others) else {
+        guard let retread = await firstRetread(of: await line.route, among: others) else {
             return .eligible
         }
         let reason = CommunityPublishingEligibility.Reason.retreads(title: retread.title)
@@ -385,25 +387,30 @@ enum CommunityPublishingCheck {
 
     /// Every hike this hiker has sent, as values rather than as models.
     ///
-    /// Read on the main actor because SwiftData is, and handed on as
-    /// `Sendable` values so the comparison itself can leave it — the same
-    /// shape ``GPXExport/Track/init(hike:)`` takes, and for the same reason.
+    /// Read off the main actor, in a context made here and dropped on return,
+    /// as ``HikePhotoSearchPlan/SourceRead`` reads a hike: each of these rows
+    /// is a whole line to decode, and on the main actor five long ones held
+    /// the sheet up for most of a fifth of a second every time it opened. A
+    /// hike has reached the store by the time it counts here, because
+    /// ``CommunityUploadQueueing/record`` saves what it writes.
     ///
     /// A hike is a candidate if it carries a submission id, which covers both
     /// *awaiting review* and *published*: a submission a reviewer has not
     /// reached yet is still a listing this trail is about to have. Which of
     /// the two it is decides what a retread can *do*, not whether it is one —
     /// see ``SharedHike/listingID``.
+    @concurrent
     static func alreadyShared(
-        in context: ModelContext,
-        excluding hike: Hike
-    ) -> [SharedHike] {
+        in container: ModelContainer,
+        excluding hike: PersistentIdentifier
+    ) async -> [SharedHike] {
+        assertOffMainThread("Reading the hikes already shared must stay off the main thread")
         let descriptor = FetchDescriptor<Hike>(
             predicate: #Predicate { $0.communitySubmissionID != nil }
         )
-        let shared = (try? context.fetch(descriptor)) ?? []
+        let shared = (try? ModelContext(container).fetch(descriptor)) ?? []
         return shared
-            .filter { $0.persistentModelID != hike.persistentModelID }
+            .filter { $0.persistentModelID != hike }
             .map { other in
                 SharedHike(
                     title: other.displayTitle,

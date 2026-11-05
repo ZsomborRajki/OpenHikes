@@ -22,6 +22,9 @@ import SwiftUI
 
 struct PlacesAroundScreen<Content: View>: View {
     let hike: Hike
+    /// The hike's line as its screens read it — see ``ShownLine``. `nil` on
+    /// *Places Nearby*, which is a recording's, whose draft has no line yet.
+    let line: ShownLine?
     let around: TrailPlacesAround
     let mapController: MapController
     let placePins: TrailPlacePinController?
@@ -65,14 +68,20 @@ struct PlacesAroundScreen<Content: View>: View {
         // The hike's own places stay on the map beside the pale ones, and a
         // tap on one opens its card — the claim the screen under this one
         // held, taken over while this one is on top.
-        .background(HikePlacePinClaim(hike: hike, controller: placePins, onOpen: select))
+        .background(HikePlacePinClaim(hike: hike, controller: placePins, line: line, onOpen: select))
         .onAppear(perform: attach)
         .onDisappear(perform: detach)
         .onChange(of: candidates, initial: true) { _, rows in
             if let token { around.show(rows, token: token) }
         }
         .sheet(isPresented: $search.selection.isPresent()) {
-            HikePlaceAroundCard(search: search, hike: hike, placeRows: placePins?.placeRows, onAdd: add) { photo in
+            HikePlaceAroundCard(
+                search: search,
+                hike: hike,
+                line: line,
+                placeRows: placePins?.placeRows,
+                onAdd: add
+            ) { photo in
                 // The card goes first: a push under a presented sheet lands
                 // behind it.
                 search.selection = nil

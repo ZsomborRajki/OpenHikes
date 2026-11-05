@@ -50,6 +50,10 @@ import SwiftUI
 
 struct CommunityShareSheet: View {
     let hike: Hike
+    /// The hike's line, as the screen under this one read it: what is counted
+    /// here and sent, so that neither decodes it on the main actor — see
+    /// ``ShownLine``.
+    let line: ShownLine
     let transport: any CommunityTransporting
     /// Where the photo files are, so the form can ask which of this hike's
     /// pictures this device actually holds. Injected rather than reached for,
@@ -115,8 +119,9 @@ struct CommunityShareSheet: View {
     /// aimed.
     @State private var contributionTarget: CommunityPhotoTarget?
 
-    init(hike: Hike, transport: any CommunityTransporting, store: HikePhotoStore = .shared) {
+    init(hike: Hike, line: ShownLine, transport: any CommunityTransporting, store: HikePhotoStore = .shared) {
         self.hike = hike
+        self.line = line
         self.transport = transport
         self.store = store
         // Read here rather than in a `.task`, so a hike that was uploaded and
@@ -583,7 +588,7 @@ private extension CommunityShareSheet {
             // to come back as a failure. Also held while eligibility is still
             // `nil`, which is the one window in which a tap could start a send
             // the next line of this screen is about to forbid.
-            canConfirm: hike.pointCount >= 2 && eligibility != nil,
+            canConfirm: line.pointCount >= 2 && eligibility != nil,
             offersConfirmation: eligibility?.reason == nil
         ) {
             // Committed here as well as in `onDisappear`, and this is the one
@@ -619,7 +624,8 @@ private extension CommunityShareSheet {
                 hike,
                 authorName: boundedAuthorName,
                 transport: transport,
-                excludingPhotos: excludedPhotoIDs
+                excludingPhotos: excludedPhotoIDs,
+                line: line.current
             )
             phase = CommunitySendPhase(outcome)
         }

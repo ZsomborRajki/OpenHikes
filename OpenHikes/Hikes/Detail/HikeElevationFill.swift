@@ -41,6 +41,15 @@
 //  would splice two disagreeing references into one profile, so a hike with
 //  any height on it is left as it is.
 //
+//  ## Off the main actor, up to the write
+//
+//  The line it starts from is the one the hike's screen read (``ShownLine``),
+//  and the line it checks its answer against is read in a context of its own
+//  once the answer is back, by a ``SelectedLine`` it makes for that: a read on
+//  the main actor decoded all of it, twice if a save fell between. The
+//  heights are worked out there too. Only the write is left on the main
+//  actor, because the hike's own context is what writes it.
+//
 
 import Foundation
 import OpenHikesData
@@ -55,19 +64,15 @@ enum HikeElevationFill {
         route.count > 1 && !route.contains { $0.elevation?.isFinite == true }
     }
 
-    /// Whether `hike` is one the subscription would give heights to — see
-    /// the file header. A walk still being recorded has no line yet.
-    static func canFill(_ hike: Hike) -> Bool {
-        canFill(hike, along: hike.route)
-    }
-
-    /// The same, of `route`, the line `hike` has now as its screen read it
-    /// off the main actor — see ``ShownLine``.
+    /// Whether `hike` is one the subscription would give heights to, along
+    /// `route`, the line it has now as its screen read it off the main actor
+    /// — see the file header. A walk still being recorded has no line yet.
     static func canFill(_ hike: Hike, along route: [RouteCoordinate]) -> Bool {
         !hike.isRecording && needsHeights(route)
     }
 
-    /// Reads heights for `hike`'s line from `source` and saves them onto it.
+    /// Reads heights for `route`, `hike`'s line as its screen read it, from
+    /// `source` and saves them onto the hike.
     ///
     /// - Returns: whether the hike now has them. False for a hike that did
     ///   not need them, a source that could not answer, a line that changed
@@ -75,27 +80,45 @@ enum HikeElevationFill {
     ///   the line back as it was.
     @discardableResult static func fill(
         _ hike: Hike,
+        along route: [RouteCoordinate],
         from source: any CuratedElevationSourcing,
         in context: ModelContext,
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) async -> Bool {
-        guard canFill(hike) else { return false }
-        guard let samples = await source.samples(of: hike.route), !Task.isCancelled else { return false }
+        guard canFill(hike, along: route) else { return false }
+        guard let samples = await source.samples(of: route), !Task.isCancelled, hike.isAttached else { return false }
         // Read again after the await: an edit, or another device's sync, may
-        // have replaced the line, or given it heights, in the meantime.
-        let route = hike.route
-        guard canFill(hike), samples.describes(route) else { return false }
-        hike.replaceRoute(with: samples.interpolating(route))
+        // have replaced the line, or given it heights, in the meantime. And a
+        // write while this read is out replaces it.
+        let read = SelectedLine().read(of: hike)
+        guard let filled = await heights(on: read, from: samples), hike.isAttached, !hike.isRecording,
+              !read.isReplaced else { return false }
+        hike.replaceRoute(with: filled.route)
         do {
             try save(context)
         } catch {
             // Restore only our change. This is the shared UI context, whose
             // other pending edits may have arrived while the source was
             // suspended; rolling it back would discard those too.
-            hike.replaceRoute(with: route)
+            hike.replaceRoute(with: filled.previous)
             logger.error("Heights for a hike could not be saved: \(error.localizedDescription, privacy: .public)")
             return false
         }
         return true
+    }
+
+    /// The line `read` holds, and that line with `samples`' heights on it, or
+    /// `nil` for a line that has heights by now or that they do not describe.
+    ///
+    /// `@concurrent`, because a `nonisolated async` function runs on its
+    /// caller's executor, and each of these walks the whole line.
+    @concurrent
+    nonisolated private static func heights(
+        on read: SelectedLine.Read,
+        from samples: RouteHeightSamples
+    ) async -> (previous: [RouteCoordinate], route: [RouteCoordinate])? {
+        let route = await read.route
+        guard needsHeights(route), samples.describes(route) else { return nil }
+        return (route, samples.interpolating(route))
     }
 }

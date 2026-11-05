@@ -17,6 +17,23 @@ import Testing
 @MainActor
 @Suite("Hike place rows")
 struct HikePlaceRowsTests {
+    /// Reading the column here is the decode a screen's line is there to
+    /// spare, so a line that has not landed measures nothing rather than
+    /// falling back to it. Only a screen with no line asks the hike.
+    @Test("a screen's line that has not landed measures nothing, and reads nothing of the hike's")
+    func aLineNotLandedLeavesThePlacesUnmeasured() throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        let place = try #require(hike.route.dropFirst().first).latitude
+        let id = UUID()
+        hike.addPlace(TrailPlace(latitude: place, longitude: hike.route[1].longitude, id: id), in: context)
+        let rows = HikePlaceRows()
+
+        #expect(hike.orderedPlaces(on: ShownLine(), preparedBy: rows).map(\.anchor) == [nil])
+        #expect(hike.placeRow(id: id, on: ShownLine(), preparedBy: rows)?.anchor == nil)
+        #expect(hike.placeRow(id: id, on: nil, preparedBy: rows)?.anchor != nil, "no line asks the hike")
+    }
+
     /// The real projection, counted: how often it ran, how many places it was
     /// asked about, how often that was on the main thread, and how many runs
     /// have finished.

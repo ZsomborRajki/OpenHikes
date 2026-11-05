@@ -53,6 +53,18 @@
 //  to the shared read. Either switch compares the new read with the line on
 //  screen, off the main actor, and the same line moves nothing.
 //
+//  ## The screens over it
+//
+//  A place's screen, *Add Place*, *Places Around Trail*, a walk's summary and
+//  the community share form are all about the same hike, and each read
+//  `hike.route` on the main actor, so each paid what the hike's screen stopped
+//  paying (#1263). One of these serves them all: ``HikeDetailInteraction``
+//  holds it, for as long as any screen about the hike is on the path, so a
+//  screen pushed over the hike's own opens on the line that has landed, with
+//  nothing to read and no pass to draw it again. It keeps a turn of the phone
+//  from reading the line again, too. A screen with nothing under it, such as
+//  a place opened over the recording screen, asks for its hike's line itself.
+//
 
 import Foundation
 import Observation
@@ -112,6 +124,17 @@ final class ShownLine {
 
     /// How many points the line on screen has, and none before it lands.
     var pointCount: Int { current?.route.count ?? 0 }
+
+    /// Whether ``current`` is the line the read in force holds, and nothing
+    /// has replaced it. False from the moment an edit is heard until the line
+    /// after it lands.
+    ///
+    /// For work about to act on the line, not for a body: nothing observed
+    /// moves when it turns true again and the same line landed.
+    var isSettled: Bool {
+        guard let read else { return false }
+        return landedRead === read && !read.isReplaced
+    }
 
     /// Shows `hike`'s line from here on and hands back the read in force,
     /// the one the screen builds its work from.

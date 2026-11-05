@@ -38,6 +38,9 @@ import SwiftUI
 struct HikePlaceAroundCard: View {
     let search: HikePlacesAroundSearch
     let hike: Hike
+    /// The hike's line as its screens read it — see ``ShownLine``. `nil` on a
+    /// recording's *Places Nearby*.
+    var line: ShownLine?
     /// Where the hike's own places are read from — see ``HikePlaceRows``.
     var placeRows: HikePlaceRows?
     /// Adds a found place to the hike.
@@ -49,7 +52,8 @@ struct HikePlaceAroundCard: View {
 
     var body: some View {
         Group {
-            if let id = search.selection, let content = Content(id: id, hike: hike, rows: placeRows, search: search) {
+            if let id = search.selection,
+               let content = Content(id: id, hike: hike, line: line, rows: placeRows, search: search) {
                 HikePlaceAroundCardContent(
                     content: content,
                     hike: hike,
@@ -80,8 +84,8 @@ struct HikePlaceAroundCard: View {
         let isOnHike: Bool
 
         @MainActor
-        init?(id: UUID, hike: Hike, rows: HikePlaceRows?, search: HikePlacesAroundSearch) {
-            if let held = hike.placeRow(id: id, preparedBy: rows) {
+        init?(id: UUID, hike: Hike, line: ShownLine?, rows: HikePlaceRows?, search: HikePlacesAroundSearch) {
+            if let held = hike.placeRow(id: id, on: line, preparedBy: rows) {
                 row = held
                 isOnHike = true
             } else if let found = search.row(id) {

@@ -151,16 +151,16 @@ struct HikeDetailView: View {
     /// for. The trail maker's Save and its refusal are two presentations for
     /// the same reason.
     @State var isShowingResetRefusal = false
+    // swiftlint:enable private_swiftui_state
+    /// Owned by the navigation session so changing presentation hosts keeps
+    /// the selected section and an unfinished rename. Read only by this screen.
+    @Bindable var interaction = HikeDetailInteraction()
     /// The hike's line, read off the main actor and read again only when it
     /// changes, which is what everything on this screen that needs the line
     /// takes it from. Nothing here reads `hike.route`: after any save to the
     /// store, that decoded the whole line on the main actor again (#1252).
     /// See ``ShownLine``.
-    @State var line = ShownLine()
-    // swiftlint:enable private_swiftui_state
-    /// Owned by the navigation session so changing presentation hosts keeps
-    /// the selected section and an unfinished rename. Read only by this screen.
-    @Bindable var interaction = HikeDetailInteraction()
+    var line: ShownLine { interaction.line }
     private static let storedBytesRefreshDebounce: Duration = .seconds(5)
     /// How long the section picker takes to fade as the sheet settles at,
     /// or leaves, its smallest detent. See ``segmentPicker``.
@@ -812,7 +812,7 @@ private extension HikeDetailView {
         // The maker's save lands here, and a hiker standing still sends
         // no fix to notice the edit by: a walk along the old line must not
         // be shown against the new one.
-        walkSession.endIfRouteChanged(knowing: (hike, prepared.walkRevision))
+        walkSession.endIfRouteChanged(knowing: (hike.id, prepared.walkRevision))
         // Keep the first live fix from racing the widget's initial trail snapshot.
         await backgroundTracker.waitForSelectionPublish()
         await followLocation(profile: built, along: along)

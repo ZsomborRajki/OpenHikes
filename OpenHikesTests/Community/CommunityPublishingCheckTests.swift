@@ -59,12 +59,31 @@ struct CommunityPublishingCheckTests {
         }
     }
 
+    /// The check reads the store, so the hikes are saved first, as an
+    /// upload's own save has them by the time a form asks.
+    private static func eligibility(
+        of hike: Hike,
+        in context: ModelContext
+    ) async throws -> CommunityPublishingEligibility {
+        try context.save()
+        return await CommunityPublishingCheck.eligibility(of: hike, in: context)
+    }
+
+    /// The same, for the fetch on its own.
+    private static func alreadyShared(
+        in context: ModelContext,
+        excluding hike: Hike
+    ) async throws -> [CommunityPublishingCheck.SharedHike] {
+        try context.save()
+        return await CommunityPublishingCheck.alreadyShared(in: context.container, excluding: hike.persistentModelID)
+    }
+
     @Test("a first walk in an empty library may be published")
     func firstWalk() async throws {
         let context = try Fixture.modelContext()
         let hike = Self.hike(in: context, title: "Ridge", route: Self.line())
 
-        #expect(await CommunityPublishingCheck.eligibility(of: hike, in: context) == .eligible)
+        #expect(try await Self.eligibility(of: hike, in: context) == .eligible)
     }
 
     /// A hike is never compared with itself. Re-opening the form for a hike
@@ -76,7 +95,7 @@ struct CommunityPublishingCheckTests {
         let context = try Fixture.modelContext()
         let hike = Self.hike(in: context, title: "Ridge", route: Self.line(), submissionID: "sub-1")
 
-        #expect(await CommunityPublishingCheck.eligibility(of: hike, in: context) == .eligible)
+        #expect(try await Self.eligibility(of: hike, in: context) == .eligible)
     }
 
     /// The earlier hike is **published**, so the second walk's photographs
@@ -96,7 +115,7 @@ struct CommunityPublishingCheckTests {
         // one path, not two paths.
         let again = Self.hike(in: context, title: "Ridge again", route: Self.line(eastOffset: 20))
 
-        let eligibility = await CommunityPublishingCheck.eligibility(of: again, in: context)
+        let eligibility = try await Self.eligibility(of: again, in: context)
         #expect(eligibility.reason == .retreads(title: "Thumsee Ridge Traverse"))
         // The *earlier* hike's listing and the earlier hike's name, because
         // that is the trail the pictures are joining.
@@ -114,7 +133,7 @@ struct CommunityPublishingCheckTests {
         _ = Self.hike(in: context, title: "Private ridge", route: Self.line())
         let again = Self.hike(in: context, title: "Ridge again", route: Self.line(eastOffset: 20))
 
-        #expect(await CommunityPublishingCheck.eligibility(of: again, in: context) == .eligible)
+        #expect(try await Self.eligibility(of: again, in: context) == .eligible)
     }
 
     /// A submission still waiting for review counts. The listing it is about
@@ -131,7 +150,7 @@ struct CommunityPublishingCheckTests {
         _ = Self.hike(in: context, title: "Sent yesterday", route: Self.line(), submissionID: "sub-1")
         let again = Self.hike(in: context, title: "Same walk", route: Self.line())
 
-        let eligibility = await CommunityPublishingCheck.eligibility(of: again, in: context)
+        let eligibility = try await Self.eligibility(of: again, in: context)
         #expect(eligibility == .refused(.retreads(title: "Sent yesterday")))
         #expect(eligibility.photoTarget == nil)
     }
@@ -143,7 +162,7 @@ struct CommunityPublishingCheckTests {
         _ = Self.hike(in: context, title: "East ridge", route: Self.line(), submissionID: "sub-1")
         let west = Self.hike(in: context, title: "West ridge", route: Self.line(eastOffset: 600))
 
-        #expect(await CommunityPublishingCheck.eligibility(of: west, in: context) == .eligible)
+        #expect(try await Self.eligibility(of: west, in: context) == .eligible)
     }
 
     /// Provenance is answered before anything is fetched, which is why an
@@ -158,7 +177,7 @@ struct CommunityPublishingCheckTests {
             hike.importedAuthorName = "Anna"
         }
 
-        let eligibility = await CommunityPublishingCheck.eligibility(of: saved, in: context)
+        let eligibility = try await Self.eligibility(of: saved, in: context)
         #expect(eligibility.reason == .savedFromTheCommunity(author: "Anna"))
         // The listing it was saved from, not the published hike it also
         // happens to retrace: provenance is answered first and answers it
@@ -190,13 +209,13 @@ struct CommunityPublishingCheckTests {
     /// The fetch itself, on its own: what `alreadyShared` includes and what it
     /// leaves out.
     @Test("only hikes with a submission are candidates, and never the hike itself")
-    func candidates() throws {
+    func candidates() async throws {
         let context = try Fixture.modelContext()
         _ = Self.hike(in: context, title: "Sent", route: Self.line(), submissionID: "sub-1")
         _ = Self.hike(in: context, title: "Private", route: Self.line())
         let subject = Self.hike(in: context, title: "Subject", route: Self.line(), submissionID: "sub-2")
 
-        let candidates = CommunityPublishingCheck.alreadyShared(in: context, excluding: subject)
+        let candidates = try await Self.alreadyShared(in: context, excluding: subject)
         #expect(candidates.map(\.title) == ["Sent"])
         // Absent rather than blank, which is the distinction the whole retread
         // answer now turns on — see this file's header.
@@ -208,7 +227,7 @@ struct CommunityPublishingCheckTests {
     /// rather than looked up again, so the target and the title can never be
     /// about two different hikes.
     @Test("a published candidate carries the listing a contribution would use")
-    func candidatesCarryTheirListing() throws {
+    func candidatesCarryTheirListing() async throws {
         let context = try Fixture.modelContext()
         _ = Self.hike(
             in: context,
@@ -219,7 +238,7 @@ struct CommunityPublishingCheckTests {
         )
         let subject = Self.hike(in: context, title: "Subject", route: Self.line())
 
-        let candidates = CommunityPublishingCheck.alreadyShared(in: context, excluding: subject)
+        let candidates = try await Self.alreadyShared(in: context, excluding: subject)
         #expect(candidates.map(\.listingID) == ["listing-1"])
     }
 }

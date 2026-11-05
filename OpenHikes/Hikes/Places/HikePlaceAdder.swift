@@ -74,6 +74,8 @@ import SwiftUI
 
 struct HikePlaceAdder: View {
     let hike: Hike
+    /// The hike's line, which the pins are ordered along — see ``ShownLine``.
+    let line: ShownLine
     let spot: HikePlaceSpot
     var placePins: TrailPlacePinController?
     /// Everything the form has been told and handed, kept by the sheet rather
@@ -142,7 +144,7 @@ struct HikePlaceAdder: View {
             }
         }
         .background {
-            HikePlaceAdderPinClaim(hike: hike, controller: placePins, draft: session.draft, spot: spot)
+            HikePlaceAdderPinClaim(hike: hike, line: line, controller: placePins, draft: session.draft, spot: spot)
         }
         // The session's own staging rather than this view's: a camera this
         // form presented can outlive it by a turn of the phone, and its
@@ -332,12 +334,13 @@ private struct HikePlaceAdderNoteField: View {
 /// glyph. Its own view so that a reader of the kind is not the form.
 private struct HikePlaceAdderPinClaim: View {
     let hike: Hike
+    let line: ShownLine
     let controller: TrailPlacePinController?
     let draft: HikePlaceDraft
     let spot: HikePlaceSpot
 
     var body: some View {
-        HikePlacePinClaim(hike: hike, controller: controller, placeholder: draft.placeholder(at: spot))
+        HikePlacePinClaim(hike: hike, controller: controller, line: line, placeholder: draft.placeholder(at: spot))
     }
 }
 

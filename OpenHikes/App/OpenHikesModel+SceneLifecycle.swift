@@ -59,7 +59,7 @@ extension OpenHikesModel {
         // by; coming back is the other moment it can. The same goes for a
         // route edited under the walk on the hiker's other device.
         walkSession.endIfAbandoned()
-        walkSession.endIfRouteChanged()
+        walkSession.checkWalkedLine()
         cloudSync.sceneDidBecomeActive()
         entitlement.sceneDidBecomeActive()
     }

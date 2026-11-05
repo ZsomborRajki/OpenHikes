@@ -177,7 +177,7 @@ extension HikeDetailView {
                     await CommunityContributionCheck.refresh(hike, transport: transport)
                 }
                 .sheet(isPresented: $isSharingToCommunity) {
-                    CommunityShareSheet(hike: hike, transport: transport)
+                    CommunityShareSheet(hike: hike, line: line, transport: transport)
                 }
                 .sheet(item: $contributionTarget) { target in
                     CommunityPhotoShareSheet(

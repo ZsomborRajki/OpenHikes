@@ -38,16 +38,26 @@ struct WalkSummaryTrailTests {
         return walk
     }
 
+    /// The hike's line, read as its screens read it.
+    private func shownLine(of walk: HikeWalk) async throws -> ShownLine {
+        let selection = ShownLineTests.selection()
+        let line = ShownLine()
+        line.show(try #require(walk.hike), selection: selection.lines, followedBy: selection.watch)
+        await line.landing?.value
+        return line
+    }
+
     @Test("the prepared profile and revision describe the same line")
     func unchangedTrailCanBeDrawn() async throws {
         let context = try Fixture.modelContext()
         let walk = walk(in: context)
-        let key = WalkSummaryRouteKey(walk: walk)
+        let line = try await shownLine(of: walk)
+        let key = WalkSummaryRouteKey(walk: walk, line: line)
         let trail = try await WalkSummaryTrail.prepare(along: key)
 
         #expect(trail.key == key)
-        #expect(trail.matches(walk))
-        let segments = try await trail.coveredSegments(of: walk)
+        #expect(trail.matches(walk, on: line))
+        let segments = try await trail.coveredSegments(of: walk, on: line)
         #expect(segments.count == 1)
         #expect(segments.first?.first?.latitude == Self.route.first?.latitude)
         #expect(segments.first?.last?.latitude != Self.route.last?.latitude)
@@ -57,7 +67,7 @@ struct WalkSummaryTrailTests {
     func cancelledPreparationIsRejected() async throws {
         let context = try Fixture.modelContext()
         let walk = walk(in: context)
-        let key = WalkSummaryRouteKey(walk: walk)
+        let key = WalkSummaryRouteKey(walk: walk, line: try await shownLine(of: walk))
         let task = Task { try await WalkSummaryTrail.prepare(along: key) }
         // Still on the main actor, before the task can enter its build.
         task.cancel()
@@ -65,23 +75,25 @@ struct WalkSummaryTrailTests {
         await #expect(throws: CancellationError.self) { try await task.value }
     }
 
-    @Test("an old profile stops matching as soon as the route changes")
+    @Test("an old profile stops drawing as soon as the route changes, and stops matching once the new line lands")
     func editedRouteRejectsTheOldProfile() async throws {
         let context = try Fixture.modelContext()
         let walk = walk(in: context)
         let hike = try #require(walk.hike)
-        let trail = try await WalkSummaryTrail.prepare(along: WalkSummaryRouteKey(walk: walk))
-        #expect(trail.matches(walk))
+        let line = try await shownLine(of: walk)
+        let trail = try await WalkSummaryTrail.prepare(along: WalkSummaryRouteKey(walk: walk, line: line))
+        #expect(trail.matches(walk, on: line))
 
         hike.replaceRoute(with: hike.route.reversed())
 
-        #expect(!trail.matches(walk), "before the replacement profile has even been prepared")
-        await #expect(throws: CancellationError.self) {
-            try await trail.coveredSegments(of: walk) { _, _ in
+        await #expect(throws: CancellationError.self, "before the new line has even been read") {
+            try await trail.coveredSegments(of: walk, on: line) { _, _ in
                 Issue.record("an obsolete profile must not start drawing")
                 return []
             }
         }
+        await settleDelegateHop(until: "the new line has landed") { line.isSettled }
+        #expect(!trail.matches(walk, on: line))
     }
 
     @Test("a route edit during drawing discards the old covered stretches")
@@ -89,10 +101,11 @@ struct WalkSummaryTrailTests {
         let context = try Fixture.modelContext()
         let walk = walk(in: context)
         let hike = try #require(walk.hike)
-        let trail = try await WalkSummaryTrail.prepare(along: WalkSummaryRouteKey(walk: walk))
+        let line = try await shownLine(of: walk)
+        let trail = try await WalkSummaryTrail.prepare(along: WalkSummaryRouteKey(walk: walk, line: line))
         let gate = SegmentGate()
         let task = Task {
-            try await trail.coveredSegments(of: walk) { ranges, profile in
+            try await trail.coveredSegments(of: walk, on: line) { ranges, profile in
                 await gate.wait()
                 return await WalkHighlight.segments(covering: ranges, along: profile)
             }
@@ -108,10 +121,11 @@ struct WalkSummaryTrailTests {
     func cancelledDrawingIsRejected() async throws {
         let context = try Fixture.modelContext()
         let walk = walk(in: context)
-        let trail = try await WalkSummaryTrail.prepare(along: WalkSummaryRouteKey(walk: walk))
+        let line = try await shownLine(of: walk)
+        let trail = try await WalkSummaryTrail.prepare(along: WalkSummaryRouteKey(walk: walk, line: line))
         let gate = SegmentGate()
         let task = Task {
-            try await trail.coveredSegments(of: walk) { ranges, profile in
+            try await trail.coveredSegments(of: walk, on: line) { ranges, profile in
                 await gate.wait()
                 return await WalkHighlight.segments(covering: ranges, along: profile)
             }

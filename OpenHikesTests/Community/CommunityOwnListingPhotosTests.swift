@@ -102,6 +102,7 @@ struct CommunityOwnListingPhotosTests {
             hike.communityListingID = "listing-1"
         }
         let again = Fixture.hike(in: context, title: "Almbachklamm again", route: published.route)
+        try context.save()
 
         let eligibility = await CommunityPublishingCheck.eligibility(of: again, in: context)
 

@@ -33,9 +33,14 @@ extension TrailWalkSession {
         )
     }
 
-    /// ``recordBackgroundMatch(hikeID:distance:accuracy:at:)`` for a fix that
-    /// reports no uncertainty.
-    @discardableResult func recordBackgroundMatch(hikeID: UUID, distance: Double, at timestamp: Date) -> Bool {
-        recordBackgroundMatch(hikeID: hikeID, distance: distance, accuracy: 0, at: timestamp)
+    /// ``recordBackgroundMatch(hikeID:distance:accuracy:at:revision:)`` for a
+    /// fix that reports no uncertainty.
+    @discardableResult func recordBackgroundMatch(
+        hikeID: UUID,
+        distance: Double,
+        at timestamp: Date,
+        revision: String? = nil
+    ) -> Bool {
+        recordBackgroundMatch(hikeID: hikeID, distance: distance, accuracy: 0, at: timestamp, revision: revision)
     }
 }
