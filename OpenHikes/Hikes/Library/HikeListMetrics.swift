@@ -48,8 +48,8 @@ nonisolated enum HikeListMetrics {
     struct ElevationMeasurements: Sendable {
         /// One for each hike whose cached figures are not its line's.
         var figures: [ElevationMeasurement] = []
-        /// The hikes whose row, or the figures cached beside it, could not
-        /// be fetched.
+        /// The hikes a fetch failed for: of the row, or of the figures cached
+        /// beside it when the line needed them.
         var failed: Set<UUID> = []
 
         /// Keeps what `measuring` found of `hikeID`'s line: figures to
@@ -61,14 +61,14 @@ nonisolated enum HikeListMetrics {
                 if let measurement = try measuring() { figures.append(measurement) }
             } catch {
                 HikeListMetrics.logger.error(
-                    "Could not read a listed line: \(error.localizedDescription, privacy: .public)"
+                    "Could not read a listed hike or its figures: \(error.localizedDescription, privacy: .public)"
                 )
                 failed.insert(hikeID)
             }
         }
     }
 
-    private struct RouteInput {
+    struct RouteInput {
         let hikeID: UUID
         let route: [RouteCoordinate]
     }
@@ -109,22 +109,38 @@ nonisolated enum HikeListMetrics {
             guard !Task.isCancelled else { break }
             measured.record(hikeID) {
                 guard let hike = try hike(hikeID, in: context) else { return nil }
-                return try measurement(for: RouteInput(hikeID: hikeID, route: hike.route), in: context)
+                return try measurement(for: RouteInput(hikeID: hikeID, route: hike.route)) {
+                    try HikeLocalState.fetchExisting(for: hikeID, in: context)
+                }
             }
         }
         return measured
     }
 
-    private static func measurement(for input: RouteInput, in context: ModelContext) throws -> ElevationMeasurement? {
+    /// What `input`'s line measures, against the figures `cached` fetches
+    /// beside it. A line with usable heights is measured even when that
+    /// fetch fails, since publication compares the figures with its own
+    /// copy; only a line without them throws the failure, because only the
+    /// cached figures say whether old ones must be cleared. Apart from the
+    /// fetch so that a suite can fail it.
+    static func measurement(
+        for input: RouteInput,
+        cached: () throws -> HikeLocalState?
+    ) throws -> ElevationMeasurement? {
         let revision = elevationRevision(of: input.route)
-        let state = try HikeLocalState.fetchExisting(for: input.hikeID, in: context)
+        let fetched = Result(catching: cached)
+        let state = try? fetched.get()
         if state?.elevationRouteRevision == revision, state?.climbMeters != nil, state?.descentMeters != nil {
             return nil
         }
         let totals = elevationTotals(of: input.route)
-        // A missing height is not a flat route. An existing obsolete figure
-        // must still be cleared; an unmeasured route needs no new sidecar.
-        guard totals.hasChange || state?.climbMeters != nil || state?.descentMeters != nil else { return nil }
+        if !totals.hasChange {
+            // A missing height is not a flat route. An existing obsolete
+            // figure must still be cleared; an unmeasured route needs no new
+            // sidecar.
+            let cachedState = try fetched.get()
+            guard cachedState?.climbMeters != nil || cachedState?.descentMeters != nil else { return nil }
+        }
         return ElevationMeasurement(
             hikeID: input.hikeID,
             climbMeters: totals.hasChange ? totals.gainMeters : nil,

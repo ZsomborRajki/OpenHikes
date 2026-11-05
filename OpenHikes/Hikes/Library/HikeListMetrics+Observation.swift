@@ -53,16 +53,21 @@
 //  way.
 //
 //  A measurement fetches each hike's row and the figures cached beside it,
-//  and a fetch can fail. That says nothing about the line, but the change
-//  that named the hike was spent on it, so the hike would keep its old
-//  figures until its line changed again (#1315). So a hike whose fetch
-//  failed stays owed: each wake measures it again, whatever the wake was
-//  for, until a fetch lands. Its first failure asks for one more pass at
-//  once, for the reason a failed look does: the save it took may be the
-//  last. A failure that holds asks for nothing more, and that hike waits
-//  for the next wake. A row that is gone owes nothing: the list's task
-//  starts over when the listed hikes change. The library's lines on the
-//  map treat a failed read the same way (`LibraryLines.swift`).
+//  and a fetch can fail. A line with usable heights is measured without the
+//  figures; a line without them needs them, to know whether old ones must
+//  be cleared. A failure that stops a measurement says nothing about the
+//  line, but the change that named the hike was spent on it, so the hike
+//  would keep its old figures until its line changed again (#1315). So a
+//  hike whose fetch failed stays owed: each wake measures it again,
+//  whatever the wake was for, until a fetch lands. Its first failure asks
+//  for one more pass at once, for the reason a failed look does: the save
+//  it took may be the last. A failure that holds asks for nothing more, and
+//  that hike waits for the next wake. A row that is gone owes nothing: the
+//  list's task starts over when the listed hikes change. Publication's own
+//  fetches, on the main context, owe nothing either: one that fails, like
+//  a save that fails, leaves the hike for its next change or the task's
+//  next start. The library's lines on the map treat a failed read the same
+//  way as a measurement (`LibraryLines.swift`).
 //
 //  All of it stays in the list's task, never its body. Routes are read,
 //  fingerprinted and measured in a context of their own, publication reads

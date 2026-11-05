@@ -15,6 +15,7 @@
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import RealModule
 import SwiftData
 import Synchronization
 import Testing
@@ -26,6 +27,7 @@ struct HikeListElevationFailedFetchTests {
     private struct Watching {
         let stage: HikeListElevationStage
         let fetches: FailingFetches
+        let looks: LandedLooks
         let task: Task<Void, Never>
 
         /// The hikes each measurement after the first pass was handed.
@@ -37,17 +39,19 @@ struct HikeListElevationFailedFetchTests {
     private func watching() async throws -> Watching {
         let stage = try await HikeListElevationStage(hostingTheList: true)
         let fetches = FailingFetches()
+        let looks = LandedLooks()
         let task = Task {
             await HikeListMetrics.observeElevation(
                 in: stage.hikes,
                 container: stage.container,
-                measuring: fetches.measure
+                measuring: fetches.measure,
+                checking: looks.look
             ) {
                 stage.didPublish()
             }
         }
         await settleDelegateHop(until: "the first pass is published") { stage.publications == 1 }
-        return Watching(stage: stage, fetches: fetches, task: task)
+        return Watching(stage: stage, fetches: fetches, looks: looks, task: task)
     }
 
     private func saveElsewhere(climbing climb: Double, on index: Int, in stage: HikeListElevationStage) async throws {
@@ -81,7 +85,9 @@ struct HikeListElevationFailedFetchTests {
     /// Passes run one at a time, so a line saved afterwards being published
     /// says the pass before it is over, and any pass that one asked for. An
     /// owed hike is measured once a wake, before the look says what else is
-    /// due.
+    /// due. A failure is counted in the seam, before the task has its
+    /// answer, so the next save waits for the retry pass's look to land: a
+    /// save before it would be named by that look rather than its own wake.
     @Test("a failure that holds keeps the old figures and asks for one more pass, and no more")
     func aFailureThatHoldsAsksForOneMorePass() async throws {
         let watching = try await watching()
@@ -93,9 +99,11 @@ struct HikeListElevationFailedFetchTests {
         let later = stage.hikes[3]
 
         watching.fetches.fail(edited.id)
+        let looked = watching.looks.count
         try await saveElsewhere(climbing: 500, on: 1, in: stage)
-        await settleDelegateHop(until: "the save's pass and the one it asked for both failed") {
-            watching.fetches.failures(of: edited.id) == 2
+        // The save's look, the failed pass's, and the retry pass's.
+        await settleDelegateHop(until: "the save's pass and the one it asked for both failed, and looked") {
+            watching.fetches.failures(of: edited.id) == 2 && watching.looks.count == looked + 3
         }
         try await saveElsewhere(climbing: 400, on: 2, in: stage)
         await settleDelegateHop(until: "the other new line is published") { stage.has(other, climbing: 400) }
@@ -125,6 +133,41 @@ struct HikeListElevationFailedFetchTests {
         measured.record(failing) { throw FetchFailure() }
         #expect(measured.failed == [failing])
         #expect(measured.figures.map(\.hikeID) == [hike.id])
+    }
+
+    /// Only a line without usable heights needs the figures cached beside
+    /// it, to know whether old ones must be cleared.
+    @Test("a failed fetch of the cached figures holds back only a line without heights")
+    func aFailedFigureFetchHoldsBackOnlyALineWithoutHeights() throws {
+        let line = HikeListElevationStage.line(0, climb: 200)
+        let measured = HikeListMetrics.RouteInput(hikeID: UUID(), route: line)
+        let figures = try HikeListMetrics.measurement(for: measured) { throw FetchFailure() }
+        let climb = try #require(figures?.climbMeters)
+        #expect(climb.isApproximatelyEqual(to: 200, absoluteTolerance: 0.001))
+
+        let unmeasured = HikeListMetrics.RouteInput(
+            hikeID: UUID(),
+            route: line.map { RouteCoordinate(latitude: $0.latitude, longitude: $0.longitude) }
+        )
+        #expect(throws: FetchFailure.self) {
+            try HikeListMetrics.measurement(for: unmeasured) { throw FetchFailure() }
+        }
+        #expect(try HikeListMetrics.measurement(for: unmeasured) { nil } == nil, "nor does it need new figures")
+    }
+}
+
+/// The list's looks at history, counted as each lands: after it has read
+/// history, before the task has its answer.
+nonisolated private final class LandedLooks: Sendable {
+    private let landed = Mutex(0)
+
+    var count: Int { landed.withLock { $0 } }
+
+    @concurrent
+    func look(_ request: StoreHistoryCheck.Request) async -> StoreHistoryCheck.Answer {
+        let answer = await StoreHistoryCheck.answer(request)
+        landed.withLock { $0 += 1 }
+        return answer
     }
 }
 
