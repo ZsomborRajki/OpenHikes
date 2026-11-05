@@ -613,6 +613,21 @@ final class TrailDraftController {
         await geocoder?.mapItem(at: coordinate).flatMap(TrailStopName.address(of:))
     }
 
+    /// The same address, handed to `show` only while the task that asked
+    /// still owns the card.
+    ///
+    /// The card is handed every spot the hiker taps and keeps its state, so
+    /// the question about the last spot is cancelled while MapKit is still
+    /// answering it, and its answer — or the `nil` a refused one comes back
+    /// as — would land on the new spot's card. Checked on the main actor,
+    /// where SwiftUI cancels, for the reason
+    /// ``HikePhotoLoader/thumbnail(for:in:show:)`` gives.
+    func address(at coordinate: CLLocationCoordinate2D, show: (String?) -> Void) async {
+        let address = await address(at: coordinate)
+        guard !Task.isCancelled else { return }
+        show(address)
+    }
+
     // MARK: - A point under a finger
 
     /// Takes hold of the point at `index`. Answers whether there was one.

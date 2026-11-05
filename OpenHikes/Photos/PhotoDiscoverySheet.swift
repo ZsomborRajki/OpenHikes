@@ -484,7 +484,9 @@ private struct DiscoveryAddButton: View {
 /// `.task(id:)` rather than `onAppear`, for the same reason
 /// ``HikePhotoThumbnail`` uses it: the grid recycles cells, and keying the
 /// load on the match is what stops a reused cell from showing the previous
-/// photo until its own image lands.
+/// photo until its own image lands. A load cancelled on the way, by a cell
+/// scrolled away, writes nothing here — see
+/// ``PhotoDiscoveryController/thumbnail(for:show:)``.
 private struct DiscoveredPhotoTile: View {
     let match: LibraryPhotoMatch
     let controller: PhotoDiscoveryController
@@ -511,7 +513,7 @@ private struct DiscoveredPhotoTile: View {
                 .strokeBorder(isSelected ? Color.accentColor : .clear, lineWidth: 3)
         }
         .task(id: match.id) {
-            image = await controller.thumbnail(for: match)?.image
+            await controller.thumbnail(for: match) { image = $0?.image }
         }
     }
 

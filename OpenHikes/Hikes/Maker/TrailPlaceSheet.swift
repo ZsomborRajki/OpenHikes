@@ -107,7 +107,9 @@ private struct TrailPlaceCardView: View {
     let allowsScrolling: Bool
 
     /// The address MapKit found, `nil` until it answers and for a spot it
-    /// cannot place. Asked once per coordinate.
+    /// cannot place. Asked once per coordinate, and written only by the
+    /// question about the coordinate the card is on now — see
+    /// ``TrailDraftController/address(at:show:)``.
     @State private var address: String?
 
     /// Room between the grabber and the title, as the map sheet leaves above
@@ -140,7 +142,7 @@ private struct TrailPlaceCardView: View {
         .accessibilityIdentifier("trail-place-sheet")
         .task(id: [card.latitude, card.longitude]) {
             address = nil
-            address = await maker.address(at: card.coordinate)
+            await maker.address(at: card.coordinate) { address = $0 }
         }
     }
 
