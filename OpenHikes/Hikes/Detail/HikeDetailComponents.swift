@@ -408,8 +408,7 @@ struct OfflineDownloadButton: View {
 
     private var accessibilityValue: String {
         switch downloader.phase {
-        case .downloading:
-            downloader.progress.formatted(.percent.precision(.fractionLength(0)))
+        case .downloading: downloader.percentSaved
         case .finished: String(localized: "Saved")
         case .failed: String(localized: "Failed")
         case .needsSpace: String(localized: "Needs space")
@@ -423,7 +422,7 @@ struct OfflineDownloadButton: View {
             ActionTile {
                 ProgressView().controlSize(.small)
                     .accessibilityHidden(true)
-                Text("\(Int(downloader.progress * 100))%")
+                Text(downloader.percentSaved)
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(.secondary)
             }
