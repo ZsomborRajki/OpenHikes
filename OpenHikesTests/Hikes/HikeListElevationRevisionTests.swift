@@ -154,7 +154,7 @@ struct HikeListElevationRevisionTests {
 
         // Publication reads no route on the main actor, so the overtaken
         // figures land, stamped with the line they measured.
-        #expect(HikeListMetrics.cacheElevation(measured, in: container))
+        #expect(HikeListMetrics.cacheElevation(measured.figures, in: container))
         try Self.expectClimb(100, on: hike)
 
         #expect(await HikeListMetrics.fillElevation(for: [hike.id], in: container))
@@ -172,9 +172,9 @@ struct HikeListElevationRevisionTests {
         hike.replaceRoute(with: Edit.heights.route)
         try context.save()
         let measured = await HikeListMetrics.measureElevation(for: [hike.id], in: container)
-        #expect(measured.count == 1)
+        #expect(measured.figures.count == 1)
 
-        #expect(HikeListMetrics.cacheElevation(measured, in: container) { _ in
+        #expect(HikeListMetrics.cacheElevation(measured.figures, in: container) { _ in
             throw CocoaError(.fileWriteUnknown)
         } == false)
         try Self.expectClimb(100, on: hike)
