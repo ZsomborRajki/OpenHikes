@@ -221,7 +221,9 @@ struct PlacesNearbyEntry: Identifiable, Equatable {
     ///
     /// Nearest to the hiker rather than along a line, because there is no
     /// line yet — and the nearest is what a hiker looking around is asking
-    /// about. Ties keep the order they came in.
+    /// about. Places as far away keep the order they came in, the walk's own
+    /// first, because `sorted(by:)` is stable — and with no origin that is
+    /// every place, so the list is the order it came in.
     static func sorted(
         held: [TrailPlaceRow],
         candidates: [TrailPlaceRow],
@@ -229,19 +231,15 @@ struct PlacesNearbyEntry: Identifiable, Equatable {
     ) -> [Self] {
         let entries = held.map { TrailPlaceAroundEntry(row: $0, isAdded: true) }
             + candidates.map { TrailPlaceAroundEntry(row: $0, isAdded: false) }
+        // Measured once each before the sort, rather than in the comparator,
+        // which would measure every place again on every comparison.
         let measured = entries.map { entry in
             Self(
                 entry: entry,
                 meters: origin.map { RouteGeometry.distanceMeters(from: $0, to: entry.row.place.clCoordinate) }
             )
         }
-        return measured.enumerated()
-            .sorted { left, right in
-                let lhs = left.element.meters ?? .infinity
-                let rhs = right.element.meters ?? .infinity
-                return lhs != rhs ? lhs < rhs : left.offset < right.offset
-            }
-            .map(\.element)
+        return measured.sorted { ($0.meters ?? .infinity) < ($1.meters ?? .infinity) }
     }
 }
 

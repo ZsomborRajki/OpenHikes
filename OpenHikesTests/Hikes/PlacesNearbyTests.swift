@@ -52,6 +52,11 @@ struct PlacesNearbyTests {
         )
     }
 
+    /// A place `meters` east of ``here``, as the list is handed it.
+    private static func row(_ name: String, east meters: Double) -> TrailPlaceRow {
+        TrailPlaceRow(place: TrailPlace(coordinate: Self.meters(east: meters, of: Self.here), name: name), anchor: nil)
+    }
+
     private static func spanMeters(_ region: MKCoordinateRegion) -> (latitude: Double, longitude: Double) {
         let perDegree = RouteGeometry.metersPerDegreeLatitude
         return (
@@ -222,5 +227,39 @@ struct PlacesNearbyTests {
         #expect(entries.map(\.entry.row.place.name) == ["Spring", "Bench", "Hut"])
         #expect(entries.map(\.entry.isAdded) == [false, true, false])
         #expect(100.0.isApproximatelyEqual(to: entries.first?.meters ?? 0, absoluteTolerance: 1))
+    }
+
+    /// The sort compares the distance alone and leaves a tie to
+    /// `sorted(by:)` being stable, so this is what holds a tie in place.
+    @Test("places as far from the hiker keep the order they came in, the walk's own first")
+    func equalDistancesKeepArrivalOrder() {
+        let entries = PlacesNearbyEntry.sorted(
+            held: [Self.row("Bench", east: 300)],
+            candidates: [
+                Self.row("Spring", east: 300),
+                Self.row("Gate", east: 100),
+                Self.row("Hut", east: 300),
+                Self.row("Cairn", east: 300),
+            ],
+            from: Self.here
+        )
+
+        #expect(entries.map(\.entry.row.place.name) == ["Gate", "Bench", "Spring", "Hut", "Cairn"])
+        #expect(entries.map(\.entry.isAdded) == [false, true, false, false, false])
+    }
+
+    /// Before anything has been asked there is no origin, so nothing is
+    /// nearer than anything else and the list is the order it came in.
+    @Test("with no origin the walk's own places come first, then the found ones, as they came")
+    func noOriginKeepsArrivalOrder() {
+        let entries = PlacesNearbyEntry.sorted(
+            held: [Self.row("Bench", east: 900), Self.row("Gate", east: 100)],
+            candidates: [Self.row("Spring", east: 700), Self.row("Hut", east: 200)],
+            from: nil
+        )
+
+        #expect(entries.map(\.entry.row.place.name) == ["Bench", "Gate", "Spring", "Hut"])
+        #expect(entries.map(\.entry.isAdded) == [true, true, false, false])
+        #expect(entries.allSatisfy { $0.meters == nil })
     }
 }
