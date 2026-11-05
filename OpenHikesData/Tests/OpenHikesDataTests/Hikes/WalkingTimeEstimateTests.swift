@@ -1,10 +1,10 @@
 //
 //  WalkingTimeEstimateTests.swift
-//  OpenHikesSharedTests
+//  OpenHikesDataTests
 //
 
 import Foundation
-import OpenHikesShared
+import OpenHikesData
 import RealModule
 import Testing
 
