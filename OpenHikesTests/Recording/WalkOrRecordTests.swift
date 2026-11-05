@@ -111,21 +111,37 @@ final class WalkOrRecordTests {
         #expect(!entry.walkEndRefused)
     }
 
-    /// The permission prompt is the clearest of the waits a Start has before
-    /// its draft exists; the precision sheet and the journal's first write
-    /// are the others, and a recovery reading its journal back is a fourth.
-    @Test("a recording still waiting for its draft holds a walk back, by hand or by matched fixes")
-    func recordingWithoutADraftHoldsAWalkBack() async {
+    /// A recorder that has been asked to start and is waiting on its
+    /// permission prompt, the clearest of the waits a Start has before its
+    /// draft exists; the precision sheet and the journal's first write are the
+    /// others, and a recovery reading its journal back is a fourth.
+    private func recordingWithoutADraft() async -> HikeRecorder {
         let hikeRecorder = makeRecorder()
-        let session = walkSession(asking: hikeRecorder)
         source.authorization = .notDetermined
         await hikeRecorder.start()
         #expect(hikeRecorder.isActive, "precondition: a recording under way")
         #expect(hikeRecorder.currentHike == nil, "precondition: with no draft yet")
+        return hikeRecorder
+    }
 
+    @Test("a recording still waiting for its draft holds back a walk started by hand")
+    func recordingWithoutADraftRefusesAStartByHand() async {
+        let session = walkSession(asking: await recordingWithoutADraft())
+        let walked = trail()
+
+        #expect(!session.start(hike: walked, profile: RouteProfile(route: walked.route)))
+        #expect(session.walkUnderWayTitle == nil)
+        #expect(walked.walkInProgress == nil)
+    }
+
+    /// The fixes that start a walk with nothing recording — see
+    /// ``PendingWalkStart`` — start none while a recording waits.
+    @Test("a recording still waiting for its draft holds back a walk matched fixes would start")
+    func recordingWithoutADraftRefusesAStartByFixes() async {
+        let session = walkSession(asking: await recordingWithoutADraft())
         let walked = trail()
         let profile = RouteProfile(route: walked.route)
-        #expect(!session.start(hike: walked, profile: profile))
+
         for point in 0...2 {
             clock.advance(by: 60)
             session.recordForegroundMatch(hike: walked, profile: profile, distance: profile.distances[point])
@@ -133,5 +149,31 @@ final class WalkOrRecordTests {
 
         #expect(session.walkUnderWayTitle == nil)
         #expect(walked.walkInProgress == nil)
+    }
+
+    /// The suites above hand their session the recorder's answer themselves;
+    /// this holds the composition root to handing over the same one.
+    @Test("the app's walk session asks the recorder whether a recording is under way")
+    func composedSessionAsksTheRecorder() async throws {
+        let hikeRecorder = makeRecorder()
+        let session = OpenHikesModel.makeWalkSession(
+            container,
+            BackgroundTrailTracker(
+                container: container,
+                monitor: StubLocationMonitor(),
+                regionMonitor: FakeTrailRegionMonitor(),
+                defaults: try makeScratchDefaults()
+            ),
+            nil,
+            hikeRecorder,
+            WeatherManager(widgetPublisher: .inert)
+        )
+        #expect(!session.isRecording, "precondition: nothing recording")
+
+        source.authorization = .notDetermined
+        await hikeRecorder.start()
+        #expect(hikeRecorder.currentHike == nil, "precondition: with no draft yet")
+
+        #expect(session.isRecording)
     }
 }

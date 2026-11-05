@@ -98,7 +98,7 @@ final class TrailWalkSession {
     /// back, are recordings with no draft yet, and a walk begun in that wait
     /// would be beside one the moment the draft is written.
     ///
-    /// Assigned by the composition root, as the controller's is; until it is,
+    /// Assigned by ``OpenHikesModel/makeWalkSession(_:_:_:_:_:)``. Until it is,
     /// the draft alone answers, which is all a suite about the walk needs.
     @ObservationIgnored var hasActiveRecording: () -> Bool = { false }
     /// The reminder a paused walk can produce, when the app has one.
