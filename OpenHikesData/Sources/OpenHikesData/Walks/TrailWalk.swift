@@ -33,7 +33,8 @@ nonisolated public enum TrailWalkPolicy {
     /// this long, it is a match that landed behind the one before it. The
     /// slack a match is allowed off the route, read along it — see
     /// ``TrailWalkCoverage/walkedTowardsStart``. The same length turns a walk
-    /// under way round — see ``TrailWalkCoverage/direction``.
+    /// under way round, or more where its fixes are less certain — see
+    /// ``TrailWalkCoverage/direction``.
     public static let minimumTurnMeters: Double = RouteProfile.followMatchThresholdMeters
     /// Coverage at or above this, with a match this close to *either* end of
     /// the route, is the walk reaching the end on its own.
@@ -162,6 +163,10 @@ nonisolated public struct TrailWalkCoverage: Codable, Equatable, Sendable {
     /// a turn is measured from; before it has a way, where they began. `nil`
     /// before the first match, and after a break in continuity.
     private var furthestThisWayMeters: Double?
+    /// The horizontal accuracy of the fix behind ``furthestThisWayMeters``,
+    /// in metres. `nil` beside it, and on a record written before this was
+    /// kept, which reads as a fix that said nothing.
+    private var furthestThisWayAccuracyMeters: Double?
 
     public init() {
         // The memberwise initialiser is private, since the union is.
@@ -207,9 +212,9 @@ nonisolated public struct TrailWalkCoverage: Codable, Equatable, Sendable {
     }
 
     /// The same union, from stored pairs. Pairs are trusted to be merged —
-    /// they were written by ``record(distance:)`` — but re-merged anyway, each
-    /// with the pairs walked its way, so a row edited by hand still reads as
-    /// a union.
+    /// they were written by ``record(distance:accuracy:)`` — but re-merged
+    /// anyway, each with the pairs walked its way, so a row edited by hand
+    /// still reads as a union.
     public init(intervals: [Double], furthestDistanceMeters: Double) {
         var built = Self()
         for (start, end) in Self.pairs(of: intervals) {
@@ -221,10 +226,14 @@ nonisolated public struct TrailWalkCoverage: Codable, Equatable, Sendable {
         self = built
     }
 
-    /// Folds in an on-route match at `distance` metres along the route.
-    public mutating func record(distance: Double) {
+    /// Folds in an on-route match at `distance` metres along the route, of a
+    /// fix that put the hiker within `accuracy` metres — its horizontal
+    /// accuracy — which is what ``direction`` weighs a turn against. 0, for a
+    /// match with no fix behind it, leaves a turn at
+    /// ``TrailWalkPolicy/minimumTurnMeters``.
+    public mutating func record(distance: Double, accuracy: Double = 0) {
         furthestDistanceMeters = max(furthestDistanceMeters, distance)
-        updateDirection(at: distance)
+        updateDirection(at: distance, accuracy: accuracy)
         defer { lastMatchedDistance = distance }
         guard let last = lastMatchedDistance,
               last != distance,
@@ -251,11 +260,12 @@ nonisolated public struct TrailWalkCoverage: Codable, Equatable, Sendable {
     public mutating func breakContinuity() {
         lastMatchedDistance = nil
         furthestThisWayMeters = nil
+        furthestThisWayAccuracyMeters = nil
     }
 
-    /// Which way the walk is going now: the way its matches last moved
-    /// ``TrailWalkPolicy/minimumTurnMeters``, in the order they landed. `nil`
-    /// until they have moved that far.
+    /// Which way the walk is going now: the way its matches last moved a
+    /// turn's length, ``TrailWalkPolicy/minimumTurnMeters`` or more, in the
+    /// order they landed. `nil` until they have moved that far.
     ///
     /// The deadband ``walkedTowardsStart`` keeps on a stored stretch, kept
     /// here on the running position. Measured from the furthest the walk has
@@ -263,31 +273,57 @@ nonisolated public struct TrailWalkCoverage: Codable, Equatable, Sendable {
     /// nothing however often it happens, and a hiker who has turned is
     /// believed however short their steps.
     ///
-    /// A match past ``TrailWalkPolicy/gapBoundMeters`` counts. The bound
-    /// refuses the ground in between, not the fact of having got there, and
-    /// every step of a significant-change feed can be past it.
+    /// Longer where the fixes say less: at least the horizontal accuracies of
+    /// the fix a turn is measured from and of this one, end to end. A hiker
+    /// standing still has every fix land within its accuracy of them, so two
+    /// can be that far apart without a step taken, and a walk accepts fixes
+    /// good only to ``RouteProfile/followMatchThresholdMeters``, which end to
+    /// end is twice a turn. Against the turn alone, matches wandering along
+    /// the route at a standstill turned the walk on every swing, and its time
+    /// left with it (#1307). Fixes good to half a turn leave it a turn.
+    ///
+    /// A match past ``TrailWalkPolicy/gapBoundMeters`` counts, however
+    /// uncertain its fix. The bound refuses the ground in between, not the
+    /// fact of having got there, and every step of a significant-change feed
+    /// can be past it, so it is also the longest a turn is ever asked to be.
     ///
     /// Written with the rest of the coverage, so at the sidecar's cadence and
     /// never for itself. A relaunch finds what the last write held, what a
-    /// turn is measured from included: a hiker who turned in the fixes that
-    /// write missed is caught by the first fix after it. A row keeps only the
-    /// stretches, and a finished walk is not going anywhere.
+    /// turn is measured from and how good its fix was included: a hiker who
+    /// turned in the fixes that write missed is caught by the first fix after
+    /// it. A row keeps only the stretches, and a finished walk is not going
+    /// anywhere.
     public var direction: TrailWalkDirection? {
         directionID.flatMap(TrailWalkDirection.init(rawValue:))
     }
 
-    /// Moves ``direction`` on for a match at `distance`: further the way the
-    /// walk is going, or a turn's length the other way.
-    private mutating func updateDirection(at distance: Double) {
+    /// Moves ``direction`` on for a match at `distance`, of a fix good to
+    /// `accuracy`: further the way the walk is going, or a turn's length the
+    /// other way.
+    ///
+    /// A match where the walk already is goes the walk's way, whichever that
+    /// is, and so takes over what a turn is weighed against. It is how the
+    /// fix that confirms a proposed walk hands the walk its accuracy: the
+    /// proposal folded it in without, and the walk records it again.
+    private mutating func updateDirection(at distance: Double, accuracy: Double) {
         guard let reached = furthestThisWayMeters else {
             furthestThisWayMeters = distance
+            furthestThisWayAccuracyMeters = accuracy
             return
         }
         let step = distance - reached
-        let way: TrailWalkDirection = step < 0 ? .towardsStart : .towardsEnd
-        guard way == direction || abs(step) >= TrailWalkPolicy.minimumTurnMeters else { return }
+        let way: TrailWalkDirection = step == 0 ? direction ?? .towardsEnd : step < 0 ? .towardsStart : .towardsEnd
+        let turn = Self.turnMeters(between: furthestThisWayAccuracyMeters ?? 0, and: accuracy)
+        guard way == direction || abs(step) >= turn else { return }
         directionID = way.rawValue
         furthestThisWayMeters = distance
+        furthestThisWayAccuracyMeters = accuracy
+    }
+
+    /// How far apart two matches, of fixes good to `reachedAccuracy` and
+    /// `accuracy` metres, have to be to turn the walk — see ``direction``.
+    private static func turnMeters(between reachedAccuracy: Double, and accuracy: Double) -> Double {
+        min(TrailWalkPolicy.gapBoundMeters, max(TrailWalkPolicy.minimumTurnMeters, reachedAccuracy + accuracy))
     }
 
     /// The union's total length, in metres.

@@ -489,6 +489,7 @@ final class BackgroundTrailTracker: NSObject {
 
         let modelContainer = container
         let coordinate = location.coordinate
+        let accuracy = location.horizontalAccuracy
         let heading = LocationFixPolicy.course(of: location)
         let timestamp = location.timestamp
         let revision = selectionRevision
@@ -528,9 +529,7 @@ final class BackgroundTrailTracker: NSObject {
                 // Coverage accrues from here too — this is the feed that
                 // keeps a walk honest while the phone is in a pocket.
                 let completedWalk = walkSession?.recordBackgroundMatch(
-                    hikeID: hikeID,
-                    distance: distance,
-                    at: timestamp
+                    hikeID: hikeID, distance: distance, accuracy: accuracy, at: timestamp
                 ) ?? false
                 // A fix that completed the walk is not published: the write
                 // below would carry no walk and start a plain follow over the

@@ -19,6 +19,10 @@ import Observation
 /// moving fast enough for it to mean anything — which way they're going.
 nonisolated struct RouteFix {
     let coordinate: CLLocationCoordinate2D
+    /// How far from the hiker the receiver says this fix may have landed, in
+    /// metres. What a walk weighs a turn against — see
+    /// `TrailWalkCoverage.direction`.
+    let horizontalAccuracy: CLLocationAccuracy
     /// Course over ground in degrees from true north, or `nil` when this fix
     /// carries none worth trusting. Route matching uses it to tell the
     /// outbound leg of a trail from the return one.
@@ -317,6 +321,7 @@ final class LocationManager: NSObject {
               ) else { return nil }
         return RouteFix(
             coordinate: latestLocation.coordinate,
+            horizontalAccuracy: latestLocation.horizontalAccuracy,
             course: LocationFixPolicy.course(of: latestLocation),
             timestamp: latestLocation.timestamp
         )
