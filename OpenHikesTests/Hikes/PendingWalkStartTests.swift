@@ -192,11 +192,42 @@ struct PendingWalkStartTests {
         #expect(pending.confirmedRecord.startedAt == origin)
     }
 
-    /// Away from the trailhead, the other end of a route whose ends meet can
-    /// be an out-and-back's other leg: the same ground, not the way round. A
-    /// hiker found standing on the way home is matched on the way out, and
-    /// their first step home lands on the leg beside it.
-    @Test("away from the trailhead, a step onto an out-and-back's other leg is read straight along")
+    /// A figure-eight whose trailhead is its crossing passes through it
+    /// halfway too. Setting off along that pass, every step is further along
+    /// the route from the start and nearer round it to the end.
+    @Test("setting off along a later pass through the trailhead confirms")
+    func laterPassThroughTheTrailheadConfirms() {
+        var pending = PendingWalkStart(
+            hikeID: UUID(),
+            routeDistanceMeters: 4000,
+            endsApartMeters: 0,
+            routeRevision: nil,
+            distance: 0,
+            at: origin
+        )
+        for step in 0...10 {
+            pending.record(distance: 2010 + Double(step) * 10, at: origin.addingTimeInterval(Double(step + 1) * 8))
+        }
+        #expect(pending.isConfirmed)
+    }
+
+    /// The phone indoors by a loop's trailhead, snapped a few hundred metres
+    /// along and drifting back: further round the loop each time, and no
+    /// nearer to being a walk.
+    @Test("at a loop's trailhead, a snapped fix drifting back does not confirm")
+    func loopTrailheadSnapDriftingBackDoesNotConfirm() {
+        var pending = proposal(at: 0, endsApartMeters: 0)
+        for (step, distance) in [300.0, 290, 280, 270].enumerated() {
+            pending.record(distance: distance, at: origin.addingTimeInterval(Double(step + 1) * 5))
+        }
+        #expect(!pending.isConfirmed)
+    }
+
+    /// The other end of a route whose ends meet can be an out-and-back's
+    /// other leg: the same ground, not the way round. A hiker found standing
+    /// on the way home is matched on the way out, and their first step home
+    /// lands on the leg beside it, nearly the whole route along.
+    @Test("away from the trailhead, a step onto an out-and-back's other leg still confirms")
     func outAndBackOtherLegIsAlong() {
         var pending = proposal(at: 1000, endsApartMeters: 0)
         for step in 0...10 {

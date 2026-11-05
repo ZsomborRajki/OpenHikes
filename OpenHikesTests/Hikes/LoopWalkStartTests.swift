@@ -43,25 +43,54 @@ struct LoopWalkStartTests {
         )
     }
 
-    /// A two-kilometre square, a point every ten metres: north from the
-    /// trailhead, east, south, and back west into it. The way in and the way
-    /// out meet at a right angle, as a car park's two paths do.
-    private static var loop: [RouteCoordinate] {
-        var line: [CLLocationCoordinate2D] = []
-        for step in 0..<50 { line.append(point(north: Double(step) * 10, east: 0)) }
-        for step in 0..<50 { line.append(point(north: 500, east: Double(step) * 10)) }
-        for step in 0..<50 { line.append(point(north: 500 - Double(step) * 10, east: 500)) }
-        for step in 0...50 { line.append(point(north: 0, east: 500 - Double(step) * 10)) }
+    /// A line through `corners`, as metres north and east of the trailhead,
+    /// with a point every ten metres along each leg.
+    private static func line(through corners: [(north: Double, east: Double)]) -> [RouteCoordinate] {
+        guard var last = corners.first else { return [] }
+        var line = [point(north: last.north, east: last.east)]
+        for corner in corners.dropFirst() {
+            let north = corner.north - last.north
+            let east = corner.east - last.east
+            let steps = max(1, Int(((north * north + east * east).squareRoot() / 10).rounded()))
+            for step in 1...steps {
+                let fraction = Double(step) / Double(steps)
+                line.append(point(north: last.north + north * fraction, east: last.east + east * fraction))
+            }
+            last = corner
+        }
         return line.map { RouteCoordinate($0) }
+    }
+
+    /// A two-kilometre square: north from the trailhead, east, south, and
+    /// back west into it. The way in and the way out meet at a right angle,
+    /// as a car park's two paths do.
+    private static var loop: [RouteCoordinate] {
+        line(through: [(0, 0), (500, 0), (500, 500), (0, 500), (0, 0)])
     }
 
     /// A kilometre north and back along the same path, the way home three
     /// metres to the east.
     private static var outAndBack: [RouteCoordinate] {
-        var line: [CLLocationCoordinate2D] = []
-        for step in 0...100 { line.append(point(north: Double(step) * 10, east: 0)) }
-        for step in (0...100).reversed() { line.append(point(north: Double(step) * 10, east: 3)) }
-        return line.map { RouteCoordinate($0) }
+        line(through: [(0, 0), (1000, 0), (1000, 3), (0, 3)])
+    }
+
+    /// A four-kilometre figure-eight whose trailhead is its crossing: a loop
+    /// to the north-west, back through the trailhead halfway, and a loop to
+    /// the south-east.
+    private static var figureEight: [RouteCoordinate] {
+        line(through: [
+            (0, 0), (500, 0), (500, -500), (0, -500), (0, 0),
+            (-500, 0), (-500, 500), (0, 500), (0, 0),
+        ])
+    }
+
+    /// Two loops from one car park recorded as one hike, the three-kilometre
+    /// one first: back through the trailhead three quarters of the way along.
+    private static var twoLoops: [RouteCoordinate] {
+        line(through: [
+            (0, 0), (750, 0), (750, -750), (0, -750), (0, 0),
+            (-250, 0), (-250, 250), (0, 250), (0, 0),
+        ])
     }
 
     /// One fix, as the receiver took it now — `nil` course for a hiker
@@ -140,6 +169,25 @@ struct LoopWalkStartTests {
     func theWayHomeStarts() throws {
         let walked = try #require(walkedMetersToStart(on: Self.outAndBack, standingAt: (300, 3), steps: 25) { meters in
             (north: 300 - meters, east: 3, course: 180)
+        })
+        #expect(walked <= 2 * PendingWalkStart.confirmingMeters)
+    }
+
+    /// A route can come back through its trailhead before its end. Setting
+    /// off the stored way along that later pass, the hiker is matched just
+    /// past it, halfway along the figure-eight, and walks away from it.
+    @Test("a figure-eight set off from its crossing onto the second loop starts a walk")
+    func theSecondLoopStarts() throws {
+        let walked = try #require(walkedMetersToStart(on: Self.figureEight, standingAt: (0, 0), steps: 40) { meters in
+            (north: -meters, east: 0, course: 180)
+        })
+        #expect(walked <= 2 * PendingWalkStart.confirmingMeters)
+    }
+
+    @Test("the second of two loops from one car park starts a walk")
+    func theShortLoopStarts() throws {
+        let walked = try #require(walkedMetersToStart(on: Self.twoLoops, standingAt: (0, 0), steps: 25) { meters in
+            (north: -meters, east: 0, course: 180)
         })
         #expect(walked <= 2 * PendingWalkStart.confirmingMeters)
     }

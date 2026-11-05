@@ -17,7 +17,7 @@
 //  more than one fix — dated from when they set off, and carrying the
 //  coverage it saw on the way, so a confirmed walk is the walk it would
 //  always have been. From a loop's trailhead, which is both of its ends,
-//  that is measured the shorter way round — see ``meters(fromOrigin:)``.
+//  that is read the shorter way round as well — see ``shorterWay``.
 //  Nothing here is published, persisted or drawn: a proposal is the
 //  session's private business until it confirms.
 //
@@ -37,7 +37,7 @@ struct PendingWalkStart: Equatable {
     /// Half the confirming distance, so the two cannot overlap.
     static let stillRadiusMeters = confirmingMeters / 2
     /// How many matches, each further out than the last, setting off has to
-    /// be seen in — see ``stepsOut``.
+    /// be seen in — see ``Departure/steps``.
     static let confirmingSteps = 2
     /// How long a proposal waits for its next match before it is forgotten.
     /// A hiker who stood here an hour ago and is back now is starting from
@@ -51,26 +51,43 @@ struct PendingWalkStart: Equatable {
     /// How far apart the route's two ends are, when the first match put the
     /// hiker within ``stillRadiusMeters`` of one of them, and `nil` when it
     /// put them anywhere else: the gap the way round, through the ends, has
-    /// to cross — see ``meters(fromOrigin:)``.
+    /// to cross — see ``shorterWay``.
     private let gapThroughEndsMeters: Double?
-    /// The last match still within ``stillRadiusMeters`` of that spot: when
-    /// the hiker set off, and what a confirmed walk is dated from.
+    /// The last match within ``stillRadiusMeters`` of that spot, read the
+    /// shorter way: when the hiker set off, and what a confirmed walk is
+    /// dated from.
     private var setOffAt: Date
-    /// The furthest a match has landed from the origin, either way along the
-    /// route or round it — see ``meters(fromOrigin:)`` — since the hiker set
-    /// off, which a hiker standing still does not grow, however long they
-    /// stand. Back to zero whenever a match puts them at the origin again, as
-    /// ``setOffAt`` moves.
-    private var departureMeters: Double = 0
-    /// How many matches since setting off have each landed further from the
-    /// origin than any before them.
+    /// The matches read straight along the route.
+    private var straightAlong = Departure()
+    /// The matches read the shorter way: straight along, or — from a
+    /// trailhead both of the route's ends share — round through the ends.
     ///
-    /// A walk is a run of fixes working outwards. One fix that lands a few
-    /// hundred metres along is not that: GPS re-acquiring, or a phone indoors
-    /// snapping to another spot on the trail, puts a single match anywhere
-    /// the coverage will bridge, and a snapped phone that stays snapped
-    /// repeats the same spot rather than moving past it.
-    private var stepsOut = 0
+    /// A hiker found at a loop's trailhead who sets off the other way round
+    /// from the way it is stored is matched at its start until they are out
+    /// of the start's reach, and then near its end: most of the route away
+    /// read straight along, and every step after that one nearer, so the walk
+    /// never started. Read round through the trailhead, each step is further
+    /// out, until the hiker is halfway round. A gap between the ends is
+    /// crossed as the crow flies: a loop recorded a little short of where it
+    /// began reads like one that closes, and the far end of a trail between
+    /// two places is never nearer than the ground between them.
+    ///
+    /// Beside the straight reading rather than instead of it, because the way
+    /// round is the shorter only until halfway round, and past that point a
+    /// route can come back through its trailhead: a figure-eight whose
+    /// trailhead is its crossing, or two loops from one car park recorded as
+    /// one hike. Setting off along that later pass, each step is further
+    /// along the route and nearer round it, so read the shorter way alone,
+    /// that walk would never start; straight along, it starts as it always
+    /// did. And the shorter way, not the way round: a phone at the trailhead
+    /// that snaps a few hundred metres along and drifts back is further round
+    /// each time, which would count as steps out of a walk.
+    ///
+    /// From the trailhead only. Anywhere else the way round is the shorter
+    /// only for a match more than halfway round, by when the straight reading
+    /// has long since started the walk, so it would be one more way for a
+    /// stray match to count and nothing else.
+    private var shorterWay = Departure()
 
     /// - Parameter endsApartMeters: how far apart the route's two ends are
     ///   on the ground — see ``endsApartMeters(of:)``.
@@ -114,42 +131,21 @@ struct PendingWalkStart: Equatable {
         record.coverage.record(distance: distance)
         record.lastMatchedAt = date
         record.lastFollowedDistanceMeters = distance
-        let fromOrigin = meters(fromOrigin: distance)
-        if fromOrigin <= Self.stillRadiusMeters {
-            setOffAt = date
-            departureMeters = 0
-            stepsOut = 0
-        } else if fromOrigin > departureMeters {
-            departureMeters = fromOrigin
-            stepsOut += 1
-        }
-    }
-
-    /// How far from where the proposal found the hiker a match at `distance`
-    /// lands, along the route.
-    ///
-    /// The shorter way round, from a trailhead both of the route's ends
-    /// share. A hiker found at a loop's trailhead who sets off the other way
-    /// round from the way it is stored is matched at its start until they are
-    /// out of the start's reach, and then near its end: most of the route
-    /// away read straight along, and every step after that one nearer, so
-    /// the walk never started. Read through the trailhead, each step is as
-    /// far out as it is on the ground. A gap between the ends is crossed as
-    /// the crow flies: a loop recorded a little short of where it began reads
-    /// like one that closes, and the far end of a trail between two places is
-    /// never nearer than the ground between them.
-    ///
-    /// From the trailhead only. Anywhere else on a route whose ends meet, the
-    /// other end can be an out-and-back's other leg, which is the same
-    /// ground: a hiker found standing on the way home is placed on the way
-    /// out, and their first step home moves them to the leg beside it, nearly
-    /// the whole route along. Read through the trailhead, every step home
-    /// after that one would be nearer; read straight along, each one is
-    /// further, as it is on the ground.
-    private func meters(fromOrigin distance: Double) -> Double {
         let along = abs(distance - originMeters)
-        guard let gap = gapThroughEndsMeters else { return along }
-        return min(along, record.routeDistanceMeters - along + gap)
+        let shorter = gapThroughEndsMeters.map { min(along, record.routeDistanceMeters - along + $0) } ?? along
+        // Still, read either way: a hiker at a loop's trailhead is matched
+        // either side of the join, and both are where they stand. On a loop
+        // under about 150 m the hiker is back that near the trailhead before
+        // they are far enough from it to have set off, so only Start begins
+        // a walk there.
+        if shorter <= Self.stillRadiusMeters {
+            setOffAt = date
+            straightAlong = Departure()
+            shorterWay = Departure()
+        } else {
+            straightAlong.record(along)
+            shorterWay.record(shorter)
+        }
     }
 
     /// Whether the hiker has walked far enough along the route to be walking
@@ -157,9 +153,7 @@ struct PendingWalkStart: Equatable {
     /// outwards, with the stretch between actually covered rather than
     /// bridged by a jump the coverage refused.
     var isConfirmed: Bool {
-        departureMeters >= Self.confirmingMeters
-            && stepsOut >= Self.confirmingSteps
-            && record.coverage.meetsMinimum
+        (straightAlong.isConfirmed || shorterWay.isConfirmed) && record.coverage.meetsMinimum
     }
 
     func isExpired(at now: Date) -> Bool {
@@ -172,5 +166,36 @@ struct PendingWalkStart: Equatable {
         walk.startedAt = setOffAt
         walk.phaseChangedAt = setOffAt
         return walk
+    }
+
+    /// How far out one reading of the matches has seen the hiker go since
+    /// they set off.
+    private struct Departure: Equatable {
+        /// The furthest a match has landed from the origin, read this way,
+        /// since the hiker set off — which a hiker standing still does not
+        /// grow, however long they stand.
+        private(set) var meters: Double = 0
+        /// How many matches since setting off have each landed further from
+        /// the origin than any before them, read this way.
+        ///
+        /// A walk is a run of fixes working outwards. One fix that lands a
+        /// few hundred metres along is not that: GPS re-acquiring, or a phone
+        /// indoors snapping to another spot on the trail, puts a single match
+        /// anywhere the coverage will bridge, and a snapped phone that stays
+        /// snapped repeats the same spot rather than moving past it.
+        private(set) var steps = 0
+
+        /// Far enough from the spot the proposal found the hiker, in more
+        /// than one step outwards.
+        var isConfirmed: Bool {
+            meters >= PendingWalkStart.confirmingMeters && steps >= PendingWalkStart.confirmingSteps
+        }
+
+        /// A match `fromOrigin` metres from the origin, read this way.
+        mutating func record(_ fromOrigin: Double) {
+            guard fromOrigin > meters else { return }
+            meters = fromOrigin
+            steps += 1
+        }
     }
 }
