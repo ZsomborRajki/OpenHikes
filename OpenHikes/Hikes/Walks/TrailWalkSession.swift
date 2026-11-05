@@ -17,8 +17,8 @@
 //  One `@Observable` reference type, read by the leaves and never by
 //  `HikeDetailView.body`, with its properties split by rate. `walkedHikeID`,
 //  `phase` and `walkedHikeTitle` change on a tap; `coveredFraction` and
-//  `furthestDistanceMeters` change per matched fix. The controls and the
-//  sheet's row read the first group, the progress row reads the second, and
+//  `metersLeft` change per matched fix. The controls and the sheet's row read
+//  the first group, the progress row reads the second, and
 //  `TrailWalkIsolationTests` is what keeps a fix-rate write from reaching a
 //  body that only wanted the phase.
 //
@@ -70,7 +70,10 @@ final class TrailWalkSession {
     // MARK: Fine — changes per matched fix
 
     private(set) var coveredFraction: Double = 0
-    private(set) var furthestDistanceMeters: Double = 0
+    /// How far the walk has left, to the end it is going for — see
+    /// ``metersLeft(of:)``. It moves on ground already covered too, where
+    /// ``coveredFraction`` stands still.
+    private(set) var metersLeft: Double = 0
 
     // MARK: Storage
 
@@ -391,8 +394,8 @@ final class TrailWalkSession {
         record = current
         let fraction = current.coveredFraction
         if coveredFraction != fraction { coveredFraction = fraction }
-        let furthest = current.coverage.furthestDistanceMeters
-        if furthestDistanceMeters != furthest { furthestDistanceMeters = furthest }
+        let left = Self.metersLeft(of: current)
+        if metersLeft != left { metersLeft = left }
         estimateFinish(at: now)
         if current.reachesEnd(atMatch: distance) {
             // A refused commit leaves the walk under way, and the fix that
@@ -432,7 +435,7 @@ final class TrailWalkSession {
         walkedHikeTitle = hike.displayTitle
         phase = walk.phase
         coveredFraction = walk.coveredFraction
-        furthestDistanceMeters = walk.coverage.furthestDistanceMeters
+        metersLeft = Self.metersLeft(of: walk)
         // A walk adopted from the sidecar was paused on a previous launch as
         // often as it was started on this one, and the pause a background
         // relaunch inherits is exactly the one a hiker forgets: the phone has
@@ -630,7 +633,7 @@ final class TrailWalkSession {
         startNotice = nil
         phase = nil
         coveredFraction = 0
-        furthestDistanceMeters = 0
+        metersLeft = 0
     }
 
     // MARK: Launch
@@ -705,7 +708,8 @@ final class TrailWalkSession {
             furthestDistanceMeters: record.coverage.furthestDistanceMeters,
             activeSeconds: record.activeSeconds(at: now),
             startedAt: record.startedAt,
-            secondsLeft: secondsLeft
+            secondsLeft: secondsLeft,
+            metersLeft: Self.metersLeft(of: record)
         )
     }
 }
@@ -800,6 +804,7 @@ private extension TrailWalkSession {
             let walk = PendingWalkStart(
                 hikeID: hike.id,
                 routeDistanceMeters: profile.totalDistanceMeters,
+                endsApartMeters: PendingWalkStart.endsApartMeters(of: profile),
                 routeRevision: revision,
                 distance: distance,
                 at: now
