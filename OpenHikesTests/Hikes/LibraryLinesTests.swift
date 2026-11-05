@@ -253,6 +253,7 @@ final class LibraryLinesStage {
     let openRequests = HikeOpenRequests()
     let library: LibraryLines
     let reads = ReadLog()
+    let listings = ListingLog()
     private let checking: StoreHistoryCheck.Making
     private var task: Task<Void, Never>?
 
@@ -273,8 +274,8 @@ final class LibraryLinesStage {
     }
 
     func start() {
-        task = Task { [library, container, reads, checking] in
-            await library.follow(in: container, reading: reads.read, checking: checking)
+        task = Task { [library, container, listings, reads, checking] in
+            await library.follow(in: container, listing: listings.list, reading: reads.read, checking: checking)
         }
     }
 
