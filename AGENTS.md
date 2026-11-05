@@ -1416,10 +1416,15 @@ this before changing `OpenHikesWatch/`, `OpenHikes/Watch/` or the shared
   `WatchMessageKind`.
 - **No transfer leaves before activation completes**, because
   `transferUserInfo` on a session that has not activated is a programmer
-  error (`WatchLinkActivation`). A launch's requests wait for the callback, and
-  a walk stays on the disk queue, not marked as crossing, for the drain that
-  follows it. A failed activation is tried again when the app comes to the
-  front.
+  error.
+  - On the watch (`WatchLinkActivation`), a launch's requests wait for the
+    callback, and a walk stays on the disk queue, not marked as crossing, for
+    the drain that follows it. A failed activation is tried again when the app
+    comes to the front.
+  - On the phone (`WatchSessionActivation`), a switch to another watch takes
+    the session down too. A trail package or a walk's receipt that finishes
+    before activation or during a switch waits for the next activation that
+    succeeds, which after a switch reaches the watch now selected.
 - **A recorded walk is written before it is sent.**
   - `WatchStore` queues it on disk and drops it only on a `WatchWalkReceipt`.
   - The phone's import is idempotent on `HikeLocalState.watchSessionID`.
