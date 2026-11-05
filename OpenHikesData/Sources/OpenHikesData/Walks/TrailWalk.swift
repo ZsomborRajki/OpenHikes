@@ -212,9 +212,9 @@ nonisolated public struct TrailWalkCoverage: Codable, Equatable, Sendable {
     }
 
     /// The same union, from stored pairs. Pairs are trusted to be merged —
-    /// they were written by ``record(distance:)`` — but re-merged anyway, each
-    /// with the pairs walked its way, so a row edited by hand still reads as
-    /// a union.
+    /// they were written by ``record(distance:accuracy:)`` — but re-merged
+    /// anyway, each with the pairs walked its way, so a row edited by hand
+    /// still reads as a union.
     public init(intervals: [Double], furthestDistanceMeters: Double) {
         var built = Self()
         for (start, end) in Self.pairs(of: intervals) {
@@ -300,6 +300,11 @@ nonisolated public struct TrailWalkCoverage: Codable, Equatable, Sendable {
     /// Moves ``direction`` on for a match at `distance`, of a fix good to
     /// `accuracy`: further the way the walk is going, or a turn's length the
     /// other way.
+    ///
+    /// A match where the walk already is goes the walk's way, whichever that
+    /// is, and so takes over what a turn is weighed against. It is how the
+    /// fix that confirms a proposed walk hands the walk its accuracy: the
+    /// proposal folded it in without, and the walk records it again.
     private mutating func updateDirection(at distance: Double, accuracy: Double) {
         guard let reached = furthestThisWayMeters else {
             furthestThisWayMeters = distance
@@ -307,7 +312,7 @@ nonisolated public struct TrailWalkCoverage: Codable, Equatable, Sendable {
             return
         }
         let step = distance - reached
-        let way: TrailWalkDirection = step < 0 ? .towardsStart : .towardsEnd
+        let way: TrailWalkDirection = step == 0 ? direction ?? .towardsEnd : step < 0 ? .towardsStart : .towardsEnd
         let turn = Self.turnMeters(between: furthestThisWayAccuracyMeters ?? 0, and: accuracy)
         guard way == direction || abs(step) >= turn else { return }
         directionID = way.rawValue

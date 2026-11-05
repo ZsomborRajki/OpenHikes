@@ -224,7 +224,7 @@ final class TrailWalkSession {
     ///
     /// - Returns: whether this fix *ended* the walk. A caller that publishes
     ///   the fix afterwards must not: see
-    ///   ``recordMatch(hikeID:distance:at:accuracy:)``.
+    ///   ``recordMatch(hikeID:distance:accuracy:at:)``.
     ///
     /// - Parameter timestamp: when the receiver *took* the fix, which is not
     ///   when the follow loop got round to it. A fix as much as
@@ -241,17 +241,18 @@ final class TrailWalkSession {
     ///   save has refreshed the hike, and hashes it on every fix (#1252).
     ///   `nil` asks the hike, for a caller that has no screen's line.
     /// - Parameter accuracy: the fix's horizontal accuracy, which the walk
-    ///   weighs a turn against — see ``TrailWalkCoverage/direction``. 0 for a
-    ///   caller with no fix to hand. A proposal does without it: it starts a
-    ///   walk only once matches have worked outwards from where it found the
-    ///   hiker, and that run is a way to be going whatever their accuracy.
+    ///   weighs a turn against — see ``TrailWalkCoverage/direction``. No
+    ///   default, so that every feed has to say. A proposal does without it:
+    ///   it starts a walk only once matches have worked outwards from where
+    ///   it found the hiker, and that run is a way to be going whatever their
+    ///   accuracy. The fix that starts the walk hands the walk its own.
     @discardableResult func recordForegroundMatch(
         hike: Hike,
         profile: RouteProfile,
         distance: Double,
+        accuracy: Double,
         revision: String? = nil,
-        at timestamp: Date? = nil,
-        accuracy: Double = 0
+        at timestamp: Date? = nil
     ) -> Bool {
         let now = clock()
         let matchedAt = timestamp ?? now
@@ -265,7 +266,7 @@ final class TrailWalkSession {
             proposeOrConfirmStart(hike: hike, profile: profile, revision: revision, distance: distance, at: matchedAt)
         }
         if record?.hikeID == hike.id { walkedProfile = profile }
-        return recordMatch(hikeID: hike.id, distance: distance, at: matchedAt, accuracy: accuracy)
+        return recordMatch(hikeID: hike.id, distance: distance, accuracy: accuracy, at: matchedAt)
     }
 
     /// A fix matched on-route by the background feed. Never proposes a walk —
@@ -277,13 +278,13 @@ final class TrailWalkSession {
     /// - Returns: whether this fix ended the walk, as above.
     /// - Parameter accuracy: the fix's horizontal accuracy, as above.
     @discardableResult func recordBackgroundMatch(
-        hikeID: UUID, distance: Double, at timestamp: Date, accuracy: Double = 0
+        hikeID: UUID, distance: Double, accuracy: Double, at timestamp: Date
     ) -> Bool {
         discardWalkIfHikeGone()
         endIfRouteChanged()
         endIfAbandoned(at: clock())
         if record == nil { advancePendingStart(hikeID: hikeID, distance: distance, at: timestamp) }
-        return recordMatch(hikeID: hikeID, distance: distance, at: timestamp, accuracy: accuracy)
+        return recordMatch(hikeID: hikeID, distance: distance, accuracy: accuracy, at: timestamp)
     }
 
     /// An accepted fix that did not match `hikeID`'s route: the hiker is
@@ -335,9 +336,7 @@ final class TrailWalkSession {
     ///   published: with the record cleared, `publishes(hikeID:)` says yes and
     ///   `payload(for:)` says nothing, so the write would start a fresh plain
     ///   follow over the finished panel ``walkDidEnd(final:)`` just queued.
-    @discardableResult private func recordMatch(
-        hikeID: UUID, distance: Double, at now: Date, accuracy: Double
-    ) -> Bool {
+    private func recordMatch(hikeID: UUID, distance: Double, accuracy: Double, at now: Date) -> Bool {
         guard var current = record, current.hikeID == hikeID else { return false }
         // A fix something newer has already overtaken says nothing that has
         // not been said better since, and it is not this walk's most recent
@@ -726,7 +725,7 @@ extension TrailWalkSession {
     ///   gives: the walk is under way in memory, and the next fix writes it.
     /// - Parameter revision: the line `profile` was built from, as a walk
     ///   names it, for the reason
-    ///   ``recordForegroundMatch(hike:profile:distance:revision:at:accuracy:)``
+    ///   ``recordForegroundMatch(hike:profile:distance:accuracy:revision:at:)``
     ///   takes it. `nil` asks the hike.
     @discardableResult func start(hike: Hike, profile: RouteProfile, revision: String? = nil) -> Bool {
         let now = clock()
@@ -815,7 +814,7 @@ private extension TrailWalkSession {
     ///
     /// - Parameter revision: the line the proposed hike has now, as its
     ///   screen read it, from the foreground feed — see
-    ///   ``recordForegroundMatch(hike:profile:distance:revision:at:accuracy:)``.
+    ///   ``recordForegroundMatch(hike:profile:distance:accuracy:revision:at:)``.
     ///   `nil` asks the hike, which is what the background feed does.
     func confirmPendingStartIfDue(at now: Date, along revision: String? = nil) {
         guard let proposed = pendingStart, proposed.walk.isConfirmed else { return }

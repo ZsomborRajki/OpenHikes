@@ -109,6 +109,28 @@ struct TrailWalkStandstillTests {
         #expect(coverage.direction == .towardsStart)
     }
 
+    /// A walk a proposal starts holds matches folded in without their
+    /// accuracy, and the fix that confirms it reaches the walk a second time,
+    /// at the same spot, with its accuracy. A match where the walk already is
+    /// goes the walk's own way, whichever way that is, so the reference takes
+    /// that fix's accuracy, and the first swing back is weighed against two.
+    @Test("a match where the walk already is sets what a turn is weighed against", arguments: [1.0, -1.0])
+    func aMatchInPlaceRefreshesTheReference(way: Double) {
+        let onward: TrailWalkDirection = way > 0 ? .towardsEnd : .towardsStart
+        let back: TrailWalkDirection = way > 0 ? .towardsStart : .towardsEnd
+        var coverage = TrailWalkCoverage()
+        for step in [0.0, 80, 110] {
+            coverage.record(distance: 3000 + way * step)
+        }
+        coverage.record(distance: 3000 + way * 110, accuracy: 60)
+        #expect(coverage.direction == onward)
+
+        coverage.record(distance: 3000 + way * 10, accuracy: 60)
+        #expect(coverage.direction == onward, "100 m back, on fixes good to 60 m")
+        coverage.record(distance: 3000 - way * 10, accuracy: 60)
+        #expect(coverage.direction == back)
+    }
+
     /// The trade-off #1299 made and #1307 keeps: a significant-change feed may
     /// deliver nothing but jumps past the gap bound, and each of them has to
     /// say which way the walk is going on its own, however poor its fix.

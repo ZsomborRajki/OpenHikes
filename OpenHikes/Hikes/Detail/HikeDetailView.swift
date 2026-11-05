@@ -920,9 +920,9 @@ private extension HikeDetailView {
             hike: hike,
             profile: profile,
             distance: match.distanceAlongRoute,
+            accuracy: fix.horizontalAccuracy,
             revision: prepared.walkRevision,
-            at: fix.timestamp,
-            accuracy: fix.horizontalAccuracy
+            at: fix.timestamp
         )
         if hike.autoFollowEnabled {
             updateLiveTracker(distance: match.distanceAlongRoute)

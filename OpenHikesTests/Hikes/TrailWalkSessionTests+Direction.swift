@@ -210,24 +210,31 @@ extension TrailWalkSessionTests {
     /// A proposal starts a walk once matches have worked outwards from where
     /// it found the hiker, and that run is the way they are going, however
     /// good its fixes. From the fix that starts it, a turn is weighed like
-    /// any other: 100 m back on fixes good to 60 m is not one yet.
-    @Test("a walk started on uncertain fixes knows its way, and weighs its first turn against them")
-    func aStartedWalkWeighsItsFirstTurn() throws {
+    /// any other: 100 m back on fixes good to 60 m is not one yet. Either
+    /// way along the route, since the fix that starts a walk lands where the
+    /// walk already is, which is no step either way.
+    @Test(
+        "a walk started on uncertain fixes knows its way, and weighs its first turn against them",
+        arguments: [1.0, -1.0]
+    )
+    func aStartedWalkWeighsItsFirstTurn(way: Double) throws {
+        let onward: TrailWalkDirection = way > 0 ? .towardsEnd : .towardsStart
+        let back: TrailWalkDirection = way > 0 ? .towardsStart : .towardsEnd
         let session = session()
         let walked = climbingHike()
         let profile = RouteProfile(route: walked.route)
-        let origin = profile.distances[10]
+        let origin = profile.distances[way > 0 ? 10 : 50]
         for step in [0.0, 80, 110] {
             clock.advance(by: 60)
-            session.recordForegroundMatch(hike: walked, profile: profile, distance: origin + step, accuracy: 60)
+            session.recordForegroundMatch(hike: walked, profile: profile, distance: origin + way * step, accuracy: 60)
         }
-        #expect(try #require(session.record, "precondition: the walk started").coverage.direction == .towardsEnd)
+        #expect(try #require(session.record, "precondition: the walk started").coverage.direction == onward)
 
         clock.advance(by: 60)
-        session.recordForegroundMatch(hike: walked, profile: profile, distance: origin + 10, accuracy: 60)
-        #expect(try #require(session.record).coverage.direction == .towardsEnd)
+        session.recordForegroundMatch(hike: walked, profile: profile, distance: origin + way * 10, accuracy: 60)
+        #expect(try #require(session.record).coverage.direction == onward)
         clock.advance(by: 60)
-        session.recordForegroundMatch(hike: walked, profile: profile, distance: origin - 10, accuracy: 60)
-        #expect(try #require(session.record).coverage.direction == .towardsStart)
+        session.recordForegroundMatch(hike: walked, profile: profile, distance: origin - way * 10, accuracy: 60)
+        #expect(try #require(session.record).coverage.direction == back)
     }
 }
