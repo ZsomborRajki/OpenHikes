@@ -46,9 +46,11 @@ protocol MovementReminderNotifying: AnyObject {
     /// iOS Settings: a permission taken away while a pause was running, or one
     /// given while a warning or a Resume reminder was waiting for it.
     ///
-    /// An unanswered prompt reads as allowed: a hiker who has not said no
-    /// has not refused, and what this answer is used to take away is a watch
-    /// the system has actually silenced.
+    /// Only an answer that lets a banner through reads as allowed. A question
+    /// still open does not: it is what a failed request leaves behind, and a
+    /// reminder held back for permission and posted on it would be spent on a
+    /// banner iOS never shows. A recording's watch given back on it loses
+    /// nothing a banner could have used, and the next pause asks again.
     func canPost() async -> Bool
 
     /// Puts one reminder on the hiker's screen, replacing any earlier one of

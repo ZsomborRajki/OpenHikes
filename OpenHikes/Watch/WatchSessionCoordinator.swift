@@ -40,6 +40,18 @@
 //  discarded inside one call — the shape the repository instructions require
 //  of anything touching the store from a delegate.
 //
+//  ## Nothing transfers unless the session has activated
+//
+//  `transferUserInfo` on a session that has not activated is a programmer
+//  error, and on iOS a session that has activated can stop being one: when
+//  the hiker switches to another paired watch it becomes inactive, then
+//  deactivated, until it is activated again. A package or a receipt is the
+//  end of an asynchronous job and can finish in either window, so each goes
+//  through ``WatchSessionActivation``, which holds it and lets it go on the
+//  next activation that succeeds. The library waits the same way, as
+//  `pendingCatalog`. The watch keeps the same rule on its side, in
+//  `WatchLinkActivation`.
+//
 //  ## Isolation
 //
 //  Every `WCSessionDelegate` callback is `nonisolated` and arrives on a
@@ -122,6 +134,9 @@ final class WatchSessionCoordinator: NSObject {
     /// watch's list would miss the launch that produced it, and there is no
     /// second sweep behind it.
     @ObservationIgnored private var pendingCatalog: SharedHikeCatalog?
+    /// Whether the session can take a transfer, and the packages and receipts
+    /// that finished while it could not. See ``WatchSessionActivation``.
+    @ObservationIgnored private var activation = WatchSessionActivation()
     #endif
 
     init(container: ModelContainer, healthExport: WatchWalkHealthExport? = nil) {
@@ -267,11 +282,23 @@ final class WatchSessionCoordinator: NSObject {
     }
 
     private func send(_ package: WatchTrailPackage) {
+        #if canImport(WatchConnectivity)
+        guard allowsTransfers else {
+            activation.hold(package)
+            return
+        }
         transfer { try WatchLink.message(package) }
+        #endif
     }
 
     private func send(_ receipt: WatchWalkReceipt) {
+        #if canImport(WatchConnectivity)
+        guard allowsTransfers else {
+            activation.hold(receipt)
+            return
+        }
         transfer { try WatchLink.message(receipt) }
+        #endif
     }
 
     /// Performs a command and replies with what happened.
@@ -323,7 +350,8 @@ final class WatchSessionCoordinator: NSObject {
         #endif
     }
 
-    /// `transferUserInfo` for everything the phone sends back.
+    /// `transferUserInfo` for everything the phone sends back, once
+    /// ``allowsTransfers`` has said it may go.
     ///
     /// Queued to the system's own container and retried across relaunches,
     /// which both of these need: a package is tens of kilobytes, and a receipt
@@ -343,6 +371,25 @@ final class WatchSessionCoordinator: NSObject {
         }
         #endif
     }
+
+    #if canImport(WatchConnectivity)
+    /// Whether `transferUserInfo` may be called now: ``WatchSessionActivation``
+    /// decides, from what the delegate last reported and the session's own
+    /// state, which a switch moves before its callback reaches this actor.
+    private var allowsTransfers: Bool {
+        guard let session else { return false }
+        return activation.allowsTransfers(sessionActivated: session.activationState == .activated)
+    }
+
+    /// The session answered `activate()`, at launch or at the end of a
+    /// switch, which is the first moment a held package or receipt can go.
+    /// A failure lets nothing go and keeps what is held for the next answer.
+    private func activationFinished(activated: Bool) {
+        guard let release = activation.finished(activated: activated) else { return }
+        for package in release.packages { send(package) }
+        for receipt in release.receipts { send(receipt) }
+    }
+    #endif
 }
 
 #if canImport(WatchConnectivity)
@@ -358,18 +405,21 @@ nonisolated extension WatchSessionCoordinator: WCSessionDelegate {
         if let error {
             Self.logger.error("Watch session activation failed: \(error.localizedDescription, privacy: .public)")
         }
+        let activated = state == .activated
         let installed = session.isWatchAppInstalled
         let reachable = session.isReachable
         onMainActor { [weak self] in
             guard let self else { return }
             isWatchAppInstalled = installed
-            // This is the first moment either of the next two can work.
+            // This is the first moment any of the next three can work.
             // `publish(_:)` was called from `OpenHikesApp.init` before
-            // `activate()` was, so it had nothing to send through; and the
+            // `activate()` was, so it had nothing to send through; a package
+            // or a receipt that finished during a switch was held; and the
             // mirror is otherwise started only by a *change* of reachability,
             // which a watch app already in the foreground when this process
             // launched never produces.
             flushPendingCatalog()
+            activationFinished(activated: activated)
             mirror?.reachabilityChanged(to: reachable)
         }
     }
@@ -380,8 +430,11 @@ nonisolated extension WatchSessionCoordinator: WCSessionDelegate {
     /// with none of this hiker's trails on it, and a session nobody
     /// reactivated is a watch that stays empty forever.
     func sessionDidBecomeInactive(_ session: WCSession) {
-        // Nothing to tear down: this type holds no per-watch state, and the
-        // reactivation below is what matters.
+        // The session takes no new transfer from here until the switch has
+        // activated it again. A package or a receipt that finishes in between
+        // waits for that answer rather than reaching a session that refuses
+        // it — see ``WatchSessionActivation``.
+        onMainActor { [weak self] in self?.activation.becameInactive() }
     }
 
     func sessionDidDeactivate(_ session: WCSession) {

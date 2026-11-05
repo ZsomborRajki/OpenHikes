@@ -947,21 +947,22 @@ a change to recording, the map, the sheet or the render path; the PR template,
   - **The Spanish says *tú*, and keeps one word for each thing:** *excursión*
     (hike), *sendero* (trail), *ruta* (route), *lugar* (place), *grabación*
     (recording), *parada* (a stop on a drawn trail), *tesela* (map tile),
-    *fototeca* (the photo library). Record is *grabar* and save is *guardar*,
-    so the two never meet. One `es` serves every Spanish-speaking region, so
-    it avoids words only one region uses, and Apple's own names are those of
-    Apple's Spanish for Spain (*Ajustes*, *Salud*, *Mapas*, *Actividad en
-    directo*). Buttons and titles are in sentence case, a button is an
-    infinitive (*Guardar excursión*) and an instruction the *tú* imperative
-    (*Activa*), and people are named without a gender where Spanish allows it
-    (*otra persona*, *quien revisa*). Quotes are «…», a question or an
-    exclamation opens with ¿ or ¡, nothing goes before : ; ? !, a no-break
-    space goes before %, an aside sits between rayas with no space inside
-    (—así—), and an ellipsis follows the word with no space. The Siri phrases
-    take the *tú* imperative (*Empieza una excursión en OpenHikes*). Spanish
-    uses the `one` form for 1 alone, so its singular may spell the count out
-    as the English does, and each Spanish plural carries `many` worded as
-    `other`, as the French does.
+    *fototeca* (the photo library), *punto GPS* (a track point). Record is
+    *grabar* and save is *guardar*, so the two never meet, and report is
+    *denunciar*. One `es` follows Spain's usage, as Apple's own `es` does, in
+    Apple's names (*Ajustes*, *Salud*, *Mapas*, *Actividad en directo*) and in
+    the app's own words (*aparcamiento*, *en coche*); Latin America's would be
+    an `es-419` of its own. Buttons and titles are in sentence case, a button
+    is an infinitive (*Guardar excursión*) and an instruction the *tú*
+    imperative (*Activa*), and people are named without a gender where Spanish
+    allows it (*otra persona*, *quien revisa*). Quotes are the RAE's «…», a
+    question or an exclamation opens with ¿ or ¡, nothing goes before : ; ? !,
+    a no-break space goes before %, an aside sits between rayas with no space
+    inside (—así—), and an ellipsis follows the word with no space. The Siri
+    phrases take the *tú* imperative (*Empieza una excursión en OpenHikes*).
+    Spanish uses the `one` form for 1 alone, so its singular may spell the
+    count out as the English does, and each Spanish plural carries `many`
+    worded as `other`, as the French does.
   - **A French singular keeps its number.** French uses the `one` form for 0
     as well as 1, so a singular that spells the count out as a word would say
     *une* photo for none (`frenchSingularKeepsTheCount`). Each French plural
@@ -974,7 +975,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
     English. French says « Départ » for a route's start and « Démarrer » on
     the record button (`recording.start`), and agrees *None* with a place's
     kind (`place.kind.none`). Spanish calls the watch's share of a trail
-    already walked «Completado» and a close button «OK» (`follow.done`).
+    already walked «Completado» and a close button «OK» (`follow.done`), and
+    files the recording actions in Shortcuts under «Grabación» while a badge
+    says «Grabando» (`intent.category.recording`).
   - **A sentence never changes the case of a catalogued word**, because German
     capitalizes every noun. A sentence that names something is passed whole
     (`CommunityMailOutcomeSections.handoffDetail`).
@@ -1416,10 +1419,15 @@ this before changing `OpenHikesWatch/`, `OpenHikes/Watch/` or the shared
   `WatchMessageKind`.
 - **No transfer leaves before activation completes**, because
   `transferUserInfo` on a session that has not activated is a programmer
-  error (`WatchLinkActivation`). A launch's requests wait for the callback, and
-  a walk stays on the disk queue, not marked as crossing, for the drain that
-  follows it. A failed activation is tried again when the app comes to the
-  front.
+  error.
+  - On the watch (`WatchLinkActivation`), a launch's requests wait for the
+    callback, and a walk stays on the disk queue, not marked as crossing, for
+    the drain that follows it. A failed activation is tried again when the app
+    comes to the front.
+  - On the phone (`WatchSessionActivation`), a switch to another watch takes
+    the session down too. A trail package or a walk's receipt that finishes
+    before activation or during a switch waits for the next activation that
+    succeeds, which after a switch reaches the watch now selected.
 - **A recorded walk is written before it is sent.**
   - `WatchStore` queues it on disk and drops it only on a `WatchWalkReceipt`.
   - The phone's import is idempotent on `HikeLocalState.watchSessionID`.

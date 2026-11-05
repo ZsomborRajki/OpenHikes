@@ -1,6 +1,6 @@
 //
 //  WalkingTimeEstimate.swift
-//  OpenHikesShared
+//  OpenHikesData
 //
 //  How long a route takes on foot when nobody has walked it with a clock.
 //
@@ -27,14 +27,28 @@
 //  together. It is the time a fit adult takes with no breaks, which is also
 //  what the signposts say.
 //
-//  In this package rather than in the app because the widget, the Live
-//  Activity and the watch are the surfaces a walk is followed on, and "how
-//  long is left" has to mean the same thing on all of them.
+//  ## Where it is worked out
+//
+//  In the app, and nowhere else. `WalkTimeLeft` scales it to the hiker's own
+//  pace for the time left on a followed trail, which the hike's screen shows
+//  while the walk is under way and the dusk reminder reads. A route with no
+//  clock shows it on its hike's screen as an estimated time, and the trail
+//  maker counts a drawn line's climb with it. The Live Activity shows the time
+//  left as seconds the app worked out, carried in ``SharedTrailSnapshot`` and
+//  from there in the activity's content, so the widget extension never
+//  computes it. No widget family shows a time left, and neither does the
+//  watch.
+//
+//  So it lives here, beside ``RouteProfile`` and the rest of the
+//  framework-free logic over a route, and not in `OpenHikesShared`, which
+//  holds what more than one target compiles. `nonisolated` against this
+//  package's main-actor default, as ``RouteProfile`` is, because the hike's
+//  screen prepares its figures off the main actor.
 //
 
 import Foundation
 
-public enum WalkingTimeEstimate {
+nonisolated public enum WalkingTimeEstimate {
     /// Horizontal pace on the flat, in metres per hour.
     public static let flatMetersPerHour = 4000.0
     /// Ascent per hour.
