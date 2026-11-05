@@ -418,8 +418,10 @@ public protocol TrailWidgetMetricSource {
 }
 
 public extension SharedTrailSnapshot {
-    /// The stat chips for this trail: at most two, most useful first, and
-    /// truncated to whatever the widget family has width for.
+    /// The stat chips for this trail, most useful first: one for each slot
+    /// below that this snapshot has a figure for, cut to the `limit` the
+    /// caller's widget family has width for, so a narrower family gives up
+    /// the last of them first.
     ///
     /// A widget is a glance, not a report, so the band carries one fact about
     /// height rather than four. Ascent is that fact — it is what separates a
