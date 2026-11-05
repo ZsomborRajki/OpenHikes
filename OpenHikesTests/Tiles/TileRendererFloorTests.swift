@@ -67,8 +67,9 @@ struct TileRendererFloorTests {
         let renderer = CachingTileOverlayRenderer(overlay: overlay)
 
         let tileMapSize = MKMapSize.world.width / Double(1 << path.z)
-        // Inset, so the pass covers this one tile and not its neighbours,
-        // which are uncached and would only spend a fetch.
+        // Inset, belt and braces: a tile-aligned rect covers this one tile and
+        // not its neighbours too (`TileRendererTileRangeTests`), and they are
+        // uncached, so reaching one would only spend a fetch.
         let mapRect = MKMapRect(
             x: Double(path.x) * tileMapSize,
             y: Double(path.y) * tileMapSize,
