@@ -53,7 +53,7 @@ extension StringCatalogTests {
             let entry = value as? [String: Any] ?? [:]
             let translated = Self.localization(language, of: entry)
             if translated.isEmpty { continue }
-            let english = Self.placeholders(in: key)
+            let english = Self.placeholders(in: Self.english(of: key, entry))
             let forms = Self.forms(of: translated)
             let isPlural = Self.localization("en", of: entry)["variations"] != nil
             if forms.isEmpty || (isPlural && translated["variations"] == nil) {
@@ -177,6 +177,17 @@ extension StringCatalogTests {
         entry["extractionState"] as? String != "stale"
             && entry["shouldTranslate"] as? Bool != false
             && key.replacing(placeholder, with: "").contains(where: \.isLetter)
+    }
+
+    /// The English a translation stands in for: the key itself, except for a
+    /// key named for its meaning, such as `walk.percentHiked`, whose English
+    /// is the default value the source hands it (*One English word that a
+    /// translation splits takes a second key* in the repository instructions).
+    static func english(of key: String, _ entry: [String: Any]) -> String {
+        guard entry["extractionState"] as? String == "extracted_with_value",
+              let unit = localization("en", of: entry)["stringUnit"] as? [String: Any],
+              let value = unit["value"] as? String else { return key }
+        return value
     }
 
     /// The strings a localization holds: its one value, or each plural form.

@@ -230,9 +230,7 @@ nonisolated extension HikeActivityAttributes {
             meters: routeDistanceMeters ?? 0,
             locale: locale
         )
-        let percentage = progress.map { fraction in
-            "\(Int((fraction * 100).rounded()))%"
-        }
+        let percentage = progress.map { WidgetFormat.percent($0, locale: locale) }
         let showsTimer = walk.isWalking && state.isTicking
         return HikeActivityPresentation(
             title: title,
@@ -258,7 +256,7 @@ nonisolated extension HikeActivityAttributes {
                 ?? title,
             accessibilityValue: Self.spoken(
                 [
-                    percentage.map { Self.spokenPercentage($0, walking: walk.isWalking) }
+                    progress.map { Self.spokenPercentage($0, walking: walk.isWalking) }
                         ?? String(localized: "\(total) long"),
                     walk.isWalking ? elapsed : walk.remaining.map { String(localized: "\($0) remaining") },
                 ],
@@ -267,8 +265,12 @@ nonisolated extension HikeActivityAttributes {
         )
     }
 
-    private static func spokenPercentage(_ percentage: String, walking: Bool) -> String {
-        let value = String(percentage.dropLast())
+    /// The whole number the panel draws, said in words. Taken from the
+    /// fraction rather than by trimming the sign off the drawn figure, which
+    /// is the locale's own spelling: German puts a no-break space before the
+    /// sign, and Arabic writes its own digits and sign.
+    private static func spokenPercentage(_ fraction: Double, walking: Bool) -> String {
+        let value = String(WidgetFormat.wholePercent(fraction))
         if walking { return String(localized: "\(value) percent hiked") }
         return String(localized: "\(value) percent complete")
     }

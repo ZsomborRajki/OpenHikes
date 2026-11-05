@@ -11,6 +11,7 @@
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import OpenHikesShared
 import RealModule
 import Testing
 
@@ -63,6 +64,19 @@ struct WalkShareFiguresTests {
 
         #expect(card.value(of: .distance, locale: Self.metric) == "2,3 km")
         #expect(card.value(of: .completion, locale: Locale(identifier: "en_US")) == "62%")
+        #expect(card.value(of: .completion, locale: Self.metric) == "62\u{00A0}%")
+    }
+
+    /// The summary under the card says "63%" for a walk that covered 62.5%
+    /// of its trail. The card rounded the fraction half to even on its own,
+    /// and printed "62%" over the same walk.
+    @Test("the card's completion is the one the walk's summary draws, halves included")
+    func completionRoundsAsTheSummaryDoes() {
+        let english = Locale(identifier: "en_US")
+        let card = figures(completion: 0.625)
+
+        #expect(card.value(of: .completion, locale: english) == "63%")
+        #expect(card.value(of: .completion, locale: english) == WidgetFormat.percent(0.625, locale: english))
     }
 
     /// The box prints the average under "AVG SPEED", which is what a quarter

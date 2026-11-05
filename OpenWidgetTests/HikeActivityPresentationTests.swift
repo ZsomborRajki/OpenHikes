@@ -153,6 +153,33 @@ struct HikeActivityPresentationTests {
         #expect(presentation.accessibilityValue.contains("62 percent complete"))
     }
 
+    /// The panel took a locale and drew "62%" whatever it was. The spoken
+    /// figure is still the bare number, which trimming the sign off the drawn
+    /// one would have left with a no-break space after it.
+    @Test("a followed trail's percentage is written the locale's way and spoken as the number")
+    func followingPercentageFollowsTheLocale() {
+        let german = Locale(identifier: "de_DE")
+        let plain = Self.followingAttributes.presentation(
+            for: HikeActivityAttributes.ContentState(distanceMeters: 6200, offRouteMeters: 8),
+            locale: german
+        )
+        #expect(plain.primaryValue == "62\u{00A0}%")
+        #expect(plain.primaryValue == WidgetFormat.percent(0.62, locale: german))
+        #expect(plain.accessibilityValue.hasPrefix("62 percent complete,"))
+
+        let walking = Self.followingAttributes.presentation(
+            for: HikeActivityAttributes.ContentState(
+                distanceMeters: 6200,
+                offRouteMeters: 8,
+                coveredFractionComplete: 0.5,
+                runState: .running
+            ),
+            locale: german
+        )
+        #expect(walking.primaryValue == "50\u{00A0}%")
+        #expect(walking.accessibilityValue.hasPrefix("50 percent hiked,"))
+    }
+
     /// Claiming 0% for a hiker who has merely lost the trail would be a
     /// confident wrong answer; the trail's own length is the honest one.
     @Test("losing the trail falls back to its length rather than claiming zero")

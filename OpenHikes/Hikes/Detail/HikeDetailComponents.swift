@@ -98,8 +98,9 @@ struct TrailProgressView: View {
         // independent.
         let remaining = walking?.metersLeft ?? profile.remainingDistanceMeters(atDistance: distance)
         let fraction = walked ?? profile.fractionComplete(atDistance: distance) ?? 0
-        let percent = Int((fraction * 100).rounded())
-        let caption = walked == nil ? "\(percent)%" : String(localized: "\(percent)% hiked")
+        let percent = WidgetFormat.wholePercent(fraction)
+        let percentage = WidgetFormat.percent(fraction)
+        let caption = walked == nil ? percentage : String(localized: "\(percentage) hiked")
         // How long that is, while a walk is under way — the rest of the route
         // at this walk's own pace. Read here, per matched fix, for the reason
         // the coverage is: this row and nothing above it redraws.

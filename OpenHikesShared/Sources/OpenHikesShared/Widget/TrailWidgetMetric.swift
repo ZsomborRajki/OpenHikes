@@ -130,6 +130,34 @@ public enum WidgetFormat {
             )
     }
 
+    /// How much of a trail is done, as the locale writes a whole percentage —
+    /// "62%", "62 %", "٦٢٪". Every completion figure is this: the watch's,
+    /// the Live Activity's, the widget's, the walk's summary, row and share
+    /// card, and the hike screen's progress row. Most used to build their own
+    /// out of an integer and an ASCII "%", so a German Lock Screen read "62%"
+    /// in the Live Activity and "62 %" in the widget's ring beside it.
+    ///
+    /// The integer is formatted rather than the fraction, so the figure drawn
+    /// is always ``wholePercent(_:)``, the one VoiceOver is told. Formatting
+    /// the fraction rounds half to even, and on the fraction's decimal
+    /// spelling rather than on the `Double`: the Lock Screen's ring drew 0.625
+    /// as "62%" and spoke it as "63%", and the share card printed "62%" under
+    /// a summary that said "63%".
+    public static func percent(_ fraction: Double, locale: Locale = .current) -> String {
+        wholePercent(fraction).formatted(.percent.locale(locale))
+    }
+
+    /// The whole number ``percent(_:locale:)`` draws, for the sentences that
+    /// speak it — "62 percent complete" — and for a figure drawn without a
+    /// sign, as the walk row's ring is.
+    ///
+    /// A fraction that is not a number reads as none rather than trapping,
+    /// because a widget that crashes shows nothing at all.
+    public static func wholePercent(_ fraction: Double) -> Int {
+        guard fraction.isFinite else { return 0 }
+        return Int((fraction * 100).rounded())
+    }
+
     /// The one place a temperature becomes text, for the app's badge and the
     /// widget's alike.
     ///
