@@ -316,6 +316,49 @@ extension TrailWalkSessionTests {
         #expect(try walks(of: walked).first?.endReason == .routeChanged)
     }
 
+    /// A fix on another hike's screen can come every second, and each look
+    /// reads the whole walked line in a context of its own and leaves a watch
+    /// on it that only its next write releases. So the line that look read
+    /// stands until the interval has passed, or a write has replaced it.
+    @Test("fixes on another hike's screen share one look at the walked line until it is due or edited")
+    func fixesOnAnotherHikesScreenShareALook() async throws {
+        let session = session()
+        let reads = WidgetFeedSuites.SelectedLineImportTests.FetchCount()
+        session.lineLooks.fetch = reads.fetch
+        let walked = hike()
+        let shown = hike(title: "Shown")
+        let profile = RouteProfile(route: walked.route)
+        walk(session, hike: walked, profile: profile, from: 0, through: 5)
+        try context.save()
+        let matchOnShown: () -> Void = {
+            session.recordForegroundMatch(
+                hike: shown,
+                profile: profile,
+                distance: profile.distances[1],
+                revision: "shown"
+            )
+        }
+
+        for _ in 0..<5 {
+            matchOnShown()
+            await session.lineCheck?.value
+        }
+        #expect(reads.count == 1, "one read of the line, and so one watch on it, for five fixes")
+
+        clock.advance(by: TrailWalkSession.walkedLineLookInterval)
+        matchOnShown()
+        await session.lineCheck?.value
+        #expect(reads.count == 2, "looked at again once the interval has passed")
+        #expect(session.walkedHikeID == walked.id)
+
+        walked.replaceRoute(with: Array(walked.route.dropLast()))
+        try context.save()
+        matchOnShown()
+        await session.lineCheck?.value
+        #expect(session.walkedHikeID == nil, "an edit through the hike's context is looked at by the next fix")
+        #expect(try walks(of: walked).first?.endReason == .routeChanged)
+    }
+
     /// Everything here runs on the main actor, so the look cannot land until
     /// the test awaits it: by then the walk it was about has gone, and the
     /// line it read is not the one the next walk is along.

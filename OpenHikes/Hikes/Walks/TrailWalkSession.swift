@@ -84,10 +84,8 @@ final class TrailWalkSession {
     /// Start hands one in, so a walk adopted at launch has none until the
     /// detail's follow loop supplies it.
     @ObservationIgnored private(set) var walkedProfile: RouteProfile?
-    /// The look at the walked line out now, if any — see
-    /// ``checkWalkedLine(at:)``. Readable so a suite can wait on the effect
-    /// rather than on a duration.
-    @ObservationIgnored var lineCheck: Task<Void, Never>?
+    /// The looks at the walked line — see ``WalkedLineLooks``.
+    @ObservationIgnored var lineLooks = WalkedLineLooks()
     @ObservationIgnored private let context: ModelContext
     @ObservationIgnored private let tracker: BackgroundTrailTracker?
     @ObservationIgnored let clock: @Sendable () -> Date
@@ -224,17 +222,6 @@ final class TrailWalkSession {
         guard let record, record.hikeID == hikeID else { return nil }
         let now = clock()
         return Self.payload(for: record, at: now, state: state, secondsLeft: secondsLeft(at: now))
-    }
-
-    /// The walk's clock, minus its pauses, read now. Not observable — the
-    /// readout that draws it ticks on its own timer.
-    func activeSeconds() -> TimeInterval {
-        record?.activeSeconds(at: clock()) ?? 0
-    }
-
-    /// The time left, read now — see ``secondsLeft(at:)``.
-    func secondsLeft() -> TimeInterval? {
-        secondsLeft(at: clock())
     }
 
     // MARK: Feeding
@@ -719,6 +706,21 @@ final class TrailWalkSession {
             secondsLeft: secondsLeft,
             metersLeft: Self.metersLeft(of: record)
         )
+    }
+}
+
+// MARK: - Readouts
+
+extension TrailWalkSession {
+    /// The walk's clock, minus its pauses, read now. Not observable — the
+    /// readout that draws it ticks on its own timer.
+    func activeSeconds() -> TimeInterval {
+        record?.activeSeconds(at: clock()) ?? 0
+    }
+
+    /// The time left, read now — see ``secondsLeft(at:)``.
+    func secondsLeft() -> TimeInterval? {
+        secondsLeft(at: clock())
     }
 }
 
