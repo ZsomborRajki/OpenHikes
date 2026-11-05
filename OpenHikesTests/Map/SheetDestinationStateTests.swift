@@ -293,6 +293,28 @@ struct SheetDestinationStateTests {
         #expect(next !== visit && next.visit != visit.visit, "opening it again is a new visit")
         #expect(next.photoCopy == nil && !next.hasEnded)
     }
+
+    /// A pop builds the preview it is taking away once more, after the path
+    /// has lost its route. Handed a new visit there, the screen slid out
+    /// showing *Loading route…* rather than the page it had — watched on a
+    /// pool iPhone 18 Pro. It draws the visit it had, ended, and the next
+    /// open is still a new visit.
+    @Test("a popped preview keeps its own visit on the way out, and the next open is a new one")
+    func aPoppedPreviewKeepsItsVisitOnTheWayOut() {
+        let listing = CommunityListing.stub()
+        let presentation = SheetPresentation()
+        presentation.path = [.communityHike(listing)]
+        let visit = presentation.communityPreview(of: listing)
+
+        presentation.path = []
+        #expect(visit.hasEnded)
+        #expect(presentation.communityPreview(of: listing) === visit, "the screen going draws what it had")
+
+        presentation.path = [.communityHike(listing)]
+        let next = presentation.communityPreview(of: listing)
+        #expect(next !== visit && !next.hasEnded, "opening it again is a new visit")
+        #expect(presentation.communityPreview(of: listing) === next)
+    }
 }
 
 /// Answers as soon as it is asked — which, in a suite holding the main actor,

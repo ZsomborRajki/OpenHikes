@@ -249,6 +249,9 @@ final class SheetPresentation {
     /// downloads still loading it and the import — see
     /// ``CommunityPreviewSession``.
     @ObservationIgnored private var communityPreviews: [SheetRoute: CommunityPreviewSession] = [:]
+    /// The visits the last change of path ended, for the screens still going
+    /// — see ``communityPreview(of:)``.
+    @ObservationIgnored private var endedCommunityPreviews: [SheetRoute: CommunityPreviewSession] = [:]
     /// The screens that have brought what they are about into view — see
     /// ``claimsFirstFraming(of:)``.
     @ObservationIgnored private var framedRoutes: Set<SheetRoute> = []
@@ -273,11 +276,11 @@ final class SheetPresentation {
     /// job rather than a happy accident. ``isPresentingCommunityHike(_:)`` is
     /// what a disappearing preview asks to tell a push over it from the hiker
     /// leaving, and it asks about the *listing*: a second copy of the same one
-    /// answers for the copy being popped, so that screen cancels no download,
-    /// cancels no analysis, tells the map nothing and leaves its downloads in
-    /// `tmp` forever. Guarding only the top of the stack left that a gesture
-    /// away — pin A, pin B, pin A — and left `[A, A]`, where Back lands the
-    /// hiker on the screen they were already looking at.
+    /// answers for the copy being popped, so that screen tells the map nothing,
+    /// and the two copies would be one visit — see ``communityPreview(of:)``.
+    /// Guarding only the top of the stack left that a gesture away — pin A,
+    /// pin B, pin A — and left `[A, A]`, where Back lands the hiker on the
+    /// screen they were already looking at.
     ///
     /// Popping back to the open copy rather than refusing, because the two are
     /// the same answer to *show me this hike* and only one of them moves: a
@@ -479,9 +482,16 @@ final class SheetPresentation {
     /// ``isPresentingCommunityHike(_:)`` asks about, which is the listing's
     /// record name — so a listing is one visit for as long as it is on the
     /// stack, which ``showCommunityHike(_:)`` keeps to once.
+    ///
+    /// A pop asks once more, for the screen it is taking away: the path has
+    /// lost the route by then, and a new visit handed over there made the
+    /// preview slide out showing *Loading route…*. So that screen gets the
+    /// visit it was drawing, ended, and the next open of the listing a new
+    /// one.
     func communityPreview(of listing: CommunityListing) -> CommunityPreviewSession {
         let route = SheetRoute.communityHike(listing)
         if let existing = communityPreviews[route] { return existing }
+        if !storedPath.contains(route), let ended = endedCommunityPreviews[route] { return ended }
         let session = CommunityPreviewSession(listing: listing)
         communityPreviews[route] = session
         return session
@@ -689,7 +699,8 @@ final class SheetPresentation {
         // its screen: a turn of the phone takes the screen away and leaves the
         // route, and a preview taken off the stack from under its gallery is
         // not on screen to see itself go. See ``CommunityPreviewSession``.
-        for (route, preview) in communityPreviews where !storedPath.contains(route) { preview.end() }
+        endedCommunityPreviews = communityPreviews.filter { !storedPath.contains($0.key) }
+        for preview in endedCommunityPreviews.values { preview.end() }
         communityPreviews = communityPreviews.filter { storedPath.contains($0.key) }
         framedRoutes = framedRoutes.filter { storedPath.contains($0) }
         let recording = storedPath.last == .recording
