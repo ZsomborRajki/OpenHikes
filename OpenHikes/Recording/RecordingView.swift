@@ -12,6 +12,9 @@ struct RecordingView: View {
     private static let cardID = "recording-card"
 
     let recorder: HikeRecorder
+    /// What the card's idle Start goes through, so that it asks before ending
+    /// a walk as the map's record button does — see ``RecordingEntry``.
+    let entry: RecordingEntry
     var mapController: MapController
     /// Offers the map's camera pill while a walk is being recorded. Optional
     /// so previews and tests can build this view without one.
@@ -69,6 +72,7 @@ struct RecordingView: View {
                 RecordingPlaceTips(recorder: recorder)
                 RecordingCard(
                     recorder: recorder,
+                    entry: entry,
                     onSaved: onSaved,
                     onDiscarded: onDiscarded
                 )
