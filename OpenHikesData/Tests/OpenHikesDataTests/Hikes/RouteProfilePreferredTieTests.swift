@@ -53,6 +53,22 @@ struct RouteProfilePreferredTieTests {
         #expect(preferred.offRouteMeters == plain.offRouteMeters)
     }
 
+    /// The picker's positional tier asks this way only for the coordinate
+    /// (#1334), so with nothing preferred a tie must go where the plain
+    /// search sends it, to the start of the route.
+    @Test("with nothing preferred a tie goes where the plain search sends it")
+    func nothingPreferredIsThePlainSearch() throws {
+        let profile = Self.outAndBack
+        let plain = try #require(profile.nearestPoint(to: Self.midpoint))
+        let unpreferred = try #require(profile.nearestPoint(to: Self.midpoint) { _ in false })
+
+        #expect(unpreferred.distanceAlongRoute == plain.distanceAlongRoute)
+        #expect(unpreferred.offRouteMeters == plain.offRouteMeters)
+        #expect(plain.distanceAlongRoute < Self.turn)
+        #expect(unpreferred.coordinate.latitude.isApproximatelyEqual(to: 0, absoluteTolerance: 1e-9))
+        #expect(unpreferred.coordinate.longitude.isApproximatelyEqual(to: 0.01, absoluteTolerance: 1e-9))
+    }
+
     @Test("the chosen coordinate stays on a stationary piece after a pause", arguments: [false, true])
     func stationaryPieceKeepsItsProjection(continuesAfterAnotherPause: Bool) throws {
         var route = [
