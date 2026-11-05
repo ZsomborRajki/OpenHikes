@@ -29,7 +29,7 @@ import Testing
 struct CommunityPublishingCheckTests {
     /// Twelve kilometres due north, dense enough that a sample of it is a
     /// sample of a walk rather than of four points.
-    private static func line(
+    static func line(
         eastOffset: Double = 0,
         meters: Double = 12_000
     ) -> [RouteCoordinate] {
@@ -46,7 +46,7 @@ struct CommunityPublishingCheckTests {
         }
     }
 
-    private static func hike(
+    static func hike(
         in context: ModelContext,
         title: String,
         route: [RouteCoordinate],
@@ -66,7 +66,7 @@ struct CommunityPublishingCheckTests {
         in context: ModelContext
     ) async throws -> CommunityPublishingEligibility {
         try context.save()
-        return await CommunityPublishingCheck.eligibility(of: hike, in: context)
+        return try #require(await CommunityPublishingCheck.eligibility(of: hike, in: context))
     }
 
     /// The same, for the fetch on its own.
@@ -75,7 +75,10 @@ struct CommunityPublishingCheckTests {
         excluding hike: Hike
     ) async throws -> [CommunityPublishingCheck.SharedHike] {
         try context.save()
-        return await CommunityPublishingCheck.alreadyShared(in: context.container, excluding: hike.persistentModelID)
+        return try await CommunityPublishingCheck.alreadyShared(
+            in: context.container,
+            excluding: hike.persistentModelID
+        )
     }
 
     @Test("a first walk in an empty library may be published")

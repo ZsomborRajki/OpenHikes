@@ -357,13 +357,13 @@ struct CommunityPublicationCheckTests {
         try context.save()
 
         #expect(
-            await !CommunityPublishingCheck.alreadyShared(in: context.container, excluding: id).isEmpty,
+            try await !CommunityPublishingCheck.alreadyShared(in: context.container, excluding: id).isEmpty,
             "the published walk is a retread candidate while it remembers its submission"
         )
 
         CommunityPublicationCheck.forgetPublication(published)
 
-        #expect(await CommunityPublishingCheck.alreadyShared(in: context.container, excluding: id).isEmpty)
+        #expect(try await CommunityPublishingCheck.alreadyShared(in: context.container, excluding: id).isEmpty)
     }
 
     @Test("forgetting a hike that was never shared writes nothing")

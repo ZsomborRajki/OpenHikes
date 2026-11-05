@@ -92,7 +92,9 @@
 //  ``Read/isReplaced`` still says a write overtook it. One that fails is not
 //  read again, because nothing is left to ask for its line: its reader is
 //  handed no line, as for a row the store no longer holds, and
-//  ``Read/failed`` says which it was.
+//  ``Read/failed`` says which it was. A reader that would take no line for an
+//  answer asks it: the community's check reads once more, and then says it
+//  could not check (#1354).
 //
 
 import Foundation

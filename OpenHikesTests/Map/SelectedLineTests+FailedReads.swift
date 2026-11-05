@@ -5,7 +5,8 @@
 //  A fetch that fails says nothing about the row, so its read is neither kept
 //  as the hike's line nor handed out over the line the readers hold: see
 //  *A read that fails* in `SelectedLine.swift` (#1333). A real store does not
-//  fail a fetch on demand, so the fetch seam fails the calls a test names.
+//  fail a fetch on demand, so the fetch seam fails the calls a test names
+//  (`FailingLineFetch`).
 //
 
 import CoreLocation
@@ -14,39 +15,7 @@ import Foundation
 import OpenHikesData
 import OpenHikesShared
 import SwiftData
-import Synchronization
 import Testing
-
-/// ``SelectedLine``'s fetch, throwing at the calls it was told to, counting
-/// from one, and the store's own answer at every other — held, at the call
-/// it was told to hold, until the test opens it, as ``HeldLineFetch`` holds.
-nonisolated private final class FailingLineFetch: Sendable {
-    private struct Failure: Error {}
-
-    private let calls = Mutex(0)
-    private let failing: Set<Int>
-    private let heldCall: Int?
-    private let release = DispatchSemaphore(value: 0)
-
-    init(failing: Set<Int>, holding heldCall: Int? = nil) {
-        self.failing = failing
-        self.heldCall = heldCall
-    }
-
-    var count: Int { calls.withLock { $0 } }
-
-    func fetch(_ context: ModelContext, _ id: PersistentIdentifier) throws -> Hike? {
-        let call = calls.withLock { count in
-            count += 1
-            return count
-        }
-        if call == heldCall { release.wait() }
-        if failing.contains(call) { throw Failure() }
-        return try SelectedLine.fetchHike(context, id)
-    }
-
-    func open() { release.signal() }
-}
 
 extension WidgetFeedSuites.SelectedLineTests {
     /// A saved hike on the ridge, the line its four readers share, and them.

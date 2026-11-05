@@ -63,6 +63,7 @@
 
 import Foundation
 import OpenHikesData
+import os
 import SwiftData
 
 /// Whether this hike may be offered to the community, and why not.
@@ -87,7 +88,7 @@ nonisolated enum CommunityPublishingEligibility: Equatable, Sendable {
     ///
     /// Cases are alphabetical because the linter asks for that. The order they
     /// are *applied* in is the file header's, and is decided by ``of(importedFromListingID:importedAuthorName:distanceMeters:)``
-    /// and ``CommunityPublishingCheck/eligibility(of:in:)``.
+    /// and ``CommunityPublishingCheck/eligibility(of:in:fetchLine:fetchShared:)``.
     enum Reason: Equatable, Sendable {
         /// Substantially the same ground as a hike this hiker has already
         /// sent. `title` is that hike's, so the refusal can name it.
@@ -315,6 +316,8 @@ nonisolated extension CommunityPublishingEligibility.Reason {
 /// the part that has to go and look.
 @MainActor
 enum CommunityPublishingCheck {
+    private static let logger = Logger(subsystem: "OpenHikes", category: "Community")
+
     /// Cheap first, and then only if it has to.
     ///
     /// The retread check reads every hike this hiker has already sent and
@@ -341,11 +344,35 @@ enum CommunityPublishingCheck {
         var route: [RouteCoordinate]
     }
 
-    /// - Parameter context: Where the already-shared hikes are.
+    /// `hike`'s eligibility, or `nil` when the check could not be made.
+    ///
+    /// A fetch can fail, and a failure says nothing about the hikes. A line
+    /// that could not be read is not a line that retraces nothing, and hikes
+    /// already shared that could not be fetched are not none, but a failed
+    /// read of either used to answer `.eligible` (#1354). So either answers
+    /// `nil`, once this hike's line has been read once more, as a selection's
+    /// is after a first failure (``SelectedLine``). The share form holds its
+    /// button while the answer is `nil`, as it does while the check is out,
+    /// and asks again when it is next opened. With nothing already shared
+    /// there is nothing to retrace, so this hike's line is not waited for.
+    ///
+    /// The check is not what keeps a route off other people's screens, and a
+    /// failed read is not trusted anywhere else either:
+    /// ``CommunityPublisher/share`` sends no hike without a line, and a
+    /// reviewer reads every submission.
+    ///
+    /// - Parameters:
+    ///   - context: Where the already-shared hikes are.
+    ///   - fetchLine: How this hike's line is fetched, as a seam so a suite
+    ///     can fail it. ``SelectedLine/fetchHike(_:_:)`` everywhere else.
+    ///   - fetchShared: How the hikes already shared are fetched, the same
+    ///     seam for them. ``sharedHikes(_:)`` everywhere else.
     static func eligibility(
         of hike: Hike,
-        in context: ModelContext
-    ) async -> CommunityPublishingEligibility {
+        in context: ModelContext,
+        fetchLine: @escaping @Sendable (ModelContext, PersistentIdentifier) throws -> Hike? = SelectedLine.fetchHike,
+        fetchShared: @Sendable (ModelContext) throws -> [Hike] = sharedHikes
+    ) async -> CommunityPublishingEligibility? {
         let cheap = CommunityPublishingEligibility.of(
             importedFromListingID: hike.importedFromListingID,
             importedAuthorName: hike.importedAuthorName,
@@ -356,11 +383,22 @@ enum CommunityPublishingCheck {
 
         // In a read of its own, off the main actor, as the hikes below are:
         // this runs as a sheet opens.
-        let line = SelectedLine().read(of: hike)
-        let others = await alreadyShared(in: context.container, excluding: hike.persistentModelID)
+        let line = SelectedLine(fetch: fetchLine).read(of: hike)
+        let others: [SharedHike]
+        do {
+            others = try await alreadyShared(
+                in: context.container,
+                excluding: hike.persistentModelID,
+                fetch: fetchShared
+            )
+        } catch {
+            logger.error("Could not read the hikes already shared: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
         guard !others.isEmpty else { return .eligible }
 
-        guard let retread = await firstRetread(of: await line.route, among: others) else {
+        guard let read = await lineRead(of: hike, from: line, fetch: fetchLine) else { return nil }
+        guard let retread = await firstRetread(of: await read.route, among: others) else {
             return .eligible
         }
         let reason = CommunityPublishingEligibility.Reason.retreads(title: retread.title)
@@ -385,6 +423,22 @@ enum CommunityPublishingCheck {
         )
     }
 
+    /// The read that holds `hike`'s line: `read`, or, when its fetch failed,
+    /// one more. `nil` when that one fails too.
+    ///
+    /// Never a read whose fetch failed: the line it hands out has no points,
+    /// and a line with no points retraces nothing, so comparing it would
+    /// answer a read that found nothing out as a hike that retraces nothing.
+    private static func lineRead(
+        of hike: Hike,
+        from read: SelectedLine.Read,
+        fetch: @escaping @Sendable (ModelContext, PersistentIdentifier) throws -> Hike?
+    ) async -> SelectedLine.Read? {
+        guard await read.failed else { return read }
+        let again = SelectedLine(fetch: fetch).read(of: hike)
+        return await again.failed ? nil : again
+    }
+
     /// Every hike this hiker has sent, as values rather than as models.
     ///
     /// Read off the main actor, in a context made here and dropped on return,
@@ -399,17 +453,17 @@ enum CommunityPublishingCheck {
     /// reached yet is still a listing this trail is about to have. Which of
     /// the two it is decides what a retread can *do*, not whether it is one —
     /// see ``SharedHike/listingID``.
+    ///
+    /// Throws when the fetch fails, which is not the same answer as none: see
+    /// ``eligibility(of:in:fetchLine:fetchShared:)``.
     @concurrent
     static func alreadyShared(
         in container: ModelContainer,
-        excluding hike: PersistentIdentifier
-    ) async -> [SharedHike] {
+        excluding hike: PersistentIdentifier,
+        fetch: @Sendable (ModelContext) throws -> [Hike] = sharedHikes
+    ) async throws -> [SharedHike] {
         assertOffMainThread("Reading the hikes already shared must stay off the main thread")
-        let descriptor = FetchDescriptor<Hike>(
-            predicate: #Predicate { $0.communitySubmissionID != nil }
-        )
-        let shared = (try? ModelContext(container).fetch(descriptor)) ?? []
-        return shared
+        return try fetch(ModelContext(container))
             .filter { $0.persistentModelID != hike }
             .map { other in
                 SharedHike(
@@ -418,6 +472,11 @@ enum CommunityPublishingCheck {
                     route: other.route
                 )
             }
+    }
+
+    /// The store's own answer: every hike that carries a submission.
+    nonisolated static func sharedHikes(_ context: ModelContext) throws -> [Hike] {
+        try context.fetch(FetchDescriptor<Hike>(predicate: #Predicate { $0.communitySubmissionID != nil }))
     }
 
     /// The first already-shared hike this route retraces.

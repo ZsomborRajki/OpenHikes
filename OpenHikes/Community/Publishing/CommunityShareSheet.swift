@@ -108,7 +108,9 @@ struct CommunityShareSheet: View {
     /// Whether this hike may be published at all, once the library has been
     /// asked. `nil` until then, and the Share button waits for it: offering a
     /// send that the answer is about to withdraw is worse than offering it a
-    /// moment late.
+    /// moment late. Still `nil` when the library could not be asked, for the
+    /// same reason, until the form is opened again — see
+    /// ``CommunityPublishingCheck/eligibility(of:in:fetchLine:fetchShared:)``.
     @State private var eligibility: CommunityPublishingEligibility?
     /// The trail this hike's photographs would go on instead, once the hiker
     /// has asked for that. `nil` is the ordinary state, including while the

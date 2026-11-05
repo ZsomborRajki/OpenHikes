@@ -359,8 +359,9 @@ extension HikeDetailView {
     /// strip and would aim the next send at it. So the target is one this hike
     /// really has — an import's listing, or its own — and a hike with neither
     /// was sent as a retread of an earlier walk, which only
-    /// ``CommunityPublishingCheck`` can find. Failing that, the share form,
-    /// which says why the photographs have nowhere to go.
+    /// ``CommunityPublishingCheck`` can find. Failing that, or when the check
+    /// could not be made, the share form, which asks again and says why the
+    /// photographs have nowhere to go.
     private func finishSendingPhotos(_ eligibility: CommunityPublishingEligibility) {
         let known = eligibility.photoTarget ?? CommunityPhotoTarget.published(
             listingID: hike.communityListingID,
@@ -372,7 +373,7 @@ extension HikeDetailView {
         }
         Task {
             let resolved = await CommunityPublishingCheck.eligibility(of: hike, in: modelContext)
-            if let target = resolved.photoTarget {
+            if let target = resolved?.photoTarget {
                 contributionTarget = target
             } else {
                 isSharingToCommunity = true
