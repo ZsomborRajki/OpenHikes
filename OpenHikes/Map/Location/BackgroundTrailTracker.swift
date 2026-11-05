@@ -528,12 +528,9 @@ final class BackgroundTrailTracker: NSObject {
                 lastMatchedDistance = distance
                 // Coverage accrues from here too — this is the feed that
                 // keeps a walk honest while the phone is in a pocket.
+                let walkRevision = matched.walkRevision
                 let completedWalk = walkSession?.recordBackgroundMatch(
-                    hikeID: hikeID,
-                    distance: distance,
-                    accuracy: accuracy,
-                    at: timestamp,
-                    revision: matched.walkRevision
+                    hikeID: hikeID, distance: distance, accuracy: accuracy, at: timestamp, revision: walkRevision
                 ) ?? false
                 // A fix that completed the walk is not published: the write
                 // below would carry no walk and start a plain follow over the
