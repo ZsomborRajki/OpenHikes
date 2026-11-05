@@ -177,6 +177,28 @@ struct TileRendererTileRangeTests {
         #expect(painted == Self.tiles(columns: Self.column...(Self.column + 1), rows: Self.row...Self.row))
     }
 
+    /// The guard on the range. A rect with no width, or no height, lying on a
+    /// tile edge would end the range one tile before it starts, which traps.
+    /// It covers the tile it sits in instead, the one past that edge.
+    @Test("a rect with no width or no height on a tile edge draws the one tile past it", arguments: [true, false])
+    func flatRectOnAnEdgeDrawsOneTile(hasNoWidth: Bool) throws {
+        let side = Self.tileMapSize
+        let mapRect = MKMapRect(
+            x: Double(Self.column) * side,
+            y: Double(Self.row) * side,
+            width: hasNoWidth ? 0 : side,
+            height: hasNoWidth ? side : 0
+        )
+
+        let painted = try paintedTiles(
+            drawing: mapRect,
+            around: (Self.column - 1)...(Self.column + 1),
+            (Self.row - 1)...(Self.row + 1)
+        )
+
+        #expect(painted == [Tile(x: Self.column, y: Self.row)])
+    }
+
     /// A rect a world to the east, as MapKit draws while panning across the
     /// antimeridian, still draws the tiles it wraps onto, and only those.
     @Test("an aligned rect past the antimeridian draws the tiles it wraps onto and none beyond")
