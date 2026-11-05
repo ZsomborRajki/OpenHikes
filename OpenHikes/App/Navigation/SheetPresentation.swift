@@ -251,6 +251,12 @@ final class SheetPresentation {
     /// downloads still loading it and the import — see
     /// ``CommunityPreviewSession``.
     @ObservationIgnored private var communityPreviews = SheetRetained<SheetRoute, CommunityPreviewSession>()
+    /// The same, for a queued hike's review and a queued set of photographs':
+    /// what has arrived, what is struck off, a corrected title and a decision
+    /// under way — see ``CommunityHikeReviewSession``.
+    @ObservationIgnored private var hikeReviews = SheetRetained<SheetRoute, CommunityHikeReviewSession>()
+    @ObservationIgnored private var photoReviews =
+        SheetRetained<SheetRoute, CommunityReviewDecisions<CommunityPhotoContribution>>()
     /// The screens that have brought what they are about into view — see
     /// ``claimsFirstFraming(of:)``.
     @ObservationIgnored private var framedRoutes: Set<SheetRoute> = []
@@ -470,6 +476,22 @@ final class SheetPresentation {
         communityPreviews.value(for: .communityHike(listing)) { CommunityPreviewSession(listing: listing) }
     }
 
+    /// The review of a queued hike, kept for as long as its route is on the
+    /// stack, so the screen a turn of the phone builds in the other host goes
+    /// on with the review rather than starting it over — see
+    /// ``CommunityHikeReviewSession``.
+    func review(of pending: CommunityPendingSubmission) -> CommunityHikeReviewSession {
+        hikeReviews.value(for: .pendingSubmission(pending)) { CommunityHikeReviewSession(pending: pending) }
+    }
+
+    /// The same, for a queued set of contributed photographs, which have no
+    /// title to correct.
+    func review(of pending: CommunityPendingPhotos) -> CommunityReviewDecisions<CommunityPhotoContribution> {
+        photoReviews.value(for: .pendingPhotos(pending)) {
+            CommunityReviewDecisions(listing: pending.prospectiveListing)
+        }
+    }
+
     /// Whether this is the first time since `route` was pushed that its
     /// screen asks to bring what it is about into view: `true` once, then
     /// `false` until the route is popped.
@@ -670,8 +692,12 @@ final class SheetPresentation {
         // And a preview's downloads, which go with its route rather than with
         // its screen: a turn of the phone takes the screen away and leaves the
         // route, and a preview taken off the stack from under its gallery is
-        // not on screen to see itself go. See ``CommunityPreviewSession``.
+        // not on screen to see itself go. See ``CommunityPreviewSession``. A
+        // review's go the same way, for the first of those reasons — see
+        // ``CommunityReviewDecisions/end()``.
         for preview in communityPreviews.release(keeping: isOnPath) { preview.end() }
+        for review in hikeReviews.release(keeping: isOnPath) { review.decisions.end() }
+        for review in photoReviews.release(keeping: isOnPath) { review.end() }
         framedRoutes = framedRoutes.filter { stack.contains($0) }
         let recording = storedPath.last == .recording
         if isRecordingPresented != recording { isRecordingPresented = recording }

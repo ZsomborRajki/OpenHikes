@@ -91,51 +91,49 @@ struct CommunityReviewView: View {
     /// places its photographs were taken on the map behind the sheet. See this
     /// file's header.
     var browser: CommunityBrowser
+    /// The title as it will be published, the phase, the removals and the
+    /// tasks, kept by the sheet rather than here: a turn of the phone builds
+    /// this screen again in the other host — see
+    /// ``CommunityHikeReviewSession``.
+    let review: CommunityHikeReviewSession
     /// Pops the screen. Run after a decision has landed, and after nothing
     /// else — a reviewer who backs out has decided nothing.
     let onFinished: () -> Void
+    /// Whether the route is still on the stack as this screen goes — see
+    /// ``CommunityReviewChrome/remainsPushed``.
+    let remainsPushed: () -> Bool
 
-    /// The title as it will be published, which starts as the one that was
-    /// sent.
-    ///
-    /// Only ever the *listing's* title. The submission keeps what its author
-    /// wrote — see this file's header for why that is both possible and
-    /// deliberate.
-    @State private var titleDraft: String
     /// Whether the title field has the keyboard.
     ///
     /// Written by the *Done* button above the keyboard and by nothing else —
     /// see ``submissionSection`` for why that button is here rather than
     /// being a convenience.
     @FocusState private var isEditingTitle: Bool
-    /// The phase, the removals and the tasks — shared with
-    /// ``CommunityPhotoReviewView``, which decides the same way about a
-    /// different thing. See ``CommunityReviewDecisions``.
-    @State private var decisions: CommunityReviewDecisions<CommunityHikeDetail>
 
-    /// Seeds the title field from the submission.
-    ///
-    /// A hand-written initializer for that one line. The alternative is
-    /// copying the title into the field from `.task`, which runs again on
-    /// every appearance and would quietly undo an edit the reviewer had
-    /// already made.
+    /// Written out because ``isEditingTitle`` is private, which would make
+    /// the memberwise initializer private too.
     init(
         pending: CommunityPendingSubmission,
         transport: any CommunityTransporting,
         queue: CommunityReviewQueue,
         browser: CommunityBrowser,
-        onFinished: @escaping () -> Void
+        review: CommunityHikeReviewSession,
+        onFinished: @escaping () -> Void,
+        remainsPushed: @escaping () -> Bool
     ) {
         self.pending = pending
         self.transport = transport
         self.queue = queue
         self.browser = browser
+        self.review = review
         self.onFinished = onFinished
-        _titleDraft = State(initialValue: pending.title)
-        _decisions = State(
-            initialValue: CommunityReviewDecisions(listing: pending.prospectiveListing)
-        )
+        self.remainsPushed = remainsPushed
     }
+
+    /// The phase, the removals and the tasks — shared with
+    /// ``CommunityPhotoReviewView``, which decides the same way about a
+    /// different thing. See ``CommunityReviewDecisions``.
+    private var decisions: CommunityReviewDecisions<CommunityHikeDetail> { review.decisions }
 
     /// Whether publishing this would produce a listing anybody can see.
     ///
@@ -172,7 +170,7 @@ struct CommunityReviewView: View {
     /// is mid-edit, and quietly publishing the name they just deleted is the
     /// app deciding something they did not.
     private var publishedTitle: String {
-        BoundedText.boundedOrEmpty(titleDraft, to: .title)
+        BoundedText.boundedOrEmpty(review.titleDraft, to: .title)
     }
 
     var body: some View {
@@ -199,10 +197,10 @@ struct CommunityReviewView: View {
                 The hiker is not told, and their app goes on reading \
                 “waiting for review”.
                 """,
-                isConfirmingDecline: $decisions.isConfirmingDecline,
-                decisionFailure: $decisions.decisionFailure,
-                begin: { await decisions.begin(loading: download, thenShowing: showOnMap) },
-                end: { decisions.end() },
+                isConfirmingDecline: Bindable(decisions).isConfirmingDecline,
+                decisionFailure: Bindable(decisions).decisionFailure,
+                begin: { decisions.begin(loading: download, thenShowing: showOnMap) },
+                remainsPushed: remainsPushed,
                 decline: { decline() }
             )
         )
@@ -219,7 +217,7 @@ private extension CommunityReviewView {
     var submissionSection: some View {
         Section {
             LabeledContent("Title") {
-                TextField("Title", text: $titleDraft)
+                TextField("Title", text: Bindable(review).titleDraft)
                     .multilineTextAlignment(.trailing)
                     .disabled(decisions.isDeciding)
                     .focused($isEditingTitle)

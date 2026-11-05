@@ -51,31 +51,18 @@ struct CommunityPhotoReviewView: View {
     /// Written, never read: it is what puts these photographs' places on the
     /// map behind the sheet. See this file's header.
     var browser: CommunityBrowser
+    /// The phase, the removals and the tasks — shared with
+    /// ``CommunityReviewView``, which decides the same way about a different
+    /// thing. See ``CommunityReviewDecisions``. Kept by the sheet rather than
+    /// here, because a turn of the phone builds this screen again in the
+    /// other host.
+    let decisions: CommunityReviewDecisions<CommunityPhotoContribution>
     /// Pops the screen. Run after a decision has landed, and after nothing
     /// else — a reviewer who backs out has decided nothing.
     let onFinished: () -> Void
-
-    /// The phase, the removals and the tasks — shared with
-    /// ``CommunityReviewView``, which decides the same way about a different
-    /// thing. See ``CommunityReviewDecisions``.
-    @State private var decisions: CommunityReviewDecisions<CommunityPhotoContribution>
-
-    init(
-        pending: CommunityPendingPhotos,
-        transport: any CommunityTransporting,
-        queue: CommunityReviewQueue,
-        browser: CommunityBrowser,
-        onFinished: @escaping () -> Void
-    ) {
-        self.pending = pending
-        self.transport = transport
-        self.queue = queue
-        self.browser = browser
-        self.onFinished = onFinished
-        _decisions = State(
-            initialValue: CommunityReviewDecisions(listing: pending.prospectiveListing)
-        )
-    }
+    /// Whether the route is still on the stack as this screen goes — see
+    /// ``CommunityReviewChrome/remainsPushed``.
+    let remainsPushed: () -> Bool
 
     /// Whether publishing this would produce a record anybody can use.
     ///
@@ -114,10 +101,10 @@ struct CommunityPhotoReviewView: View {
                 app goes on reading “waiting for review”. The trail itself is not \
                 touched.
                 """,
-                isConfirmingDecline: $decisions.isConfirmingDecline,
-                decisionFailure: $decisions.decisionFailure,
-                begin: { await decisions.begin(loading: download, thenShowing: showOnMap) },
-                end: { decisions.end() },
+                isConfirmingDecline: Bindable(decisions).isConfirmingDecline,
+                decisionFailure: Bindable(decisions).decisionFailure,
+                begin: { decisions.begin(loading: download, thenShowing: showOnMap) },
+                remainsPushed: remainsPushed,
                 decline: { decline() }
             )
         )

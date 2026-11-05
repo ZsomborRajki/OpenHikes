@@ -73,6 +73,11 @@ struct SheetPoppedDestinationTests {
             presentation.communityPhotoSelection(for: gallery)
         }
 
+        let submission = CommunityPendingSubmission.stub()
+        expectKept(pushing: [.pendingSubmission(submission)]) { $0.review(of: submission) }
+
+        let photos = CommunityPendingPhotos.stub()
+        expectKept(pushing: [.pendingPhotos(photos)]) { $0.review(of: photos) }
     }
 
     @Test("what a pop let go of is handed on only until the path changes again")

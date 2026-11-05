@@ -2,10 +2,10 @@
 //  WindowSupport.swift
 //  OpenHikesUITests
 //
-//  Where the app's window is, and whether XCUITest's hit test can be believed
-//  in it, for every class in this bundle. Both have one answer on every iPhone
-//  and another on the iPhone Duo's inner display turned to landscape, which is
-//  the way up that display opens.
+//  Where the app's window is, whether XCUITest's hit test can be believed in
+//  it, and when it has finished turning, for every class in this bundle. The
+//  first two have one answer on every iPhone and another on the iPhone Duo's
+//  inner display turned to landscape, which is the way up that display opens.
 //
 
 import XCTest
@@ -42,5 +42,37 @@ extension XCTestCase {
         return window.width > window.height
             && abs(stale.width - window.height) < 1
             && abs(stale.height - window.width) < 1
+    }
+
+    // MARK: - Waiting on the rotation
+
+    /// Waits for the window itself to have turned.
+    ///
+    /// The app's frame is the effect a rotation has — a duration is not, and
+    /// the accessibility tree answers with the old geometry until the system
+    /// has finished laying out the new one. Here rather than on
+    /// `OrientationUITests` because a turn of the phone is also how
+    /// `CommunityReviewUITests` holds a review to its route.
+    @MainActor
+    func waitForLandscape(_ app: XCUIApplication) -> Bool {
+        wait(for: app) { $0.width > $0.height }
+    }
+
+    @MainActor
+    func waitForPortrait(_ app: XCUIApplication) -> Bool {
+        wait(for: app) { $0.height > $0.width }
+    }
+
+    @MainActor
+    private func wait(
+        for app: XCUIApplication,
+        until isSettled: @escaping (CGRect) -> Bool
+    ) -> Bool {
+        let turned = NSPredicate { _, _ in isSettled(app.frame) }
+        let settled = expectation(for: turned, evaluatedWith: app)
+        return XCTWaiter.wait(
+            for: [settled],
+            timeout: UITestTimeout.navigation
+        ) == .completed
     }
 }

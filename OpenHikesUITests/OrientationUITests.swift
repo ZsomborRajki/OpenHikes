@@ -412,34 +412,4 @@ extension OrientationUITests {
         XCTAssertTrue(waitForPortrait(app), "the app should have started upright")
         return app
     }
-
-    // MARK: - Waiting on the rotation
-
-    /// Waits for the window itself to have turned.
-    ///
-    /// The app's frame is the effect a rotation has — a duration is not, and
-    /// the accessibility tree answers with the old geometry until the system
-    /// has finished laying out the new one.
-    @MainActor
-    func waitForLandscape(_ app: XCUIApplication) -> Bool {
-        wait(for: app) { $0.width > $0.height }
-    }
-
-    @MainActor
-    func waitForPortrait(_ app: XCUIApplication) -> Bool {
-        wait(for: app) { $0.height > $0.width }
-    }
-
-    @MainActor
-    private func wait(
-        for app: XCUIApplication,
-        until isSettled: @escaping (CGRect) -> Bool
-    ) -> Bool {
-        let turned = NSPredicate { _, _ in isSettled(app.frame) }
-        let settled = expectation(for: turned, evaluatedWith: app)
-        return XCTWaiter.wait(
-            for: [settled],
-            timeout: UITestTimeout.navigation
-        ) == .completed
-    }
 }
