@@ -350,8 +350,9 @@ enum CommunityPublishingCheck {
     /// that could not be read is not a line that retraces nothing, and hikes
     /// already shared that could not be fetched are not none, but a failed
     /// read of either used to answer `.eligible` (#1354). So either answers
-    /// `nil`, once this hike's line has been read once more, as a selection's
-    /// is after a first failure (``SelectedLine``). The share form holds its
+    /// `nil`: the hikes already shared at once, and this hike's line once it
+    /// has been read once more and failed again, as a selection's is read
+    /// again after a first failure (``SelectedLine``). The share form holds its
     /// button while the answer is `nil`, as it does while the check is out,
     /// and asks again when it is next opened. With nothing already shared
     /// there is nothing to retrace, so this hike's line is not waited for.
