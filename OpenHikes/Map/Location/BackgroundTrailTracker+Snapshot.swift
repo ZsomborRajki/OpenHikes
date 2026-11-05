@@ -106,8 +106,8 @@ extension BackgroundTrailTracker {
     /// `referenceDistance` at once, because these fixes are too sparse to wait
     /// for the several that `FollowAnchor` does before believing a turn. The
     /// position published is the point that projection fell on, never one
-    /// read back from its distance, as the foreground's is — see
-    /// ``publishLiveFix(hike:profile:match:line:walk:)``.
+    /// read back from its distance, the same rule the foreground's follows —
+    /// see ``publishLiveFix(hike:profile:match:line:walk:)``.
     ///
     /// Returns `nil` when the hike is gone or too short to match against.
     nonisolated static func match(

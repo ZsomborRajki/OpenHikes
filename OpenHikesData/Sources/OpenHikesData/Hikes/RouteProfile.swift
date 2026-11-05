@@ -602,10 +602,7 @@ nonisolated extension RouteProfile {
         to coordinate: CLLocationCoordinate2D,
         preferring isPreferred: (Double) -> Bool
     ) -> (distanceAlongRoute: Double, offRouteMeters: Double, coordinate: CLLocationCoordinate2D)? {
-        guard coordinates.count > 1 else {
-            guard let only = coordinates.first, let match = nearestPoint(to: coordinate) else { return nil }
-            return (match.distanceAlongRoute, match.offRouteMeters, only)
-        }
+        guard coordinates.count > 1 else { return nearestPoint(to: coordinate) }
         var candidates: [NearestCandidate] = []
         candidates.reserveCapacity(coordinates.count - 1)
         var best: NearestCandidate?

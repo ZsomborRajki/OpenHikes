@@ -126,9 +126,13 @@ struct RouteProfileProjectedCoordinateTests {
         let only = CLLocationCoordinate2D(latitude: 47, longitude: 12)
         let profile = RouteProfile(route: [RouteCoordinate(only)])
 
-        let match = try #require(profile.nearestPoint(to: CLLocationCoordinate2D(latitude: 47.001, longitude: 12)))
+        let fix = CLLocationCoordinate2D(latitude: 47.001, longitude: 12)
+        let match = try #require(profile.nearestPoint(to: fix))
+        let preferring = try #require(profile.nearestPoint(to: fix) { _ in true })
 
-        #expect(match.coordinate.latitude == only.latitude)
-        #expect(match.coordinate.longitude == only.longitude)
+        for answer in [match, preferring] {
+            #expect(answer.coordinate.latitude == only.latitude)
+            #expect(answer.coordinate.longitude == only.longitude)
+        }
     }
 }
