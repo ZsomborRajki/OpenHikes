@@ -784,6 +784,7 @@ private extension TrailWalkSession {
             let walk = PendingWalkStart(
                 hikeID: hike.id,
                 routeDistanceMeters: profile.totalDistanceMeters,
+                endsApartMeters: PendingWalkStart.endsApartMeters(of: profile),
                 routeRevision: revision,
                 distance: distance,
                 at: now
