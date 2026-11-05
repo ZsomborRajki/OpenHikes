@@ -6,6 +6,7 @@
 //
 
 import OpenHikesData
+import OpenHikesShared
 import SwiftUI
 
 struct WalkRow: View {
@@ -51,11 +52,12 @@ struct WalkRow: View {
         }
     }
 
-    private var percent: Int { Int((walk.coveredFraction * 100).rounded()) }
+    private var percent: Int { WidgetFormat.wholePercent(walk.coveredFraction) }
 
     private var subtitle: String {
+        let covered = WidgetFormat.percent(walk.coveredFraction)
         let duration = HikeFormat.duration(walk.activeSeconds)
-        return String(localized: "\(percent)% hiked · \(duration) · \(Self.outcome(walk.endReason))")
+        return String(localized: "\(covered) hiked · \(duration) · \(Self.outcome(walk.endReason))")
     }
 
     private var spokenSubtitle: String {

@@ -381,6 +381,56 @@
         }
       }
     },
+    "%@ hiked" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ gewandert"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ recorrido"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parcouru à %@"
+          }
+        }
+      }
+    },
+    "%@ hiked · %@ · %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ gewandert · %2$@ · %3$@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ hiked · %2$@ · %3$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ recorrido · %2$@ · %3$@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parcouru à %1$@ · %2$@ · %3$@"
+          }
+        }
+      }
+    },
     "%@ is already in the list. Your photos can go on it, and a person checks them first." : {
       "localizations" : {
         "de" : {
@@ -3082,56 +3132,6 @@
     },
     "%lld%%" : {
 
-    },
-    "%lld%% hiked" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld%% gewandert"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld %% recorrido"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Parcouru à %lld %%"
-          }
-        }
-      }
-    },
-    "%lld%% hiked · %@ · %@" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld%% gewandert · %2$@ · %3$@"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld%% hiked · %2$@ · %3$@"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld %% recorrido · %2$@ · %3$@"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Parcouru à %1$lld %% · %2$@ · %3$@"
-          }
-        }
-      }
     },
     "A hike is in progress on %@. End it there to hike this trail." : {
       "localizations" : {

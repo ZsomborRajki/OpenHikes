@@ -15,6 +15,7 @@
 
 import CoreLocation
 import OpenHikesData
+import OpenHikesShared
 import SwiftUI
 
 struct WalkSummaryView: View {
@@ -51,7 +52,9 @@ struct WalkSummaryView: View {
 
     private var hike: Hike? { walk.hike }
     private var tint: Color { hike?.tintOpaque ?? .green }
-    private var percent: Int { Int((walk.coveredFraction * 100).rounded()) }
+    /// What VoiceOver is told, the whole number the figure draws — see
+    /// ``WidgetFormat/percent(_:locale:)``.
+    private var percent: Int { WidgetFormat.wholePercent(walk.coveredFraction) }
     private var profile: RouteProfile? {
         guard let trail, trail.key == WalkSummaryRouteKey(walk: walk, line: line) else { return nil }
         return trail.profile
@@ -148,7 +151,7 @@ struct WalkSummaryView: View {
     private var completion: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("\(percent)%")
+                Text(WidgetFormat.percent(walk.coveredFraction))
                     .font(.system(size: figureSize, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .minimumScaleFactor(0.5)

@@ -83,10 +83,15 @@ struct SharedTrailSnapshotTests {
 
     // MARK: The shared status line
 
+    // The percentages below are written through `WidgetFormat.percent`, as
+    // the distances are through `WidgetFormat.length`: the simulator's region
+    // decides both, and an English-language simulator in Germany spaces the
+    // sign, "62 %".
+
     @Test("with a fix, the status line is progress and distance left")
     func statusWithFix() {
         let status = Self.snapshot(total: 10_000, along: 6200).statusText
-        #expect(status.contains("62%"))
+        #expect(status.contains(WidgetFormat.percent(0.62)))
         #expect(status.contains("left"))
     }
 
@@ -136,9 +141,9 @@ struct SharedTrailSnapshotTests {
         var snapshot = Self.snapshot(total: 10_000, along: 6200)
         snapshot.walk = Self.walk()
         let status = snapshot.statusText
-        #expect(status.hasPrefix("50% hiked"))
+        #expect(status.hasPrefix("\(WidgetFormat.percent(0.5)) hiked"))
         #expect(status.contains("left"))
-        #expect(!status.contains("62%"))
+        #expect(!status.contains(WidgetFormat.percent(0.62)))
         #expect(snapshot.progressFraction == 0.5, "and the bar draws the same number")
         #expect(snapshot.fractionComplete == 0.62, "position is still there for whoever asks for it")
     }
@@ -151,21 +156,21 @@ struct SharedTrailSnapshotTests {
         var snapshot = Self.snapshot(total: 10_000, along: 6200)
         snapshot.walk = Self.walk(covered: 0.8, metersLeft: 6200)
         #expect(snapshot.remainingDistanceMeters == 6200)
-        #expect(snapshot.statusText == "80% hiked · \(WidgetFormat.length(meters: 6200)) left")
+        #expect(snapshot.statusText == "\(WidgetFormat.percent(0.8)) hiked · \(WidgetFormat.length(meters: 6200)) left")
     }
 
     @Test("a paused walk says so before its coverage")
     func pausedWalkSaysPaused() {
         var snapshot = Self.snapshot(total: 10_000, along: 6200)
         snapshot.walk = Self.walk(state: .paused)
-        #expect(snapshot.statusText.hasPrefix("Paused · 50% hiked"))
+        #expect(snapshot.statusText.hasPrefix("Paused · \(WidgetFormat.percent(0.5)) hiked"))
     }
 
     @Test("a walk with no fix reports coverage and nothing left")
     func walkWithoutFixReportsCoverageOnly() {
         var snapshot = Self.snapshot(total: 10_000)
         snapshot.walk = Self.walk(covered: 0.25)
-        #expect(snapshot.statusText == "25% hiked")
+        #expect(snapshot.statusText == "\(WidgetFormat.percent(0.25)) hiked")
         #expect(snapshot.progressFraction == 0.25)
     }
 

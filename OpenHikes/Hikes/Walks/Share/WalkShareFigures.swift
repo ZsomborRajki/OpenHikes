@@ -120,7 +120,7 @@ nonisolated struct WalkShareFigures: Equatable, Sendable {
         case .speed:
             return averageMetersPerSecond.map { WidgetFormat.speed(metersPerSecond: $0, locale: locale) }
         case .completion:
-            return completion.formatted(.percent.precision(.fractionLength(0)).locale(locale))
+            return WidgetFormat.percent(completion, locale: locale)
         case .date:
             return startedAt.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted).locale(locale))
         }
