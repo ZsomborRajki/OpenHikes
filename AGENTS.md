@@ -851,7 +851,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
     `MapSidePanel` widens to edge to edge.
   - `SheetPresentation` keeps each pushed screen's state objects until the
     route pops, so rotation keeps them. A cover driven by a destination's own
-    `@State` closes on a turn.
+    `@State` closes on a turn. A pop builds the screen it is taking away once
+    more, so a new destination's object goes in a `SheetRetained`, which hands
+    that build the object it had.
   - `OrientationUITests` guards all of this.
 - **Make a push reach `NavigationStack` in one pass per frame.**
   - Outside a tap, write the selection and the detent first and the path last,

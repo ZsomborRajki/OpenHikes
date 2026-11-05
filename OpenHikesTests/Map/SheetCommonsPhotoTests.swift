@@ -184,6 +184,10 @@ struct SheetCommonsPhotoTests {
         presentation.path.removeLast()
         #expect(presentation.path == [.commonsPhoto(Self.photo(1))])
         #expect(presentation.detent == .medium)
+        // The pop builds the gallery once more on its way out — see
+        // `SheetRetained` — and pushing it again starts over.
+        #expect(presentation.communityPhotoSelection(for: gallery).currentIndex == 1)
+        presentation.path.append(gallery)
         #expect(presentation.communityPhotoSelection(for: gallery).currentIndex == nil)
     }
 
