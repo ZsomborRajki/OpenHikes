@@ -233,6 +233,36 @@ struct HikeLocalStateTests {
         #expect(stored.coverage.direction == .towardsEnd)
     }
 
+    /// The member beside what a turn counts from: how good that fix was. The
+    /// backstep after the fetch is no turn for two fixes good to 60 m only if
+    /// it came back; read as a fix that said nothing, 100 m would be one.
+    @Test("how good the fix a turn counts from was round-trips through the sidecar")
+    func walkTurnAccuracyRoundTrips() throws {
+        let container = try Fixture.modelContainer()
+        let id: UUID
+        do {
+            let context = ModelContext(container)
+            let hike = Fixture.hike(in: context)
+            id = hike.id
+            var record = TrailWalkRecord(hikeID: hike.id, routeDistanceMeters: 2000, startedAt: .now)
+            record.coverage.record(distance: 400, accuracy: 60)
+            record.coverage.record(distance: 1000, accuracy: 60)
+            hike.walkInProgress = record
+            try context.save()
+        }
+
+        let context = ModelContext(container)
+        let refetched = try #require(
+            try context.fetch(FetchDescriptor<Hike>(predicate: #Predicate { $0.id == id })).first
+        )
+        var stored = try #require(refetched.walkInProgress)
+        #expect(stored.coverage.direction == .towardsEnd)
+        stored.coverage.record(distance: 900, accuracy: 60)
+        #expect(stored.coverage.direction == .towardsEnd)
+        stored.coverage.record(distance: 880, accuracy: 60)
+        #expect(stored.coverage.direction == .towardsStart)
+    }
+
     @Test("a hike with nothing walked reports no walk without creating a row")
     func noWalkCreatesNoRow() throws {
         let context = try context()

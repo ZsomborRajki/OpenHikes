@@ -56,7 +56,7 @@ struct RecordAlongTrailIntent: AppIntent, ForegroundContinuableIntent, HikeCoord
     // periphery:ignore - see `StartHikeRecordingIntent.description`.
     static let description = IntentDescription(
         "Starts recording a hike and follows one of your saved trails.",
-        categoryName: "Recording"
+        categoryName: LocalizedStringResource("intent.category.recording", defaultValue: "Recording")
     )
     /// The same pair ``StartHikeRecordingIntent`` declares, and for the same
     /// reason: `recorder.start()` is the only call that asks Core Location

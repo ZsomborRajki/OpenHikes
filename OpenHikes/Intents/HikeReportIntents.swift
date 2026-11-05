@@ -21,7 +21,7 @@ struct CurrentHikeProgressIntent: AppIntent, HikeCoordinatingIntent {
     // AppIntents metadata rather than by any call site.
     static let description = IntentDescription(
         "Says how far and how long you are into the hike you are recording.",
-        categoryName: "Recording"
+        categoryName: LocalizedStringResource("intent.category.recording", defaultValue: "Recording")
     )
     @available(iOS 26.0, *) static let supportedModes: IntentModes = .background
 

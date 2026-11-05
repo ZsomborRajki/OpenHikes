@@ -96,7 +96,12 @@ struct LoopWalkStartTests {
     /// One fix, as the receiver took it now — `nil` course for a hiker
     /// standing still.
     private func fix(north: Double, east: Double, course: CLLocationDirection?) -> RouteFix {
-        RouteFix(coordinate: Self.point(north: north, east: east), course: course, timestamp: clock.now)
+        RouteFix(
+            coordinate: Self.point(north: north, east: east),
+            horizontalAccuracy: 5,
+            course: course,
+            timestamp: clock.now
+        )
     }
 
     /// Opens `route` standing at `start`, then walks `steps` ten-metre steps
@@ -125,6 +130,7 @@ struct LoopWalkStartTests {
                 hike: hike,
                 profile: profile,
                 distance: match.distanceAlongRoute,
+                accuracy: fix.horizontalAccuracy,
                 at: fix.timestamp
             )
         }
