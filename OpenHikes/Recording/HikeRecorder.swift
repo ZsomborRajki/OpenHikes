@@ -446,6 +446,13 @@ extension HikeRecorder {
 
     func resume() async {
         guard phase == .paused else { return }
+        // First, before any wait, as `stop()` and `discard()` tell them: the
+        // precision sheet and the journal below take as long as they take,
+        // and a permission answer landing in them would find the pause still
+        // held and post a Resume reminder for a recording being resumed.
+        // Every way out from here resumes or fails, and a failure ends the
+        // reminders anyway.
+        movementReminders?.recordingDidResume()
         guard source.authorization == .authorized else {
             fail(.locationDenied)
             return
@@ -475,7 +482,6 @@ extension HikeRecorder {
         // `CLLocationManager`, and starting a recording feed on top of
         // significant-change monitoring leaves the monitoring behind.
         source.stopMovementWatch()
-        movementReminders?.recordingDidResume()
         let elevationAnchor = lastAcceptedPoint?.elevation
         pendingResumeFlag = true
         // `recentFixes` is kept: the pause is marked on the next fix by the
@@ -520,6 +526,13 @@ extension HikeRecorder {
             throw failure
         }
         phase = .saving
+        // Told here, before any wait, as `discard()` tells them: a permission
+        // answer landing in the merge, the drain or the finish below would
+        // otherwise find the pause still held, and post a Resume reminder that
+        // the end of the recording takes straight back down. The sensors are
+        // released after the waits, and that tells the reminders again, which
+        // changes nothing.
+        movementReminders?.recordingDidEnd()
         cancelLiveMatching(clearWindow: false)
         cancelTrailGraphPrefetches()
         journalFlushTask?.cancel()

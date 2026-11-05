@@ -20,9 +20,14 @@ struct StartHikeRecordingIntent: AppIntent, ForegroundContinuableIntent, HikeCoo
     static let title: LocalizedStringResource = "Start Hike Recording"
     // periphery:ignore - an optional `AppIntent` requirement, read through the
     // AppIntents metadata rather than by any call site.
+    //
+    // A key of its own for the category, which every recording action names,
+    // because a status badge's "Recording" says what is happening now, and
+    // Spanish names that apart from the activity these are filed under
+    // («Grabando», «Grabación»).
     static let description = IntentDescription(
         "Starts recording a new hike, with the screen off and the phone in your pocket.",
-        categoryName: "Recording"
+        categoryName: LocalizedStringResource("intent.category.recording", defaultValue: "Recording")
     )
     @available(iOS 26.0, *) static let supportedModes: IntentModes = [.background, .foreground(.dynamic)]
 
@@ -57,7 +62,7 @@ struct PauseHikeRecordingIntent: AppIntent, HikeCoordinatingIntent {
     // periphery:ignore - see `StartHikeRecordingIntent.description`.
     static let description = IntentDescription(
         "Pauses the hike being recorded, and turns the GPS off until you resume.",
-        categoryName: "Recording"
+        categoryName: LocalizedStringResource("intent.category.recording", defaultValue: "Recording")
     )
     @available(iOS 26.0, *) static let supportedModes: IntentModes = .background
 
@@ -74,7 +79,7 @@ struct ResumeHikeRecordingIntent: AppIntent, ForegroundContinuableIntent, HikeCo
     // periphery:ignore - see `StartHikeRecordingIntent.description`.
     static let description = IntentDescription(
         "Picks the paused hike back up where you left it.",
-        categoryName: "Recording"
+        categoryName: LocalizedStringResource("intent.category.recording", defaultValue: "Recording")
     )
     @available(iOS 26.0, *) static let supportedModes: IntentModes = [.background, .foreground(.dynamic)]
 
@@ -100,7 +105,7 @@ struct StopHikeRecordingIntent: AppIntent, HikeCoordinatingIntent {
     // periphery:ignore - see `StartHikeRecordingIntent.description`.
     static let description = IntentDescription(
         "Stops the hike being recorded and saves it.",
-        categoryName: "Recording"
+        categoryName: LocalizedStringResource("intent.category.recording", defaultValue: "Recording")
     )
     @available(iOS 26.0, *) static let supportedModes: IntentModes = .background
 

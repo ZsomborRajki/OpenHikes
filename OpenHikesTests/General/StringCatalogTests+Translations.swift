@@ -147,6 +147,16 @@ extension StringCatalogTests {
         #expect(differences.isEmpty, "AppShortcuts.xcstrings and OpenHikesShortcuts.swift differ on: \(differences)")
     }
 
+    /// A hike's stat row and the widget's figure count the same points, under
+    /// two spellings of the English, so no key holds them to one word.
+    @Test("the app and the widget name a track point alike", arguments: Self.translations)
+    func trackPointsKeepOneName(language: String) throws {
+        let app = try #require(Self.catalog(in: "OpenHikes")["Track Points"] as? [String: Any])
+        let widget = try #require(Self.catalog(in: "OpenWidget")["Track points"] as? [String: Any])
+        let names = [app, widget].map { Self.forms(of: Self.localization(language, of: $0)).first?.text.lowercased() }
+        #expect(names[0] != nil && names[0] == names[1], "\(language) names a track point \(names)")
+    }
+
     /// The `language` localization of a catalog entry, empty when it has none.
     static func localization(_ language: String, of entry: [String: Any]) -> [String: Any] {
         (entry["localizations"] as? [String: Any])?[language] as? [String: Any] ?? [:]
