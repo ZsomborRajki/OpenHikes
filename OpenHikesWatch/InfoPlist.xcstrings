@@ -54,6 +54,12 @@
             "state" : "translated",
             "value" : "OpenHikes lit votre fréquence cardiaque dans Santé pendant que vous enregistrez une randonnée, pour que la montre puisse l’afficher pendant que vous marchez. Rien d’autre n’est lu dans Santé."
           }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes legge la tua frequenza cardiaca da Salute mentre registri un’escursione, così l’orologio può mostrarla mentre cammini. Nient’altro viene letto da Salute."
+          }
         }
       }
     },
@@ -83,6 +89,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes démarre un entraînement de randonnée dans Santé pendant que vous enregistrez sur votre montre : c’est ce qui maintient l’enregistrement actif écran éteint. L’entraînement lui-même n’est pas sauvegardé – c’est votre iPhone qui sauvegarde la randonnée terminée."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes avvia un allenamento di escursionismo in Salute mentre registri sull’orologio: è questo che mantiene attiva la registrazione a schermo spento. L’allenamento in sé non viene salvato – è il tuo iPhone a salvare l’escursione terminata."
           }
         }
       }
@@ -114,6 +126,12 @@
             "state" : "translated",
             "value" : "OpenHikes utilise votre position pour indiquer où vous êtes sur le sentier que vous suivez, et pour enregistrer votre randonnée."
           }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes usa la tua posizione per mostrarti dove ti trovi sul sentiero che stai seguendo e per registrare la tua escursione."
+          }
         }
       }
     },
@@ -143,6 +161,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes utilise les capteurs de mouvement pour améliorer l’altitude enregistrée pendant votre randonnée."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes usa i sensori di movimento per migliorare l’altitudine registrata durante l’escursione."
           }
         }
       }
