@@ -245,6 +245,10 @@ final class SheetPresentation {
     @ObservationIgnored private var placesAroundSearches: [SheetRoute: HikePlacesAroundSearch] = [:]
     /// The same, for *Places Nearby* — see ``HikePlacesNearbySession``.
     @ObservationIgnored private var placesNearbySessions: [SheetRoute: HikePlacesNearbySession] = [:]
+    /// The same, for a shared hike's preview: what it has loaded, the
+    /// downloads still loading it and the import — see
+    /// ``CommunityPreviewSession``.
+    @ObservationIgnored private var communityPreviews: [SheetRoute: CommunityPreviewSession] = [:]
     /// The screens that have brought what they are about into view — see
     /// ``claimsFirstFraming(of:)``.
     @ObservationIgnored private var framedRoutes: Set<SheetRoute> = []
@@ -471,6 +475,18 @@ final class SheetPresentation {
         return session
     }
 
+    /// The visit to `listing`'s preview. Keyed on the route
+    /// ``isPresentingCommunityHike(_:)`` asks about, which is the listing's
+    /// record name — so a listing is one visit for as long as it is on the
+    /// stack, which ``showCommunityHike(_:)`` keeps to once.
+    func communityPreview(of listing: CommunityListing) -> CommunityPreviewSession {
+        let route = SheetRoute.communityHike(listing)
+        if let existing = communityPreviews[route] { return existing }
+        let session = CommunityPreviewSession(listing: listing)
+        communityPreviews[route] = session
+        return session
+    }
+
     /// Whether this is the first time since `route` was pushed that its
     /// screen asks to bring what it is about into view: `true` once, then
     /// `false` until the route is popped.
@@ -669,6 +685,12 @@ final class SheetPresentation {
         for (route, search) in placesAroundSearches where !storedPath.contains(route) { search.cancel() }
         placesAroundSearches = placesAroundSearches.filter { storedPath.contains($0.key) }
         placesNearbySessions = placesNearbySessions.filter { storedPath.contains($0.key) }
+        // And a preview's downloads, which go with its route rather than with
+        // its screen: a turn of the phone takes the screen away and leaves the
+        // route, and a preview taken off the stack from under its gallery is
+        // not on screen to see itself go. See ``CommunityPreviewSession``.
+        for (route, preview) in communityPreviews where !storedPath.contains(route) { preview.end() }
+        communityPreviews = communityPreviews.filter { storedPath.contains($0.key) }
         framedRoutes = framedRoutes.filter { storedPath.contains($0) }
         let recording = storedPath.last == .recording
         if isRecordingPresented != recording { isRecordingPresented = recording }

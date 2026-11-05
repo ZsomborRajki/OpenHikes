@@ -5,15 +5,17 @@
 //  The button that saves the hike, and what saving it came to.
 //
 //  Split from `CommunityHikeView.swift` for length alone, the way
-//  `CommunityHikeView+Curated.swift` is, which is why the state these read is
+//  `CommunityHikeView+Curated.swift` is, which is why these methods are
 //  `internal` rather than `private`: `private` is file-scoped in Swift, and
-//  these files are one type.
+//  these files are one type. What they read and write is the visit's — see
+//  ``CommunityPreviewSession`` — so an import a turn of the phone interrupts
+//  lands on the screen the turn built.
 //
 //  A save can keep the route and miss some of its photographs — see
 //  ``CommunityPhotoCopy`` — and this is where the hiker is told, and offered
 //  the missing ones again. The screen stays up for it rather than opening the
-//  saved hike, because the files a retry copies from are this screen's
-//  downloads and go when it does.
+//  saved hike, because the files a retry copies from are this visit's
+//  downloads and go when it ends.
 //
 
 import Foundation
@@ -29,7 +31,7 @@ extension CommunityHikeView {
                 performImport(detail)
             } label: {
                 HStack {
-                    if isImporting {
+                    if session.isImporting {
                         ProgressView()
                     } else {
                         Image(systemName: importGlyph)
@@ -39,17 +41,17 @@ extension CommunityHikeView {
                 .frame(maxWidth: .infinity)
             }
             .prominentGlassButtonStyle()
-            .disabled(isImporting)
+            .disabled(session.isImporting)
             .accessibilityIdentifier("community-import-button")
 
-            if let importFailure {
+            if let importFailure = session.importFailure {
                 Text(importFailure.localizedDescription)
                     .font(.footnote)
                     .foregroundStyle(.red)
             }
-            if let photoCopy {
+            if let photoCopy = session.photoCopy {
                 missingPhotos(photoCopy, of: detail)
-            } else if existingHike != nil {
+            } else if session.existingHike != nil {
                 Text("This hike is already in your list.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -74,7 +76,7 @@ extension CommunityHikeView {
                 retryPhotos(of: detail)
             }
             .font(.footnote)
-            .disabled(isImporting)
+            .disabled(session.isImporting)
             .accessibilityIdentifier("community-import-retry-photos")
         }
     }
@@ -83,13 +85,15 @@ extension CommunityHikeView {
     /// page and the first item of the toolbar menu are the same tap, and two
     /// wordings for it would read as two different things to do.
     var importButtonTitle: String {
-        if isImporting { return "Adding…" }
-        return existingHike == nil ? String(localized: "Add to My Hikes") : String(localized: "Open in My Hikes")
+        if session.isImporting { return "Adding…" }
+        return session.existingHike == nil
+            ? String(localized: "Add to My Hikes")
+            : String(localized: "Open in My Hikes")
     }
 
     /// The glyph beside that title, shared for the same reason.
     var importGlyph: String {
-        existingHike == nil ? "square.and.arrow.down" : "checkmark"
+        session.existingHike == nil ? "square.and.arrow.down" : "checkmark"
     }
 }
 
@@ -101,34 +105,34 @@ extension CommunityHikeView {
     /// Held because the hiker can leave — by backing out, or by blocking this
     /// author — while the photographs are still being copied, and an
     /// unstructured task keeps running when the screen goes. What that costs
-    /// is covered in ``discardDownloads()`` and just below.
+    /// is covered in ``CommunityPreviewSession/end()`` and just below.
     func performImport(_ detail: CommunityHikeDetail) {
         // Already in the library: this is the "Open" case, and re-importing
         // would make a second copy of the same trail.
-        if let existingHike {
+        if let existingHike = session.existingHike {
             onImport(existingHike)
             return
         }
-        isImporting = true
-        importFailure = nil
+        session.isImporting = true
+        session.importFailure = nil
         // Inherits the main actor from here, which is what every assignment
         // inside it needs and what ``CommunityImport/importHike(_:into:)``
         // requires anyway.
-        importTask = Task {
+        session.importTask = Task {
             let outcome = await CommunityImport.importHike(
                 await withLatePhotographs(detail),
                 into: context
             )
-            isImporting = false
+            session.isImporting = false
             switch outcome {
             case let .imported(hike, photos) where !photos.isComplete:
                 // Saved, and short of photographs: this screen stays, because
                 // it is the only one holding the files a retry needs. The
                 // button beneath already says *Open in My Hikes*.
-                existingHike = hike
-                photoCopy = photos
+                session.existingHike = hike
+                session.photoCopy = photos
             case .imported(let hike, _), .alreadyImported(let hike):
-                existingHike = hike
+                session.existingHike = hike
                 // Blocked while this was running, which is the later of the
                 // two things the hiker said. The hike stays in the library —
                 // it committed before the photographs began copying, and
@@ -136,32 +140,33 @@ extension CommunityHikeView {
                 // than a retraction of a save — but nothing re-opens it. The
                 // alternative is the screen they just hid reappearing on top
                 // of the list they were sent back to.
-                guard !wasAuthorBlocked else { return }
+                guard !session.wasAuthorBlocked else { return }
                 onImport(hike)
             case .refused(let failure):
-                importFailure = failure
+                session.importFailure = failure
             }
         }
     }
 
     /// Copies the photographs the import missed onto the hike it saved.
     ///
-    /// Held in ``importTask`` for the reason the import is: it reads out of
-    /// the downloads ``discardDownloads()`` removes. Reads the same detail the
+    /// Held in ``CommunityPreviewSession/importTask`` for the reason the
+    /// import is: it reads out of the downloads
+    /// ``CommunityPreviewSession/end()`` removes. Reads the same detail the
     /// import did — the screen's, contributed sets and Commons photographs
     /// included — so every photograph is found at the position
     /// ``CommunityPhotoCopy`` recorded it under.
     func retryPhotos(of detail: CommunityHikeDetail) {
-        guard let existingHike, let previous = photoCopy else { return }
-        isImporting = true
-        importTask = Task {
+        guard let existingHike = session.existingHike, let previous = session.photoCopy else { return }
+        session.isImporting = true
+        session.importTask = Task {
             let copy = await CommunityImport.copyPhotos(
                 of: await withLatePhotographs(detail),
                 onto: existingHike,
                 after: previous
             )
-            isImporting = false
-            photoCopy = copy.isComplete ? nil : copy
+            session.isImporting = false
+            session.photoCopy = copy.isComplete ? nil : copy
         }
     }
 
@@ -178,11 +183,11 @@ extension CommunityHikeView {
     /// tell the fast tap from the slow one — which is the worst shape a bug of
     /// this kind can take.
     ///
-    /// So it waits, and then reads the detail the **screen** ended up with
+    /// So it waits, and then reads the detail the **visit** ended up with
     /// rather than the one captured at the tap: the fetches hang their answers
-    /// on ``phase``, where a value copied out before they landed cannot see
-    /// them. Filtered on the way out for the reason everything drawn from
-    /// `phase` is — see ``visible(_:)``.
+    /// on ``CommunityPreviewSession/phase``, where a value copied out before
+    /// they landed cannot see them. Filtered on the way out for the reason
+    /// everything drawn from `phase` is — see ``visible(_:)``.
     ///
     /// A fetch that fails, finds nothing or is cancelled changes nothing: the
     /// wait ends and what comes back is the detail already on screen, which is
@@ -190,9 +195,9 @@ extension CommunityHikeView {
     /// something is known to be coming. The button is showing a spinner by the
     /// time this runs, so the wait reads as part of the import it is part of.
     func withLatePhotographs(_ detail: CommunityHikeDetail) async -> CommunityHikeDetail {
-        await contributionsTask?.value
-        await commonsTask?.value
-        guard case .loaded(let latest) = phase else { return detail }
+        await session.contributionsTask?.value
+        await session.commonsTask?.value
+        guard case .loaded(let latest) = session.phase else { return detail }
         return visible(latest)
     }
 }

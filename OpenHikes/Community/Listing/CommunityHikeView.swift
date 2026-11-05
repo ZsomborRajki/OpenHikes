@@ -59,10 +59,10 @@
 //  put the result: ``Hike/surfaceBreakdown`` is a column on a model this
 //  screen does not have and must not create to hold a measurement about a
 //  trail nobody has imported. So the analysis runs when the route lands and
-//  its answer lives in `@State` for as long as the screen does — opened twice
-//  is measured twice, and what keeps that cheap is
-//  ``OverpassTrailGraphProvider``'s own region cache, which this shares with
-//  the hiker's hikes and with the recorder.
+//  its answer lives in the visit's ``CommunityPreviewSession`` for as long as
+//  the preview is on the stack — opened twice is measured twice, and what
+//  keeps that cheap is ``OverpassTrailGraphProvider``'s own region cache,
+//  which this shares with the hiker's hikes and with the recorder.
 //
 //  It is a request on a screen that refuses to fetch a single map tile, and
 //  the difference is what each one buys. Tiles mean a provider, the
@@ -76,11 +76,19 @@
 //  sections absent rather than explaining itself to somebody who never asked.
 //  There is still no map of its own here.
 //
-//  Everything downloaded lands in one directory owned by this screen and
-//  deleted when it goes — or when the last thing using it finishes, whichever
-//  is later. These are a stranger's photographs held for as long as they are
-//  being looked at, and no longer, unless the hiker imports the hike, at which
-//  point ``CommunityImport`` makes copies that are theirs.
+//  Everything downloaded lands in one directory owned by this visit and
+//  deleted when the preview leaves the stack — or when the last thing using it
+//  finishes, whichever is later. These are a stranger's photographs held for
+//  as long as they are being looked at, and no longer, unless the hiker
+//  imports the hike, at which point ``CommunityImport`` makes copies that are
+//  theirs.
+//
+//  A *visit* and not a screen, because a turn of the phone builds this screen
+//  again in the other host — the sheet in portrait, the side panel in
+//  landscape — and the screen built there is the same visit. Everything this
+//  page has loaded, and the work still loading it, is held by
+//  ``CommunityPreviewSession``, which ``SheetPresentation`` keeps for as long
+//  as the route is on the path and ends when it leaves (#1336).
 //
 //  One directory per *visit*, and not per listing, for the reason a share
 //  stages one per attempt rather than one per hike — see ``CommunityStaging``,
@@ -90,18 +98,19 @@
 //  first visit's discard still waiting on the first visit's tasks — and a
 //  discard removes a *path*, so a name carrying only the listing would have it
 //  take the second visit's photographs the moment the first visit's download
-//  finished. Waiting for work protects one screen's files from that screen's
-//  own tasks; it says nothing about another screen holding the same name. See
-//  ``previewSession``.
+//  finished. Waiting for work protects one visit's files from that visit's
+//  own tasks; it says nothing about another visit holding the same name. See
+//  ``CommunityPreviewSession/visit``.
 //
 //  *The last thing using it* is two tasks and not one, and the second half is
 //  a fix. The import reads out of the directory, so deleting underneath it
 //  costs the hiker the pictures of a hike they asked for. The download
 //  **writes** into it, so deleting underneath that leaves files behind
 //  instead: the writer re-creates the directory after the remove, and nothing
-//  ever comes back for it. So the load is held in ``loadTask`` like the
-//  import, cancelled when the hiker leaves, and waited for before anything is
-//  removed — and ``CloudKitCommunityTransport/detail(for:downloadingInto:)``
+//  ever comes back for it. So the load is held in
+//  ``CommunityPreviewSession/loadTask`` like the import, cancelled when the
+//  hiker leaves, and waited for before anything is removed — and
+//  ``CloudKitCommunityTransport/detail(for:downloadingInto:)``
 //  checks that cancellation before it writes, since a cancelled task that
 //  never looks is a task that carries on. The check it cannot make is the one
 //  *after* it returns, and that is ``detail(of:from:downloadingInto:)``: a
@@ -143,25 +152,13 @@ import SwiftUI
 struct CommunityHikeView: View {
     private static let photoTileSize: CGFloat = 96
 
-    /// What the screen is doing, as one value.
-    ///
-    /// A single enum rather than a `detail` plus an `isLoading` plus an
-    /// `error`, because those three can express states that do not exist — a
-    /// failure with a detail behind it, a load that is both finished and
-    /// running — and every one of them would be a screen somebody has to
-    /// reason about.
-    ///
-    /// Internal rather than `private` because the contributions fetch reads
-    /// and replaces it from a sibling file, where `private` — which is
-    /// file-scoped in Swift — does not reach. See
-    /// `CommunityHikeView+Contributions.swift`.
-    enum Phase {
-        case failed(CommunityFailure)
-        case loaded(CommunityHikeDetail)
-        case loading
-    }
-
-    let listing: CommunityListing
+    /// This visit: the hike it is to, what the page has loaded, the work
+    /// loading it, and the import. Kept by ``SheetPresentation`` until the
+    /// route is popped, so the screen a turn of the phone builds in the other
+    /// host draws the same answer rather than asking again — see
+    /// ``CommunityPreviewSession``.
+    let session: CommunityPreviewSession
+    var listing: CommunityListing { session.listing }
     let transport: any CommunityTransporting
     /// The hiker's own block list. Written by this screen and read by the
     /// lists behind it — see ``CommunityBlockList``.
@@ -189,20 +186,22 @@ struct CommunityHikeView: View {
     /// caller can push the gallery over this screen.
     ///
     /// Both halves travel because there is nowhere else to get them: the
-    /// photographs are files in ``downloadDirectory``, which this visit owns,
-    /// and the detail holding them never leaves this view. See
+    /// photographs are files in ``CommunityPreviewSession/downloadDirectory``,
+    /// which this visit owns, and the detail holding them never leaves it. See
     /// ``SheetRoute/communityPhoto(_:_:_:)``.
     ///
     /// Defaulted to nothing so a preview and a suite can build this screen
     /// without a navigation stack behind it, exactly as ``remainsPushed`` is.
     var onOpenPhoto: ([CommunityGalleryPhoto], Int) -> Void = { _, _ in /* no-op default */ }
     /// Whether this screen is still on the navigation stack while it is
-    /// disappearing — which is the difference between a push over it and the
-    /// hiker leaving.
+    /// disappearing — which is the difference between a push over it, or a
+    /// turn of the phone, and the hiker leaving.
     ///
     /// Injected rather than inferred, because the only thing that knows is
     /// the stack: SwiftUI reports a pushed-over view and a popped one the
     /// same way. See ``SheetPresentation/isPresentingCommunityHike(_:)``.
+    /// What it decides is only the map's line now; the downloads go with the
+    /// route itself — see ``CommunityPreviewSession/end()``.
     var remainsPushed: () -> Bool = { false }
     /// OSM walking graph behind the Surface and Difficulty sections. `nil`
     /// leaves both absent and asks nothing — which is what a preview and a
@@ -210,133 +209,11 @@ struct CommunityHikeView: View {
     var trailGraphProvider: (any TrailGraphProviding)?
 
     @Environment(\.modelContext) var context
-    // Shared with the contributions fetch in the companion extension file,
-    // which hangs its answer on the detail already on screen — the same
-    // disable ``HikeDetailView`` carries for its own companion files, and for
-    // the same reason: `private` is file-scoped in Swift.
-    // swiftlint:disable:next private_swiftui_state
-    @State var phase: Phase = .loading
-    /// The elevation profile and the stat tiles, from the same builder a hike
-    /// in the library uses.
-    ///
-    /// Held apart from ``phase`` because they arrive after it: the route is
-    /// what the screen is waiting for and both of these are a walk of that
-    /// route, so folding them together would hold the photographs and the Add
-    /// button back on a computation nothing is blocked by.
-    ///
-    /// One optional rather than a profile and an array, because they land
-    /// together and the difference between them matters on screen: `nil` is
-    /// "the route has not been walked yet" and a value with a flat profile in
-    /// it is "this hike has no elevations", which are two different things to
-    /// draw. See ``elevationSection``.
-    @State private var prepared: HikeDetailPreparedContent?
-    /// What OpenStreetMap says this route runs on, measured on open and kept
-    /// no longer than the screen — see this file's header.
-    @State private var breakdowns = HikeTrailBreakdowns.empty
-    /// The elevation chart's scrub position.
-    ///
-    /// A reference type for the reason ``HikeDetailView``'s is, and handed
-    /// down without ever being read here: a finger dragging the chart moves
-    /// the marker and redraws the chart, and nothing on this screen above it.
-    /// Unlike the hike's own, nothing else writes to it — there is no live
-    /// location to project onto a stranger's trail, so
-    /// ``TrackerState/liveTrackerDistance`` stays `nil` for the life of this
-    /// screen. The map's dot follows it, through the browser rather than
-    /// through anything this body reads — see ``publishChartPosition()``.
-    @State private var tracker = TrackerState()
-    // The import's state is read by `CommunityHikeView+Import.swift`, which
-    // holds the button and the save — internal for the reason ``phase`` is.
-    // swiftlint:disable private_swiftui_state
-    @State var isImporting = false
-    @State var importFailure: CommunityFailure?
-    @State var existingHike: Hike?
-    /// What the import this screen made came to, for as long as some of its
-    /// photographs are still missing — and `nil` the rest of the time.
-    ///
-    /// Kept here rather than on the hike because this is the only place a
-    /// retry can run: the photographs are copied out of this screen's own
-    /// downloads, which go when it does. See ``CommunityPhotoCopy``.
-    @State var photoCopy: CommunityPhotoCopy?
-    // swiftlint:enable private_swiftui_state
     @State private var isReporting = false
     @State private var isConfirmingBlock = false
     @State private var isConfirmingTakeDown = false
     @State private var isTakingDown = false
     @State private var takeDownFailure: CommunityFailure?
-    /// The import, held rather than fired and forgotten.
-    ///
-    /// It outlives this screen — an unstructured `Task` is not tied to a view
-    /// — and two things have to wait for it: the download directory, which it
-    /// is still reading photographs out of, and nothing else may delete
-    /// underneath it. See ``discardDownloads()``.
-    @State var importTask: Task<Void, Never>? // swiftlint:disable:this private_swiftui_state
-    /// The download, held for the same reason and a sharper one.
-    ///
-    /// This is what *writes* into the directory ``discardDownloads()``
-    /// removes, so leaving it unowned meant `onDisappear` could neither stop
-    /// it nor wait for it: a hiker backing out mid-download had the directory
-    /// deleted and then re-created underneath them, and a stranger's
-    /// photographs stayed in a temporary directory with nothing left that
-    /// would ever collect them. *Try Again* writes to the same handle, since
-    /// an unowned retry is the same leak by a second route.
-    @State private var loadTask: Task<Void, Never>?
-    /// The trail analysis, held so backing out stops it.
-    ///
-    /// Nothing waits for this — it writes two sections that are absent until
-    /// it answers — but a hiker who leaves must not leave a run of Overpass
-    /// requests going for a screen that has gone. Deliberately **not** in
-    /// ``discardDownloads()``'s wait list: it neither reads from nor writes
-    /// into the download directory, and making a stranger's photographs wait
-    /// on a trail graph would couple two unrelated things through one `for`
-    /// loop.
-    @State private var analysisTask: Task<Void, Never>?
-    // swiftlint:disable private_swiftui_state
-    /// The other hikers' photographs, held so backing out stops the fetch.
-    ///
-    /// **In** ``discardDownloads()``'s wait list, unlike the analysis beside
-    /// it, and the difference is exactly the rule that list states: this one
-    /// writes files into the download directory. A hiker who backs out
-    /// mid-download would otherwise have the directory deleted and re-created
-    /// underneath them, leaving a stranger's photographs in a temporary
-    /// directory with nothing left that would ever collect them.
-    ///
-    /// Internal for the reason ``phase`` is: the fetch that owns it lives in
-    /// `CommunityHikeView+Contributions.swift`, and nothing outside this type
-    /// touches it.
-    @State var contributionsTask: Task<Void, Never>?
-    /// The Wikimedia Commons photographs of a curated route, held for the
-    /// reason ``contributionsTask`` is and in the same wait list: it writes
-    /// files into the download directory. Owned by
-    /// `CommunityHikeView+CommonsPhotos.swift`.
-    @State var commonsTask: Task<Void, Never>?
-    // swiftlint:enable private_swiftui_state
-    /// Whether this author was blocked while the screen was up.
-    ///
-    /// Read by the import when it finishes, so a hike the hiker asked for a
-    /// moment before blocking does not re-open itself over the list — see
-    /// ``performImport(_:)``.
-    @State var wasAuthorBlocked = false // swiftlint:disable:this private_swiftui_state
-
-    /// This visit, told apart from every other visit to the same listing.
-    ///
-    /// `@State` is what makes it a *visit* rather than a screen or a listing.
-    /// It is made once per pushed view and kept for as long as that view is on
-    /// the stack, so a push over this preview and the Back out of it come home
-    /// to the same downloads — the case ``remainsPushed`` already protects from
-    /// the other side. Opening the same listing again after leaving builds a
-    /// new view, and a new view gets a new one of these.
-    ///
-    /// Two visits to one listing must not share a directory, because
-    /// ``discardDownloads()`` removes a path once the tasks *it* was given have
-    /// finished, and the tasks of a visit that has gone know nothing about the
-    /// visit that replaced it.
-    @State private var previewSession = UUID()
-
-    /// Where this visit's downloads live. Per-visit rather than per-listing —
-    /// see ``previewSession`` — and removed in `onDisappear`.
-    var downloadDirectory: URL {
-        CommunityStaging.previewDirectory(of: listing, in: previewSession)
-    }
 
     var body: some View {
         ScrollView {
@@ -349,7 +226,7 @@ struct CommunityHikeView: View {
                 // still loading is the header and a spinner, exactly as it was.
                 elevationSection
                 header
-                switch phase {
+                switch session.phase {
                 case .loading:
                     loadingState
                 case .failed(let failure):
@@ -410,33 +287,25 @@ struct CommunityHikeView: View {
             """)
         }
         .communityFailureAlert("Couldn’t take it down", failure: $takeDownFailure)
-        // Started here and *held*, rather than simply run by the modifier.
-        // `.task`'s own cancellation is the right trigger and the wrong reach:
-        // it cancels this closure, and the work that writes into the download
-        // directory is one `await` deeper. See ``loadTask``.
-        .task {
-            let task = Task { await load() }
-            loadTask = task
-            await task.value
-        }
         .onAppear {
             // `try?`, deliberately: this decides which button the screen
             // draws, and a store that cannot answer should offer *Save* and
             // let the import refuse — which it now does — rather than claim
             // the hike is already saved.
-            existingHike = try? CommunityImport.existingImport(of: listing.id, in: context)
+            session.existingHike = try? CommunityImport.existingImport(of: listing.id, in: context)
             // Before the route exists, deliberately: this only says which hike
             // the map is now about, so that a fetch landing after the hiker
             // backed out is ignored rather than drawn.
             browser.previewOpened(listing)
-            // Coming *back* to this screen, with the answer it already has.
-            // `load()` returns at once for a loaded phase, so without this the
-            // map would be told which hike it is about and never told where
-            // that hike goes — the line the preview exists to show, missing on
-            // the second visit and every one after it. Published here rather
-            // than from the task so it cannot race the call above, which is
-            // what retires the previous preview's line.
-            if case .loaded(let detail) = phase {
+            // Coming *back* to this screen, or up in the host a turn of the
+            // phone moved it to, with the answer the visit already has. The
+            // load is not asked again once the visit has started one, so
+            // without this the map would be told which hike it is about and
+            // never told where that hike goes — the line the preview exists to
+            // show, missing on the second appearance and every one after it.
+            // Published here rather than from the load so it cannot race the
+            // call above, which is what retires the previous preview's line.
+            if case .loaded(let detail) = session.phase {
                 browser.previewLoaded(detail.route, of: listing)
                 // The same filtered answer the strip is drawing, so the pins
                 // and the pages agree about which picture is which — coming
@@ -448,30 +317,25 @@ struct CommunityHikeView: View {
                 // And the dot, where the chart's marker was left.
                 publishChartPosition()
             }
+            // Last, so the map is told which hike it is about before anything
+            // the load hands it, and held by the visit rather than run by a
+            // `.task`: a turn of the phone takes this screen away while the
+            // load is still out, and a `.task`'s cancellation would reach
+            // only the closure waiting on it. The screen the turn builds asks
+            // again and is told the load has started — see
+            // ``CommunityPreviewSession/startLoading(_:)``.
+            session.startLoading { await load() }
         }
         .onDisappear {
-            // A screen pushed over this one is not the hiker leaving it, and
-            // both look identical from here — its gallery pushes over it.
-            // Disposing on the first would take the line off the map and
-            // delete the photographs out from under a screen the hiker is
-            // one Back from returning to, with its own cached detail still
-            // pointing at the deleted files.
+            // A screen pushed over this one is not the hiker leaving it — its
+            // gallery pushes over it — and neither is a turn of the phone, and
+            // all three look identical from here. Taking the line off the map
+            // for either of the first two would leave the hiker one Back from,
+            // or looking at, a preview whose trail the map no longer draws.
+            // The downloads are not this screen's to discard: they go when the
+            // route leaves the path — see ``CommunityPreviewSession/end()``.
             guard !remainsPushed() else { return }
-            // Before the discard, so a download still running is told to stop
-            // rather than raced to the directory it is writing into.
-            loadTask?.cancel()
-            // And the other two downloads, for the same reason and the same
-            // order: they write into the directory below, and an unstructured
-            // `Task` does not inherit the load's cancellation however closely
-            // the three are started together.
-            contributionsTask?.cancel()
-            commonsTask?.cancel()
-            // Nothing waits for this one; it is cancelled because a screen
-            // that has gone has no use for an answer and no right to keep
-            // asking Overpass for it.
-            analysisTask?.cancel()
             browser.previewClosed(listing)
-            discardDownloads()
         }
     }
 }
@@ -574,7 +438,7 @@ private extension CommunityHikeView {
     /// written a second time here, so the two ways to one tap cannot end up
     /// describing it differently. See ``importButtonTitle``.
     @ViewBuilder var importMenuItem: some View {
-        if case .loaded(let detail) = phase {
+        if case .loaded(let detail) = session.phase {
             Button {
                 // Filtered, exactly as the button under the page is — see
                 // ``visible(_:)``. The two are one tap doing one thing, and
@@ -587,7 +451,7 @@ private extension CommunityHikeView {
             } label: {
                 Label(importButtonTitle, systemImage: importGlyph)
             }
-            .disabled(isImporting)
+            .disabled(session.isImporting)
             .accessibilityIdentifier("community-import-menu-button")
 
             Divider()
@@ -665,7 +529,7 @@ private extension CommunityHikeView {
         blockList.block(listing)
         // Before the pop, so an import still in flight finds it set when it
         // lands — see ``performImport(_:)`` for what it stops.
-        wasAuthorBlocked = true
+        session.wasAuthorBlocked = true
         onBlock()
     }
 }
@@ -729,13 +593,12 @@ private extension CommunityHikeView {
                     .multilineTextAlignment(.center)
             }
             Button("Try Again") {
-                phase = .loading
                 // The same handle the first attempt used. An unowned retry is
-                // the leak in ``loadTask`` by a second route: `onDisappear`
-                // would neither stop it nor wait for it, and backing out of a
-                // retry would leave its download writing into a directory that
-                // had already been removed.
-                loadTask = Task { await load() }
+                // the leak in ``CommunityPreviewSession/loadTask`` by a second
+                // route: the end of the visit would neither stop it nor wait
+                // for it, and backing out of a retry would leave its download
+                // writing into a directory that had already been removed.
+                session.reload { await load() }
             }
             .glassButtonStyle()
             .padding(.top, 4)
@@ -829,9 +692,9 @@ private extension CommunityHikeView {
                     // tint, which belongs to hikes the hiker owns — see
                     // ``CommunityListing/tint``.
                     tint: listing.tint,
-                    tracker: tracker,
+                    tracker: session.tracker,
                     onScrub: { distance in
-                        tracker.trackerDistance = distance
+                        session.tracker.trackerDistance = distance
                         publishChartPosition(distance, along: profile)
                     }
                 )
@@ -852,7 +715,7 @@ private extension CommunityHikeView {
                         .accessibilityIdentifier("community-elevation-attribution")
                 }
             }
-        } else if listing.isCurated, prepared != nil {
+        } else if listing.isCurated, session.prepared != nil {
             // The one route here a subscription gives heights to — see
             // ``ElevationProPrompt``. Drawn only for a hiker without one: a
             // subscriber whose request failed gets no section, as before.
@@ -867,7 +730,7 @@ private extension CommunityHikeView {
     /// The profile the chart draws, or `nil` when there is no chart: the route
     /// has not been walked yet, or carries no heights to draw.
     var chartProfile: RouteProfile? {
-        guard let profile = prepared?.profile, profile.samples.count > 1 else { return nil }
+        guard let profile = session.prepared?.profile, profile.samples.count > 1 else { return nil }
         return profile
     }
 
@@ -885,7 +748,7 @@ private extension CommunityHikeView {
     /// chart, since the dot is the chart's and says nothing on its own.
     func publishChartPosition() {
         guard let chartProfile else { return }
-        publishChartPosition(tracker.trackerDistance, along: chartProfile)
+        publishChartPosition(session.tracker.trackerDistance, along: chartProfile)
     }
 
     /// What OpenStreetMap says this stretch of trail runs on, in the hike
@@ -895,14 +758,14 @@ private extension CommunityHikeView {
     /// does. The `if let` is here rather than inside the section because the
     /// section draws a breakdown and does not decide whether there is one.
     @ViewBuilder var surfaceSection: some View {
-        if let surface = breakdowns.surface {
+        if let surface = session.breakdowns.surface {
             TrailSurfaceSection(breakdown: surface)
         }
     }
 
     /// Mirrors ``surfaceSection``.
     @ViewBuilder var difficultySection: some View {
-        if let difficulty = breakdowns.difficulty {
+        if let difficulty = session.breakdowns.difficulty {
             TrailDifficultySection(breakdown: difficulty)
         }
     }
@@ -939,7 +802,7 @@ private extension CommunityHikeView {
     /// are already up, and a card of dashes that fills itself in is a worse
     /// thing to look at than a card that appears.
     @ViewBuilder var statsSummary: some View {
-        if let stats = prepared?.stats, !stats.isEmpty {
+        if let stats = session.prepared?.stats, !stats.isEmpty {
             StatSummary(stats: stats)
         }
     }
@@ -991,7 +854,7 @@ private extension CommunityHikeView {
 
 private extension CommunityHikeView {
     func load() async {
-        guard case .loading = phase else { return }
+        guard case .loading = session.phase else { return }
         // A preview about to stage a directory of its own is the moment to
         // clear away the ones an earlier preview or share never got to remove
         // — a kill reaches neither teardown, and no name is ever reused. See
@@ -1001,9 +864,9 @@ private extension CommunityHikeView {
             let detail = try await Self.detail(
                 of: listing,
                 from: transport,
-                downloadingInto: downloadDirectory
+                downloadingInto: session.downloadDirectory
             )
-            phase = .loaded(detail)
+            session.phase = .loaded(detail)
             // The route this screen no longer draws, handed to the map that
             // does — see this file's header. Before anything derived from it,
             // because it is what the hiker is waiting to see and it costs
@@ -1034,7 +897,7 @@ private extension CommunityHikeView {
             // same reason and absent for the same reason when it fails. See
             // ``CommonsPhoto``.
             loadCommonsPhotos(along: detail.route)
-            prepared = await Self.prepare(detail)
+            session.prepared = await Self.prepare(detail)
             // The chart is up, with its marker at the trailhead, so the map's
             // dot goes there too.
             publishChartPosition()
@@ -1047,7 +910,7 @@ private extension CommunityHikeView {
             // than an error nobody caused.
             return
         } catch {
-            phase = .failed(CommunityFailure(error))
+            session.phase = .failed(CommunityFailure(error))
         }
     }
 
@@ -1056,7 +919,7 @@ private extension CommunityHikeView {
     /// the transport made on open and was refused, made again now that it
     /// would not be. Onto the detail too, so *Save* keeps them.
     func fetchHeights() {
-        guard case .loaded(let detail) = phase,
+        guard case .loaded(let detail) = session.phase,
               let source = OpenHikesModel.makeTrailElevationSource() else { return }
         Task {
             let filled = await source.filled(detail.route)
@@ -1064,10 +927,10 @@ private extension CommunityHikeView {
             // the contributions and the Commons photographs land on `phase`
             // while the heights are out, and writing back the earlier copy
             // would take them off the screen again.
-            guard filled != detail.route, case .loaded(var latest) = phase else { return }
+            guard filled != detail.route, case .loaded(var latest) = session.phase else { return }
             latest.route = filled
-            phase = .loaded(latest)
-            prepared = await Self.prepare(latest)
+            session.phase = .loaded(latest)
+            session.prepared = await Self.prepare(latest)
             // The first chart this route has had, so its dot goes up with it.
             publishChartPosition()
         }
@@ -1077,18 +940,19 @@ private extension CommunityHikeView {
     /// this file's header for why that request is worth making on a screen
     /// that refuses to fetch a map tile.
     ///
-    /// Held in ``analysisTask`` rather than fired and forgotten, and the
-    /// cancellation check is the same one ``HikeDetailView`` makes before its
-    /// write: ``HikeTrailAnalysis`` never throws, so a torn-down screen and a
-    /// valley nobody has mapped both come back as an empty answer and only
-    /// `Task.isCancelled` tells them apart.
+    /// Held in ``CommunityPreviewSession/analysisTask`` rather than fired and
+    /// forgotten, and the cancellation check is the same one
+    /// ``HikeDetailView`` makes before its write: ``HikeTrailAnalysis`` never
+    /// throws, so a preview that has gone and a valley nobody has mapped both
+    /// come back as an empty answer and only `Task.isCancelled` tells them
+    /// apart.
     ///
     /// A provider-less launch — a preview, or any suite — asks nothing and
     /// leaves both sections absent, exactly as one does on a hike in the
     /// library.
     func analyze(_ route: [RouteCoordinate]) {
         guard let trailGraphProvider else { return }
-        analysisTask = Task {
+        session.analysisTask = Task {
             let measured = await HikeTrailAnalysis.breakdowns(
                 route: route,
                 provider: trailGraphProvider
@@ -1097,52 +961,15 @@ private extension CommunityHikeView {
             // No transition and no curve of our own, for the reason the hike's
             // own screen gives: SwiftUI's default insertion is a fade, and it
             // is what every other section that appears late here already uses.
-            withAnimation { breakdowns = measured }
+            withAnimation { session.breakdowns = measured }
         }
-    }
-
-    /// Off the main actor, in the shape the photo and tile deletions already
-    /// use. What a kill leaves behind is a directory the system reclaims on
-    /// its own.
-    ///
-    /// It waits for the import first, and that is not tidiness. These files
-    /// are what ``CommunityImport`` copies a stranger's photographs out of,
-    /// this runs from `onDisappear`, and the screen can be left — backed out
-    /// of, or blocked away from — while the copy is still going. Deleting
-    /// underneath it would cost the hiker the pictures of a hike they asked
-    /// for, silently and for no reason they could ever connect to what they
-    /// did.
-    func discardDownloads() {
-        // Both tasks, for opposite reasons. The import is still *reading* a
-        // stranger's photographs out of here, so deleting underneath it costs
-        // the hiker the pictures of a hike they asked for. The download is
-        // still *writing* them, so deleting underneath it leaves files behind
-        // instead — the writer re-creates the directory after the remove, and
-        // nothing ever comes back for it. Cancelling the load in `onDisappear`
-        // is what keeps this wait short rather than a whole download long.
-        //
-        // The contributions fetch is the third and is here for the *writing*
-        // reason: it downloads other hikers' photographs into a subdirectory
-        // of this one. The Commons fetch is the fourth, for the same reason.
-        // The trail analysis is deliberately still absent — it touches no file
-        // here, and making a stranger's photographs wait on a trail graph
-        // would couple two unrelated things through one `for` loop.
-        //
-        // All four are this visit's, and so is the path — see
-        // ``previewSession``. What is waited for and what is removed have to
-        // belong to the same screen, or the wait is for one visit's work and
-        // the remove lands on another's.
-        Self.discardDownloads(
-            at: downloadDirectory,
-            after: [loadTask, importTask, contributionsTask, commonsTask]
-        )
     }
 }
 
 // MARK: - The page, and clearing up after it
 
 // None of these is `private`, and all three are `static`s taking their work
-// rather than methods reading `@State`, for the reason
+// rather than methods reading the visit's state, for the reason
 // `CloudKitCommunityTransport.pins(_:for:of:takenOn:)` is one: what each
 // decides is invisible in the result it produces.
 extension CommunityHikeView {
@@ -1160,9 +987,9 @@ extension CommunityHikeView {
     ///
     /// The analysis is the step that makes this matter. It is spawned into an
     /// unstructured task, which inherits no cancellation and is not yet in
-    /// ``analysisTask`` for `onDisappear` to have reached — the disappearance
-    /// has already happened by the time it exists — so its own
-    /// `Task.isCancelled` guard stays false and a run of up to
+    /// ``CommunityPreviewSession/analysisTask`` for the end of the visit to
+    /// have reached — the end has already happened by the time it exists — so
+    /// its own `Task.isCancelled` guard stays false and a run of up to
     /// ``TrailGraphProviding/maximumPrefetchRegions`` Overpass requests
     /// carries on for a preview nobody can see. Throwing here instead lands in
     /// ``load()``'s `CancellationError` branch, which is already the "the

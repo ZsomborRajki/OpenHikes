@@ -15,7 +15,7 @@
 //  The subject is one request and the three decisions around it. Each is
 //  stated on the method below, because each is a decision rather than a
 //  default: a failure draws nothing, blocked contributors never reach the
-//  wire, and the answer is thrown away with the screen.
+//  wire, and the answer is thrown away with the visit.
 //
 //  And the read side, which is here because it is the same subject seen from
 //  the other end. The request's exclusion set covers everybody this hiker had
@@ -52,18 +52,18 @@ extension CommunityHikeView {
     /// ``CommunityBlockList`` is read here rather than filtered afterwards for
     /// that reason.
     ///
-    /// **It is asked once per open and thrown away with the screen**, the rule
-    /// the trail analysis on this screen already follows. There is nowhere to
+    /// **It is asked once per visit and thrown away with it**, the rule the
+    /// trail analysis on this screen already follows. There is nowhere to
     /// keep these: they are somebody else's photographs in a directory this
     /// visit owns, and a hike nobody has imported has no row to hold them on.
     func loadContributions() {
-        contributionsTask = Task {
+        session.contributionsTask = Task {
             let contributions: [CommunityPhotoContribution]
             do {
                 contributions = try await transport.contributedPhotos(
                     for: listing.id,
                     excluding: blockList.blockedIDs,
-                    downloadingInto: downloadDirectory
+                    downloadingInto: session.downloadDirectory
                 )
             } catch {
                 Self.contributionLogger.debug(
@@ -79,9 +79,9 @@ extension CommunityHikeView {
             // `phase`, and a fetch that landed against the previous attempt
             // would hang a stranger's pictures on a route nobody is looking
             // at — and worse, on files a re-download has already replaced.
-            guard case .loaded(var detail) = phase else { return }
+            guard case .loaded(var detail) = session.phase else { return }
             detail.contributions = contributions
-            withAnimation { phase = .loaded(detail) }
+            withAnimation { session.phase = .loaded(detail) }
             // The map is told again, because its pins are the merged set: the
             // hike's own photographs went up when the route did, and these are
             // the ones that arrived afterwards. One call with the whole list
@@ -98,10 +98,11 @@ extension CommunityHikeView {
     /// reach the request that fetched it: blocking its contributor, and — for
     /// a reviewer — taking it down. Both are decided in the gallery pushed
     /// over this screen, and coming back from that gallery is a pop rather
-    /// than a fetch: ``CommunityHikeView/load()`` returns at once for a loaded
-    /// phase, deliberately, because re-downloading a stranger's photographs
-    /// every time somebody closes the viewer would be the cost this screen is
-    /// most careful about. So the filter is on the draw.
+    /// than a fetch: the visit's load is not asked again once it has started —
+    /// see ``CommunityPreviewSession/startLoading(_:)`` — deliberately,
+    /// because re-downloading a stranger's photographs every time somebody
+    /// closes the viewer would be the cost this screen is most careful about.
+    /// So the filter is on the draw.
     ///
     /// The filtering itself is ``CommunityHikeDetail/excluding(authors:contributions:)``,
     /// which is where the arithmetic it has to preserve lives and where a
@@ -109,9 +110,9 @@ extension CommunityHikeView {
     /// list, which is the hiker's, and the reviewer's own record of what they
     /// have removed.
     ///
-    /// Nothing is thrown away — ``CommunityHikeView/phase`` keeps every set
-    /// that arrived — so unblocking a contributor from Settings brings their
-    /// photographs back without a second download.
+    /// Nothing is thrown away — ``CommunityPreviewSession/phase`` keeps every
+    /// set that arrived — so unblocking a contributor from Settings brings
+    /// their photographs back without a second download.
     func visible(_ detail: CommunityHikeDetail) -> CommunityHikeDetail {
         detail.excluding(
             authors: blockList.blockedIDs,

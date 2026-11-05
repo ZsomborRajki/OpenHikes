@@ -6,12 +6,12 @@
 //  has along it.
 //
 //  Split from `CommunityHikeView.swift` for length, the way the contributions
-//  fetch is, which is why the state it reads is `internal` rather than
-//  `private`. Its three decisions are the contributions fetch's three, for the
-//  same reasons — a failure draws nothing, the answer goes with the screen,
-//  and nothing waits for it but the import — and one more of its own: the
-//  photographs are credited where they are shown, because the licence they
-//  came under is the only reason the app may show them. See ``CommonsPhoto``.
+//  fetch is, which is why it is `internal` rather than `private`. Its three
+//  decisions are the contributions fetch's three, for the same reasons — a
+//  failure draws nothing, the answer goes with the visit, and nothing waits
+//  for it but the import — and one more of its own: the photographs are
+//  credited where they are shown, because the licence they came under is the
+//  only reason the app may show them. See ``CommonsPhoto``.
 //
 
 import OpenHikesData
@@ -38,13 +38,13 @@ extension CommunityHikeView {
     /// not arrive look the same, and neither is a thing the hiker can act on.
     func loadCommonsPhotos(along route: [RouteCoordinate]) {
         guard listing.isCurated else { return }
-        commonsTask = Task {
+        session.commonsTask = Task {
             let photos: [CommonsPhoto]
             do {
                 photos = try await transport.commonsPhotos(
                     for: listing,
                     along: route,
-                    downloadingInto: downloadDirectory
+                    downloadingInto: session.downloadDirectory
                 )
             } catch {
                 Self.commonsLogger.debug(
@@ -56,9 +56,9 @@ extension CommunityHikeView {
             // Onto the detail on screen now, for the reason the contributions
             // are: a retry replaces `phase`, and the contributions may have
             // landed on it while these were on their way.
-            guard case .loaded(var detail) = phase else { return }
+            guard case .loaded(var detail) = session.phase else { return }
             detail.commonsPhotos = photos
-            withAnimation { phase = .loaded(detail) }
+            withAnimation { session.phase = .loaded(detail) }
             // The whole merged set again, so the map's pins and the strip are
             // one answer — see ``publishPhotoPins(_:)``.
             publishPhotoPins(visible(detail))
