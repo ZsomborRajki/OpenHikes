@@ -24,8 +24,9 @@ extension WidgetFeedSuites {
 @Suite("Feed behavior", .serialized)
 final class WidgetFeedTests {
     private let container: ModelContainer
-    private let context: ModelContext
-    private let tracker: BackgroundTrailTracker
+    /// Internal, with the tracker, for `WidgetFeedTests+Pauses.swift`.
+    let context: ModelContext
+    let tracker: BackgroundTrailTracker
     /// The tracker's own suite rather than the host app's, which is what
     /// ``BackgroundTrailTracker/init(container:monitor:defaults:)`` asks for:
     /// running against `UserDefaults.standard` reads and writes the simulator

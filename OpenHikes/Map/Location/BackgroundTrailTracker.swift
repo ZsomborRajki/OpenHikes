@@ -386,6 +386,9 @@ final class BackgroundTrailTracker: NSObject {
     /// - Parameter match: the fix's nearest point on the route, however far
     ///   off it fell — this decides with its own thresholds whether that is
     ///   on the trail — or `nil` for a fix that could not be matched at all.
+    ///   Its coordinate is the one published, never one read back from its
+    ///   distance: across a pause a distance can name the far end of the
+    ///   drive (#1350).
     /// - Parameter walk: what the walk along this hike has recorded so far,
     ///   or `nil` when nothing is being walked. Written into the snapshot
     ///   beside the fix, so the widget and the Lock Screen read coverage and
@@ -396,7 +399,7 @@ final class BackgroundTrailTracker: NSObject {
     func publishLiveFix(
         hike: Hike,
         profile: RouteProfile,
-        match: (distanceAlongRoute: Double, offRouteMeters: Double)?,
+        match: (distanceAlongRoute: Double, offRouteMeters: Double, coordinate: CLLocationCoordinate2D)?,
         line: SelectedLine.Line? = nil,
         walk: SharedTrailSnapshot.Walk? = nil
     ) {
@@ -435,14 +438,14 @@ final class BackgroundTrailTracker: NSObject {
         // cannot leave the main actor. Everything the write path does with
         // them happens off it.
         let input = Self.liveFixInput(of: hike, line: line)
-        guard isOnRoute, let match, let coordinate = profile.coordinate(atDistance: match.distanceAlongRoute) else {
+        guard isOnRoute, let match else {
             updateStoredLiveFix(nil, input: input, elevation: profile.elevation, walk: walk)
             return
         }
         lastMatchedDistance = match.distanceAlongRoute
         updateStoredLiveFix(
             SharedTrailSnapshot.LiveFix(
-                coordinate: .init(latitude: coordinate.latitude, longitude: coordinate.longitude),
+                coordinate: .init(latitude: match.coordinate.latitude, longitude: match.coordinate.longitude),
                 distanceAlongRouteMeters: match.distanceAlongRoute,
                 offRouteMeters: match.offRouteMeters,
                 timestamp: .now,

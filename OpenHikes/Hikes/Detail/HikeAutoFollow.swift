@@ -103,7 +103,7 @@ struct FollowAnchor: Equatable {
         on profile: RouteProfile,
         to fix: RouteFix?,
         scope: RouteProfile.SearchScope
-    ) -> (distanceAlongRoute: Double, offRouteMeters: Double)? {
+    ) -> (distanceAlongRoute: Double, offRouteMeters: Double, coordinate: CLLocationCoordinate2D)? {
         guard let fix else {
             anchor?.contraryFixes = 0
             return nil

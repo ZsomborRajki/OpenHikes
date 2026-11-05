@@ -104,7 +104,10 @@ extension BackgroundTrailTracker {
     /// The projection is `RouteProfile.nearestPointHeadingFirst(to:near:heading:)`
     /// rather than the foreground's `nearestPoint`: a fix's course outranks
     /// `referenceDistance` at once, because these fixes are too sparse to wait
-    /// for the several that `FollowAnchor` does before believing a turn.
+    /// for the several that `FollowAnchor` does before believing a turn. The
+    /// position published is the point that projection fell on, never one
+    /// read back from its distance, as the foreground's is — see
+    /// ``publishLiveFix(hike:profile:match:line:walk:)``.
     ///
     /// Returns `nil` when the hike is gone or too short to match against.
     nonisolated static func match(
@@ -131,8 +134,7 @@ extension BackgroundTrailTracker {
             heading: heading
         )
         guard let match = nearest,
-              match.offRouteMeters <= RouteProfile.followMatchThresholdMeters,
-              let matched = profile.coordinate(atDistance: match.distanceAlongRoute) else {
+              match.offRouteMeters <= RouteProfile.followMatchThresholdMeters else {
             return BackgroundMatch(
                 input: input,
                 walkRevision: walkRevision,
@@ -148,7 +150,7 @@ extension BackgroundTrailTracker {
             walkRevision: walkRevision,
             elevation: profile.elevation,
             fix: SharedTrailSnapshot.LiveFix(
-                coordinate: .init(latitude: matched.latitude, longitude: matched.longitude),
+                coordinate: .init(latitude: match.coordinate.latitude, longitude: match.coordinate.longitude),
                 distanceAlongRouteMeters: match.distanceAlongRoute,
                 offRouteMeters: match.offRouteMeters,
                 timestamp: timestamp,

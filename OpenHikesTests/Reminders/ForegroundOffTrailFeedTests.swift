@@ -106,7 +106,11 @@ final class ForegroundOffTrailFeedTests {
     /// the match itself rather than `nil`.
     private func follow(_ hike: Hike, profile: RouteProfile, offRouteAfter seconds: TimeInterval) {
         clock.advance(by: seconds)
-        let match = (distanceAlongRoute: profile.distances[2], offRouteMeters: Self.wellOff)
+        let match = (
+            distanceAlongRoute: profile.distances[2],
+            offRouteMeters: Self.wellOff,
+            coordinate: profile.coordinates[2]
+        )
         session.recordOffRoute(hikeID: hike.id)
         guard session.publishes(hikeID: hike.id) else { return }
         tracker.publishLiveFix(hike: hike, profile: profile, match: match, walk: session.payload(for: hike.id))
