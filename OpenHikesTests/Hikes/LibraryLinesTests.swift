@@ -28,6 +28,11 @@ struct LibraryLinesTests {
     private static let hour: TimeInterval = 3600
     private static let red = "#FF0000"
 
+    /// Whether `hikeID`'s drawn line starts where `route` does.
+    static func draws(_ route: [RouteCoordinate], for hikeID: UUID, in stage: LibraryLinesStage) -> Bool {
+        stage.library.line(of: hikeID)?.runs.first?.first?.latitude == route[0].latitude
+    }
+
     @Test("every finished hike's line is drawn, newest first, and a recording's draft is not")
     func everyFinishedHikeIsDrawn() async throws {
         let stage = try LibraryLinesStage()
@@ -392,6 +397,36 @@ private extension LibraryLines.LineRead {
     nonisolated var foundLine: Bool {
         guard case .line = self else { return false }
         return true
+    }
+}
+
+/// Every listing of the library, and the ones it was told to fail.
+nonisolated final class ListingLog: Sendable {
+    private struct ListingFailure: Error {}
+
+    private let counts = Mutex<(listings: Int, failures: Int, failing: Int)>((0, 0, 0))
+
+    /// How many times the library was listed, or a listing failed.
+    var count: Int { counts.withLock { $0.listings } }
+    /// How many of those listings failed.
+    var failures: Int { counts.withLock { $0.failures } }
+
+    /// Fails the next `listings` listings, and lists any after for real.
+    func fail(next listings: Int) {
+        counts.withLock { $0.failing = listings }
+    }
+
+    @concurrent
+    func list(in container: ModelContainer) async throws -> [LibraryLines.ListedHike] {
+        let fails = counts.withLock { counts in
+            counts.listings += 1
+            guard counts.failing > 0 else { return false }
+            counts.failing -= 1
+            counts.failures += 1
+            return true
+        }
+        if fails { throw ListingFailure() }
+        return try await LibraryLines.listHikes(in: container)
     }
 }
 
