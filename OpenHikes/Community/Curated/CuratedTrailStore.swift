@@ -46,11 +46,17 @@ import Foundation
 
 /// The on-disk half of the curated trail cache.
 ///
-/// A value rather than an actor: every caller is already inside
-/// ``CuratedTrailSource``'s isolation, which is where the serialisation this
-/// needs comes from. How the directory behaves — expiry, the re-stamp on use,
-/// the trim — is ``OverpassFileStore``'s, and is the same for every
-/// OpenStreetMap cache this app keeps.
+/// A value rather than an actor, because every caller is already off the
+/// main actor and the files need no serializing. ``trail(of:)`` and every
+/// save are made inside ``CuratedTrailSource``'s isolation, so those never
+/// overlap one another. ``trails(near:limit:)`` is not:
+/// ``CuratedTrailSource/cachedTrails(near:limit:)`` calls it from `@concurrent`
+/// code, off the actor, so a refused search's fall-back can read the whole
+/// directory while the actor reads or saves a route. ``OverpassFileStore``
+/// says why that is safe — a file is replaced whole, and one that vanishes
+/// reads as a miss — and what such an overlap can cost. How the directory
+/// behaves — expiry, the re-stamp on use, the trim — is that type's too, and
+/// is the same for every OpenStreetMap cache this app keeps.
 nonisolated struct CuratedTrailStore: Sendable {
     /// How many routes are kept on disk.
     ///
