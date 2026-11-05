@@ -11021,6 +11021,35 @@
         }
       }
     },
+    "intent.category.recording" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufzeichnung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Recording"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grabación"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrement"
+          }
+        }
+      }
+    },
     "Issued by %@" : {
       "localizations" : {
         "de" : {
@@ -14559,7 +14588,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No se han encontrado puntos de track en este archivo."
+            "value" : "No se han encontrado puntos GPS en este archivo."
           }
         },
         "fr" : {
@@ -23277,7 +23306,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Detenido"
+            "value" : "Sin movimiento"
           }
         },
         "fr" : {
@@ -25445,7 +25474,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Este archivo GPX solo tiene un punto de track."
+            "value" : "Este archivo GPX solo tiene un punto GPS."
           }
         },
         "fr" : {
@@ -25863,7 +25892,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Esta grabación solo tiene un punto de track."
+            "value" : "Esta grabación solo tiene un punto GPS."
           }
         },
         "fr" : {
@@ -26504,7 +26533,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Puntos de track"
+            "value" : "Puntos GPS"
           }
         },
         "fr" : {
