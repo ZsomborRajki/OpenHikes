@@ -7,14 +7,15 @@
 //
 //  Both halves already owned their own directory and deleted it on the way
 //  out: a preview downloads a stranger's route and photographs into one and
-//  removes it in `onDisappear`, a share stages re-encoded copies into one and
-//  removes it in a `defer`. Both of those are code that has to get to *run*,
-//  and the ordinary end of a long share is the system killing the app while it
-//  is in the background. A kill reaches neither. Since both names are unique
-//  per attempt — see ``previewDirectory(of:in:)`` and ``shareDirectory(of:)``,
-//  and ``CommunityHikeView``'s `previewSession` for why they have to be —
-//  nothing reuses the path either, so every orphan is a new one and no later
-//  visit will ever tidy it away.
+//  removes it when its route leaves the sheet's stack, a share stages
+//  re-encoded copies into one and removes it in a `defer`. Both of those are
+//  code that has to get to *run*, and the ordinary end of a long share is the
+//  system killing the app while it is in the background. A kill reaches
+//  neither. Since both names are unique per attempt — see
+//  ``previewDirectory(of:in:)`` and ``shareDirectory(of:)``, and
+//  ``CommunityPreviewSession/visit`` for why they have to be — nothing reuses
+//  the path either, so every orphan is a new one and no later visit will ever
+//  tidy it away.
 //
 //  ``GPXExport/stagingDirectory`` answers exactly this for a directory of
 //  exactly this shape, and this is that answer: one parent inside `tmp` so a
