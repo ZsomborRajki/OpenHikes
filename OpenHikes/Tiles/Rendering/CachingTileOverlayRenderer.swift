@@ -286,15 +286,21 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
         // ``TileLayer/minimumZ``.
         guard zoom >= overlay.minimumZ else { return }
 
-        let firstCol = Int(floor((mapRect.minX - overlayRect.origin.x) / tileMapSize))
-        let lastCol = Int(floor((mapRect.maxX - overlayRect.origin.x) / tileMapSize))
-        let firstRow = Int(floor((mapRect.minY - overlayRect.origin.y) / tileMapSize))
-        let lastRow = Int(floor((mapRect.maxY - overlayRect.origin.y) / tileMapSize))
+        let columns = Self.tiles(
+            from: mapRect.minX - overlayRect.origin.x,
+            to: mapRect.maxX - overlayRect.origin.x,
+            size: tileMapSize
+        )
+        let rows = Self.tiles(
+            from: mapRect.minY - overlayRect.origin.y,
+            to: mapRect.maxY - overlayRect.origin.y,
+            size: tileMapSize
+        )
         // Column/row count at this zoom — used to keep tile indices in range.
         let tileCount = 1 << zoom
 
-        for x in firstCol...lastCol {
-            for y in firstRow...lastRow {
+        for x in columns {
+            for y in rows {
                 let tileRect = MKMapRect(
                     x: Double(x) * tileMapSize,
                     y: Double(y) * tileMapSize,
@@ -344,6 +350,23 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
         // and makes the invariant unconditional: after any draw, the soonest
         // surviving deadline has a timer on it.
         scheduleRetryWake()
+    }
+
+    /// The columns, or rows, of tiles `size` wide that a draw rect spanning
+    /// `start` to `end` covers: from the tile holding its first point to the
+    /// tile holding its last.
+    ///
+    /// MapKit's draw rects are aligned to tile edges, so `end` is the first
+    /// edge of the next tile over, and that tile is not the rect's to draw.
+    /// Rounding `end` down took it as well, one column and one row past every
+    /// rect: on the iOS 27.2 simulator, which draws overlays 512 points
+    /// across, nine lookups for four tiles, and for each that missed a load,
+    /// or a refresh of saved coverage past its age, for ground outside the
+    /// rect. A span with no width still covers the tile it sits in, so the
+    /// range is never reversed, which would trap.
+    private static func tiles(from start: Double, to end: Double, size: Double) -> ClosedRange<Int> {
+        let first = Int(floor(start / size))
+        return first...max(first, Int(ceil(end / size)) - 1)
     }
 
     // MARK: Loading
