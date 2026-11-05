@@ -1335,7 +1335,8 @@ echo "Published legal pages"
 legal_gate="$repository_root/Scripts/check-legal-pages.sh"
 legal_work="$work/legal-pages"
 
-# A checkout whose English, German, French and Spanish pages agree, at `$1`.
+# A checkout whose English, German, French, Spanish and Italian pages agree,
+# at `$1`.
 write_legal_site() {
     local root="$1" page language date
     mkdir -p "$root/OpenHikes/Purchases"
@@ -1343,18 +1344,21 @@ write_legal_site() {
 case .english: URL(string: "https://zsomborrajki.github.io/OpenHikes/privacy/")!
 case .french: URL(string: "https://zsomborrajki.github.io/OpenHikes/fr/privacy/")!
 case .german: URL(string: "https://zsomborrajki.github.io/OpenHikes/de/privacy/")!
+case .italian: URL(string: "https://zsomborrajki.github.io/OpenHikes/it/privacy/")!
 case .spanish: URL(string: "https://zsomborrajki.github.io/OpenHikes/es/privacy/")!
 case .english: URL(string: "https://zsomborrajki.github.io/OpenHikes/terms/")!
 case .french: URL(string: "https://zsomborrajki.github.io/OpenHikes/fr/terms/")!
 case .german: URL(string: "https://zsomborrajki.github.io/OpenHikes/de/terms/")!
+case .italian: URL(string: "https://zsomborrajki.github.io/OpenHikes/it/terms/")!
 case .spanish: URL(string: "https://zsomborrajki.github.io/OpenHikes/es/terms/")!
 static let termsOfUse = URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!
 FIXTURE
-    for page in privacy terms de/privacy de/terms fr/privacy fr/terms es/privacy es/terms; do
+    for page in privacy terms de/privacy de/terms fr/privacy fr/terms es/privacy es/terms it/privacy it/terms; do
         language=en
         [[ "$page" == de/* ]] && language=de
         [[ "$page" == fr/* ]] && language=fr
         [[ "$page" == es/* ]] && language=es
+        [[ "$page" == it/* ]] && language=it
         date=2026-10-12
         [[ "$page" == *privacy ]] && date=2026-10-29
         mkdir -p "$root/docs/$page"
@@ -1370,6 +1374,7 @@ if expect_status 0 \
     && expect_contains "$output" "ok    docs/de/privacy/index.html (de, 2026-10-29)" "the output" \
     && expect_contains "$output" "ok    docs/fr/terms/index.html (fr, 2026-10-12)" "the output" \
     && expect_contains "$output" "ok    docs/es/privacy/index.html (es, 2026-10-29)" "the output" \
+    && expect_contains "$output" "ok    docs/it/terms/index.html (it, 2026-10-12)" "the output" \
     && expect_contains "$output" "ok    docs/terms/index.html (en, 2026-10-12)" "the output" \
     && expect_absent "$output" "apple.com" "the output"; then
     pass
@@ -1385,6 +1390,7 @@ if expect_status 1 \
     && expect_contains "$output" "docs/de/privacy/index.html takes effect 2026-10-29" "the error" \
     && expect_contains "$output" "docs/fr/privacy/index.html takes effect 2026-10-29" "the error" \
     && expect_contains "$output" "docs/es/privacy/index.html takes effect 2026-10-29" "the error" \
+    && expect_contains "$output" "docs/it/privacy/index.html takes effect 2026-10-29" "the error" \
     && expect_contains "$output" "docs/privacy/index.html took effect 2026-11-02" "the error"; then
     pass
 fi

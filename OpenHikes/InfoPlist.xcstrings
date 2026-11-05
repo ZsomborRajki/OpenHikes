@@ -33,6 +33,12 @@
             "state" : "translated",
             "value" : "Fichier GPX"
           }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "File GPX"
+          }
         }
       }
     },
@@ -62,6 +68,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes utilise l’appareil photo pour que vous puissiez photographier une randonnée en cours. Les photos sont conservées avec cette randonnée et placées au point du sentier que vous aviez sélectionné."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes usa la fotocamera per permetterti di fotografare un’escursione mentre sei in cammino. Le foto restano con quell’escursione, nel punto del sentiero che avevi selezionato."
           }
         }
       }
@@ -93,6 +105,12 @@
             "state" : "translated",
             "value" : "OpenHikes se connecte à Santé pour enregistrer vos randonnées terminées comme entraînements, avec leur distance et leur itinéraire, lorsque vous activez « Enregistrer les randonnées dans Santé ». OpenHikes ne lit rien dans Santé sur votre iPhone."
           }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes si collega a Salute per salvare le escursioni terminate come allenamenti, con la loro distanza e il loro percorso, quando attivi «Salva escursioni in Salute». OpenHikes non legge nulla da Salute sul tuo iPhone."
+          }
         }
       }
     },
@@ -122,6 +140,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes enregistre vos randonnées terminées dans Santé comme entraînements de randonnée, avec leur distance et leur itinéraire, lorsque vous activez « Enregistrer les randonnées dans Santé ». OpenHikes ne lit rien dans Santé sur votre iPhone."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes salva le escursioni terminate in Salute come allenamenti di escursionismo, con la loro distanza e il loro percorso, quando attivi «Salva escursioni in Salute». OpenHikes non legge nulla da Salute sul tuo iPhone."
           }
         }
       }
@@ -153,6 +177,12 @@
             "state" : "translated",
             "value" : "OpenHikes utilise l’accès « Toujours » à la position, seulement si vous activez « Suivi du sentier en arrière-plan » dans les réglages de l’app, pour que votre widget de l’écran d’accueil et votre Activité en direct continuent d’afficher votre progression sur le sentier lorsque l’app n’est pas ouverte."
           }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes usa l’accesso «Sempre» alla posizione, solo se attivi «Monitoraggio del sentiero in background» nelle impostazioni dell’app, perché il widget della schermata Home e l’Attività in tempo reale continuino a mostrare i tuoi progressi lungo il sentiero quando l’app non è aperta."
+          }
         }
       }
     },
@@ -182,6 +212,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes utilise votre position pour indiquer où vous êtes sur la carte et pour enregistrer les randonnées que vous choisissez de démarrer."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes usa la tua posizione per mostrarti dove ti trovi sulla mappa e per registrare le escursioni che scegli di avviare."
           }
         }
       }
@@ -213,6 +249,12 @@
             "state" : "translated",
             "value" : "OpenHikes utilise les capteurs de mouvement pour améliorer l’altitude enregistrée et reconstituer le sentier parcouru pendant les interruptions du GPS."
           }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes usa i sensori di movimento per migliorare l’altitudine registrata e ricostruire il sentiero percorso quando il segnale GPS si interrompe."
+          }
         }
       }
     },
@@ -242,6 +284,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Activez « Enregistrer aussi dans Photos » pour conserver une copie de chaque photo de randonnée dans votre photothèque, avec la date et le lieu de la prise de vue."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Attiva «Salva anche in Foto» per conservare una copia di ogni foto dell’escursione nella tua libreria foto, con la data e il luogo in cui è stata scattata."
           }
         }
       }
@@ -273,6 +321,12 @@
             "state" : "translated",
             "value" : "OpenHikes parcourt votre photothèque à la recherche des photos prises pendant une randonnée, afin de placer chacune au point du sentier où vous vous trouviez. Seules les photos prises pendant cette randonnée sont lues."
           }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes cerca nella tua libreria foto le immagini scattate durante un’escursione, per collocare ciascuna nel punto del sentiero in cui ti trovavi. Legge solo le foto scattate durante quell’escursione."
+          }
         }
       }
     },
@@ -302,6 +356,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes a besoin de votre position exacte pour enregistrer le sentier que vous parcourez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes ha bisogno della tua posizione esatta per registrare il sentiero che percorri."
           }
         }
       }
