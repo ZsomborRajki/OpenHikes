@@ -346,6 +346,9 @@ final class AutoSaveController {
         case unchanged
         /// One point or none: no corridor worth the name.
         case tooShort
+        /// No line, because its read failed, which says nothing about it —
+        /// see *A read that fails* in `SelectedLine.swift`.
+        case unread
     }
 
     /// Builds the corridor of `line` off the main actor once it is read and
@@ -355,6 +358,8 @@ final class AutoSaveController {
     /// A line of one point or none has no corridor worth the name, so it
     /// stands the hike down instead: the toggle is disabled for one in the
     /// UI, and the empty corridor the store held meanwhile claimed nothing.
+    /// A read that failed stands nothing down. The corridor up stays up, and
+    /// the watch on the line hears it when it is read.
     private func prepareCorridor(for hikeID: UUID, line: SelectedLine.Read) {
         activationRevision &+= 1
         let revision = activationRevision
@@ -373,6 +378,8 @@ final class AutoSaveController {
             switch prepared {
             case .tooShort:
                 standDownShortLine()
+                return
+            case .unread:
                 return
             case .unchanged:
                 break
@@ -412,7 +419,7 @@ final class AutoSaveController {
             "Auto-save route preparation must stay off the main thread"
         )
         let route = await line.route
-        guard route.count > 1 else { return .tooShort }
+        guard route.count > 1 else { return await line.failed ? .unread : .tooShort }
         if let installed, await installed.route == route { return .unchanged }
         guard !Task.isCancelled else { throw CancellationError() }
         let coordinates = try route.clCoordinates()
