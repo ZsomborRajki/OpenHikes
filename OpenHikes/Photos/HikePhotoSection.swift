@@ -261,7 +261,9 @@ struct HikePhotoSection: View {
 /// `.task(id:)` rather than `onAppear`: scrolling the strip reuses tiles, and
 /// keying the load on the photo is what stops a recycled tile from showing the
 /// previous photo's image until its own decode lands. It is also what cancels
-/// a decode for a tile that scrolled away before it finished.
+/// a decode for a tile that scrolled away before it finished — and a load
+/// cancelled either way writes nothing here, however far its decode had got;
+/// see ``HikePhotoLoader/thumbnail(for:in:show:)``.
 ///
 /// It draws three things rather than two, because there are three: the
 /// picture, a placeholder for a decode that hasn't landed, and a photo this
@@ -297,7 +299,7 @@ struct HikePhotoThumbnail: View {
         .accessibilityElement()
         .accessibilityLabel(accessibilityLabel)
         .task(id: photo.id) {
-            display = await HikePhotoLoader.thumbnail(for: photo, in: store)
+            await HikePhotoLoader.thumbnail(for: photo, in: store) { display = $0 }
         }
     }
 

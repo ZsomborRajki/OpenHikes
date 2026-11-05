@@ -251,6 +251,24 @@ struct WikidataPlaceLookupTests {
         #expect(await WikidataPlaceLookup.image(from: Data("<html>Not found</html>".utf8)) == nil)
     }
 
+    /// A card handed another place's photograph cancels the decode of the
+    /// last one, which runs to the end regardless — and must then draw
+    /// nothing, or the last place's picture lands over the new one's.
+    @Test("a photograph decoded for a card that has moved on is not drawn")
+    func aPhotographForACardThatMovedOnIsNotDrawn() async {
+        let data = PhotoDiscoveryFixture.sampleImageData()
+        // Cancelled before it starts: the task is the main actor's, and
+        // cannot run until this test suspends.
+        let movedOn = Task {
+            var drawn = false
+            await WikidataPlaceLookup.image(from: data) { _ in drawn = true }
+            return drawn
+        }
+        movedOn.cancel()
+
+        #expect(await movedOn.value == false)
+    }
+
     @Test("an answer with neither an article nor a photograph is no answer")
     func neitherIsNoAnswer() {
         #expect(WikidataPlace(item: "Q1", article: nil, photo: nil) == nil)
