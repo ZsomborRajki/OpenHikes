@@ -36,7 +36,7 @@ struct DownloadProgressTests {
                 return true
             }
         )
-        let counter = ObservationCounter { _ = downloader.progress }
+        let counter = ObservationCounter { _ = downloader.percentSaved }
         await counter.settle()
 
         downloader.start(

@@ -84,9 +84,6 @@ final class OfflineTileDownloader {
     /// explicit keys; partial runs carry only keys verified on durable storage.
     private(set) var completedRecord: OfflineDownloadRecord?
 
-    /// 0…1 fraction of tiles saved, for a progress indicator.
-    var progress: Double { total == 0 ? 0 : min(1, Double(completed) / Double(total)) }
-
     var isFailed: Bool {
         if case .failed = phase { return true }
         return false
@@ -557,6 +554,32 @@ final class OfflineTileDownloader {
             return
         }
         phase = .failed(message)
+    }
+}
+
+// MARK: - How far a run has got
+
+extension OfflineTileDownloader {
+    /// The tiles saved so far, for the hike screen's tile, which draws this
+    /// and has VoiceOver read it — see ``percent(saved:of:locale:)``.
+    var percentSaved: String { Self.percent(saved: completed, of: total) }
+
+    /// `saved` of `total` tiles as the locale writes a whole percentage:
+    /// "62%", "62 %".
+    ///
+    /// Rounded down, so a download says 100% only once its last tile is
+    /// saved. Rounded to the nearest, as every completion figure is
+    /// (``WidgetFormat/percent(_:locale:)``), 199 of 200 would already say it.
+    ///
+    /// Counted in whole tiles rather than through a fraction, whose
+    /// truncation drew 29 of 100 as "28%": 0.29 × 100 is 28.999999999999996.
+    /// And the integer is what is formatted, as `WidgetFormat` formats its
+    /// own, so the figure drawn is the one spoken. The tile used to truncate
+    /// what it drew and round, half to even, what it spoke, so at 249 of 250
+    /// it showed "99%" and VoiceOver said "100%".
+    static func percent(saved: Int, of total: Int, locale: Locale = .current) -> String {
+        let whole = total > 0 ? min(100, saved * 100 / total) : 0
+        return whole.formatted(.percent.locale(locale))
     }
 }
 

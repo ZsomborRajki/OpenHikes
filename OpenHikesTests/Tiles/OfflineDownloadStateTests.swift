@@ -141,7 +141,7 @@ struct OfflineDownloadStateTests {
     func progressStartsEmpty() {
         let downloader = OfflineTileDownloader()
         #expect(downloader.phase == .idle)
-        #expect(downloader.progress == 0)
+        #expect(downloader.percentSaved == 0.formatted(.percent))
         #expect(downloader.total == 0)
         #expect(!downloader.isFailed)
     }
@@ -327,7 +327,7 @@ struct OfflineDownloadStateTests {
         #expect(downloader.isFailed)
         #expect(downloader.total > 0, "precondition: it had tiles to try")
         #expect(downloader.completed == 0)
-        #expect(downloader.progress == 0, "nothing saved is nothing to show")
+        #expect(downloader.percentSaved == 0.formatted(.percent), "nothing saved is nothing to show")
     }
 
     /// And the other end: a download that really did save everything still
@@ -344,7 +344,7 @@ struct OfflineDownloadStateTests {
         await downloader.waitForCurrentRun()
 
         #expect(downloader.completed == downloader.total)
-        #expect(downloader.progress == 1)
+        #expect(downloader.percentSaved == 100.formatted(.percent))
     }
 
     @Test("a complete download keeps the compact deterministic record")
