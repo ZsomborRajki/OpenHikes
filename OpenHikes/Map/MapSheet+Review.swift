@@ -32,10 +32,19 @@ extension MapSheet {
                 transport: transport,
                 queue: appModel.communityReview,
                 browser: appModel.community,
+                // What the reviewer has decided so far, kept until the route
+                // is popped, so the screen a turn of the phone builds in the
+                // other host goes on with the same review — see
+                // ``CommunityHikeReviewSession``.
+                review: presentation.review(of: pending),
                 // Back to the list the row was on. The row itself is already
                 // gone — the screen tells the queue before it pops — so this
                 // lands on a list that agrees with the decision just made.
-                onFinished: { presentation.path.removeAll() }
+                onFinished: { presentation.path.removeAll() },
+                // Asked while the screen is going, to tell a turn of the
+                // phone from the reviewer leaving: Back and a decision have
+                // taken the route out of the path by then, and a turn has not.
+                remainsPushed: { presentation.path.contains(.pendingSubmission(pending)) }
             )
         }
     }
@@ -55,7 +64,9 @@ extension MapSheet {
                 transport: transport,
                 queue: appModel.communityReview,
                 browser: appModel.community,
-                onFinished: { presentation.path.removeAll() }
+                decisions: presentation.review(of: pending),
+                onFinished: { presentation.path.removeAll() },
+                remainsPushed: { presentation.path.contains(.pendingPhotos(pending)) }
             )
         }
     }

@@ -538,6 +538,41 @@ extension CommunityPendingSubmission {
     }
 }
 
+extension CommunityPendingPhotos {
+    /// Fixed moments, for the reason ``CommunityPendingSubmission``'s stub
+    /// has them.
+    private enum StubDate {
+        static let takenInterval: TimeInterval = 1_750_000_000
+        static let noticedInterval: TimeInterval = 1_750_050_000
+        static let taken = Date(timeIntervalSince1970: takenInterval)
+        static let noticed = Date(timeIntervalSince1970: noticedInterval)
+    }
+
+    /// A queued set of contributed photographs with everything filled in.
+    ///
+    /// ``CommunityPendingPhotos/photoCount`` is zero for the reason a queued
+    /// hike's is: the count arrives with the photographs.
+    static func stub(
+        id: String = "photo-notice-1",
+        listingID: String = "listing-1",
+        latitude: Double = 47.63,
+        longitude: Double = 12.86
+    ) -> Self {
+        Self(
+            id: id,
+            photoSubmissionID: "photo-submission-1",
+            listingID: listingID,
+            authorName: "Aino",
+            authorID: "author-1",
+            takenOn: StubDate.taken,
+            photoCount: 0,
+            latitude: latitude,
+            longitude: longitude,
+            noticedAt: StubDate.noticed
+        )
+    }
+}
+
 extension CommunityListing {
     /// Fixed moments so a listing built in two different tests compares equal.
     ///

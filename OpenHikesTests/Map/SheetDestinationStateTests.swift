@@ -60,6 +60,8 @@ struct SheetDestinationStateTests {
         #expect(presentation.hikeInteraction(for: hike).line === line, "the hike's own screen need not be under it")
 
         presentation.path = []
+        #expect(presentation.hikeInteraction(for: hike).line === line, "the screen going draws the line it had")
+        presentation.path = [.hike(hike)]
         #expect(presentation.hikeInteraction(for: hike).line !== line)
     }
 

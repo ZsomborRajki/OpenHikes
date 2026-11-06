@@ -53,12 +53,15 @@ struct CommunityReviewChrome: ViewModifier {
     let declineWarning: LocalizedStringKey
     @Binding var isConfirmingDecline: Bool
     @Binding var decisionFailure: CommunityFailure?
-    /// Downloads the subject and shows it. Built on the screen rather than
-    /// here because it closes over that screen's current state — see
-    /// *Why the operations are passed per call* in
-    /// ``CommunityReviewDecisions``.
-    let begin: () async -> Void
-    let end: () -> Void
+    /// Downloads the subject and shows it, or shows what has already arrived.
+    /// Built on the screen rather than here because it closes over that
+    /// screen's current state — see *Why the operations are passed per call*
+    /// in ``CommunityReviewDecisions``.
+    let begin: () -> Void
+    /// Asked as the screen goes, to tell a turn of the phone from the
+    /// reviewer leaving: the route is still on the stack after a turn, and
+    /// not after Back or a decision.
+    let remainsPushed: () -> Bool
     let decline: () -> Void
 
     func body(content: Content) -> some View {
@@ -67,13 +70,19 @@ struct CommunityReviewChrome: ViewModifier {
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
-            .task {
+            .onAppear {
                 browser.previewOpened(listing)
-                await begin()
+                begin()
             }
             .onDisappear {
+                // A turn of the phone takes this screen away and brings
+                // another up for the same review, in either order, so taking
+                // the route off the map for it would leave the review over a
+                // map drawing nothing. The downloads are not this screen's to
+                // discard: they go when the route leaves the path — see
+                // ``CommunityReviewDecisions/end()``.
+                guard !remainsPushed() else { return }
                 browser.previewClosed(listing)
-                end()
             }
             .confirmationDialog(
                 declineQuestion,

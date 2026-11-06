@@ -27,11 +27,19 @@
 //
 //  ## Why an @Observable class rather than @State on each screen
 //
-//  Because there is one of it per screen and both screens' bodies read all of
+//  Because there is one of it per review and both screens' bodies read all of
 //  it. The render-isolation rule this repository enforces is about *high
 //  frequency* state, which this is not: it changes when a download lands, when
 //  a tile is tapped, and when a decision is made. A body that redraws on those
 //  is a body that is doing its job.
+//
+//  ## Held by the sheet rather than by the screen
+//
+//  A turn of the phone builds a review screen again in the other host, and
+//  while the screen held one of these as `@State`, the screen built there
+//  started the review over (#1353). So ``SheetPresentation`` keeps it for as
+//  long as the queue row's route is on the stack, and ends it when the route
+//  leaves — see ``begin(loading:thenShowing:)`` and ``end()``.
 //
 
 import CoreLocation
@@ -207,6 +215,8 @@ final class CommunityReviewDecisions<Subject: CommunityReviewSubject> {
     /// swipes back mid-decision would have the files pulled out from under the
     /// upload.
     private var decisionTask: Task<Void, Never>?
+    /// Whether the route has left the path. Nothing starts after it has.
+    @ObservationIgnored private(set) var hasEnded = false
 
     init(listing: CommunityListing) {
         staging = CommunityStaging.previewDirectory(of: listing, in: UUID())
@@ -234,21 +244,40 @@ final class CommunityReviewDecisions<Subject: CommunityReviewSubject> {
 
     // MARK: - Arriving and leaving
 
-    /// Downloads the subject, then tells the map what is now on screen.
+    /// Downloads the subject, then tells the map what is now on screen —
+    /// unless the download has started already.
     ///
-    /// Awaited by the caller's `.task`, and retained so that leaving can
-    /// cancel it and the staging sweep can wait for it.
+    /// Asked by every screen that comes up for this review, and only the
+    /// first one's question is a request. ``SheetPresentation`` keeps one of
+    /// these per queue row on the stack, so a screen built by a turn of the
+    /// phone finds the download the screen before it started, finished or
+    /// still out — see ``CommunityHikeReviewSession``. One that finds it
+    /// finished puts what arrived back on the map, which is what the load
+    /// would have done for it. A load that failed stays failed until *Try
+    /// Again* says otherwise — see ``retry(loading:thenShowing:)``.
+    ///
+    /// Retained rather than run by the screen's `.task`, so that a turn,
+    /// which takes the screen away mid-download, does not cancel it, and so
+    /// the end of the review can cancel it and the staging sweep wait for it.
     func begin(
         loading download: @escaping @Sendable (URL) async throws -> Subject,
         thenShowing show: @escaping (Subject) -> Void
-    ) async {
+    ) {
+        if case .loaded(let subject) = phase { show(subject) }
+        guard loadTask == nil, !hasEnded else { return }
         loadTask = Task { await load(download, then: show) }
-        await loadTask?.value
     }
 
-    /// Cancels the load and deletes the downloads behind whatever is still
-    /// using them.
+    /// The route has left the path: cancels the load and deletes the
+    /// downloads behind whatever is still using them.
+    ///
+    /// Called by ``SheetPresentation`` rather than by the screen going,
+    /// because a turn of the phone takes the screen away and leaves the
+    /// review — and a publish that takes photographs off the submission is
+    /// still uploading the kept ones from ``staging``.
     func end() {
+        guard !hasEnded else { return }
+        hasEnded = true
         loadTask?.cancel()
         CommunityHikeView.discardDownloads(at: staging, after: [loadTask, decisionTask])
     }
@@ -266,7 +295,7 @@ final class CommunityReviewDecisions<Subject: CommunityReviewSubject> {
             photoCount = arrived.photoFileURLs.count
             show(arrived)
         } catch is CancellationError {
-            // The screen has gone. Nothing to report a failure on, and nobody
+            // The review has ended. Nothing to report a failure on, and nobody
             // waiting — the silence ``CommunityHikeView/load()`` keeps.
             return
         } catch {
@@ -279,6 +308,7 @@ final class CommunityReviewDecisions<Subject: CommunityReviewSubject> {
         loading download: @escaping @Sendable (URL) async throws -> Subject,
         thenShowing show: @escaping (Subject) -> Void
     ) {
+        guard !hasEnded else { return }
         phase = .loading
         loadTask = Task { await load(download, then: show) }
     }

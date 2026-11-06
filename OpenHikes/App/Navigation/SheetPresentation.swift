@@ -227,40 +227,42 @@ final class SheetPresentation {
     }
 
     /// The hosts are replaced on rotation, but their destinations keep these
-    /// objects until the corresponding route is popped. Cache lookup must not
-    /// subscribe MapSheet to a destination's interaction state.
-    @ObservationIgnored private var hikeInteractions: [UUID: HikeDetailInteraction] = [:]
-    @ObservationIgnored private var photoSelections: [SheetRoute: PhotoViewerSelection] = [:]
-    /// The same, for a shared hike's gallery. A second dictionary rather than
-    /// a second field on ``PhotoViewerSelection``, because the two galleries
+    /// objects until the corresponding route is popped — and the pop's own
+    /// last build of the screen is handed the one it was drawing; see
+    /// ``SheetRetained``. Cache lookup must not subscribe MapSheet to a
+    /// destination's interaction state.
+    @ObservationIgnored private var hikeInteractions = SheetRetained<UUID, HikeDetailInteraction>()
+    @ObservationIgnored private var photoSelections = SheetRetained<SheetRoute, PhotoViewerSelection>()
+    /// The same, for a shared hike's gallery. A second store rather than a
+    /// second field on ``PhotoViewerSelection``, because the two galleries
     /// identify a page differently — see ``CommunityPhotoSelection``.
-    @ObservationIgnored private var communityPhotoSelections: [SheetRoute: CommunityPhotoSelection] = [:]
+    @ObservationIgnored private var communityPhotoSelections = SheetRetained<SheetRoute, CommunityPhotoSelection>()
     /// The same, for a walk summary's share card — see ``WalkShareSession``.
-    @ObservationIgnored private var walkShares: [SheetRoute: WalkShareSession] = [:]
+    @ObservationIgnored private var walkShares = SheetRetained<SheetRoute, WalkShareSession>()
     /// The same, for *Add Place*'s form and the camera it has open — see
     /// ``HikePlaceAdderSession``.
-    @ObservationIgnored private var placeAdders: [SheetRoute: HikePlaceAdderSession] = [:]
+    @ObservationIgnored private var placeAdders = SheetRetained<SheetRoute, HikePlaceAdderSession>()
     /// The same, for what *Places Around Trail* has found and the card open
     /// on it — see ``HikePlacesAroundSearch``.
-    @ObservationIgnored private var placesAroundSearches: [SheetRoute: HikePlacesAroundSearch] = [:]
+    @ObservationIgnored private var placesAroundSearches = SheetRetained<SheetRoute, HikePlacesAroundSearch>()
     /// The same, for *Places Nearby* — see ``HikePlacesNearbySession``.
-    @ObservationIgnored private var placesNearbySessions: [SheetRoute: HikePlacesNearbySession] = [:]
+    @ObservationIgnored private var placesNearbySessions = SheetRetained<SheetRoute, HikePlacesNearbySession>()
     /// The same, for a shared hike's preview: what it has loaded, the
     /// downloads still loading it and the import — see
     /// ``CommunityPreviewSession``.
-    @ObservationIgnored private var communityPreviews: [SheetRoute: CommunityPreviewSession] = [:]
-    /// The visits the last change of path ended, for the screens still going
-    /// — see ``communityPreview(of:)``.
-    @ObservationIgnored private var endedCommunityPreviews: [SheetRoute: CommunityPreviewSession] = [:]
+    @ObservationIgnored private var communityPreviews = SheetRetained<SheetRoute, CommunityPreviewSession>()
+    /// The same, for a queued hike's review and a queued set of photographs':
+    /// what has arrived, what is struck off, a corrected title and a decision
+    /// under way — see ``CommunityHikeReviewSession``.
+    @ObservationIgnored private var hikeReviews = SheetRetained<SheetRoute, CommunityHikeReviewSession>()
+    @ObservationIgnored private var photoReviews =
+        SheetRetained<SheetRoute, CommunityReviewDecisions<CommunityPhotoContribution>>()
     /// The screens that have brought what they are about into view — see
     /// ``claimsFirstFraming(of:)``.
     @ObservationIgnored private var framedRoutes: Set<SheetRoute> = []
 
     func hikeInteraction(for hike: Hike) -> HikeDetailInteraction {
-        if let existing = hikeInteractions[hike.id] { return existing }
-        let interaction = HikeDetailInteraction()
-        hikeInteractions[hike.id] = interaction
-        return interaction
+        hikeInteractions.value(for: hike.id) { HikeDetailInteraction() }
     }
 
     /// Opens a published hike's preview, from anywhere.
@@ -437,45 +439,27 @@ final class SheetPresentation {
     }
 
     func photoSelection(for route: SheetRoute) -> PhotoViewerSelection {
-        if let existing = photoSelections[route] { return existing }
-        let selection = PhotoViewerSelection()
-        photoSelections[route] = selection
-        return selection
+        photoSelections.value(for: route) { PhotoViewerSelection() }
     }
 
     func communityPhotoSelection(for route: SheetRoute) -> CommunityPhotoSelection {
-        if let existing = communityPhotoSelections[route] { return existing }
-        let selection = CommunityPhotoSelection()
-        communityPhotoSelections[route] = selection
-        return selection
+        communityPhotoSelections.value(for: route) { CommunityPhotoSelection() }
     }
 
     func walkShare(for route: SheetRoute) -> WalkShareSession {
-        if let existing = walkShares[route] { return existing }
-        let session = WalkShareSession()
-        walkShares[route] = session
-        return session
+        walkShares.value(for: route) { WalkShareSession() }
     }
 
     func placeAdder(for route: SheetRoute) -> HikePlaceAdderSession {
-        if let existing = placeAdders[route] { return existing }
-        let session = HikePlaceAdderSession()
-        placeAdders[route] = session
-        return session
+        placeAdders.value(for: route) { HikePlaceAdderSession() }
     }
 
     func placesAroundSearch(for route: SheetRoute) -> HikePlacesAroundSearch {
-        if let existing = placesAroundSearches[route] { return existing }
-        let search = HikePlacesAroundSearch()
-        placesAroundSearches[route] = search
-        return search
+        placesAroundSearches.value(for: route) { HikePlacesAroundSearch() }
     }
 
     func placesNearby(for route: SheetRoute) -> HikePlacesNearbySession {
-        if let existing = placesNearbySessions[route] { return existing }
-        let session = HikePlacesNearbySession()
-        placesNearbySessions[route] = session
-        return session
+        placesNearbySessions.value(for: route) { HikePlacesNearbySession() }
     }
 
     /// The visit to `listing`'s preview. Keyed on the route
@@ -487,14 +471,25 @@ final class SheetPresentation {
     /// lost the route by then, and a new visit handed over there made the
     /// preview slide out showing *Loading route…*. So that screen gets the
     /// visit it was drawing, ended, and the next open of the listing a new
-    /// one.
+    /// one — see ``SheetRetained``.
     func communityPreview(of listing: CommunityListing) -> CommunityPreviewSession {
-        let route = SheetRoute.communityHike(listing)
-        if let existing = communityPreviews[route] { return existing }
-        if !storedPath.contains(route), let ended = endedCommunityPreviews[route] { return ended }
-        let session = CommunityPreviewSession(listing: listing)
-        communityPreviews[route] = session
-        return session
+        communityPreviews.value(for: .communityHike(listing)) { CommunityPreviewSession(listing: listing) }
+    }
+
+    /// The review of a queued hike, kept for as long as its route is on the
+    /// stack, so the screen a turn of the phone builds in the other host goes
+    /// on with the review rather than starting it over — see
+    /// ``CommunityHikeReviewSession``.
+    func review(of pending: CommunityPendingSubmission) -> CommunityHikeReviewSession {
+        hikeReviews.value(for: .pendingSubmission(pending)) { CommunityHikeReviewSession(pending: pending) }
+    }
+
+    /// The same, for a queued set of contributed photographs, which have no
+    /// title to correct.
+    func review(of pending: CommunityPendingPhotos) -> CommunityReviewDecisions<CommunityPhotoContribution> {
+        photoReviews.value(for: .pendingPhotos(pending)) {
+            CommunityReviewDecisions(listing: pending.prospectiveListing)
+        }
     }
 
     /// Whether this is the first time since `route` was pushed that its
@@ -681,28 +676,29 @@ final class SheetPresentation {
     }
 
     private func pathDidChange() {
-        hikeInteractions = hikeInteractions.filter { id, _ in
-            storedPath.contains { $0.shows(hikeID: id) }
-        }
-        photoSelections = photoSelections.filter { storedPath.contains($0.key) }
-        communityPhotoSelections = communityPhotoSelections.filter { storedPath.contains($0.key) }
-        walkShares = walkShares.filter { storedPath.contains($0.key) }
-        placeAdders = placeAdders.filter { storedPath.contains($0.key) }
+        let stack = storedPath
+        let isOnPath = { (route: SheetRoute) in stack.contains(route) }
+        hikeInteractions.release { id in stack.contains { $0.shows(hikeID: id) } }
+        photoSelections.release(keeping: isOnPath)
+        communityPhotoSelections.release(keeping: isOnPath)
+        walkShares.release(keeping: isOnPath)
+        placeAdders.release(keeping: isOnPath)
         // Back withdraws what *Places Around Trail* still has out, which its
         // screen going does not — see ``PlacesAroundScreen``. *Places Nearby*
         // asks through the map's finder, which its screen withdraws as it
         // lets the map go.
-        for (route, search) in placesAroundSearches where !storedPath.contains(route) { search.cancel() }
-        placesAroundSearches = placesAroundSearches.filter { storedPath.contains($0.key) }
-        placesNearbySessions = placesNearbySessions.filter { storedPath.contains($0.key) }
+        for search in placesAroundSearches.release(keeping: isOnPath) { search.cancel() }
+        placesNearbySessions.release(keeping: isOnPath)
         // And a preview's downloads, which go with its route rather than with
         // its screen: a turn of the phone takes the screen away and leaves the
         // route, and a preview taken off the stack from under its gallery is
-        // not on screen to see itself go. See ``CommunityPreviewSession``.
-        endedCommunityPreviews = communityPreviews.filter { !storedPath.contains($0.key) }
-        for preview in endedCommunityPreviews.values { preview.end() }
-        communityPreviews = communityPreviews.filter { storedPath.contains($0.key) }
-        framedRoutes = framedRoutes.filter { storedPath.contains($0) }
+        // not on screen to see itself go. See ``CommunityPreviewSession``. A
+        // review's go the same way, for the first of those reasons — see
+        // ``CommunityReviewDecisions/end()``.
+        for preview in communityPreviews.release(keeping: isOnPath) { preview.end() }
+        for review in hikeReviews.release(keeping: isOnPath) { review.decisions.end() }
+        for review in photoReviews.release(keeping: isOnPath) { review.end() }
+        framedRoutes = framedRoutes.filter { stack.contains($0) }
         let recording = storedPath.last == .recording
         if isRecordingPresented != recording { isRecordingPresented = recording }
         let drafting = storedPath.last == .trailDraft

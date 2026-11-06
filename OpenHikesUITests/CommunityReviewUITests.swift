@@ -304,6 +304,106 @@ nonisolated final class CommunityReviewUITests: XCTestCase {
         )
     }
 
+    /// What the rotation test corrects the photographed submission's title to.
+    private static let correctedTitle = "Steinerne Rinne, from the Wilder Kaiser hut"
+
+    /// A turn of the phone mid-review keeps the review: a photograph struck
+    /// off and a title corrected are both still there after a turn there and
+    /// back.
+    ///
+    /// The screen is drawn in the sheet in portrait and in the side panel in
+    /// landscape, so a turn builds it again. While what the reviewer had
+    /// decided was the screen's own state, the one built in the other host
+    /// downloaded the submission again and put both back as they were sent
+    /// (#1353).
+    ///
+    /// Each step starts at the top of a screen a turn has just built, once
+    /// the other host's copy has gone, and only scrolls and types in
+    /// portrait. The form is barely taller than the sheet at its middle
+    /// detent, so a search that starts lower flings its target past the top,
+    /// and the swipe back down at the top of the form lowers the sheet
+    /// instead of scrolling it. In landscape the keyboard covers nearly all of
+    /// the side panel, and typing there dropped letters.
+    @MainActor
+    func testAReviewInProgressSurvivesATurnOfThePhone() {
+        addTeardownBlock {
+            await MainActor.run { XCUIDevice.shared.orientation = .portrait }
+        }
+        XCUIDevice.shared.orientation = .portrait
+        let app = launchCommunity(scenario: .reviewing)
+        XCTAssertTrue(waitForPortrait(app), "the app should have started upright")
+        selectCommunityTab(in: app)
+        openQueuedSubmission(titled: SeededQueuedHike.photographedTitle, in: app)
+
+        let heading = reviewPhotoHeading(in: app)
+        XCTAssertTrue(scrollUntilVisible(heading, in: app), "precondition: the photographs have arrived")
+        element("review-photo-remove", in: app).firstMatch.tap()
+        let struckOff = "Photos (\(SeededQueuedHike.photoCount - 1) of \(SeededQueuedHike.photoCount))"
+        XCTAssertTrue(
+            waitUntil(timeout: UITestTimeout.existence) { heading.label == struckOff },
+            "precondition: one photograph is struck off"
+        )
+
+        turnThereAndBack(in: app)
+        XCTAssertTrue(scrollUntilVisible(heading, in: app), "the review still has its photographs")
+        XCTAssertEqual(heading.label, struckOff, "with the one struck off still struck off")
+
+        // Back to the top of a new screen, where the title is.
+        turnThereAndBack(in: app)
+        let field = element("review-title-field", in: app)
+        XCTAssertTrue(correctTitle(of: field, to: Self.correctedTitle), "precondition: the title is corrected")
+        commitKeyboardEdit(in: app)
+
+        turnThereAndBack(in: app)
+        XCTAssertEqual(field.value as? String, Self.correctedTitle, "the title is still as corrected")
+    }
+
+    /// Turns the phone on its side and back, each time waiting for the screen
+    /// the turn built to be the only review up.
+    @MainActor
+    private func turnThereAndBack(in app: XCUIApplication) {
+        for orientation in [UIDeviceOrientation.landscapeLeft, .portrait] {
+            XCUIDevice.shared.orientation = orientation
+            XCTAssertTrue(orientation == .portrait ? waitForPortrait(app) : waitForLandscape(app))
+            XCTAssertTrue(waitForOneReview(in: app), "the review is still open, in one host")
+        }
+    }
+
+    /// Where to tap the title to put the caret after the text in it. The field
+    /// is right-aligned, so its text runs to its trailing edge, and a tap any
+    /// further in lands on the last letters and leaves the caret before them.
+    private static let endOfTheTitle = CGVector(dx: 0.99, dy: 0.5)
+
+    /// Replaces the title a key at a time from its end, and checks that the
+    /// field took it.
+    ///
+    /// Not ``replaceText(of:with:)``. Its three taps on this field opened the
+    /// edit menu or left the caret at the start, and every retry typed the
+    /// new title into the old one. A tap at the trailing edge and a delete
+    /// per letter is what `CommunityUITests+ShareForm.swift` does to the share
+    /// form's title. What is trusted is what the field reads back, and an
+    /// attempt that left anything else is made again.
+    @MainActor
+    private func correctTitle(of field: XCUIElement, to text: String) -> Bool {
+        waitUntil(timeout: UITestTimeout.navigation) {
+            if field.value as? String == text { return true }
+            field.coordinate(withNormalizedOffset: Self.endOfTheTitle).tap()
+            let typed = field.value as? String ?? ""
+            field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: typed.count))
+            field.typeText(text)
+            return field.value as? String == text
+        }
+    }
+
+    /// Whether the screen a turn has built is the only review up, at its top.
+    /// For a moment after a turn both hosts' copies are, and the one going
+    /// still holds what it had.
+    @MainActor
+    private func waitForOneReview(in app: XCUIApplication) -> Bool {
+        let titleFields = app.descendants(matching: .any).matching(identifier: "review-title-field")
+        return waitUntil(timeout: UITestTimeout.navigation) { titleFields.count == 1 }
+    }
+
     /// The row that told a reviewer to look at the map is gone, and the map is
     /// still drawing the route.
     ///

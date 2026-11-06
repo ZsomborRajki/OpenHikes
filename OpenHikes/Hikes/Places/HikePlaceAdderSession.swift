@@ -17,7 +17,8 @@
 //
 //  Released with its route, at *Cancel* or once *Add* replaces the form with
 //  the new place's screen — the photographs held here are camera frames, and
-//  they go when the form does.
+//  they go when the form does: once it has slid out, at the next change of
+//  the sheet's path — see ``SheetRetained``.
 //
 
 import Foundation
