@@ -23,7 +23,9 @@ extension WidgetFeedSuites {
 final class BackgroundDeliveryTests {
     private let container: ModelContainer
     private let context: ModelContext
-    private let defaults: UserDefaults
+    /// Internal, with the four helpers below, for
+    /// `BackgroundDeliveryTests+Pauses.swift`.
+    let defaults: UserDefaults
     private let monitor = StubLocationMonitor()
     /// Held for the length of the test: the monitor references its delegate
     /// weakly, exactly as CoreLocation does.
@@ -42,7 +44,7 @@ final class BackgroundDeliveryTests {
 
     /// A hike stored in the container and recorded as the last selection —
     /// which is all a relaunched process has to go on.
-    private func selectedHike(route: [RouteCoordinate] = Fixture.ridgeRoute) -> Hike {
+    func selectedHike(route: [RouteCoordinate] = Fixture.ridgeRoute) -> Hike {
         let hike = Fixture.hike(in: context, route: route)
         try? context.save()
         defaults.set(hike.id.uuidString, forKey: SettingsKey.lastSelectedHikeID)
@@ -51,13 +53,13 @@ final class BackgroundDeliveryTests {
 
     /// A tracker built the way a background relaunch builds one: no selection
     /// call, no published snapshot, nothing but what's on disk.
-    @discardableResult private func relaunchedTracker() -> BackgroundTrailTracker {
+    @discardableResult func relaunchedTracker() -> BackgroundTrailTracker {
         let newTracker = BackgroundTrailTracker(container: container, monitor: monitor, defaults: defaults)
         retainedTracker = newTracker
         return newTracker
     }
 
-    private func fix(
+    func fix(
         at coordinate: CLLocationCoordinate2D,
         accuracy: CLLocationAccuracy = 10,
         age: TimeInterval = 0,
@@ -85,7 +87,7 @@ final class BackgroundDeliveryTests {
     /// tracker refuses outright — stale, imprecise, or for a hike that is gone
     /// — nothing was started and the wait returns at once, which is what makes
     /// it safe to use for the negative assertions too.
-    private func deliver(_ location: CLLocation) async {
+    func deliver(_ location: CLLocation) async {
         monitor.deliver(location)
         await retainedTracker?.waitForLiveFixPublish()
     }

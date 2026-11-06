@@ -438,6 +438,14 @@ nonisolated extension RouteProfile {
     /// the nearest recorded piece — and a route with no other leg, which is
     /// the only route that leaves nothing to project onto, answers `nil`.
     ///
+    /// The point itself comes back beside its distance, and is what a caller
+    /// that draws the fix draws, because across a pause a distance does not
+    /// name one place. A piece a recording resumed on without moving shares
+    /// its whole distance with the fix before the pause, and
+    /// ``coordinate(atDistance:)`` reads that distance back as the fix before
+    /// it, or as the start of the next piece — a drive away from the hiker
+    /// (#1350).
+    ///
     /// `referenceDistance`, when given (the previous match), breaks ties in
     /// favor of continuity. Loops, out-and-backs, and switchbacks can bring
     /// two very different points along the route within GPS-noise distance of
@@ -486,12 +494,12 @@ nonisolated extension RouteProfile {
         heading: CLLocationDirection? = nil,
         headingOverridesReference: Bool = false,
         scope: SearchScope = .wholeRoute
-    ) -> (distanceAlongRoute: Double, offRouteMeters: Double)? {
+    ) -> (distanceAlongRoute: Double, offRouteMeters: Double, coordinate: CLLocationCoordinate2D)? {
         guard !coordinates.isEmpty else { return nil }
         guard coordinates.count > 1 else {
             let only = coordinates[0]
             let offset = RouteGeometry.distanceMeters(from: coordinate, to: only)
-            return (0, offset)
+            return (0, offset, only)
         }
         let course = referenceDistance == nil || headingOverridesReference ? heading : nil
         return nearestCandidate(
@@ -499,7 +507,7 @@ nonisolated extension RouteProfile {
             near: referenceDistance,
             course: course,
             scope: scope
-        )?.match
+        ).map(match(of:))
     }
 
     /// Projects a fix onto the route letting a usable course outrank
@@ -536,12 +544,13 @@ nonisolated extension RouteProfile {
     /// or more. With no course, or no reference to disagree with, this is
     /// ``nearestPoint(to:near:heading:headingOverridesReference:scope:)``
     /// exactly — continuity for a Wi-Fi or cell fix that carries no course,
-    /// and for the first fix the course and then the start of the route.
+    /// and for the first fix the course and then the start of the route —
+    /// and like it, it answers the point the fix fell on beside its distance.
     public func nearestPointHeadingFirst(
         to coordinate: CLLocationCoordinate2D,
         near referenceDistance: Double?,
         heading: CLLocationDirection?
-    ) -> (distanceAlongRoute: Double, offRouteMeters: Double)? {
+    ) -> (distanceAlongRoute: Double, offRouteMeters: Double, coordinate: CLLocationCoordinate2D)? {
         guard let referenceDistance, let heading, coordinates.count > 1 else {
             return nearestPoint(to: coordinate, near: referenceDistance, heading: heading)
         }
@@ -551,14 +560,14 @@ nonisolated extension RouteProfile {
             course: heading,
             scope: .wholeRoute
         ) else { return nil }
-        if Self.runs(windowed, with: heading) { return windowed.match }
+        if Self.runs(windowed, with: heading) { return match(of: windowed) }
 
         let fullRange = 0..<(coordinates.count - 1)
         var candidates: [NearestCandidate] = []
         candidates.reserveCapacity(fullRange.count)
         var best: NearestCandidate?
         appendCandidates(to: coordinate, in: fullRange, candidates: &candidates, best: &best)
-        guard let best else { return windowed.match }
+        guard let best else { return match(of: windowed) }
         let routeWide = breakTie(
             among: candidates,
             best: best,
@@ -567,9 +576,9 @@ nonisolated extension RouteProfile {
         )
         guard Self.runs(routeWide, with: heading),
               routeWide.offRouteMeters <= Self.followMatchThresholdMeters else {
-            return windowed.match
+            return match(of: windowed)
         }
-        return routeWide.match
+        return match(of: routeWide)
     }
 
     /// Projects a coordinate onto the whole route as
@@ -586,20 +595,14 @@ nonisolated extension RouteProfile {
     /// ``tieBreakToleranceMeters`` beyond the closest is another piece of
     /// trail, and the answer is then the one the plain search gives.
     ///
-    /// The projected coordinate travels with its distance: a stationary
-    /// piece after a pause shares its distance with another piece, so
-    /// ``coordinate(atDistance:)`` cannot always recover the chosen place.
-    /// A caller that pins something where a projection fell and has no
-    /// stretch to prefer passes `{ _ in false }`, for the plain search's
-    /// answer with its coordinate.
+    /// The projected coordinate travels with its distance, for the reason
+    /// the plain search gives. With `{ _ in false }` this is the plain
+    /// search's answer.
     public func nearestPoint(
         to coordinate: CLLocationCoordinate2D,
         preferring isPreferred: (Double) -> Bool
     ) -> (distanceAlongRoute: Double, offRouteMeters: Double, coordinate: CLLocationCoordinate2D)? {
-        guard coordinates.count > 1 else {
-            guard let only = coordinates.first, let match = nearestPoint(to: coordinate) else { return nil }
-            return (match.distanceAlongRoute, match.offRouteMeters, only)
-        }
+        guard coordinates.count > 1 else { return nearestPoint(to: coordinate) }
         var candidates: [NearestCandidate] = []
         candidates.reserveCapacity(coordinates.count - 1)
         var best: NearestCandidate?
@@ -609,13 +612,22 @@ nonisolated extension RouteProfile {
             .filter { $0.offRouteMeters <= best.offRouteMeters + Self.tieBreakToleranceMeters }
             .filter { isPreferred($0.distanceAlongRoute) }
             .min { $0.offRouteMeters < $1.offRouteMeters }
-        let chosen = preferred ?? breakTie(among: candidates, best: best, anchor: 0, course: nil)
+        return match(of: preferred ?? breakTie(among: candidates, best: best, anchor: 0, course: nil))
+    }
+
+    /// `candidate` as the searches answer it: its distance, how far off the
+    /// line it fell, and the point on the line it fell on, which its distance
+    /// alone cannot always name — see
+    /// ``nearestPoint(to:near:heading:headingOverridesReference:scope:)``.
+    private func match(
+        of candidate: NearestCandidate
+    ) -> (distanceAlongRoute: Double, offRouteMeters: Double, coordinate: CLLocationCoordinate2D) {
         let projected = RouteGeometry.interpolate(
-            from: coordinates[chosen.segmentIndex],
-            to: coordinates[chosen.segmentIndex + 1],
-            fraction: chosen.fraction
+            from: coordinates[candidate.segmentIndex],
+            to: coordinates[candidate.segmentIndex + 1],
+            fraction: candidate.fraction
         )
-        return (chosen.distanceAlongRoute, chosen.offRouteMeters, projected)
+        return (candidate.distanceAlongRoute, candidate.offRouteMeters, projected)
     }
 
     /// The search both matchers share, on a route of at least two points,
@@ -729,9 +741,6 @@ nonisolated extension RouteProfile {
         let dx: Double
         let dy: Double
         var bearingDegrees: Double { atan2(dx, dy) * 180 / .pi }
-        var match: (distanceAlongRoute: Double, offRouteMeters: Double) {
-            (distanceAlongRoute, offRouteMeters)
-        }
     }
 
     private func appendCandidates(

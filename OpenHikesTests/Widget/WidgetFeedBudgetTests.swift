@@ -271,7 +271,8 @@ final class WidgetFeedBudgetTests {
         // the hiker has not left the trail.
         let marginal = (
             distanceAlongRoute: onRoute.distanceAlongRoute,
-            offRouteMeters: RouteProfile.followMatchThresholdMeters + 1
+            offRouteMeters: RouteProfile.followMatchThresholdMeters + 1,
+            coordinate: onRoute.coordinate
         )
         var previous = SharedStore.load()?.updatedAt
         var writes = 0

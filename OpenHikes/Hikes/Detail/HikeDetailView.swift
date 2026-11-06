@@ -850,7 +850,7 @@ private extension HikeDetailView {
     private func clearLiveFollow(
         profile: RouteProfile,
         along prepared: PreparedLine,
-        offRoute: (distanceAlongRoute: Double, offRouteMeters: Double)? = nil
+        offRoute: (distanceAlongRoute: Double, offRouteMeters: Double, coordinate: CLLocationCoordinate2D)? = nil
     ) {
         // Guarded so a run of off-route fixes (nil already) doesn't write
         // `tracker` for nothing.
