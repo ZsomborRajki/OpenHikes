@@ -134,7 +134,7 @@ enum CommunityPublicationCheck {
     /// leave the hike reading *waiting for review* about a submission that is
     /// gone, which is a worse lie than the stale *published* it replaced. It
     /// would also go on blocking a re-record:
-    /// ``CommunityPublishingCheck/alreadyShared(in:excluding:)`` fetches
+    /// ``CommunityPublishingCheck/alreadyShared(in:excluding:fetch:)`` fetches
     /// on ``Hike/communitySubmissionID`` alone, so a hike that keeps that
     /// column is still somebody else's retread however dead its listing is.
     ///

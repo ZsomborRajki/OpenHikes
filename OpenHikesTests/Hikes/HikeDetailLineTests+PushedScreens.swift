@@ -186,7 +186,7 @@ extension HikeDetailLineTests {
 
         let eligibility = await CommunityPublishingCheck.eligibility(of: hike, in: container.mainContext)
 
-        #expect(eligibility.reason != nil, "the line was read, and found to retrace the one already shared")
+        #expect(eligibility?.reason != nil, "the line was read, and found to retrace the one already shared")
         for line in [hike, shared] {
             let read = Self.mainActorRead(of: line)
             #expect(read.points == Self.longPoints)

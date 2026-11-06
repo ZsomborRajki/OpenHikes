@@ -106,7 +106,7 @@ struct CommunityOwnListingPhotosTests {
 
         let eligibility = await CommunityPublishingCheck.eligibility(of: again, in: context)
 
-        let target = try #require(eligibility.photoTarget)
+        let target = try #require(eligibility?.photoTarget)
         #expect(target.listingID == "listing-1")
         #expect(target.isYours)
     }
