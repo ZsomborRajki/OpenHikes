@@ -345,8 +345,14 @@ private struct CommunityPhotoPage: View {
         .accessibilityElement()
         .accessibilityLabel(accessibilityLabel)
         .task(id: photo.fileURL) {
-            image = await CommunityPhotoTile.decode(photo.fileURL, maxPixelSize: maxPixelSize)
-            didFinishDecoding = true
+            // Both halves of the answer through the hand-off, so a decode
+            // this page has moved on from — scrolled away from before it
+            // landed — writes neither the picture nor the word that it
+            // failed over the newer decode's.
+            await CommunityPhotoTile.decode(photo.fileURL, maxPixelSize: maxPixelSize) { decoded in
+                image = decoded
+                didFinishDecoding = true
+            }
         }
     }
 

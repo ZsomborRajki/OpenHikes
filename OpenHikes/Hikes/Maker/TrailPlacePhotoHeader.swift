@@ -65,9 +65,12 @@ struct TrailPlacePhotoHeader: View {
                 .tint(.white)
                 .padding(8)
         }
+        // Keyed by the file, so a card the maker hands another place's
+        // photograph never shows the last one's while the new one decodes,
+        // nor after: the last decode, cancelled, hands over nothing.
         .task(id: photo.fileURL) {
             image = nil
-            image = await CommunityPhotoTile.decode(photo.fileURL, maxPixelSize: Self.maxPixelSize)
+            await CommunityPhotoTile.decode(photo.fileURL, maxPixelSize: Self.maxPixelSize) { image = $0 }
         }
     }
 }

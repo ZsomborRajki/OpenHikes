@@ -383,6 +383,17 @@ final class PhotoDiscoveryController {
         )
     }
 
+    /// The same picture, handed to `show` only while the task that asked
+    /// still owns the cell. A cell scrolled away cancels its load, which
+    /// PhotoKit finishes regardless, and the cell scrolled back starts the
+    /// next without waiting for it; see
+    /// ``HikePhotoLoader/thumbnail(for:in:show:)``.
+    func thumbnail(for match: LibraryPhotoMatch, show: (LoadedPhotoImage?) -> Void) async {
+        let image = await thumbnail(for: match)
+        guard !Task.isCancelled else { return }
+        show(image)
+    }
+
     /// Runs an import as *the* import, so the sheet that started it can stop
     /// it on the way out.
     ///
