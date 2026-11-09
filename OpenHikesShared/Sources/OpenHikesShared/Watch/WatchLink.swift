@@ -172,7 +172,7 @@ public enum WatchLink {
     }
 }
 
-// MARK: The five messages
+// MARK: Message payloads
 
 /// One pair of functions per ``WatchMessageKind``, which is the whole
 /// vocabulary of this link. Adding a kind without adding its pair here leaves
