@@ -95,8 +95,8 @@ public struct WatchWalkDelivery: Sendable {
     /// its finish arrives like any other.
     ///
     /// - Parameter isCrossing: whether `WCSession` still holds a transfer of
-    ///   this walk. Decodes each queued walk to read its ID, so it is asked
-    ///   once per walk per process rather than on every drain.
+    ///   this walk. It searches the system's whole queue, so it is asked only
+    ///   until this process first offers the walk rather than on every drain.
     public mutating func isDue(
         _ sessionID: UUID,
         at now: Date,

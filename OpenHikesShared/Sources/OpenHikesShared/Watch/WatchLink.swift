@@ -13,12 +13,30 @@
 //  which is the same drift `SharedStore` exists to prevent across the App
 //  Group, in a place with one more process and no file to look at afterwards.
 //
-//  So a message is exactly two keys: a ``WatchMessageKind`` naming what it is,
-//  and the payload's bytes. The bytes are JSON rather than a nested
-//  dictionary because the payloads are already `Codable` for the App Group,
-//  and because `WCSession` accepts `Data` as a property-list type — so a
-//  payload crosses the link and lands in the container in the same encoding,
-//  and nothing has to describe it twice.
+//  So a message is two keys: a ``WatchMessageKind`` naming what it is, and the
+//  payload's bytes. The bytes are JSON rather than a nested dictionary because
+//  the payloads are already `Codable` for the App Group, and because
+//  `WCSession` accepts `Data` as a property-list type — so a payload crosses
+//  the link and lands in the container in the same encoding, and nothing has
+//  to describe it twice.
+//
+//  ## One key more, for a finished walk
+//
+//  A recorded walk also carries its session ID beside the bytes. Not for the
+//  phone, which reads the ID out of the payload like any other field and never
+//  looks at the key, but for the watch, which looks for its own walks in
+//  `WCSession`'s queue of transfers by that ID: on the main actor for every
+//  walk on its disk queue after a launch, and again for each transfer that
+//  finishes. The bytes are the whole recording, so reading the ID out of them
+//  decoded queued recordings fix by fix to compare one field (#1371). The key
+//  makes it a dictionary lookup.
+//
+//  It is written by the function that writes the bytes, so the two cannot
+//  disagree. A transfer outlives the build that queued it, so a walk without
+//  the key — queued before an update — is still read from its bytes, and is
+//  adopted rather than sent a second time. The phone is untouched either way:
+//  every build of it reads the kind and the bytes and nothing else, so a newer
+//  watch's extra key and an older watch's missing one look the same to it.
 //
 //  ## Version checking is the link's job, not the receiver's
 //
@@ -96,6 +114,8 @@ public enum WatchLinkFailure: LocalizedError, Equatable, Sendable {
 public enum WatchLink {
     static let kindKey = "kind"
     static let bodyKey = "body"
+    /// A recorded walk's session, beside its bytes. See this file's header.
+    static let sessionKey = "session"
 
     /// Reads a versioned payload back out, refusing a format this build does
     /// not know before any field is interpreted.
@@ -183,11 +203,26 @@ public extension WatchLink {
     }
 
     static func message(_ walk: WatchRecordedWalk) throws -> [String: Any] {
-        try message(.recordedWalk, walk)
+        var message = try message(.recordedWalk, walk)
+        message[sessionKey] = walk.sessionID.uuidString
+        return message
     }
 
     static func recordedWalk(from message: [String: Any]) throws(WatchLinkFailure) -> WatchRecordedWalk {
         try payload(WatchRecordedWalk.self, of: .recordedWalk, from: message)
+    }
+
+    /// Which walk a message carries, read from beside its bytes rather than
+    /// out of them.
+    ///
+    /// `nil` for any other kind. A walk queued by a build from before
+    /// ``sessionKey`` has no key, and is read from its bytes the way every
+    /// walk once was — `nil` if they do not decode. That is the cost the key
+    /// removes, paid only for the transfers an update found still crossing.
+    static func recordedWalkSessionID(in message: [String: Any]) -> UUID? {
+        guard kind(of: message) == .recordedWalk else { return nil }
+        if let carried = (message[sessionKey] as? String).flatMap(UUID.init(uuidString:)) { return carried }
+        return (try? recordedWalk(from: message))?.sessionID
     }
 
     static func message(_ receipt: WatchWalkReceipt) throws -> [String: Any] {
