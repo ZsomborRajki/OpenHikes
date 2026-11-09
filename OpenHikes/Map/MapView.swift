@@ -346,10 +346,13 @@ struct MapView: MapViewRepresentable, Equatable {
         // Set on the map that is already there rather than by building a new
         // one: a configuration is a property MapKit applies live, and a new
         // `MKMapView` would throw away the camera, every overlay and every
-        // observation made on this one.
+        // observation made on this one. Tiles picked while the map is tilted
+        // go straight onto the terrain — see
+        // `MapCoordinator+TerrainUnderTiles.swift`.
+        coordinator.tilesOnTerrain = SystemMapStyle.tilesDrawOnTerrain(atPitch: mapView.camera.pitch)
         mapView.preferredConfiguration = switch base {
         case let .system(style): style.configuration
-        case .tiles: SystemMapStyle.underTiles
+        case .tiles: SystemMapStyle.underTiles(onTerrain: coordinator.tilesOnTerrain)
         }
 
         // No overlay at all, rather than an empty one: `canReplaceMapContent`

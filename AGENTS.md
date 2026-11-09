@@ -1175,6 +1175,11 @@ in its source header. Do not weaken one without a measurement.
   `UIApplication` notifications rather than SwiftUI. The 1 Hz `TimelineView`
   exists only while the scene is `.active`. The location background mode keeps
   the app running, so iOS will not stop those timers for you.
+- **Terrain goes under the tiles only while the map is tilted**
+  (`Map/MapCoordinator+TerrainUnderTiles.swift`). MapKit keeps fetching the
+  map a replacing tile overlay hides, so terrain under the tiles costs Apple's
+  satellite imagery on every view. A map lying flat keeps the flat map under
+  its tiles, as it always did.
 
 ## Schema and migration policy
 
@@ -1618,6 +1623,10 @@ Reopening one needs new evidence, not a fresh reading of the same code.
     drawn earlier when that scale was shown again.
   - Mirroring is assumed to carry `@Attribute(.externalStorage)` routes as
     `CKAsset`s. Nobody has watched a 20,000-point route cross a real container.
+  - A tilted map's tiles assume MapKit drapes a replacing tile overlay, and
+    every line above it, over the realistic satellite map's terrain. Watched
+    on iOS 18.6 and 27.2 simulators, never on a device; WWDC22 said an
+    overlay flattens a realistic map, on iOS 16.
 
 ## Documentation
 

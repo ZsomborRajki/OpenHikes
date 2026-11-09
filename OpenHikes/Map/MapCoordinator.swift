@@ -114,6 +114,9 @@ extension MapView {
         /// The currently installed tile overlay and a key identifying its source.
         var tileOverlay: TileOverlay?
         var tileSourceKey: String?
+        /// Whether the map under ``tileOverlay`` is the satellite terrain
+        /// rather than the flat map — see `MapCoordinator+TerrainUnderTiles.swift`.
+        var tilesOnTerrain = false
         /// The installed hiking-route layer and the id it was built for — see
         /// `MapCoordinator+TileLayer.swift`.
         var layerOverlay: TileOverlay?
@@ -878,6 +881,9 @@ extension MapView.Coordinator {
     #endif
 
     func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
+        // Tilting the map puts terrain under the tiles, and laying it flat
+        // takes it away — see `MapCoordinator+TerrainUnderTiles.swift`.
+        applyTerrainUnderTiles(on: mapView)
         // A place being added goes wherever the map came to rest under its
         // pin — see `MapPlacePlacement.swift`.
         placePlacementRegionDidSettle(on: mapView)

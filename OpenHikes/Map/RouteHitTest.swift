@@ -33,6 +33,17 @@
 //  ``MapView/Coordinator/routeTapTarget(at:in:)`` for the guard that keeps an
 //  ordinary miss from paying it.
 //
+//  ## Over terrain
+//
+//  Exact on a flat map, and only there. On a realistic map MapKit drapes the
+//  line over the ground while `convert` still projects onto a flat one, so a
+//  thumb lands where the line is drawn and is measured against where
+//  `convert` says it is: 170 pt apart for a point 800 m down the Watzmann's
+//  east face at 35° of tilt. MapKit offers no projection that knows the
+//  ground. Apple Satellite
+//  draws on terrain always, the tile maps only while tilted — see
+//  `MapCoordinator+TerrainUnderTiles.swift`.
+//
 //  ## Nearest rather than first
 //
 //  Two lines sharing a valley floor overlap on screen at any zoom that shows

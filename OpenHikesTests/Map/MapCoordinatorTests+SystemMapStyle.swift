@@ -47,9 +47,10 @@ extension MapCoordinatorTests {
         #expect(standard.pointOfInterestFilter == .includingAll)
     }
 
-    /// Under tiles the map is what it always was: flat, so the overlay is
-    /// drawn as it always has been, with the chrome over it as light as the
-    /// tiles are.
+    /// Under tiles on a map lying flat, the map is what it always was: flat,
+    /// so the overlay is drawn as it always has been, with the chrome over it
+    /// as light as the tiles are. A tilted one is
+    /// `MapCoordinatorTests+TerrainUnderTiles.swift`'s.
     @Test("a tile source is drawn over a flat standard map")
     func tilesKeepAFlatMapUnderneath() throws {
         let coordinator = MapView.Coordinator()
