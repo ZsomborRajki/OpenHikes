@@ -42,13 +42,33 @@ extension SystemMapStyle {
         }
     }
 
-    /// The configuration under a raster tile overlay: flat, which is MapKit's
-    /// default and what the overlay was always drawn over. Switching from
-    /// either map above to tiles has to put it back, or the tiles would be
-    /// drawn over whatever the hiker last picked.
-    static var underTiles: MKMapConfiguration {
-        let standard = MKStandardMapConfiguration(elevationStyle: .flat)
-        standard.pointOfInterestFilter = .includingAll
-        return standard
+    /// The least tilt, in degrees, that puts terrain under raster tiles. A
+    /// degree rather than zero, so a camera a rounding error off flat is not
+    /// taken for one the hiker tilted.
+    static let terrainPitch: CLLocationDegrees = 1
+
+    /// Whether raster tiles seen at `pitch` are drawn on terrain. See
+    /// `MapCoordinator+TerrainUnderTiles.swift` for why only when tilted.
+    static func tilesDrawOnTerrain(atPitch pitch: CLLocationDegrees) -> Bool {
+        pitch >= terrainPitch
+    }
+
+    /// The configuration under a raster tile overlay. The tiles hide it
+    /// either way; what it decides is the ground they are drawn on.
+    ///
+    /// Off terrain, the flat map: MapKit's default, and what the overlay was
+    /// always drawn over. On terrain, the satellite map, whose realistic
+    /// elevation the overlay lies over in 3D. Not the standard map's:
+    /// realistic draws the Watzmann exactly as flat as `.flat` does.
+    ///
+    /// Switching from either map above to tiles has to set one of these, or
+    /// the tiles would be drawn over whatever the hiker last picked.
+    static func underTiles(onTerrain: Bool) -> MKMapConfiguration {
+        guard onTerrain else {
+            let standard = MKStandardMapConfiguration(elevationStyle: .flat)
+            standard.pointOfInterestFilter = .includingAll
+            return standard
+        }
+        return Self.hybrid.configuration
     }
 }
