@@ -1231,8 +1231,8 @@ echo "Release secrets gate"
 
 # The archive checklist's second step. `OpenHikes/Secrets.plist` is gitignored
 # and exists on one laptop, and an archive cut without it ships an app whose
-# two paid map styles cannot draw a tile — while building, signing and passing
-# CI.
+# paid map styles cannot draw a tile — while building, signing and passing CI.
+# The cases count keys, not styles, as the gate does; its header says why.
 secrets_gate="$repository_root/Scripts/check-release-secrets.sh"
 
 # A plist with whatever values a case wants, written the way a person's own

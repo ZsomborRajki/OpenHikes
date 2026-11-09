@@ -7,9 +7,14 @@
 # on the TestFlight workflow's runner, which writes it from the `testflight`
 # environment's secrets (Scripts/write-release-secrets.sh). A Release archive
 # cut without it builds, signs, uploads and passes CI's archive job, and ships
-# an app whose two paid map styles cannot draw a tile: `Secrets.canLoadTiles`
-# is false for both paid sources, so both provider rows are drawn at
-# `disabledOpacity` and refuse the tap.
+# an app whose paid map styles cannot draw a tile: `Secrets.canLoadTiles` is
+# false for every key-gated `TileProvider`, so each of those styles' cards in
+# the map picker is drawn at `disabledOpacity` and refuses the tap. That app
+# draws no Stadia elevation either, not even for a subscriber, because
+# `StadiaElevationSource` sends the Stadia key too. A key is the vendor's, not
+# a style's: every Stadia style names `StadiaAPIKey` as its
+# `TileProvider.apiKeyPlistKey`, so `required_keys` below has a row per key,
+# naming the styles it unlocks, rather than a row per style.
 #
 # Not a CI check, and it must not become one. The `archive` job builds without
 # keys deliberately, and its *Verify what the archive does and does not carry*
@@ -35,7 +40,7 @@
 
 set -euo pipefail
 
-# The keys `TileProvider.apiKeyPlistKey` names, and the source each one is for.
+# The keys `TileProvider.apiKeyPlistKey` names, and the styles each one unlocks.
 # Kept here rather than read out of the Swift, because this program has to run
 # against a tree it cannot compile and a name it could not resolve would make
 # it pass rather than fail.
