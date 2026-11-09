@@ -9,9 +9,11 @@
 # cut without it builds, signs, uploads and passes CI's archive job, and ships
 # an app whose paid map styles cannot draw a tile: `Secrets.canLoadTiles` is
 # false for every key-gated `TileProvider`, so each of those styles' cards in
-# the map picker is drawn at `disabledOpacity` and refuses the tap. A key is a
-# provider's, not a style's (`TileProvider.apiKeyPlistKey`): every Stadia
-# style reads `StadiaAPIKey`, so `required_keys` below has a row per key,
+# the map picker is drawn at `disabledOpacity` and refuses the tap. That app
+# draws no Stadia elevation either, not even for a subscriber, because
+# `StadiaElevationSource` sends the Stadia key too. A key is the vendor's, not
+# a style's: every Stadia style names `StadiaAPIKey` as its
+# `TileProvider.apiKeyPlistKey`, so `required_keys` below has a row per key,
 # naming the styles it unlocks, rather than a row per style.
 #
 # Not a CI check, and it must not become one. The `archive` job builds without
