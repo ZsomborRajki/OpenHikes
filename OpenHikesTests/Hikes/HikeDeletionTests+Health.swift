@@ -267,8 +267,9 @@ extension HikeDeletionTests {
 
 /// A writer whose `write` stays suspended until the test lets it answer, so a
 /// deletion can land at a known point inside it — a handshake, not a race.
+/// `WatchWalkHealthExportTests` holds a walk from the watch to the same race.
 @MainActor
-private final class HeldWorkoutWriter: HikeWorkoutWriting {
+final class HeldWorkoutWriter: HikeWorkoutWriting {
     /// The hikes a deletion asked Health to take back, in the order it asked.
     private(set) var deleted: [UUID] = []
     private var hasEntered = false
