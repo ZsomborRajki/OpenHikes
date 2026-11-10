@@ -33,6 +33,32 @@ struct WatchLinkTests {
         #expect(WatchLink.kind(of: message) == .trailRequest)
     }
 
+    @Test("A recorded walk names its session without its recording being read")
+    func walkSessionIsReadableWithoutItsBody() throws {
+        var message = try WatchLink.message(try #require(Fixture.walk))
+        // Spelled out, because a transfer outlives the build that queued it:
+        // the watch reads this key back after an update.
+        #expect(message["session"] as? String == Fixture.sessionID.uuidString)
+        message["body"] = Data()
+        #expect(WatchLink.recordedWalkSessionID(in: message) == Fixture.sessionID)
+    }
+
+    @Test("A walk queued by a build that wrote no session beside it is still recognized")
+    func walkWithoutItsSessionIsReadFromItsBody() throws {
+        let message = try WatchLink.message(try #require(Fixture.walk))
+        let earlier: [String: Any] = ["kind": "recordedWalk", "body": try #require(message["body"])]
+        #expect(WatchLink.recordedWalkSessionID(in: earlier) == Fixture.sessionID)
+    }
+
+    @Test("Only a recorded walk names a session")
+    func onlyAWalkNamesASession() throws {
+        let receipt = try WatchLink.message(WatchWalkReceipt(sessionID: Fixture.sessionID))
+        #expect(WatchLink.recordedWalkSessionID(in: receipt) == nil)
+        var request = try WatchLink.message(WatchTrailRequest(hikeID: Fixture.hikeID))
+        request["session"] = Fixture.sessionID.uuidString
+        #expect(WatchLink.recordedWalkSessionID(in: request) == nil)
+    }
+
     @Test("A kind this build does not know reads as no kind rather than throwing")
     func unknownKindIsNotAFailure() {
         #expect(WatchLink.kind(of: ["kind": "somethingLater", "body": Data()]) == nil)

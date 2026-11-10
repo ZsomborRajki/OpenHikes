@@ -213,13 +213,14 @@ final class PhoneLink: NSObject {
 
     /// Whether `WCSession` still holds a transfer of this walk.
     ///
-    /// Decodes each queued walk to read its ID, which is why it is asked once
-    /// per walk per process rather than on every drain.
+    /// Asked on the main actor for every walk this process has not offered,
+    /// which after a launch is every walk on the queue, so it reads each
+    /// transfer's session from beside its payload rather than decoding a
+    /// whole recording per comparison — see ``WatchLink``'s header.
     private func isCrossing(_ sessionID: UUID) -> Bool {
         guard let session else { return false }
         return session.outstandingUserInfoTransfers.contains { pending in
-            WatchLink.kind(of: pending.userInfo) == .recordedWalk
-                && (try? WatchLink.recordedWalk(from: pending.userInfo))?.sessionID == sessionID
+            WatchLink.recordedWalkSessionID(in: pending.userInfo) == sessionID
         }
     }
 
@@ -406,9 +407,7 @@ nonisolated extension PhoneLink: WCSessionDelegate {
     /// refused to save it, which it says by withholding the receipt, so this
     /// only ends the transfer and never touches the disk queue.
     func session(_ session: WCSession, didFinish userInfoTransfer: WCSessionUserInfoTransfer, error: Error?) {
-        let userInfo = userInfoTransfer.userInfo
-        guard WatchLink.kind(of: userInfo) == .recordedWalk,
-              let sessionID = (try? WatchLink.recordedWalk(from: userInfo))?.sessionID else { return }
+        guard let sessionID = WatchLink.recordedWalkSessionID(in: userInfoTransfer.userInfo) else { return }
         if let error {
             Self.logger.error("A walk's transfer failed: \(error.localizedDescription, privacy: .public)")
         }
