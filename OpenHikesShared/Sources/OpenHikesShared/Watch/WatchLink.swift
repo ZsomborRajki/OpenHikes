@@ -24,12 +24,12 @@
 //
 //  A recorded walk also carries its session ID beside the bytes. Not for the
 //  phone, which reads the ID out of the payload like any other field and never
-//  looks at the key, but for the watch, which looks for its own walks in
-//  `WCSession`'s queue of transfers by that ID: on the main actor for every
-//  walk on its disk queue after a launch, and again for each transfer that
-//  finishes. The bytes are the whole recording, so reading the ID out of them
-//  decoded queued recordings fix by fix to compare one field (#1371). The key
-//  makes it a dictionary lookup.
+//  looks at the key, but for the watch, which needs only that ID from its own
+//  transfers: on the main actor, searching `WCSession`'s queue for every walk
+//  on its disk queue after a launch, and on the delegate's queue for each
+//  transfer that finishes. The bytes are the whole recording, so reading the
+//  ID out of them decoded queued recordings fix by fix to compare one field
+//  (#1371). The key makes it a dictionary lookup.
 //
 //  It is written by the function that writes the bytes, so the two cannot
 //  disagree. A transfer outlives the build that queued it, so a walk without
