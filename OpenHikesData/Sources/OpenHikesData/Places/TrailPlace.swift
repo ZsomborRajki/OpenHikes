@@ -500,6 +500,9 @@ nonisolated public enum TrailPlaceOrder {
     /// screen that keeps its answer while the line is unchanged only pays
     /// for this one. A place missing from `anchors` sorts as one with no line
     /// to be measured against: after every measured place, in marked order.
+    /// Places at the same distance keep marked order too. Both rest on
+    /// `sorted(by:)` being stable, so the comparator leaves a tie to the sort
+    /// rather than breaking it.
     public static func ordered(
         _ places: [TrailPlace],
         anchors: [UUID: TrailPlaceAnchor]
@@ -508,34 +511,26 @@ nonisolated public enum TrailPlaceOrder {
             return places.map { TrailPlaceRow(place: $0, anchor: nil) }
         }
         return places
-            .enumerated()
             .sorted { left, right in
-                let leftAnchor = anchors[left.element.id]
-                let rightAnchor = anchors[right.element.id]
-                switch (leftAnchor, rightAnchor) {
-                case let (lhs?, rhs?):
-                    guard lhs.distanceAlongRouteMeters != rhs.distanceAlongRouteMeters else {
-                        // Two places at the same distance keep the order they
-                        // were marked in, so the list never reshuffles under a
-                        // hiker for a difference of nothing.
-                        return left.offset < right.offset
-                    }
-                    return lhs.distanceAlongRouteMeters < rhs.distanceAlongRouteMeters
+                switch (anchors[left.id], anchors[right.id]) {
+                // Neither of two places at the same distance comes first, so
+                // they stay as marked and the list never reshuffles under a
+                // hiker for a difference of nothing.
+                case let (lhs?, rhs?): return lhs.distanceAlongRouteMeters < rhs.distanceAlongRouteMeters
                 // An unmeasured place sorts after every measured one: it is
                 // not on the line, so it belongs under the places that are.
-                case (nil, _?): return false
                 case (_?, nil): return true
-                case (nil, nil): return left.offset < right.offset
+                case (nil, _): return false
                 }
             }
-            .map { indexed in
-                let anchor = anchors[indexed.element.id]
+            .map { place in
+                let anchor = anchors[place.id]
                 // An anchor that cannot describe the route is dropped rather
                 // than shown: the sort above still used it, because *nearest
                 // crossing* is the best order there is for a place beside the
                 // line, but a figure nobody should read is worse than none.
                 return TrailPlaceRow(
-                    place: indexed.element,
+                    place: place,
                     anchor: anchor?.describesTheRoute == true ? anchor : nil,
                     offRouteMeters: anchor?.offRouteMeters
                 )

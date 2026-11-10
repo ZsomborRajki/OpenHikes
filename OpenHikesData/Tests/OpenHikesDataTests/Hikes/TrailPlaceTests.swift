@@ -138,6 +138,53 @@ struct TrailPlaceTests {
         )
     }
 
+    /// The sort compares the distance alone and leaves a tie to
+    /// `sorted(by:)` being stable, so this is what holds a tie in place. The
+    /// viewpoint is too far off to be described by its crossing, and is still
+    /// put where that crossing is rather than last.
+    @Test("places at the same distance keep the order they were marked in")
+    func placesAtTheSameDistanceKeepTheirOrder() {
+        let spring = Self.place(Line.south, name: "Spring")
+        let gate = Self.place(Line.south, name: "Gate")
+        let bench = Self.place(Line.south, name: "Bench")
+        let viewpoint = Self.place(Line.south, name: "Viewpoint")
+        let hut = Self.place(Line.south, name: "Hut")
+        let cairn = Self.place(Line.south, name: "Cairn")
+        let onTheLine = TrailPlaceAnchor(distanceAlongRouteMeters: 600, offRouteMeters: 0)
+        let anchors = [
+            spring.id: onTheLine,
+            gate.id: TrailPlaceAnchor(distanceAlongRouteMeters: 100, offRouteMeters: 0),
+            bench.id: onTheLine,
+            viewpoint.id: TrailPlaceAnchor(distanceAlongRouteMeters: 300, offRouteMeters: 800),
+            hut.id: onTheLine,
+            cairn.id: onTheLine,
+        ]
+
+        let ordered = TrailPlaceOrder.ordered([spring, gate, bench, viewpoint, hut, cairn], anchors: anchors)
+
+        #expect(ordered.map(\.place.name) == ["Gate", "Viewpoint", "Spring", "Bench", "Hut", "Cairn"])
+        #expect(ordered.map { $0.anchor != nil } == [true, false, true, true, true, true])
+        #expect(ordered[1].offRouteMeters == anchors[viewpoint.id]?.offRouteMeters)
+    }
+
+    /// Several places not yet measured all sort as one, after the measured
+    /// ones, so only `sorted(by:)` being stable keeps them in marked order.
+    @Test("places not yet measured keep the order they were marked in")
+    func unmeasuredPlacesKeepTheirOrder() {
+        let route = Self.route(from: Line.south, to: Line.north)
+        let far = Self.place(Line.north - 0.002, name: "Far")
+        let near = Self.place(Line.south + 0.002, name: "Near")
+        let measured = TrailPlaceOrder.anchors(of: [far, near], along: route)
+        let first = Self.place(Line.north, name: "First")
+        let second = Self.place(Line.south, name: "Second")
+        let third = Self.place(Line.south + 0.01, name: "Third")
+
+        let ordered = TrailPlaceOrder.ordered([first, far, second, near, third], anchors: measured)
+
+        #expect(ordered.map(\.place.name) == ["Near", "Far", "First", "Second", "Third"])
+        #expect(ordered.suffix(3).allSatisfy { $0.anchor == nil && $0.offRouteMeters == nil })
+    }
+
     /// Nearest to the line wins, not first along it. A trail that doubles back
     /// passes a spot twice, and the crossing the hiker means is the one it
     /// actually touches.
