@@ -15,6 +15,7 @@
 
 import Charts
 import OpenHikesData
+import OpenHikesShared
 import os
 import SwiftData
 import SwiftUI
@@ -261,7 +262,7 @@ private struct LibraryMonthChart: View {
     }
 
     var body: some View {
-        let unit = TotalsFormat.chartUnit
+        let unit = TotalsFormat.chartUnit()
         let drawn = columns
         let labels = Dictionary(drawn.map { ($0.key, $0.label) }, uniquingKeysWith: { first, _ in first })
         Chart(bars(drawn)) { bar in
@@ -303,20 +304,27 @@ private struct LibraryMonthChart: View {
 /// uses for the same figure: a distance as the detail screen writes one, a
 /// height through ``HikeFormat/elevation(_:locale:)``, and the chart's axis
 /// in the unit the reader's roads are signed in.
-private enum TotalsFormat {
-    static func distance(_ meters: Double) -> String {
+///
+/// Not private, so `LibraryTotalsUnitTests` can hold the chart to the tiles;
+/// `locale` is that suite's seam, as it is on `HikeFormat`.
+enum TotalsFormat {
+    static func distance(_ meters: Double, locale: Locale = .autoupdatingCurrent) -> String {
         Measurement(value: meters, unit: UnitLength.meters)
-            .formatted(.measurement(width: .abbreviated, usage: .road))
+            .formatted(.measurement(width: .abbreviated, usage: .road).locale(locale))
     }
 
     static func height(_ meters: Double) -> String {
         HikeFormat.elevation(Measurement(value: meters, unit: UnitLength.meters))
     }
 
-    static var chartUnit: UnitLength {
-        switch Locale.autoupdatingCurrent.measurementSystem {
-        case .us, .uk: .miles
-        default: .kilometers
-        }
+    /// Miles where ``distance(_:locale:)`` writes miles, and kilometres
+    /// everywhere else: ``WidgetFormat/prefersImperialRoadUnits(in:)`` is the
+    /// question the tiles ask by passing `usage: .road`. This asked
+    /// `measurementSystem` instead, a different question that happens to
+    /// agree in most places. Liberia is `ussystem` and Myanmar `uksystem`,
+    /// both sign their roads in kilometres, and both drew "5 km" tiles above
+    /// a chart in miles (#1368).
+    static func chartUnit(in locale: Locale = .autoupdatingCurrent) -> UnitLength {
+        WidgetFormat.prefersImperialRoadUnits(in: locale) ? .miles : .kilometers
     }
 }
