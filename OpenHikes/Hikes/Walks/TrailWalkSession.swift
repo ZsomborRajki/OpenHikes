@@ -84,6 +84,10 @@ final class TrailWalkSession {
     /// Start hands one in, so a walk adopted at launch has none until the
     /// detail's follow loop supplies it.
     @ObservationIgnored private(set) var walkedProfile: RouteProfile?
+    /// What the walked trail was drawn for, which paces its time left — see
+    /// ``WalkTimeLeft``. Read once, when the walk is adopted, because it is a
+    /// decode of the whole drawn plan; hiking for a trail not drawn.
+    @ObservationIgnored private(set) var walkedTravelMode = TrailTravelMode.hiking
     /// The looks at the walked line — see ``WalkedLineLooks``.
     @ObservationIgnored var lineLooks = WalkedLineLooks()
     @ObservationIgnored private let context: ModelContext
@@ -423,6 +427,7 @@ final class TrailWalkSession {
         // it, and reads nothing of the hike's.
         record = walk.routeRevision == nil ? walk.stamped(along: hike.route) : walk
         walkedHike = hike
+        walkedTravelMode = hike.drawnRoute?.travelMode ?? .hiking
         endedHikeIDs.remove(hike.id)
         pendingStart = nil
         lastEndedWalk = nil
@@ -620,6 +625,7 @@ final class TrailWalkSession {
         record = nil
         walkedHike = nil
         walkedProfile = nil
+        walkedTravelMode = .hiking
         lastPersistedAt = nil
         lastPersistenceAttemptAt = nil
         persistenceFailures = 0

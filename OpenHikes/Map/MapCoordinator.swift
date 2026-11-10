@@ -69,6 +69,9 @@ extension MapView {
         /// they sit on. See `MapCoordinator+WalkHighlight.swift`.
         var walkHighlightCasingOverlays: [MKPolyline] = []
         var walkHighlightOverlays: [MKPolyline] = []
+        /// The walk under way's time left, on its line — see
+        /// `MapCoordinator+WalkTimeLeft.swift`.
+        var walkTimeLeft = WalkTimeLeftMapState()
         var recordingChunkOverlays: [MKPolyline] = []
         var recordingTailOverlay: MKPolyline?
         var recordingReviewOverlay: MKPolyline?
@@ -88,7 +91,10 @@ extension MapView {
         /// lost, only not drawn. Observed through notifications rather than
         /// `scenePhase` so this stays entirely off SwiftUI's render path,
         /// which is the whole point of the coordinator.
-        private var isForeground = true
+        ///
+        /// The walk's time left moves at the rate of its matches and is held
+        /// back the same way — see `MapCoordinator+WalkTimeLeft.swift`.
+        private(set) var isForeground = true
         private var pendingRecordingTrace = false
         private weak var observedRecordingTrace: RecordingTrace?
         private weak var observedRecordingMapView: MKMapView?
@@ -707,6 +713,7 @@ private extension MapView.Coordinator {
     /// rather than by one apply per fix.
     func resumeForegroundDrawing() {
         isForeground = true
+        applyPendingWalkTimeLeft()
         guard pendingRecordingTrace,
               let trace = observedRecordingTrace,
               let mapView = observedRecordingMapView
@@ -815,6 +822,8 @@ extension MapView.Coordinator {
         // The maker's kinds and the *Community* tab's photographs in one
         // question — see ``ownedAnnotationView(for:on:)``.
         if let owned = ownedAnnotationView(for: annotation, on: mapView) { return owned }
+        // The walk's time left — see `MapCoordinator+WalkTimeLeft.swift`.
+        if let walkTime = walkTimeLeftView(for: annotation, on: mapView) { return walkTime }
         // The dot an open preview's chart stands on its line — see
         // `MapCommunityPreviewHighlight.swift`.
         if let previewDot = communityPreviewHighlightView(for: annotation, on: mapView) { return previewDot }
