@@ -258,7 +258,8 @@ private extension WatchWalkImportOutcome {
     /// The hike this arrival is about, whichever of the two ways it got there.
     var importedHikeID: UUID? {
         switch self {
-        case .imported(let id), .alreadyImported(let id): id
+        case .imported(let saved): saved.hikeID
+        case .alreadyImported(let id): id
         case .deleted, .refused: nil
         }
     }

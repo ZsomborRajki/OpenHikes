@@ -35,14 +35,18 @@ struct WatchWalkHealthExportTests {
         let request = try #require(harness.writer.written.first)
         #expect(harness.writer.written.count == 1)
         let hike = try #require(try Fixture.hike(request.hikeID, in: harness.container.mainContext))
-        #expect(outcome == .imported(hike.id))
+        #expect(outcome == .imported(ImportedWatchWalk(
+            hikeID: hike.id,
+            route: hike.route,
+            distanceMeters: hike.distanceMeters
+        )))
         #expect(request.startedAt == walk.startedAt)
         #expect(request.endedAt == walk.endedAt)
         #expect(request.pauses.isEmpty)
         // The saved hike's figure, which is measured from the track, rather
         // than the watch's own total.
         #expect(request.distanceMeters == hike.distanceMeters)
-        #expect(request.route.count == walk.fixes.count)
+        #expect(request.route == hike.route)
         #expect(request.elevationGainMeters == 120)
         #expect(request.elevationLossMeters == 80)
     }
@@ -91,10 +95,11 @@ struct WatchWalkHealthExportTests {
 
         let outcome = await harness.arrive(Fixture.walk())
 
-        guard case .imported(let hikeID) = outcome else {
+        guard case .imported(let saved) = outcome else {
             Issue.record("Expected the walk to be imported, got \(outcome)")
             return
         }
+        let hikeID = saved.hikeID
         let state = HikeLocalState.existing(for: hikeID, in: harness.container.mainContext)
         #expect(state?.wroteToHealth == true)
     }
@@ -132,10 +137,11 @@ struct WatchWalkHealthExportTests {
         let first = await harness.arrive(walk)
         let second = await harness.arrive(walk)
 
-        guard case .imported(let hikeID) = first else {
+        guard case .imported(let saved) = first else {
             Issue.record("Expected the first arrival to be imported, got \(first)")
             return
         }
+        let hikeID = saved.hikeID
         #expect(second == .alreadyImported(hikeID))
         #expect(harness.writer.written.count == 1)
     }
@@ -147,10 +153,11 @@ struct WatchWalkHealthExportTests {
         let harness = try Harness(savesToHealth: .on)
         let walk = Fixture.walk()
         let first = await harness.arrive(walk)
-        guard case .imported(let hikeID) = first else {
+        guard case .imported(let saved) = first else {
             Issue.record("Expected the first arrival to be imported, got \(first)")
             return
         }
+        let hikeID = saved.hikeID
         let hike = try #require(try Fixture.hike(hikeID, in: harness.container.mainContext))
         try HikeDeletion.delete([hike])
 
@@ -169,10 +176,11 @@ struct WatchWalkHealthExportTests {
 
         let outcome = await harness.arrive(Fixture.walk())
 
-        guard case .imported(let hikeID) = outcome else {
+        guard case .imported(let saved) = outcome else {
             Issue.record("Expected the walk to be imported, got \(outcome)")
             return
         }
+        let hikeID = saved.hikeID
         #expect(harness.writer.written.count == 1)
         #expect(try Fixture.hike(hikeID, in: harness.container.mainContext) != nil)
         let state = HikeLocalState.existing(for: hikeID, in: harness.container.mainContext)
@@ -197,20 +205,26 @@ struct WatchWalkHealthExportTests {
         let writer = StubWorkoutWriter()
         let export: WatchWalkHealthExport
 
-        init(savesToHealth: Switch) throws {
-            container = try Fixture.modelContainer()
+        /// - Parameter container: in memory unless a suite needs the line
+        ///   on disk, as the external storage it is in the app.
+        init(savesToHealth: Switch, container: ModelContainer? = nil) throws {
+            self.container = try container ?? Fixture.modelContainer()
+            export = WatchWalkHealthExport(
+                writer: writer,
+                container: self.container,
+                defaults: Self.defaults(savesToHealth: savesToHealth),
+                weatherState: { .idle }
+            )
+        }
+
+        static func defaults(savesToHealth: Switch) -> UserDefaults {
             let defaults = UserDefaults(suiteName: "watch-health-export-\(UUID().uuidString)") ?? .standard
             switch savesToHealth {
             case .neverSet: break
             case .off: defaults.set(false, forKey: SettingsKey.savesHikesToHealth)
             case .on: defaults.set(true, forKey: SettingsKey.savesHikesToHealth)
             }
-            export = WatchWalkHealthExport(
-                writer: writer,
-                container: container,
-                defaults: defaults,
-                weatherState: { .idle }
-            )
+            return defaults
         }
 
         func arrive(

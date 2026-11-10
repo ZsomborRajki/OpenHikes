@@ -30,6 +30,17 @@
 //  as ``RouteBoundary`` — so Health's duration is the moving time the watch
 //  counted without the workout ending early. See ``HikeWorkoutPauses``.
 //
+//  ## Handed on, not read back
+//
+//  The line and the distance are the ones the import saved, handed on in
+//  ``ImportedWatchWalk``, the way a phone recording hands on its
+//  `PreparedRecording`. This used to fetch the hike into the main context
+//  and read its line there (#1372). The line is external storage, so that
+//  decoded all of it on the main actor to learn what the import had held a
+//  moment before. Whether the hike is still there to describe is
+//  ``HikeWorkoutExport``'s question, asked on both sides of the write, so a
+//  hike deleted since the import is neither written nor marked.
+//
 
 import Foundation
 import OpenHikesData
@@ -49,29 +60,24 @@ struct WatchWalkHealthExport {
     /// Writes the walk to Health if this arrival saved it and the hiker asked
     /// for that; otherwise does nothing.
     func export(_ walk: WatchRecordedWalk, after outcome: WatchWalkImportOutcome) async {
-        guard case .imported(let hikeID) = outcome,
-              HikeWorkoutExport.isEnabled(in: defaults),
-              let request = request(for: walk, savedAs: hikeID) else { return }
-        await HikeWorkoutExport.write(request, with: writer, filingInto: container)
+        guard case .imported(let saved) = outcome,
+              HikeWorkoutExport.isEnabled(in: defaults) else { return }
+        await HikeWorkoutExport.write(request(for: walk, savedAs: saved), with: writer, filingInto: container)
     }
 
-    /// The workout `walk` becomes, or `nil` once its hike is gone — deleted in
-    /// the moment between the import and this, which leaves nothing to write.
-    private func request(for walk: WatchRecordedWalk, savedAs hikeID: UUID) -> HikeWorkoutRequest? {
-        var descriptor = FetchDescriptor<Hike>(predicate: #Predicate { $0.id == hikeID })
-        descriptor.fetchLimit = 1
-        guard let hike = try? container.mainContext.fetch(descriptor).first else { return nil }
+    /// The workout `walk` becomes, from what its import saved.
+    private func request(for walk: WatchRecordedWalk, savedAs saved: ImportedWatchWalk) -> HikeWorkoutRequest {
         let endedAt = HikeWorkoutPauses.end(
             stoppedAt: walk.endedAt,
             startedAt: walk.startedAt,
-            route: hike.route
+            route: saved.route
         )
         return HikeWorkoutRequest(
-            hikeID: hikeID,
+            hikeID: saved.hikeID,
             startedAt: walk.startedAt,
             endedAt: endedAt,
-            pauses: HikeWorkoutPauses.pauses(in: hike.route, from: walk.startedAt, to: endedAt),
-            distanceMeters: hike.distanceMeters,
+            pauses: HikeWorkoutPauses.pauses(in: saved.route, from: walk.startedAt, to: endedAt),
+            distanceMeters: saved.distanceMeters,
             elevationGainMeters: walk.elevationGainMeters,
             elevationLossMeters: walk.elevationLossMeters,
             weather: HikeWorkoutWeather(
@@ -79,7 +85,7 @@ struct WatchWalkHealthExport {
                 walkFrom: walk.startedAt,
                 to: endedAt
             ),
-            route: hike.route
+            route: saved.route
         )
     }
 }

@@ -32,10 +32,11 @@ struct WatchWalkDeletionTests {
         in container: ModelContainer
     ) async throws -> UUID {
         let first = await WatchWalkImport.store(walk, in: container)
-        guard case .imported(let hikeID) = first else {
+        guard case .imported(let saved) = first else {
             Issue.record("Expected the first arrival to be imported, got \(first)")
             throw Unexpected()
         }
+        let hikeID = saved.hikeID
         let context = container.mainContext
         let hike = try #require(try Fixture.hike(hikeID, in: context))
         try HikeDeletion.delete([hike])
@@ -100,10 +101,11 @@ struct WatchWalkDeletionTests {
         let container = try Fixture.modelContainer()
         let walk = Fixture.walk()
         let first = await WatchWalkImport.store(walk, in: container)
-        guard case .imported(let hikeID) = first else {
+        guard case .imported(let saved) = first else {
             Issue.record("Expected the first arrival to be imported, got \(first)")
             return
         }
+        let hikeID = saved.hikeID
         let hike = try #require(try Fixture.hike(hikeID, in: container.mainContext))
 
         #expect(throws: Fixture.RefusedSave.self) {

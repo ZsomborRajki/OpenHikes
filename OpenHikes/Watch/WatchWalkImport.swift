@@ -78,8 +78,8 @@ enum WatchWalkImportOutcome: Equatable, Sendable {
     /// An earlier arrival became a hike that the hiker has since deleted.
     /// Nothing is saved — see ``DeletedWatchWalk``.
     case deleted
-    /// Saved now.
-    case imported(UUID)
+    /// Saved now, with what it was saved as — see ``ImportedWatchWalk``.
+    case imported(ImportedWatchWalk)
     case refused(WatchWalkImportFailure)
 
     /// Whether the watch should be told it can let this walk go.
@@ -94,6 +94,21 @@ enum WatchWalkImportOutcome: Equatable, Sendable {
         case .refused: false
         }
     }
+}
+
+/// A walk this arrival saved: the hike it became, and the line and distance
+/// that hike was saved with.
+///
+/// Handed on so that ``WatchWalkHealthExport`` describes the walk without
+/// reading it back. The line is external storage, and a read of it on the
+/// main actor decodes all of it — see *Persistence and sync* in `AGENTS.md`.
+nonisolated struct ImportedWatchWalk: Equatable, Sendable {
+    let hikeID: UUID
+    /// ``Hike/route`` as saved.
+    let route: [RouteCoordinate]
+    /// ``Hike/distanceMeters`` as saved: measured along ``route``, for the
+    /// reason in this file's header.
+    let distanceMeters: Double
 }
 
 nonisolated enum WatchWalkImport {
@@ -187,7 +202,7 @@ nonisolated enum WatchWalkImport {
             \(Int(walk.distanceMeters), privacy: .public) m reported
             """
         )
-        return .imported(hike.id)
+        return .imported(ImportedWatchWalk(hikeID: hike.id, route: route, distanceMeters: measured))
     }
 
     /// What an earlier arrival of this recording left: the hike it became,
