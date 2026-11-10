@@ -18,6 +18,12 @@ struct PhotoTrailAnchorTests {
     private static let liveMatchMeters: Double = 120
     private static let scrubbedMeters: Double = 340
 
+    /// A match at ``liveMatchMeters`` on the ridge, standing where the route
+    /// does there, as a projection onto an unbroken route does.
+    private static func liveMatch(on profile: RouteProfile) throws -> PhotoTrailAnchor.LiveMatch {
+        (liveMatchMeters, try #require(profile.coordinate(atDistance: liveMatchMeters)))
+    }
+
     @Test("an untouched tracker at the start is not a position")
     func placeholderZeroIsNotAnAnchor() {
         // `HikeDetailView` parks the tracker at 0 when the profile is built,
@@ -61,26 +67,68 @@ struct PhotoTrailAnchorTests {
     }
 
     @Test("no profile means no coordinate")
-    func missingProfileYieldsNoCoordinate() {
+    func missingProfileYieldsNoCoordinate() throws {
         #expect(
             PhotoTrailAnchor.coordinate(
                 profile: nil,
-                live: Self.liveMatchMeters,
+                live: try Self.liveMatch(on: RouteProfile(route: Fixture.ridgeRoute)),
                 scrubbed: 0
             ) == nil
         )
     }
 
+    /// No fix matches onto a route with no geometry, so what is left to ask
+    /// about is a scrub.
     @Test("a route with no geometry yields no coordinate")
     func emptyRouteYieldsNoCoordinate() {
         let profile = RouteProfile(route: [])
         #expect(
             PhotoTrailAnchor.coordinate(
                 profile: profile,
-                live: 0,
-                scrubbed: 0
+                live: nil,
+                scrubbed: Self.scrubbedMeters
             ) == nil
         )
+    }
+
+    /// The ordinary live case, matched the way the hike's screen matches a
+    /// fix: on a route with no pause, the point the projection fell on is the
+    /// one its distance reads back as, so nothing moves for it.
+    @Test("a live match is pinned where it fell")
+    func liveMatchIsPinnedWhereItFell() throws {
+        let profile = RouteProfile(route: Fixture.ridgeRoute)
+        let onTheRidge = try #require(profile.coordinate(atDistance: Self.scrubbedMeters))
+        let beside = CLLocationCoordinate2D(latitude: onTheRidge.latitude, longitude: onTheRidge.longitude + 0.0001)
+        var anchor: FollowAnchor?
+        let fix = RouteFix(coordinate: beside, horizontalAccuracy: 5, course: nil, timestamp: .now)
+        let match = try #require(FollowAnchor.advance(&anchor, on: profile, to: fix, scope: .wholeRoute))
+        let live: PhotoTrailAnchor.LiveMatch = (match.distanceAlongRoute, match.coordinate)
+
+        let photo = try #require(PhotoTrailAnchor.coordinate(profile: profile, live: live, scrubbed: 0))
+        let place = try #require(PhotoTrailAnchor.placeCoordinate(profile: profile, live: live, scrubbed: 0))
+        let readBack = try #require(profile.coordinate(atDistance: match.distanceAlongRoute))
+
+        #expect(RouteGeometry.distanceMeters(from: photo, to: match.coordinate) < 0.01)
+        #expect(RouteGeometry.distanceMeters(from: place, to: match.coordinate) < 0.01)
+        #expect(RouteGeometry.distanceMeters(from: photo, to: readBack) < 0.01)
+    }
+
+    /// The live point travels only with a distance a match could have. One
+    /// that fails the distance rule leaves the scrub in charge, read back
+    /// from its own distance, rather than lending its point to it.
+    @Test("a live match with no usable distance leaves the scrub its own point")
+    func refusedLiveMatchLeavesTheScrub() throws {
+        let profile = RouteProfile(route: Fixture.ridgeRoute)
+        let stray = CLLocationCoordinate2D(latitude: 47.6, longitude: 12.9)
+        let scrubbed = try #require(profile.coordinate(atDistance: Self.scrubbedMeters))
+
+        for distance in [Double.nan, -1] {
+            let photo = try #require(
+                PhotoTrailAnchor.coordinate(profile: profile, live: (distance, stray), scrubbed: Self.scrubbedMeters)
+            )
+            #expect(photo.latitude == scrubbed.latitude)
+            #expect(photo.longitude == scrubbed.longitude)
+        }
     }
 
     @Test("a selected position resolves to a point on the route")
@@ -156,7 +204,7 @@ struct PhotoTrailAnchorTests {
     @Test("a place takes the photograph's position when there is one")
     func placeFollowsThePhotoRule() throws {
         let profile = RouteProfile(route: Fixture.ridgeRoute)
-        let live = Self.liveMatchMeters
+        let live = try Self.liveMatch(on: profile)
         let place = try #require(
             PhotoTrailAnchor.placeCoordinate(profile: profile, live: live, scrubbed: Self.scrubbedMeters)
         )
@@ -189,8 +237,9 @@ struct PhotoTrailAnchorTests {
     }
 
     @Test("no profile yet means nowhere to put a place")
-    func placeNeedsAProfile() {
-        #expect(PhotoTrailAnchor.placeCoordinate(profile: nil, live: Self.liveMatchMeters, scrubbed: 0) == nil)
+    func placeNeedsAProfile() throws {
+        let live = try Self.liveMatch(on: RouteProfile(route: Fixture.ridgeRoute))
+        #expect(PhotoTrailAnchor.placeCoordinate(profile: nil, live: live, scrubbed: 0) == nil)
         #expect(PhotoTrailAnchor.placeCoordinate(profile: RouteProfile(route: []), live: nil, scrubbed: 0) == nil)
     }
 }

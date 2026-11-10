@@ -19,7 +19,8 @@ import OpenHikesData
 /// them in their bodies — the graph's moving marks (`ElevationChartMarks`),
 /// the position it speaks (`ElevationChartSpokenPosition`), and
 /// `TrailProgressView` — and nothing above them, `ElevationChartView`
-/// included.
+/// included. The photo pill reads the live match too, but only at the tap —
+/// see ``liveMatch``.
 @Observable
 final class TrackerState {
     /// Persistent tracker position along the route (metres from start). Starts
@@ -28,8 +29,37 @@ final class TrackerState {
     var trackerDistance: Double = 0
     /// The user's live GPS fix projected onto the route (metres from start), or
     /// `nil` when auto-follow is off, there's no fix, or the fix is too far
-    /// from the trail to match.
+    /// from the trail to match. Moved with ``liveMatch``, through
+    /// ``showLiveMatch(at:on:)`` and ``clearLiveMatch()``.
     var liveTrackerDistance: Double?
+    /// The same match with the point its projection fell on, which is where a
+    /// photo or a place added now is pinned — see ``PhotoTrailAnchor``.
+    ///
+    /// Kept beside the distance rather than read back from it. A pause adds no
+    /// distance (see ``RouteBoundary``), so on a piece a recording resumed on
+    /// without moving, the match's distance is the fix's before the pause as
+    /// well, and reading it back pinned the photo there, a drive away (#1366).
+    /// Ignored by Observation, because nothing draws it: it is read at the
+    /// tap, and a fix that moves it must wake nobody.
+    @ObservationIgnored private(set) var liveMatch: PhotoTrailAnchor.LiveMatch?
+
+    /// Moves the live position to a match: its distance for the graph, its
+    /// point for whatever is pinned at the tap.
+    func showLiveMatch(at distance: Double, on coordinate: CLLocationCoordinate2D) {
+        liveMatch = (distance, coordinate)
+        // Compared first, so that a fix matched where the last one was moves
+        // nothing. Observation would drop that write by itself, because a
+        // `Double?` is `Equatable` — `RenderIsolationTests+Observation.swift`
+        // pins it — so the guard costs nothing, and keeps the graph quiet
+        // should that ever change.
+        if liveTrackerDistance != distance { liveTrackerDistance = distance }
+    }
+
+    /// Takes the live position away, its point with it.
+    func clearLiveMatch() {
+        liveMatch = nil
+        if liveTrackerDistance != nil { liveTrackerDistance = nil }
+    }
 }
 
 /// Matching history changes per fix and is never drawn. Holding it by

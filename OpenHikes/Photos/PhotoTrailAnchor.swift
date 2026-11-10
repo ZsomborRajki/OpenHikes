@@ -19,12 +19,24 @@
 //  counts at any distance including zero, a scrub counts once it has actually
 //  moved, and a bare placeholder counts as nothing at all.
 //
+//  The two positions then become a point in different ways. A scrub is a
+//  distance and nothing more, so its point is read back from the profile. A
+//  live match is a point already, the one its projection fell on, and is
+//  never read back: a pause adds no distance (see ``RouteBoundary``), so on a
+//  piece a recording resumed on without moving, the distance names the fix
+//  before the pause too, or the start of the next piece — a drive away from
+//  the hiker (#1366).
+//
 
 import CoreLocation
 import Foundation
 import OpenHikesData
 
 nonisolated enum PhotoTrailAnchor {
+    /// A live match as ``TrackerState/liveMatch`` holds it: how far along the
+    /// route the fix projected, and the point that projection fell on.
+    typealias LiveMatch = (distanceAlongRoute: Double, coordinate: CLLocationCoordinate2D)
+
     /// How far along the route a photo taken now belongs, or `nil` when the
     /// elevation graph has no position worth pinning to.
     ///
@@ -37,7 +49,7 @@ nonisolated enum PhotoTrailAnchor {
     static func distanceAlongRoute(live: Double?, scrubbed: Double) -> Double? {
         // A match is evidence of a place, so it is taken at face value even at
         // the trailhead. Only the untouched placeholder is refused.
-        if let live, live.isFinite, live >= 0 { return live }
+        if let live, isMatch(live) { return live }
         guard scrubbed.isFinite, scrubbed > 0 else { return nil }
         return scrubbed
     }
@@ -49,17 +61,18 @@ nonisolated enum PhotoTrailAnchor {
     /// has been built yet, no position has been selected on the graph, and a
     /// position that the profile cannot turn into a coordinate — a route of
     /// one point, or none.
+    ///
+    /// - Parameter live: ``TrackerState/liveMatch``, whose point is the one
+    ///   pinned whenever its distance is the one chosen.
     static func coordinate(
         profile: RouteProfile?,
-        live: Double?,
+        live: LiveMatch?,
         scrubbed: Double
     ) -> CLLocationCoordinate2D? {
         guard let profile,
-              let distance = distanceAlongRoute(live: live, scrubbed: scrubbed),
-              let coordinate = profile.coordinate(atDistance: distance),
-              CLLocationCoordinate2DIsValid(coordinate)
+              let distance = distanceAlongRoute(live: live?.distanceAlongRoute, scrubbed: scrubbed)
         else { return nil }
-        return coordinate
+        return point(atDistance: distance, on: profile, live: live)
     }
 
     /// Where a place added now would stand: the photograph's rule, and then
@@ -73,15 +86,38 @@ nonisolated enum PhotoTrailAnchor {
     /// taps again.
     static func placeCoordinate(
         profile: RouteProfile?,
-        live: Double?,
+        live: LiveMatch?,
         scrubbed: Double
     ) -> CLLocationCoordinate2D? {
         guard let profile else { return nil }
-        let distance = distanceAlongRoute(live: live, scrubbed: scrubbed) ?? (scrubbed.isFinite ? max(scrubbed, 0) : 0)
-        guard let coordinate = profile.coordinate(atDistance: distance),
-              CLLocationCoordinate2DIsValid(coordinate)
-        else { return nil }
-        return coordinate
+        let distance = distanceAlongRoute(live: live?.distanceAlongRoute, scrubbed: scrubbed)
+            ?? (scrubbed.isFinite ? max(scrubbed, 0) : 0)
+        return point(atDistance: distance, on: profile, live: live)
+    }
+
+    /// Whether a live distance is one a match could have: any finite distance
+    /// from the start on, the trailhead included.
+    private static func isMatch(_ distance: Double) -> Bool {
+        distance.isFinite && distance >= 0
+    }
+
+    /// The point a position ``distanceAlongRoute(live:scrubbed:)`` chose
+    /// stands for: the live match's own when it chose the match, and
+    /// otherwise `distance` read back from the profile, as a scrub is — see
+    /// the header for why the two differ.
+    private static func point(
+        atDistance distance: Double,
+        on profile: RouteProfile,
+        live: LiveMatch?
+    ) -> CLLocationCoordinate2D? {
+        let point: CLLocationCoordinate2D?
+        if let live, isMatch(live.distanceAlongRoute) {
+            point = live.coordinate
+        } else {
+            point = profile.coordinate(atDistance: distance)
+        }
+        guard let point, CLLocationCoordinate2DIsValid(point) else { return nil }
+        return point
     }
 
     /// The coordinate for a photo taken while recording, where there is no

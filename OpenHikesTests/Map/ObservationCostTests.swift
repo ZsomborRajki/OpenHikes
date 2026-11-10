@@ -58,4 +58,29 @@ struct ObservationCostTests {
         #expect(regionCounter.count == 1)
         #expect(fitCounter.count == 1, "showing a region must not also re-fit the route")
     }
+
+    /// Every live match carries a point for the photo pill, and nothing draws
+    /// it. A coordinate is not `Equatable`, so were the point observed, every
+    /// fix would notify whoever read it, even standing still; it is read only
+    /// at the tap, so it notifies nobody, and a new point at the old distance
+    /// leaves the graph alone too.
+    @Test("a live match's point wakes nobody")
+    func liveMatchPointIsUnobserved() async {
+        let tracker = TrackerState()
+        tracker.showLiveMatch(at: 100, on: CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86))
+        let pointCounter = ObservationCounter { _ = tracker.liveMatch }
+        let graphCounter = ObservationCounter { _ = tracker.liveTrackerDistance }
+        await pointCounter.settle()
+
+        tracker.showLiveMatch(at: 100, on: CLLocationCoordinate2D(latitude: 48, longitude: 12))
+        await pointCounter.settle()
+        #expect(pointCounter.count == 0, "the point is read at the tap, never observed")
+        #expect(graphCounter.count == 0, "a new point at the same distance moves nothing on the graph")
+        #expect(tracker.liveMatch?.coordinate.latitude == 48)
+
+        tracker.clearLiveMatch()
+        await pointCounter.settle()
+        #expect(pointCounter.count == 0)
+        #expect(graphCounter.count == 1, "clearing the match must still reach the graph")
+    }
 }

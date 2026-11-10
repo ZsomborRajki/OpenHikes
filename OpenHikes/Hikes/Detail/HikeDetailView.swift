@@ -253,7 +253,7 @@ struct HikeDetailView: View {
         .onChange(of: hike.autoFollowEnabled) { _, enabled in
             walkSession.autoFollowDidChange(hikeID: hike.id, enabled: enabled)
             if !enabled {
-                tracker.liveTrackerDistance = nil
+                tracker.clearLiveMatch()
                 // A walk keeps its phase and its feeds, just as it does when
                 // this screen closes. Only a plain follow loses its panel.
                 if !walkSession.isWalking(hike.id) {
@@ -798,7 +798,7 @@ private extension HikeDetailView {
         stats = StatHalves(prepared.stats)
         // Place the tracker at the start of the track, on both graph and map.
         tracker.trackerDistance = 0
-        tracker.liveTrackerDistance = nil
+        tracker.clearLiveMatch()
         follow.anchor = nil
         follow.search = OffRouteSearchPolicy()
         highlight.move(to: built.coordinate(atDistance: 0))
@@ -853,11 +853,9 @@ private extension HikeDetailView {
         along prepared: PreparedLine,
         offRoute: (distanceAlongRoute: Double, offRouteMeters: Double, coordinate: CLLocationCoordinate2D)? = nil
     ) {
-        // Guarded so a run of off-route fixes (nil already) doesn't write
-        // `tracker` for nothing.
-        if tracker.liveTrackerDistance != nil {
-            tracker.liveTrackerDistance = nil
-        }
+        // A run of off-route fixes clears a match that is already gone, which
+        // writes nothing the graph reads — see ``TrackerState/clearLiveMatch()``.
+        tracker.clearLiveMatch()
         // An active walk still reports losing the route with its chart off.
         // A paused walk is left alone: the widget says Paused, and that stands.
         if hike.autoFollowEnabled || walkSession.isWalking(hike.id),
@@ -926,7 +924,7 @@ private extension HikeDetailView {
             at: fix.timestamp
         )
         if hike.autoFollowEnabled {
-            updateLiveTracker(distance: match.distanceAlongRoute)
+            updateLiveTracker(distance: match.distanceAlongRoute, coordinate: match.coordinate)
         }
         // A paused walk still moves the dot above, and publishes nothing. Nor
         // does the fix that just completed a walk: with the record gone the
@@ -944,14 +942,12 @@ private extension HikeDetailView {
 
     /// Updates only the detail's live display. Scrubbing parks the manual
     /// tracker without suspending the walk's widget or Lock Screen feed.
-    private func updateLiveTracker(distance: Double) {
-        let moved = tracker.liveTrackerDistance != distance
-        // Guarded like `trackerDistance` below — reassigning `@Observable`
-        // storage to an equal value still triggers dependent views, so an
-        // unconditional write here would invalidate the graph's moving marks
-        // and the progress row (and, previously, `HikeDetailView` itself) on
-        // every fix that matched to the same place too.
-        if moved { tracker.liveTrackerDistance = distance }
+    ///
+    /// - Parameter coordinate: where the match's projection fell, which a
+    ///   photo or a place added now is pinned to rather than to a point read
+    ///   back from `distance` — see ``TrackerState/liveMatch``.
+    private func updateLiveTracker(distance: Double, coordinate: CLLocationCoordinate2D) {
+        tracker.showLiveMatch(at: distance, on: coordinate)
         // Don't fight an in-progress manual scrub; the live dot still moves,
         // but the persistent tracker stays under the user's finger.
         guard FollowInteractionPolicy.appliesMatchToPersistentTracker(
@@ -961,8 +957,8 @@ private extension HikeDetailView {
         }
         // Skip the tracker write when the projected position hasn't actually
         // moved (e.g. paused, or GPS noise below the route-matching
-        // resolution) — avoids a redundant `TrackerState` update on a fix that
-        // projects to the same distance along the route.
+        // resolution) — the guard ``TrackerState/showLiveMatch(at:on:)``
+        // keeps, for the reason it gives.
         if tracker.trackerDistance != distance {
             tracker.trackerDistance = distance
         }
