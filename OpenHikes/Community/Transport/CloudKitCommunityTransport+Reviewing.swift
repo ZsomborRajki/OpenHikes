@@ -47,18 +47,47 @@ nonisolated extension CloudKitCommunityTransport {
         )
     }
 
-    /// How many notices one look at the queue reads.
+    /// How many entries one look at the queue shows.
     ///
     /// A ceiling rather than a page: the queue is meant to be emptied, and a
     /// reviewer facing more than this has a backlog that a second screenful
-    /// would not help with. No cursor is followed, so the oldest fifty are
-    /// always the ones shown — which is the right fifty, since the sort is
-    /// oldest-first and the 24-hour commitment in `docs/privacy/` is about the
-    /// front of the queue rather than the back.
+    /// would not help with. The oldest fifty are always the ones shown —
+    /// which is the right fifty, since the sort is oldest-first and the
+    /// 24-hour commitment in `docs/privacy/` is about the front of the queue
+    /// rather than the back.
+    ///
+    /// Fifty entries a reviewer can act on, not fifty notices. See
+    /// ``queuePages``.
     static var queueLimit: Int { 50 }
+
+    /// How many pages of notices one look at the queue may read.
+    ///
+    /// More than one for the reason ``CommunityPageBudget`` exists: notices
+    /// are left out after the server has counted them. One whose submission
+    /// is already published is the case that matters — the delete after a
+    /// publication is allowed to fail, see ``publish(_:)`` — and a single page
+    /// could be nothing else. Reading one page and dropping the cursor then
+    /// left the work behind it unreachable: every look fetched the same
+    /// fifty leftovers and drew an empty queue. So a page spent on them buys
+    /// another, asking only for the slots still empty, which keeps the
+    /// ceiling and the oldest-first order.
+    ///
+    /// Four, the browse path's budget, rather than unbounded: a page of
+    /// leftovers takes a run of failed deletes, which is rare, and a queue
+    /// with none in its first page pays exactly the one read it always did.
+    static var queuePages: Int { 4 }
 
     @concurrent
     func reviewQueue() async throws -> CommunityReviewBatch {
+        try await Self.reviewQueue(in: CloudKitReviewDatabase(containerIdentifier: containerIdentifier))
+    }
+
+    /// ``reviewQueue()`` against `database`: the public one in the app, a
+    /// script in a suite. See ``CommunityReviewDatabase``.
+    @concurrent
+    static func reviewQueue<Database: CommunityReviewDatabase>(
+        in database: Database
+    ) async throws -> CommunityReviewBatch {
         let query = CKQuery(
             recordType: CommunitySchema.noticeType,
             predicate: NSPredicate(value: true)
@@ -70,13 +99,62 @@ nonisolated extension CloudKitCommunityTransport {
         // than two lists that each claim to be oldest-first.
         query.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: true)]
 
+        var batch = CommunityReviewBatch()
+        var cursor: Database.Cursor?
+        for page in 1...Self.queuePages {
+            let read: (entries: CommunityReviewBatch, next: Database.Cursor?)
+            do {
+                read = try await queuePage(
+                    of: query,
+                    after: cursor,
+                    slots: Self.queueLimit - batch.count,
+                    in: database
+                )
+            } catch where page > 1 {
+                // The first page answers whether this account may read the
+                // queue at all, and its failure is thrown — see
+                // ``queuePage(of:after:slots:in:)``. A later one fails after
+                // that is settled, and what the pages before it found is real
+                // work, so it is kept and the next look reads further.
+                Self.logger.error(
+                    """
+                    Stopped reading the review queue after \(page - 1) pages: \
+                    \(error.localizedDescription, privacy: .public)
+                    """
+                )
+                break
+            }
+            batch.hikes += read.entries.hikes
+            batch.photographs += read.entries.photographs
+            guard let next = read.next, batch.count < Self.queueLimit else { break }
+            cursor = next
+        }
+        return batch
+    }
+
+    /// One page of notices, as the entries a reviewer can act on, and where
+    /// the next page starts.
+    ///
+    /// - Parameter slots: How many entries the queue still has room for, and
+    ///   so how many notices this page asks for. A notice makes one entry at
+    ///   most, so a page this size cannot overfill the queue, and one read
+    ///   after an older page cannot put a newer entry ahead of an older one.
+    private static func queuePage<Database: CommunityReviewDatabase>(
+        of query: CKQuery,
+        after cursor: Database.Cursor?,
+        slots: Int,
+        in database: Database
+    ) async throws -> (entries: CommunityReviewBatch, next: Database.Cursor?) {
         let notices: [CKRecord]
+        let next: Database.Cursor?
         do {
-            let (matches, _) = try await database.records(
-                matching: query,
-                resultsLimit: Self.queueLimit
-            )
+            let (matches, following) = if let cursor {
+                try await database.records(continuingMatchFrom: cursor, resultsLimit: slots)
+            } else {
+                try await database.records(matching: query, resultsLimit: slots)
+            }
             notices = matches.compactMap { try? $0.1.get() }
+            next = following
         } catch {
             // A refusal is reported rather than swallowed, and that is a
             // deliberate change of mind worth the comment. Turning it into an
@@ -87,7 +165,7 @@ nonisolated extension CloudKitCommunityTransport {
             // ``CommunityReviewQueue`` is where the silence lives instead.
             throw Self.failure(from: error, while: "reading the review queue")
         }
-        guard !notices.isEmpty else { return CommunityReviewBatch() }
+        guard !notices.isEmpty else { return (CommunityReviewBatch(), next) }
 
         // Split by which reference the notice carries, before anything is
         // fetched, because the two kinds are read with different `desiredKeys`
@@ -99,9 +177,9 @@ nonisolated extension CloudKitCommunityTransport {
             in: notices,
             field: CommunitySchema.Notice.photoSubmission
         )
-        async let hikes = pendingHikes(from: notices, ids: hikeIDs)
-        async let photographs = pendingPhotos(from: notices, ids: photoIDs)
-        return CommunityReviewBatch(hikes: try await hikes, photographs: try await photographs)
+        async let hikes = pendingHikes(from: notices, ids: hikeIDs, in: database)
+        async let photographs = pendingPhotos(from: notices, ids: photoIDs, in: database)
+        return (CommunityReviewBatch(hikes: try await hikes, photographs: try await photographs), next)
     }
 
     /// The record IDs the notices point at through one of their two reference
@@ -115,9 +193,10 @@ nonisolated extension CloudKitCommunityTransport {
     }
 
     /// The hike half of one look at the queue.
-    private func pendingHikes(
+    private static func pendingHikes(
         from notices: [CKRecord],
-        ids: [CKRecord.ID]
+        ids: [CKRecord.ID],
+        in database: some CommunityReviewDatabase
     ) async throws -> [CommunityPendingSubmission] {
         guard !ids.isEmpty else { return [] }
         let submissions: [CKRecord.ID: Result<CKRecord, any Error>]
@@ -144,7 +223,12 @@ nonisolated extension CloudKitCommunityTransport {
             throw Self.failure(from: error, while: "reading queued submissions")
         }
 
-        let alreadyPublished = await publishedSubmissionIDs(among: ids)
+        let alreadyPublished = await published(
+            ids,
+            as: CommunitySchema.listingType,
+            through: CommunitySchema.Listing.submission,
+            in: database
+        )
         return notices.compactMap { notice in
             Self.pending(from: notice, in: submissions, skipping: alreadyPublished)
         }
@@ -152,16 +236,19 @@ nonisolated extension CloudKitCommunityTransport {
 
     /// The contribution half of one look at the queue.
     ///
-    /// No self-healing pass beside it, unlike the hikes above, and the
-    /// asymmetry is the cheap direction rather than an omission: a
-    /// contribution whose notice outlived its publication shows up once, opens
-    /// on a screen that says how many photographs are on the record, and is
-    /// resolved by the reviewer publishing or declining it. Spending a second
-    /// query per launch on everybody to save that is the trade
-    /// ``CommunityReviewBatch`` exists to refuse.
-    private func pendingPhotos(
+    /// Checked against what is already published, as the hikes above are, and
+    /// for a sharper version of their reason. A contribution whose notice
+    /// outlived its publication — see ``publishPhotos(_:)``, where the delete
+    /// is allowed to fail — has no right answer if it is offered again:
+    /// publishing it puts a second copy of the same set on the hike, and
+    /// declining it deletes the submission the published set reads its
+    /// photographs from. The check costs a reviewer one query for a page that
+    /// holds a contribution, and costs everybody else nothing, because their
+    /// read of the queue is refused before any of this runs.
+    private static func pendingPhotos(
         from notices: [CKRecord],
-        ids: [CKRecord.ID]
+        ids: [CKRecord.ID],
+        in database: some CommunityReviewDatabase
     ) async throws -> [CommunityPendingPhotos] {
         guard !ids.isEmpty else { return [] }
         let submissions: [CKRecord.ID: Result<CKRecord, any Error>]
@@ -182,8 +269,15 @@ nonisolated extension CloudKitCommunityTransport {
         } catch {
             throw Self.failure(from: error, while: "reading queued photos")
         }
+
+        let alreadyPublished = await published(
+            ids,
+            as: CommunitySchema.contributionType,
+            through: CommunitySchema.Contribution.photoSubmission,
+            in: database
+        )
         return notices.compactMap { notice in
-            Self.pendingPhotos(from: notice, in: submissions)
+            Self.pendingPhotos(from: notice, in: submissions, skipping: alreadyPublished)
         }
     }
 
@@ -198,13 +292,17 @@ nonisolated extension CloudKitCommunityTransport {
     /// coordinate is a set of pictures that will be judged on the pictures.
     private static func pendingPhotos(
         from notice: CKRecord,
-        in submissions: [CKRecord.ID: Result<CKRecord, any Error>]
+        in submissions: [CKRecord.ID: Result<CKRecord, any Error>],
+        skipping alreadyPublished: Set<CKRecord.ID>
     ) -> CommunityPendingPhotos? {
         guard let reference = notice[CommunitySchema.Notice.photoSubmission]
             as? CKRecord.Reference,
             let record = try? submissions[reference.recordID]?.get(),
             let listingID = record[CommunitySchema.PhotoSubmission.listing] as? String,
-            !listingID.isEmpty
+            !listingID.isEmpty,
+            // Published already, and the notice outlived it. See
+            // ``pendingPhotos(from:ids:in:)`` for why it must not be offered.
+            !alreadyPublished.contains(reference.recordID)
         else { return nil }
 
         let location = record[CommunitySchema.PhotoSubmission.location] as? CLLocation
@@ -298,24 +396,32 @@ nonisolated extension CloudKitCommunityTransport {
         )
     }
 
-    /// Which of `submissionIDs` already have a listing.
+    /// Which of `submissionIDs` a published record of `recordType` already
+    /// names through `field`.
     ///
     /// One query rather than one per row, which is what makes the self-healing
-    /// above affordable: ``CommunitySchema/Listing/submission`` is QUERYABLE,
-    /// so `IN` asks the whole question at once.
+    /// above affordable: both back-references —
+    /// ``CommunitySchema/Listing/submission`` for a hike and
+    /// ``CommunitySchema/Contribution/photoSubmission`` for photographs — are
+    /// QUERYABLE, so `IN` asks the whole question at once. It is always the
+    /// published type that is asked, never a submission type, whose missing
+    /// index is the security control ``CommunitySchema`` describes.
     ///
-    /// Best effort by design. A failure here means the queue shows a hike that
-    /// is already published, which a reviewer can see for themselves on the
-    /// screen that opens it — where the alternative, refusing to draw the
+    /// Best effort by design. A failure here means the queue shows something
+    /// that is already published, which a reviewer can see for themselves on
+    /// the screen that opens it — where the alternative, refusing to draw the
     /// queue at all because a tidying query failed, would be the tail wagging
     /// the dog.
-    private func publishedSubmissionIDs(
-        among submissionIDs: [CKRecord.ID]
+    private static func published(
+        _ submissionIDs: [CKRecord.ID],
+        as recordType: String,
+        through field: String,
+        in database: some CommunityReviewDatabase
     ) async -> Set<CKRecord.ID> {
         let references = submissionIDs.map { CKRecord.Reference(recordID: $0, action: .none) }
         let query = CKQuery(
-            recordType: CommunitySchema.listingType,
-            predicate: NSPredicate(format: "%K IN %@", CommunitySchema.Listing.submission, references)
+            recordType: recordType,
+            predicate: NSPredicate(format: "%K IN %@", field, references)
         )
         do {
             let (matches, _) = try await database.records(
@@ -325,15 +431,15 @@ nonisolated extension CloudKitCommunityTransport {
             return Set(
                 matches.compactMap { match in
                     (try? match.1.get())
-                        .flatMap { $0[CommunitySchema.Listing.submission] as? CKRecord.Reference }?
+                        .flatMap { $0[field] as? CKRecord.Reference }?
                         .recordID
                 }
             )
         } catch {
             Self.logger.error(
                 """
-                Could not check the review queue against published listings: \
-                \(error.localizedDescription, privacy: .public)
+                Could not check the review queue against published \(recordType, privacy: .public) \
+                records: \(error.localizedDescription, privacy: .public)
                 """
             )
             return []
@@ -374,6 +480,16 @@ nonisolated extension CloudKitCommunityTransport {
 
     @concurrent
     func publish(_ pending: CommunityPendingSubmission) async throws -> CommunityListing {
+        try await Self.publish(pending, in: CloudKitReviewDatabase(containerIdentifier: containerIdentifier))
+    }
+
+    /// ``publish(_:)`` against `database`: the public one in the app, a script
+    /// in a suite. See ``CommunityReviewDatabase``.
+    @concurrent
+    static func publish(
+        _ pending: CommunityPendingSubmission,
+        in database: some CommunityReviewDatabase
+    ) async throws -> CommunityListing {
         let record = CKRecord(recordType: CommunitySchema.listingType)
         record[CommunitySchema.Listing.submission] = CKRecord.Reference(
             recordID: CKRecord.ID(recordName: pending.submissionID),

@@ -112,6 +112,16 @@ nonisolated extension CloudKitCommunityTransport {
     func publishPhotos(
         _ pending: CommunityPendingPhotos
     ) async throws -> CommunityPhotoContribution {
+        try await Self.publishPhotos(pending, in: CloudKitReviewDatabase(containerIdentifier: containerIdentifier))
+    }
+
+    /// ``publishPhotos(_:)`` against `database`: the public one in the app, a
+    /// script in a suite. See ``CommunityReviewDatabase``.
+    @concurrent
+    static func publishPhotos(
+        _ pending: CommunityPendingPhotos,
+        in database: some CommunityReviewDatabase
+    ) async throws -> CommunityPhotoContribution {
         let record = CKRecord(recordType: CommunitySchema.contributionType)
         record[CommunitySchema.Contribution.photoSubmission] = CKRecord.Reference(
             // `.none`, unlike the notice's back-reference: a published
