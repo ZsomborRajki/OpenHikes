@@ -78,6 +78,34 @@ extension PinnedTrailSweepTests {
         }
     }
 
+    /// A launch whose store would not open runs on an empty in-memory one,
+    /// which finds every pin gone without failing. That is no answer about
+    /// the store the pins were made from, and a map deleted on it comes back
+    /// only with a render, on a launch that has the network.
+    @Test("a launch on the in-memory fallback keeps every pinned trail's snapshot and map")
+    func theFallbackStoreKeepsEveryPin() async throws {
+        let fallback = try Fixture.modelContainer()
+        let pinned = try Self.hikeElsewhere(title: "In the store that would not open")
+        let log = WriteLog()
+        try await withStore {
+            let old = try await Self.snapshot(of: pinned)
+            SharedStore.saveTrailSnapshot(old)
+
+            await SharedHikeCatalogPublisher.publishPinnedTrails(
+                Self.storeSweep(
+                    pinning: [pinned.hikeID],
+                    in: fallback,
+                    writer: Self.writer(log),
+                    into: log,
+                    storageIsDurable: false
+                )
+            )
+
+            #expect(SharedStore.loadTrailSnapshot(for: pinned.hikeID) == old)
+            #expect(log.recorded == Writes(keptBasemaps: [[pinned.hikeID]]))
+        }
+    }
+
     /// The live feed's trail is the feed's, as #1160 made its static route:
     /// its next write would put the mirror back, so a prune in between only
     /// blanks the pinned widget for the length of a fix.
@@ -131,13 +159,15 @@ extension PinnedTrailSweepTests {
         in container: ModelContainer,
         writer: BackgroundTrailTracker.SnapshotWriter,
         fetch: @escaping @Sendable (ModelContext, UUID) throws -> Hike? = SharedHikeCatalogPublisher.fetchHike,
-        into log: WriteLog
+        into log: WriteLog,
+        storageIsDurable: Bool = true
     ) -> SharedHikeCatalogPublisher.PinnedTrailSweep {
         let publication = SharedHikeCatalogPublisher.PinnedTrailPublication(
             build: { hikeID in
                 await SharedHikeCatalogPublisher.PinnedTrailPublication.liveBuild(
                     of: hikeID,
                     in: container,
+                    storageIsDurable: storageIsDurable,
                     fetch: fetch
                 )
             },

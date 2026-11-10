@@ -41,7 +41,8 @@
 //  snapshot and its map in the same prune, and the widget draws its empty
 //  state rather than a route nothing can open (#1378). Only a row that is
 //  gone: a read that failed says nothing about the row, and keeps what it
-//  has, for the reason `SelectedLine.Found` tells the two apart.
+//  has, for the reason `SelectedLine.Found` tells the two apart. Nor does a
+//  launch on the in-memory fallback, whose store has no rows to be missing.
 //
 
 import Foundation
@@ -81,15 +82,21 @@ nonisolated enum SharedHikeCatalogPublisher {
     ///   argument this type's header already makes about writing per change,
     ///   and the reason Spotlight is fed from here too (see
     ///   ``publishLibrary(from:to:)``).
+    /// - Parameter storageIsDurable: false for a launch on the in-memory
+    ///   fallback, whose store holds no hikes at all — see
+    ///   ``PinnedTrailPublication/liveBuild(of:in:storageIsDurable:fetch:)``.
     static func publish(
         from coordinator: HikeIntentCoordinator,
         container: ModelContainer,
+        storageIsDurable: Bool,
         writer: BackgroundTrailTracker.SnapshotWriter,
         watch: WatchSessionCoordinator? = nil
     ) {
         Task.detached(priority: .utility) {
             await publishLibrary(from: coordinator, to: .live(watch: watch))
-            await publishPinnedTrails(.live(container: container, writer: writer))
+            await publishPinnedTrails(
+                .live(container: container, storageIsDurable: storageIsDurable, writer: writer)
+            )
         }
     }
 
@@ -393,9 +400,11 @@ nonisolated enum SharedHikeCatalogPublisher {
         let build: @Sendable (UUID) async -> Build
         let refreshBasemap: @Sendable (UUID, [SharedTrailSnapshot.CodableCoordinate]) async -> Void
 
-        static func live(container: ModelContainer) -> Self {
+        static func live(container: ModelContainer, storageIsDurable: Bool) -> Self {
             Self(
-                build: { hikeID in await liveBuild(of: hikeID, in: container) },
+                build: { hikeID in
+                    await liveBuild(of: hikeID, in: container, storageIsDurable: storageIsDurable)
+                },
                 refreshBasemap: { hikeID, polyline in
                     await TrailBasemapRenderer.shared.refreshPinned(hikeID: hikeID, polyline: polyline)
                 }
@@ -406,9 +415,16 @@ nonisolated enum SharedHikeCatalogPublisher {
         /// snapshot built as the tracker builds the selected one. Its own
         /// function so a suite can drive the real read with a fetch of its
         /// own, beside a map lane that never reaches the renderer.
+        ///
+        /// - Parameter storageIsDurable: false for a launch on the in-memory
+        ///   fallback. That store holds no hikes, so it finds every pin gone
+        ///   *successfully*, while the store the pins were made from may open
+        ///   again next launch; its answer is no answer about the row, as the
+        ///   launch's photo and tile sweeps already treat it.
         static func liveBuild(
             of hikeID: UUID,
             in container: ModelContainer,
+            storageIsDurable: Bool,
             fetch: @Sendable (ModelContext, UUID) throws -> Hike? = SharedHikeCatalogPublisher.fetchHike
         ) async -> Build {
             switch await SharedHikeCatalogPublisher.routeInput(for: hikeID, in: container, fetch: fetch) {
@@ -417,7 +433,7 @@ nonisolated enum SharedHikeCatalogPublisher {
                 else { return .unavailable }
                 return .snapshot(snapshot)
             case .gone:
-                return .gone
+                return storageIsDurable ? .gone : .unavailable
             case .failed:
                 return .unavailable
             }
@@ -426,7 +442,7 @@ nonisolated enum SharedHikeCatalogPublisher {
 
     /// Everything the pinned-trail sweep reads and writes, so a suite can hand
     /// it an answer WidgetKit never gives the test host and see what it does
-    /// with it. ``live(container:writer:)`` is the app's.
+    /// with it. ``live(container:storageIsDurable:writer:)`` is the app's.
     ///
     /// A seam for the reason `TrailBasemapRenderer.PinnedHikes` is one, and
     /// wider: the sweep's writes land in the App Group the renderer's own
@@ -451,7 +467,11 @@ nonisolated enum SharedHikeCatalogPublisher {
         let reloadWidgets: @Sendable () async -> Void
 
         /// WidgetKit, the app's own defaults, `container` and the App Group.
-        static func live(container: ModelContainer, writer: BackgroundTrailTracker.SnapshotWriter) -> Self {
+        static func live(
+            container: ModelContainer,
+            storageIsDurable: Bool,
+            writer: BackgroundTrailTracker.SnapshotWriter
+        ) -> Self {
             Self(
                 pinnedTrails: SharedHikeCatalogPublisher.pinnedTrails,
                 selectedHikeIDs: SharedHikeCatalogPublisher.selectedHikeIDs,
@@ -459,7 +479,7 @@ nonisolated enum SharedHikeCatalogPublisher {
                     await SharedHikeCatalogPublisher.publishTrail(
                         hikeID,
                         writer: writer,
-                        publication: .live(container: container)
+                        publication: .live(container: container, storageIsDurable: storageIsDurable)
                     )
                 },
                 pruneTrailSnapshots: { SharedStore.pruneTrailSnapshots(keeping: $0) },

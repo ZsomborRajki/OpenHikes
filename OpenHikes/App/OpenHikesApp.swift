@@ -86,6 +86,7 @@ struct OpenHikesApp: App {
             SharedHikeCatalogPublisher.publish(
                 from: coordinator,
                 container: appModel.container,
+                storageIsDurable: appModel.startupIssue == nil,
                 writer: appModel.backgroundTracker.snapshotWriter,
                 watch: appModel.watchLink
             )
