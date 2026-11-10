@@ -12,6 +12,11 @@
 //  asserts the library read: the fetch records the thread it ran on, and the
 //  route decode runs after it in the same context.
 //
+//  The read also says *what* it found, because the sweep after it acts on
+//  the difference: a hike that is gone loses its pin's snapshot and map, and
+//  a read that failed keeps them (#1378). `PinnedTrailSweepTests` holds the
+//  sweep to that.
+//
 
 import Foundation
 @testable import OpenHikes
@@ -22,6 +27,9 @@ import Testing
 
 @Suite("Pinned trail read")
 final class PinnedTrailReadTests {
+    /// What a store that cannot answer throws.
+    nonisolated struct Refusal: Error {}
+
     /// Which threads the hike fetch ran on, one entry per call.
     nonisolated final class FetchLog: Sendable {
         private let threads = Mutex<[Bool]>([])
@@ -50,7 +58,7 @@ final class PinnedTrailReadTests {
         try context.save()
         let log = FetchLog()
 
-        let input = await SharedHikeCatalogPublisher.routeInput(
+        let read = await SharedHikeCatalogPublisher.routeInput(
             for: hike.id,
             in: container,
             fetch: { context, hikeID in
@@ -60,17 +68,40 @@ final class PinnedTrailReadTests {
         )
 
         #expect(log.ranOnMainThread == [false])
-        #expect(input?.hikeID == hike.id)
-        #expect(input?.title == "Thumsee Loop")
-        #expect(input?.route == Fixture.ridgeRoute)
+        let input = try #require(read.input)
+        #expect(input.hikeID == hike.id)
+        #expect(input.title == "Thumsee Loop")
+        #expect(input.route == Fixture.ridgeRoute)
     }
 
     /// A widget pinned to a hike deleted since it was configured: nothing to
     /// draw, and the prune after the sweep takes its file.
-    @Test("a pinned hike that is gone reads as nothing")
-    func aDeletedHikeReadsAsNothing() async {
-        let input = await SharedHikeCatalogPublisher.routeInput(for: UUID(), in: container)
+    @Test("a pinned hike that is gone reads as gone")
+    func aDeletedHikeReadsAsGone() async {
+        let read = await SharedHikeCatalogPublisher.routeInput(for: UUID(), in: container)
 
-        #expect(input == nil)
+        guard case .gone = read else {
+            Issue.record("a row the store does not hold must read as gone, not as \(read)")
+            return
+        }
+    }
+
+    /// A store that could not answer says nothing about the row, so the
+    /// sweep must not hear it as a deletion and take a pinned widget's trail.
+    @Test("a fetch that fails reads as a failure, not as a hike that is gone")
+    func aFailedFetchIsNotADeletion() async throws {
+        let hike = Fixture.hike(in: context, title: "Thumsee Loop")
+        try context.save()
+
+        let read = await SharedHikeCatalogPublisher.routeInput(
+            for: hike.id,
+            in: container,
+            fetch: { _, _ in throw Refusal() }
+        )
+
+        guard case .failed = read else {
+            Issue.record("a fetch that throws must read as failed, not as \(read)")
+            return
+        }
     }
 }

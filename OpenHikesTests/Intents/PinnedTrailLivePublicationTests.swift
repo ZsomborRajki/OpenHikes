@@ -59,7 +59,7 @@ struct PinnedTrailLivePublicationTests {
                 #expect(await writer.applyWalk(Self.walk(paused: true), hikeID: input.hikeID, ifCurrent: 0) != nil)
             }
             gate.open()
-            await staticPublish.value
+            #expect(await staticPublish.value == .keep)
 
             let written = try #require(live)
             let selected = try #require(SharedStore.load())
@@ -81,11 +81,13 @@ struct PinnedTrailLivePublicationTests {
             live.walk = Self.walk(paused: false)
             #expect(await writer.save(live, ifCurrent: 0))
             let maps = MapLog()
-            await SharedHikeCatalogPublisher.publishTrail(
+            let files = await SharedHikeCatalogPublisher.publishTrail(
                 other.hikeID,
                 writer: writer,
                 publication: Self.publication(other, maps: maps)
             )
+
+            #expect(files == .keep)
 
             let pinned = try #require(SharedStore.loadTrailSnapshot(for: other.hikeID))
             #expect(pinned.hikeID == other.hikeID)
@@ -115,7 +117,7 @@ struct PinnedTrailLivePublicationTests {
             await settleDelegateHop(until: "the former selection's static build is held") { gate.isHolding }
             #expect(await writer.save(selected, ifCurrent: 0))
             gate.open()
-            await staticPublish.value
+            #expect(await staticPublish.value == .keep)
 
             let pinned = try #require(SharedStore.loadTrailSnapshot(for: input.hikeID))
             #expect(pinned.liveFix == nil)
@@ -162,7 +164,7 @@ struct PinnedTrailLivePublicationTests {
             }
             mirror.open()
             #expect(await liveSave.value)
-            await staticPublish.value
+            #expect(await staticPublish.value == .keep)
 
             #expect(SharedStore.load() == live)
             #expect(SharedStore.loadTrailSnapshot(for: input.hikeID) == live)
@@ -187,7 +189,8 @@ struct PinnedTrailLivePublicationTests {
                 let snapshot = await BackgroundTrailTracker.buildSnapshotOffMain(from: input, liveFix: nil)
                 if let gate { await gate.wait() }
                 didBuild()
-                return snapshot
+                guard let snapshot else { return .unavailable }
+                return .snapshot(snapshot)
             },
             refreshBasemap: { hikeID, _ in await maps.record(hikeID) }
         )

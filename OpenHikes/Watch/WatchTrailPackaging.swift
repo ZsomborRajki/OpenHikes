@@ -63,7 +63,7 @@ nonisolated enum WatchTrailPackaging {
             for: request.hikeID,
             in: container,
             fetch: fetch
-        ),
+        ).input,
             let package = await package(from: input, readAt: readAt, requestID: request.id)
         else { return nil }
         // The watch already holds exactly this, and asked to find out whether
