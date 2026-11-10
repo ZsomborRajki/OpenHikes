@@ -136,9 +136,11 @@ nonisolated extension CloudKitCommunityTransport {
     /// the next page starts.
     ///
     /// - Parameter slots: How many entries the queue still has room for, and
-    ///   so how many notices this page asks for. A notice makes one entry at
-    ///   most, so a page this size cannot overfill the queue, and one read
-    ///   after an older page cannot put a newer entry ahead of an older one.
+    ///   so how many notices this page asks for. A notice this app writes
+    ///   makes one entry at most, so a page this size cannot overfill the
+    ///   queue, and one read after an older page cannot put a newer entry
+    ///   ahead of an older one. (One that somebody wrote naming both kinds
+    ///   makes two; nothing stops that, and it costs only a longer list.)
     private static func queuePage<Database: CommunityReviewDatabase>(
         of query: CKQuery,
         after cursor: Database.Cursor?,
@@ -408,10 +410,12 @@ nonisolated extension CloudKitCommunityTransport {
     /// index is the security control ``CommunitySchema`` describes.
     ///
     /// Best effort by design. A failure here means the queue shows something
-    /// that is already published, which a reviewer can see for themselves on
-    /// the screen that opens it — where the alternative, refusing to draw the
-    /// queue at all because a tidying query failed, would be the tail wagging
-    /// the dog.
+    /// that is already published. For a hike a reviewer can see that for
+    /// themselves on the screen that opens it; the photographs' screen does
+    /// not show it, so a set offered again this way is the hazard
+    /// ``pendingPhotos(from:ids:in:)`` describes, for that look. The
+    /// alternative, refusing to draw the queue at all because a tidying query
+    /// failed, would be the tail wagging the dog.
     private static func published(
         _ submissionIDs: [CKRecord.ID],
         as recordType: String,
