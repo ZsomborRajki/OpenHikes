@@ -82,7 +82,7 @@ extension View {
             placeAnchor: {
                 PhotoTrailAnchor.placeCoordinate(
                     profile: profile(),
-                    live: tracker.liveTrackerDistance,
+                    live: tracker.liveMatch,
                     scrubbed: tracker.trackerDistance
                 )
             },
@@ -93,7 +93,7 @@ extension View {
             anchor: { _ in
                 PhotoTrailAnchor.coordinate(
                     profile: profile(),
-                    live: tracker.liveTrackerDistance,
+                    live: tracker.liveMatch,
                     scrubbed: tracker.trackerDistance
                 )
             }

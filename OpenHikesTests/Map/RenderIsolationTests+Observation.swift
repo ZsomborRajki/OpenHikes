@@ -60,11 +60,11 @@ final class AppearancePublisher {
 extension ObservationCostTests {
     /// Observation filters a write that doesn't change an `Equatable` value.
     /// So the hot paths' guards around `Double`/`Double?`/`CGFloat` state —
-    /// `if moved { tracker.liveTrackerDistance = … }` and friends — are
+    /// `TrackerState.showLiveMatch(at:on:)`'s and friends — are
     /// belt-and-braces on this toolchain: an unguarded equal assignment costs
-    /// nothing either. Pinned because the comments around those guards claim
-    /// otherwise, and because a future guard removed on this evidence should
-    /// fail loudly here if the runtime ever changes back.
+    /// nothing either. Pinned because the comments around those guards say
+    /// so, and because a future guard removed on this evidence should fail
+    /// loudly here if the runtime ever changes back.
     @Test("an equal write to an Equatable property notifies nobody")
     func equalEquatableWriteIsFiltered() async {
         let tracker = TrackerState()
