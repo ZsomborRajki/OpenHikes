@@ -190,6 +190,13 @@
 # heading is `WikidataPlace`'s, and what is asked and read is
 # `WikidataPlaceSource` and `WikidataQuery`, each with a suite of its own.
 #
+# `CommunityReviewSections` came out of `CommunityReviewView` on 2026-11-09
+# (#1367): the review's title, places and decision sections, each a view of
+# its own so that a keystroke re-runs only what reads the title. It is body
+# code moved out of a listed screen, the case the duplication sweeps above
+# describe. What the sections read is `CommunityHikeReviewSession`'s, which
+# stays measured, with `CommunityReviewIsolationTests`.
+#
 # The UI suites still exist and still run locally:
 #
 #   Scripts/run-ui-tests.sh --all
@@ -212,6 +219,7 @@ OpenHikes/Community/CommunityPhotoViewer.swift
 OpenHikes/Community/Review/CommunityReportSheet.swift
 OpenHikes/Community/Review/CommunityReviewChrome.swift
 OpenHikes/Community/Review/CommunityReviewPhotoStrip.swift
+OpenHikes/Community/Review/CommunityReviewSections.swift
 OpenHikes/Community/Review/CommunityReviewView.swift
 OpenHikes/Community/Publishing/CommunitySendFormViews.swift
 OpenHikes/Community/Publishing/CommunitySharePhotoStrip.swift

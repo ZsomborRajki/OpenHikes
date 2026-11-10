@@ -74,10 +74,16 @@
 //  at a hike they chose, and waiting on an answer — so a failed publish says
 //  so and leaves the row where it is.
 //
+//  ## What the form's body reads
+//
+//  The phase, and what the chrome binds: what changes when the submission
+//  arrives and when a decision is made. The title, the keyboard it brings and
+//  the order of the places along the route are each read by a section of
+//  their own, because a keystroke used to re-run all of this and order the
+//  places again with it (#1367) — see `CommunityReviewSections.swift`.
+//
 
 import Foundation
-import OpenHikesData
-import OpenHikesShared
 import SwiftUI
 
 /// One submission, and the decision about it.
@@ -91,10 +97,10 @@ struct CommunityReviewView: View {
     /// places its photographs were taken on the map behind the sheet. See this
     /// file's header.
     var browser: CommunityBrowser
-    /// The title as it will be published, the phase, the removals and the
-    /// tasks, kept by the sheet rather than here: a turn of the phone builds
-    /// this screen again in the other host — see
-    /// ``CommunityHikeReviewSession``.
+    /// The title as it will be published, the phase, the removals, the
+    /// tasks and where the places sit along the route, kept by the sheet
+    /// rather than here: a turn of the phone builds this screen again in the
+    /// other host — see ``CommunityHikeReviewSession``.
     let review: CommunityHikeReviewSession
     /// Pops the screen. Run after a decision has landed, and after nothing
     /// else — a reviewer who backs out has decided nothing.
@@ -103,79 +109,14 @@ struct CommunityReviewView: View {
     /// ``CommunityReviewChrome/remainsPushed``.
     let remainsPushed: () -> Bool
 
-    /// Whether the title field has the keyboard.
-    ///
-    /// Written by the *Done* button above the keyboard and by nothing else —
-    /// see ``submissionSection`` for why that button is here rather than
-    /// being a convenience.
-    @FocusState private var isEditingTitle: Bool
-
-    /// Written out because ``isEditingTitle`` is private, which would make
-    /// the memberwise initializer private too.
-    init(
-        pending: CommunityPendingSubmission,
-        transport: any CommunityTransporting,
-        queue: CommunityReviewQueue,
-        browser: CommunityBrowser,
-        review: CommunityHikeReviewSession,
-        onFinished: @escaping () -> Void,
-        remainsPushed: @escaping () -> Bool
-    ) {
-        self.pending = pending
-        self.transport = transport
-        self.queue = queue
-        self.browser = browser
-        self.review = review
-        self.onFinished = onFinished
-        self.remainsPushed = remainsPushed
-    }
-
     /// The phase, the removals and the tasks — shared with
     /// ``CommunityPhotoReviewView``, which decides the same way about a
     /// different thing. See ``CommunityReviewDecisions``.
     private var decisions: CommunityReviewDecisions<CommunityHikeDetail> { review.decisions }
 
-    /// Whether publishing this would produce a listing anybody can see.
-    ///
-    /// ``CommunityListing/init(record:)`` drops a listing whose `authorID` is
-    /// blank, so publishing without one writes a record that is live, costs
-    /// storage, and is invisible to every client including this one — the
-    /// exact silent failure that publishing by hand in the Console made easy.
-    /// It cannot happen here, because the field is read off the submission's
-    /// creator rather than typed. The guard stays because *cannot happen* and
-    /// *is not checked* are different things, and this is the one failure
-    /// nothing downstream would ever report.
-    ///
-    /// ``CommunityReviewDecisions/canDecide`` carries the other half: nothing
-    /// knows how many photographs there are until the detail arrives — a
-    /// queue entry cannot — so a publish before then writes *no photos* onto
-    /// a listing that has some. The title is the exception, and deliberately
-    /// so: it is editable from the moment the screen opens, because the queue
-    /// entry carries it and a reviewer can perfectly well fix a name while
-    /// the pictures arrive.
-    private var canPublish: Bool {
-        decisions.canDecide && !pending.authorID.isEmpty && !publishedTitle.isEmpty
-    }
-
-    /// The title this would be published under, bounded the way every other
-    /// piece of free text reaching the public database is.
-    ///
-    /// Bounded here rather than on the field, so the reviewer types against no
-    /// resistance and the ceiling applies to what is written — the same
-    /// division ``HikeTitle`` makes, and the same ``TextBound/title`` the
-    /// queue already bounded the submitted title to.
-    ///
-    /// Empty is possible, by clearing the field, and is refused rather than
-    /// falling back to the submitted title: a reviewer who has emptied the box
-    /// is mid-edit, and quietly publishing the name they just deleted is the
-    /// app deciding something they did not.
-    private var publishedTitle: String {
-        BoundedText.boundedOrEmpty(review.titleDraft, to: .title)
-    }
-
     var body: some View {
         Form {
-            submissionSection
+            CommunityReviewSubmissionSection(pending: pending, review: review)
             switch decisions.phase {
             case .loading:
                 Section { ProgressView("Loading submission…") }
@@ -184,7 +125,7 @@ struct CommunityReviewView: View {
             case .loaded(let detail):
                 contentSections(detail)
             }
-            decisionSection
+            CommunityHikeDecisionSection(pending: pending, review: review, publish: { publish() })
         }
         .modifier(
             CommunityReviewChrome(
@@ -210,85 +151,6 @@ struct CommunityReviewView: View {
 // MARK: - What is being decided
 
 private extension CommunityReviewView {
-    /// The title and credit, which are what a listing is found and read by.
-    ///
-    /// The title is a field rather than a label, and it is the only editable
-    /// thing on this screen that is not a photograph — see this file's header.
-    var submissionSection: some View {
-        Section {
-            LabeledContent("Title") {
-                TextField("Title", text: Bindable(review).titleDraft)
-                    .multilineTextAlignment(.trailing)
-                    .disabled(decisions.isDeciding)
-                    .focused($isEditingTitle)
-                    .submitLabel(.done)
-                    // The hike's own title field used to carry the same
-                    // *Done* and does not any more — a keyboard accessory that
-                    // arrives and leaves with its field stops the app ever
-                    // reporting itself idle, at 60 seconds a gesture, which is
-                    // what issue #539 was. This one is safe for the reason
-                    // that one was not, and it was measured rather than
-                    // assumed: the field and the accessory are both always in
-                    // this hierarchy, and
-                    // `testAReviewerCanCorrectTheTitleBeforePublishing` runs
-                    // clean at 20.5s on the simulator that took 677.9s over
-                    // the rename.
-                    //
-                    // It stays because here it is the difference between
-                    // reaching the decision and not. This screen is a `Form` in a sheet that rests
-                    // at half height: the keyboard covers what is left of it,
-                    // *Publish* and *Decline* are at the foot, and a `Form`
-                    // builds its rows lazily — so a reviewer who has just
-                    // corrected a name can be left with neither the room to
-                    // scroll to the decision nor a row down there to scroll
-                    // to. `CommunityReviewUITests` failed on both halves of
-                    // that before this button existed.
-                    .toolbar {
-                        ToolbarItemGroup(placement: .keyboard) {
-                            Spacer()
-                            RoleButton(.confirm) { isEditingTitle = false }
-                                .accessibilityIdentifier("keyboard-done")
-                        }
-                    }
-                    .accessibilityIdentifier("review-title-field")
-            }
-            LabeledContent("Credit") {
-                // An empty credit is ordinary rather than wrong — the field is
-                // optional on the share form — so it says so rather than
-                // leaving a blank the reviewer has to interpret.
-                Text(pending.authorName.isEmpty ? String(localized: "None given") : pending.authorName)
-                    .foregroundStyle(pending.authorName.isEmpty ? .secondary : .primary)
-            }
-            LabeledContent("Hiked") {
-                Text(pending.hikeDate.formatted(date: .abbreviated, time: .omitted))
-            }
-            LabeledContent("Distance") {
-                // The same measurement, width and usage ``CommunityHikeRow``
-                // formats with, so the figure a reviewer approves reads
-                // identically to the one the row will show.
-                Text(
-                    Measurement(value: pending.distanceMeters, unit: UnitLength.meters)
-                        .formatted(.measurement(width: .abbreviated, usage: .road))
-                )
-            }
-        } header: {
-            Text("Submission")
-        } footer: {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Sent \(pending.noticedAt.formatted(date: .abbreviated, time: .shortened))")
-                if publishedTitle != pending.title {
-                    // What the hiker called it, kept in front of the reviewer
-                    // rather than replaced by the edit. It is the thing being
-                    // corrected, so it is the thing an edit has to be judged
-                    // against — and a reviewer who has second thoughts should
-                    // not have to leave the screen to recover it.
-                    Text("Sent as “\(pending.title)”")
-                        .accessibilityIdentifier("review-original-title")
-                }
-            }
-        }
-    }
-
     @ViewBuilder
     func contentSections(_ detail: CommunityHikeDetail) -> some View {
         Section("Description") {
@@ -300,17 +162,11 @@ private extension CommunityReviewView {
             }
         }
 
-        // Every place's name and note is text the author wrote, and it is
-        // shown to everybody who opens the hike once it is published — so it
-        // is read here, like the description above, or it is the one
-        // published field nobody checked.
+        // The author's words again, and in a section of its own because
+        // putting the places in order is a walk of the whole route — see
+        // ``CommunityReviewPlaceSection``.
         if !detail.places.isEmpty {
-            Section("Places") {
-                ForEach(TrailPlaceOrder.ordered(detail.places, along: detail.route)) { row in
-                    TrailPlaceRowView(row: row, noteLineLimit: nil)
-                }
-            }
-            .accessibilityIdentifier("review-places")
+            CommunityReviewPlaceSection(places: detail.places, route: detail.route, review: review)
         }
 
         if detail.photoFileURLs.isEmpty {
@@ -366,43 +222,6 @@ private extension CommunityReviewView {
 // MARK: - Deciding
 
 private extension CommunityReviewView {
-    var decisionSection: some View {
-        CommunityReviewDecisionSection(
-            isDeciding: decisions.isDeciding,
-            canPublish: canPublish,
-            publishIdentifier: "review-publish",
-            declineIdentifier: "review-decline",
-            publish: { publish() },
-            decline: { decisions.isConfirmingDecline = true },
-            footer: {
-                if pending.authorID.isEmpty {
-                    // Reachable only from a submission CloudKit did not stamp with
-                    // a creator, which should be impossible — the type grants
-                    // create to `_icloud` and nothing else. Saying so beats a
-                    // disabled button with no explanation.
-                    Text(
-                        """
-                        This submission has no creator recorded, so a published \
-                        listing would be invisible and nobody could block its \
-                        author. It cannot be published.
-                        """
-                    )
-                } else if !decisions.hasLoaded {
-                    // The same rule the button is disabled by, said out loud —
-                    // see ``canPublish``. Declining stays available, because a
-                    // submission that will not load is a perfectly good reason to.
-                    Text("Publishing waits for the description and photographs to load.")
-                } else if publishedTitle.isEmpty {
-                    // A reviewer mid-edit rather than a submission with a problem,
-                    // which is why it says what to do rather than what is wrong.
-                    Text("A hike needs a title. Put one back to publish this.")
-                } else {
-                    Text("Publishing makes this visible to everybody, immediately.")
-            }
-            }
-        )
-    }
-
     /// Downloads the submission into the staging directory this visit owns.
     func download(into staging: URL) async throws -> CommunityHikeDetail {
         try await transport.detail(ofPending: pending, downloadingInto: staging)
@@ -437,7 +256,7 @@ private extension CommunityReviewView {
     }
 
     func publish() {
-        guard canPublish, let detail = decisions.subject else { return }
+        guard review.canPublish(pending), let detail = decisions.subject else { return }
         decisions.decide {
             let count = try await decisions.publishedPhotoCount(of: detail) { kept, staging in
                 try await transport.keepOnlyPhotos(kept, of: pending, staging: staging)
@@ -445,7 +264,7 @@ private extension CommunityReviewView {
             var decided = pending
             // The reviewer's title, which is the listing's alone — see this
             // file's header.
-            decided.title = publishedTitle
+            decided.title = review.publishedTitle
             // What the record will serve, which is the only number a row can
             // promise: a listing claiming photographs it has not got opens a
             // shorter gallery than it advertised, and one claiming fewer than
