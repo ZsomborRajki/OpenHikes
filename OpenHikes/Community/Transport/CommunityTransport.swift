@@ -396,7 +396,10 @@ nonisolated protocol CommunityTransporting: Sendable {
     /// `desiredKeys` so a queue of twenty does not download twenty routes. A
     /// notice whose submission is missing is left out — an upload that failed
     /// after its notice was written, or a submission already deleted — since
-    /// there is nothing to review.
+    /// there is nothing to review. So is one whose submission is already
+    /// published, which a publication whose cleanup failed leaves behind, and
+    /// the read pages past what it leaves out: the ceiling is on entries a
+    /// reviewer can act on, not on notices.
     ///
     /// The two kinds arrive together and are separated on the way out; see
     /// ``CommunityReviewBatch`` for why that is one request and two arrays.
