@@ -85,8 +85,17 @@ extension BackgroundTrailTracker {
         /// overwrite the live mirror in between those writes (#1160).
         func savePinned(_ snapshot: SharedTrailSnapshot) {
             assertOffMainThread("Pinned widget snapshot writes must stay off the main thread")
-            guard SharedStore.load()?.hikeID != snapshot.hikeID else { return }
+            guard !ownsTrail(snapshot.hikeID) else { return }
             SharedStore.saveTrailSnapshot(snapshot)
+        }
+
+        /// Whether this feed owns `hikeID`'s trail: the selected file holds
+        /// it, and each write of that file mirrors it into the per-hike store.
+        /// The launch sweep leaves such a trail to the feed, both the static
+        /// route above and, for a hike that is gone, the prune (#1378).
+        func ownsTrail(_ hikeID: UUID) -> Bool {
+            assertOffMainThread("Reading the widget snapshot must stay off the main thread")
+            return SharedStore.load()?.hikeID == hikeID
         }
 
         func clear(ifCurrent revision: UInt64) -> Bool {

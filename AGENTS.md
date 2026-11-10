@@ -650,7 +650,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
   - The widget's half is append-only. It never reads the queue back, matches a
     route or computes a statistic.
 - **Basemaps are kept per trail**, so a pinned widget keeps its map whatever is
-  selected. When WidgetKit cannot say what is pinned, nothing is pruned.
+  selected. When WidgetKit cannot say what is pinned, nothing is pruned. A pin
+  whose hike the store no longer holds loses its snapshot and map at the
+  launch sweep; a read that failed is not a missing row, and keeps them.
 - **The Live Activity is split along the same seam.**
   - `OpenHikesShared/LiveActivity/` owns the payload (`HikeActivityAttributes`)
     and numeric projections and rounding. `OpenWidget/`

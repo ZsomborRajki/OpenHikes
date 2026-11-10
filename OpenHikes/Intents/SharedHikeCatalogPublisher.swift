@@ -34,6 +34,15 @@
 //  keeping three hundred routes warm. When WidgetKit cannot say what is
 //  pinned, nothing is thrown away, because no answer is not an empty one.
 //
+//  A pin is not proof that its hike exists. One deleted on another device
+//  arrives here as a row that is simply gone, with none of the cleanup a
+//  deletion on this device does, and a launch that died between the two
+//  leaves the same. So a pinned hike the store no longer holds loses its
+//  snapshot and its map in the same prune, and the widget draws its empty
+//  state rather than a route nothing can open (#1378). Only a row that is
+//  gone: a read that failed says nothing about the row, and keeps what it
+//  has, for the reason `SelectedLine.Found` tells the two apart.
+//
 
 import Foundation
 import OpenHikesData
@@ -173,26 +182,52 @@ nonisolated enum SharedHikeCatalogPublisher {
     /// and with one sweep a launch the widget drew its empty state until the
     /// next. A snapshot nothing draws costs bytes until WidgetKit answers; one
     /// deleted on the guess costs a pinned widget its trail.
+    ///
+    /// **Only a hike that is gone loses its pin's files.** The same argument
+    /// the other way round: a read that failed is no answer about the row,
+    /// so its snapshot and map stay, and only a store that holds no such hike
+    /// takes them (#1378). The widgets are then asked to redraw, because a
+    /// timeline already holding the deleted route would otherwise draw it
+    /// until its safety-net reload, hours away.
     static func publishPinnedTrails(_ sweep: PinnedTrailSweep) async {
         guard case .known(let pinned) = await sweep.pinnedTrails() else { return }
+        var gone: Set<UUID> = []
         for hikeID in pinned {
-            await sweep.publishTrail(hikeID)
+            let files = await sweep.publishTrail(hikeID)
+            if files == .discard { gone.insert(hikeID) }
         }
         // The selected trail's mirror survives too, because the unconfigured
-        // widgets are following it.
-        let kept = pinned.union(sweep.selectedHikeIDs())
+        // widgets are following it. A hike that is gone does not, selected
+        // or not: the one the live feed still holds was kept by
+        // ``publishTrail(_:writer:publication:)``, and no other is followed.
+        let kept = pinned.union(sweep.selectedHikeIDs()).subtracting(gone)
         sweep.pruneTrailSnapshots(kept)
         await sweep.pruneBasemaps(kept)
+        guard !gone.isEmpty else { return }
+        await sweep.reloadWidgets()
     }
 
     /// One hike's snapshot, built the same way the tracker builds the selected
     /// one so the two cannot describe the same trail differently.
+    ///
+    /// - Returns: whether the trail's files may go, which only a hike the
+    ///   store no longer holds earns, and only when the live feed is not
+    ///   holding it: that trail's files are the feed's, as its static route
+    ///   is below, and its next write would only put the mirror back.
     static func publishTrail(
         _ hikeID: UUID,
         writer: BackgroundTrailTracker.SnapshotWriter,
         publication: PinnedTrailPublication
-    ) async {
-        guard let snapshot = await publication.build(hikeID) else { return }
+    ) async -> PinnedTrailFiles {
+        let snapshot: SharedTrailSnapshot
+        switch await publication.build(hikeID) {
+        case .snapshot(let built):
+            snapshot = built
+        case .gone:
+            return await writer.ownsTrail(hikeID) ? .keep : .discard
+        case .unavailable:
+            return .keep
+        }
         // No live fix, and that is the shape rather than an omission.
         // `BackgroundTrailTracker` publishes a fix for the *tracked* hike only
         // — one hike is being walked — so a widget pinned to a different trail
@@ -204,6 +239,7 @@ nonisolated enum SharedHikeCatalogPublisher {
         // Framed from the same decimated polyline the widget draws, as the
         // selection's map is. A no-op when the set on disk already frames it.
         await publication.refreshBasemap(hikeID, snapshot.polyline)
+        return .keep
     }
 
     /// One hike read into values, in a context of its own off the main actor:
@@ -219,23 +255,30 @@ nonisolated enum SharedHikeCatalogPublisher {
     /// `BackgroundTrailTracker.match` already reads the tracked hike in.
     ///
     /// `@concurrent`, because a `nonisolated async` function runs on its
-    /// caller's executor. `nil` for a hike deleted since its caller learned of
-    /// it — a widget configured, a watch's list published — or one that
-    /// cannot be read. Neither has anything to draw or report then: the prune
-    /// after the sweep takes a pinned trail's file and the widget shows its
-    /// empty state, and the watch draws its waiting state.
+    /// caller's executor. ``RouteRead/gone`` for a hike deleted since its
+    /// caller learned of it — a widget configured, a watch's list published —
+    /// and ``RouteRead/failed`` for one that cannot be read. Neither has
+    /// anything to draw or report now, and the watch draws its waiting state
+    /// for both. Only the sweep tells them apart: the prune after it takes a
+    /// pinned trail's files for a hike that is gone, and the widget shows its
+    /// empty state, but leaves them for a read that failed.
     ///
     /// - Parameter fetch: the store's fetch of one hike, a seam so a suite can
-    ///   see which thread it ran on.
+    ///   see which thread it ran on, or make it fail.
     @concurrent
     nonisolated static func routeInput(
         for hikeID: UUID,
         in container: ModelContainer,
         fetch: @Sendable (ModelContext, UUID) throws -> Hike? = fetchHike
-    ) async -> HikeRouteInput? {
+    ) async -> RouteRead {
         assertOffMainThread("Reading a hike's route for a widget or a watch must stay off the main thread")
-        guard let hike = try? fetch(ModelContext(container), hikeID) else { return nil }
-        return HikeRouteInput(hike: hike)
+        do {
+            guard let hike = try fetch(ModelContext(container), hikeID) else { return .gone }
+            return .found(HikeRouteInput(hike: hike))
+        } catch {
+            Self.logger.debug("Hike route read failed: \(error.localizedDescription, privacy: .public)")
+            return .failed
+        }
     }
 
     /// The store's own answer for ``routeInput(for:in:fetch:)``: the one hike,
@@ -298,24 +341,86 @@ nonisolated enum SharedHikeCatalogPublisher {
         }
     }
 
+    /// What ``routeInput(for:in:fetch:)`` found of one hike.
+    ///
+    /// A fetch that failed is told from a row that is gone, as
+    /// `SelectedLine.Found` tells them, because only a row that is gone may
+    /// take a pinned widget's trail with it (#1378).
+    nonisolated enum RouteRead: Sendable {
+        /// The fetch failed, which says nothing about the row.
+        case failed
+        /// The hike, read into values.
+        case found(HikeRouteInput)
+        /// No row: the hike was deleted, on this device or another.
+        case gone
+
+        /// The hike's values, or `nil` either way of not having them, which
+        /// is all a watch's answer needs to know.
+        var input: HikeRouteInput? {
+            switch self {
+            case .found(let input): input
+            case .failed, .gone: nil
+            }
+        }
+    }
+
+    /// What the sweep does with one pinned trail's snapshot and map, once
+    /// ``publishTrail(_:writer:publication:)`` has tried it.
+    nonisolated enum PinnedTrailFiles: Sendable, Equatable {
+        /// The store holds no such hike, so the prune takes them.
+        case discard
+        /// They stay: published just now, the live feed's own, or not read
+        /// this time.
+        case keep
+    }
+
     /// The expensive build and map render, injectable so a suite can hold a
     /// static build open while the live writer publishes a fix or a pause.
     /// The snapshot commit stays in ``publishTrail(_:writer:publication:)``.
     nonisolated struct PinnedTrailPublication: Sendable {
-        let build: @Sendable (UUID) async -> SharedTrailSnapshot?
+        /// What a build found of one pinned trail.
+        nonisolated enum Build: Sendable {
+            /// The store holds no such hike.
+            case gone
+            /// The trail, ready to commit.
+            case snapshot(SharedTrailSnapshot)
+            /// Nothing to publish this time — a read that failed, or a route
+            /// with nothing to draw — which says nothing about the files
+            /// already on disk.
+            case unavailable
+        }
+
+        let build: @Sendable (UUID) async -> Build
         let refreshBasemap: @Sendable (UUID, [SharedTrailSnapshot.CodableCoordinate]) async -> Void
 
         static func live(container: ModelContainer) -> Self {
             Self(
-                build: { hikeID in
-                    guard let input = await SharedHikeCatalogPublisher.routeInput(for: hikeID, in: container)
-                    else { return nil }
-                    return await BackgroundTrailTracker.buildSnapshotOffMain(from: input, liveFix: nil)
-                },
+                build: { hikeID in await liveBuild(of: hikeID, in: container) },
                 refreshBasemap: { hikeID, polyline in
                     await TrailBasemapRenderer.shared.refreshPinned(hikeID: hikeID, polyline: polyline)
                 }
             )
+        }
+
+        /// The app's build: the hike read off the main actor, and its
+        /// snapshot built as the tracker builds the selected one. Its own
+        /// function so a suite can drive the real read with a fetch of its
+        /// own, beside a map lane that never reaches the renderer.
+        static func liveBuild(
+            of hikeID: UUID,
+            in container: ModelContainer,
+            fetch: @Sendable (ModelContext, UUID) throws -> Hike? = SharedHikeCatalogPublisher.fetchHike
+        ) async -> Build {
+            switch await SharedHikeCatalogPublisher.routeInput(for: hikeID, in: container, fetch: fetch) {
+            case .found(let input):
+                guard let snapshot = await BackgroundTrailTracker.buildSnapshotOffMain(from: input, liveFix: nil)
+                else { return .unavailable }
+                return .snapshot(snapshot)
+            case .gone:
+                return .gone
+            case .failed:
+                return .unavailable
+            }
         }
     }
 
@@ -334,11 +439,16 @@ nonisolated enum SharedHikeCatalogPublisher {
         let selectedHikeIDs: @Sendable () -> Set<UUID>
         /// Writes one pinned trail's map, and its static snapshot unless the
         /// live feed owns that trail: the feed's own writes keep that one.
-        let publishTrail: @Sendable (UUID) async -> Void
+        /// Answers whether the trail's files may go, which only a hike that
+        /// is gone earns.
+        let publishTrail: @Sendable (UUID) async -> PinnedTrailFiles
         /// Deletes every per-hike snapshot but these.
         let pruneTrailSnapshots: @Sendable (Set<UUID>) -> Void
         /// Deletes every trail's map but these.
         let pruneBasemaps: @Sendable (Set<UUID>) async -> Void
+        /// Redraws the widgets once a pinned trail's files have gone, unless
+        /// a live recording owns them: see `TrailWidgetReload`.
+        let reloadWidgets: @Sendable () async -> Void
 
         /// WidgetKit, the app's own defaults, `container` and the App Group.
         static func live(container: ModelContainer, writer: BackgroundTrailTracker.SnapshotWriter) -> Self {
@@ -353,7 +463,8 @@ nonisolated enum SharedHikeCatalogPublisher {
                     )
                 },
                 pruneTrailSnapshots: { SharedStore.pruneTrailSnapshots(keeping: $0) },
-                pruneBasemaps: { await TrailBasemapRenderer.shared.prune(keeping: $0) }
+                pruneBasemaps: { await TrailBasemapRenderer.shared.prune(keeping: $0) },
+                reloadWidgets: { await writer.reloadWidget() }
             )
         }
     }
