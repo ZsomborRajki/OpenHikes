@@ -22,6 +22,7 @@
 //  than for a translator (#1028).
 //
 
+import Algorithms
 import Foundation
 
 /// The credits a tile source must display, in the order they must appear.
@@ -138,10 +139,8 @@ nonisolated struct TileAttribution: Hashable, Sendable {
     func including(previews: [Self]) -> Self {
         let candidates = credits + previews.flatMap(\.credits)
         let needsDataCredit = candidates.contains(.openStreetMapData)
-        var named = Set<String>()
-        return Self(candidates.compactMap { credit in
-            guard named.insert(Self.identity(of: credit)).inserted else { return nil }
-            return needsDataCredit && credit == .openStreetMap ? .openStreetMapData : credit
+        return Self(candidates.uniqued(on: Self.identity(of:)).map { credit in
+            needsDataCredit && credit == .openStreetMap ? .openStreetMapData : credit
         })
     }
 
