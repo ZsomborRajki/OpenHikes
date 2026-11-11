@@ -48,8 +48,14 @@ extension MapView.Coordinator {
         let traits = override == .unspecified
             ? mapView.traitCollection
             : mapView.traitCollection.modifyingTraits { $0.userInterfaceStyle = override }
-        let accent = UIColor(named: "AccentColor") ?? UIColor(Color.accentColor)
-        return accent.resolvedColor(with: traits)
+        return accentAsset.resolvedColor(with: traits)
+    }
+
+    /// The accent colour from the asset, unresolved, for a view that resolves
+    /// it against the map by itself — see ``trailDraftTint(on:)`` for why the
+    /// asset and not `Color.accentColor`.
+    static var accentAsset: UIColor {
+        UIColor(named: "AccentColor") ?? UIColor(Color.accentColor)
     }
 
     /// Redraws the trail being drawn in the colour the map now calls for.

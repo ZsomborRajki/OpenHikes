@@ -40,6 +40,7 @@ struct MapAnnotationKeyCodingTests {
         ("CommunityPhotoMapAnnotation", CommunityPhotoMapAnnotation.self),
         ("CommunityPreviewHighlightAnnotation", CommunityPreviewHighlightAnnotation.self),
         ("PhotoMapAnnotation", PhotoMapAnnotation.self),
+        ("WalkTimeLeftAnnotation", WalkTimeLeftAnnotation.self),
     ]
 
     @Test("every annotation answers to title")

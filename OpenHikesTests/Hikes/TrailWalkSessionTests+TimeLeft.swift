@@ -11,6 +11,7 @@ import Foundation
 @testable import OpenHikes
 import OpenHikesData
 import OpenHikesShared
+import RealModule
 import Testing
 
 extension TrailWalkSessionTests {
@@ -69,6 +70,48 @@ extension TrailWalkSessionTests {
     func noWalkNoTimeLeft() {
         let session = session()
         #expect(session.secondsLeft() == nil)
+        #expect(session.timeLeftMark() == nil, "and nothing on the map")
+    }
+
+    /// The map's figure is the readout's, standing halfway between where the
+    /// hiker last matched and the end of the trail.
+    @Test("the map's time left is the walk's, halfway along the way ahead")
+    func theMarkIsTheWalksTimeLeft() throws {
+        let session = session()
+        let walked = hike()
+        let profile = RouteProfile(route: walked.route)
+        walk(session, hike: walked, profile: profile, from: 0, through: 3)
+
+        let mark = try #require(session.timeLeftMark())
+        #expect(mark.hikeID == walked.id)
+        #expect(mark.seconds == session.secondsLeft())
+        let midway = profile.distances[3] + session.metersLeft / 2
+        let expected = try #require(profile.coordinate(atDistance: midway))
+        #expect(mark.coordinate.latitude.isApproximatelyEqual(to: expected.latitude, absoluteTolerance: 1e-9))
+        #expect(mark.coordinate.longitude.isApproximatelyEqual(to: expected.longitude, absoluteTolerance: 1e-9))
+    }
+
+    /// A trail drawn for the bike is ridden at a cyclist's pace, not walked
+    /// at a hiker's — see ``WalkTimeLeft``.
+    @Test("a trail drawn for cycling has a cyclist's time left")
+    func aDrawnRideIsTimedForTheBike() throws {
+        let session = session()
+        let ride = hike(title: "River Ride") { hike in
+            hike.drawnRoute = DrawnRoute(
+                waypoints: [hike.route[0], hike.route[hike.route.count - 1]],
+                waypointNames: [],
+                travelMode: .cycling,
+                snapsToPaths: false,
+                editedUnderSubmissionID: nil,
+                chosenLegs: []
+            )
+        }
+        let profile = RouteProfile(route: ride.route)
+        walk(session, hike: ride, profile: profile, from: 0, through: 3)
+
+        let left = try #require(session.secondsLeft())
+        let expected = session.metersLeft / TrailTravelMode.cycling.paceMetersPerSecond
+        #expect(left.isApproximatelyEqual(to: expected, absoluteTolerance: 0.001))
     }
 
     /// Started by hand at the trailhead, before a fix has said where on the

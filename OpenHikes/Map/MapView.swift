@@ -151,6 +151,12 @@ struct MapView: MapViewRepresentable, Equatable {
     /// it to MapKit and re-renders no view — see ``LibraryLines``.
     var libraryLines: LibraryLines
 
+    /// The walk under way, whose time left stands on its line. Observed
+    /// directly by the map (not via SwiftUI) so a matched fix slides the
+    /// bubble and re-renders no view — see `MapCoordinator+WalkTimeLeft.swift`.
+    /// `nil` in a suite that is not about walks.
+    var walk: TrailWalkSession?
+
     /// How far the landscape side panel reaches in from the leading edge, or
     /// zero in portrait where there is no panel and the sheet is over the map
     /// instead.
@@ -227,6 +233,9 @@ struct MapView: MapViewRepresentable, Equatable {
         // And the hiker's own hikes, over those and under the selected one —
         // see `MapLibraryLines.swift`. The same recognizer answers for them.
         coordinator.observeLibraryLines(libraryLines, recording: recordingEntry, on: mapView)
+        // And the walk's time left, on the walked hike's line — see
+        // `MapCoordinator+WalkTimeLeft.swift`.
+        if let walk { coordinator.observeWalkTimeLeft(walk, on: mapView) }
         #if canImport(UIKit)
         coordinator.installRouteTap(on: mapView)
         // And the press that moves a point already down. A separate
@@ -578,6 +587,9 @@ struct MapView: MapViewRepresentable, Equatable {
         // `MapLibraryLines.swift`. Asked on every way out below, a route
         // taken away included.
         coordinator.applyLibraryLines(on: mapView)
+        // The walk's time left stands on the walked hike's line alone — see
+        // `MapCoordinator+WalkTimeLeft.swift` — so it follows the selection.
+        coordinator.applyWalkTimeLeft(on: mapView)
 
         if let existing = coordinator.routeOverlay {
             mapView.removeOverlay(existing)
@@ -877,6 +889,7 @@ extension MapView {
             && lhs.community === rhs.community
             && lhs.searchCompleter === rhs.searchCompleter
             && lhs.libraryLines === rhs.libraryLines
+            && lhs.walk === rhs.walk
             && lhs.sidePanelInset == rhs.sidePanelInset
             && lhs.isCoveredByPanel == rhs.isCoveredByPanel
     }

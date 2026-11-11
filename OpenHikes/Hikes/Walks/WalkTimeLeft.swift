@@ -64,6 +64,32 @@
 //  back against a climb it never made, and a stretch walked there and back
 //  counted once against twice the time (#1039).
 //
+//  ## On a bike, or in a car
+//
+//  A trail drawn in the maker keeps what it was drawn for —
+//  ``DrawnRoute/travelMode`` — and one drawn for walking the streets, for
+//  cycling or for driving is not covered at a hiker's pace on a path. For
+//  those the signposts are the mode's own pace over the distance,
+//  ``TrailTravelMode/paceMetersPerSecond``, with no climb, which is how the
+//  maker times a leg no router timed (``TrailDraft/climbFactor(_:)`` counts a
+//  climb for hiking alone), and the calibration measures the walk against
+//  the same pace. So the time left on a ride starts near the maker's figure
+//  and becomes the rider's own. Recordings, imports and trails drawn for
+//  hiking keep DIN 33466.
+//
+//  A mode's pace takes no heights, so the rule above that a flat figure is
+//  no figure holds for hiking alone: off foot, a flat figure is the maker's
+//  own, and it is shown before calibration too.
+//
+//  ## On the map
+//
+//  The same figure stands on the line, halfway along the way ahead —
+//  ``midwayAhead(position:coverage:routeMeters:)`` — the way the maker puts a
+//  route's time on the route and Apple Maps puts one on each of its routes.
+//  Halfway, so it is on the ground it times, and as far from the hiker's dot
+//  and from the end's pin as that ground allows. See
+//  `MapCoordinator+WalkTimeLeft.swift`.
+//
 
 import Foundation
 import OpenHikesData
@@ -89,11 +115,14 @@ nonisolated enum WalkTimeLeft {
     ///   - coverage: the stretches this walk has actually spanned, each the
     ///     way it was walked, and the way it is going now.
     ///   - activeSeconds: the walk's clock with its pauses taken out.
+    ///   - travelMode: what the trail was drawn for, which sets the pace the
+    ///     signposts stand for — see the file header.
     static func seconds(
         profile: RouteProfile,
         position: Double,
         coverage: TrailWalkCoverage,
-        activeSeconds: TimeInterval
+        activeSeconds: TimeInterval,
+        travelMode: TrailTravelMode = .hiking
     ) -> TimeInterval? {
         let remainingMeters = metersAhead(
             position: position,
@@ -101,17 +130,29 @@ nonisolated enum WalkTimeLeft {
             routeMeters: profile.totalDistanceMeters
         )
         guard remainingMeters.isFinite, remainingMeters > 0 else { return nil }
-        let ahead = climbAhead(profile: profile, position: position, coverage: coverage)
-        let pace = paceFactor(profile: profile, coverage: coverage, activeSeconds: activeSeconds)
-        // Neither heights nor a calibrated pace: a flat figure is the error
-        // this exists to correct.
-        guard ahead != nil || pace != nil else { return nil }
-        let signposts = WalkingTimeEstimate.seconds(
-            distanceMeters: remainingMeters,
-            ascentMeters: ahead?.gainMeters ?? 0,
-            descentMeters: ahead?.lossMeters ?? 0
+        let ahead = travelMode == .hiking
+            ? climbAhead(profile: profile, position: position, coverage: coverage)
+            : nil
+        let pace = paceFactor(
+            profile: profile,
+            coverage: coverage,
+            activeSeconds: activeSeconds,
+            travelMode: travelMode
         )
+        // On foot, neither heights nor a calibrated pace: a flat figure is
+        // the error this exists to correct. A vehicle's pace is flat anyway.
+        guard travelMode != .hiking || ahead != nil || pace != nil else { return nil }
+        let signposts = signpostSeconds(meters: remainingMeters, climb: ahead, travelMode: travelMode)
         return signposts * (pace ?? 1)
+    }
+
+    /// Halfway along the way ahead, in metres along the route: where the map
+    /// stands the time left on the line — see the file header.
+    static func midwayAhead(position: Double, coverage: TrailWalkCoverage, routeMeters: Double) -> Double {
+        let ahead = metersAhead(position: position, coverage: coverage, routeMeters: routeMeters)
+        return isGoingToStart(position: position, coverage: coverage, routeMeters: routeMeters)
+            ? position - ahead / 2
+            : position + ahead / 2
     }
 
     /// What the line climbs and drops between `position` and the end the walk
@@ -151,23 +192,37 @@ nonisolated enum WalkTimeLeft {
     /// Against each stretch the way it was walked, over the stretches' own
     /// lengths, ``TrailWalkCoverage/walkedMeters`` — see the file header. A
     /// stretch walked there and back is walked twice, as the time spent on it
-    /// was.
+    /// was. A trail drawn for a vehicle is measured against that vehicle's
+    /// pace.
     static func paceFactor(
         profile: RouteProfile,
         coverage: TrailWalkCoverage,
-        activeSeconds: TimeInterval
+        activeSeconds: TimeInterval,
+        travelMode: TrailTravelMode = .hiking
     ) -> Double? {
         let walkedMeters = coverage.walkedMeters
         guard walkedMeters >= calibrationMeters,
               activeSeconds >= calibrationSeconds else { return nil }
-        let walked = profile.climb(walking: coverage)
-        let expected = WalkingTimeEstimate.seconds(
-            distanceMeters: walkedMeters,
-            ascentMeters: walked?.gainMeters ?? 0,
-            descentMeters: walked?.lossMeters ?? 0
-        )
+        let walked = travelMode == .hiking ? profile.climb(walking: coverage) : nil
+        let expected = signpostSeconds(meters: walkedMeters, climb: walked, travelMode: travelMode)
         guard expected > 0 else { return nil }
         return min(max(activeSeconds / expected, paceFactorBounds.lowerBound), paceFactorBounds.upperBound)
+    }
+
+    /// The signposts' time over `meters` with `climb` to make: DIN 33466 on
+    /// foot, and a vehicle's own flat pace for a trail drawn for one — see
+    /// the file header.
+    private static func signpostSeconds(
+        meters: Double,
+        climb: (gainMeters: Double, lossMeters: Double)?,
+        travelMode: TrailTravelMode
+    ) -> TimeInterval {
+        guard travelMode == .hiking else { return meters / travelMode.paceMetersPerSecond }
+        return WalkingTimeEstimate.seconds(
+            distanceMeters: meters,
+            ascentMeters: climb?.gainMeters ?? 0,
+            descentMeters: climb?.lossMeters ?? 0
+        )
     }
 
     /// The best guess at whether a walk is heading for the route's stored

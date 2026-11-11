@@ -31,9 +31,11 @@
 //
 //  In the app, and nowhere else. `WalkTimeLeft` scales it to the hiker's own
 //  pace for the time left on a followed trail, which the hike's screen shows
-//  while the walk is under way and the dusk reminder reads. A route with no
-//  clock shows it on its hike's screen as an estimated time, and the trail
-//  maker counts a drawn line's climb with it. The Live Activity shows the time
+//  while the walk is under way, the map stands on the line still to walk and
+//  the dusk reminder reads; a trail drawn for a vehicle is timed at that
+//  vehicle's pace instead. A route with no clock shows it on its hike's
+//  screen as an estimated time, and the trail maker counts a drawn line's
+//  climb with it. The Live Activity shows the time
 //  left as seconds the app worked out, carried in ``SharedTrailSnapshot`` and
 //  from there in the activity's content, so the widget extension never
 //  computes it. No widget family shows a time left, and neither does the

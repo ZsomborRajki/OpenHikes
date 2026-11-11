@@ -12,7 +12,7 @@ There is no OpenHikes account and no server holding your hikes: they live on the
 - **GPX import and export**: open files from Files, AirDrop or any share sheet, one hike per track, and share any hike back as GPX, with its places as waypoints.
 - **Drawing a trail**: press and hold to drop stops, or search for them by name. Each leg follows the paths OpenStreetMap has mapped.
 - **Places** along a trail: huts, springs and waterfalls from OpenStreetMap, or places of your own, with your photographs and, where OpenStreetMap links one, the start of the place's Wikipedia article.
-- **Walking a saved trail**, with progress along it, a history of past walks and a shareable photo card.
+- **Walking a saved trail**, with progress along it, the time left shown on the line ahead, a history of past walks and a shareable photo card.
 - **Statistics**: an interactive elevation profile, overall and moving average speed, surface and Swiss Alpine Club difficulty from OpenStreetMap, and yearly and all-time totals.
 - **Maps**: OpenStreetMap, Apple's standard and satellite maps, Stadia Outdoors, Stamen Terrain and Thunderforest Outdoors, with an optional Waymarked Trails layer and every hike in your library drawn faintly on top. Tilting the map raises the terrain in 3D under the satellite map and the tile styles. Tiles you browse are saved as you go, and a route's map can be downloaded where the provider allows it.
 - **Photos** taken on a walk or picked from the library, pinned to where on the trail they were taken.

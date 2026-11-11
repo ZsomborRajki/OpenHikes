@@ -400,7 +400,9 @@ nonisolated final class WalkUITests: XCTestCase {
 
 }
 
-private extension WalkUITests {
+// Internal rather than private so `WalkUITests+TimeLeft.swift` can start a
+// walk the same way.
+extension WalkUITests {
     /// Walks the trail's first four points, 116 m end to end — past the
     /// distance an automatic start waits for, since a matched fix only
     /// proposes a walk — and waits for the walk to show.
