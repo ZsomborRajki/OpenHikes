@@ -66,7 +66,7 @@ struct MapSheetHikes: View, Equatable {
     /// behind it does nothing at all: `HikeOrderUITests` asserted exactly that
     /// before this existed, and the row came back to where it started.
     @State private var editMode: EditMode = .inactive
-    /// Bumped by a drag, and read by ``hikesList`` for nothing but that.
+    /// Bumped by a drag, and read by ``hikesList(positions:)`` for nothing but that.
     ///
     /// The hand-ordered positions are device-local — see
     /// ``HikeLocalState/listOrder`` — and SwiftData's observation does not
@@ -263,7 +263,12 @@ struct MapSheetHikes: View, Equatable {
 
 private extension MapSheetHikes {
     var hikesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        // Where the hiker has placed each hike, read once for the pass and
+        // handed to the sort bar and to the rows. It is a fetch, and the
+        // order's label, the menu's selection and the rows asked it one each.
+        // Not read while the community list is up, which draws neither.
+        let positions = community.isBrowsing ? [:] : HikeListOrder.positions(of: hikes)
+        return VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
                 listHeading
                 hikeActions
@@ -285,10 +290,10 @@ private extension MapSheetHikes {
                 // hand-made one — so the bar is just the way back out of it.
                 communityReorderBar
             } else {
-                sortBar
+                sortBar(isCustom: !positions.isEmpty)
             }
 
-            selectedList
+            selectedList(positions: positions)
         }
     }
 
@@ -321,11 +326,12 @@ private extension MapSheetHikes {
     /// hiker's own there were — reachable only by scrolling past a library
     /// that grows — and a scroll position meant something different depending
     /// on which half you were reading. Each list now starts at the top.
-    @ViewBuilder var selectedList: some View {
+    @ViewBuilder
+    func selectedList(positions: [UUID: Int]) -> some View {
         if community.isBrowsing {
             communityList
         } else {
-            hikesList
+            hikesList(positions: positions)
         }
     }
 
@@ -355,14 +361,18 @@ private extension MapSheetHikes {
     /// leads it, and it sits in the same glass as ``importButton``, stretched
     /// to a capsule to hold the name. *Totals* at the other end is the same
     /// capsule, so the two read as one row of controls.
-    @ViewBuilder var sortBar: some View {
+    ///
+    /// - Parameter isCustom: Whether a hand-made order is in force, as
+    ///   ``hikesSection`` read it for this pass.
+    @ViewBuilder
+    func sortBar(isCustom: Bool) -> some View {
         GlassStack {
-            sortBarContent
+            sortBarContent(isCustom: isCustom)
         }
         .padding(.horizontal)
     }
 
-    var sortBarContent: some View {
+    func sortBarContent(isCustom: Bool) -> some View {
         HStack(spacing: 8) {
             if editMode == .active {
                 // The way out of reorder mode, and the only one: while it is
@@ -372,7 +382,7 @@ private extension MapSheetHikes {
                     editMode = .inactive
                 }
             } else {
-                sortMenu
+                sortMenu(isCustom: isCustom)
             }
             Spacer(minLength: 0)
             if editMode != .active {
@@ -391,16 +401,13 @@ private extension MapSheetHikes {
         }
     }
 
-    var sortMenu: some View {
-        // Asked once for the label and the value both: the answer is a fetch
-        // — see ``HikeListOrder/isCustom(_:)``.
-        let isCustom = isCustomOrder
-        return Menu {
+    func sortMenu(isCustom: Bool) -> some View {
+        Menu {
             // The hand-made order is never offered here — a hiker makes it by
             // dragging, not by picking it out of a list of orders it is not
             // one of. While it is in force nothing is ticked at all, which is
-            // what keeps every entry a change: see ``sortSelection``.
-            Picker("Order", selection: sortSelection) {
+            // what keeps every entry a change: see ``sortSelection(isCustom:)``.
+            Picker("Order", selection: sortSelection(isCustom: isCustom)) {
                 ForEach(HikeListSort.menuOrder) { option in
                     Label(option.title, systemImage: option.symbol)
                         .tag(HikeListSort?.some(option))
@@ -445,9 +452,12 @@ private extension MapSheetHikes {
     /// entitled to ignore. With nothing selected, every entry in the menu is
     /// a change, and the only way out of *Your Order* is not the one door
     /// that might be nailed shut.
-    var sortSelection: Binding<HikeListSort?> {
+    ///
+    /// The getter answers from the pass's own reading, because a `Binding`
+    /// reads it as it is built; the setter asks the store again, at the tap.
+    func sortSelection(isCustom: Bool) -> Binding<HikeListSort?> {
         Binding(
-            get: { isCustomOrder ? nil : sort },
+            get: { isCustom ? nil : sort },
             set: { chosen in
                 guard let chosen else { return }
                 if HikeListOrder.isCustom(hikes) { HikeListOrder.reset(hikes) }
@@ -458,8 +468,6 @@ private extension MapSheetHikes {
     }
 
     var sort: HikeListSort { HikeListSort(rawValue: sortID) ?? .newest }
-
-    var isCustomOrder: Bool { HikeListOrder.isCustom(hikes) }
 
     var importButton: some View {
         Button {
@@ -485,7 +493,10 @@ private extension MapSheetHikes {
     /// that only ever gets longer. The two are a tab apart again, but a tab is
     /// not the chip: the picker says which list is showing and the community
     /// half still costs nothing until it is selected.
-    var hikesList: some View {
+    ///
+    /// - Parameter positions: Where the hiker has placed each hike, as
+    ///   ``hikesSection`` read it for this pass.
+    func hikesList(positions: [UUID: Int]) -> some View {
         // Read once per pass and handed to both the pin and the rows: asking
         // `status(for:)` inside the `ForEach` would ask it per row per pass,
         // and the answer is a property of the list.
@@ -495,7 +506,7 @@ private extension MapSheetHikes {
         // a drag writes something nothing here would notice; bumping it is how
         // the list is told to arrange itself again. See ``HikeListOrder``.
         let arranged = orderRevision >= 0
-            ? HikeListOrder.arrange(hikes, activeHikeID: activeID, sort: sort)
+            ? HikeListOrder.arrange(hikes, activeHikeID: activeID, sort: sort, positions: positions)
             : hikes
 
         return List {
@@ -682,7 +693,7 @@ private extension MapSheetHikes {
 
 extension MapSheetHikes {
     /// The hike being recorded or walked, pinned above the published hikes
-    /// the way ``hikesList`` pins it above the hiker's own.
+    /// the way ``hikesList(positions:)`` pins it above the hiker's own.
     ///
     /// A walk under way is the thing happening, not a place in a library, and
     /// a hiker who flips to the community half to look for the next trail is

@@ -117,6 +117,31 @@ struct HikeListOrderTests {
         #expect(HikeListOrder.arrange(hikes, activeHikeID: nil).map(\.title) == ["Newest", "Middle", "Oldest"])
     }
 
+    @Test("positions read once for a pass arrange the list as a fresh read does")
+    func positionsReadOnceArrangeTheSame() throws {
+        let context = try Fixture.modelContext()
+        let hikes = try makeHikes(in: context)
+        let middle = try #require(hikes.first { $0.title == "Middle" })
+        // The list reads the positions once and hands them to both the sort
+        // bar and the rows, so that reading has to answer what each of them
+        // used to ask the store for: under a sort, then in a hand-made order.
+        func readOnce() -> [String] {
+            let positions = HikeListOrder.positions(of: hikes)
+            #expect(positions.isEmpty == !HikeListOrder.isCustom(hikes))
+            return HikeListOrder.arrange(hikes, activeHikeID: middle.id, sort: .alphabetical, positions: positions)
+                .map(\.title)
+        }
+        func readFresh() -> [String] {
+            HikeListOrder.arrange(hikes, activeHikeID: middle.id, sort: .alphabetical).map(\.title)
+        }
+
+        #expect(readOnce() == readFresh())
+
+        HikeListOrder.move(HikeListOrder.arrange(hikes, activeHikeID: nil), from: IndexSet(integer: 2), to: 0)
+        #expect(HikeListOrder.isCustom(hikes))
+        #expect(readOnce() == readFresh())
+    }
+
     /// Three hikes a day apart, oldest last, which is the order the list draws
     /// them in before anybody touches it.
     private func makeHikes(in context: ModelContext) throws -> [Hike] {

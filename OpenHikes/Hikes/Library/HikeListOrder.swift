@@ -62,11 +62,21 @@ enum HikeListOrder {
         activeHikeID: UUID?,
         sort: HikeListSort = .newest
     ) -> [Hike] {
+        arrange(hikes, activeHikeID: activeHikeID, sort: sort, positions: positions(of: hikes))
+    }
+
+    /// The same, from positions the caller has already read — see
+    /// ``positions(of:)``.
+    static func arrange(
+        _ hikes: [Hike],
+        activeHikeID: UUID?,
+        sort: HikeListSort,
+        positions: [UUID: Int]
+    ) -> [Hike] {
         let rest: [Hike]
         let active = activeHikeID.flatMap { id in hikes.first { $0.id == id } }
         let unpinned = active == nil ? hikes : hikes.filter { $0.id != activeHikeID }
 
-        let positions = positions(of: hikes)
         if !positions.isEmpty {
             // A hike with no position is newer than the ordering itself.
             // `Int.min` puts it above everything placed, where a walk that has
@@ -88,8 +98,12 @@ enum HikeListOrder {
         return active.map { [$0] + rest } ?? rest
     }
 
-    /// Where each hike the hiker has placed sits.
-    private static func positions(of hikes: [Hike]) -> [UUID: Int] {
+    /// Where each hike the hiker has placed sits: empty while a sort is in
+    /// force, which is ``isCustom(_:)``'s answer.
+    ///
+    /// A fetch, so a list that needs the answer more than once in a pass reads
+    /// it once and hands it on — see `MapSheetHikes.hikesSection`.
+    static func positions(of hikes: [Hike]) -> [UUID: Int] {
         sidecars(of: hikes, matching: #Predicate { $0.listOrder != nil }).compactMapValues(\.listOrder)
     }
 
@@ -108,9 +122,9 @@ enum HikeListOrder {
     /// sidecar with a fetch and remembers the row it found but not that it
     /// found none. A hike with no sidecar — every hike another device synced
     /// here, until this one stores something for it — fetched again on every
-    /// read. The list asks for positions several times in each pass of a body
-    /// that every write to any hike re-runs, so a read per hike was a fetch
-    /// per hike per pass, for nothing: the answer while a sort is in force is
+    /// read. The list asks for positions in each pass of a body that every
+    /// write to any hike re-runs, so a read per hike was a fetch per hike per
+    /// pass, for nothing: the answer while a sort is in force is
     /// that no hike has one, and this fetch finds that in one query.
     ///
     /// Rows left by a hike that is not in `hikes` are left out, so the
