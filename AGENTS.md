@@ -247,8 +247,8 @@ either: the second run waits silently on the first run's build lock.
   Device Hub opens it by hand. `Scripts/duo-pose.sh open --device <udid>`
   unfolds it to the inner display (669 × 951, upright) and reads the display
   state back; one unfold from cold is the move to rely on.
-  `--orientation landscape` leaves it the way it unfolds, 951 × 669: a window
-  wider than tall, so the map screen draws its side panel.
+  `--orientation landscape` leaves it the way it unfolds, 951 × 669: wide
+  enough for a map beside the side panel, so the map screen draws one.
 - **Opening it takes hinge**
   ([artemnovichkov/hinge](https://github.com/artemnovichkov/hinge)), an
   optional tool that posts the event Device Hub's hinge slider posts. It is
@@ -270,6 +270,29 @@ either: the second run waits silently on the first run's build lock.
   skip it (`OpenHikesUITests/WindowSupport.swift`).
 - The screenshot set shoots on it with `--device-type "iPhone Duo"` and
   `--pose`; see `Screenshots/README.md`.
+
+### The iPad
+
+- **It runs the iPhone's screens, laid out by the window.** Nothing in the app
+  asks which device it is on. A full-screen iPad either way up is wide enough
+  for the map screen's side panel, and a window narrowed beside another app
+  gets the sheet a phone gets (*The map screen*).
+- **One window.** `UIApplicationSceneManifest~ipad` turns multiple scenes off,
+  because each window builds its own `OpenHikesView`, whose launch work — the
+  tile, photo and sidecar sweeps and the library-line reads — would run again
+  beside the first. iPadOS 26 still resizes that one window.
+  `InfoPlistContractTests` pins it, with the four orientations App Store
+  Connect requires of an iPad app that shares the screen.
+- **What an iPad lacks.** It pairs with no watch (`WCSession.isSupported()` is
+  false, so the watch link never starts), and a Wi-Fi model has no GPS. The
+  widget offers the iPhone's three Home Screen sizes; `.systemExtraLarge`
+  waits for a basemap its size.
+- **Take one from a pool of its own**, and pass its UDID as usual:
+  `OPENHIKES_SIM_POOL_PREFIX='OpenHikes iPad'
+  OPENHIKES_SIM_POOL_DEVICE_TYPE='iPad Pro 13-inch (M5)' Scripts/sim-pool.sh
+  acquire`. No gate runs on an iPad. There `isHittable` answers no for
+  everything in the side panel, either way up, and the shared helpers skip it
+  as they do on the Duo (`OpenHikesUITests/WindowSupport.swift`).
 
 ### UI automation
 
@@ -489,15 +512,18 @@ a change to recording, the map, the sheet or the render path; the PR template,
     links only this package pays for a dependency in full: five one-line
     swift-algorithms rewrites measured +610 KB on the widget and +1.2 MB on
     each watch product. Write the few lines by hand.
-- **Targets: iPhone, plus a watch companion, and nothing else.** The shipping
-  targets are `OpenHikes`, `OpenWidgetExtension` (the widget, the Live Activity
-  views and the Control Center toggle), `OpenHikesWatch` (watchOS 11) and
-  `OpenHikesWatchWidgets`.
+- **Targets: iPhone and iPad, plus a watch companion, and nothing else.** The
+  shipping targets are `OpenHikes`, `OpenWidgetExtension` (the widget, the Live
+  Activity views and the Control Center toggle), `OpenHikesWatch` (watchOS 11)
+  and `OpenHikesWatchWidgets`. Every iOS target builds for
+  `TARGETED_DEVICE_FAMILY = "1,2"`; see *The iPad*.
   - The app embeds the watch app, so building `OpenHikes` builds the watch
     too. Breaking the watch cannot leave CI green.
   - An embedded extension's device family stays a subset of its host's, so
     `OpenWidgetExtension` moves with the app; the archive job's
-    `ValidateEmbeddedBinary` enforces it.
+    `ValidateEmbeddedBinary` enforces it. A subset still archives with an iPad
+    left out, so `InfoPlistContractTests` holds the widget's family equal to
+    the app's.
   - In the app targets, the `canImport(UIKit)` and `#if os(iOS)` guards are kept
     for possible later platforms, and nothing builds their other branch. In
     `OpenHikesShared` they are load-bearing: the watch build compiles it, where
@@ -750,7 +776,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
   generation (macOS 15.4, visionOS 2.4), so that `swift test` refuses what the
   iOS build refuses. Below 18 the app would lose `Mutex` and the Control
   Center control. 18.4 is `DispatchQueue` as a `TaskExecutor` (`TileCache`,
-  `TrailBasemapRenderer`), and every iPhone that runs 18 can update to it.
+  `TrailBasemapRenderer`), and every iPhone and iPad that runs 18 can update
+  to it.
 - **A newer API is reached through one wrapper, with its fallback beside
   it.** A screen asks for a shape or a behavior, never for a release. The
   `if #available` lives in:
@@ -834,16 +861,19 @@ a change to recording, the map, the sheet or the render path; the PR template,
   alert lives in `MapScreenAlerts`, and `MapScreenAlertUITests` checks them,
   except the trail maker's missed-photo alert: it is attached beside them on the
   same contents, because a seventh parameter is past the lint limit.
-- **The primary surface has two shapes: a sheet when the window is taller
-  than wide, a panel when it is wider.**
+- **The primary surface has two shapes: a sheet in a narrow window, a panel
+  beside the map in a wide or a short one.**
   - At a compact height a sheet left to adapt is presented full-screen, its
     detents ignored, so `MapSidePanel` draws the same `MapSheet` beside the
     map, and `SheetPresentation.layout` settles the differences. A sheet
     with `.presentationCompactAdaptation(.none)`, as the place cards have,
     stays a sheet there and keeps every detent but `.medium` (`SheetLayout`).
-  - A wider window of regular height — an unfolded iPhone Duo, an iPad later —
-    takes the panel too, by choice; there the sheet was a card in the middle
-    of the bottom edge. `SheetLayout(windowSize:isCompactHeight:)` is the rule.
+  - A window of regular height with room for a map beside the panel — an
+    unfolded iPhone Duo in landscape, an iPad either way up — takes the panel
+    too, by choice; there the sheet was a card in the middle of the bottom
+    edge, with the map's controls floating above it. A phone and a Duo held
+    upright are too narrow. `SheetLayout(windowSize:isCompactHeight:)` is the
+    rule.
   - `verticalSizeClass` and the window's size are read only in
     `SheetLayoutReader`.
   - The sheet keeps its toolbar across its top (`horizontalSheetToolbar()`).

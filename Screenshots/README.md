@@ -5,10 +5,12 @@ reasoning behind the parts that are not obvious.
 
 ## What App Store Connect actually requires
 
-**One set, at 6.9".** Since App Store Connect's 2025 change an iPhone-only app
-uploads a single 6.9" set — 1320 × 2868 — and every smaller size is scaled from
-it. OpenHikes is `TARGETED_DEVICE_FAMILY = 1`, so there is no iPad set at all.
-The iPhone Duo has a slot of its own; see *The iPhone Duo set* below.
+**One iPhone set, at 6.9".** Since App Store Connect's 2025 change an app
+uploads a single 6.9" iPhone set — 1320 × 2868 — and every smaller iPhone size
+is scaled from it. The iPhone Duo has a slot of its own; see *The iPhone Duo
+set* below. OpenHikes builds for iPad too, and App Store Connect will not take
+an iPad build without a 13-inch iPad set, 2064 × 2752 either way up, which
+these scripts do not capture yet.
 
 **Between one and ten of them.** Not ten: only the first three appear in search
 results, and every frame past the first few is one more thing to re-shoot when

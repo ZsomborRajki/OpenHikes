@@ -2,7 +2,7 @@
 
 [![Download on the App Store](docs/images/app-store-badge.svg)](https://apps.apple.com/app/openhikes/id6787467479)
 
-OpenHikes is a local-first hiking app for iPhone and Apple Watch, built with SwiftUI, SwiftData and MapKit. Record a hike, import a GPX file or draw a trail, then walk it, read its elevation profile and keep its map for when there is no signal.
+OpenHikes is a local-first hiking app for iPhone, iPad and Apple Watch, built with SwiftUI, SwiftData and MapKit. Record a hike, import a GPX file or draw a trail, then walk it, read its elevation profile and keep its map for when there is no signal.
 
 There is no OpenHikes account and no server holding your hikes: they live on the device and sync through your own private iCloud database. The one exception is sharing a hike, which publishes it to a public database that other hikers browse. [The privacy policy](https://zsomborrajki.github.io/OpenHikes/privacy/) says exactly what that sends.
 
@@ -29,7 +29,7 @@ There is no OpenHikes account and no server holding your hikes: they live on the
 
 ## Requirements
 
-- Xcode 27 or later. The app deploys to iOS 18.4 on iPhone, and its embedded watch app to watchOS 11.0.
+- Xcode 27 or later. The app deploys to iOS 18.4 on iPhone and iPad, and its embedded watch app to watchOS 11.0.
 - An Apple development team that can sign WeatherKit, both App Groups, the iCloud container, push and Time Sensitive Notifications, and HealthKit.
 - Optionally, API keys for Stadia and Thunderforest, each with a paid plan from its vendor. OpenStreetMap and Apple's maps need no key, and a build without keys shows the paid styles locked.
 
@@ -83,7 +83,7 @@ The tests, the optional tools and what CI runs are under *Build and test* in [`A
 
 | Path | What it holds |
 |---|---|
-| `OpenHikes/` | The iPhone app, one folder per product domain (`Hikes/`, `Recording/`, `Map/`, `Tiles/`, `Community/`…), with `App/` as the composition root |
+| `OpenHikes/` | The iPhone and iPad app, one folder per product domain (`Hikes/`, `Recording/`, `Map/`, `Tiles/`, `Community/`…), with `App/` as the composition root |
 | `OpenHikesData/` | A local package: what a hike is, with the SwiftData models, the schema and the route index |
 | `OpenHikesShared/` | A local package compiled by the app, the widget and the watch |
 | `OpenWidget/` | The Home Screen widget, the Live Activity and the Control Center toggle |

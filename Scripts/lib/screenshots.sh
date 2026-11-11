@@ -4,8 +4,8 @@
 # Scripts/screenshots-dark.sh. Not executable on its own: each of those sets
 # `screenshot_appearance` and calls `screenshots_main "$@"`.
 #
-# App Store Connect wants one set at 6.9" for an iPhone-only app — it scales
-# every smaller size from it — so this pins itself to an iPhone 18 Pro Max,
+# App Store Connect wants one iPhone set at 6.9" — it scales every smaller
+# iPhone size from it — so this pins itself to an iPhone 18 Pro Max,
 # whose screenshots come out at 1320 x 2868. That is not a preference: a set
 # captured on a narrower device is a set App Store Connect will not take for
 # the 6.9" slot.
