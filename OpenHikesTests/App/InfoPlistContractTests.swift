@@ -23,6 +23,10 @@
 //  | `NSMotionUsageDescription` | barometric fusion and motion state fail |
 //  | `NSCameraUsageDescription` | in-hike capture fails |
 //  | `NSPhotoLibraryUsageDescription` / `…AddUsageDescription` | the photo features fail |
+//  | `UIDeviceFamily` → `2` | an iPad runs the iPhone app, scaled up |
+//  | the widget's `UIDeviceFamily` → `2` | the archive passes, and an iPad has no widget |
+//  | `UISupportedInterfaceOrientations~ipad` | short of every orientation, App Store Connect refuses the upload |
+//  | `UIApplicationSceneManifest~ipad` | a second iPad window runs the launch's sweeps again |
 //
 //  Two things make this more than theoretical.
 //
@@ -51,6 +55,7 @@
 import Foundation
 @testable import OpenHikes
 import Testing
+import UIKit
 
 @Suite("Info.plist contract")
 struct InfoPlistContractTests {
@@ -204,5 +209,94 @@ struct InfoPlistContractTests {
                 forInfoDictionaryKey: "ITSAppUsesNonExemptEncryption"
             ) as? Bool == false
         )
+    }
+
+    // MARK: - The devices it runs on
+
+    /// Written by the build from `TARGETED_DEVICE_FAMILY`, so this reads what
+    /// the setting produced rather than the setting. Without the `2` an iPad
+    /// still installs the app, as an iPhone app drawn at a phone's size in
+    /// the middle of the screen, and nothing anywhere says so.
+    @Test("the app is built for iPhone and iPad")
+    func appRunsOnIPhoneAndIPad() {
+        #expect(Bundle.main.object(forInfoDictionaryKey: "UIDeviceFamily") as? [Int] == [1, 2])
+    }
+
+    /// The archive's `ValidateEmbeddedBinary` holds an extension to a
+    /// *subset* of its host's devices, so a widget left on the iPhone alone
+    /// archives cleanly inside an app that runs on both — and an iPad then has
+    /// no widget to place. Equal is the contract, and nothing else checks it.
+    @Test("the widget is offered on every device the app runs on")
+    func widgetFollowsTheAppsDevices() throws {
+        let widget = try #require(
+            Bundle.main.builtInPlugInsURL
+                .map { $0.appending(path: "OpenWidgetExtension.appex") }
+                .flatMap(Bundle.init(url:)),
+            "the widget extension is missing from the built app"
+        )
+        #expect(
+            widget.object(forInfoDictionaryKey: "UIDeviceFamily") as? [Int]
+                == Bundle.main.object(forInfoDictionaryKey: "UIDeviceFamily") as? [Int]
+        )
+    }
+
+    /// The bundle's own file rather than `Bundle.main`'s dictionary: a `~ipad`
+    /// key is resolved for the device that reads it, and the suites run on an
+    /// iPhone. The file holds both devices' keys as they were written.
+    private func rawInfoDictionary() throws -> [String: Any] {
+        let data = try Data(contentsOf: Bundle.main.bundleURL.appending(path: "Info.plist"))
+        return try #require(
+            try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
+        )
+    }
+
+    /// An iPad app that can share the screen has to turn every way, upside
+    /// down included, or App Store Connect refuses the upload: the iPhone's
+    /// list leaves upside down out, and an iPad cannot. `UIRequiresFullScreen`
+    /// was the way out of that and is not one any more: iPadOS 26 deprecated
+    /// it, and every iPad window can be resized.
+    @Test("an iPad turns every way, and asks for no full screen")
+    func iPadTurnsEveryWay() throws {
+        let plist = try rawInfoDictionary()
+        let orientations = try #require(
+            plist["UISupportedInterfaceOrientations~ipad"] as? [String],
+            "UISupportedInterfaceOrientations~ipad is missing from the built bundle"
+        )
+        #expect(
+            Set(orientations) == [
+                "UIInterfaceOrientationPortrait",
+                "UIInterfaceOrientationPortraitUpsideDown",
+                "UIInterfaceOrientationLandscapeLeft",
+                "UIInterfaceOrientationLandscapeRight",
+            ]
+        )
+        #expect(plist["UIRequiresFullScreen"] == nil)
+        #expect(plist["UIRequiresFullScreen~ipad"] == nil)
+    }
+
+    /// One window on an iPad, until the map screen can be more than one. Each
+    /// window builds its own `OpenHikesView` over the one `OpenHikesModel`, and
+    /// that view's `onAppear` starts the launch's tile, photo and sidecar
+    /// sweeps and its `.task`s follow the library's lines: a second window
+    /// would run all of them again, beside the first. An iPhone shows one
+    /// window anyway, so its half of the manifest is left as it was.
+    @Test("an iPad opens one window")
+    func iPadOpensOneWindow() throws {
+        let manifest = try #require(
+            try rawInfoDictionary()["UIApplicationSceneManifest~ipad"] as? [String: Any],
+            "UIApplicationSceneManifest~ipad is missing from the built bundle"
+        )
+        #expect(manifest["UIApplicationSupportsMultipleScenes"] as? Bool == false)
+    }
+
+    /// What the system made of it. A `~ipad` key the system did not honour
+    /// would pass the test above and leave an iPad opening windows. An iPhone
+    /// answers no whatever its own manifest says — measured on an iPhone 18
+    /// Pro simulator, whose manifest says yes — so it is a run on an iPad that
+    /// makes this a test of the key.
+    @MainActor
+    @Test("the system holds the app to one window")
+    func systemHoldsTheAppToOneWindow() {
+        #expect(!UIApplication.shared.supportsMultipleScenes)
     }
 }
