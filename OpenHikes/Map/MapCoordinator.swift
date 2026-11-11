@@ -165,6 +165,24 @@ extension MapView {
         weak var refusedTrackingButton: UIButton?
         #endif
 
+        // MARK: 2D button
+        // Stored state for `MapCoordinator+FlattenButton.swift`, which owns
+        // everything that reads it. The button stands on the tracking button
+        // and takes its fade from the same call.
+
+        #if os(iOS)
+        weak var flattenButton: UIView?
+        /// Whether the button is up, or on its way up: compared on every frame
+        /// the camera moves, so a fade starts only when the answer changes.
+        var isFlattenButtonShown = false
+        /// Set by a tap and cleared where the camera it started comes to rest,
+        /// so the frames of the flattening do not bring the button back.
+        var isFlattening = false
+        /// The opacity the sheet's position alone calls for, as the camera
+        /// pill's ``photoControlsSheetAlpha`` is.
+        var flattenButtonSheetAlpha: CGFloat = 1
+        #endif
+
         weak var sheetMetrics: SheetMetrics?
         /// The map geometry the button was last positioned against, so repeated
         /// `update(_:_:)` calls during a sheet drag (where the map's own bounds
@@ -893,6 +911,11 @@ extension MapView.Coordinator {
         // Tilting the map puts terrain under the tiles, and laying it flat
         // takes it away — see `MapCoordinator+TerrainUnderTiles.swift`.
         applyTerrainUnderTiles(on: mapView)
+        #if os(iOS)
+        // And a flattening the 2D button started ends here — see
+        // `MapCoordinator+FlattenButton.swift`.
+        flattenButtonRegionDidSettle(on: mapView)
+        #endif
         // A place being added goes wherever the map came to rest under its
         // pin — see `MapPlacePlacement.swift`.
         placePlacementRegionDidSettle(on: mapView)

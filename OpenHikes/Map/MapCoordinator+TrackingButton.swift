@@ -213,6 +213,11 @@ extension MapView.Coordinator {
         if let attributionView, attributionView.alpha != alpha {
             attributionView.alpha = alpha
         }
+        #if os(iOS)
+        // The 2D button stands on the tracking button, and has a second reason
+        // to be hidden too: a map lying flat.
+        applyFlattenButtonAlpha(alpha)
+        #endif
         // The pill has a second reason to be hidden — there may be no hike to
         // photograph — so it takes this through the accessor that combines the
         // two rather than having it written at it directly. The maker's pill

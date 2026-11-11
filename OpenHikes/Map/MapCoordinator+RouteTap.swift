@@ -419,6 +419,7 @@ extension MapView.Coordinator: UIGestureRecognizerDelegate {
         if view === trackingButton || view === areaSearchControl { return true }
         #if os(iOS)
         if view === photoControls || view === attributionView { return true }
+        if view === flattenButton { return true }
         if view === trailDraftControls { return true }
         if view === trailPointSearchControl || view === placesAroundMap.searchControl { return true }
         // TipKit draws the card's words and its ✕ in SwiftUI, none of it a

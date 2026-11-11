@@ -3922,6 +3922,34 @@
         }
       }
     },
+    "2D" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2D"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2D"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2D"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2D"
+          }
+        }
+      }
+    },
     "A hike is in progress on %@. End it there to hike this trail." : {
       "localizations" : {
         "de" : {
@@ -28389,6 +28417,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mostra le condizioni e la fonte di questa previsione"
+          }
+        }
+      }
+    },
+    "Shows the map flat, from straight above." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zeigt die Karte flach, direkt von oben."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Muestra el mapa en plano, visto desde arriba."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Affiche la carte à plat, vue de dessus."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostra la mappa in piano, vista dall’alto."
           }
         }
       }
