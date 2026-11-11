@@ -14,15 +14,16 @@
 //  taken out of a pocket at a junction rotates on its own; a hiker who cannot
 //  see the map is the whole cost of that.
 //
-//  So landscape gets a panel rather than a sheet, and so does a window wider
-//  than tall at a regular height — an unfolded iPhone Duo — where the sheet
-//  would be a card in the middle of the bottom edge; ``SheetLayout`` has the
-//  rule. It is a plain overlay, not a presentation: nothing about it is modal,
-//  the map keeps taking touches beside it, and `MapSheet` is handed to it
-//  unchanged — the same view, the same navigation stack, the same screens. What
-//  the two shapes disagree about is carried by ``SheetLayout`` and by
-//  ``MapSidePanelLayout``, whose numbers the map is told as well so its own
-//  controls stay clear of the panel rather than behind it.
+//  So landscape gets a panel rather than a sheet, and so does any window at a
+//  regular height with room for a map beside it — an unfolded iPhone Duo, an
+//  iPad either way up — where the sheet would be a card in the middle of the
+//  bottom edge; ``SheetLayout`` has the rule. It is a plain overlay, not a
+//  presentation: nothing about it is modal, the map keeps taking touches
+//  beside it, and `MapSheet` is handed to it unchanged — the same view, the
+//  same navigation stack, the same screens. What the two shapes disagree
+//  about is carried by ``SheetLayout`` and by ``MapSidePanelLayout``, whose
+//  numbers the map is told as well so its own controls stay clear of the
+//  panel rather than behind it.
 //
 //  One screen is the exception: a photo viewer. In portrait it raises the sheet
 //  to `.large`; here the equivalent is the whole window, so the panel widens to

@@ -184,7 +184,7 @@ nonisolated final class ScreenshotUITests: XCTestCase {
     /// lower deliberately — the list is most of what this screenshot is of,
     /// and ``revealCommunityPins(in:atLeast:)`` pans the pins into the band
     /// above the sheet rather than making the band bigger. Beside the side
-    /// panel, in a window wider than tall, the same pan aims at the map the
+    /// panel, in a window with room for one, the same pan aims at the map the
     /// panel leaves open.
     ///
     /// The `showcase` database rather than the seeded one the suites use:
@@ -511,7 +511,8 @@ extension ScreenshotUITests {
     /// in the tree, and not in the picture. The same measured pan the hero
     /// frame uses on the photo pins, aimed at the middle of the open map
     /// rather than at the middle of the screen, because half the screen is
-    /// sheet — or, in a window wider than tall, a third of it is panel.
+    /// sheet — or, in a window with room for the side panel, part of it is
+    /// panel.
     @MainActor
     private func centerCommunityPins(in app: XCUIApplication, titled titles: [String] = []) {
         let map = mapElement(in: app)
@@ -557,8 +558,8 @@ extension ScreenshotUITests {
     }
 
     /// The part of the window where the map shows with nothing over it:
-    /// beside the side panel, which is what a window wider than tall draws the
-    /// sheet's contents as, and above the sheet otherwise.
+    /// beside the side panel, which is what a window with room for one draws
+    /// the sheet's contents as, and above the sheet otherwise.
     ///
     /// A sheet that cannot be found must not silently mean "the map is a
     /// zero-height strip at the top", which is what reading `.frame` off a
@@ -659,8 +660,8 @@ extension ScreenshotUITests {
     /// to where the frame wants it, the map zoomed one step beside it, and
     /// the doubled offset that leaves is panned back out.
     ///
-    /// Beside the map there is nothing to expand into. A window wider than
-    /// tall draws the sheet's contents as a panel at its full height, which
+    /// Beside the map there is nothing to expand into. A window with room for
+    /// the side panel draws the sheet's contents as one at its full height, which
     /// *Zoom* already fits the route beside — the panel is the one thing the
     /// focus area measures there — so the route has the whole open map, and
     /// one more step would push its ends off it.
