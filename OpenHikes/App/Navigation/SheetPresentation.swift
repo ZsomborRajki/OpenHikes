@@ -50,7 +50,7 @@ import SwiftUI
 /// app that keeps this sheet up permanently and re-presents it when it is
 /// dismissed, that is not a taller sheet but the whole UI, with the map behind
 /// it and no way back. Landscape gets a side panel instead, and so does any
-/// window wider than tall with room for the map beside it — see
+/// window with room for the map beside it, an iPad's either way up — see
 /// ``init(windowSize:isCompactHeight:)``, which is the whole rule.
 ///
 /// A sheet that opts out with `.presentationCompactAdaptation(.none)` stays a
@@ -60,9 +60,11 @@ import SwiftUI
 /// `OrientationUITests.testALandscapePlaceCardScrollsToItsLastRow` holds one
 /// of them to it.
 enum SheetLayout {
-    /// Taller than wide: an Apple Maps-style detented sheet over the map.
+    /// A phone held upright, or any window too narrow for a map beside a
+    /// panel: an Apple Maps-style detented sheet over the map.
     case bottomSheet
-    /// Wider than tall: a panel down the leading edge, with the map beside it.
+    /// A compact height, or a window with room to spare: a panel down the
+    /// leading edge, with the map beside it.
     case sidePanel
 }
 

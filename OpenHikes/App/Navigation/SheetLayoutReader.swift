@@ -26,8 +26,9 @@
 //
 //  What leaves here is the coarse flag rather than the inputs:
 //  ``SheetPresentation/layout`` changes when the window changes shape — a
-//  rotation, or an iPhone Duo opening or closing — and at no other time, so
-//  the root view re-renders for those and for nothing else.
+//  rotation, an iPhone Duo opening or closing, or an iPad window resized
+//  across the panel's width — and at no other time, so the root view
+//  re-renders for those and for nothing else.
 //
 
 import SwiftUI
@@ -36,10 +37,9 @@ extension SheetLayout {
     /// The narrowest window, at a regular height, that the panel is used in:
     /// one that leaves the map at least as wide as the panel beside it.
     ///
-    /// Below it a wide window keeps the sheet, which at least spends its
-    /// width on the map. A compact height takes the panel whatever the width
-    /// — see ``init(windowSize:isCompactHeight:)`` for why that is not a
-    /// choice.
+    /// Below it the window keeps the sheet, which at least spends its width
+    /// on the map. A compact height takes the panel whatever the width — see
+    /// ``init(windowSize:isCompactHeight:)`` for why that is not a choice.
     static let minimumPanelWindowWidth = MapSidePanelLayout.mapInset * 2
 
     /// The shape the map screen takes in a window of `size` — the space it is
@@ -50,18 +50,22 @@ extension SheetLayout {
     /// ``SheetLayout``. iPhone landscape is that case, and so is a closed iPhone
     /// Duo turned on its side.
     ///
-    /// **A window wider than tall gets it too, by choice**, once there is room
-    /// for a map beside it. An unfolded iPhone Duo is the case that asked: its
-    /// inner display is 951 × 669 points in landscape and of regular height, so
-    /// the sheet stayed a sheet — a card in the middle of the bottom edge, with
-    /// map on both sides of it and the map's own controls riding a top edge
-    /// that nothing under them shared. Wide is the panel's shape, and taller
-    /// than wide is the sheet's, so the rule is the window's and not the
-    /// device's: an iPad, a Duo turned upright and a phone all answer it the
-    /// same way.
+    /// **Any window with room for a map beside it gets it too, by choice.**
+    /// That wide, the sheet stops spanning the window: it is a card in the
+    /// middle of the bottom edge, with map on both sides of it and the map's
+    /// own controls riding a top edge that nothing under them shares. An
+    /// unfolded iPhone Duo in landscape, 951 × 669 points, was the case that
+    /// asked. An iPad held upright is the same card, taller: measured on an
+    /// iPad Pro 13-inch simulator, its controls stood halfway up the map, the
+    /// credit line met the weather badge once the keyboard raised the sheet,
+    /// and a photograph opened in a card no wider than a phone. So the rule
+    /// is the window's width rather than its shape or its device: a phone, a
+    /// Duo turned upright — 669 points across — and an iPad window narrowed
+    /// beside another app keep the sheet, and an iPad keeps the panel through
+    /// a rotation, the way Maps does.
     init(windowSize size: CGSize, isCompactHeight: Bool) {
-        let isWide = size.width > size.height && size.width >= Self.minimumPanelWindowWidth
-        self = isCompactHeight || isWide ? .sidePanel : .bottomSheet
+        let hasRoomForPanel = size.width >= Self.minimumPanelWindowWidth
+        self = isCompactHeight || hasRoomForPanel ? .sidePanel : .bottomSheet
     }
 }
 
@@ -88,10 +92,12 @@ struct SheetLayoutReader: View {
         // out in; read through a geometry reader rather than a change handler
         // so the first answer is already the window's own.
         //
-        // Not shortened by the keyboard. On a large screen held upright — an
-        // open iPhone Duo, an iPad — the space above a keyboard is wider than
-        // tall, and the sheet must not turn into the panel because someone
-        // started typing in it.
+        // Not shortened by the keyboard. The rule reads only the width, which
+        // a keyboard does not change, so today this changes nothing. It stays
+        // for a rule that reads the height again, as this one did when it
+        // asked which way the window was longer: on a large screen held
+        // upright the space above a keyboard is wider than tall, and the sheet
+        // must not turn into the panel because someone started typing in it.
         GeometryReader { proxy in
             // Draws nothing and is never announced: this view exists for the
             // window it sits in, not for anything on screen.
