@@ -17,8 +17,6 @@ import OpenHikesShared
 
 struct CurrentHikeProgressIntent: AppIntent, HikeCoordinatingIntent {
     static let title: LocalizedStringResource = "Current Hike Progress"
-    // periphery:ignore - an optional `AppIntent` requirement, read through the
-    // AppIntents metadata rather than by any call site.
     static let description = IntentDescription(
         "Says how far and how long you are into the hike you are recording.",
         categoryName: LocalizedStringResource("intent.category.recording", defaultValue: "Recording")
@@ -35,7 +33,8 @@ struct CurrentHikeProgressIntent: AppIntent, HikeCoordinatingIntent {
 
 struct HikeDistanceTodayIntent: AppIntent, HikeCoordinatingIntent {
     static let title: LocalizedStringResource = "Distance Hiked Today"
-    // periphery:ignore - see `CurrentHikeProgressIntent.description`.
+    // periphery:ignore - an optional `AppIntent` requirement, read through the
+    // AppIntents metadata rather than by any call site.
     static let description = IntentDescription(
         "Adds up everything you have hiked today.",
         categoryName: "Hikes"
@@ -60,7 +59,7 @@ struct HikeDistanceTodayIntent: AppIntent, HikeCoordinatingIntent {
 
 struct LastHikeIntent: AppIntent, HikeCoordinatingIntent {
     static let title: LocalizedStringResource = "Last Hike"
-    // periphery:ignore - see `CurrentHikeProgressIntent.description`.
+    // periphery:ignore - see `HikeDistanceTodayIntent.description`.
     static let description = IntentDescription(
         "Reports the most recent hike you finished.",
         categoryName: "Hikes"
@@ -94,7 +93,7 @@ struct LastHikeIntent: AppIntent, HikeCoordinatingIntent {
 /// point on the calling thread, inside an intent with a system execution budget.
 struct HikeDurationIntent: AppIntent, HikeCoordinatingIntent {
     static let title: LocalizedStringResource = "Hike Summary"
-    // periphery:ignore - see `CurrentHikeProgressIntent.description`.
+    // periphery:ignore - see `HikeDistanceTodayIntent.description`.
     static let description = IntentDescription(
         "Reports how far and how long a hike you have saved was.",
         categoryName: "Hikes"
