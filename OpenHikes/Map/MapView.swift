@@ -382,8 +382,9 @@ struct MapView: MapViewRepresentable, Equatable {
     }
 
     /// Enables MapKit's standard controls. Compass and scale are built-in flags;
-    /// the "my location" button has no flag on iOS, so it's added as a subview —
-    /// and so is the camera pill facing it across the map.
+    /// the "my location" button and the 2D button over it have no flag on
+    /// iOS, so they're added as subviews — and so is the camera pill facing
+    /// them across the map.
     private func addControls(to mapView: MKMapView, _ coordinator: Coordinator) {
         mapView.showsCompass = true
         mapView.showsScale = true
@@ -407,6 +408,9 @@ struct MapView: MapViewRepresentable, Equatable {
             glass.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -Self.controlInset),
             bottom,
         ])
+        // And the 2D button standing on it, there only while the map is
+        // tilted — see `MapCoordinator+FlattenButton.swift`.
+        addFlattenButton(to: mapView, coordinator, above: glass)
 
         // The credit line first: the camera pill is constrained against it
         // rather than against a constant of its own, so it has to exist by the
