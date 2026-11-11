@@ -19,12 +19,13 @@ import Testing
 struct WalkTimeLeftDirectionTests {
     /// Ten kilometres due north, a point about every 100 m: the first eight
     /// rise 200 m, the last two climb another 1000 m.
-    static let route: [RouteCoordinate] = (0...100).map { step in
-        RouteCoordinate(
-            latitude: 47.0 + Double(step) * 0.0009,
-            longitude: 11.0,
-            elevation: step <= 80 ? 1000 + Double(step) * 2.5 : 1200 + Double(step - 80) * 50
-        )
+    static let route: [RouteCoordinate] = (0...100).map { (step: Int) -> RouteCoordinate in
+        // Typed, and the elevation on a line of its own: as one untyped
+        // expression it is past Swift 6.4.2's type-checking limit on x86_64,
+        // where every literal could also be a Float80, and a generic
+        // simulator build such as Scripts/periphery.sh's compiles that slice.
+        let elevation: Double = step <= 80 ? 1000 + Double(step) * 2.5 : 1200 + Double(step - 80) * 50
+        return RouteCoordinate(latitude: 47.0 + Double(step) * 0.0009, longitude: 11.0, elevation: elevation)
     }
 
     private static let profile = RouteProfile(route: route)
