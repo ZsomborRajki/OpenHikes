@@ -153,8 +153,8 @@ extension MapView.Coordinator {
     }
 
     /// The pins a tap may open a screen from: the maker's own, a saved hike's
-    /// places, and a community photograph or a group of them. Answers whether
-    /// it was one of them.
+    /// places, a community photograph or a group of them, and the walk's time
+    /// left. Answers whether it was one of them.
     ///
     /// One question for all of them, so the selection handler in
     /// `MapCoordinator.swift` asks it once.
@@ -163,6 +163,7 @@ extension MapView.Coordinator {
             || selectHikePlaceAnnotation(view, on: mapView)
             || selectCommunityCommonsPhoto(view, on: mapView)
             || selectCommunityCommonsPhotoGroup(view, on: mapView)
+            || selectWalkTimeLeft(view, on: mapView)
     }
 
     /// Opens a community photograph's screen. Answers whether the tap was on

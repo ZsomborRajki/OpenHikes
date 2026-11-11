@@ -99,6 +99,31 @@ extension MapCoordinatorTests {
         #endif
     }
 
+    /// The bubble stands on the walked line and takes the tap from it, so it
+    /// opens what the line opens rather than nothing.
+    @Test("a tap on the time left opens the walked hike, as a tap on its line does")
+    func aTapOnTheTimeLeftOpensTheWalkedHike() throws {
+        #if os(iOS)
+        let walk = try WalkUnderWay(clock: clock)
+        walk.walk(from: 0, through: 3)
+        let coordinator = MapView.Coordinator()
+        let view = mapView(route: walk.route, walk: walk.session)
+        let map = makeMap(view, coordinator)
+        defer { detach(map) }
+        view.update(map, coordinator)
+        var opened = 0
+        drawnRouteTap.onOpen { opened += 1 }
+
+        let drawn = try #require(coordinator.walkTimeLeft.annotation)
+        let bubble = try #require(coordinator.mapView(map, viewFor: drawn))
+        #expect(bubble.accessibilityTraits.contains(.button))
+        coordinator.mapView(map, didSelect: bubble)
+
+        #expect(opened == 1)
+        #expect(!map.selectedAnnotations.contains { $0 === drawn }, "let go of, so a second tap is heard")
+        #endif
+    }
+
     /// The walk outlives its screen; a time left over a line the map is not
     /// drawing would be a bubble in a field.
     @Test("the time left follows the walked hike's line on and off the map")

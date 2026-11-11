@@ -29,9 +29,17 @@
 //  refuses too — see ``MapView/Coordinator/isForeground``. The change is
 //  noted and drawn once, on return.
 //
+//  **A tap on it is a tap on the line under it.** The bubble is a view, so
+//  it claims the touch from the route's own recognizer — see
+//  ``MapView/Coordinator/isTapClaimed(at:in:)`` — and stands on the one line
+//  that always has it. Left to MapKit, that stretch of line would open
+//  nothing and the bubble would stay selected, deaf to a second tap. So it
+//  opens the walked hike, as a tap beside it does.
+//
 
 import MapKit
 import OpenHikesData
+import OpenHikesShared
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -85,7 +93,8 @@ final class WalkTimeLeftView: TravelTimeBubbleView {
         // it would take the walk's one figure off the map.
         displayPriority = .required
         accessibilityLabel = annotation.spokenDescription
-        accessibilityTraits = .staticText
+        // It opens the walked hike — see the file header.
+        accessibilityTraits = .button
         accessibilityIdentifier = "walk-time-left"
     }
 }
@@ -139,6 +148,17 @@ extension MapView.Coordinator {
         // A view MapKit has not made yet takes the figure when it is asked for.
         (mapView.view(for: drawn) as? WalkTimeLeftView)?.show(drawn)
         #endif
+    }
+
+    /// A tap on the bubble, which opens the walked hike as a tap on its line
+    /// does — see the file header. Answers whether the tap was on it.
+    func selectWalkTimeLeft(_ view: MKAnnotationView, on mapView: MKMapView) -> Bool {
+        guard let timeLeft = view.annotation as? WalkTimeLeftAnnotation else { return false }
+        // Let go of, so a second tap is heard after Back.
+        mapView.deselectAnnotation(timeLeft, animated: false)
+        HapticMoment.targetHit.play()
+        drawnRouteTap?.open()
+        return true
     }
 
     /// The pass the bubble is owed for a walk that moved in the background —
