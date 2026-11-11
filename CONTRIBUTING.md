@@ -16,9 +16,9 @@ points at it rather than repeating it.
 ## Before you start
 
 Open an issue first for anything larger than a fix. The app has a deliberate
-scope — local-first, iPhone with an Apple Watch companion and nothing else, no
-OpenHikes account — and a feature that does not fit it is better discussed
-before it is written. Sharing a hike to the
+scope — local-first, iPhone and iPad with an Apple Watch companion and nothing
+else, no OpenHikes account — and a feature that does not fit it is better
+discussed before it is written. Sharing a hike to the
 community is the one thing that leaves the device for a database the developer
 owns, and it is an exception argued for in *The community feature* in
 [`AGENTS.md`](AGENTS.md) rather than a precedent for the next one.

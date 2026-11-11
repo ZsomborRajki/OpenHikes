@@ -26,7 +26,7 @@ extension XCTestCase {
 
     /// Whether `isHittable` is wrong in `window`: on the iPhone Duo's inner
     /// display turned to landscape, where `app.frame` is the window's size
-    /// turned back to portrait.
+    /// turned back to portrait, and on an iPad either way up.
     ///
     /// There XCUITest answered *not hittable* for every element in the side
     /// panel — the hike screen's Back button among them, in plain sight at
@@ -36,8 +36,15 @@ extension XCTestCase {
     /// drags are aimed at frames, which are measured in the turned window,
     /// and they land. On the same display upright, and on any other iPhone in
     /// landscape, `app.frame` turns with the window and this is false.
+    ///
+    /// An iPad gives the same answers with an `app.frame` that is the window's
+    /// own, so it is named rather than measured: a hike row, the Back button
+    /// and a photo tile all answered no, and a tap on each landed — on an iPad
+    /// Pro 13-inch simulator on iOS 27.2, where the tree lists a `Toolbar` as
+    /// tall as the panel over the panel's contents.
     @MainActor
     func hitTestIsUnreliable(in app: XCUIApplication, window: CGRect) -> Bool {
+        if UIDevice.current.userInterfaceIdiom == .pad { return true }
         let stale = app.frame
         return window.width > window.height
             && abs(stale.width - window.height) < 1
