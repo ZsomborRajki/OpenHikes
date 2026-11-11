@@ -445,8 +445,9 @@ jobs:
   #   - `ValidateEmbeddedBinary` on OpenWidgetExtension.appex, which runs once
   #     here and zero times there. That is the check that enforces the rule the
   #     repository documents — an embedded extension's device family has to
-  #     stay a subset of its host's — so nothing else in CI would catch the
-  #     widget drifting away from the app's `TARGETED_DEVICE_FAMILY`.
+  #     stay a subset of its host's. A subset is all it asks, so a widget left
+  #     on the iPhone alone passes it; `InfoPlistContractTests`, in the unit
+  #     tests, holds the widget's family equal to the app's.
   #   - The `InstallationBuildProductsLocation` path: strip, SetOwnerAndGroup,
   #     SetMode and bundle validation.
   #

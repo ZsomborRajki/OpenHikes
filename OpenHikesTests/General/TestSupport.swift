@@ -201,7 +201,7 @@ enum Fixture {
     private enum TileImageConstants {
         static let tilePoints: Double = 256.0
         // periphery:ignore - read only from the `canImport(AppKit)` branch
-        // below, which this iPhone-only build never compiles.
+        // below, which this iOS-only build never compiles.
         static let bitsPerSample: Int = 8
         // periphery:ignore - as above.
         static let samplesPerPixel: Int = 4

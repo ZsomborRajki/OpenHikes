@@ -681,9 +681,10 @@ struct TrailWidget: Widget {
     /// has a ``TrailWidgetLayout`` to draw with — which is a question only
     /// these three are asked, because they are the only ones that draw a map.
     ///
-    /// `.systemExtraLarge` is deliberately absent: it exists on iPad and the
-    /// Mac, and every target here declares `TARGETED_DEVICE_FAMILY = 1`, so
-    /// offering it advertised a size no hiker could ever place.
+    /// `.systemExtraLarge` is absent for now. Of the devices this ships for
+    /// only an iPad has it, and its map would be the wide basemap drawn at
+    /// nearly twice the size it was rendered at — see `TrailBasemapVariant`.
+    /// Offering it waits for a basemap that size.
     static let systemFamilies: [WidgetFamily] = [.systemSmall, .systemMedium, .systemLarge]
 
     /// The Lock Screen sizes, drawn by `TrailWidgetAccessories.swift`. They

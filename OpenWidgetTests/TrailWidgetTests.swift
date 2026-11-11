@@ -286,7 +286,7 @@ struct TrailWidgetTests {
     // MARK: Families
 
     /// The list the system reads to decide where this widget may be placed.
-    /// Every entry has to be reachable on the one device family the app ships
+    /// Every entry has to be reachable on every device family the app ships
     /// for, and every entry has to have something to draw.
     @Test("the widget offers the iPhone Home Screen and Lock Screen sizes")
     func supportedFamiliesMatchTheiPhoneSurface() {
@@ -302,7 +302,7 @@ struct TrailWidgetTests {
             TrailWidget.supportedFamilies
                 == TrailWidget.systemFamilies + TrailWidget.accessoryFamilies
         )
-        // iPad and the Mac only, and every target here is TARGETED_DEVICE_FAMILY = 1.
+        // An iPad's alone, and without a basemap its size — see TrailWidget.systemFamilies.
         #expect(!TrailWidget.supportedFamilies.contains(.systemExtraLarge))
         #expect(Set(TrailWidget.supportedFamilies).count == TrailWidget.supportedFamilies.count)
     }
