@@ -61,8 +61,6 @@ extension PhotoDiscoveryControllerTests {
         case matching = "matching"
     }
 
-    private static let walkDay = 24.0 * 60
-
     /// Where a store on disk goes: emptied once per run, never during one —
     /// see `StoreSandbox` for why.
     private static let storesRoot: URL = {

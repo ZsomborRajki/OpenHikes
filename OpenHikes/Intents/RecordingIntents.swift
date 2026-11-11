@@ -18,9 +18,6 @@ import OpenHikesShared
 
 struct StartHikeRecordingIntent: AppIntent, ForegroundContinuableIntent, HikeCoordinatingIntent {
     static let title: LocalizedStringResource = "Start Hike Recording"
-    // periphery:ignore - an optional `AppIntent` requirement, read through the
-    // AppIntents metadata rather than by any call site.
-    //
     // A key of its own for the category, which every recording action names,
     // because a status badge's "Recording" says what is happening now, and
     // Spanish names that apart from the activity these are filed under
@@ -59,7 +56,6 @@ struct StartHikeRecordingIntent: AppIntent, ForegroundContinuableIntent, HikeCoo
 
 struct PauseHikeRecordingIntent: AppIntent, HikeCoordinatingIntent {
     static let title: LocalizedStringResource = "Pause Hike Recording"
-    // periphery:ignore - see `StartHikeRecordingIntent.description`.
     static let description = IntentDescription(
         "Pauses the hike being recorded, and turns the GPS off until you resume.",
         categoryName: LocalizedStringResource("intent.category.recording", defaultValue: "Recording")
@@ -76,7 +72,6 @@ struct PauseHikeRecordingIntent: AppIntent, HikeCoordinatingIntent {
 
 struct ResumeHikeRecordingIntent: AppIntent, ForegroundContinuableIntent, HikeCoordinatingIntent {
     static let title: LocalizedStringResource = "Resume Hike Recording"
-    // periphery:ignore - see `StartHikeRecordingIntent.description`.
     static let description = IntentDescription(
         "Picks the paused hike back up where you left it.",
         categoryName: LocalizedStringResource("intent.category.recording", defaultValue: "Recording")
@@ -102,7 +97,6 @@ struct ResumeHikeRecordingIntent: AppIntent, ForegroundContinuableIntent, HikeCo
 
 struct StopHikeRecordingIntent: AppIntent, HikeCoordinatingIntent {
     static let title: LocalizedStringResource = "Stop Hike Recording"
-    // periphery:ignore - see `StartHikeRecordingIntent.description`.
     static let description = IntentDescription(
         "Stops the hike being recorded and saves it.",
         categoryName: LocalizedStringResource("intent.category.recording", defaultValue: "Recording")

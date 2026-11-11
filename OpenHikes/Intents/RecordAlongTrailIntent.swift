@@ -53,7 +53,6 @@ import OpenHikesShared
 /// `@Dependency` wrap mutable stored properties.
 struct RecordAlongTrailIntent: AppIntent, ForegroundContinuableIntent, HikeCoordinatingIntent {
     static let title: LocalizedStringResource = "Record Along a Trail"
-    // periphery:ignore - see `StartHikeRecordingIntent.description`.
     static let description = IntentDescription(
         "Starts recording a hike and follows one of your saved trails.",
         categoryName: LocalizedStringResource("intent.category.recording", defaultValue: "Recording")
