@@ -492,39 +492,49 @@ struct OfflineStorageStatus: View {
     let deleteStoredTiles: () -> Void
 
     var body: some View {
+        // The device-local record, read once for the pass. Each passthrough on
+        // `Hike` fetches it again for a hike that has none — every hike another
+        // device synced here, until this one stores something for it — so
+        // asking them one at a time was five fetches a pass.
+        let local = hike.localState
+        let autoSavedCount = local?.autoSavedTileKeys.count ?? 0
         VStack(spacing: 12) {
             OfflineDownloadStatus(
                 downloader: downloader,
-                idleNote: autoSaveNote
+                idleNote: autoSaveNote(local, autoSavedCount: autoSavedCount)
             )
-            storedTilesRow
+            storedTilesRow(
+                hasStoredTiles: !(local?.offlineDownloads.isEmpty ?? true) || autoSavedCount > 0
+            )
         }
-        .onChange(of: hike.autoSavedTileKeys.count) { _, _ in
+        .onChange(of: autoSavedCount) { _, _ in
             scheduleStoredBytesRefresh()
         }
     }
 
-    private var autoSaveNote: String? {
+    private func autoSaveNote(_ local: HikeLocalState?, autoSavedCount count: Int) -> String? {
         if let systemMapName {
             return String(localized: """
             \(systemMapName) uses no downloadable tiles. Choose another map in Settings to save \
             this hike for offline use.
             """)
         }
-        guard hike.autoSaveTilesEnabled else {
+        // On for a hike with no record yet, as ``Hike/autoSaveTilesEnabled``
+        // answers.
+        guard local?.autoSaveTilesEnabled ?? true else {
             return String(localized: """
             Turn on Auto-Save, then pan and zoom around the trail to save its tiles for offline use.
             """)
         }
-        let count = hike.autoSavedTileKeys.count
         if autoSave.isCapReached(for: hike) {
             return String(localized: "Auto-saved \(count) tiles near the trail — storage limit reached.")
         }
         return String(localized: "Auto-saving tiles near the trail as you browse (\(count) so far).")
     }
 
-    @ViewBuilder private var storedTilesRow: some View {
-        if !hike.offlineDownloads.isEmpty || !hike.autoSavedTileKeys.isEmpty {
+    @ViewBuilder
+    private func storedTilesRow(hasStoredTiles: Bool) -> some View {
+        if hasStoredTiles {
             HStack {
                 Label(
                     storedBytes.map { bytes in
