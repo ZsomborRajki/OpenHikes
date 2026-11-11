@@ -11,6 +11,16 @@ import CoreLocation
 import Foundation
 import OpenHikesData
 
+/// The time left as the map draws it — see
+/// ``TrailWalkSession/timeLeftMark(at:)``.
+nonisolated struct WalkTimeLeftMark: Sendable {
+    /// The hike being walked, so the map draws the mark only over its line.
+    let hikeID: UUID
+    /// Halfway along the way ahead, on the walked line.
+    let coordinate: CLLocationCoordinate2D
+    let seconds: TimeInterval
+}
+
 extension TrailWalkSession {
     /// Seconds to the end of the walked trail at `now`, or `nil` with no walk,
     /// no route to measure against, or nothing honest to say.
@@ -27,8 +37,30 @@ extension TrailWalkSession {
             profile: walkedProfile,
             position: position,
             coverage: record.coverage,
-            activeSeconds: record.activeSeconds(at: now)
+            activeSeconds: record.activeSeconds(at: now),
+            travelMode: walkedTravelMode
         )
+    }
+
+    /// The time left where the map draws it: ``secondsLeft(at:)``, halfway
+    /// along the way ahead — see ``WalkTimeLeft/midwayAhead(position:coverage:routeMeters:)``.
+    /// `nil` whenever there is no time left to say.
+    func timeLeftMark(at now: Date) -> WalkTimeLeftMark? {
+        guard let walkedHikeID, let record, let walkedProfile,
+              let position = record.lastFollowedDistanceMeters,
+              let seconds = secondsLeft(at: now) else { return nil }
+        let midway = WalkTimeLeft.midwayAhead(
+            position: position,
+            coverage: record.coverage,
+            routeMeters: walkedProfile.totalDistanceMeters
+        )
+        guard let coordinate = walkedProfile.coordinate(atDistance: midway) else { return nil }
+        return WalkTimeLeftMark(hikeID: walkedHikeID, coordinate: coordinate, seconds: seconds)
+    }
+
+    /// The same, read now.
+    func timeLeftMark() -> WalkTimeLeftMark? {
+        timeLeftMark(at: clock())
     }
 
     /// How far `walk` has left: from where the hiker last matched to the end

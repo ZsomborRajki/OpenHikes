@@ -83,39 +83,12 @@ final class TrailDraftTravelTimeAnnotation: NSObject, MKAnnotation {
 
 #if os(iOS)
 /// The bubble: the time in a capsule, filled for the route drawn and plain for
-/// one on offer.
-final class TrailDraftTravelTimeView: MKAnnotationView {
-    private static let padding = UIEdgeInsets(top: 4, left: 8, bottom: 4, right: 8)
-    private static let shadowOpacity: Float = 0.2
-
-    private let label = UILabel()
-
-    override init(annotation: (any MKAnnotation)?, reuseIdentifier: String?) {
-        super.init(annotation: annotation, reuseIdentifier: reuseIdentifier)
-        canShowCallout = false
-        collisionMode = .rectangle
-        label.font = .preferredFont(forTextStyle: .caption1).bold
-        label.adjustsFontForContentSizeCategory = true
-        label.textAlignment = .center
-        addSubview(label)
-        layer.shadowColor = CGColor(gray: 0, alpha: 1)
-        layer.shadowOpacity = Self.shadowOpacity
-        layer.shadowRadius = 2
-        layer.shadowOffset = .zero
-        isAccessibilityElement = true
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        fatalError("A travel time bubble is created in code only")
-    }
-
+/// one on offer — see ``TravelTimeBubbleView``.
+final class TrailDraftTravelTimeView: TravelTimeBubbleView {
     func show(_ annotation: TrailDraftTravelTimeAnnotation) {
         self.annotation = annotation
         let isChosen = annotation.choice == nil
-        label.text = annotation.title
-        label.textColor = isChosen ? .white : .label
-        backgroundColor = isChosen ? UIColor(Color.accentColor) : .systemBackground
+        showTime(annotation.title, fill: isChosen ? UIColor(Color.accentColor) : nil)
         // The route's own time never gives way; an alternative's always can.
         // At `.defaultHigh` the route's lost its collision with whatever
         // `.required` stood beside it — the start's pin, or the hiker's dot
@@ -125,21 +98,6 @@ final class TrailDraftTravelTimeView: MKAnnotationView {
         accessibilityLabel = annotation.spokenDescription
         accessibilityTraits = isChosen ? .staticText : .button
         accessibilityIdentifier = isChosen ? "trail-draft-route-time" : "trail-draft-alternative-time"
-        let size = label.intrinsicContentSize
-        bounds = CGRect(
-            x: 0,
-            y: 0,
-            width: size.width + Self.padding.left + Self.padding.right,
-            height: size.height + Self.padding.top + Self.padding.bottom
-        )
-        label.frame = bounds.inset(by: Self.padding)
-        layer.cornerRadius = bounds.height / 2
-    }
-}
-
-private extension UIFont {
-    var bold: UIFont {
-        fontDescriptor.withSymbolicTraits(.traitBold).map { UIFont(descriptor: $0, size: 0) } ?? self
     }
 }
 #endif
