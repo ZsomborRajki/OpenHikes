@@ -185,14 +185,16 @@ extension MapView {
 
         weak var sheetMetrics: SheetMetrics?
         /// The map geometry the button was last positioned against, so repeated
-        /// `update(_:_:)` calls during a sheet drag (where the map's own bounds
-        /// haven't moved) can skip reapplying — the sheet observation already
-        /// tracks `topY` at full frame rate on its own.
+        /// `update(_:_:)` calls and layout passes during a sheet drag (where
+        /// the map's own bounds haven't moved) can skip reapplying — the sheet
+        /// observation already tracks `topY` at full frame rate on its own.
         ///
         /// The top inset is part of it because the button's upper limit is
         /// measured from it: a status bar that appears or disappears moves that
-        /// limit without touching the map's height.
-        var lastAppliedGeometry = (height: CGFloat(-1), topInset: CGFloat(-1))
+        /// limit without touching the map's height. The bottom inset and the
+        /// side panel's are part of it because beside a panel the row rests on
+        /// the bottom safe area rather than on a sheet.
+        var lastAppliedGeometry: RowGeometry?
 
         // MARK: Side panel
         // The horizontal edges every control on the map hangs off: the safe

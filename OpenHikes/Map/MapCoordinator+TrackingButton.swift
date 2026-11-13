@@ -34,6 +34,15 @@ import UIKit
 #endif
 
 extension MapView.Coordinator {
+    /// Everything about the map that the row's place is measured from, apart
+    /// from the sheet — see ``lastAppliedGeometry``.
+    struct RowGeometry: Equatable {
+        let height: CGFloat
+        let topInset: CGFloat
+        let bottomInset: CGFloat
+        let panelInset: CGFloat
+    }
+
     /// Where the sheet's top is assumed to be until it says otherwise: the
     /// compact detent, plus the room its shadow and grabber want.
     private static let sheetFallbackOffset: CGFloat = 92
@@ -61,12 +70,21 @@ extension MapView.Coordinator {
     }
 
     /// Reapplies the button position only when the map's own geometry has
-    /// changed (first layout, rotation, a safe-area change) — everything else
-    /// `topY`-driven is already handled reactively by `observeSheetMetrics`.
-    func applySheetTopIfHeightChanged(on mapView: MKMapView) {
-        let geometry = (
+    /// changed (first layout, rotation, a resized window, a safe-area change,
+    /// the side panel arriving or leaving) — everything else `topY`-driven is
+    /// already handled reactively by `observeSheetMetrics`.
+    ///
+    /// Asked from two places, because the geometry reaches the map from two:
+    /// its size and safe area from UIKit, through ``MapLayoutObserver``, and
+    /// the panel's inset from SwiftUI, through `MapView.update(_:_:)`. Either
+    /// can land first in a rotation, and each is measured against what the
+    /// other last left.
+    func applySheetTopIfGeometryChanged(on mapView: MKMapView) {
+        let geometry = RowGeometry(
             height: mapView.bounds.height,
-            topInset: mapView.safeAreaInsets.top
+            topInset: mapView.safeAreaInsets.top,
+            bottomInset: mapView.safeAreaInsets.bottom,
+            panelInset: sidePanelInset
         )
         guard geometry != lastAppliedGeometry else { return }
         lastAppliedGeometry = geometry

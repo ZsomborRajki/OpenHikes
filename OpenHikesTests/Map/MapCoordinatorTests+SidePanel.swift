@@ -175,6 +175,36 @@ extension MapCoordinatorTests {
         #endif
     }
 
+    /// An iPad keeps the panel either way up, so turning it changes nothing
+    /// SwiftUI hands the map: `MapView.==` holds and `update` never runs. The
+    /// row's place is measured from the map's own height all the same, and it
+    /// stayed where the other way up had put it: turned to landscape, 300
+    /// points below the bottom edge, the record and trail buttons with it.
+    @Test("a map that changes height beside the panel keeps its controls on its bottom edge")
+    func sidePanelControlsFollowTheMapsHeight() throws {
+        #if os(iOS)
+        let coordinator = MapView.Coordinator()
+        let view = mapView(sidePanelInset: MapSidePanelLayout.mapInset)
+        let map = makeMap(view, coordinator)
+        defer { detach(map) }
+        let upright = CGSize(width: 1032, height: 1376)
+        map.frame = CGRect(origin: .zero, size: upright)
+        view.update(map, coordinator)
+        map.layoutIfNeeded()
+        let tracking = try #require(coordinator.trackingBottomConstraint)
+        let credit = try #require(coordinator.attributionBottomConstraint)
+        let spacing: CGFloat = 16
+        #expect(tracking.constant == upright.height - map.safeAreaInsets.bottom - spacing)
+
+        // The turn as the map meets it: a new size, and no `update`.
+        map.frame = CGRect(x: 0, y: 0, width: upright.height, height: upright.width)
+        map.layoutIfNeeded()
+
+        #expect(tracking.constant == upright.width - map.safeAreaInsets.bottom - spacing)
+        #expect(credit.constant == tracking.constant, "the row stays one row")
+        #endif
+    }
+
     /// MapKit's own compass and scale are laid out against the map's margins,
     /// and the map fills the window — so without these they sit against the
     /// screen's edge, and in landscape behind the panel.
