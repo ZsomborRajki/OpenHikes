@@ -501,10 +501,11 @@ jobs:
           set -euo pipefail
           app="build/OpenHikes.xcarchive/Products/Applications/OpenHikes.app"
           status=0
-          # Each of the four products carries its German, French, Spanish and
-          # Italian too: a catalog compiles a `de.lproj`, `fr.lproj`, `es.lproj`
-          # or `it.lproj` only while it holds that translation, and one missing
-          # here ships that product without it.
+          # Each of the four products carries its German, French, Spanish,
+          # Italian and Russian too: a catalog compiles a `de.lproj`,
+          # `fr.lproj`, `es.lproj`, `it.lproj` or `ru.lproj` only while it holds
+          # that translation, and one missing here ships that product without
+          # it.
           for path in \
             "$app/OpenHikes" \
             "$app/PlugIns/OpenWidgetExtension.appex" \
@@ -525,6 +526,10 @@ jobs:
             "$app/PlugIns/OpenWidgetExtension.appex/it.lproj" \
             "$app/Watch/OpenHikesWatch.app/it.lproj" \
             "$app/Watch/OpenHikesWatch.app/PlugIns/OpenHikesWatchWidgets.appex/it.lproj" \
+            "$app/ru.lproj" \
+            "$app/PlugIns/OpenWidgetExtension.appex/ru.lproj" \
+            "$app/Watch/OpenHikesWatch.app/ru.lproj" \
+            "$app/Watch/OpenHikesWatch.app/PlugIns/OpenHikesWatchWidgets.appex/ru.lproj" \
             "build/OpenHikes.xcarchive/dSYMs/OpenHikes.app.dSYM" \
             "build/OpenHikes.xcarchive/dSYMs/OpenWidgetExtension.appex.dSYM"
           do
