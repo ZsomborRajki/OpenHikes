@@ -205,6 +205,44 @@ extension MapCoordinatorTests {
         #endif
     }
 
+    /// MapKit draws its logo and its Legal link on its own maps, at the foot
+    /// of the leading margin, which beside a panel is the corner the pill
+    /// stands in. A sheet covers them; a panel does not, and the record
+    /// button was drawn over the logo. The row rests above that credit there,
+    /// and nowhere else.
+    @Test("beside a panel, the row stands clear of the credit MapKit draws on its own map")
+    func sidePanelRowClearsTheSystemCredit() throws {
+        #if os(iOS)
+        let coordinator = MapView.Coordinator()
+        let onTiles = mapView(sidePanelInset: MapSidePanelLayout.mapInset)
+        let onAppleMaps = mapView(base: .system(.standard), sidePanelInset: MapSidePanelLayout.mapInset)
+        let map = makeMap(onTiles, coordinator)
+        defer { detach(map) }
+        onTiles.update(map, coordinator)
+        let tracking = try #require(coordinator.trackingBottomConstraint)
+        let credit = try #require(coordinator.attributionBottomConstraint)
+        let spacing: CGFloat = 16
+        let onSafeArea = map.bounds.height - map.safeAreaInsets.bottom - spacing
+        #expect(tracking.constant == onSafeArea, "precondition: tiles replace the map, and its logo")
+
+        onAppleMaps.update(map, coordinator)
+        // The logo's height and the gap the pill keeps over a credit line.
+        let clearance: CGFloat = 21 + MapView.creditLineSpacing
+        #expect(tracking.constant == onSafeArea - clearance)
+        #expect(credit.constant == tracking.constant, "the row stays one row")
+
+        onTiles.update(map, coordinator)
+        #expect(tracking.constant == onSafeArea, "and comes back down with the tiles")
+
+        // Under a sheet the credit is covered, so the row rides the sheet as
+        // it always did, whichever map is under it.
+        mapView(base: .system(.standard)).update(map, coordinator)
+        sheetMetrics.topY = 700
+        coordinator.applySheetTop(on: map)
+        #expect(tracking.constant == 700 - spacing)
+        #endif
+    }
+
     /// MapKit's own compass and scale are laid out against the map's margins,
     /// and the map fills the window — so without these they sit against the
     /// screen's edge, and in landscape behind the panel.
