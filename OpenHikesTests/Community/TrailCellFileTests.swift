@@ -226,6 +226,19 @@ struct TrailCellFileTests {
         Self.expectRefusal(of: square.encoded(), as: .corrupt)
     }
 
+    /// A step is any 64-bit number the bytes spell, and the largest varint
+    /// there is reads as a step of `Int64.min` — a number with no absolute
+    /// value. Measuring the cursor with `abs` stopped the app on it, where
+    /// neither `try?` nor the fall back to Overpass could help.
+    @Test("a step that carries a coordinate to the smallest number there is is refused, not a crash")
+    func aStepToTheSmallestNumber() {
+        // An unpacked square of one relation, one way and one point, whose
+        // latitude step is the ten bytes of `UInt64.max`.
+        let file = Self.bytes(hex: "4f4854430100 16 c0843d 01 00 01 02 00 01 00 01 ffffffffffffffffff01 00")
+
+        Self.expectRefusal(of: file, as: .corrupt)
+    }
+
     @Test("a string index past the strings is refused")
     func aStringIndexPastTheEnd() {
         // The first tag's key index: byte 77 of the tool's square, which

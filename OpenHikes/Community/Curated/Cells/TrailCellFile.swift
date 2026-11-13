@@ -272,9 +272,16 @@ nonisolated private struct Cursor {
     }
 
     /// The point the cursor stands on, or `nil` when that is off the Earth.
+    ///
+    /// Held between two bounds rather than measured with `abs`: a step is any
+    /// 64-bit number a file cares to spell, so the cursor can stand on
+    /// `Int64.min`, which has no absolute value and would stop the app where
+    /// this is meant to refuse the file.
     var point: TrailCellFile.Point? {
-        guard abs(latitude) <= Self.poleDegrees * unitsPerDegree,
-              abs(longitude) <= Self.antimeridianDegrees * unitsPerDegree,
+        let pole = Self.poleDegrees * unitsPerDegree
+        let antimeridian = Self.antimeridianDegrees * unitsPerDegree
+        guard (-pole...pole).contains(latitude),
+              (-antimeridian...antimeridian).contains(longitude),
               let north = Int32(exactly: latitude),
               let east = Int32(exactly: longitude)
         else { return nil }
