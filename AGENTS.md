@@ -905,11 +905,12 @@ a change to recording, the map, the sheet or the render path; the PR template,
   the `Info.plist` purpose strings, the Background Trail Tracking footer, and
   App Review's notes in App Store Connect. Always access is for the widget and
   the Live Activity; the `location` background mode is for the recorder. Their
-  German, French, Spanish and Italian must agree too: the prompts in
+  German, French, Spanish, Italian and Russian must agree too: the prompts in
   `OpenHikes/InfoPlist.xcstrings`, the footer in the app's catalog.
-- **Strings live in String Catalogs, in English, German, French, Spanish and
-  Italian.** English is the development language. The app, the widget, the
-  watch, Siri and the permission prompts all follow the device's language.
+- **Strings live in String Catalogs, in English, German, French, Spanish,
+  Italian and Russian.** English is the development language. The app, the
+  widget, the watch, Siri and the permission prompts all follow the device's
+  language.
   - `xcodebuild` does not merge extracted strings the way the IDE does. After
     changing text, build, then run
     `Scripts/sync-string-catalogs.sh <derived-data>`. CI's `--check` exits 2
@@ -934,12 +935,14 @@ a change to recording, the map, the sheet or the render path; the PR template,
     comments, or on the support page when a hiker needs them. A switch is
     named for everything it controls. `StringCatalogTests` holds every English
     value under a length ceiling.
-  - **Every string gets its German, French, Spanish and Italian in the same
-    change.** Sync the new key into its catalog, then give it a `de`, an `fr`,
-    an `es` and an `it` localization with `"state" : "translated"`.
+  - **Every string gets its German, French, Spanish, Italian and Russian in
+    the same change.** Sync the new key into its catalog, then give it a `de`,
+    an `fr`, an `es`, an `it` and a `ru` localization with
+    `"state" : "translated"`.
     `StringCatalogTests+Translations.swift` fails on a key missing any of them,
     and on a translation that drops or retypes a placeholder (a singular may
-    leave the count out, as the English one does, except in French). The shared
+    leave the count out, as the English one does, except in French and
+    Russian). The shared
     App Intent and `RoleButton` wording sits in all four catalogs, so it is
     translated in all four. A new language joins
     `StringCatalogTests.translations`, `knownRegions` in the project,
@@ -1001,9 +1004,46 @@ a change to recording, the map, the sheet or the render path; the PR template,
     in OpenHikes*). Italian uses the `one` form for 1 alone, so its singular
     may spell the count out as the English does, and each Italian plural
     carries `many` worded as `other`, as the French and the Spanish do.
+  - **The Russian says *вы*, in lower case, and keeps one word for each
+    thing:** *поход* (hike), *тропа* (trail), *маршрут* (route), *место*
+    (place), *запись* (recording), *остановка* (a stop on a drawn trail),
+    *тайл* (map tile), *медиатека* (the photo library), *точка трека* (a track
+    point), *маркировка* (a waymark), *турист* (a hiker) and *фото* (a photo),
+    which never declines. Record is *записать*, save is *сохранить* and
+    report is *пожаловаться*. Apple's own names are Apple's Russian ones
+    (*Настройки*, *Здоровье*, *Карты Apple*, *Эфир активности*, and
+    *геопозиция* for location), and *ё* is written *е*, as Apple's Russian
+    writes it. Buttons and titles are in sentence case, a button is an
+    infinitive (*Сохранить поход*) and an instruction the *вы* imperative
+    (*Включите*), and an error title opens with *Не удалось*, as Apple's do.
+    With *вы* the past tense is plural, so it never genders the hiker, and
+    other people are named without a gender where Russian allows it (*другой
+    человек*). OpenHikes takes no gender: its sentence is in the present or
+    impersonal, or says *приложение OpenHikes*. Quotes are «…», and „…“
+    inside them, a dash is a spaced —, nothing goes before : ; ? !, a
+    no-break space goes before %, and an ellipsis follows the word with no
+    space. The Siri phrases take the *ты* imperative people speak to Siri in
+    (*Начни поход в OpenHikes*), and a phrase in the first person past is
+    listed once for each gender (*прошел*, *прошла*).
+  - **A Russian count has three forms.** Russian uses `one` for 21 and 101
+    as well as 1, `few` for 2 to 4 and `many` for 5 and up, so every Russian
+    plural carries `one`, `few`, `many` and `other`
+    (`russianPluralHasEveryForm`). Its singular keeps its number, as the
+    French does, and takes no *оно* or *его*, which 21 photos would make
+    wrong. Only a fraction reaches `other`, which is worded as `few`. A string
+    with one count takes the forms even where the English has no plural
+    (*%lld процент*, *процента*, *процентов*). Where a string has two counts,
+    or its figure arrives already formatted, no word may agree with it:
+    *Сохранено тайлов: 3 из 12*.
+  - **What fills a Russian placeholder stays in the nominative.** Russian
+    would decline it, so a title, a name or a catalogued word goes in «» or
+    after a colon (*Источник: %@*). A duration in words arrives in the
+    nominative too (*1 час 21 минута*), so nothing governs it: *время в пути:
+    %@*, never *за %@*. A date ends in *г.*, so it never stands before a
+    sentence's full stop.
   - **A French singular keeps its number.** French uses the `one` form for 0
     as well as 1, so a singular that spells the count out as a word would say
-    *une* photo for none (`frenchSingularKeepsTheCount`). Each French plural
+    *une* photo for none (`singularKeepsTheCount`). Each French plural
     also carries `many`, the form CLDR gives large round numbers, worded as
     `other`.
   - **One English word that a translation splits takes a second key.** A
@@ -1015,7 +1055,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
     kind (`place.kind.none`). Spanish calls the watch's share of a trail
     already walked «Completado» and a close button «OK» (`follow.done`), and
     files the recording actions in Shortcuts under «Grabación» while a badge
-    says «Grabando» (`intent.category.recording`).
+    says «Grabando» (`intent.category.recording`). Russian calls the easiest
+    difficulty grade *Пеший поход* and the trail maker's travel mode *По
+    тропам* (`travelMode.hiking`).
   - **A sentence never changes the case of a catalogued word**, because German
     capitalizes every noun. A sentence that names something is passed whole
     (`CommunityMailOutcomeSections.handoffDetail`).
@@ -1024,28 +1066,29 @@ a change to recording, the map, the sheet or the render path; the PR template,
     `OpenHikes/AppShortcuts.xcstrings`, one entry per shortcut keyed by its
     first phrase. The IDE extracts into both and `xcodebuild` into neither, so
     an edited purpose string or phrase means editing its catalog's English,
-    German, French, Spanish and Italian by hand. The translation tests hold
-    each to its `Info.plist` and to `OpenHikesShortcuts.swift`. The IDE also
-    extracts the bundle's name and the GPX type's into `InfoPlist.xcstrings`:
-    a name gets its translations, or `"shouldTranslate" : false` when it stays
-    as it is, as *OpenHikes* does.
+    German, French, Spanish, Italian and Russian by hand. The translation
+    tests hold each to its `Info.plist` and to `OpenHikesShortcuts.swift`. The
+    IDE also extracts the bundle's name and the GPX type's into
+    `InfoPlist.xcstrings`: a name gets its translations, or
+    `"shouldTranslate" : false` when it stays as it is, as *OpenHikes* does.
   - **The privacy policy and the terms are published in German, French,
-    Spanish and Italian too.** `docs/de/privacy/`, `docs/de/terms/`,
+    Spanish, Italian and Russian too.** `docs/de/privacy/`, `docs/de/terms/`,
     `docs/fr/privacy/`, `docs/fr/terms/`, `docs/es/privacy/`,
-    `docs/es/terms/`, `docs/it/privacy/` and `docs/it/terms/` translate the
-    English pages, and the app opens the copy in its own language
+    `docs/es/terms/`, `docs/it/privacy/`, `docs/it/terms/`,
+    `docs/ru/privacy/` and `docs/ru/terms/` translate the English pages, and
+    the app opens the copy in its own language
     (`MapPurchaseLinks.PageLanguage` argues why). An edit to an English page
-    edits its German, French, Spanish and Italian copies in the same change,
-    and all five move their `<time datetime>` together, which
+    edits its German, French, Spanish, Italian and Russian copies in the same
+    change, and all six move their `<time datetime>` together, which
     `Scripts/check-legal-pages.sh` holds them to, on every pull request. It
     reads the pages from the quoted URLs in `MapPurchaseLinks.swift`.
     `MapPurchaseLinksTests` fails on an app language that has no pages of
-    its own. Each page's language menu links the other four.
+    its own. Each page's language menu links the other five.
   - **So is the support page.** `docs/de/support/`, `docs/fr/support/`,
-    `docs/es/support/` and `docs/it/support/` translate `docs/support/`, for
-    the App Store listing in each language to link. The app links none of
-    them, so no script holds them together: an edit to one edits the others in
-    the same change.
+    `docs/es/support/`, `docs/it/support/` and `docs/ru/support/` translate
+    `docs/support/`, for the App Store listing in each language to link. The
+    app links none of them, so no script holds them together: an edit to one
+    edits the others in the same change.
   - The hosted tests and the UI suites assert English copy, so they assume a
     simulator whose language is English, as CI's is.
 - **OpenHikes Pro is one monthly subscription.**
@@ -1381,13 +1424,14 @@ is world-readable, because browsing needs no account.
 - **What is sent is stated, and the statements move together.**
   `CommunityShareDisclosureTests` holds the share footer to the payload. The
   privacy manifest, `docs/privacy/` and `docs/terms/`, with their German,
-  French, Spanish and Italian copies under `docs/de/`, `docs/fr/`, `docs/es/`
-  and `docs/it/`, change whenever what is sent changes, what a reviewer may do
-  changes, the removal, *Check Whether It's Still Live*, reset or *Finish
-  Sending* flows change, what the Commons requests ask for or keep changes, or
-  `CommunityPublisher.maximumPhotos` (36) changes. That limit is the first
-  number to lower if storage costs bite. App Store Connect's own privacy
-  answers are separate, and the manifest does not update them.
+  French, Spanish, Italian and Russian copies under `docs/de/`, `docs/fr/`,
+  `docs/es/`, `docs/it/` and `docs/ru/`, change whenever what is sent changes,
+  what a reviewer may do changes, the removal, *Check Whether It's Still
+  Live*, reset or *Finish Sending* flows change, what the Commons requests ask
+  for or keep changes, or `CommunityPublisher.maximumPhotos` (36) changes.
+  That limit is the first number to lower if storage costs bite. App Store
+  Connect's own privacy answers are separate, and the manifest does not update
+  them.
 
 ### OpenStreetMap and Wikimedia Commons
 
