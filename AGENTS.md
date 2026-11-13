@@ -1254,10 +1254,16 @@ in its source header. Do not weaken one without a measurement.
   once before promoting. An `@Attribute(.externalStorage)` column, such as
   `Hike.route`, also mirrors through a `CD_<name>_ckAsset` asset field: check
   that the development export has it, and promote both.
-- **Deployment state, checked 2026-11-03.** Development and production export
-  the same schema, `md5 81e928147a7c881fabb32ee3e1270fcd`, with a column for
-  every attribute in `MirroredCloudKitSchema.recordTypes`. The only live
-  columns the contract does not name are SwiftData's own `CD_entityName`, the
+- **Deployment state, checked 2026-11-13.** Development exports
+  `md5 e2fd4f7c500b3911fae3d86a9b9d3f9c` and production
+  `md5 81e928147a7c881fabb32ee3e1270fcd`. Development is ahead by the two
+  trail-square record types, `CuratedTrailCell` and `CuratedTrailManifest`,
+  neither with an index. Production needs them promoted before squares are
+  uploaded to it, and not before a build is: the app only reads them, and
+  reads a record that is not there as no squares (*The trail squares*). Both
+  environments have a column for every attribute in
+  `MirroredCloudKitSchema.recordTypes`. The only live columns the contract
+  does not name are SwiftData's own `CD_entityName`, the
   to-one reference columns that the contract lists as relationships, and the
   `CD_route_ckAsset` and `CD_rawRoute_ckAsset` asset fields of the two
   external-storage attributes. Re-export before believing these numbers, and
@@ -1482,8 +1488,9 @@ by name. `TrailCellGrid` argues the design and has the measurements.
   over a database that holds the world. It signs with a server-to-server key
   from the CloudKit Console, named by `OPENHIKES_CLOUDKIT_KEY_ID` and
   `OPENHIKES_CLOUDKIT_KEY_FILE`; the private half stays out of the repository.
-- **Both record types are added by schema import before the first upload**,
-  for the reason *A new field arrives indexed* gives.
+- **Both record types are added by schema import before the first upload**
+  to an environment, for the reason *A new field arrives indexed* gives. The
+  deployment state under *CloudKit* says which environments have them.
 
 ## The watch app
 
@@ -1689,11 +1696,10 @@ Reopening one needs new evidence, not a fresh reading of the same code.
   - The trail squares have never met CloudKit. That a server-to-server key
     may write a type only `reviewer` may write, and that the asset store takes
     a square as a request's raw body, are read off Apple's Web Services
-    reference; the app's fetch has only run against a stub. What is observed:
-    openssl verifies the request signature (`Scripts/run-script-tests.sh`),
-    and `cktool validate-schema` accepts the two record types.
-    `Scripts/trail-cells.sh whoami` and a development upload are the first
-    real test.
+    reference; the app's fetch has only run against a stub. What is observed
+    is that openssl verifies the request signature
+    (`Scripts/run-script-tests.sh`). `Scripts/trail-cells.sh whoami` and a
+    development upload are the first real test.
 
 ## Documentation
 
