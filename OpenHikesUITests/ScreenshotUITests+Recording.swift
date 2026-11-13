@@ -90,17 +90,18 @@ extension ScreenshotUITests {
         notice.tap()
         XCTAssertTrue(notice.waitForNonExistence(timeout: UITestTimeout.existence), "and closes when asked")
         frameRecordedLine(in: app)
-        let display = screenshotDisplay(in: app)
-        XCTAssertTrue(
-            waitUntil(timeout: UITestTimeout.trace) { screenshotMapHasTiles(in: app, on: display) },
-            "the map should finish drawing its terrain after zooming"
-        )
         capture(as: .recording, of: app)
     }
 
     /// Fits the red stroke into the map above the measured sheet. Collapsing
     /// it temporarily exposes the map's center for two-finger zoom-out taps;
     /// the original detent is restored before the capture.
+    ///
+    /// The sheet is not lowered for the fingers' sake alone, so leaving it up
+    /// and tapping the map above it does not do. The walker's dot stands
+    /// under the sheet's top edge, and each zoom draws the line in towards
+    /// it: tried on the 6.9" phone, the taps left no red above the sheet to
+    /// measure.
     @MainActor
     private func frameRecordedLine(in app: XCUIApplication) {
         let window = windowFrame(of: app)
@@ -158,13 +159,7 @@ extension ScreenshotUITests {
             x: min(max(anchor.x + dx, area.minX), area.maxX),
             y: min(max(anchor.y + dy, area.minY), area.maxY)
         )
-        let map = mapElement(in: app)
-        coordinate(at: anchor, on: map).press(
-            forDuration: Self.recordingPanPress,
-            thenDragTo: coordinate(at: landing, on: map),
-            withVelocity: .slow,
-            thenHoldForDuration: Self.recordingPanPress
-        )
+        panMap(mapElement(in: app), from: anchor, to: landing)
     }
 
     @MainActor

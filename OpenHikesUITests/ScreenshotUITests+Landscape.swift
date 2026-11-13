@@ -2,9 +2,10 @@
 //  ScreenshotUITests+Landscape.swift
 //  OpenHikesUITests
 //
-//  Compose the same captures in the Duo's side panel. Read the scrolling
-//  viewport and the share boxes rather than accepting a hit-test result from
-//  the folded-away cover display.
+//  Compose the same captures in the side panel: the open Duo's on its side,
+//  and an iPad's either way up. Read the scrolling viewport and the share
+//  boxes rather than accepting a hit-test result, which on the Duo comes from
+//  the folded-away cover display and on an iPad is no for the whole panel.
 //
 
 import XCTest
@@ -34,6 +35,11 @@ extension ScreenshotUITests {
             XCTAssertTrue(scrollIntoView(strip, in: app))
             return
         }
+        // An iPad's panel is tall enough to show the gallery under the chart
+        // that was just tapped, with nothing scrolled: the whole frame as it
+        // stands, and a strip that no drag could bring to the bottom edge.
+        let viewport = scrollContainer(in: app).frame.intersection(windowFrame(of: app))
+        if viewport.contains(strip.frame) { return }
         alignInScreenshotViewport(
             strip, edge: .bottom, tolerance: 24, in: app, named: "Landscape gallery", leadingDrag: true
         )
@@ -84,26 +90,37 @@ extension ScreenshotUITests {
 
     /// Use the app's free system map for the Duo's nearby frame. The raster
     /// map can leave its new top row blank after the landscape camera move.
+    ///
+    /// The open Duo on its side and nothing else: an iPad's hit test is as
+    /// unreliable, and its nearby frame keeps the map every other frame has.
     @MainActor
     func prepareNearbyLandscapeMap(in app: XCUIApplication) {
-        guard hitTestIsUnreliable(in: app, window: windowFrame(of: app)) else { return }
-        element("settings-button", in: app).tap()
-        let provider = element("provider-row-apple_maps", in: app)
-        XCTAssertTrue(provider.waitForExistence(timeout: UITestTimeout.navigation))
-        provider.tap()
-        app.buttons["settings-close"].tap()
+        guard XCUIScreen.screens.count > 1,
+              hitTestIsUnreliable(in: app, window: windowFrame(of: app)) else { return }
+        selectMap("apple_maps", in: app)
     }
 
     /// Observe rendered tiles and their final redraw, including replacement
     /// of lower-resolution fallback tiles after the camera move.
+    ///
+    /// `requireTerrain` also asks for most of the map to be coloured land, and
+    /// `rejectSmallLoadingPatches` for next to none of it to be loading grid:
+    /// what a frame can ask depends on its map's palette, which
+    /// ``screenshotMapSample(in:on:requireTerrain:rejectSmallLoadingPatches:)``
+    /// has the reasons for.
     @MainActor
-    func settleScreenshotMapTiles(in app: XCUIApplication, rejectSmallLoadingPatches: Bool = false) {
+    func settleScreenshotMapTiles(
+        in app: XCUIApplication, requireTerrain: Bool = false, rejectSmallLoadingPatches: Bool = false
+    ) {
         let display = screenshotDisplay(in: app)
         var previousSignature: Int?
         var stableSince = ProcessInfo.processInfo.systemUptime
         let ready = waitUntil(timeout: UITestTimeout.trace) {
             guard let sample = screenshotMapSample(
-                in: app, on: display, rejectSmallLoadingPatches: rejectSmallLoadingPatches
+                in: app,
+                on: display,
+                requireTerrain: requireTerrain,
+                rejectSmallLoadingPatches: rejectSmallLoadingPatches
             ), sample.hasTiles else {
                 previousSignature = nil
                 return false

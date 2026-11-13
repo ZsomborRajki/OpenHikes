@@ -272,6 +272,9 @@ if [[ "${1:-}" == test-without-building ]]; then
         printf 'screenshot locale %s\n' "$TEST_RUNNER_OPENHIKES_SCREENSHOT_LOCALE" >> "$STUB_CALL_LOG"
         printf 'screenshot strings %s\n' "${TEST_RUNNER_OPENHIKES_SCREENSHOT_STRINGS:-}" >> "$STUB_CALL_LOG"
     fi
+    if [[ -n "${TEST_RUNNER_OPENHIKES_SCREENSHOT_ORIENTATION:-}" ]]; then
+        printf 'screenshot orientation %s\n' "$TEST_RUNNER_OPENHIKES_SCREENSHOT_ORIENTATION" >> "$STUB_CALL_LOG"
+    fi
     if [[ -n "${STUB_SCREENSHOT_RESULTS:-}" ]]; then
         while [[ $# -gt 0 ]]; do
             if [[ "$1" == -resultBundlePath ]]; then mkdir -p "$2"; break; fi
@@ -2782,6 +2785,46 @@ run_script "screenshots refuses an orientation for any pose but open, before tou
     "$screenshots_light" --pose closed --orientation landscape --device "$pro_udid"
 if expect_status 2 \
     && expect_contains "$output" "--orientation needs --pose open" "the error" \
+    && expect_absent "$calls" "simctl erase" "the recorded calls"; then
+    pass
+fi
+
+# An iPad has no pose to take, so the test class turns it, and is told which
+# way through its runner's environment. An iPhone's run tells it nothing: an
+# open iPhone Duo is turned before the build, by Scripts/duo-pose.sh.
+run_script "screenshots shoots an iPad upright unless asked, and tells its runner which way" \
+    "$screenshots_light" --frame 7 --no-photos --no-retry --device "$pro_udid" \
+    --device-type 'iPad Pro 13-inch (M5)' --derived-data "$screens_dd" --output "$work/screens-out"
+if expect_status 1 \
+    && expect_contains "$calls" "screenshot orientation portrait" "the runner environment" \
+    && expect_contains "$output" "ipad_pro_13_inch_m5_portrait_en_ie_$screenshot_test_date/light" "the output"; then
+    pass
+fi
+
+run_script "screenshots shoots an iPad on its side when asked" \
+    "$screenshots_dark" --frame 7 --no-photos --no-retry --device "$pro_udid" \
+    --device-type 'iPad Pro 13-inch (M5)' --orientation landscape \
+    --derived-data "$screens_dd" --output "$work/screens-out"
+if expect_status 1 \
+    && expect_contains "$calls" "screenshot orientation landscape" "the runner environment" \
+    && expect_contains "$output" "ipad_pro_13_inch_m5_landscape_en_ie_$screenshot_test_date/dark" "the output"; then
+    pass
+fi
+
+TEST_RUNNER_OPENHIKES_SCREENSHOT_ORIENTATION=landscape \
+    run_script "screenshots asks an iPhone's runner for no orientation, whatever its caller exported" \
+    "$screenshots_light" --frame 7 --no-photos --no-retry --device "$pro_udid" \
+    --derived-data "$screens_dd" --output "$work/screens-out"
+if expect_status 1 \
+    && expect_contains "$calls" "xcodebuild test-without-building" "the recorded calls" \
+    && expect_absent "$calls" "screenshot orientation" "the runner environment"; then
+    pass
+fi
+
+run_script "screenshots refuses an orientation on an iPhone that has no pose, before touching a device" \
+    "$screenshots_light" --orientation landscape --device "$pro_udid"
+if expect_status 2 \
+    && expect_contains "$output" "--orientation needs --pose open or an iPad" "the error" \
     && expect_absent "$calls" "simctl erase" "the recorded calls"; then
     pass
 fi

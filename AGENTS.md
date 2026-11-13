@@ -293,6 +293,8 @@ either: the second run waits silently on the first run's build lock.
   acquire`. No gate runs on an iPad. There `isHittable` answers no for
   everything in the side panel, either way up, and the shared helpers skip it
   as they do on the Duo (`OpenHikesUITests/WindowSupport.swift`).
+- The screenshot set shoots on it with `--device-type "iPad Pro 13-inch (M5)"`
+  and `--orientation`; see `Screenshots/README.md`.
 
 ### UI automation
 

@@ -73,8 +73,12 @@ nonisolated final class ScreenshotUITests: XCTestCase {
     /// purpose, because a tap on the drawn route opens its hike.
     private static let zoomTapPoint = CGVector(dx: heroRouteCenterX + 0.2, dy: heroRouteCenter)
 
-    /// Long enough for the drag to be taken as a drag rather than a tap.
+    /// Long enough for the drag to be taken as a drag rather than a tap, and
+    /// for a map held that long at the end of one to stay where it was put.
     private static let dragPressDuration = 0.1
+    /// How far a finger travels over a map before MapKit takes it for a pan,
+    /// in points. See ``panMap(_:from:to:)``.
+    private static let panSlop: CGFloat = 10
     /// Near the bottom edge, so the sheet is dragged past the middle detent
     /// rather than to it.
     private static let dragTarget = 0.95
@@ -82,6 +86,27 @@ nonisolated final class ScreenshotUITests: XCTestCase {
     /// compact detent is 80 points against a screen of over 800, so anything
     /// below four fifths is unambiguously it.
     private static let collapsedSheetFraction = 0.8
+
+    /// Turns an iPad the way `Scripts/lib/screenshots.sh` asked, once, ahead
+    /// of the frames' launches, so the app opens that way up in each. An
+    /// iPhone's run asks for nothing and the device is left as it is: an open
+    /// iPhone Duo has already been turned, by `Scripts/duo-pose.sh`.
+    override static func setUp() {
+        super.setUp()
+        MainActor.assumeIsolated {
+            guard let orientation = requestedOrientation else { return }
+            XCUIDevice.shared.orientation = orientation
+        }
+    }
+
+    /// And upright again after them. A simulator keeps the way up it was
+    /// left, and every other class in this bundle assumes a portrait screen.
+    override static func tearDown() {
+        MainActor.assumeIsolated {
+            if requestedOrientation != nil { XCUIDevice.shared.orientation = .portrait }
+        }
+        super.tearDown()
+    }
 
     // MARK: - Frames
 
@@ -108,21 +133,7 @@ nonisolated final class ScreenshotUITests: XCTestCase {
         ])
         openHikeDetail(in: app, titled: Self.routeTitle)
         try importDiscoveredPhotos(in: app, selecting: Self.pinnedPhotoIndexes)
-
-        let zoom = app.buttons[screenshotText("Zoom")]
-        XCTAssertTrue(
-            scrollIntoView(zoom, in: app),
-            "the detail screen should offer to frame the whole route"
-        )
-        zoom.tap()
-        collapseSheet(in: app)
-
-        let pin = element("photo-pin", in: app)
-        XCTAssertTrue(
-            pin.waitForExistence(timeout: UITestTimeout.navigation),
-            "an anchored photograph should stand on the map where it was taken"
-        )
-        expandRouteIntoTheFreedSpace(in: app)
+        showWholeRouteOnTheMap(in: app)
 
         // The callout is drawn *above* its pin, so it is opened on the
         // topmost: the trailhead's, where what it covers is the village the
@@ -214,7 +225,6 @@ nonisolated final class ScreenshotUITests: XCTestCase {
         )
         frameCommunityPins(in: app)
         revealCommunityPins(in: app, atLeast: Self.minimumVisiblePins)
-        settleScreenshotMapTiles(in: app, rejectSmallLoadingPatches: true)
         capture(as: .nearby, of: app)
     }
 
@@ -282,7 +292,7 @@ extension ScreenshotUITests {
         case nearby = "03-nearby-trails"
         case following = "04-following-the-trail"
         case recording = "05-recording-a-hike"
-        case maps = "06-a-map-for-the-mountains"
+        case terrain = "06-the-trail-in-3d"
         case walkHistory = "07-walk-summary"
         case trailMaker = "08-draw-your-own-trail"
         case place = "09-a-place-and-its-photos"
@@ -460,11 +470,22 @@ extension ScreenshotUITests {
         )
     }
 
-    /// How many steps out the nearby frame takes from where the map opens on
-    /// the hiker: one, from the streets of Schönau to the end of the lake,
-    /// which is the scale a walk up to the alm and one round the landing both
-    /// read at. Two put the whole valley on screen and the lines went thin.
-    static let nearbyZoomOutSteps = 1
+    /// How much ground the nearby frame's open map has to show, in square
+    /// kilometres, before it stops stepping out from where the map opens on
+    /// the hiker: from the streets of Schönau to the end of the lake, which
+    /// is the scale a walk up to the alm and one round the landing both read
+    /// at.
+    ///
+    /// Ground rather than a count of steps, because the map opens on the
+    /// same ground whatever it is drawn on, and a display with more points
+    /// draws it closer. Measured: one step takes the 6.9" phone to 33 km²,
+    /// the closed iPhone Duo to 25 and an iPad held upright to 40. It leaves
+    /// an iPad on its side at 11, with the lake off the bottom of the map,
+    /// and a second takes that to 45. One step further on the phone put the
+    /// whole valley on screen and the lines went thin.
+    static let nearbyGround = 15.0
+    /// The most steps out it takes to get there, on any display.
+    static let nearbyZoomOutLimit = 3
 
     /// The walks the nearby frame centres on, by the titles the `showcase`
     /// database gives them. Its two waymarked routes are pinned at the middle
@@ -492,9 +513,10 @@ extension ScreenshotUITests {
     /// half as much map again as the 6.9" phone without the step.
     @MainActor
     func frameCommunityPins(in app: XCUIApplication) {
-        let zoomOutSteps = screenshotDisplay(in: app).screen == XCUIScreen.main ? Self.nearbyZoomOutSteps : 0
-        for _ in 0..<zoomOutSteps {
-            guard let pin = visibleCommunityPins(in: app).first else { return }
+        let zoomOutLimit = screenshotDisplay(in: app).screen == XCUIScreen.main ? Self.nearbyZoomOutLimit : 0
+        for _ in 0..<zoomOutLimit {
+            guard let ground = openMapGround(in: app), ground < Self.nearbyGround,
+                  let pin = visibleCommunityPins(in: app).first else { break }
             pin.twoFingerTap()
         }
         // Once. A second pass is a correction of a few points, short enough
@@ -536,8 +558,7 @@ extension ScreenshotUITests {
             x: min(max(anchor.x + dx * window.width, area.minX + margin.width), area.maxX - margin.width),
             y: min(max(anchor.y + dy * window.height, area.minY + margin.height), area.maxY - window.height * 0.02)
         )
-        coordinate(at: anchor, on: map)
-            .press(forDuration: Self.dragPressDuration, thenDragTo: coordinate(at: landing, on: map))
+        panMap(map, from: anchor, to: landing)
     }
 
     /// The community pins that are actually on screen, in the open map.
@@ -585,6 +606,35 @@ extension ScreenshotUITests {
         element("map-side-panel", in: app).exists
     }
 
+    /// Pans the map by the vector from `start` to `end`, both in the window,
+    /// and leaves it there.
+    ///
+    /// Two things kept a pan from landing where it was aimed, and each cost
+    /// the hero frame a second pan to take back what the first got wrong:
+    ///
+    /// - A map let go of at speed coasts on. Its pan after the zoom landed
+    ///   60% past its aim, 0.13 of the screen one way and then 0.08 back. So
+    ///   the drag is drawn slowly and held before it lets go.
+    /// - MapKit spends the first ``panSlop`` points of a drag telling it from
+    ///   a tap, and moves the map by the rest: a 57.7-point drag moved it
+    ///   47.7. So the finger goes down that far behind `start`, and the map
+    ///   moves by the whole vector.
+    @MainActor
+    func panMap(_ map: XCUIElement, from start: CGPoint, to end: CGPoint) {
+        let length = hypot(end.x - start.x, end.y - start.y)
+        guard length > 0 else { return }
+        let runUp = CGPoint(
+            x: start.x - (end.x - start.x) / length * Self.panSlop,
+            y: start.y - (end.y - start.y) / length * Self.panSlop
+        )
+        coordinate(at: runUp, on: map).press(
+            forDuration: Self.dragPressDuration,
+            thenDragTo: coordinate(at: end, on: map),
+            withVelocity: .slow,
+            thenHoldForDuration: Self.dragPressDuration
+        )
+    }
+
     /// `point`, in the window, as a coordinate of `element`: absolute, where a
     /// normalized offset is a share of whatever size `element` is.
     @MainActor
@@ -603,7 +653,7 @@ extension ScreenshotUITests {
     /// aims at a point no pin is near, which is how this frame ended up with
     /// one pin on screen instead of three.
     @MainActor
-    private static func bounds(of pins: [XCUIElement]) -> CGRect? {
+    static func bounds(of pins: [XCUIElement]) -> CGRect? {
         let real = pins.map(\.frame).filter { $0.width > 0 && $0.height > 0 }
         guard let first = real.first else { return nil }
         return real.dropFirst().reduce(first) { $0.union($1) }
@@ -644,6 +694,25 @@ extension ScreenshotUITests {
         )
     }
 
+    /// Frames the whole route in the open map, with the sheet out of its way
+    /// and the photo pins standing along it — what the hero frame and the
+    /// tilted one both start from.
+    @MainActor
+    func showWholeRouteOnTheMap(in app: XCUIApplication) {
+        let zoom = app.buttons[screenshotText("Zoom")]
+        XCTAssertTrue(
+            scrollIntoView(zoom, in: app),
+            "the detail screen should offer to frame the whole route"
+        )
+        zoom.tap()
+        collapseSheet(in: app)
+        XCTAssertTrue(
+            element("photo-pin", in: app).waitForExistence(timeout: UITestTimeout.navigation),
+            "an anchored photograph should stand on the map where it was taken"
+        )
+        expandRouteIntoTheFreedSpace(in: app)
+    }
+
     /// Re-frames the route to use the space collapsing the sheet just freed.
     ///
     /// The app cannot be asked to do this, and that is a deliberate design
@@ -666,23 +735,22 @@ extension ScreenshotUITests {
     /// focus area measures there — so the route has the whole open map, and
     /// one more step would push its ends off it.
     @MainActor
-    func expandRouteIntoTheFreedSpace(in app: XCUIApplication) {
+    private func expandRouteIntoTheFreedSpace(in app: XCUIApplication) {
         if isPanelBesideTheMap(in: app) {
             positionLandscapeHikeHeader(in: app)
             return
         }
         centerPhotoPins(in: app)
         zoomMapInOneStep(in: app)
-        // Up to twice, because a drag lands short of the vector it is given,
-        // so one correction only closes part of the gap. A pass inside
-        // ``centeringTolerance`` spends no gesture.
+        // Measured again after it, and panned again only if that says so: a
+        // pass inside ``centeringTolerance`` spends no gesture.
         centerPhotoPins(in: app)
         centerPhotoPins(in: app)
     }
 
     /// This hike's photo pins, top to bottom.
     @MainActor
-    private func photoPins(in app: XCUIApplication) -> [XCUIElement] {
+    func photoPins(in app: XCUIApplication) -> [XCUIElement] {
         app.descendants(matching: .any)
             .matching(identifier: "photo-pin")
             .allElementsBoundByIndex
@@ -712,16 +780,12 @@ extension ScreenshotUITests {
         let dy = Self.heroRouteCenter - bounds.midY / screen.height
         guard abs(dx) > Self.centeringTolerance || abs(dy) > Self.centeringTolerance else { return }
 
-        let from = CGVector(dx: Self.dragAnchor.dx, dy: Self.dragAnchor.dy)
-        let to = CGVector(
-            dx: min(max(Self.dragAnchor.dx + dx, 0.05), 0.95),
-            dy: min(max(Self.dragAnchor.dy + dy, 0.05), 0.7)
+        let anchor = CGPoint(x: screen.width * Self.dragAnchor.dx, y: screen.height * Self.dragAnchor.dy)
+        let landing = CGPoint(
+            x: screen.width * min(max(Self.dragAnchor.dx + dx, 0.05), 0.95),
+            y: screen.height * min(max(Self.dragAnchor.dy + dy, 0.05), 0.7)
         )
-        map.coordinate(withNormalizedOffset: from)
-            .press(
-                forDuration: Self.dragPressDuration,
-                thenDragTo: map.coordinate(withNormalizedOffset: to)
-            )
+        panMap(map, from: anchor, to: landing)
     }
 
     /// Drags the sheet down to its compact detent and waits for it to land.
@@ -777,8 +841,14 @@ extension ScreenshotUITests {
     /// there. The app is asked only which screen that is.
     @MainActor
     func capture(as frame: Frame, of app: XCUIApplication) {
+        // Once, here, for every frame with a map in it, and as strictly as
+        // that frame's own map allows.
         switch frame {
-        case .route, .nearby, .following, .recording, .maps, .trailMaker:
+        case .nearby:
+            settleScreenshotMapTiles(in: app, rejectSmallLoadingPatches: true)
+        case .recording:
+            settleScreenshotMapTiles(in: app, requireTerrain: true)
+        case .route, .following, .terrain, .trailMaker:
             settleScreenshotMapTiles(in: app)
         case .photos, .walkHistory, .place, .share:
             break

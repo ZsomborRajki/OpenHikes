@@ -28,6 +28,13 @@ extension ScreenshotUITests {
     private static let maximumSmallPatchFraction = 0.01
     private static let mapSampleInset: CGFloat = 12
     private static let locationPulseRadius: CGFloat = 64
+    // The flat grey MapKit draws past the last ground of a tilted map is
+    // 99, 99, 99 on an iPad Pro 13-inch. Rock under hillshading is as dark,
+    // and never as even: 126, 128, 120.
+    private static let farEdgeGray: ClosedRange<UInt8> = 80...120
+    private static let farEdgeChannelSpread: UInt8 = 2
+    private static let farEdgeProbeDepth: CGFloat = 48
+    private static let farEdgeProbeStride = 4
 
     @MainActor
     private func screenshotPixels(on display: ScreenshotDisplay) -> (bytes: [UInt8], width: Int, height: Int)? {
@@ -56,21 +63,6 @@ extension ScreenshotUITests {
         }
         guard rendered else { return nil }
         return (pixels, width, height)
-    }
-
-    @MainActor
-    func screenshotMapHasTiles(
-        in app: XCUIApplication,
-        on display: ScreenshotDisplay,
-        requireTerrain: Bool = true,
-        rejectSmallLoadingPatches: Bool = false
-    ) -> Bool {
-        screenshotMapSample(
-            in: app,
-            on: display,
-            requireTerrain: requireTerrain,
-            rejectSmallLoadingPatches: rejectSmallLoadingPatches
-        )?.hasTiles == true
     }
 
     /// Palette and signature describe the same rendered frame. Two separate
@@ -129,6 +121,29 @@ extension ScreenshotUITests {
             && (!requireTerrain || Double(terrain) / Double(samples) >= Self.minimumTerrainFraction)
             && Double(placeholder) / Double(samples) < maximum
         return (hasTiles, signature.finalize())
+    }
+
+    /// Whether the flat grey past a tilted map's last ground shows along the
+    /// top of the open map: any row of its first points that is mostly that
+    /// grey, which a status bar's glyphs and a weather badge leave it.
+    @MainActor
+    func screenshotMapShowsItsFarEdge(in app: XCUIApplication, on display: ScreenshotDisplay) -> Bool {
+        guard let image = screenshotPixels(on: display) else { return false }
+        let band = openMapArea(in: app)
+            .intersection(CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        guard !band.isEmpty else { return false }
+        let top = Int(band.minY)
+        let rows = stride(from: top, to: top + Int(Self.farEdgeProbeDepth), by: Self.farEdgeProbeStride)
+        let columns = Array(stride(from: Int(band.minX), to: Int(band.maxX), by: Self.farEdgeProbeStride))
+        return rows.contains { row in
+            let gray = columns.count { column in
+                let offset = (row * image.width + column) * 4
+                let channels = image.bytes[offset..<(offset + 3)]
+                guard let high = channels.max(), let low = channels.min() else { return false }
+                return high - low <= Self.farEdgeChannelSpread && Self.farEdgeGray.contains(high)
+            }
+            return gray * 2 > columns.count
+        }
     }
 
     @MainActor

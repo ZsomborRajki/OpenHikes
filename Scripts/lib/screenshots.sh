@@ -26,6 +26,16 @@
 # frame upright in its pixels and puts the pixel back on one that is that
 # close to a size App Store Connect takes, and leaves the rest alone.
 #
+# ## The iPad
+#
+# An app that runs on iPad is not taken without a 13-inch iPad set:
+# 2064 × 2752, or 2752 × 2064 on its side, which is what an iPad Pro 13-inch
+# captures. `--device-type "iPad Pro 13-inch (M5)"` shoots the set on one,
+# upright unless `--orientation landscape` asks for the other way up. Nothing
+# has to be opened, so the test class turns the device itself: the orientation
+# reaches it as OPENHIKES_SCREENSHOT_ORIENTATION, and an iPhone's run sets
+# none. The map screen draws its side panel on an iPad either way up.
+#
 # ## One appearance per script, and one device per appearance
 #
 # The light and dark passes used to be one script run twice over one device.
@@ -111,7 +121,7 @@ readonly screenshot_frames=(
     "03:testCapturesNearbyTrails"
     "04:testCapturesFollowingTheTrail"
     "05:testCapturesRecordingAHike"
-    "06:testCapturesMapsForTheMountains"
+    "06:testCapturesTheTrailInThreeDimensions"
     "07:testCapturesWalkHistory"
     "08:testCapturesDrawingATrail"
     "09:testCapturesAPlaceAndItsPhotos"
@@ -140,15 +150,19 @@ readonly screenshot_library_frames=" 01 02 06 09 10 "
 # into a retry.
 readonly addmedia_timeout_seconds=180
 
-# The sizes App Store Connect takes for an iPhone frame, each way up: the 6.9"
-# slot, then the iPhone Duo's cover and inner displays. Handed to
-# Scripts/lib/fit-screenshot.swift, which only ever adds the pixel a capture
-# came out short of one of them.
+# The sizes App Store Connect takes for a frame, each way up: the 6.9" iPhone
+# slot, the iPhone Duo's cover and inner displays, then the 13-inch iPad slot.
+# Handed to Scripts/lib/fit-screenshot.swift, which only ever adds the pixel a
+# capture came out short of one of them.
 readonly screenshot_store_sizes=(
     1320x2868 2868x1320
     1398x2034 2034x1398
     2007x2853 2853x2007
+    2064x2752 2752x2064
 )
+
+# The device types a set is shot on, one for each slot above.
+readonly screenshot_tablet_type='iPad Pro 13-inch (M5)'
 
 # How long one frame may run before XCTest kills it and moves on. The slowest,
 # the routed walk, waits on Apple and Stadia and takes under a minute; a frame
@@ -162,7 +176,7 @@ screenshots_usage() {
 Usage: $(basename "$0") [options]
 
 Captures the App Store screenshot set in $screenshot_appearance appearance on a
-dedicated 6.9" simulator.
+dedicated simulator: the 6.9" iPhone unless --device-type names another.
 
 Options:
   --frame <nn>       Shoot only this frame (01-10); repeat for more.
@@ -180,7 +194,8 @@ Options:
                     Use a freshly acquired pool device without erasing it.
                     The caller owns its pool claim and releases it afterwards.
   --pool-owner <id>  Owner passed to sim-pool acquire (default: session/checkout)
-  --device-type <t>  iPhone 18 Pro Max (default) or iPhone Duo
+  --device-type <t>  iPhone 18 Pro Max (default), iPhone Duo or
+                     $screenshot_tablet_type
   --pose <p>         For an iPhone Duo: closed (its inner display folded away,
                      as it boots) or open (unfolded). See Scripts/duo-pose.sh.
                      open needs hinge, and is skipped on a machine without it.
@@ -189,6 +204,8 @@ Options:
                      opens, 2853 x 2007). A closed Duo is shot upright: the
                      cover's home screen does not turn, so its pose cannot be
                      read back on its side before the app is up.
+                     On an iPad: portrait (default, 2064 x 2752) or landscape
+                     (2752 x 2064).
   --derived-data <p> Build directory (default: DerivedData/Screenshots-$screenshot_appearance)
   --locale <id>      Locale to pin the simulator to (default: en_IE). This is
                      what decides "2.4 km" against "2,4 km" and "6.6 mi", so
@@ -612,14 +629,26 @@ screenshots_main() {
         esac
     done
 
-    if [[ -n "$orientation" && "$pose" != open ]]; then
-        echo "--orientation needs --pose open: a closed Duo is shot upright." >&2
+    case "$device_type" in
+        'iPhone 18 Pro Max'|'iPhone Duo'|"$screenshot_tablet_type") ;;
+        *)
+            echo "Unsupported screenshot device type: $device_type" \
+                "(iPhone 18 Pro Max, iPhone Duo or $screenshot_tablet_type)." >&2
+            exit 2
+            ;;
+    esac
+    if [[ -n "$orientation" && "$pose" != open && "$device_type" != "$screenshot_tablet_type" ]]; then
+        echo "--orientation needs --pose open or an iPad: a closed Duo and an iPhone are shot upright." >&2
         exit 2
     fi
-    case "$device_type" in
-        'iPhone 18 Pro Max'|'iPhone Duo') ;;
-        *) echo "Unsupported screenshot device type: $device_type (iPhone 18 Pro Max or iPhone Duo)." >&2; exit 2 ;;
-    esac
+    # An iPad is turned by the test class, which is told which way here: see
+    # *The iPad* at the top of this file. Unset on an iPhone, whose tests then
+    # leave the device as Scripts/duo-pose.sh, or nothing, put it.
+    unset TEST_RUNNER_OPENHIKES_SCREENSHOT_ORIENTATION
+    if [[ "$device_type" == "$screenshot_tablet_type" ]]; then
+        orientation="${orientation:-portrait}"
+        export TEST_RUNNER_OPENHIKES_SCREENSHOT_ORIENTATION="$orientation"
+    fi
     # Before any device is touched: an open Duo needs hinge, and a machine
     # without it skips the set rather than failing the run or shooting it closed.
     local without_hinge
@@ -655,6 +684,7 @@ screenshots_main() {
     local layout="${pose:+$pose${orientation:+_$orientation}}"
     if [[ "$device_type" == 'iPhone Duo' && -z "$pose" ]]; then layout="closed"; fi
     if [[ "$pose" == open && -z "$orientation" ]]; then layout="open_portrait"; fi
+    if [[ "$device_type" == "$screenshot_tablet_type" && -z "$pose" ]]; then layout="$orientation"; fi
     output_dir="$(screenshot_output_directory "$output_root" "$device_type" "$locale_id" \
         "$layout" "$screenshot_appearance")" || exit $?
     device_pinned=false
