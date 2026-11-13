@@ -32,7 +32,8 @@
 #
 #   build     File an extract's routes into <dir> (default .build/trail-cells/squares).
 #             Pass --world for the whole planet and for nothing else: it is what
-#             lets the app read a square with no file as a place with no trails.
+#             lets the app answer from the squares at all, and read a square
+#             with no file as a place with no trails.
 #             Its working files go in <dir>.work and are deleted afterwards
 #             unless --keep-work. They are small beside the extract: Hungary's
 #             were 50 MB, for one in seventy-five of the world's hiking relations.

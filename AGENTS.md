@@ -1454,12 +1454,16 @@ square, one `CuratedTrailCell` record a square in the public database, fetched
 by name. `TrailCellGrid` argues the design and has the measurements.
 
 - **An answer is complete or it is not given** (`TrailCellLibrary`). A search
-  is answered from the squares only when every square within reach of it was
-  read, or is absent from a set the manifest says is the whole world. With no
-  manifest, a regional set that lacks a square, or a square that could not be
+  is answered from the squares only when the manifest says they are the whole
+  world, and every square within reach of the search was read or has no
+  record. With no manifest, a regional set, or a square that could not be
   read, `CuratedTrailSource` asks Overpass as it did before. So a build of the
   app can ship before the squares do, and an empty answer from the squares
   means *no trails here*.
+- **A regional build is never read, even where its squares are.** It leaves
+  out the routes that run out of its extract and holds nothing of the ones
+  beyond it, so a record that is there cannot say what is missing from it. A
+  region uploaded to development tries the upload, not the search.
 - **A square holds relations as OpenStreetMap has them**, not assembled
   lines. Which ways are the route, and whether they join, stays
   `CuratedTrailDecoding`'s, applied to a square as it is to an Overpass answer

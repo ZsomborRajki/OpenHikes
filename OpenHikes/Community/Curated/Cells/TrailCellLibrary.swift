@@ -12,14 +12,22 @@
 //
 //  - ``TrailCellAnswer/trails(_:)`` is everything the squares hold in the
 //    area. It is complete — an empty one means there are no waymarked day
-//    hikes there — and it is only given when every square the area needs was
-//    read, or is known not to exist in a set of squares that is the whole
-//    world.
+//    hikes there — and it is only given when the squares are the whole
+//    world, and every square the area needs was read or is known not to
+//    exist.
 //  - ``TrailCellAnswer/uncovered`` is the squares not reaching this area:
-//    none published in this environment, or a regional set with this square
-//    missing. See ``TrailCellFetch/Manifest``.
+//    none published in this environment, or a set that is only part of the
+//    world. See ``TrailCellFetch/Manifest``.
 //  - ``TrailCellAnswer/unreachable`` is a square that should be readable and
 //    was not.
+//
+//  **A square that is there is not enough.** A regional build files a square
+//  for the routes its extract holds whole, and leaves out the ones that run
+//  out of the extract or lie wholly beyond it, so in part of the world a
+//  record cannot say what is missing from it: read as answers, two squares of
+//  such a set give a search a list that is a route short, with nothing on
+//  screen to say so. So what a manifest has not called the whole world is not
+//  read at all.
 //
 //  The two non-answers send the search to Overpass exactly as it went before
 //  there were squares, so nothing a hiker sees is ever worse than it was: the
@@ -103,7 +111,7 @@ nonisolated struct TrailCellLibrary: Sendable {
                 held.merge(cells) { _, fresh in fresh }
 
             case .uncovered:
-                Self.logger.notice("The trail squares do not reach this area, so Overpass is asked.")
+                Self.logger.notice("The trail squares are not the whole world, so Overpass is asked.")
                 return .uncovered
 
             case .unreachable:
@@ -158,6 +166,22 @@ nonisolated private extension TrailCellLibrary {
             return .unreachable
         }
 
+        // Asked before any square is looked at, the ones that arrived
+        // included: see this file's header for why a record that is there
+        // answers nothing in a set that is part of the world. It also means
+        // nothing is kept from such a set, so every kept square came out of
+        // one that was the whole world.
+        switch fetch.manifest {
+        case .complete:
+            break
+
+        case .absent, .partial:
+            return .uncovered
+
+        case .unread:
+            return .unreachable
+        }
+
         var cells: [String: TrailCellFile] = [:]
         var fresh: [(name: String, bytes: Data)] = []
         for name in names {
@@ -173,20 +197,11 @@ nonisolated private extension TrailCellLibrary {
                 fresh.append((name: name, bytes: bytes))
 
             case .absent:
-                switch fetch.manifest {
-                case .complete:
-                    // No record, in a set that is the whole world: a square
-                    // with nothing in it, and worth remembering as one.
-                    let empty = TrailCellFile(relations: [])
-                    cells[name] = empty
-                    fresh.append((name: name, bytes: empty.encoded()))
-
-                case .absent, .partial:
-                    return .uncovered
-
-                case .unread:
-                    return .unreachable
-                }
+                // No record, in a set that is the whole world: a square with
+                // nothing in it, and worth remembering as one.
+                let empty = TrailCellFile(relations: [])
+                cells[name] = empty
+                fresh.append((name: name, bytes: empty.encoded()))
 
             case .failed:
                 return .unreachable

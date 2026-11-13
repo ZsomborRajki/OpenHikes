@@ -32,8 +32,9 @@ struct BuildOptions {
     var relationsPath: String
     var waysPath: String
     var outputDirectory: URL
-    /// Whether the extract was the whole planet, so a square with no file is
-    /// a square with no routes. See `BuildManifest.complete`.
+    /// Whether the extract was the whole planet, so every square holds all
+    /// of its routes and a square with no file is a square with no routes.
+    /// See `BuildManifest.complete`.
     var coversTheWorld: Bool
     /// When the extract's data was current, as osmium read it off the file.
     var osmTimestamp: Date?
@@ -56,9 +57,10 @@ struct BuildManifest: Codable {
     static let cellFileExtension = "cell"
 
     var generation: Int
-    /// Whether these squares are every square there is. Only then may a
-    /// reader take a missing one to mean *no routes here*; a regional build
-    /// says no, and the app goes on asking Overpass about what it lacks.
+    /// Whether these squares are every square there is. Only then does the
+    /// app read them, and take a missing one to mean *no routes here*. A
+    /// regional build says no: it leaves out the routes that run out of its
+    /// extract, so the app goes on asking Overpass.
     var complete: Bool
     var builtAt: Date
     var osmTimestamp: Date?

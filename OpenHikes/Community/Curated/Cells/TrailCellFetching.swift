@@ -16,10 +16,15 @@
 //    this environment at all, and nothing is known about this one — which is
 //    not an answer, and Overpass is asked as it always was.
 //
+//  In part of the world a square that *is* there is no answer either: a
+//  regional build leaves out the routes that run out of its extract, and
+//  ``TrailCellLibrary`` reads none of its squares for that reason.
+//
 //  That second reading is also what lets a build of the app ship before the
-//  squares do, and lets a regional build be tried in development: until a
-//  manifest says the squares are complete, a missing one only ever means *ask
-//  the old way*.
+//  squares do, lets a regional build be uploaded to development to try the
+//  upload, and keeps a first upload out of sight until its last square is
+//  in: until a manifest says the squares are complete, every search is asked
+//  the old way.
 //
 //  A protocol for the reason ``CuratedTrailSourcing`` is one. The conformance
 //  that reaches CloudKit is ``CloudKitTrailCellDatabase``, and no suite may
@@ -39,8 +44,9 @@ nonisolated struct TrailCellFetch: Equatable, Sendable {
         /// The squares are the whole world, so a square with no record is a
         /// square with no routes.
         case complete
-        /// The squares are part of the world, so a square with no record is
-        /// one nothing is known about.
+        /// The squares are part of the world, so nothing is known from them:
+        /// a square with no record may hold routes, and one with a record
+        /// may hold more than it lists.
         case partial
         /// The manifest could not be read, which is not the same as there
         /// being none.
