@@ -1254,14 +1254,10 @@ in its source header. Do not weaken one without a measurement.
   once before promoting. An `@Attribute(.externalStorage)` column, such as
   `Hike.route`, also mirrors through a `CD_<name>_ckAsset` asset field: check
   that the development export has it, and promote both.
-- **Deployment state, checked 2026-11-13.** Development exports
-  `md5 e2fd4f7c500b3911fae3d86a9b9d3f9c` and production
-  `md5 81e928147a7c881fabb32ee3e1270fcd`. Development is ahead by the two
+- **Deployment state, checked 2026-11-13.** Development and production both
+  export `md5 e2fd4f7c500b3911fae3d86a9b9d3f9c`. Both have the two
   trail-square record types, `CuratedTrailCell` and `CuratedTrailManifest`,
-  neither with an index. Production needs them promoted before squares are
-  uploaded to it, and not before a build is: the app only reads them, and
-  reads a record that is not there as no squares (*The trail squares*). Both
-  environments have a column for every attribute in
+  neither with an index, and a column for every attribute in
   `MirroredCloudKitSchema.recordTypes`. The only live columns the contract
   does not name are SwiftData's own `CD_entityName`, the
   to-one reference columns that the contract lists as relationships, and the
