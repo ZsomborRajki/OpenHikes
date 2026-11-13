@@ -4224,6 +4224,13 @@ cells_work="$work/trail-cells"
 mkdir -p "$cells_work"
 export OPENHIKES_TRAIL_CELLS_BUILD="$cells_work/tool"
 : > "$cells_work/extract.osm.pbf"
+# No case here may reach CloudKit, and a key is the one thing that would let
+# one: an upload's dry run with a key reads the real database. The machine
+# that uploads keeps its keys in these names, so all six are cleared for the
+# whole section, and a case that is about a key sets its own.
+unset OPENHIKES_CLOUDKIT_KEY_ID OPENHIKES_CLOUDKIT_KEY_FILE \
+    OPENHIKES_CLOUDKIT_KEY_ID_DEVELOPMENT OPENHIKES_CLOUDKIT_KEY_FILE_DEVELOPMENT \
+    OPENHIKES_CLOUDKIT_KEY_ID_PRODUCTION OPENHIKES_CLOUDKIT_KEY_FILE_PRODUCTION
 
 # One relation of each kind the build tells apart. The first is filed, and its
 # name carries every character OPL escapes; the last is filed elsewhere, so the
