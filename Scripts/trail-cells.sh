@@ -48,6 +48,9 @@
 #                                Console. Or pass --key-id.
 #   OPENHIKES_CLOUDKIT_KEY_FILE  Its private half, a PEM file kept outside the
 #                                repository. Or pass --key-file.
+#   Each environment has keys of its own in the Console. Add _DEVELOPMENT or
+#   _PRODUCTION to either name for a key that is only that environment's; it
+#   is read before the plain name.
 #   OPENHIKES_TRAIL_CELLS_BUILD  Where the tool is compiled to
 #                                (default .build/trail-cells).
 #
@@ -191,7 +194,7 @@ build() {
 # `upload` and `whoami`: the tool's own options, with the container and the key
 # filled in from where this machine keeps them.
 with_database() {
-    local command="$1" has_key_id=false has_key_file=false argument
+    local command="$1" has_key_id=false has_key_file=false argument environment="" previous=""
     shift
     for argument in "$@"; do
         case "$argument" in
@@ -199,19 +202,34 @@ with_database() {
             --key-file) has_key_file=true ;;
             --container) usage_error "the container is the app's own; it is not an option." ;;
         esac
+        [[ "$previous" != --environment ]] || environment="$argument"
+        previous="$argument"
     done
+    # A key belongs to one environment, so each may have its own:
+    # OPENHIKES_CLOUDKIT_KEY_ID_PRODUCTION is read before the plain name when
+    # the upload is to production, and likewise for the file and development.
+    local suffix key_id key_file id_name="OPENHIKES_CLOUDKIT_KEY_ID" file_name="OPENHIKES_CLOUDKIT_KEY_FILE"
+    suffix="$(printf '%s' "$environment" | tr '[:lower:]' '[:upper:]')"
+    key_id="${OPENHIKES_CLOUDKIT_KEY_ID:-}"
+    key_file="${OPENHIKES_CLOUDKIT_KEY_FILE:-}"
+    if [[ "$suffix" == DEVELOPMENT || "$suffix" == PRODUCTION ]]; then
+        id_name="OPENHIKES_CLOUDKIT_KEY_ID_$suffix"
+        file_name="OPENHIKES_CLOUDKIT_KEY_FILE_$suffix"
+        key_id="${!id_name:-$key_id}"
+        key_file="${!file_name:-$key_file}"
+    fi
     local arguments=("$command" "$@" --container "$(container_identifier)")
     # A plan against a saved state sends nothing, so it needs no key.
     if [[ " $* " != *" --against "* ]]; then
         if [[ "$has_key_id" == false ]]; then
-            [[ -n "${OPENHIKES_CLOUDKIT_KEY_ID:-}" ]] \
-                || usage_error "name the server-to-server key: --key-id, or OPENHIKES_CLOUDKIT_KEY_ID."
-            arguments+=(--key-id "$OPENHIKES_CLOUDKIT_KEY_ID")
+            [[ -n "$key_id" ]] \
+                || usage_error "name the server-to-server key: --key-id, $id_name or OPENHIKES_CLOUDKIT_KEY_ID."
+            arguments+=(--key-id "$key_id")
         fi
         if [[ "$has_key_file" == false ]]; then
-            [[ -n "${OPENHIKES_CLOUDKIT_KEY_FILE:-}" ]] \
-                || usage_error "name the key's PEM file: --key-file, or OPENHIKES_CLOUDKIT_KEY_FILE."
-            arguments+=(--key-file "$OPENHIKES_CLOUDKIT_KEY_FILE")
+            [[ -n "$key_file" ]] \
+                || usage_error "name the key's PEM file: --key-file, $file_name or OPENHIKES_CLOUDKIT_KEY_FILE."
+            arguments+=(--key-file "$key_file")
         fi
     fi
     prepare_tool

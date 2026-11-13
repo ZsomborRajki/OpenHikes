@@ -4439,6 +4439,17 @@ if expect_status 2 && expect_contains "$output" "OPENHIKES_CLOUDKIT_KEY_ID" "the
     pass
 fi
 
+# Each environment has keys of its own in the Console, so each may be named
+# apart. With only development's set, an upload to production has no key, and
+# says which name it looked for.
+run_script "trail-cells upload reads an environment's own key, and not another environment's" \
+    env -u OPENHIKES_CLOUDKIT_KEY_ID -u OPENHIKES_CLOUDKIT_KEY_FILE \
+    OPENHIKES_CLOUDKIT_KEY_ID_DEVELOPMENT=dev-key OPENHIKES_CLOUDKIT_KEY_FILE_DEVELOPMENT="$cells_work/none.pem" \
+    "$trail_cells" upload "$cells_squares" --environment production --dry-run
+if expect_status 2 && expect_contains "$output" "OPENHIKES_CLOUDKIT_KEY_ID_PRODUCTION" "the error"; then
+    pass
+fi
+
 run_script "trail-cells upload does not take a container: it is the app's" \
     "$trail_cells" upload "$cells_squares" --environment development --container iCloud.example --dry-run
 if expect_status 2 && expect_contains "$output" "the container is the app's own" "the error"; then
