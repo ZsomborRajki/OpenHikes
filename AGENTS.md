@@ -876,6 +876,11 @@ a change to recording, the map, the sheet or the render path; the PR template,
     rule.
   - `verticalSizeClass` and the window's size are read only in
     `SheetLayoutReader`.
+  - A window can change size and keep the panel: an iPad turned, or its
+    window resized. Nothing SwiftUI hands the map changes then, so
+    `MapView.update` does not run, and what the map measures from its own
+    height — the row along its bottom — hears of it from UIKit
+    (`MapLayoutObserver`).
   - The sheet keeps its toolbar across its top (`horizontalSheetToolbar()`).
     A closed iPhone Duo stands a sheet's toolbar up its side, and the compact
     detent holds one button of that column.

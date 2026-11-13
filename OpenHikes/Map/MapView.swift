@@ -434,8 +434,10 @@ struct MapView: MapViewRepresentable, Equatable {
         // And *Places Around Trail*'s, the third — see `TrailPlacesAround.swift`.
         addPlacesAroundSearchControl(to: mapView, coordinator, alignedTo: guide)
         // Replaces the placeholders above with real positions as soon as the
-        // map has a height to measure against.
+        // map has a height to measure against, and again whenever that height
+        // changes — see `MapLayoutObserver.swift`.
         coordinator.applySheetTop(on: mapView)
+        addLayoutObserver(to: mapView, coordinator)
         #endif
     }
 
@@ -746,12 +748,15 @@ struct MapView: MapViewRepresentable, Equatable {
         // `routeID`) actually starts the location tracking; see
         // `Coordinator.observeLocation`.
         coordinator.observeLocation(locationManager, on: mapView)
-        // Only reapplies when the map's own bounds height moved (first layout,
-        // rotation) — `sheetMetrics.topY` changes are already tracked at full
-        // frame rate by `observeSheetMetrics`'s own observation, so redoing it
-        // here unconditionally would just repeat that work on every one of
-        // this method's (frequent, often no-op) calls.
-        coordinator.applySheetTopIfHeightChanged(on: mapView)
+        // Only reapplies when the geometry the row is measured from moved —
+        // here, the side panel's inset, written above. The map's own size
+        // reaches the same call from ``MapLayoutObserver``, since a size that
+        // changes with no input of this view never gets here.
+        // `sheetMetrics.topY` changes are already tracked at full frame rate
+        // by `observeSheetMetrics`'s own observation, so redoing it here
+        // unconditionally would just repeat that work on every one of this
+        // method's (frequent, often no-op) calls.
+        coordinator.applySheetTopIfGeometryChanged(on: mapView)
     }
 
     #if os(macOS)
