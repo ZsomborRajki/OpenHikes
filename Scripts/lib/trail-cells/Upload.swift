@@ -28,10 +28,18 @@
 //
 //  A build that is not the whole world over a database that says it holds the
 //  whole world. That is somebody refreshing a region against the wrong
-//  environment, and what it would do is delete every other region — the app
-//  would then read the gaps as *no routes here*, because the manifest it found
-//  still said the squares were complete until the last step. `--replace-world`
-//  is for the day that is really meant.
+//  environment, and what it would do is delete every other region and send
+//  every search back to Overpass, because the app reads only squares that are
+//  the whole world. `--replace-world` is for the day that is really meant.
+//
+//  On that day the first write is also what says the squares are no longer
+//  the whole world, **before the first square is deleted** and whether or not
+//  the list gains a name. Left for the last write, the flag would stand over
+//  the gaps for as long as the upload took: a phone that searched meanwhile
+//  would read a deleted square as *no routes here* and keep that for thirty
+//  days, and an upload interrupted before its last step would leave the flag
+//  standing for good. ``Plan/opening`` is that first write, decided with the
+//  rest of the plan so that a dry run can say it.
 //
 
 import Foundation
@@ -53,8 +61,21 @@ enum Upload {
         var upload: [BuildManifest.Cell] = []
         var delete: [String] = []
         var unchanged = 0
+        /// What the manifest is made to say before the first square is
+        /// touched, when it has to say anything. See this file's header.
+        var opening: Opening?
 
         var isEmpty: Bool { upload.isEmpty && delete.isEmpty }
+    }
+
+    /// The first of the manifest's two writes.
+    struct Opening {
+        /// Every name a record can exist under once the upload has begun.
+        var listing: Set<String>
+        /// Whether it also says the squares are not the whole world: for a
+        /// manifest that did not exist, and for one that said they were when
+        /// this build is not.
+        var saysNotTheWorld: Bool
     }
 
     /// How many squares go up between one request for upload URLs and the
@@ -74,6 +95,16 @@ enum Upload {
             }
         }
         plan.delete = remote.digests.keys.filter { !localNames.contains($0) }.sorted()
+
+        let endsTheWorld = remote.complete && !local.complete
+        let listsNewNames = !plan.isEmpty
+            && (!remote.manifestExists || !remote.listed.isSuperset(of: localNames))
+        if endsTheWorld || listsNewNames {
+            plan.opening = Opening(
+                listing: remote.listed.union(localNames).union(remote.digests.keys),
+                saysNotTheWorld: endsTheWorld || !remote.manifestExists
+            )
+        }
         return plan
     }
 }
@@ -114,15 +145,20 @@ extension Upload {
             + "\(plan.delete.count) to delete, \(plan.unchanged) unchanged.")
         if remote.complete, !local.complete, !mayReplaceWorld {
             throw CloudKitError(description: "the database says its squares are the whole world and this build "
-                + "is not, so uploading it would delete \(plan.delete.count) squares of everywhere else. "
-                + "Pass --replace-world if that is what is meant.")
+                + "is not, so uploading it would delete \(plan.delete.count) squares of everywhere else and "
+                + "send every search back to Overpass. Pass --replace-world if that is what is meant.")
+        }
+        // Said from the plan, so that a dry run shows the write is in it.
+        if remote.complete, plan.opening?.saysNotTheWorld == true {
+            print("Before any square is touched, the manifest is made to say the squares are no longer the "
+                + "whole world.")
         }
         guard !isDryRun, let database else {
             print("Dry run: nothing was changed.")
             return
         }
         try confirm(plan, in: database.environment, isConfirmed: isConfirmed)
-        try await apply(plan, of: local, from: directory, to: database, remote: remote)
+        try await apply(plan, of: local, from: directory, to: database)
         print("Done: \(local.cells.count) squares, \(local.routeCount) routes, "
             + (local.complete ? "marked as the whole world." : "not marked as the whole world."))
     }
@@ -246,15 +282,15 @@ private extension Upload {
         _ plan: Plan,
         of local: BuildManifest,
         from directory: URL,
-        to database: PublicDatabase,
-        remote: Remote
+        to database: PublicDatabase
     ) async throws {
-        let localNames = Set(local.cells.map(\.name))
-        if !plan.isEmpty, !remote.listed.isSuperset(of: localNames) || !remote.manifestExists {
-            // The first write of the two — see this file's header.
+        if let opening = plan.opening {
+            // The first write of the two — see this file's header. An update
+            // rather than a replacement, so a manifest that goes on saying
+            // what it said keeps its other fields until the last write.
             try await writeManifest(
-                listing: remote.listed.union(localNames).union(remote.digests.keys),
-                fields: remote.manifestExists ? [:] : [CommunitySchema.TrailManifest.complete: .integer(0)],
+                listing: opening.listing,
+                fields: opening.saysNotTheWorld ? [CommunitySchema.TrailManifest.complete: .integer(0)] : [:],
                 operation: "forceUpdate",
                 to: database
             )
@@ -283,7 +319,12 @@ private extension Upload {
         if let osmTimestamp = local.osmTimestamp {
             fields[CommunitySchema.TrailManifest.osmTimestamp] = .timestamp(osmTimestamp)
         }
-        try await writeManifest(listing: localNames, fields: fields, operation: "forceReplace", to: database)
+        try await writeManifest(
+            listing: Set(local.cells.map(\.name)),
+            fields: fields,
+            operation: "forceReplace",
+            to: database
+        )
     }
 
     static func upload(_ cells: [BuildManifest.Cell], from directory: URL, to database: PublicDatabase) async throws {

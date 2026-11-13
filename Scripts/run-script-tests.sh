@@ -4395,12 +4395,13 @@ run_script "trail-cells upload plans to send what changed, delete what is gone a
 if expect_status 0 \
     && expect_contains "$output" \
         "iCloud.tappium.com.OpenHikes, development: 1 squares to upload, 1 to delete, 1 unchanged." "the plan" \
+    && expect_absent "$output" "no longer the whole world" "the plan of a world refreshed with a world" \
     && expect_contains "$output" "nothing was changed" "the output"; then
     pass
 fi
 
 # A region refreshed against a database that holds the world would delete
-# everywhere else, and the app would read the gaps as places with no trails.
+# everywhere else, and send every search back to Overpass.
 run_script "trail-cells upload refuses to put a region where the whole world is" \
     "$trail_cells" upload "$cells_work/region" --environment production --dry-run --against "$cells_work/remote.json"
 if expect_status 1 && expect_contains "$output" "--replace-world" "the error"; then
@@ -4410,7 +4411,31 @@ fi
 run_script "trail-cells upload replaces the world with a region when it is told that is meant" \
     "$trail_cells" upload "$cells_work/region" --environment production --dry-run --replace-world \
     --against "$cells_work/remote.json"
-if expect_status 0 && expect_contains "$output" ", production: 1 squares to upload, 1 to delete" "the plan"; then
+if expect_status 0 && expect_contains "$output" ", production: 1 squares to upload, 1 to delete" "the plan" \
+    && expect_contains "$output" "Before any square is touched" "the plan"; then
+    pass
+fi
+
+# The flag has to go before the first delete does, or a phone that searches
+# meanwhile reads the gap as a place with no trails and keeps that for thirty
+# days. Here the database already holds both of the region's squares as the
+# build has them, so the manifest's list gains no name, which used to be the
+# only reason the manifest was written before the squares were touched.
+cells_far_digest="$(grep -B 1 '"name" : "trails1_544_776"' "$cells_work/region/manifest.json" \
+    | sed -n 's/.*"digest" : "\(.*\)".*/\1/p')"
+cat > "$cells_work/remote-world.json" <<EOF
+{
+  "manifestExists": true,
+  "complete": true,
+  "listed": ["trails1_544_776", "trails1_550_771", "trails1_10_10"],
+  "digests": { "trails1_544_776": "$cells_far_digest", "trails1_550_771": "$cells_digest", "trails1_10_10": "0000" }
+}
+EOF
+run_script "trail-cells upload stops calling the squares the whole world before it deletes one, with no name to list" \
+    "$trail_cells" upload "$cells_work/region" --environment production --dry-run --replace-world \
+    --against "$cells_work/remote-world.json"
+if expect_status 0 && expect_contains "$output" ", production: 0 squares to upload, 1 to delete, 2 unchanged." "the plan" \
+    && expect_contains "$output" "Before any square is touched" "the plan"; then
     pass
 fi
 
