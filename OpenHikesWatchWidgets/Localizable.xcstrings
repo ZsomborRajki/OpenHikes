@@ -27,6 +27,12 @@
             "state" : "translated",
             "value" : "Annulla"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отменить"
+          }
         }
       }
     },
@@ -55,6 +61,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fine"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Готово"
           }
         }
       }
@@ -85,6 +97,12 @@
             "state" : "translated",
             "value" : "Escursione"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поход"
+          }
         }
       }
     },
@@ -109,6 +127,12 @@
           }
         },
         "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes"
+          }
+        },
+        "ru" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes"
@@ -142,6 +166,12 @@
             "state" : "translated",
             "value" : "OpenHikes ha bisogno della tua posizione per poter registrare un’escursione."
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Чтобы записать поход, приложению OpenHikes нужна ваша геопозиция."
+          }
         }
       }
     },
@@ -171,6 +201,12 @@
             "state" : "translated",
             "value" : "Metti in pausa l’escursione"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Приостановить поход"
+          }
         }
       }
     },
@@ -199,6 +235,12 @@
             "state" : "translated",
             "value" : "In pausa"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На паузе"
+          }
         }
       }
     },
@@ -226,6 +268,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "In pausa, %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На паузе, %@"
           }
         }
       }
@@ -256,6 +304,12 @@
             "state" : "translated",
             "value" : "Mette in pausa l’escursione in registrazione, dal suo pannello nella schermata di blocco."
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Приостанавливает запись похода с ее панели на экране блокировки."
+          }
         }
       }
     },
@@ -284,6 +338,12 @@
             "state" : "translated",
             "value" : "In registrazione"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Идет запись"
+          }
         }
       }
     },
@@ -311,6 +371,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "In registrazione, %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Идет запись, %@"
           }
         }
       }
@@ -341,6 +407,12 @@
             "state" : "translated",
             "value" : "Riprendi l’escursione"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Возобновить поход"
+          }
         }
       }
     },
@@ -369,6 +441,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Riprende l’escursione in pausa, dal suo pannello nella schermata di blocco."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Возобновляет приостановленный поход с его панели на экране блокировки."
           }
         }
       }
@@ -399,6 +477,12 @@
             "state" : "translated",
             "value" : "Mostra un sentiero a tua scelta, il sentiero selezionato o un’escursione in fase di registrazione."
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показывает тропу на ваш выбор, выбранную в приложении тропу или поход, который сейчас записывается."
+          }
         }
       }
     },
@@ -427,6 +511,12 @@
             "state" : "translated",
             "value" : "Avvia una registrazione o guarda quella in corso."
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Начните запись или посмотрите ту, что уже идет."
+          }
         }
       }
     },
@@ -454,6 +544,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tocca per registrare un’escursione"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Коснитесь, чтобы записать поход"
           }
         }
       }
@@ -484,6 +580,12 @@
             "state" : "translated",
             "value" : "Attiva/disattiva registrazione"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Начать или остановить запись похода"
+          }
         }
       }
     },
@@ -512,6 +614,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sentiero"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Тропа"
           }
         }
       }

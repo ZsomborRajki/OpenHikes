@@ -15,7 +15,10 @@ nonisolated extension TrailTravelMode {
     var label: String {
         switch self {
         case .walking: String(localized: "Walking")
-        case .hiking: String(localized: "Hiking")
+        // A key of its own for the "Hiking" that the easiest difficulty grade
+        // also reads in English, because Russian names that grade «Пеший
+        // поход» and this mode, beside «Пешком», «По тропам».
+        case .hiking: String(localized: "travelMode.hiking", defaultValue: "Hiking")
         case .cycling: String(localized: "Cycling")
         case .driving: String(localized: "Driving")
         }

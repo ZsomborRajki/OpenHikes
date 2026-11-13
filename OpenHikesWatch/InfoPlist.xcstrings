@@ -60,6 +60,12 @@
             "state" : "translated",
             "value" : "OpenHikes legge la tua frequenza cardiaca da Salute mentre registri un’escursione, così l’orologio può mostrarla mentre cammini. Nient’altro viene letto da Salute."
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes читает ваш пульс из приложения «Здоровье», пока вы записываете поход, чтобы часы показывали его в пути. Больше ничего из приложения «Здоровье» не читается."
+          }
         }
       }
     },
@@ -95,6 +101,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes avvia un allenamento di escursionismo in Salute mentre registri sull’orologio: è questo che mantiene attiva la registrazione a schermo spento. L’allenamento in sé non viene salvato – è il tuo iPhone a salvare l’escursione terminata."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пока вы записываете поход на часах, OpenHikes запускает в приложении «Здоровье» тренировку «Пеший туризм»: благодаря ей запись продолжается при выключенном экране. Сама тренировка не сохраняется — завершенный поход сохраняет ваш iPhone."
           }
         }
       }
@@ -132,6 +144,12 @@
             "state" : "translated",
             "value" : "OpenHikes usa la tua posizione per mostrarti dove ti trovi sul sentiero che stai seguendo e per registrare la tua escursione."
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes использует вашу геопозицию, чтобы показывать, где вы находитесь на тропе, по которой идете, и записывать ваш поход."
+          }
         }
       }
     },
@@ -167,6 +185,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes usa i sensori di movimento per migliorare l’altitudine registrata durante l’escursione."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes использует датчики движения, чтобы уточнять высоту, записанную в походе."
           }
         }
       }

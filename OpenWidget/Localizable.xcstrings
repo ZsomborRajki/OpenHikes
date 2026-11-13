@@ -42,6 +42,12 @@
             "state" : "translated",
             "value" : "%1$@ · mancano %2$@"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · осталось %2$@"
+          }
         }
       }
     },
@@ -69,6 +75,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ percorsi"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пройдено %@"
           }
         }
       }
@@ -98,6 +110,12 @@
             "state" : "translated",
             "value" : "%@ di lunghezza"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Длина %@"
+          }
         }
       }
     },
@@ -125,6 +143,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ per cento completato"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Завершено %@ %%"
           }
         }
       }
@@ -154,6 +178,12 @@
             "state" : "translated",
             "value" : "%@ per cento percorso"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пройдено %@ %%"
+          }
         }
       }
     },
@@ -181,6 +211,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "mancano %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "осталось %@"
           }
         }
       }
@@ -215,6 +251,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@%2$@ · mancano %3$@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@%2$@ · осталось %3$@"
           }
         }
       }
@@ -328,6 +370,36 @@
               }
             }
           }
+        },
+        "ru" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld точки"
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld точек"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld точка"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld точки"
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -356,6 +428,12 @@
             "state" : "translated",
             "value" : "Dislivello +"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подъем"
+          }
         }
       }
     },
@@ -383,6 +461,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Velocità media"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Средняя скорость"
           }
         }
       }
@@ -413,6 +497,12 @@
             "state" : "translated",
             "value" : "Annulla"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отменить"
+          }
         }
       }
     },
@@ -441,6 +531,12 @@
             "state" : "translated",
             "value" : "Completato"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Завершено"
+          }
         }
       }
     },
@@ -468,6 +564,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Distanza"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Расстояние"
           }
         }
       }
@@ -498,6 +600,12 @@
             "state" : "translated",
             "value" : "Fine"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Готово"
+          }
         }
       }
     },
@@ -525,6 +633,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Trascorso"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Прошло"
           }
         }
       }
@@ -554,6 +668,12 @@
             "state" : "translated",
             "value" : "Altitudine"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Высота"
+          }
         }
       }
     },
@@ -581,6 +701,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Terminata"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Завершено"
           }
         }
       }
@@ -611,6 +737,12 @@
             "state" : "translated",
             "value" : "Escursione"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поход"
+          }
         }
       }
     },
@@ -638,6 +770,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Registrazione escursione"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запись похода"
           }
         }
       }
@@ -667,6 +805,12 @@
             "state" : "translated",
             "value" : "Percorsi"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пройдено"
+          }
         }
       }
     },
@@ -694,6 +838,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Lunghezza"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Длина"
           }
         }
       }
@@ -723,6 +873,12 @@
             "state" : "translated",
             "value" : "Fuori sentiero"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вне тропы"
+          }
         }
       }
     },
@@ -747,6 +903,12 @@
           }
         },
         "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes"
+          }
+        },
+        "ru" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes"
@@ -779,6 +941,12 @@
             "state" : "translated",
             "value" : "OpenHikes non ha potuto farlo."
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось выполнить это действие."
+          }
         }
       }
     },
@@ -808,6 +976,12 @@
             "state" : "translated",
             "value" : "OpenHikes ha bisogno della tua posizione per poter registrare un’escursione."
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Чтобы записать поход, приложению OpenHikes нужна ваша геопозиция."
+          }
         }
       }
     },
@@ -835,6 +1009,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pausa"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пауза"
           }
         }
       }
@@ -865,6 +1045,12 @@
             "state" : "translated",
             "value" : "Metti in pausa l’escursione"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Приостановить поход"
+          }
         }
       }
     },
@@ -893,6 +1079,12 @@
             "state" : "translated",
             "value" : "In pausa"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На паузе"
+          }
         }
       }
     },
@@ -920,6 +1112,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "In pausa · "
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На паузе · "
           }
         }
       }
@@ -950,6 +1148,12 @@
             "state" : "translated",
             "value" : "Mette in pausa l’escursione in registrazione, dal suo pannello nella schermata di blocco."
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Приостанавливает запись похода с ее панели на экране блокировки."
+          }
         }
       }
     },
@@ -979,6 +1183,12 @@
             "state" : "translated",
             "value" : "Registrazione"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запись"
+          }
         }
       }
     },
@@ -1006,6 +1216,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Registrazione in corso"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Идет запись похода"
           }
         }
       }
@@ -1035,6 +1251,12 @@
             "state" : "translated",
             "value" : "Registrazione in pausa"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запись на паузе"
+          }
         }
       }
     },
@@ -1063,6 +1285,12 @@
             "state" : "translated",
             "value" : "Rimanenti"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Осталось"
+          }
         }
       }
     },
@@ -1090,6 +1318,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Riprendi"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Возобновить"
           }
         }
       }
@@ -1120,6 +1354,12 @@
             "state" : "translated",
             "value" : "Riprendi l’escursione"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Возобновить поход"
+          }
         }
       }
     },
@@ -1149,6 +1389,12 @@
             "state" : "translated",
             "value" : "Riprende l’escursione in pausa, dal suo pannello nella schermata di blocco."
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Возобновляет приостановленный поход с его панели на экране блокировки."
+          }
         }
       }
     },
@@ -1177,6 +1423,12 @@
             "state" : "translated",
             "value" : "Scegli un sentiero"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выберите тропу"
+          }
         }
       }
     },
@@ -1204,6 +1456,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Scegli un sentiero in OpenHikes"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выберите тропу в OpenHikes"
           }
         }
       }
@@ -1234,6 +1492,12 @@
             "state" : "translated",
             "value" : "Mostra un sentiero a tua scelta, il sentiero selezionato o un’escursione in fase di registrazione."
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показывает тропу на ваш выбор, выбранную в приложении тропу или поход, который сейчас записывается."
+          }
         }
       }
     },
@@ -1261,6 +1525,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mostra il sentiero selezionato o un’escursione in fase di registrazione."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показывает выбранную тропу или поход, который сейчас записывается."
           }
         }
       }
@@ -1290,6 +1560,12 @@
             "state" : "translated",
             "value" : "Avvia escursione"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Начать поход"
+          }
         }
       }
     },
@@ -1317,6 +1593,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Avvia o interrompi la registrazione di un’escursione."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Начните или остановите запись похода."
           }
         }
       }
@@ -1346,6 +1628,12 @@
             "state" : "translated",
             "value" : "Interrompi escursione"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Завершить поход"
+          }
         }
       }
     },
@@ -1374,6 +1662,12 @@
             "state" : "translated",
             "value" : "Quell’escursione non è più in registrazione."
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Этот поход больше не записывается."
+          }
         }
       }
     },
@@ -1401,6 +1695,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tempo rimanente"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Осталось времени"
           }
         }
       }
@@ -1431,6 +1731,12 @@
             "state" : "translated",
             "value" : "Attiva/disattiva registrazione"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Начать или остановить запись похода"
+          }
         }
       }
     },
@@ -1458,6 +1764,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Punti GPS"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Точки трека"
           }
         }
       }
@@ -1487,6 +1799,12 @@
             "state" : "translated",
             "value" : "Sentiero"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Тропа"
+          }
         }
       }
     },
@@ -1515,6 +1833,12 @@
             "state" : "translated",
             "value" : "Lunghezza del sentiero"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Длина тропы"
+          }
         }
       }
     },
@@ -1542,6 +1866,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Attiva «Posizione esatta» in Impostazioni per continuare."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Чтобы продолжить, включите параметр «Точная геопозиция» в Настройках."
           }
         }
       }
@@ -1577,6 +1907,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ percorso"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пройдено %@"
           }
         }
       }
