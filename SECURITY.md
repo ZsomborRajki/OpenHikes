@@ -78,6 +78,14 @@ reporting:
   live — and both queries need a name that is already public or that only the
   author holds. Its `authorID` is unindexed for the reason `CommunityHike`'s
   is, and a query on it is the same enumeration finding.
+- **`CuratedTrailCell`** and **`CuratedTrailManifest`** — a copy of
+  OpenStreetMap's waymarked day hikes, filed by square of the map, and the one
+  record that says what the squares cover. Nothing in either was made by a
+  user. `_world` read; create and write granted to the `reviewer` role alone,
+  as on `CommunityHike`; **no index on either**. A write by an account outside
+  the role is a finding of the same weight as one on `CommunityHike`: what a
+  square holds is drawn on every hiker's map as a trail to walk. A read is
+  not one, since every byte is OpenStreetMap's.
 
 **Known and accepted, so a report of it is not new:** an unreviewed submission
 is readable by anyone holding its record name — unguessable, and not
@@ -95,11 +103,14 @@ enumerable, but a name rather than a permission. What would be new is a way to
 - Anything exploitable through untrusted input: an imported GPX file, an
   `openhikes://` deep link, a response from a tile or Overpass endpoint, a
   payload crossing the watch link (`WatchLink` is the only decoder on either
-  side), or the contents of a community record — which is text and assets
-  another user uploaded.
+  side), the contents of a community record — which is text and assets
+  another user uploaded — or a trail square (`TrailCellFile` is its only
+  decoder).
 - A committed credential. `OpenHikes/Secrets.plist` is gitignored and holds the
   optional Stadia and Thunderforest keys; a key that reached a commit is worth
-  reporting even if the commit is old.
+  reporting even if the commit is old. So is the private half of the
+  server-to-server key `Scripts/trail-cells.sh` uploads with, which is kept
+  outside the repository.
 
 ## What is not in scope
 

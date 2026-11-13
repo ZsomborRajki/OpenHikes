@@ -51,9 +51,16 @@
 # render-trace-report.swift turns Instruments' tables into claims about which
 # view ran its body in which step of which test, and why, and a table misread
 # is a confident wrong answer about the render path rather than an error.
+# Scripts/trail-cells.sh is here because what it uploads is drawn on a hiker's
+# map as a trail to walk, and each of its mistakes is a quiet one: an osmium
+# option dropped is a build with no routes in it that reports nothing wrong, a
+# coordinate rounded another way is a square the app reads differently, and a
+# request signed slightly wrong is refused by CloudKit without a word about
+# which part. The tool it compiles is run against an extract written out here.
 #
-# `xcrun`, `xcodebuild`, `swiftlint`, `periphery` and `hinge` are replaced
-# with recording stubs on PATH and the scripts are run for real against them.
+# `xcrun`, `xcodebuild`, `swiftlint`, `periphery`, `hinge` and `osmium` are
+# replaced with recording stubs on PATH and the scripts are run for real
+# against them.
 # Nothing is built, nothing is booted, no simulator on this machine is touched,
 # and no file in the working tree is rewritten.
 #
@@ -73,7 +80,8 @@ usage() {
 Usage: Scripts/run-script-tests.sh [--verbose]
 
 Runs the repository's shell scripts against stubbed
-xcrun/xcodebuild/swiftlint/periphery/hinge and asserts what they sent where.
+xcrun/xcodebuild/swiftlint/periphery/hinge/osmium and asserts what they sent
+where.
 
 Options:
   --verbose       Print each script's own output as it runs
@@ -364,6 +372,50 @@ case "${1:-} ${2:-}" in
         ;;
     *)
         echo "stub gh: no answer for '$*'" >&2
+        exit 64
+        ;;
+esac
+STUB
+
+# Answers the four osmium commands Scripts/trail-cells.sh makes, and records
+# each. It reads no extract. `cat` writes the OPL fixture STUB_OSMIUM_RELATIONS
+# or STUB_OSMIUM_WAYS names, whichever `-t` asks for, to the file `-o` names —
+# and writes the ways without their nodes' positions unless the format asks for
+# them, which is what the real one does and is the option the script must not
+# lose. STUB_OSMIUM_NO_POSITIONS leaves them out even then. `fileinfo` prints
+# STUB_OSMIUM_TIMESTAMP.
+cat > "$stub_bin/osmium" <<'STUB'
+#!/usr/bin/env bash
+printf 'osmium %s\n' "$*" >> "$STUB_CALL_LOG"
+command="${1:-}"
+[[ $# -eq 0 ]] || shift
+arguments=("$@")
+output="" kind="" format=""
+for (( index = 0; index < ${#arguments[@]}; index++ )); do
+    case "${arguments[index]}" in
+        -o) output="${arguments[index + 1]:-}" ;;
+        -t) kind="${arguments[index + 1]:-}" ;;
+        -f) format="${arguments[index + 1]:-}" ;;
+    esac
+done
+case "$command" in
+    tags-filter|add-locations-to-ways)
+        : > "$output"
+        ;;
+    cat)
+        if [[ "$kind" == relation ]]; then
+            cp "$STUB_OSMIUM_RELATIONS" "$output"
+        elif [[ "$format" == *locations_on_ways=true* && -z "${STUB_OSMIUM_NO_POSITIONS:-}" ]]; then
+            cp "$STUB_OSMIUM_WAYS" "$output"
+        else
+            sed -E 's/x[0-9.-]*y[0-9.-]*//g' "$STUB_OSMIUM_WAYS" > "$output"
+        fi
+        ;;
+    fileinfo)
+        printf '%s\n' "${STUB_OSMIUM_TIMESTAMP:-}"
+        ;;
+    *)
+        echo "stub osmium: no answer for '$command $*'" >&2
         exit 64
         ;;
 esac
@@ -4156,6 +4208,294 @@ run_script "cancel-branch-runs rejects a limit that is not a count" \
 if expect_status 2 \
     && expect_contains "$output" "positive whole number" "the error" \
     && expect_absent "$calls" "gh" "the recorded calls"; then
+    pass
+fi
+
+echo "Trail squares"
+
+# Scripts/trail-cells.sh files OpenStreetMap's hiking routes into the squares
+# the app's Community search reads. What it hands osmium, and what the tool it
+# compiles makes of the answer, is asserted against an extract small enough to
+# read: eight relations and five ways, written out below as the OPL osmium
+# would have produced from them. The tool is compiled into the work directory,
+# so nothing is written into the checkout.
+trail_cells="$repository_root/Scripts/trail-cells.sh"
+cells_work="$work/trail-cells"
+mkdir -p "$cells_work"
+export OPENHIKES_TRAIL_CELLS_BUILD="$cells_work/tool"
+: > "$cells_work/extract.osm.pbf"
+
+# One relation of each kind the build tells apart. The first is filed, and its
+# name carries every character OPL escapes; the last is filed elsewhere, so the
+# build has two squares to write.
+{
+    printf '%s\n' 'r100 Tname=Near%20%Loop%2c%%20%east%20%%3d%%20%west%20%%40%%20%100%25%,route=hiking,type=route Mw10@,w11@forward,n5@guidepost'
+    printf '%s\n' 'r101 Tname=Runs%20%Out,route=hiking Mw11@,w12@'
+    printf '%s\n' 'r102 Troute=hiking Mw10@'
+    printf '%s\n' 'r103 Tname=A%20%Stage,route=foot Mw10@'
+    printf '%s\n' 'r104 Tname=Long%20%Way,route=hiking Mw13@'
+    printf 'r105 Tname=Crowd,route=hiking M'
+    for (( member = 0; member < 499; member++ )); do printf 'w10@,'; done
+    printf 'w10@\n'
+    printf '%s\n' 'r106 Tname=Of%20%Stages,route=hiking Mr100@'
+    printf '%s\n' 'r107 Tname=Elsewhere,route=hiking Mw14@'
+} > "$cells_work/relations.opl"
+# Way 12 has a node the extract holds no position for, as a way that crosses
+# out of a regional extract does; way 13 is thirty-three kilometres long.
+cat > "$cells_work/ways.opl" <<'EOF'
+w10 Thighway=path Nn1x12.97y47.62,n2x12.9750006y47.6240004
+w11 Thighway=path Nn2x12.9750006y47.6240004,n3x12.98y47.628
+w12 Thighway=path Nn3x12.98y47.628,n4xy
+w13 Thighway=track Nn1x12.97y47.62,n6x12.97y47.92
+w14 Thighway=path Nn7x14y46,n8x14.01y46.01
+EOF
+export STUB_OSMIUM_RELATIONS="$cells_work/relations.opl"
+export STUB_OSMIUM_WAYS="$cells_work/ways.opl"
+export STUB_OSMIUM_TIMESTAMP="2026-11-12T21:23:05Z"
+
+cells_squares="$cells_work/squares"
+run_script "trail-cells build hands osmium its four steps, asks for positions on the ways, and files what is left" \
+    "$trail_cells" build "$cells_work/extract.osm.pbf" --out "$cells_squares" --world
+if expect_status 0 \
+    && expect_contains "$calls" \
+        "osmium tags-filter $cells_work/extract.osm.pbf r/route=hiking -o $cells_squares.work/hiking.osm.pbf --overwrite" \
+        "the recorded calls" \
+    && expect_contains "$calls" \
+        "osmium add-locations-to-ways $cells_squares.work/hiking.osm.pbf --ignore-missing-nodes -o $cells_squares.work/located.osm.pbf --overwrite" \
+        "the recorded calls" \
+    && expect_contains "$calls" "-t relation -f opl,add_metadata=false -o $cells_squares.work/relations.opl" \
+        "the recorded calls" \
+    && expect_contains "$calls" "-t way -f opl,add_metadata=false,locations_on_ways=true -o $cells_squares.work/ways.opl" \
+        "the recorded calls" \
+    && expect_contains "$calls" "osmium fileinfo -g header.option.osmosis_replication_timestamp" "the recorded calls" \
+    && expect_contains "$output" "Read 8 relations." "the summary" \
+    && expect_contains "$output" "left out 1 not tagged route=hiking" "the summary" \
+    && expect_contains "$output" "left out 1 without a name" "the summary" \
+    && expect_contains "$output" "left out 1 with too many members" "the summary" \
+    && expect_contains "$output" "left out 1 with no member ways" "the summary" \
+    && expect_contains "$output" "left out 1 running out of the extract" "the summary" \
+    && expect_contains "$output" "left out 1 wider than a day hike" "the summary" \
+    && expect_contains "$output" "Filed 2 routes (6 points) in 2 squares" "the summary" \
+    && expect_contains "$output" "Marked complete" "the summary"; then
+    if [[ -e "$cells_squares.work" ]]; then
+        fail "the working files were left behind"
+    elif [[ "$(ls "$cells_squares/cells")" != $'trails1_544_776.cell\ntrails1_550_771.cell' ]]; then
+        fail "the squares are not the two the routes are in" "$(ls "$cells_squares/cells")"
+    else
+        pass
+    fi
+fi
+
+# What the app's decoder is held to as well, in TrailCellFileTests: the two
+# ways in member order with their roles, OpenStreetMap's seventh decimal
+# rounded away, and the name with its escapes undone.
+cells_expected='{"relations":[{"id":100,"tags":{"name":"Near Loop, east = west @ 100%","route":"hiking","type":"route"},"ways":[{"points":[[47620000,12970000],[47624000,12975001]],"role":""},{"points":[[47624000,12975001],[47628000,12980000]],"role":"forward"}]}],"scale":1000000}'
+run_script "trail-cells inspect reads back the route the square was built from" \
+    "$trail_cells" inspect "$cells_squares/cells/trails1_550_771.cell" --json
+if expect_status 0; then
+    if [[ "$output" == "$cells_expected" ]]; then
+        pass
+    else
+        fail "the square does not hold the route" "$output"
+    fi
+fi
+
+current="trail-cells build records what the squares cover and when the data was current"
+cells_manifest="$(cat "$cells_squares/manifest.json")"
+if expect_contains "$cells_manifest" '"complete" : true' "the manifest" \
+    && expect_contains "$cells_manifest" '"osmTimestamp" : "2026-11-12T21:23:05Z"' "the manifest" \
+    && expect_contains "$cells_manifest" '"routeCount" : 2' "the manifest"; then
+    pass
+fi
+
+# The digest is what an upload compares, so the same extract has to give the
+# same squares, or every refresh would send the whole world again.
+run_script "trail-cells build files the same extract into the same squares, and says a region is not the world" \
+    "$trail_cells" build "$cells_work/extract.osm.pbf" --out "$cells_work/region"
+if expect_status 0 \
+    && expect_contains "$output" "Not marked complete" "the summary" \
+    && expect_contains "$(cat "$cells_work/region/manifest.json")" '"complete" : false' "the manifest"; then
+    if diff <(grep '"digest"' "$cells_squares/manifest.json") <(grep '"digest"' "$cells_work/region/manifest.json") \
+        >/dev/null \
+        && cmp -s "$cells_squares/cells/trails1_550_771.cell" "$cells_work/region/cells/trails1_550_771.cell"; then
+        pass
+    else
+        fail "a second build of the same extract wrote different squares"
+    fi
+fi
+
+mkdir -p "$cells_work/not-a-build"
+echo "somebody's notes" > "$cells_work/not-a-build/notes.txt"
+run_script "trail-cells build refuses a directory that holds something else, and leaves it alone" \
+    "$trail_cells" build "$cells_work/extract.osm.pbf" --out "$cells_work/not-a-build"
+if expect_status 1 && expect_contains "$output" "not an earlier build" "the error"; then
+    if [[ "$(ls "$cells_work/not-a-build")" == "notes.txt" ]]; then
+        pass
+    else
+        fail "the directory was written into" "$(ls "$cells_work/not-a-build")"
+    fi
+fi
+
+# What osmium writes when it is not asked for positions. Filing it would be a
+# build with no routes in it that reports nothing wrong.
+STUB_OSMIUM_NO_POSITIONS=1 run_script "trail-cells build refuses ways that carry no positions" \
+    "$trail_cells" build "$cells_work/extract.osm.pbf" --out "$cells_work/no-positions"
+if expect_status 1 && expect_contains "$output" "carries its nodes' positions" "the error"; then
+    if [[ -e "$cells_work/no-positions/manifest.json" ]]; then
+        fail "a build with no routes was written anyway"
+    else
+        pass
+    fi
+fi
+
+mv "$stub_bin/osmium" "$stub_bin/osmium.away"
+run_script "trail-cells build says how to get osmium when it is not installed" \
+    "$trail_cells" build "$cells_work/extract.osm.pbf" --out "$cells_work/no-osmium"
+mv "$stub_bin/osmium.away" "$stub_bin/osmium"
+if expect_status 1 && expect_contains "$output" "brew install osmium-tool" "the error"; then
+    pass
+fi
+
+run_script "trail-cells build needs an extract" "$trail_cells" build --out "$cells_work/none"
+if expect_status 2 && expect_contains "$output" "needs an OpenStreetMap extract" "the error" \
+    && expect_absent "$calls" "osmium" "the recorded calls"; then
+    pass
+fi
+
+run_script "trail-cells build says when the extract is not there" \
+    "$trail_cells" build "$cells_work/missing.osm.pbf"
+if expect_status 1 && expect_contains "$output" "there is no file" "the error" \
+    && expect_absent "$calls" "osmium" "the recorded calls"; then
+    pass
+fi
+
+run_script "trail-cells build rejects an option it does not understand" \
+    "$trail_cells" build "$cells_work/extract.osm.pbf" --planet
+if expect_status 2 && expect_contains "$output" "unknown option '--planet'" "the error" \
+    && expect_absent "$calls" "osmium" "the recorded calls"; then
+    pass
+fi
+
+# An upload is planned against what the database holds. Here that is read from
+# a file, because nothing in this suite may reach CloudKit: one square as the
+# build has it, and one the build no longer has.
+cells_digest="$(grep -B 1 '"name" : "trails1_550_771"' "$cells_squares/manifest.json" \
+    | sed -n 's/.*"digest" : "\(.*\)".*/\1/p')"
+cat > "$cells_work/remote.json" <<EOF
+{
+  "manifestExists": true,
+  "complete": true,
+  "listed": ["trails1_550_771", "trails1_10_10"],
+  "digests": { "trails1_550_771": "$cells_digest", "trails1_10_10": "0000" }
+}
+EOF
+
+run_script "trail-cells upload plans to send what changed, delete what is gone and skip the rest" \
+    "$trail_cells" upload "$cells_squares" --environment development --dry-run --against "$cells_work/remote.json"
+if expect_status 0 \
+    && expect_contains "$output" \
+        "iCloud.tappium.com.OpenHikes, development: 1 squares to upload, 1 to delete, 1 unchanged." "the plan" \
+    && expect_contains "$output" "nothing was changed" "the output"; then
+    pass
+fi
+
+# A region refreshed against a database that holds the world would delete
+# everywhere else, and the app would read the gaps as places with no trails.
+run_script "trail-cells upload refuses to put a region where the whole world is" \
+    "$trail_cells" upload "$cells_work/region" --environment production --dry-run --against "$cells_work/remote.json"
+if expect_status 1 && expect_contains "$output" "--replace-world" "the error"; then
+    pass
+fi
+
+run_script "trail-cells upload replaces the world with a region when it is told that is meant" \
+    "$trail_cells" upload "$cells_work/region" --environment production --dry-run --replace-world \
+    --against "$cells_work/remote.json"
+if expect_status 0 && expect_contains "$output" ", production: 1 squares to upload, 1 to delete" "the plan"; then
+    pass
+fi
+
+run_script "trail-cells upload needs to be told which environment" \
+    "$trail_cells" upload "$cells_squares" --dry-run --against "$cells_work/remote.json"
+if expect_status 2 && expect_contains "$output" "--environment is required" "the error"; then
+    pass
+fi
+
+run_script "trail-cells upload takes development or production and nothing else" \
+    "$trail_cells" upload "$cells_squares" --environment staging --dry-run --against "$cells_work/remote.json"
+if expect_status 2 && expect_contains "$output" "development or production" "the error"; then
+    pass
+fi
+
+run_script "trail-cells upload only plans against a saved state" \
+    "$trail_cells" upload "$cells_squares" --environment development --against "$cells_work/remote.json"
+if expect_status 2 && expect_contains "$output" "--against only plans" "the error"; then
+    pass
+fi
+
+run_script "trail-cells upload says where the key comes from when it has none" \
+    env -u OPENHIKES_CLOUDKIT_KEY_ID -u OPENHIKES_CLOUDKIT_KEY_FILE \
+    "$trail_cells" upload "$cells_squares" --environment development --dry-run
+if expect_status 2 && expect_contains "$output" "OPENHIKES_CLOUDKIT_KEY_ID" "the error"; then
+    pass
+fi
+
+run_script "trail-cells upload does not take a container: it is the app's" \
+    "$trail_cells" upload "$cells_squares" --environment development --container iCloud.example --dry-run
+if expect_status 2 && expect_contains "$output" "the container is the app's own" "the error"; then
+    pass
+fi
+
+# A request to CloudKit Web Services is signed, and a signature that is
+# slightly wrong is refused with no word about which part. So what the tool
+# signs is checked here by something that is not the tool: openssl, against
+# the public half of a key made for this case, over the message Apple's
+# reference spells — the date, the body's SHA-256 in base64, and the path.
+cells_key="$cells_work/server-key.pem"
+openssl ecparam -name prime256v1 -genkey -noout -out "$cells_key" 2>/dev/null
+openssl ec -in "$cells_key" -pubout -out "$cells_work/server-key.pub" 2>/dev/null
+printf '{"records":[{"recordName":"trails1_manifest"}]}' > "$cells_work/body.json"
+cells_subpath="/database/1/iCloud.example/development/public/records/lookup"
+cells_date="2026-01-25T22:15:43Z"
+run_script "trail-cells signs a request the way CloudKit Web Services verifies one" \
+    "$trail_cells" sign --key-id key-1 --key-file "$cells_key" --subpath "$cells_subpath" \
+    --date "$cells_date" --body-file "$cells_work/body.json"
+if expect_status 0 \
+    && expect_contains "$output" "X-Apple-CloudKit-Request-KeyID: key-1" "the headers" \
+    && expect_contains "$output" "X-Apple-CloudKit-Request-ISO8601Date: $cells_date" "the headers"; then
+    printf '%s\n' "$output" | sed -n 's/^X-Apple-CloudKit-Request-SignatureV1: //p' | base64 -D \
+        > "$cells_work/signature.der"
+    printf '%s:%s:%s' "$cells_date" "$(openssl dgst -sha256 -binary "$cells_work/body.json" | base64)" \
+        "$cells_subpath" > "$cells_work/message.txt"
+    if openssl dgst -sha256 -verify "$cells_work/server-key.pub" -signature "$cells_work/signature.der" \
+        "$cells_work/message.txt" >/dev/null 2>&1; then
+        pass
+    else
+        fail "openssl does not verify the signature over the message the reference describes" "$output"
+    fi
+fi
+
+run_script "trail-cells cell names the square a point is in" "$trail_cells" cell 47.715 18.94
+if expect_status 0; then
+    if [[ "$output" == "trails1_550_795" ]]; then
+        pass
+    else
+        fail "the square is not the one that holds the point" "$output"
+    fi
+fi
+
+run_script "trail-cells cell rejects a latitude that is not one" "$trail_cells" cell 91 0
+if expect_status 2 && expect_contains "$output" "not a latitude and a longitude" "the error"; then
+    pass
+fi
+
+run_script "trail-cells inspect refuses a file that is not a square" \
+    "$trail_cells" inspect "$cells_work/ways.opl"
+if expect_status 1 && expect_contains "$output" "error:" "the output"; then
+    pass
+fi
+
+run_script "trail-cells rejects a command it does not have" "$trail_cells" deploy
+if expect_status 2 && expect_contains "$output" "unknown command 'deploy'" "the error"; then
     pass
 fi
 

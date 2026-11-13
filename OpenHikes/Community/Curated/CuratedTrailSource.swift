@@ -2,8 +2,18 @@
 //  CuratedTrailSource.swift
 //  OpenHikes
 //
-//  Where the curated hikes come from: one Overpass request for the map most
-//  searches cover and two for a wide one, and a memory of what they answered.
+//  Where the curated hikes come from: the pre-built squares in the public
+//  database where they reach, Overpass where they do not — one request for
+//  the map most searches cover and two for a wide one — and a memory of what
+//  either answered.
+//
+//  **The squares are asked first, because Overpass's answer is a wait.** See
+//  ``TrailCellGrid`` for the measurement and ``TrailCellLibrary`` for what the
+//  squares can and cannot say. What they hand back is what a small search's
+//  one Overpass request hands back — every day hike in the area with its line
+//  — so everything below the first request is unchanged by which of the two
+//  made it: the same nearest rows, kept in the same caches, opened and drawn
+//  without asking again.
 //
 //  An actor for the reason ``OverpassTrailGraphProvider`` is one — it owns
 //  mutable state that arrives from concurrent requests. It still takes the
@@ -73,10 +83,12 @@ nonisolated struct CuratedCompletion: Equatable, Sendable {
 /// conformance below reaches a volunteer-run public API, and no suite may.
 nonisolated protocol CuratedTrailSourcing: Sendable {
     /// Waymarked day hikes in `area`, nearest its centre first — **with their
-    /// lines when the area was small enough to ask for both at once**, and
-    /// without them when it was not.
+    /// lines when they came out of the pre-built squares, or the area was
+    /// small enough to ask Overpass for both at once**, and without them when
+    /// neither was so.
     ///
-    /// The first half of a search, and for a small area the whole of it: see
+    /// The first half of a search, and for the squares and for a small area
+    /// the whole of it: see ``TrailCellLibrary`` and
     /// ``CuratedTrailQuery/areaRequest(in:)``. A caller cannot know how many
     /// curated rows it has room for until the published half has answered —
     /// see ``MergedCommunityTransport``, where the limit is spent on CloudKit
@@ -196,7 +208,8 @@ nonisolated extension [CuratedTrail] {
     }
 }
 
-/// Curated hikes from the public Overpass API.
+/// Curated hikes from the pre-built squares, and from the public Overpass API
+/// where the squares have no answer.
 actor CuratedTrailSource: CuratedTrailSourcing {
     typealias Transport = @Sendable (URLRequest) async throws -> OverpassHTTPResponse
 
@@ -231,6 +244,13 @@ actor CuratedTrailSource: CuratedTrailSourcing {
     /// cache that is simply absent, which costs round trips and breaks
     /// nothing.
     private let store: CuratedTrailStore?
+    /// The pre-built squares an area search asks before it asks Overpass.
+    ///
+    /// `nil` for a source that has none, which is every suite's unless it
+    /// passes one, and then every search is Overpass's as it always was. The
+    /// composition root hands the real one over: see
+    /// ``OpenHikesModel/makeCommunityTransport()``.
+    private let cells: TrailCellLibrary?
 
     /// What is known about each relation *this session*, with an eviction
     /// order whose oldest end is the **least recently used** rather than the
@@ -277,6 +297,7 @@ actor CuratedTrailSource: CuratedTrailSourcing {
     init(
         endpoint: URL = OverpassRequest.defaultEndpoint,
         directory: URL? = CuratedTrailStore.defaultDirectory(),
+        cells: TrailCellLibrary? = nil,
         clock: @escaping @Sendable () -> Date = { Date() },
         pause: @escaping @Sendable (TimeInterval) async throws -> Void = { seconds in
             try await Task.sleep(for: .seconds(seconds))
@@ -291,6 +312,7 @@ actor CuratedTrailSource: CuratedTrailSourcing {
             transport: transport
         )
         store = directory.map { CuratedTrailStore(directory: $0, clock: clock) }
+        self.cells = cells
     }
 
     // MARK: - The cache
@@ -352,19 +374,37 @@ extension CuratedTrailSource {
         // ``trails(matching:limit:)`` to answer a different area with. The
         // same area asked twice keeps its rows: that is a refresh, not a move.
         if lastArea != area { forgetLastAnswer() }
-        guard limit > 0,
-              let request = CuratedTrailQuery.areaRequest(in: CuratedTrailQuery.searchBoxes(for: area))
-        else {
+        let boxes = CuratedTrailQuery.searchBoxes(for: area)
+        guard limit > 0, let request = CuratedTrailQuery.areaRequest(in: boxes) else {
             forgetLastAnswer()
             return []
         }
-        let listed = try await conversation.fetch(
-            request.query,
-            awaiting: request.timeoutSeconds
-        ) { body in
-            try request.drawsLines
-                ? CuratedTrailDecoding.trails(fromListingWithLines: body)
-                : CuratedTrailDecoding.trails(fromListing: body)
+        let listed: [CuratedTrail]
+        // Whether the rows came with their lines: always from the squares,
+        // and from Overpass when the area was small enough to ask for both.
+        let drawsLines: Bool
+        // The squares first. A source with none is one whose squares do not
+        // reach anywhere, which is the same thing to a search.
+        switch try await cells?.trails(in: boxes) ?? .uncovered {
+        case .trails(let prebuilt):
+            // A complete answer, an empty one included: no waymarked day
+            // hikes there is something the squares can say, and asking
+            // Overpass to confirm it would bring the wait back for every
+            // search beside a lake.
+            listed = prebuilt
+            drawsLines = true
+
+        case .uncovered, .unreachable:
+            // No answer, so the question goes where it always went.
+            listed = try await conversation.fetch(
+                request.query,
+                awaiting: request.timeoutSeconds
+            ) { body in
+                try request.drawsLines
+                    ? CuratedTrailDecoding.trails(fromListingWithLines: body)
+                    : CuratedTrailDecoding.trails(fromListing: body)
+            }
+            drawsLines = request.drawsLines
         }
         // Nearest first, by the same measure the published half is sorted by,
         // so a merged list is ordered by one rule rather than by two that
@@ -387,7 +427,7 @@ extension CuratedTrailSource {
         // more. Only the page's: the rest of the box was measured and thrown
         // away, and a cache full of routes nobody was offered would evict the
         // ones somebody was.
-        if request.drawsLines { remember(nearest) }
+        if drawsLines { remember(nearest) }
         lastArea = area
         return nearest
     }

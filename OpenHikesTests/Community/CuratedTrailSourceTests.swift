@@ -191,10 +191,14 @@ struct CuratedTrailSourceTests {
     ///   and a suite that slept two real seconds per refused request is a
     ///   suite nobody runs. A case that is *about* the pause passes one that
     ///   records it — see `CuratedTrailSourceTests+Busy`.
+    /// - Parameter cells: The pre-built squares the source asks before it
+    ///   asks Overpass. None, by default, which is what makes every case
+    ///   outside `CuratedTrailSourceTests+Cells` about Overpass.
     static func makeSource(
         _ responses: [OverpassHTTPResponse],
         clock: TestClock = TestClock(),
         directory: URL? = nil,
+        cells: TrailCellLibrary? = nil,
         onRequest: (@Sendable () -> Void)? = nil,
         pause: @escaping @Sendable (TimeInterval) async throws -> Void = { _ in
             // No wait: see the parameter's documentation above.
@@ -204,6 +208,7 @@ struct CuratedTrailSourceTests {
         let source = CuratedTrailSource(
             endpoint: URL(string: "https://overpass.invalid/api/interpreter")!,
             directory: directory,
+            cells: cells,
             // ``TestClock/read`` rather than a closure of our own: the whole
             // point of the seam is that no suite waits on wall time, and the
             // bundle already has the clock that makes that true.

@@ -147,7 +147,9 @@
       "\"CommunityHike\"",
       "\"CommunitySubmissionNotice\"",
       "\"CommunityPhotoSubmission\"",
-      "\"CommunityPhotoContribution\""
+      "\"CommunityPhotoContribution\"",
+      "\"CuratedTrailCell\"",
+      "\"CuratedTrailManifest\""
     ]
   },
   {
