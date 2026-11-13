@@ -16,11 +16,11 @@
 //  moves when somebody maps it differently, not when a hiker walks it.
 //
 //  **A square that does not exist is kept too**, as a file holding no routes.
-//  That is only ever written when the manifest said the squares are the whole
-//  world — see ``TrailCellFetch/Manifest`` — so it is a fact about the place
-//  rather than about an upload that had not got there yet, and without it a
-//  search beside a lake would send a request every time, to be told the lake
-//  is still a lake.
+//  Like every square here it is only ever written when the manifest said the
+//  squares are the whole world — see ``TrailCellFetch/Manifest`` — so it is a
+//  fact about the place rather than about an upload that had not got there
+//  yet, and without it a search beside a lake would send a request every
+//  time, to be told the lake is still a lake.
 //
 
 import Foundation

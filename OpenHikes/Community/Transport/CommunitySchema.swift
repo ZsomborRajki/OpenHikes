@@ -338,8 +338,8 @@ nonisolated enum CommunitySchema {
         static let cells = "cells"
         /// `1` when the squares were built from the whole planet, so that a
         /// square with no record is a square with no routes in it. Anything
-        /// else, and the app takes a missing square to mean *not known* and
-        /// asks Overpass — see ``TrailCellFetch/Manifest``.
+        /// else, and the app reads none of the squares and asks Overpass —
+        /// see ``TrailCellFetch/Manifest``.
         static let complete = "complete"
         /// When the OpenStreetMap data the squares were built from was
         /// current.

@@ -115,8 +115,8 @@ private extension TrailCellsTool {
         }
         print(build.coversTheWorld
             ? "Marked complete: a square with no file is a square with no routes."
-            : "Not marked complete: the app keeps asking Overpass where a square is missing. "
-                + "Pass --world for a build of the whole planet.")
+            : "Not marked complete: the app reads only squares that are the whole world, and keeps asking "
+                + "Overpass. Pass --world for a build of the whole planet.")
     }
 
     static func inspect(_ options: inout Options) throws {

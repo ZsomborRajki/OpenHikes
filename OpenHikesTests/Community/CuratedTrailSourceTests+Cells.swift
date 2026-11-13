@@ -198,6 +198,27 @@ extension CuratedTrailSourceTests {
         #expect(await overpass.requestCount == 1)
     }
 
+    /// Both squares the search needs are there, as a regional build wrote
+    /// them: the eastern one for another route, and without Far Path, which
+    /// runs out of its extract. Taking them for the answer would offer one
+    /// route; Overpass has both.
+    @Test("squares that are part of the world are not the answer, even when every one the search needs is there")
+    func aRegionalSetIsNotTheAnswer() async throws {
+        let database = StubTrailCellDatabase(
+            manifest: .partial,
+            cells: [
+                Squares.west: TrailCellFixture.found([Squares.nearLoop]),
+                Squares.east: TrailCellFixture.found([Squares.brokenPath]),
+            ]
+        )
+        let (source, overpass) = Self.makeSource(squares: database, overpass: [Self.ok(Self.areaWithLinesBody)])
+
+        let trails = try await Self.search(source, area: Self.visibleArea)
+
+        #expect(trails.map(\.relationID) == [11, 22])
+        #expect(await overpass.requestCount == 1)
+    }
+
     @Test("squares that cannot be read send the search to Overpass")
     func squaresThatCannotBeRead() async throws {
         let database = Self.squaresOfTheValley

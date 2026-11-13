@@ -174,12 +174,17 @@ struct TrailCellLibraryTests {
         #expect(answer == .uncovered, "Near Loop is there, and the list would look complete without the east")
     }
 
-    /// A regional build in development, or the first upload still under way:
-    /// where every square the area needs has arrived, the answer is whole.
-    @Test("squares that are not the whole world still answer where none is missing")
-    func aRegionalSetAnswersWhereItReaches() async throws {
+    /// A regional build in development, or the first upload still under way.
+    /// A regional build files a square for the routes its extract holds
+    /// whole and leaves out the ones that run out of it, so both squares
+    /// being there says nothing about a third route that belongs in one.
+    @Test(
+        "where the squares are not the whole world, every square being there is still no answer",
+        arguments: [TrailCellFetch.Manifest.partial, .absent]
+    )
+    func aRegionalSetIsNoAnswer(manifest: TrailCellFetch.Manifest) async throws {
         let database = StubTrailCellDatabase(
-            manifest: .partial,
+            manifest: manifest,
             cells: [
                 Self.westSquare: TrailCellFixture.found([Self.nearLoop]),
                 Self.eastSquare: TrailCellFixture.found([Self.farPath]),
@@ -188,7 +193,26 @@ struct TrailCellLibraryTests {
 
         let answer = try await Self.makeLibrary(database).trails(in: [Self.valley])
 
-        #expect(Self.offered(answer) == [11])
+        #expect(answer == .uncovered)
+    }
+
+    /// Kept, a regional square would go on answering for thirty days after
+    /// the whole world replaced it.
+    @Test("a square out of a set that is not the whole world is not kept")
+    func aRegionalSquareIsNotKept() async throws {
+        let database = StubTrailCellDatabase(
+            manifest: .partial,
+            cells: [
+                Self.westSquare: TrailCellFixture.found([Self.nearLoop]),
+                Self.eastSquare: TrailCellFixture.found([Self.farPath]),
+            ]
+        )
+        let library = Self.makeLibrary(database, directory: Self.scratchDirectory())
+
+        _ = try await library.trails(in: [Self.valley])
+        _ = try await library.trails(in: [Self.valley])
+
+        #expect(database.requests == [[Self.westSquare, Self.eastSquare], [Self.westSquare, Self.eastSquare]])
     }
 
     // MARK: - A square that could not be read
@@ -208,6 +232,23 @@ struct TrailCellLibraryTests {
     @Test("a manifest that could not be read does not make a missing square an empty one")
     func anUnreadManifest() async throws {
         let database = StubTrailCellDatabase(manifest: .unread)
+
+        let answer = try await Self.makeLibrary(database).trails(in: [Self.valley])
+
+        #expect(answer == .unreachable)
+    }
+
+    /// Nothing says the squares are the whole world, so the ones that did
+    /// arrive are no more an answer than a regional set's.
+    @Test("a manifest that could not be read is no answer, even where every square was read")
+    func anUnreadManifestOverSquaresThatWereRead() async throws {
+        let database = StubTrailCellDatabase(
+            manifest: .unread,
+            cells: [
+                Self.westSquare: TrailCellFixture.found([Self.nearLoop]),
+                Self.eastSquare: TrailCellFixture.found([Self.farPath]),
+            ]
+        )
 
         let answer = try await Self.makeLibrary(database).trails(in: [Self.valley])
 
