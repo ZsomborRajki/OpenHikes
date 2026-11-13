@@ -23,22 +23,34 @@ enum ScreenshotDisplayGesture {
     ) -> Bool
 
     private static let dragDuration = 0.5
-    private static let releaseOffset = 0.7
+    /// How long a finger rests where its path ends before it lifts, so the
+    /// gesture ends as a drag and leaves no fling behind.
+    private static let holdBeforeLift = 0.2
     private static let tapDuration = 0.1
     private static let fingerSpacing: CGFloat = 30
 
     static func tapWithTwoFingers(at point: CGPoint, on display: ScreenshotDisplay) -> Bool {
         send(on: display, paths: [
-            (CGPoint(x: point.x - fingerSpacing, y: point.y), nil),
-            (CGPoint(x: point.x + fingerSpacing, y: point.y), nil),
+            [CGPoint(x: point.x - fingerSpacing, y: point.y)],
+            [CGPoint(x: point.x + fingerSpacing, y: point.y)],
         ])
     }
 
     static func drag(from start: CGPoint, to end: CGPoint, on display: ScreenshotDisplay) -> Bool {
-        send(on: display, paths: [(start, end)])
+        send(on: display, paths: [[start, end]])
     }
 
-    private static func send(on display: ScreenshotDisplay, paths: [(CGPoint, CGPoint?)]) -> Bool {
+    /// Two fingers side by side, moved together: what tilts a map. XCTest has
+    /// no element gesture for it on any display.
+    static func dragWithTwoFingers(from start: CGPoint, to end: CGPoint, on display: ScreenshotDisplay) -> Bool {
+        send(on: display, paths: [-fingerSpacing, fingerSpacing].map { offset in
+            [CGPoint(x: start.x + offset, y: start.y), CGPoint(x: end.x + offset, y: end.y)]
+        })
+    }
+
+    /// Sends one finger along each of `paths`, all at once: down at a path's
+    /// first point, across to its last, and up. A path of one point is a tap.
+    private static func send(on display: ScreenshotDisplay, paths: [[CGPoint]]) -> Bool {
         let screen = display.screen
         let recordSelector = NSSelectorFromString("initWithName:displayID:interfaceOrientation:")
         let touchSelector = NSSelectorFromString("initForTouchAtPoint:offset:")
@@ -66,13 +78,16 @@ enum ScreenshotDisplayGesture {
         let makeTouch = unsafeBitCast(method_getImplementation(touchMethod), to: TouchInit.self)
         let move = unsafeBitCast(method_getImplementation(moveMethod), to: Move.self)
         let lift = unsafeBitCast(method_getImplementation(liftMethod), to: Lift.self)
-        for (start, end) in paths {
-            guard let allocatedTouch = class_createInstance(touchClass, 0),
+        for path in paths {
+            guard let start = path.first,
+                  let allocatedTouch = class_createInstance(touchClass, 0),
                   let touch = makeTouch(allocatedTouch as AnyObject, touchSelector, display.natural(start), 0) else {
                 return false
             }
-            if let end { move(touch, moveSelector, display.natural(end), dragDuration) }
-            lift(touch, liftSelector, end == nil ? tapDuration : releaseOffset)
+            if path.count > 1, let end = path.last {
+                move(touch, moveSelector, display.natural(end), dragDuration)
+            }
+            lift(touch, liftSelector, path.count > 1 ? dragDuration + holdBeforeLift : tapDuration)
             object.perform(NSSelectorFromString("addPointerEventPath:"), with: touch)
         }
         var error: NSError?
@@ -81,5 +96,4 @@ enum ScreenshotDisplayGesture {
         if !success { XCTFail("display gesture failed: \(String(describing: error))") }
         return success
     }
-
 }

@@ -9,8 +9,8 @@ reasoning behind the parts that are not obvious.
 uploads a single 6.9" iPhone set — 1320 × 2868 — and every smaller iPhone size
 is scaled from it. The iPhone Duo has a slot of its own; see *The iPhone Duo
 set* below. OpenHikes builds for iPad too, and App Store Connect will not take
-an iPad build without a 13-inch iPad set, 2064 × 2752 either way up, which
-these scripts do not capture yet.
+an iPad build without a 13-inch iPad set, 2064 × 2752 either way up; see *The
+iPad set*.
 
 **Between one and ten of them.** Not ten: only the first three appear in search
 results, and every frame past the first few is one more thing to re-shoot when
@@ -29,7 +29,7 @@ rather than the order they are worth.
 | 3 | `03-nearby-trails` | Published hikes and waymarked OSM routes, listed and pinned |
 | 4 | `04-following-the-trail` | Where on the walk you are, and how much of it is left |
 | 5 | `05-recording-a-hike` | It records, with the figures and the line two hours in |
-| 6 | `06-a-map-for-the-mountains` | The walk on a map with hillshading and contours — OpenHikes Pro |
+| 6 | `06-the-trail-in-3d` | The walk on a tilted map, the mountains risen under it, on Thunderforest Outdoors — OpenHikes Pro |
 | 7 | `07-walk-summary` | A trail walked end to end |
 | 8 | `08-draw-your-own-trail` | Plan Saturday: search three places and walk between them |
 | 9 | `09-a-place-and-its-photos` | A place on the walk, kept with its own photographs |
@@ -95,14 +95,24 @@ used to walk twenty fixes 22 m apart at four seconds each, which read 18 km/h,
 no climb, and a line along a village street. The frame closes the recovery's
 own notice, which says, truthfully, that the recording was resumed.
 
-**06, the map**, is the hero's composition on Stadia Outdoors: hillshading,
-contours and the waymarked route numbers under the same line and photographs.
-It shows what OpenHikes Pro buys, so it is captured with `--ui-test-entitled`.
-It was the offline frame once — the hike's screen raised over the very map it
-was about, with an idle *Offline* button the only sign of the feature. The two
-cannot share a picture: the sheet grows before its contents scroll, and *Zoom*
-returns it to the middle detent scrolled to the top. The button is not pressed
-in any frame: a route's download is up to four thousand billed Stadia tiles.
+**06, the tilted map**, is the hero's walk seen at an angle: Thunderforest
+Outdoors lying over the terrain, the Watzmann's flank and the lake's trench
+risen under the same line and photographs, and the *2D* button that lays the
+map flat again standing over the location button. Thunderforest Outdoors is an
+OpenHikes Pro map, so the frame is captured with `--ui-test-entitled` and needs
+the Thunderforest key in `OpenHikes/Secrets.plist`; the tilt itself is free on
+every map. The frame starts from the hero's framing and draws two fingers up
+the map until it is tilted 35°, read back from the camera MapKit describes in
+the map element's accessibility value. Past the last ground it has, MapKit
+draws flat grey, and a display as tall as an iPad's held upright sees that far
+at 35°, so the tilt gives a little back while that grey shows along the top of
+the map: such an iPad's frame is tilted 30°. A map tilts about its middle, so
+the pins are then drawn back to the middle of the open map, and the callout is
+opened on the photograph farthest from the eye. It was the hero's composition
+flat on Stadia Outdoors before that, and the offline frame before that: the
+hike's screen raised over the very map it was about, with an idle *Offline*
+button the only sign of the feature. The button is not pressed in any frame: a
+route's download is up to four thousand billed Stadia tiles.
 
 **08, the drawn trail**, is the walk frame 1 is of, planned rather than
 imported: *Schönau am Königssee*, *Kühroint* and *St. Bartholomä*, picked from
@@ -163,8 +173,9 @@ expects an empty photo library; use a fresh pool owner for the next batch.
 The device must belong to the configured pool, have an active claim for that
 owner, and match `--device-type`. Templates and other sessions’ devices are
 refused before preparation. The caller also shuts the device down by releasing
-the claim. Only `iPhone 18 Pro Max` and `iPhone Duo` are accepted; another type
-is rejected before a build instead of retrying images with unsupported sizes.
+the claim. Only `iPhone 18 Pro Max`, `iPhone Duo` and `iPad Pro 13-inch (M5)`
+are accepted; another type is rejected before a build instead of retrying
+images with unsupported sizes.
 When capturing both appearances on one prepared device, run each appearance
 on its own fresh claim so the stamped photographs are added only once.
 
@@ -343,8 +354,13 @@ about a quarter of the screen. Correct for the app; too small for a hero shot.
 
 So the hero frame, and frame 06 after it, pans and zooms the map by hand,
 measuring the photo pins between gestures and correcting. The measuring
-matters — a drag lands short of the vector it is given, and a zoom doubles
-whatever is left off-centre. Frame 03 zooms out with a two-finger tap on one of
+matters — a zoom doubles whatever is left off-centre — and so does how the map
+is let go of. A drag let go at speed leaves the map coasting, and MapKit
+spends the first ten points of any drag telling it from a tap: the hero's pan
+after its zoom landed 60% past its aim, and a third pan took most of that
+back. Every pan in the set is `panMap(_:from:to:)` now, drawn slowly from ten
+points behind its start and held before it lets go, and lands where it was
+aimed. Frame 03 zooms out with a two-finger tap on one of
 its pins, since the map's own centre is under the sheet, and pans once. Frame
 05 measures the recording’s red stroke in the screenshot, zooming out and
 centering until it fits above the measured sheet. The sheet is collapsed
@@ -353,9 +369,12 @@ returned to its original height, with the detent checked before capturing.
 This replaces the fixed upward pan that left the line running off the top of
 the frame.
 
-Frames 03 and 06 check the rendered map for loading grids, then compare map
-pixels across polls until its redraw settles. A filled map alone is not ready:
-an enlarged lower-zoom tile can still be waiting for its final detail.
+Every frame with a map in it checks the rendered map for loading grids, then
+compares map pixels across polls until its redraw settles, once, as it is
+captured. A filled map alone is not ready: an enlarged lower-zoom tile can
+still be waiting for its final detail. The nearby frame allows the least
+loading grid, and the recording also asks for most of its map to be coloured
+land.
 
 **Zoom with a double tap, never `XCUIElement.pinch`.** A pinch rotates the map
 a little, and that cost the most time here by far: a few degrees off north
@@ -369,13 +388,15 @@ a gesture known to disturb the screen and correct afterwards.
 
 ## Before uploading
 
-- The frames are 1320 × 2868. The scripts print each one's size;
-  anything else is the wrong device.
+- The iPhone frames are 1320 × 2868, and the iPad's 2064 × 2752 or
+  2752 × 2064. The scripts print each one's size; anything else is the wrong
+  device.
 - The OpenStreetMap attribution has to stay visible in every map frame. It is a
   licence condition, not decoration.
 - Frames 6 and 8 are captured with `--ui-test-entitled`, so they show what
-  OpenHikes Pro buys: frame 6 the Stadia Outdoors map, frame 8 the climb and
-  descent in the drawn trail's header, which come from Stadia's elevation.
+  OpenHikes Pro buys: frame 6 the Thunderforest Outdoors map, frame 8 the
+  climb and descent in the drawn trail's header, which come from Stadia's
+  elevation.
   That is honest — both are real features — but App Store guideline 2.3.2 asks
   the listing to say which featured items need a purchase, so the description's
   Pro paragraph has to name both, not only the maps and the offline download.
@@ -467,6 +488,46 @@ shared `scrollIntoView` draws a target that has gone past back down with a
 drag that does not fling. The gallery frame aligns its footer with the bottom
 of the cover’s viewport, keeping the photo strip and action row whole. The
 maker returns to its middle detent after searching so its route stays visible.
+
+## The iPad set
+
+```sh
+# Upright, 2064 × 2752
+Scripts/screenshots.sh --device "OpenHikes Screenshots iPad" \
+    --device-type "iPad Pro 13-inch (M5)" --append
+# On its side, 2752 × 2064
+Scripts/screenshots.sh --device "OpenHikes Screenshots iPad" \
+    --device-type "iPad Pro 13-inch (M5)" --orientation landscape --append
+```
+
+App Store Connect takes a 13-inch iPad frame at 2064 × 2752 or 2752 × 2064,
+which is what an iPad Pro 13-inch (M5) simulator captures, and scales every
+smaller iPad's from it. The same ten frames are shot from the same test class,
+into `ipad_pro_13_inch_m5_portrait_en_ie_YYYY_MM_DD/` or `…_landscape_…`. Add
+`--locale de_DE` for German.
+
+**The test class turns the device.** An iPad has nothing to open, so there is
+no `--pose`: the script tells the runner which way up it was asked for
+(`OPENHIKES_SCREENSHOT_ORIENTATION`), and `ScreenshotUITests` turns the device
+once, before its frames run, so the app opens that way up in each, and turns
+it upright again after them. An iPhone's run tells it nothing.
+
+**Either way up is the side panel**, since an iPad is wide enough for a map
+beside it upright too (*The map screen* in `AGENTS.md`). The frames come out
+in the shape the open Duo's landscape set has, with three differences:
+
+- Upright, the panel is tall enough to show the chart and the gallery at
+  once, so frame 02 is left as it stands rather than scrolled until the
+  gallery meets the panel's bottom edge, which nothing could bring it to.
+- The nearby frame keeps OpenStreetMap. The open Duo's switches to Apple Maps
+  for a raster row that stalls there, and an iPad's has not stalled.
+- The nearby frame steps out by the ground its map shows rather than by a
+  count of steps. The map opens on the same ground whatever draws it, so an
+  iPad on its side takes two steps to the scale the phone reaches in one.
+
+`isHittable` answers no for everything in the panel on an iPad, as on the
+open Duo on its side, so the shared helpers take a centre in the window as
+reachable there (`OpenHikesUITests/WindowSupport.swift`).
 
 ## The Apple Watch set
 

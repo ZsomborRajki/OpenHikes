@@ -27,6 +27,16 @@ extension ScreenshotUITests {
         Self.screenshotStrings[key] ?? key
     }
 
+    /// The way up the script asked for the device to be turned, or `nil`
+    /// when it asked for none. Only an iPad's run asks.
+    static var requestedOrientation: UIDeviceOrientation? {
+        switch ProcessInfo.processInfo.environment["OPENHIKES_SCREENSHOT_ORIENTATION"] {
+        case "portrait": .portrait
+        case "landscape": .landscapeLeft
+        default: nil
+        }
+    }
+
     /// UIKit gives its sheet handle a localized label and no identifier.
     /// Read that label from UIKit's accessibility bundle for the capture's
     /// language, rather than copying its translations into these tests.
