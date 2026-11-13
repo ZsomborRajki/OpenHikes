@@ -103,12 +103,14 @@ OpenHikes Pro map, so the frame is captured with `--ui-test-entitled` and needs
 the Thunderforest key in `OpenHikes/Secrets.plist`; the tilt itself is free on
 every map. The frame starts from the hero's framing and draws two fingers up
 the map until it is tilted 35°, read back from the camera MapKit describes in
-the map element's accessibility value. Past the last ground it has, MapKit
-draws flat grey, and a display as tall as an iPad's held upright sees that far
-at 35°, so the tilt gives a little back while that grey shows along the top of
-the map: such an iPad's frame is tilted 30°. A map tilts about its middle, so
-the pins are then drawn back to the middle of the open map, and the callout is
-opened on the photograph farthest from the eye. It was the hero's composition
+the map element's accessibility value. A map tilts about its middle, so the
+pins are then drawn back to the middle of the open map, and the callout is
+opened on the photograph farthest from the eye. Past the last ground it has,
+MapKit draws flat grey, and whatever draws the map down the screen after the
+tilt can bring that edge into the top of the picture: the room MapKit makes
+for the callout did on the open Duo on its side. So the frame's last move
+reads that grey's depth off the settled picture and draws the map back up by
+it. It was the hero's composition
 flat on Stadia Outdoors before that, and the offline frame before that: the
 hike's screen raised over the very map it was about, with an idle *Offline*
 button the only sign of the feature. The button is not pressed in any frame: a

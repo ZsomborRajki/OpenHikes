@@ -12,20 +12,15 @@ import XCTest
 
 extension ScreenshotUITests {
     /// How far from straight down the map is tilted, in degrees: far enough
-    /// for the Watzmann to stand up off the page, and short of where the
-    /// horizon comes into the top of a wide display. It is also as far as
-    /// MapKit tilts a map at the scale that shows the whole walk on the 6.9"
-    /// phone.
+    /// for the Watzmann to stand up off the page. It is also as far as MapKit
+    /// tilts a map at the scale that shows the whole walk on the 6.9" phone.
     private static let wantedPitch = 35.0
-    /// Close enough to that to leave alone. MapKit reports whole degrees.
+    /// How far past that a tilt may land. MapKit reports whole degrees.
     private static let pitchTolerance = 1.0
-    /// How much of the tilt is given back at a time while the map's far edge
-    /// shows — see ``tiltMap(in:)``.
-    private static let pitchStep = 4.0
     /// The least tilt, in degrees, that reads as relief rather than as a map
-    /// seen from a little off straight down. Where MapKit stops a tilt short
-    /// of ``wantedPitch``, as it does further out, the frame is still worth
-    /// shooting above this, and fails below it.
+    /// seen from a little off straight down. Where a drag stops short of
+    /// ``wantedPitch``, the frame is still worth shooting above this, and
+    /// fails below it.
     private static let minimumPitch = 25.0
     /// What MapKit makes of two fingers drawn up the map, in degrees a point:
     /// 35° for 401 points, measured on the open iPhone Duo. Only where the
@@ -33,23 +28,30 @@ extension ScreenshotUITests {
     /// them did.
     private static let pitchPerPoint = 0.087
     /// The most of the open map's height one tilting drag covers, and how far
-    /// in from its edge the drag starts, so it begins and ends on the map.
+    /// up from its bottom edge the drag starts, so it begins and ends on the
+    /// map.
     private static let tiltReach: CGFloat = 0.6
     private static let tiltMargin: CGFloat = 0.2
-    /// Where in the open map the pan after the tilt takes hold of it, as
+    /// How many drags a tilt gets. A display as short as the iPhone Duo's
+    /// cover needs more than one to reach the pitch.
+    private static let tiltPasses = 3
+    /// The shortest drag worth making, in points. MapKit does not read a
+    /// short one as a tilt: 28 points up from 25° laid the open iPhone Duo's
+    /// map flat.
+    private static let leastTiltTravel = 100.0
+
+    /// Where in the open map a pan of the tilted map takes hold of it, as
     /// shares of its width and height: its far corner, clear of the pins, the
-    /// weather badge across from it and the buttons under it.
-    private static let recenterAnchorX: CGFloat = 0.85
-    private static let recenterAnchorY: CGFloat = 0.3
+    /// callout, the weather badge across from it and the buttons under it.
+    private static let panAnchorX: CGFloat = 0.85
+    private static let panAnchorY: CGFloat = 0.3
     /// The least the pins have to be off the middle, in points, for a pan to
     /// be worth a gesture.
     private static let recenterSlack: CGFloat = 12
-
-    /// How many passes the tilt gets: a drag each, or a look at the map's
-    /// far edge. A display as short as the iPhone Duo's cover needs more than
-    /// one drag to reach the pitch, and one as tall as an iPad's held upright
-    /// gives some of it back.
-    private static let tiltPasses = 10
+    /// How much further than the far edge is deep the map is drawn back from
+    /// it, in points, and how many times it is.
+    private static let farEdgeMargin: CGFloat = 16
+    private static let farEdgePasses = 4
 
     /// The walk on Thunderforest Outdoors, tilted: the Watzmann's flank and
     /// the lake's trench risen under the tiles, the line and the photographs.
@@ -85,9 +87,16 @@ extension ScreenshotUITests {
         // walk, and the climb the frame is of stays clear in front of it.
         let farthest = try XCTUnwrap(photoPins(in: app).first, "the map should be showing photo pins")
         farthest.tap()
+        let callout = element("photo-pin-preview", in: app)
         XCTAssertTrue(
-            element("photo-pin-preview", in: app).waitForExistence(timeout: UITestTimeout.existence),
+            callout.waitForExistence(timeout: UITestTimeout.existence),
             "selecting a photo pin should open a callout previewing the photo"
+        )
+        drawMapBackFromItsFarEdge(in: app)
+        XCTAssertGreaterThanOrEqual(
+            callout.frame.minY,
+            openMapArea(in: app).minY,
+            "the callout should still be whole once the map has been drawn back"
         )
         capture(as: .terrain, of: app)
     }
@@ -109,6 +118,54 @@ extension ScreenshotUITests {
         app.buttons["settings-close"].tap()
     }
 
+    /// Tilts the map to ``wantedPitch`` with two fingers drawn up the open
+    /// part of it, which MapKit reads as a tilt away from straight down.
+    ///
+    /// Measured rather than assumed, as the hero's pans are. A drag tilts a
+    /// map by the points it covers, the displays this set is shot on differ
+    /// by a factor of two in how many they have, and MapKit stops a tilt at a
+    /// pitch that depends on how far out the camera is. So each drag is sized
+    /// by what is still missing, at the rate the drag before it turned out to
+    /// have, until the camera says it is there or will go no further.
+    ///
+    /// Long drags up only: what is missing by less than
+    /// ``leastTiltTravel`` is left missing.
+    ///
+    /// The *2D* button is what says the app took the tilt for one: it is up
+    /// exactly while the terrain is under the tiles.
+    @MainActor
+    private func tiltMap(in app: XCUIApplication) {
+        let area = openMapArea(in: app)
+        let display = screenshotDisplay(in: app)
+        let reach = Double(area.height * Self.tiltReach)
+        let start = CGPoint(x: area.midX, y: area.minY + area.height * (1 - Self.tiltMargin))
+        var rate = Self.pitchPerPoint
+        var pitch = mapPitch(in: app)
+        for _ in 0..<Self.tiltPasses {
+            let travel = min((Self.wantedPitch - pitch) / rate, reach)
+            guard travel >= Self.leastTiltTravel else { break }
+            XCTAssertTrue(
+                ScreenshotDisplayGesture.dragWithTwoFingers(
+                    from: start, to: CGPoint(x: start.x, y: start.y - CGFloat(travel)), on: display
+                )
+            )
+            let reached = mapPitch(in: app)
+            // A drag that gained nothing found MapKit's own limit for this
+            // scale, and says nothing about the rate.
+            guard reached > pitch else { break }
+            rate = (reached - pitch) / travel
+            pitch = reached
+        }
+        XCTAssertTrue(
+            (Self.minimumPitch...Self.wantedPitch + Self.pitchTolerance).contains(pitch),
+            "two fingers drawn up the map should tilt it to about \(Self.wantedPitch)°, not \(pitch)°"
+        )
+        XCTAssertTrue(
+            element("map-flatten-button", in: app).waitForExistence(timeout: UITestTimeout.navigation),
+            "a tilted map offers 2D"
+        )
+    }
+
     /// Draws the photo pins back to the middle of the open map, which the
     /// tilt took them from.
     ///
@@ -121,75 +178,46 @@ extension ScreenshotUITests {
         guard let pins = Self.bounds(of: photoPins(in: app)) else { return }
         let offset = CGVector(dx: area.midX - pins.midX, dy: area.midY - pins.midY)
         guard hypot(offset.dx, offset.dy) > Self.recenterSlack else { return }
-        let anchor = CGPoint(
-            x: area.minX + area.width * Self.recenterAnchorX,
-            y: area.minY + area.height * Self.recenterAnchorY
-        )
+        let anchor = tiltedPanAnchor(in: area)
         panMap(mapElement(in: app), from: anchor, to: CGPoint(x: anchor.x + offset.dx, y: anchor.y + offset.dy))
     }
 
-    /// Tilts the map to ``wantedPitch`` with two fingers drawn up the open
-    /// part of it, which MapKit reads as a tilt away from straight down.
+    /// Draws the map up the screen while its far edge shows along the top of
+    /// it, and leaves the map settled.
     ///
-    /// Measured rather than assumed, as the hero's pans are. A drag tilts a
-    /// map by the points it covers, the displays this set is shot on differ
-    /// by a factor of two in how many they have, and MapKit stops a tilt at a
-    /// pitch that depends on how far out the camera is. So each drag is sized
-    /// by what is still missing, at the rate the drag before it turned out to
-    /// have, until the camera says it is there or will go no further.
+    /// MapKit draws a tilted map's ground out to a distance, and flat grey
+    /// past it. That edge moves with the ground, so whatever draws the map
+    /// down the screen after the tilt can bring it into the picture: on the
+    /// open iPhone Duo on its side, the room MapKit makes above a pin for its
+    /// callout put a band fifteen points deep along the top. Measured there,
+    /// the band was absent after the tilt and after the pins were recentred,
+    /// there once the callout was open, and gone again after a pan back up.
     ///
-    /// **And no further than the ground goes.** MapKit draws a tilted map
-    /// out to a distance and flat grey past it, and a display as tall as an
-    /// iPad's held upright sees that far at 35°: a grey band 70 points deep
-    /// under its status bar. So once the pitch is reached the top of the map
-    /// is looked at, and while the band is there the tilt gives a little back.
-    ///
-    /// The *2D* button is what says the app took the tilt for one: it is up
-    /// exactly while the terrain is under the tiles.
+    /// So this is the frame's last move, and it reads the band's depth off
+    /// the settled picture and pans by that much. The grey is only drawn once
+    /// the ground short of it is, so each look waits for the map first, which
+    /// is also the wait ``capture(as:of:)`` would otherwise make.
     @MainActor
-    private func tiltMap(in app: XCUIApplication) {
-        let area = openMapArea(in: app)
+    private func drawMapBackFromItsFarEdge(in app: XCUIApplication) {
         let display = screenshotDisplay(in: app)
-        let reach = Double(area.height * Self.tiltReach)
-        var wanted = Self.wantedPitch
-        var rate = Self.pitchPerPoint
-        var pitch = mapPitch(in: app)
-        for _ in 0..<Self.tiltPasses {
-            let missing = wanted - pitch
-            guard abs(missing) > Self.pitchTolerance else {
-                guard screenshotMapShowsItsFarEdge(in: app, on: display) else { break }
-                wanted -= Self.pitchStep
-                continue
-            }
-            let travel = min(max(missing / rate, -reach), reach)
-            // Up the map from its lower part to tilt further, and down it
-            // from its upper part to come back.
-            let start = area.minY + area.height * (travel > 0 ? 1 - Self.tiltMargin : Self.tiltMargin)
-            XCTAssertTrue(
-                ScreenshotDisplayGesture.dragWithTwoFingers(
-                    from: CGPoint(x: area.midX, y: start),
-                    to: CGPoint(x: area.midX, y: start - CGFloat(travel)),
-                    on: display
-                )
-            )
-            let reached = mapPitch(in: app)
-            // A drag that gained nothing found MapKit's own limit for this
-            // scale, and says nothing about the rate.
-            guard reached != pitch else { break }
-            rate = (reached - pitch) / travel
-            pitch = reached
+        let anchor = tiltedPanAnchor(in: openMapArea(in: app))
+        for _ in 0..<Self.farEdgePasses {
+            settleScreenshotMapTiles(in: app)
+            let depth = screenshotMapFarEdgeDepth(in: app, on: display)
+            guard depth > 0 else { return }
+            let landing = CGPoint(x: anchor.x, y: anchor.y - depth - Self.farEdgeMargin)
+            panMap(mapElement(in: app), from: anchor, to: landing)
         }
-        XCTAssertTrue(
-            (Self.minimumPitch...Self.wantedPitch + Self.pitchTolerance).contains(pitch),
-            "two fingers drawn up the map should tilt it to about \(Self.wantedPitch)°, not \(pitch)°"
+        settleScreenshotMapTiles(in: app)
+        XCTAssertEqual(
+            screenshotMapFarEdgeDepth(in: app, on: display),
+            0,
+            "the map should have been drawn back from its far edge"
         )
-        XCTAssertFalse(
-            screenshotMapShowsItsFarEdge(in: app, on: display),
-            "and the tilt should stop short of the map's far edge"
-        )
-        XCTAssertTrue(
-            element("map-flatten-button", in: app).waitForExistence(timeout: UITestTimeout.navigation),
-            "a tilted map offers 2D"
-        )
+    }
+
+    @MainActor
+    private func tiltedPanAnchor(in area: CGRect) -> CGPoint {
+        CGPoint(x: area.minX + area.width * Self.panAnchorX, y: area.minY + area.height * Self.panAnchorY)
     }
 }

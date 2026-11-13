@@ -842,15 +842,16 @@ extension ScreenshotUITests {
     @MainActor
     func capture(as frame: Frame, of app: XCUIApplication) {
         // Once, here, for every frame with a map in it, and as strictly as
-        // that frame's own map allows.
+        // that frame's own map allows. The tilted frame's last move leaves
+        // its map settled: see `drawMapBackFromItsFarEdge(in:)`.
         switch frame {
         case .nearby:
             settleScreenshotMapTiles(in: app, rejectSmallLoadingPatches: true)
         case .recording:
             settleScreenshotMapTiles(in: app, requireTerrain: true)
-        case .route, .following, .terrain, .trailMaker:
+        case .route, .following, .trailMaker:
             settleScreenshotMapTiles(in: app)
-        case .photos, .walkHistory, .place, .share:
+        case .terrain, .photos, .walkHistory, .place, .share:
             break
         }
         attachScreenshotEvidence(named: frame.rawValue, in: app)
