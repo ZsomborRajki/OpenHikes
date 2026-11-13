@@ -1489,7 +1489,9 @@ by name. `TrailCellGrid` argues the design and has the measurements.
 
   An upload sends the squares whose digest changed, deletes the ones the build
   no longer has, and writes the manifest last. It refuses a regional build
-  over a database that holds the world. It signs with a server-to-server key
+  over a database that holds the world; told `--replace-world`, it first makes
+  the manifest say the squares are no longer the whole world, before it
+  deletes one. It signs with a server-to-server key
   from the CloudKit Console, named by `OPENHIKES_CLOUDKIT_KEY_ID` and
   `OPENHIKES_CLOUDKIT_KEY_FILE`; the private half stays out of the repository.
   Each environment has keys of its own there, so either name takes
