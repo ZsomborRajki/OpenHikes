@@ -881,6 +881,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
     `MapView.update` does not run, and what the map measures from its own
     height — the row along its bottom — hears of it from UIKit
     (`MapLayoutObserver`).
+  - Beside a panel nothing covers the credit MapKit draws on its own maps,
+    so over Apple Maps or Apple Satellite that row rests above it
+    (`MapCoordinator+TrackingButton.swift`).
   - The sheet keeps its toolbar across its top (`horizontalSheetToolbar()`).
     A closed iPhone Duo stands a sheet's toolbar up its side, and the compact
     detent holds one button of that column.

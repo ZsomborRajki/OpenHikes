@@ -41,6 +41,7 @@ extension MapView.Coordinator {
         let topInset: CGFloat
         let bottomInset: CGFloat
         let panelInset: CGFloat
+        let systemCredit: CGFloat
     }
 
     /// Where the sheet's top is assumed to be until it says otherwise: the
@@ -52,6 +53,9 @@ extension MapView.Coordinator {
     /// Used only before the button has been laid out or measured: the height
     /// its capsule is built at, see ``MapView/makeTrackingButton(for:_:)``.
     private static let trackingButtonFallbackHeight = MapGlassPill.controlSize
+    /// How tall the credit MapKit draws on its own maps stands, logo and
+    /// **Legal** link: measured, since MapKit says nothing of it.
+    private static let systemCreditHeight: CGFloat = 21
 
     /// Observes `sheetMetrics.topY` and repositions the tracking button
     /// imperatively, then re-registers. Keeps sheet drags off SwiftUI's
@@ -84,7 +88,8 @@ extension MapView.Coordinator {
             height: mapView.bounds.height,
             topInset: mapView.safeAreaInsets.top,
             bottomInset: mapView.safeAreaInsets.bottom,
-            panelInset: sidePanelInset
+            panelInset: sidePanelInset,
+            systemCredit: systemCreditClearance
         )
         guard geometry != lastAppliedGeometry else { return }
         lastAppliedGeometry = geometry
@@ -148,10 +153,30 @@ extension MapView.Coordinator {
     /// exactly as long as there is a panel instead of a sheet.
     private func sheetTop(in mapView: MKMapView) -> CGFloat {
         let height = mapView.bounds.height
-        guard sidePanelInset == 0 else { return height - mapView.safeAreaInsets.bottom }
+        guard sidePanelInset == 0 else {
+            return height - mapView.safeAreaInsets.bottom - systemCreditClearance
+        }
         let reported = sheetMetrics?.topY ?? 0
         guard reported > 0, reported <= height else { return height - Self.sheetFallbackOffset }
         return reported
+    }
+
+    /// The room the row leaves under itself, beside a panel, for the credit
+    /// MapKit draws on its own maps.
+    ///
+    /// A sheet covers that credit and a panel does not. MapKit stands its
+    /// logo and its **Legal** link on the map's bottom margin, at the leading
+    /// margin that clears the panel, which is the corner the pill stands in:
+    /// on Apple Maps beside a panel the record button was drawn over the
+    /// logo. So over one of MapKit's own maps the whole row rests that much
+    /// higher, and stays one row. Nothing over raster tiles, which replace
+    /// the map and its logo, and whose credit is the app's own line.
+    private var systemCreditClearance: CGFloat {
+        #if os(iOS)
+        tileOverlay == nil ? Self.systemCreditHeight + MapView.creditLineSpacing : 0
+        #else
+        0
+        #endif
     }
 
     /// The highest the button may sit, as the Y of its bottom edge.

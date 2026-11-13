@@ -749,9 +749,10 @@ struct MapView: MapViewRepresentable, Equatable {
         // `Coordinator.observeLocation`.
         coordinator.observeLocation(locationManager, on: mapView)
         // Only reapplies when the geometry the row is measured from moved —
-        // here, the side panel's inset, written above. The map's own size
-        // reaches the same call from ``MapLayoutObserver``, since a size that
-        // changes with no input of this view never gets here.
+        // here, the side panel's inset and the base map, both written above.
+        // The map's own size reaches the same call from ``MapLayoutObserver``,
+        // since a size that changes with no input of this view never gets
+        // here.
         // `sheetMetrics.topY` changes are already tracked at full frame rate
         // by `observeSheetMetrics`'s own observation, so redoing it here
         // unconditionally would just repeat that work on every one of this

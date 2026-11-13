@@ -193,7 +193,8 @@ extension MapView {
         /// measured from it: a status bar that appears or disappears moves that
         /// limit without touching the map's height. The bottom inset and the
         /// side panel's are part of it because beside a panel the row rests on
-        /// the bottom safe area rather than on a sheet.
+        /// the bottom safe area rather than on a sheet, and the room for
+        /// MapKit's own credit because there it rests on that.
         var lastAppliedGeometry: RowGeometry?
 
         // MARK: Side panel
