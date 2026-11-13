@@ -1257,7 +1257,8 @@ in its source header. Do not weaken one without a measurement.
 - **Deployment state, checked 2026-11-13.** Development and production both
   export `md5 e2fd4f7c500b3911fae3d86a9b9d3f9c`. Both have the two
   trail-square record types, `CuratedTrailCell` and `CuratedTrailManifest`,
-  neither with an index, and a column for every attribute in
+  neither with an index, and both hold the world's squares under a manifest
+  that says so (*The trail squares*). Both have a column for every attribute in
   `MirroredCloudKitSchema.recordTypes`. The only live columns the contract
   does not name are SwiftData's own `CD_entityName`, the
   to-one reference columns that the contract lists as relationships, and the
@@ -1697,11 +1698,16 @@ Reopening one needs new evidence, not a fresh reading of the same code.
     every line above it, over the realistic satellite map's terrain. Watched
     on iOS 18.6 and 27.2 simulators, never on a device; WWDC22 said an
     overlay flattens a realistic map, on iOS 16.
-  - The app has never fetched a trail square from CloudKit: its fetch has
-    only run against a stub. The upload has been watched, in development: a
-    server-to-server key acts as the developer who made it, wrote both
-    `reviewer`-only types, and the asset store took each square as a
-    request's raw body. A search in a Debug build is the first real read.
+  - No search in the app has been watched reading a trail square, on a
+    device or in a TestFlight build. The fetch itself has been:
+    `CloudKitTrailCellDatabase` under `TrailCellLibrary`, hosted in a
+    simulator with no iCloud account, read the manifest and the squares from
+    development, and from production in a scratch build whose entitlements
+    named that environment. A search of two squares took 0.3 seconds and one
+    of six 0.8, and each again from disk under 0.15. The upload has been
+    watched in both environments: a server-to-server key acts as the
+    developer who made it, wrote both `reviewer`-only types, and the asset
+    store took each square as a request's raw body.
 
 ## Documentation
 
