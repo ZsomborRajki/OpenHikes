@@ -29,11 +29,14 @@ extension ScreenshotUITests {
     private static let mapSampleInset: CGFloat = 12
     private static let locationPulseRadius: CGFloat = 64
     // The flat grey MapKit draws past the last ground of a tilted map is
-    // 99, 99, 99 on an iPad Pro 13-inch. Rock under hillshading is as dark,
-    // and never as even: 126, 128, 120.
+    // 99, 99, 99. Rock under hillshading is as dark, and never as even:
+    // 126, 128, 120. A row has it where that grey runs unbroken for 24
+    // points, which the edge of a status bar's glyph never does and the thin
+    // end of the band's ragged edge still does.
     private static let farEdgeGray: ClosedRange<UInt8> = 80...120
     private static let farEdgeChannelSpread: UInt8 = 2
-    private static let farEdgeProbeDepth: CGFloat = 48
+    private static let farEdgeRun = 6
+    private static let farEdgeProbeDepth = 120
     private static let farEdgeProbeStride = 4
 
     @MainActor
@@ -123,27 +126,31 @@ extension ScreenshotUITests {
         return (hasTiles, signature.finalize())
     }
 
-    /// Whether the flat grey past a tilted map's last ground shows along the
-    /// top of the open map: any row of its first points that is mostly that
-    /// grey, which a status bar's glyphs and a weather badge leave it.
+    /// How deep the flat grey past a tilted map's last ground reaches down
+    /// from the top of the open map, in points, or zero where there is none.
     @MainActor
-    func screenshotMapShowsItsFarEdge(in app: XCUIApplication, on display: ScreenshotDisplay) -> Bool {
-        guard let image = screenshotPixels(on: display) else { return false }
+    func screenshotMapFarEdgeDepth(in app: XCUIApplication, on display: ScreenshotDisplay) -> CGFloat {
+        guard let image = screenshotPixels(on: display) else { return 0 }
         let band = openMapArea(in: app)
             .intersection(CGRect(x: 0, y: 0, width: image.width, height: image.height))
-        guard !band.isEmpty else { return false }
+        guard !band.isEmpty else { return 0 }
         let top = Int(band.minY)
-        let rows = stride(from: top, to: top + Int(Self.farEdgeProbeDepth), by: Self.farEdgeProbeStride)
+        let bottom = min(top + Self.farEdgeProbeDepth, Int(band.maxY))
         let columns = Array(stride(from: Int(band.minX), to: Int(band.maxX), by: Self.farEdgeProbeStride))
-        return rows.contains { row in
-            let gray = columns.count { column in
+        let rows = Array(stride(from: top, to: bottom, by: Self.farEdgeProbeStride))
+        let deepest = rows.last { row in
+            var run = 0
+            return columns.contains { column in
                 let offset = (row * image.width + column) * 4
                 let channels = image.bytes[offset..<(offset + 3)]
-                guard let high = channels.max(), let low = channels.min() else { return false }
-                return high - low <= Self.farEdgeChannelSpread && Self.farEdgeGray.contains(high)
+                let high = channels.max() ?? 0
+                let isFarEdge = high - (channels.min() ?? 0) <= Self.farEdgeChannelSpread
+                    && Self.farEdgeGray.contains(high)
+                run = isFarEdge ? run + 1 : 0
+                return run >= Self.farEdgeRun
             }
-            return gray * 2 > columns.count
         }
+        return deepest.map { CGFloat($0 - top + Self.farEdgeProbeStride) } ?? 0
     }
 
     @MainActor
