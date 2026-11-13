@@ -230,10 +230,40 @@
 //  ``Notice/submission`` and ``Notice/photoSubmission`` is set; a notice with
 //  neither is a record nothing wrote and is dropped.
 //
+//  ## The third family: OpenStreetMap's routes, filed ahead of time
+//
+//  ``trailCellType`` and ``trailManifestType`` hold nothing a hiker made.
+//  They are a copy of OpenStreetMap's waymarked day hikes, filed by square of
+//  the map — see ``TrailCellGrid`` — which `Scripts/trail-cells.sh` builds
+//  from an extract and uploads, so that a curated search is a fetch of a few
+//  records by name rather than a wait in Overpass's queue.
+//
+//  - **`_world` reads both**, for the reason it reads a listing: browsing
+//    needs no account.
+//  - **Create and write are the `reviewer` role's and nobody else's.** Not a
+//    role of their own, because it would guard nothing new: what a square
+//    holds is drawn on a hiker's map as a trail to walk, which is the trust a
+//    published listing already is, and a reviewer can publish one of those.
+//  - **No index on either.** Nothing queries them: a square is fetched by the
+//    name its place on the map gives it — see
+//    ``TrailCellGrid/recordName(for:)`` — and the manifest by its one fixed
+//    name. An index here would leak nothing, every byte being
+//    OpenStreetMap's, but it would be the one thing in this schema nobody
+//    could say the use of.
+//
+//  That last rule is why the manifest lists the squares. With no index the
+//  type cannot be enumerated, by the upload any more than by anybody else, so
+//  ``TrailManifest/cells`` is the only record of which squares exist — what
+//  lets a refresh delete the record of a square whose last route is gone.
+//
 //  Nothing here contacts CloudKit, and nothing here is verified against a
 //  live container. See *Schema and migration policy* for the standing rule
 //  that a deployment fact is recorded in `AGENTS.md` rather than in
 //  runtime code.
+//
+//  This file is also compiled into the tool behind `Scripts/trail-cells.sh`,
+//  which writes the third family's records and has to spell their fields the
+//  way the app reads them. So it imports Foundation and nothing else.
 //
 
 import Foundation
@@ -269,6 +299,54 @@ nonisolated enum CommunitySchema {
     /// What a reviewer publishes from one of those. The only type a hike's
     /// contributed photographs are ever found through.
     static let contributionType = "CommunityPhotoContribution"
+    /// One square of OpenStreetMap's waymarked day hikes, written by
+    /// `Scripts/trail-cells.sh` and fetched by name. See *The third family*
+    /// in this file's header.
+    static let trailCellType = "CuratedTrailCell"
+    /// What one generation of those squares covers: a single record, under
+    /// ``TrailCellGrid/manifestRecordName``.
+    static let trailManifestType = "CuratedTrailManifest"
+
+    /// Fields on ``trailCellType``.
+    enum TrailCell {
+        /// The square's routes, a ``TrailCellFile``, carried as an asset.
+        ///
+        /// An asset rather than a field for the reason ``Submission/route``
+        /// is one: a `CKRecord`'s fields have to add up to under a megabyte,
+        /// and the busiest squares are several hundred kilobytes of that
+        /// before OpenStreetMap maps another route into one.
+        static let routes = "routes"
+        // periphery:ignore - written and read by the tool behind
+        // `Scripts/trail-cells.sh`, which compiles this file.
+        /// SHA-256 of the file's body, in hex, which the upload compares so
+        /// that a square OpenStreetMap has not changed is not sent again. The
+        /// app never reads it.
+        static let digest = "digest"
+    }
+
+    // periphery:ignore - all but `complete` are written and read by the tool
+    // behind `Scripts/trail-cells.sh`, which compiles this file.
+    /// Fields on ``trailManifestType``.
+    enum TrailManifest {
+        /// When the squares were built.
+        static let builtAt = "builtAt"
+        /// How many squares there are.
+        static let cellCount = "cellCount"
+        /// Every square's record name, one a line, carried as an asset: the
+        /// only record of which squares exist. See *The third family* in this
+        /// file's header. The upload reads it; the app never asks for it.
+        static let cells = "cells"
+        /// `1` when the squares were built from the whole planet, so that a
+        /// square with no record is a square with no routes in it. Anything
+        /// else, and the app takes a missing square to mean *not known* and
+        /// asks Overpass — see ``TrailCellFetch/Manifest``.
+        static let complete = "complete"
+        /// When the OpenStreetMap data the squares were built from was
+        /// current.
+        static let osmTimestamp = "osmTimestamp"
+        /// How many routes the squares hold between them.
+        static let routeCount = "routeCount"
+    }
 
     /// Fields on ``submissionType``.
     enum Submission {

@@ -94,7 +94,12 @@ nonisolated enum CuratedTrailQuery {
     /// the data: the longest kept route's box is 18.9 km across and the
     /// shortest rejected one's is 55.9 km, so the line has a wide margin on
     /// both sides and is not balanced on a tie.
-    static let maximumSpanMeters: Double = 20_000
+    ///
+    /// **Spelled in ``TrailCellGrid``, and read from there.** The pre-built
+    /// squares are filed by this figure — a wider route is in no square, and
+    /// a search reads only the squares within half of it — so a second
+    /// spelling here could be raised without them and offer nothing more.
+    static let maximumSpanMeters: Double = TrailCellGrid.maximumRouteSpanMeters
 
     /// The most members a relation may have and still be asked about.
     ///
@@ -103,8 +108,9 @@ nonisolated enum CuratedTrailQuery {
     /// between them with room on the day-hike side, which is the side a
     /// mistake would cost — a route left out here is never offered at all,
     /// where one let through is only measured and thrown away by
-    /// ``isDayHike(box:)``.
-    static let maximumMemberCount = 500
+    /// ``isDayHike(box:)``. Spelled in ``TrailCellGrid`` for the reason
+    /// ``maximumSpanMeters`` is: the squares are filed by it too.
+    static let maximumMemberCount = TrailCellGrid.maximumMemberCount
 
     /// The widest search, in square metres of box, whose lines are asked for
     /// with its list.

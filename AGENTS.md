@@ -74,7 +74,7 @@ floor="$(OPENHIKES_SIM_POOL_PREFIX='OpenHikes Floor' \
 swift test --package-path OpenHikesShared -Xswiftc -warnings-as-errors
 swift test --package-path OpenHikesData -Xswiftc -warnings-as-errors
 
-# The shell scripts, against stubbed xcrun, xcodebuild, swiftlint and periphery
+# The shell scripts, against stubbed xcrun, xcodebuild, swiftlint, periphery and osmium
 Scripts/run-script-tests.sh
 
 # The privacy policy and terms pages the app links, read out of docs/
@@ -399,7 +399,7 @@ a change to recording, the map, the sheet or the render path; the PR template,
 - **SwiftLint walks dot-directories.** `excluded: "**/.*"` keeps a worktree or
   a scratch copy inside the checkout out of the lint.
 - **Optional tools** run if installed (`brew install xcbeautify periphery
-  xcode-build-server artemnovichkov/tap/hinge`):
+  xcode-build-server artemnovichkov/tap/hinge osmium-tool`):
   - `xcbeautify` formats `xcodebuild` output through
     `Scripts/lib/xcodebuild-output.sh`. It prints nothing for output it cannot
     parse (crashes, hangs, TSan reports), so the UI scripts keep a raw log. In
@@ -411,6 +411,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
   - `xcode-build-server config -project OpenHikes.xcodeproj -scheme OpenHikes`
     writes the gitignored `buildServer.json` that `sourcekit-lsp` uses.
   - `hinge` opens an iPhone Duo simulator; see *The iPhone Duo*.
+  - `osmium` reads an OpenStreetMap extract for `Scripts/trail-cells.sh build`;
+    see *The trail squares*.
 - **Hooks and formatting.** `Scripts/install-git-hooks.sh` installs an opt-in
   pre-push lint hook. There is no formatter.
 
@@ -741,6 +743,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
   - the first-run tips' ids, which their closed and used state is stored
     against (`FirstRunTipsTests`), and the name of `AppTips.isNewHiker`,
     the TipKit parameter that keeps a new hiker
+  - the trail squares' record names, which every installed build asks for
+    (`TrailCellGridTests`; see *The trail squares*)
 
 ## Conventions
 
@@ -1283,6 +1287,8 @@ is world-readable, because browsing needs no account.
 | `CommunityPhotoSubmission` (offered photos) | any signed-in account / `reviewer` | **none** |
 | `CommunityPhotoContribution` (published photos) | `reviewer` / `reviewer` | `listing`, `photoSubmission`, `publishedAt` |
 | `CommunitySubmissionNotice` (the queue; `reviewer` reads it) | any signed-in account / `reviewer` | `___recordID`, `___createTime` |
+| `CuratedTrailCell` (OpenStreetMap's day hikes, by map square) | `reviewer` / `reviewer` | **none** |
+| `CuratedTrailManifest` (what the squares cover) | `reviewer` / `reviewer` | **none** |
 
 - **A submission is write-once.** A listing points at its submission, so an
   author who could write would be able to swap an approved route.
@@ -1303,6 +1309,8 @@ is world-readable, because browsing needs no account.
   environment in the Console. Whether an account can add itself to `reviewer`
   (`Users` grants `WRITE TO "_creator"`) is unverified, so test it before
   trusting the role in production.
+- **The last two types hold nothing a hiker made.** They are a copy of
+  OpenStreetMap's routes that a script uploads; see *The trail squares*.
 
 ### Rules that hold it up
 
@@ -1381,7 +1389,9 @@ is world-readable, because browsing needs no account.
 ### OpenStreetMap and Wikimedia Commons
 
 - **Two sources feed the list.** `MergedCommunityTransport` combines CloudKit
-  with `CuratedTrailSourcing` (Overpass `route=hiking` relations).
+  with `CuratedTrailSourcing`: OpenStreetMap's `route=hiking` relations, read
+  from the pre-built squares where they have an answer and from Overpass where
+  they do not (*The trail squares*).
   - The `limit` is spent on CloudKit first, so a published hike never loses its
     place.
   - A curated failure comes back as a `CuratedTrailOutage` beside the rows,
@@ -1394,6 +1404,8 @@ is world-readable, because browsing needs no account.
   request slots per address, and has answered this app with a `429`.
   - `CommunityQueryPolicy` turns a pan into an *offer*, never a request.
   - Nothing is fetched until the *Community* tab opens.
+  - The same request asks the squares first, and Overpass only when they have
+    no answer.
   - All requests share `OverpassConversation`'s gate and its single retry.
   - Relations are cached on disk (`CuratedTrailStore`), and a refused search
     falls back to them while still showing the outage.
@@ -1427,6 +1439,51 @@ is world-readable, because browsing needs no account.
   `desiredKeys` fetch. MapKit never hit-tests overlays, so the app does
   (`RouteHitTest`). Pins stay, because a polyline is not an accessibility
   element.
+
+### The trail squares
+
+A curated search used to wait in Overpass's queue, so its answer is built
+ahead of time: OpenStreetMap's waymarked day hikes, filed by quarter-degree
+square, one `CuratedTrailCell` record a square in the public database, fetched
+by name. `TrailCellGrid` argues the design and has the measurements.
+
+- **An answer is complete or it is not given** (`TrailCellLibrary`). A search
+  is answered from the squares only when every square within reach of it was
+  read, or is absent from a set the manifest says is the whole world. With no
+  manifest, a regional set that lacks a square, or a square that could not be
+  read, `CuratedTrailSource` asks Overpass as it did before. So a build of the
+  app can ship before the squares do, and an empty answer from the squares
+  means *no trails here*.
+- **A square holds relations as OpenStreetMap has them**, not assembled
+  lines. Which ways are the route, and whether they join, stays
+  `CuratedTrailDecoding`'s, applied to a square as it is to an Overpass answer
+  (`CuratedTrailSourceTests+Cells` holds the two to one result). The tool
+  decides only what is filed: a name, under 500 members, every member way
+  present, and no wider than 20 km.
+- **A route is filed once**, under the square that holds the center of its
+  box, and a search reads every square within `TrailCellGrid.reachMeters` of
+  its map. `CuratedTrailQuery`'s day-hike figures are the grid's, spelled once:
+  raising them without rebuilding the squares would offer nothing more.
+- **The file's generation is in every record name** (`trails1_…`). An
+  installed build keeps asking for the names it knows, so a file it cannot
+  read goes under a new generation beside the old one, never over it.
+- **Three of the app's files are compiled into the tool:**
+  `TrailCellGrid.swift`, `TrailCellFile.swift` and `CommunitySchema.swift`.
+  They import nothing of the app's, and `Scripts/run-script-tests.sh` builds
+  the tool, which is what holds them to that.
+- **Building and uploading** is `Scripts/trail-cells.sh`:
+  1. `build <planet.osm.pbf> --world`. Only a build of the whole planet takes
+     `--world`, which is what marks the squares complete.
+  2. `upload <dir> --environment development`, then search in a Debug build.
+  3. `upload <dir> --environment production`.
+
+  An upload sends the squares whose digest changed, deletes the ones the build
+  no longer has, and writes the manifest last. It refuses a regional build
+  over a database that holds the world. It signs with a server-to-server key
+  from the CloudKit Console, named by `OPENHIKES_CLOUDKIT_KEY_ID` and
+  `OPENHIKES_CLOUDKIT_KEY_FILE`; the private half stays out of the repository.
+- **Both record types are added by schema import before the first upload**,
+  for the reason *A new field arrives indexed* gives.
 
 ## The watch app
 
@@ -1629,6 +1686,14 @@ Reopening one needs new evidence, not a fresh reading of the same code.
     every line above it, over the realistic satellite map's terrain. Watched
     on iOS 18.6 and 27.2 simulators, never on a device; WWDC22 said an
     overlay flattens a realistic map, on iOS 16.
+  - The trail squares have never met CloudKit. That a server-to-server key
+    may write a type only `reviewer` may write, and that the asset store takes
+    a square as a request's raw body, are read off Apple's Web Services
+    reference; the app's fetch has only run against a stub. What is observed:
+    openssl verifies the request signature (`Scripts/run-script-tests.sh`),
+    and `cktool validate-schema` accepts the two record types.
+    `Scripts/trail-cells.sh whoami` and a development upload are the first
+    real test.
 
 ## Documentation
 

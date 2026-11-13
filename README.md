@@ -90,7 +90,7 @@ The tests, the optional tools and what CI runs are under *Build and test* in [`A
 | `OpenHikesWatch/`, `OpenHikesWatchWidgets/` | The watch app, and its complication and Smart Stack widget |
 | `OpenHikesTests/`, `OpenWidgetTests/` | App-hosted unit tests, in folders that mirror the app's |
 | `OpenHikesUITests/` | UI automation |
-| `Scripts/` | Lint, the test runners, the simulated hike, the screenshot capture and the gates CI runs |
+| `Scripts/` | Lint, the test runners, the simulated hike, the screenshot capture, the build of the community's OpenStreetMap routes and the gates CI runs |
 | `Screenshots/` | The App Store screenshot set |
 | `docs/` | The GitHub Pages site: the home, privacy, terms and support pages |
 

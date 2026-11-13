@@ -181,13 +181,24 @@ nonisolated extension CuratedTrailDecoding {
     /// when its geometry came back with nothing to draw.
     static func trails(fromListingWithLines data: Data) throws -> [CuratedTrail] {
         let response = try OverpassRequest.decode(Response.self, from: data)
-        return response.elements.compactMap { element -> CuratedTrail? in
-            guard element.type == "relation",
-                  let box = element.bounds?.box,
-                  CuratedTrailQuery.isDayHike(box: box)
-            else { return nil }
-            return drawn(element)
-        }
+        return response.elements.compactMap(offered)
+    }
+
+    /// `element` as a row with its line, or `nil` when it is not one to
+    /// offer: not a relation, not a day hike, or not a route whose ways can
+    /// be drawn.
+    ///
+    /// One spelling of *offered with its line* for the two things that hand
+    /// over relations already carrying their geometry — a small search's
+    /// Overpass answer above, and a pre-built square, see
+    /// ``trails(in:touching:)`` — so the same route is offered, and drawn the
+    /// same way, whichever of them it came from.
+    static func offered(_ element: Element) -> CuratedTrail? {
+        guard element.type == "relation",
+              let box = element.bounds?.box,
+              CuratedTrailQuery.isDayHike(box: box)
+        else { return nil }
+        return drawn(element)
     }
 }
 
