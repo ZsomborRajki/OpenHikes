@@ -1488,6 +1488,8 @@ by name. `TrailCellGrid` argues the design and has the measurements.
   over a database that holds the world. It signs with a server-to-server key
   from the CloudKit Console, named by `OPENHIKES_CLOUDKIT_KEY_ID` and
   `OPENHIKES_CLOUDKIT_KEY_FILE`; the private half stays out of the repository.
+  Each environment has keys of its own there, so either name takes
+  `_DEVELOPMENT` or `_PRODUCTION` for a key that is one environment's.
 - **Both record types are added by schema import before the first upload**
   to an environment, for the reason *A new field arrives indexed* gives. The
   deployment state under *CloudKit* says which environments have them.
@@ -1693,13 +1695,11 @@ Reopening one needs new evidence, not a fresh reading of the same code.
     every line above it, over the realistic satellite map's terrain. Watched
     on iOS 18.6 and 27.2 simulators, never on a device; WWDC22 said an
     overlay flattens a realistic map, on iOS 16.
-  - The trail squares have never met CloudKit. That a server-to-server key
-    may write a type only `reviewer` may write, and that the asset store takes
-    a square as a request's raw body, are read off Apple's Web Services
-    reference; the app's fetch has only run against a stub. What is observed
-    is that openssl verifies the request signature
-    (`Scripts/run-script-tests.sh`). `Scripts/trail-cells.sh whoami` and a
-    development upload are the first real test.
+  - The app has never fetched a trail square from CloudKit: its fetch has
+    only run against a stub. The upload has been watched, in development: a
+    server-to-server key acts as the developer who made it, wrote both
+    `reviewer`-only types, and the asset store took each square as a
+    request's raw body. A search in a Debug build is the first real read.
 
 ## Documentation
 
