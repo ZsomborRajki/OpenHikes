@@ -4364,21 +4364,35 @@ if expect_contains "$cells_manifest" '"complete" : true' "the manifest" \
     pass
 fi
 
-# The hiking-routes layer's build reads the same extract and keeps every
-# hiking relation, named or not, long or not, with its ways each once: seven
-# routes and four ways — way 12 has no position. No network is tagged, so the
-# overview, which keeps the international and national routes alone, has no
-# squares, and the thirty-three-kilometre way crosses two of the finest.
+# The hiking-routes layer's build keeps every hiking relation, named or not,
+# long or not, with its ways each once — way 12 has no position. Its extract
+# is the day hikes' and four relations more, for the two things only it
+# decides. A way is filed under the topmost relations it is part of: way 14
+# is a stage of a national trail, which is the trail and not one more route,
+# and the trail is part of an E-path, which is one more, so the way is the
+# trail's, the E-path's and the unmarked route's, and international enough
+# for the overview. And a route that is only proposed is not filed at all.
+# The ways with no network on them are too local for a country's view, so
+# the region level has way 14's square alone.
+{
+    cat "$cells_work/relations.opl"
+    printf '%s\n' 'r108 Tname=Trail,network=nwn,route=hiking,type=superroute Mr109@'
+    printf '%s\n' 'r109 Tname=Stage,network=nwn,ref=S1,route=hiking Mw14@'
+    printf '%s\n' 'r110 Tname=E-Path,network=iwn,ref=E1,route=hiking,type=superroute Mr108@'
+    printf '%s\n' 'r111 Tname=Planned,ref=P1,route=hiking,state=proposed Mw14@'
+} > "$cells_work/routes-relations.opl"
 routes_squares="$cells_work/routes"
-run_script "trail-cells build-routes files every hiking route's ways at each level of detail" \
+STUB_OSMIUM_RELATIONS="$cells_work/routes-relations.opl" \
+    run_script "trail-cells build-routes files every hiking route's ways at each level of detail" \
     "$trail_cells" build-routes "$cells_work/extract.osm.pbf" --out "$routes_squares" --world
-routes_expected_files=$'routes1_z10_136_194.cell\nroutes1_z10_137_192.cell\nroutes1_z12_272_388.cell\nroutes1_z12_275_385.cell\nroutes1_z14_544_776.cell\nroutes1_z14_550_771.cell\nroutes1_z14_551_771.cell'
+routes_expected_files=$'routes1_z10_136_194.cell\nroutes1_z12_272_388.cell\nroutes1_z12_275_385.cell\nroutes1_z14_544_776.cell\nroutes1_z14_550_771.cell\nroutes1_z14_551_771.cell\nroutes1_z7_34_48.cell'
 if expect_status 0 \
     && expect_contains "$calls" \
         "osmium tags-filter $cells_work/extract.osm.pbf r/route=hiking -o $routes_squares.work/hiking.osm.pbf --overwrite" \
         "the recorded calls" \
-    && expect_contains "$output" "Read 8 relations: 7 hiking routes, 4 ways and 8 points." "the summary" \
-    && expect_contains "$output" "overview (zoom 7 on): 0 squares" "the summary" \
+    && expect_contains "$output" "Read 12 relations: 10 hiking routes, 4 ways and 8 points." "the summary" \
+    && expect_contains "$output" "overview (zoom 7 on): 1 squares" "the summary" \
+    && expect_contains "$output" "region (zoom 10 on): 1 squares" "the summary" \
     && expect_contains "$output" "detail (zoom 14 on): 3 squares" "the summary" \
     && expect_contains "$output" "Marked complete" "the summary"; then
     routes_manifest="$(cat "$routes_squares/manifest.json")"
@@ -4391,14 +4405,29 @@ if expect_status 0 \
     fi
 fi
 
-# Ways 10 and 11 and the first of way 13's two squares: five routes, a path
-# three of them share drawn once, and the way that crosses the edge carried
-# whole into both squares it touches.
+# Ways 10 and 11 and the first of way 13's two squares: six routes — the
+# relation that holds the loop as a stage among them, because neither names a
+# network — a path four of them share drawn once, and the way that crosses
+# the edge carried whole into both squares it touches.
 run_script "trail-cells inspect reads a hiking-routes square" \
     "$trail_cells" inspect "$routes_squares/cells/routes1_z14_550_771.cell"
 if expect_status 0 \
-    && expect_contains "$output" "scale 1000000, 5 routes, 3 lines, 6 points" "the square"; then
+    && expect_contains "$output" "scale 1000000, 6 routes, 3 lines, 6 points" "the square"; then
     pass
+fi
+
+run_script "trail-cells build-routes files a stage under the routes it is a stage of, and no proposed route" \
+    "$trail_cells" inspect "$routes_squares/cells/routes1_z14_544_776.cell"
+if expect_status 0 \
+    && expect_contains "$output" "scale 1000000, 3 routes, 1 lines, 2 points" "the square" \
+    && expect_contains "$output" $'107\t-\t-\tElsewhere' "the square" \
+    && expect_contains "$output" $'108\tnwn\t-\tTrail' "the square" \
+    && expect_contains "$output" $'110\tiwn\tE1\tE-Path' "the square"; then
+    if [[ "$output" == *Stage* || "$output" == *Planned* ]]; then
+        fail "the stage or the proposed route was filed as a route of its own" "$output"
+    else
+        pass
+    fi
 fi
 
 # The layer's squares are planned against the layer's own manifest: an empty

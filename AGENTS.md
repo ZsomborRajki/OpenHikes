@@ -1596,10 +1596,17 @@ has over whichever map is selected, coloured by its network. The app draws it
 beside them. `RouteSquareGrid` argues the design and has the measurements.
 
 - **One way, once.** `Scripts/trail-cells.sh build-routes` keeps each member
-  way of every hiking relation once, with the routes it belongs to and the
+  way of every hiking relation once, with the routes it is drawn as and the
   most important network among them, and files it at four levels of detail,
-  each simplified to what its zooms show (`RouteSquareLevel`). Nothing is
-  left out for being long, unnamed or big.
+  each simplified to what its zooms show and holding the networks they draw
+  (`RouteSquareLevel`). Nothing is left out for being long, unnamed or big;
+  a route OpenStreetMap calls proposed is.
+- **A way is drawn as its topmost relations.** A stage relation inside a
+  relation of its own network is that route, not one more, so its ways are
+  filed under the whole route alone; a relation inside one of another
+  network is filed beside it (`RouteCatalogue` in `RouteBuild.swift`). A
+  square's routes are therefore the relations a way is drawn as, not every
+  relation that names it.
 - **The trail squares' record types and upload, under names of their own.**
   A routes square is a `CuratedTrailCell` named `routes1_z<zoom>_<row>_<col>`,
   and the layer's manifest is `routes1_manifest`. The build's manifest says

@@ -75,7 +75,20 @@ enum RouteSquareBuild {
 // MARK: - The routes
 
 /// Every hiking relation's tags, numbered in relation-id order, and which of
-/// them each way belongs to.
+/// them each way is drawn as part of.
+///
+/// **A way is drawn as its routes' topmost relations.** A long route is often
+/// mapped as a relation for each stage inside a relation for the whole. A
+/// stage tagged with the network of the route it is a stage of is that
+/// route, not one more: its ways are filed under the whole route alone, so
+/// the map shows the Via Alpina's sign along the Via Alpina rather than a
+/// number for each of its stages. A relation inside one of another network
+/// keeps its place beside it — a national trail an E-path runs along is
+/// both. It is the rule Waymarked Trails draws by, and what a way's routes
+/// in a square are: the relations it is drawn as, not the ones that name it.
+///
+/// A route OpenStreetMap calls proposed is left out: nothing marks it on the
+/// ground yet.
 private struct RouteCatalogue {
     private(set) var ids: [Int64] = []
     private(set) var tags: [[String: String]] = []
@@ -89,23 +102,62 @@ private struct RouteCatalogue {
             summary.relationsRead += 1
             // osmium hands over a hiking relation's member relations too,
             // whatever they are, so the tag is asked about again here.
-            guard relation.tags["route"] == "hiking" else { return }
+            guard relation.tags["route"] == "hiking", relation.tags["state"] != "proposed" else { return }
             relations.append(relation)
         }
-        for relation in relations.sorted(by: { $0.id < $1.id }) {
-            let index = Int32(ids.count)
+        relations.sort { $0.id < $1.id }
+        var indices: [Int64: Int32] = [:]
+        for relation in relations {
+            indices[relation.id] = Int32(ids.count)
             ids.append(relation.id)
             tags.append(relation.tags.filter { RouteSquareFile.keptTags.contains($0.key) })
             networks.append(RouteNetwork(tag: relation.tags["network"]))
+        }
+        var parents = [[Int32]](repeating: [], count: relations.count)
+        for (index, relation) in relations.enumerated() {
+            for member in relation.members where member.kind == UInt8(ascii: "r") {
+                guard let child = indices[member.ref], child != Int32(index) else { continue }
+                parents[Int(child)].append(Int32(index))
+            }
+        }
+        let drawnAs = Self.topmost(parents: parents, networks: relations.map { $0.tags["network"] })
+        for (index, relation) in relations.enumerated() {
             for member in relation.members where member.kind == UInt8(ascii: "w") {
-                wayRoutes[member.ref, default: []].append(index)
+                wayRoutes[member.ref, default: []].append(contentsOf: drawnAs[index])
             }
         }
         summary.routes = ids.count
     }
 
-    /// The routes a way belongs to, each once and in order, or `nil` for a
-    /// way no hiking route names.
+    /// For each relation, the relations its ways are drawn as: itself and
+    /// every relation it is inside, however deep, leaving out each one that
+    /// is inside a relation of its own network.
+    ///
+    /// - Parameters:
+    ///   - parents: The relations each relation is a member of.
+    ///   - networks: Each relation's `network` tag as written, which is what
+    ///     is compared: two routes with no network are not one route.
+    static func topmost(parents: [[Int32]], networks: [String?]) -> [[Int32]] {
+        let isTopmost = parents.indices.map { index in
+            guard let network = networks[index] else { return true }
+            return !parents[index].contains { networks[Int($0)] == network }
+        }
+        return parents.indices.map { index in
+            var inside: Set<Int32> = [Int32(index)]
+            var unread = [Int32(index)]
+            while let next = unread.popLast() {
+                for parent in parents[Int(next)] where inside.insert(parent).inserted {
+                    unread.append(parent)
+                }
+            }
+            let topmost = inside.filter { isTopmost[Int($0)] }.sorted()
+            // Relations each inside the next, in a ring, have no topmost one.
+            return topmost.isEmpty ? [Int32(index)] : topmost
+        }
+    }
+
+    /// The routes a way is drawn as part of, each once and in order, or
+    /// `nil` for a way no hiking route names.
     func routes(ofWay id: Int64) -> [Int32]? {
         wayRoutes[id].map { Array(Set($0)).sorted() }
     }
