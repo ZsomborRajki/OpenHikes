@@ -105,6 +105,10 @@ struct MapCoordinatorTests {
         route: DisplayedRoute? = nil,
         base: MapBase = .tiles(osm),
         tileLayer: TileLayer? = nil,
+        // The layer's squares, which a map with the layer switched on draws
+        // from; a stub's, never the public database's — see
+        // `MapCoordinatorTests+TileLayer.swift`.
+        hikingRouteSquares: HikingRouteSquares? = nil,
         sidePanelInset: CGFloat = 0,
         isCoveredByPanel: Bool = false,
         community: CommunityBrowser = CommunityBrowser(transport: nil, blockList: .scratch()),
@@ -141,6 +145,7 @@ struct MapCoordinatorTests {
             sheetMetrics: sheetMetrics,
             base: base,
             tileLayer: tileLayer,
+            hikingRouteSquares: hikingRouteSquares,
             mapController: mapController,
             drawnRouteTap: drawnRouteTap,
             locationAccessPrompt: locationAccessPrompt,

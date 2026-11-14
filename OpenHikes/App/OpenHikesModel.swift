@@ -174,6 +174,10 @@ final class OpenHikesModel {
     /// ``makeCommunityTransport()``. Held so the share sheet and the preview
     /// screen use the same one the browser does.
     let communityTransport: (any CommunityTransporting)?
+    /// Where the hiking-routes layer's squares come from, or `nil` for a
+    /// launch that must not reach CloudKit — see
+    /// ``HikingRouteSquares/forThisLaunch()``.
+    let hikingRouteSquares = HikingRouteSquares.forThisLaunch()
     /// The link to a paired Apple Watch, or `nil` for a launch that must not
     /// open one — see ``makeWatchLink(container:recorder:defaults:)``.
     ///

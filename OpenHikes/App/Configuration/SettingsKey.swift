@@ -20,8 +20,8 @@ import Foundation
 /// UserDefaults / `@AppStorage` key shared between the settings UI and the map.
 nonisolated enum SettingsKey {
     static let tileProviderID = "settings.tileProviderID"
-    /// Whether Waymarked Trails' hiking routes are drawn over the selected
-    /// map — see ``TileLayer/waymarkedHiking``. Synced through
+    /// Whether OpenStreetMap's hiking routes are drawn over the selected
+    /// map — see ``TileLayer/hikingRoutes``. Synced through
     /// ``SyncedSettingsMirror`` beside ``tileProviderID``: it is a choice of
     /// what the map looks like, which is the person's rather than the phone's.
     static let showsHikingRoutes = "settings.showsHikingRoutes"

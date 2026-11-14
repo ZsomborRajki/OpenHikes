@@ -37,7 +37,7 @@ final class StoredSettings {
     /// The chosen map — see ``TileProvider/renderable(id:entitlement:)`` for
     /// the one actually drawn.
     private(set) var tileProviderID: String
-    /// Whether Waymarked Trails' hiking routes are drawn over it.
+    /// Whether OpenStreetMap's hiking routes are drawn over it.
     private(set) var showsHikingRoutes: Bool
     /// The hikes list's order, as ``HikeListSort``'s raw value.
     private(set) var hikeListSort: String

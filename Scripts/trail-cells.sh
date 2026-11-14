@@ -24,6 +24,7 @@
 #
 # Usage:
 #   Scripts/trail-cells.sh build <extract.osm.pbf> [--out <dir>] [--world] [--keep-work]
+#   Scripts/trail-cells.sh build-routes <extract.osm.pbf> [--out <dir>] [--world] [--keep-work]
 #   Scripts/trail-cells.sh upload <dir> --environment development|production
 #                                 [--dry-run] [--yes] [--replace-world]
 #   Scripts/trail-cells.sh whoami --environment development|production
@@ -37,6 +38,12 @@
 #             Its working files go in <dir>.work and are deleted afterwards
 #             unless --keep-work. They are small beside the extract: Hungary's
 #             were 50 MB, for one in seventy-five of the world's hiking relations.
+#   build-routes
+#             File every hiking route's ways into the hiking-routes layer's
+#             squares in <dir> (default .build/trail-cells/routes), four levels
+#             of them: see OpenHikes/Tiles/HikingRoutes/RouteSquareGrid.swift.
+#             --world, --out and --keep-work as for build. `upload` sends either
+#             kind of build; each has a manifest record of its own.
 #   upload    Make the public database hold what <dir> does: send the squares
 #             that changed, delete the ones that are gone, then say what the
 #             squares cover. --dry-run reads and plans, and changes nothing.
@@ -82,13 +89,17 @@ usage_error() {
     exit 2
 }
 
-# The tool's own sources, and the three files of the app it is compiled with:
-# the grid, the file format and the record names. They are the app's, compiled
-# here as they stand, which is why each of them imports nothing of the app's.
+# The tool's own sources, and the files of the app it is compiled with: each
+# set's grid and file format, the byte format they share, and the record
+# names. They are the app's, compiled here as they stand, which is why each of
+# them imports nothing of the app's.
 tool_sources() {
     printf '%s\n' "$repository_root"/Scripts/lib/trail-cells/*.swift \
+        "$repository_root/OpenHikes/General/PackedBytes.swift" \
         "$repository_root/OpenHikes/Community/Curated/Cells/TrailCellGrid.swift" \
         "$repository_root/OpenHikes/Community/Curated/Cells/TrailCellFile.swift" \
+        "$repository_root/OpenHikes/Tiles/HikingRoutes/RouteSquareGrid.swift" \
+        "$repository_root/OpenHikes/Tiles/HikingRoutes/RouteSquareFile.swift" \
         "$repository_root/OpenHikes/Community/Transport/CommunitySchema.swift"
 }
 
@@ -119,8 +130,11 @@ container_identifier() {
     printf '%s\n' "$identifier"
 }
 
+# `build` and `build-routes`: the same osmium steps, then the tool's command of
+# the same name, into a directory of its own by default.
 build() {
-    local extract="" out="$build_dir/squares" world=false keep_work=false
+    local tool_command="$1" extract="" out="$build_dir/$2" world=false keep_work=false
+    shift 2
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --out)
@@ -180,7 +194,7 @@ build() {
         timestamp="$(osmium fileinfo -g header.option.timestamp "$extract" 2>/dev/null || true)"
     fi
 
-    local arguments=(build --relations "$work/relations.opl" --ways "$work/ways.opl" --out "$out")
+    local arguments=("$tool_command" --relations "$work/relations.opl" --ways "$work/ways.opl" --out "$out")
     [[ "$world" == false ]] || arguments+=(--world)
     [[ -z "$timestamp" ]] || arguments+=(--osm-timestamp "$timestamp")
     echo "Filing the routes …"
@@ -243,7 +257,10 @@ shift
 
 case "$command" in
     build)
-        build "$@"
+        build build squares "$@"
+        ;;
+    build-routes)
+        build build-routes routes "$@"
         ;;
     upload|whoami)
         with_database "$command" "$@"

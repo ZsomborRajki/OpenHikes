@@ -66,8 +66,11 @@ nonisolated struct TrailCellStore: Sendable {
 
     private let files: OverpassFileStore<StoredCell>
 
-    init(directory: URL, clock: @escaping @Sendable () -> Date) {
-        files = OverpassFileStore(directory: directory, maximumFiles: Self.maximumFiles, clock: clock)
+    /// - Parameter maximumFiles: How many squares are kept: ``maximumFiles``
+    ///   for the day hikes' search, more for the hiking-routes layer, which
+    ///   reads a few squares for every map view at every zoom.
+    init(directory: URL, maximumFiles: Int = Self.maximumFiles, clock: @escaping @Sendable () -> Date) {
+        files = OverpassFileStore(directory: directory, maximumFiles: maximumFiles, clock: clock)
     }
 }
 

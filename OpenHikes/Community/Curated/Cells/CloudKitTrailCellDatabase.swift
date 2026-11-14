@@ -36,14 +36,22 @@ nonisolated struct CloudKitTrailCellDatabase: TrailCellFetching {
     private static let resourceTimeout: TimeInterval = 30
 
     let containerIdentifier: String
+    /// The record that says what the squares asked about cover: the day
+    /// hikes' manifest, or the hiking-routes layer's, whose squares are read
+    /// through this same fetch — see ``HikingRouteSquares``.
+    let manifestRecordName: String
 
-    init(containerIdentifier: String = CloudSyncCoordinator.containerIdentifier) {
+    init(
+        containerIdentifier: String = CloudSyncCoordinator.containerIdentifier,
+        manifestRecordName: String = TrailCellGrid.manifestRecordName
+    ) {
         self.containerIdentifier = containerIdentifier
+        self.manifestRecordName = manifestRecordName
     }
 
     @concurrent
     func fetch(cellsNamed names: [String]) async throws -> TrailCellFetch {
-        let ids = ([TrailCellGrid.manifestRecordName] + names).map { CKRecord.ID(recordName: $0) }
+        let ids = ([manifestRecordName] + names).map { CKRecord.ID(recordName: $0) }
         let configuration = CKOperation.Configuration()
         configuration.timeoutIntervalForRequest = Self.requestTimeout
         configuration.timeoutIntervalForResource = Self.resourceTimeout
@@ -69,7 +77,7 @@ nonisolated struct CloudKitTrailCellDatabase: TrailCellFetching {
         for (id, result) in fetched {
             results[id.recordName] = result
         }
-        return Self.answer(from: results, names: names)
+        return Self.answer(from: results, names: names, manifestRecordName: manifestRecordName)
     }
 }
 
@@ -88,10 +96,11 @@ nonisolated extension CloudKitTrailCellDatabase {
     /// network tell a hiker there are no trails where they are standing.
     static func answer(
         from results: [String: Result<CKRecord, any Error>],
-        names: [String]
+        names: [String],
+        manifestRecordName: String = TrailCellGrid.manifestRecordName
     ) -> TrailCellFetch {
         let manifest: TrailCellFetch.Manifest
-        switch results[TrailCellGrid.manifestRecordName] {
+        switch results[manifestRecordName] {
         case .success(let record):
             let flag = record[CommunitySchema.TrailManifest.complete] as? Int
             manifest = flag == completeFlag ? .complete : .partial
