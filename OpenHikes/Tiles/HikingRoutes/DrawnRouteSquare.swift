@@ -3,114 +3,100 @@
 //  OpenHikes
 //
 //  One square of the hiking-routes layer, ready to stroke: its lines in map
-//  points, each with its bounding rectangle, and joined end to end.
+//  points, each with its bounding rectangle, the networks of the routes that
+//  share it and their signs, and joined end to end.
 //
 //  **Joined, because OpenStreetMap cuts a route into many short ways.** A
 //  square holds each way once — see ``RouteSquareFile`` — and a route is
 //  dozens of them, split at every junction and bridge. Stroked one way at a
 //  time, the overview square over the Alps was 105,663 lines of two points
-//  each, every one a subpath with two round caps, twice over for the casing:
-//  a zoom-7 tile took 6.9 seconds to draw on a simulator, and every overlay
-//  on the map, the base map's tiles included, waited behind it. Ways that
-//  meet end to end in the same network are joined here, once, as a square is
-//  read — the ends are the same OpenStreetMap node, and simplification keeps
-//  ends, so they meet exactly.
+//  each, every one a subpath with two round caps: a zoom-7 tile took 6.9
+//  seconds to draw on a simulator, and every overlay on the map, the base
+//  map's tiles included, waited behind it. Ways that meet end to end are
+//  joined here, once, as a square is read — the ends are the same
+//  OpenStreetMap node, and simplification keeps ends, so they meet exactly.
+//
+//  **Joined only where the same routes run.** A line is a stretch every one
+//  of its routes shares, which is what a sign stands along and what
+//  ``HikingRoutesStyle`` strokes by: where a route leaves, the line ends and
+//  another begins.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 import MapKit
+import OrderedCollections
 
 nonisolated struct DrawnRouteSquare: Sendable {
     nonisolated struct Line: Sendable {
-        let network: RouteNetwork
-        /// The next most important network among the routes on this line,
-        /// drawn as dots along it: a regional route sharing an international
-        /// one's path.
-        let secondary: RouteNetwork?
+        /// Every network among the routes that share this line.
+        let networks: RouteNetworkSet
+        /// Those routes' signs, as indices into the square's
+        /// ``DrawnRouteSquare/signs``: each different sign once, the most
+        /// important network's first.
+        let signs: [Int]
         let points: [MKMapPoint]
         let bounds: MKMapRect
+        /// The line's length, in map points.
+        let length: Double
     }
 
-    /// Where one route's sign stands.
-    nonisolated struct Waymark: Sendable {
-        let point: MKMapPoint
-        let sign: WaymarkSign
-        /// The sign's size in points, measured once for the route rather
-        /// than at every draw.
-        let size: CGSize
-        /// The route's network, which decides whose sign stays where two
-        /// would overlap.
-        let network: RouteNetwork
-        let routeID: Int64
-    }
+    /// How many signs of the regional routes and up one line carries, and
+    /// how many of its local routes': Waymarked Trails' five of each.
+    static let maximumSignsPerLine = 5
 
     let lines: [Line]
-    /// Every route's signs, the most important network's first.
-    let waymarks: [Waymark]
+    /// Every different sign among the square's routes.
+    let signs: [WaymarkSign]
+    /// Each sign's size in tile pixels, measured once rather than at every
+    /// draw.
+    let signSizes: [CGSize]
     /// Every line's points, counted: what a square costs to hold.
     let pointCount: Int
+    /// The ground whose signs are this square's to place, or `nil` for a
+    /// square that places every sign along its lines. A line runs a segment
+    /// past its square's edge, into ground the next square places.
+    let ground: MKMapRect?
+    /// Where the signs stand at each zoom, worked out when a tile first asks.
+    let placements = WaymarkPlacements()
 
-    static let empty = Self(lines: [], waymarks: [], pointCount: 0)
+    static let empty = Self(lines: [], signs: [], pointCount: 0, ground: nil)
 
-    private init(lines: [Line], waymarks: [Waymark], pointCount: Int) {
+    private init(lines: [Line], signs: [WaymarkSign], pointCount: Int, ground: MKMapRect?) {
         self.lines = lines
-        self.waymarks = waymarks
+        self.signs = signs
+        signSizes = signs.map(\.size)
         self.pointCount = pointCount
+        self.ground = ground
     }
 
-    /// The file's lines, joined end to end where they share their networks,
-    /// in map points, and — at the levels a sign is drawn at — where each
-    /// route's signs stand.
-    init(_ file: RouteSquareFile, level: RouteSquareLevel = .detail) {
+    /// The file's lines in map points, joined end to end where the same
+    /// routes run, leaving out the ones `square`'s zooms never stroke.
+    init(_ file: RouteSquareFile, square: RouteSquare? = nil) {
         let scale = Double(file.coordinateScale)
-        let routeNetworks = file.routes.map { RouteNetwork(tag: $0.tags["network"]) }
+        let routes = RouteSigns(file.routes)
+        let grouped = Dictionary(grouping: file.lines.filter { $0.points.count > 1 }, by: \.routes)
         var count = 0
         var drawn: [Line] = []
-        let grouped = Dictionary(grouping: file.lines.filter { $0.points.count > 1 }) { line in
-            Pairing(network: line.network, secondary: Self.secondary(of: line, among: routeNetworks))
-        }
-        for pairing in grouped.keys.sorted() {
-            for run in Self.joined(grouped[pairing]?.map(\.points) ?? []) {
+        for shared in grouped.keys.sorted(by: { $0.lexicographicallyPrecedes($1) }) {
+            let ways = grouped[shared] ?? []
+            let networks = routes.networks(of: shared, or: ways.first?.network ?? .other)
+            if let level = square?.level, !HikingRoutesStyle.isDrawn(networks, at: level) { continue }
+            let shown = routes.signs(of: shared)
+            for run in Self.joined(ways.map(\.points)) {
                 let points = run.map { Self.mapPoint($0, scale: scale) }
                 count += points.count
                 drawn.append(Line(
-                    network: pairing.network,
-                    secondary: pairing.secondary,
+                    networks: networks,
+                    signs: shown,
                     points: points,
-                    bounds: Self.bounds(of: points)
+                    bounds: Self.bounds(of: points),
+                    length: Self.length(of: points)
                 ))
             }
         }
-        lines = drawn
-        waymarks = Self.waymarks(in: file, spacingMeters: Self.signSpacingMeters(at: level))
-        pointCount = count
-    }
-
-    /// The most important network among a line's routes other than its own.
-    private static func secondary(of line: RouteSquareFile.Line, among networks: [RouteNetwork]) -> RouteNetwork? {
-        line.routes
-            .compactMap { networks.indices.contains($0) ? networks[$0] : nil }
-            .filter { $0 != line.network }
-            .max()
-    }
-
-    /// The two networks a line is drawn in, ordered the way lines are
-    /// stroked: least important first, and a line without dots before one
-    /// with them.
-    private struct Pairing: Hashable, Comparable {
-        let network: RouteNetwork
-        let secondary: RouteNetwork?
-
-        static func < (lhs: Self, rhs: Self) -> Bool {
-            if lhs.network != rhs.network { return lhs.network < rhs.network }
-            return rank(lhs.secondary) < rank(rhs.secondary)
-        }
-
-        /// No second network first, then the least important.
-        private static func rank(_ network: RouteNetwork?) -> Int {
-            network.map { Int($0.rawValue) + 1 } ?? 0
-        }
+        self.init(lines: drawn, signs: routes.signs, pointCount: count, ground: square.map(Self.ground(of:)))
     }
 
     static func mapPoint(_ point: RouteSquareFile.Point, scale: Double) -> MKMapPoint {
@@ -157,16 +143,90 @@ nonisolated struct DrawnRouteSquare: Sendable {
         }
         return joined
     }
+}
 
-    private static func bounds(of points: [MKMapPoint]) -> MKMapRect {
-        var minX = Double.infinity, minY = Double.infinity
-        var maxX = -Double.infinity, maxY = -Double.infinity
-        for point in points {
-            minX = min(minX, point.x)
-            maxX = max(maxX, point.x)
-            minY = min(minY, point.y)
-            maxY = max(maxY, point.y)
+// MARK: - Measuring
+
+nonisolated private extension DrawnRouteSquare {
+    /// The furthest north and south a map point is defined: the edge of the
+    /// square map of the world.
+    static let mapLatitudeLimit: Double = 85
+
+    static func bounds(of points: [MKMapPoint]) -> MKMapRect {
+        guard let across = points.lazy.map(\.x).minAndMax(), let down = points.lazy.map(\.y).minAndMax() else {
+            return .null
         }
-        return MKMapRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+        return MKMapRect(x: across.min, y: down.min, width: across.max - across.min, height: down.max - down.min)
+    }
+
+    static func length(of points: [MKMapPoint]) -> Double {
+        points.adjacentPairs().reduce(0) { length, step in
+            length + hypot(step.1.x - step.0.x, step.1.y - step.0.y)
+        }
+    }
+
+    /// The ground `square` covers, in map points.
+    static func ground(of square: RouteSquare) -> MKMapRect {
+        let bounds = RouteSquareGrid.bounds(of: square)
+        let northWest = MKMapPoint(CLLocationCoordinate2D(
+            latitude: min(bounds.north, mapLatitudeLimit),
+            longitude: bounds.west
+        ))
+        let southEast = MKMapPoint(CLLocationCoordinate2D(
+            latitude: max(bounds.south, -mapLatitudeLimit),
+            longitude: bounds.east
+        ))
+        return MKMapRect(
+            x: northWest.x,
+            y: northWest.y,
+            width: max(0, southEast.x - northWest.x),
+            height: max(0, southEast.y - northWest.y)
+        )
+    }
+}
+
+// MARK: - The routes' networks and signs
+
+/// What a square's routes are drawn as: each one's network, and its sign as
+/// an index into a table that holds each different sign once.
+nonisolated private struct RouteSigns {
+    private let table: OrderedSet<WaymarkSign>
+    private let networks: [RouteNetwork]
+    private let signOfRoute: [Int?]
+
+    /// Every different sign among the routes, in the order they were met.
+    var signs: [WaymarkSign] { Array(table) }
+
+    init(_ routes: [RouteSquareFile.Route]) {
+        networks = routes.map { RouteNetwork(tag: $0.tags["network"]) }
+        var met: OrderedSet<WaymarkSign> = []
+        signOfRoute = routes.map { route in
+            WaymarkSign(tags: route.tags).map { met.append($0).index }
+        }
+        table = met
+    }
+
+    /// Every network among `routes`, or `fallback`'s for a line that names
+    /// none this table holds.
+    func networks(of routes: [Int], or fallback: RouteNetwork) -> RouteNetworkSet {
+        let named = routes.filter(networks.indices.contains)
+        guard !named.isEmpty else { return RouteNetworkSet(fallback) }
+        return named.reduce(into: RouteNetworkSet()) { $0.formUnion(RouteNetworkSet(networks[$1])) }
+    }
+
+    /// The different signs among `routes`, the most important network's
+    /// first, and no more of the long routes' or of the local ones' than
+    /// ``DrawnRouteSquare/maximumSignsPerLine``.
+    func signs(of routes: [Int]) -> [Int] {
+        let different = routes
+            .compactMap { signOfRoute.indices.contains($0) ? signOfRoute[$0] : nil }
+            .uniqued()
+            .sorted { lhs, rhs in
+                table[lhs].network != table[rhs].network ? table[lhs].network > table[rhs].network : lhs < rhs
+            }
+        let long = different.filter { table[$0].network > .local }
+        let local = different.filter { table[$0].network <= .local }
+        return Array(long.prefix(DrawnRouteSquare.maximumSignsPerLine))
+            + local.prefix(DrawnRouteSquare.maximumSignsPerLine)
     }
 }

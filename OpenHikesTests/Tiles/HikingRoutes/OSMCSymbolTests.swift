@@ -4,7 +4,8 @@
 //
 //  `osmc:symbol` read the way the OpenStreetMap wiki writes it: a way colour
 //  read past, a background, up to two foregrounds, and a text with its colour
-//  told apart from them by their places.
+//  told apart from them by their places — and left out when it is too long
+//  for a sign.
 //
 
 @testable import OpenHikes
@@ -77,9 +78,30 @@ struct OSMCSymbolTests {
         #expect(OSMCSymbol(tag: "") == nil)
     }
 
-    @Test("a long text is cut, as a sign on a tree is")
+    @Test("one field after the foreground is a text in black when it names no shape")
+    func textWithNoPaint() throws {
+        let symbol = try #require(OSMCSymbol(tag: "red:white:red_bar:E4"))
+        #expect(symbol.foregrounds == [OSMCSymbol.Foreground(paint: .red, shape: .bar)])
+        #expect(symbol.text == "E4")
+        #expect(symbol.textPaint == .black)
+    }
+
+    @Test("three fields after the foreground are a second foreground, a text and its paint")
+    func secondForegroundThenText() throws {
+        let symbol = try #require(OSMCSymbol(tag: "blue:white:blue_bar:red_dot:E4:yellow"))
+        #expect(symbol.foregrounds == [
+            OSMCSymbol.Foreground(paint: .blue, shape: .bar),
+            OSMCSymbol.Foreground(paint: .red, shape: .dot),
+        ])
+        #expect(symbol.text == "E4")
+        #expect(symbol.textPaint == .yellow)
+    }
+
+    @Test("a text too long for a sign is left out rather than cut, and the waymark is kept")
     func longText() throws {
-        let symbol = try #require(OSMCSymbol(tag: "red:white:red_bar:Maximiliansweg:black"))
-        #expect(symbol.text == "Maximi")
+        let symbol = try #require(OSMCSymbol(tag: "red:white:red_bar:VA-A44:black"))
+        #expect(symbol.text == nil)
+        #expect(symbol.foregrounds == [OSMCSymbol.Foreground(paint: .red, shape: .bar)])
+        #expect(try #require(OSMCSymbol(tag: "red:white:red_bar:412j:black")).text == "412j")
     }
 }

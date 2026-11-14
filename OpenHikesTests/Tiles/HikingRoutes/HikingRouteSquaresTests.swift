@@ -72,7 +72,7 @@ struct HikingRouteSquaresTests {
         #expect(library.holdsAll([Self.square, Self.neighbor]))
         let drawn = library.drawable([Self.square, Self.neighbor])
         #expect(drawn.map(\.lines.count) == [1, 0], "a square with no record is a square with no routes")
-        #expect(drawn.first?.lines.first?.network == .national)
+        #expect(drawn.first?.lines.first?.networks == .national)
         let askedAgain = library.request([Self.square]) { /* never called: held already */ }
         #expect(!askedAgain, "a square in memory is not asked for again")
         #expect(database.requests.count == 1)
