@@ -1595,6 +1595,10 @@ has over whichever map is selected, coloured by its network. The app draws it
 (`HikingRoutesRenderer`), from squares built the trail squares' way and kept
 beside them. `RouteSquareGrid` argues the design and has the measurements.
 
+- **On unless the hiker turns it off, and nothing of it is a tile.** A
+  stored answer outranks the default (`SettingsDefault`). Auto-save and
+  downloads ask the selected map alone, so over Apple's maps a hike offers
+  neither, whatever the switch says.
 - **One way, once.** `Scripts/trail-cells.sh build-routes` keeps each member
   way of every hiking relation once, with the routes it is drawn as and the
   most important network among them, and files it at four levels of detail,
