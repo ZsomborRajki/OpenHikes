@@ -56,6 +56,11 @@ struct BuildManifest: Codable {
     static let cellDirectoryName = "cells"
     static let cellFileExtension = "cell"
 
+    /// Which set of squares this is: `nil` for the day hikes' — the only set
+    /// there was when the first manifests were written — or
+    /// `RouteSquareBuild.manifestKind` for the hiking-routes layer's. See
+    /// `Upload.Dataset`.
+    var kind: String?
     var generation: Int
     /// Whether these squares are every square there is. Only then does the
     /// app read them, and take a missing one to mean *no routes here*. A
@@ -143,6 +148,7 @@ enum TrailCellBuild {
         try prepare(options.outputDirectory)
         let cells = try write(filed, to: options.outputDirectory, summary: &summary)
         try BuildManifest(
+            kind: nil,
             generation: TrailCellGrid.generation,
             complete: options.coversTheWorld,
             builtAt: Date(),
@@ -285,9 +291,9 @@ private extension TrailCellBuild {
 
 // MARK: - Writing
 
-private extension TrailCellBuild {
+extension TrailCellBuild {
     /// Empties a previous build out of `directory`, and refuses a directory
-    /// that holds anything else.
+    /// that holds anything else. Both builds' first step.
     static func prepare(_ directory: URL) throws {
         let manager = FileManager.default
         let cells = directory.appendingPathComponent(BuildManifest.cellDirectoryName, isDirectory: true)
@@ -303,7 +309,9 @@ private extension TrailCellBuild {
         }
         try manager.createDirectory(at: cells, withIntermediateDirectories: true)
     }
+}
 
+private extension TrailCellBuild {
     static func write(
         _ filed: [TrailCell: [TrailCellFile.Relation]],
         to directory: URL,

@@ -4364,6 +4364,55 @@ if expect_contains "$cells_manifest" '"complete" : true' "the manifest" \
     pass
 fi
 
+# The hiking-routes layer's build reads the same extract and keeps every
+# hiking relation, named or not, long or not, with its ways each once: seven
+# routes and four ways — way 12 has no position. No network is tagged, so the
+# overview, which keeps the international and national routes alone, has no
+# squares, and the thirty-three-kilometre way crosses two of the finest.
+routes_squares="$cells_work/routes"
+run_script "trail-cells build-routes files every hiking route's ways at each level of detail" \
+    "$trail_cells" build-routes "$cells_work/extract.osm.pbf" --out "$routes_squares" --world
+routes_expected_files=$'routes1_z10_136_194.cell\nroutes1_z10_137_192.cell\nroutes1_z12_272_388.cell\nroutes1_z12_275_385.cell\nroutes1_z14_544_776.cell\nroutes1_z14_550_771.cell\nroutes1_z14_551_771.cell'
+if expect_status 0 \
+    && expect_contains "$calls" \
+        "osmium tags-filter $cells_work/extract.osm.pbf r/route=hiking -o $routes_squares.work/hiking.osm.pbf --overwrite" \
+        "the recorded calls" \
+    && expect_contains "$output" "Read 8 relations: 7 hiking routes, 4 ways and 8 points." "the summary" \
+    && expect_contains "$output" "overview (zoom 7 on): 0 squares" "the summary" \
+    && expect_contains "$output" "detail (zoom 14 on): 3 squares" "the summary" \
+    && expect_contains "$output" "Marked complete" "the summary"; then
+    routes_manifest="$(cat "$routes_squares/manifest.json")"
+    if [[ "$(ls "$routes_squares/cells")" != "$routes_expected_files" ]]; then
+        fail "the squares are not the ones the ways are in" "$(ls "$routes_squares/cells")"
+    elif [[ "$routes_manifest" != *'"kind" : "routes"'* || "$routes_manifest" != *'"complete" : true'* ]]; then
+        fail "the manifest does not say it is the layer's, or that it is the world" "$routes_manifest"
+    else
+        pass
+    fi
+fi
+
+# Ways 10 and 11 and the first of way 13's two squares: five routes, a path
+# three of them share drawn once, and the way that crosses the edge carried
+# whole into both squares it touches.
+run_script "trail-cells inspect reads a hiking-routes square" \
+    "$trail_cells" inspect "$routes_squares/cells/routes1_z14_550_771.cell"
+if expect_status 0 \
+    && expect_contains "$output" "scale 1000000, 5 routes, 3 lines, 6 points" "the square"; then
+    pass
+fi
+
+# The layer's squares are planned against the layer's own manifest: an empty
+# database means every square is sent and nothing of the day hikes' is read.
+printf '%s\n' '{ "manifestExists": false, "complete": false, "listed": [], "digests": {} }' \
+    > "$cells_work/routes-remote.json"
+run_script "trail-cells upload plans the hiking-routes layer's squares under its own manifest" \
+    "$trail_cells" upload "$routes_squares" --environment development --dry-run --against "$cells_work/routes-remote.json"
+if expect_status 0 \
+    && expect_contains "$output" \
+        "iCloud.tappium.com.OpenHikes, development: 7 squares to upload, 0 to delete, 0 unchanged." "the plan"; then
+    pass
+fi
+
 # The digest is what an upload compares, so the same extract has to give the
 # same squares, or every refresh would send the whole world again.
 run_script "trail-cells build files the same extract into the same squares, and says a region is not the world" \

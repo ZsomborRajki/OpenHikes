@@ -772,7 +772,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
     against (`FirstRunTipsTests`), and the name of `AppTips.isNewHiker`,
     the TipKit parameter that keeps a new hiker
   - the trail squares' record names, which every installed build asks for
-    (`TrailCellGridTests`; see *The trail squares*)
+    (`TrailCellGridTests`; see *The trail squares*), and the hiking-routes
+    layer's (`RouteSquareGridTests`; see *The hiking-routes layer*)
 
 ## Conventions
 
@@ -912,8 +913,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
 ### Tiles
 
 - **Respect provider policy.** `TileProvider.supportsBulkDownload` gates
-  prefetching, and OpenStreetMap is auto-save only. Waymarked Trails is a
-  `TileLayer` with no bulk download, and stays out of `TileProvider.all`.
+  prefetching, and OpenStreetMap is auto-save only. The hiking routes are a
+  `TileLayer` the app draws itself (*The hiking-routes layer*), and stay out
+  of `TileProvider.all`.
 - **A tile is identified by provider plus z/x/y**, never by scale
   (`TileCacheKey`).
 - **Never turn a render miss into synchronous disk or network work**, and never
@@ -1373,7 +1375,7 @@ is world-readable, because browsing needs no account.
 | `CommunityPhotoSubmission` (offered photos) | any signed-in account / `reviewer` | **none** |
 | `CommunityPhotoContribution` (published photos) | `reviewer` / `reviewer` | `listing`, `photoSubmission`, `publishedAt` |
 | `CommunitySubmissionNotice` (the queue; `reviewer` reads it) | any signed-in account / `reviewer` | `___recordID`, `___createTime` |
-| `CuratedTrailCell` (OpenStreetMap's day hikes, by map square) | `reviewer` / `reviewer` | **none** |
+| `CuratedTrailCell` (OpenStreetMap's day hikes, and the hiking-routes layer, by map square) | `reviewer` / `reviewer` | **none** |
 | `CuratedTrailManifest` (what the squares cover) | `reviewer` / `reviewer` | **none** |
 
 - **A submission is write-once.** A listing points at its submission, so an
@@ -1396,7 +1398,8 @@ is world-readable, because browsing needs no account.
   (`Users` grants `WRITE TO "_creator"`) is unverified, so test it before
   trusting the role in production.
 - **The last two types hold nothing a hiker made.** They are a copy of
-  OpenStreetMap's routes that a script uploads; see *The trail squares*.
+  OpenStreetMap's routes that a script uploads; see *The trail squares* and
+  *The hiking-routes layer*.
 
 ### Rules that hold it up
 
@@ -1558,10 +1561,11 @@ by name. `TrailCellGrid` argues the design and has the measurements.
 - **The file's generation is in every record name** (`trails1_…`). An
   installed build keeps asking for the names it knows, so a file it cannot
   read goes under a new generation beside the old one, never over it.
-- **Three of the app's files are compiled into the tool:**
-  `TrailCellGrid.swift`, `TrailCellFile.swift` and `CommunitySchema.swift`.
-  They import nothing of the app's, and `Scripts/run-script-tests.sh` builds
-  the tool, which is what holds them to that.
+- **Six of the app's files are compiled into the tool:** `PackedBytes.swift`,
+  `TrailCellGrid.swift`, `TrailCellFile.swift`, `RouteSquareGrid.swift`,
+  `RouteSquareFile.swift` and `CommunitySchema.swift`. They import nothing of
+  the app's, and `Scripts/run-script-tests.sh` builds the tool, which is what
+  holds them to that.
 - **Building and uploading** is `Scripts/trail-cells.sh`:
   1. `build <planet.osm.pbf> --world`. Only a build of the whole planet takes
      `--world`, which is what marks the squares complete.
@@ -1580,6 +1584,38 @@ by name. `TrailCellGrid` argues the design and has the measurements.
 - **Both record types are added by schema import before the first upload**
   to an environment, for the reason *A new field arrives indexed* gives. The
   deployment state under *CloudKit* says which environments have them.
+
+### The hiking-routes layer
+
+The *Hiking Routes* switch draws every `route=hiking` relation OpenStreetMap
+has over whichever map is selected, coloured by its network. The app draws it
+(`HikingRoutesRenderer`), from squares built the trail squares' way and kept
+beside them. `RouteSquareGrid` argues the design and has the measurements.
+
+- **One way, once.** `Scripts/trail-cells.sh build-routes` keeps each member
+  way of every hiking relation once, with the routes it belongs to and the
+  most important network among them, and files it at four levels of detail,
+  each simplified to what its zooms show (`RouteSquareLevel`). Nothing is
+  left out for being long, unnamed or big.
+- **The trail squares' record types and upload, under names of their own.**
+  A routes square is a `CuratedTrailCell` named `routes1_z<zoom>_<row>_<col>`,
+  and the layer's manifest is `routes1_manifest`. The build's manifest says
+  `"kind": "routes"`, and `upload` reads that to choose the manifest record,
+  so an upload of one set never reads, lists or deletes the other's. No
+  schema change was needed.
+- **Drawn only from a set that is the whole world**, for the reason *An
+  answer is complete or it is not given* is: until then a missing record means
+  nothing, and the layer draws nothing (`HikingRouteSquares`).
+- **A tile waits for every square it overlaps.** `canDraw` answers no and asks
+  for the missing ones, which redraw the tile when they arrive; a line never
+  stops at the edge of a square that has not come. Nothing on MapKit's
+  drawing threads waits on the disk or the network.
+- **No suite reaches the squares.** `HikingRouteSquares.forThisLaunch()` is
+  `nil` under `isRunningTests`, UI tests included, and the map then installs
+  no layer whatever the switch says; suites hand the map a stub's squares.
+- **Building and uploading** is the trail squares' procedure with
+  `build-routes` for `build`: `build-routes <planet.osm.pbf> --world`, then
+  `upload` to development, then to production.
 
 ## The watch app
 

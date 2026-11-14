@@ -186,7 +186,7 @@ struct SettingsView: View {
             // Edge to edge, so the row scrolls out from under the section's
             // rounded corners rather than stopping short of them.
             .listRowInsets(EdgeInsets())
-            // Waymarked Trails' hiking routes over whichever map is chosen
+            // OpenStreetMap's hiking routes over whichever map is chosen
             // above — a layer rather than a sixth card, because it is drawn
             // with any of them.
             HikingRoutesToggle()

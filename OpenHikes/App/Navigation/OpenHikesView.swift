@@ -309,6 +309,7 @@ struct OpenHikesView: View {
             sheetMetrics: sheetMetrics,
             base: activeBase,
             tileLayer: TileLayer.shown(isOn: showsHikingRoutes),
+            hikingRouteSquares: appModel.hikingRouteSquares,
             mapController: mapController,
             drawnRouteTap: drawnRouteTap,
             locationAccessPrompt: locationAccessPrompt,

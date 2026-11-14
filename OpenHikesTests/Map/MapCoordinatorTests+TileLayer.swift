@@ -15,16 +15,17 @@ import MapKit
 import Testing
 
 extension MapCoordinatorTests {
-    /// The real layer's credits and zoom range, behind a host that cannot
-    /// resolve: nothing here draws, but nothing here should be able to ask a
-    /// volunteer's server for a tile either.
-    static let routesLayer = TileLayer(
-        id: "layer_test",
-        urlTemplate: "https://layer.example.invalid/{z}/{x}/{y}.png",
-        minimumZ: TileLayer.waymarkedHiking.minimumZ,
-        maximumZ: TileLayer.waymarkedHiking.maximumZ,
-        attribution: TileLayer.waymarkedHiking.attribution
-    )
+    static let routesLayer = TileLayer.hikingRoutes
+
+    /// Squares from a stub and kept nowhere: a map under test may ask for
+    /// them as it lays out, and must reach neither the public database nor
+    /// the app's `Caches`.
+    static let routeSquares = HikingRouteSquares(database: StubTrailCellDatabase(), directory: nil)
+
+    /// The map with the layer switched on, drawn from the stub's squares.
+    func layeredMapView(route: DisplayedRoute? = nil, base: MapBase = .tiles(osm)) -> MapView {
+        mapView(route: route, base: base, tileLayer: Self.routesLayer, hikingRouteSquares: Self.routeSquares)
+    }
 
     #if os(iOS)
     /// What VoiceOver reads for the line: the canonical credits, carried by
@@ -42,16 +43,30 @@ extension MapCoordinatorTests {
     @Test("the layer goes on directly above the map's tiles, without replacing them")
     func layerSitsAboveTheBaseTiles() throws {
         let coordinator = MapView.Coordinator()
-        let map = makeMap(mapView(tileLayer: Self.routesLayer), coordinator)
+        let map = makeMap(layeredMapView(), coordinator)
         defer { detach(map) }
 
         let base = try #require(coordinator.tileOverlay)
         let layer = try #require(coordinator.layerOverlay)
         #expect(stack(map).map(ObjectIdentifier.init) == [ObjectIdentifier(base), ObjectIdentifier(layer)])
-        #expect(!layer.canReplaceMapContent, "a layer that replaced the map would blank whatever is under it")
-        #expect(layer.providerID == Self.routesLayer.id, "its tiles are filed under its own namespace")
-        #expect(layer.minimumZ == Self.routesLayer.minimumZ)
-        #expect(layer.maximumZ == Self.routesLayer.maximumZ)
+        #expect(layer.squares === Self.routeSquares, "the layer draws from the squares it was handed")
+        #expect(coordinator.mapView(map, rendererFor: layer) is HikingRoutesRenderer)
+    }
+
+    /// A hosted suite and a UI-testing launch have no squares, and a layer
+    /// built without them would have nothing to draw from.
+    @Test("with no squares the switch puts no layer on, and the line still credits it")
+    func noSquaresNoLayer() throws {
+        #if os(iOS)
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(base: .system(.standard), tileLayer: Self.routesLayer), coordinator)
+        defer { detach(map) }
+
+        #expect(coordinator.layerOverlay == nil)
+        #expect(stack(map).isEmpty)
+        let credit = try #require(coordinator.attributionView)
+        #expect(!credit.isHidden)
+        #endif
     }
 
     /// The case the layer is most wanted for: satellite or Apple's own map
@@ -62,20 +77,19 @@ extension MapCoordinatorTests {
     )
     func layerDrawsOverTheSystemBaseMap(style: SystemMapStyle) throws {
         let coordinator = MapView.Coordinator()
-        let map = makeMap(mapView(base: .system(style), tileLayer: Self.routesLayer), coordinator)
+        let map = makeMap(layeredMapView(base: .system(style)), coordinator)
         defer { detach(map) }
 
         let layer = try #require(coordinator.layerOverlay)
         #expect(coordinator.tileOverlay == nil)
         #expect(stack(map).count == 1)
         #expect(stack(map).first === layer)
-        #expect(!layer.canReplaceMapContent)
     }
 
     @Test("an update that changes nothing keeps the same layer")
     func repeatedUpdatesReuseTheLayer() throws {
         let coordinator = MapView.Coordinator()
-        let view = mapView(tileLayer: Self.routesLayer)
+        let view = layeredMapView()
         let map = makeMap(view, coordinator)
         defer { detach(map) }
         let installed = try #require(coordinator.layerOverlay)
@@ -84,13 +98,13 @@ extension MapCoordinatorTests {
         view.update(map, coordinator)
 
         #expect(coordinator.layerOverlay === installed)
-        #expect(stack(map).count(where: { $0 is TileOverlay }) == 2)
+        #expect(stack(map).count == 2)
     }
 
     @Test("switching the layer off takes it off and leaves the map's tiles")
     func switchingOffRemovesTheLayer() throws {
         let coordinator = MapView.Coordinator()
-        let map = makeMap(mapView(tileLayer: Self.routesLayer), coordinator)
+        let map = makeMap(layeredMapView(), coordinator)
         defer { detach(map) }
         let base = try #require(coordinator.tileOverlay)
 
@@ -113,7 +127,7 @@ extension MapCoordinatorTests {
         mapView(route: route).update(map, coordinator)
         let line = try #require(coordinator.routeOverlay)
 
-        mapView(route: route, tileLayer: Self.routesLayer).update(map, coordinator)
+        layeredMapView(route: route).update(map, coordinator)
 
         let layer = try #require(coordinator.layerOverlay)
         let order = stack(map)
@@ -128,10 +142,10 @@ extension MapCoordinatorTests {
     @Test("a route drawn over the layer goes above it")
     func routeGoesAboveAnExistingLayer() throws {
         let coordinator = MapView.Coordinator()
-        let map = makeMap(mapView(base: .system(.standard), tileLayer: Self.routesLayer), coordinator)
+        let map = makeMap(layeredMapView(base: .system(.standard)), coordinator)
         defer { detach(map) }
 
-        mapView(route: Self.route(), base: .system(.standard), tileLayer: Self.routesLayer).update(map, coordinator)
+        layeredMapView(route: Self.route(), base: .system(.standard)).update(map, coordinator)
 
         let line = try #require(coordinator.routeOverlay)
         #expect(stack(map).first === coordinator.layerOverlay)
@@ -144,11 +158,11 @@ extension MapCoordinatorTests {
     @Test("changing map with the layer on keeps the layer above the new tiles")
     func changingMapKeepsTheLayerOnTop() throws {
         let coordinator = MapView.Coordinator()
-        let map = makeMap(mapView(base: .system(.standard), tileLayer: Self.routesLayer), coordinator)
+        let map = makeMap(layeredMapView(base: .system(.standard)), coordinator)
         defer { detach(map) }
         let layer = try #require(coordinator.layerOverlay)
 
-        mapView(tileLayer: Self.routesLayer).update(map, coordinator)
+        layeredMapView().update(map, coordinator)
 
         let base = try #require(coordinator.tileOverlay)
         #expect(coordinator.layerOverlay === layer, "the layer did not need rebuilding")
@@ -166,9 +180,9 @@ extension MapCoordinatorTests {
         let credit = try #require(coordinator.attributionView)
         #expect(credit.isHidden, "precondition: nothing of ours to credit")
 
-        mapView(base: .system(.standard), tileLayer: Self.routesLayer).update(map, coordinator)
+        layeredMapView(base: .system(.standard)).update(map, coordinator)
         #expect(!credit.isHidden)
-        #expect(spokenCredit(credit)?.contains("Waymarked Trails") == true)
+        #expect(spokenCredit(credit)?.contains("OpenStreetMap") == true)
 
         mapView(base: .system(.standard)).update(map, coordinator)
         #expect(credit.isHidden, "and takes it away again")
@@ -179,7 +193,7 @@ extension MapCoordinatorTests {
     func layerIsCreditedAfterTheMap() throws {
         #if os(iOS)
         let coordinator = MapView.Coordinator()
-        let map = makeMap(mapView(tileLayer: Self.routesLayer), coordinator)
+        let map = makeMap(layeredMapView(), coordinator)
         defer { detach(map) }
         let credit = try #require(coordinator.attributionView)
 
