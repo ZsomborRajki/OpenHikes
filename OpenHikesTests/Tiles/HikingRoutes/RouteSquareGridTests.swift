@@ -99,10 +99,11 @@ struct RouteSquareGridTests {
         #expect(RouteNetwork.leastImportantFirst.count == 5)
     }
 
-    @Test("only the overview leaves routes out, and keeps the international and national ones")
-    func overviewKeepsLongRoutes() {
+    @Test("a level files the networks its zooms draw: the long routes from far out, every route close in")
+    func levelsKeepWhatTheyDraw() {
         #expect(RouteSquareLevel.overview.minimumNetwork == .national)
-        for level in [RouteSquareLevel.region, .area, .detail] {
+        #expect(RouteSquareLevel.region.minimumNetwork == .regional)
+        for level in [RouteSquareLevel.area, .detail] {
             #expect(level.minimumNetwork == .other)
         }
     }

@@ -15,22 +15,26 @@
 //
 //  ## Four levels, measured on the planet of 2026-11-09
 //
-//  273,074 routes, 4.6 million ways and 70 million points, 1.51 million km of
+//  272,436 routes, 4.6 million ways and 70 million points, 1.51 million km of
 //  network once a shared way is counted once. Drawn at full detail from a
 //  continent's view that is far too much to fetch, and drawn simplified at a
 //  street's view it misses the path, so each level of detail is a set of
-//  squares of its own, simplified to what its zooms can show:
+//  squares of its own, simplified to what its zooms can show and holding
+//  only the networks they draw:
 //
 //  | Level      | Zooms  | Square | Simplified | Units  | Routes          | Whole set | Largest |
 //  |------------|--------|--------|------------|--------|-----------------|-----------|---------|
-//  | `overview` | 7–9    | 4°     | 300 m      | 1e-4°  | iwn and nwn     | 8.6 MB    | 768 KB  |
-//  | `region`   | 10–11  | 1°     | 40 m       | 1e-5°  | all             | 46 MB     | 623 KB  |
-//  | `area`     | 12–13  | 0.5°   | 8 m        | 1e-5°  | all             | 76 MB     | 364 KB  |
-//  | `detail`   | 14 on  | 0.25°  | none       | 1e-6°  | all             | 222 MB    | 404 KB  |
+//  | `overview` | 7–9    | 4°     | 300 m      | 1e-4°  | iwn and nwn     | 11 MB     | 1.2 MB  |
+//  | `region`   | 10–11  | 1°     | 40 m       | 1e-5°  | rwn and up      | 30 MB     | 589 KB  |
+//  | `area`     | 12–13  | 0.5°   | 8 m        | 1e-5°  | all             | 74 MB     | 335 KB  |
+//  | `detail`   | 14 on  | 0.25°  | none       | 1e-6°  | all             | 228 MB    | 379 KB  |
 //
 //  A square's side is chosen so that the busiest — the Alps, the Ardennes,
 //  the Black Forest — stays under a few hundred kilobytes, which one map view
-//  fetches one to four of. 4° squares at zooms 10 and 11 were 6 MB there.
+//  fetches one to four of. 4° squares at zooms 10 and 11 were 6 MB there. A
+//  way's network is the most important among the relations it is drawn as,
+//  which the build works out — a stage of a national trail an E-path runs
+//  along is international.
 //
 //  ## A segment is filed in every square its box touches
 //
@@ -143,9 +147,15 @@ nonisolated enum RouteSquareLevel: Int, Sendable {
     }
 
     /// The least important network filed at this level. From a continent's
-    /// view only the long routes read as routes; the rest is a texture.
+    /// view only the long routes read as routes, and from a country's the
+    /// local ones are a texture over the whole of it: the layer draws
+    /// neither there — see ``HikingRoutesStyle`` — so neither is filed.
     var minimumNetwork: RouteNetwork {
-        self == .overview ? .national : .other
+        switch self {
+        case .overview: .national
+        case .region: .regional
+        case .area, .detail: .other
+        }
     }
 
     /// What this level's record names say it is.
