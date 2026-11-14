@@ -10,8 +10,11 @@
 //  the one hikers already read, so its map style is followed figure for
 //  figure rather than imitated by eye. A first attempt that only resembled
 //  it gave every local route a sign from a region's view and drew each twice
-//  the size, and a valley disappeared under its own numbers. What the style
-//  does, zoom by zoom:
+//  the size, and a valley disappeared under its own numbers. The figures are
+//  read out of the style the project publishes (`waymarkedtrails-backend`,
+//  under `wmt_db/data/map-styles`, and `waymarkedtrails-shields`), and the
+//  *Hiking Routes* switch credits it for them (``HikingRoutesToggle``). What
+//  the style does, zoom by zoom:
 //
 //  | Zooms  | Lines                                         | Signs                      |
 //  |--------|-----------------------------------------------|----------------------------|

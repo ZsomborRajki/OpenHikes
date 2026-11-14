@@ -1640,6 +1640,11 @@ beside them. `RouteSquareGrid` argues the design and has the measurements.
   256-pixel tile's, `1 / zoomScale` map points — because MapKit hands a
   phone tiles one to two zooms deeper than its screen, and a size in points
   stood half as large again as the layer this one replaced.
+- **The switch credits Waymarked Trails for the look** (`HikingRoutesToggle`).
+  The figures were read out of the map style that project publishes under
+  the GPL, and the owner settled on a credit in the switch's caption, in
+  every language. It stays for as long as the look does. The line on the
+  map still credits OpenStreetMap alone, whose data is drawn.
 - **A sign is a route's waymark, or its number** (`WaymarkSign`): its
   `osmc:symbol` (`OSMCSymbol`), else its `ref`, else what its name shortens
   to, framed in its network's colour. Shapes the wiki lists that `OSMCSymbol`
