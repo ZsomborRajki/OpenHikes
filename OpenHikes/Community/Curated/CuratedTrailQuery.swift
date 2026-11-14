@@ -63,29 +63,50 @@ import OpenHikesData
 /// routes count, how wide a box is worth asking for — is invisible in the
 /// result and would otherwise only be testable through the network.
 nonisolated enum CuratedTrailQuery {
-    /// The widest search this will ask Overpass about, in metres of radius.
+    /// The widest search there is, in metres of radius.
     ///
-    /// **The app's zoom ceiling as well, and this is where it is decided.**
+    /// **The app's zoom ceiling, and this is where it is decided.**
     /// ``CommunityQueryPolicy/maximumRadiusMeters`` is spelled as this value
     /// rather than as a number of its own — see *One ceiling, and it is
     /// OpenStreetMap's* in that file. The figure is set by the source that
-    /// minds being asked: the listing pass scales with the *area* of the box
-    /// — 44 KB over a 17 × 28 km box in dense Alpine mapping — so an 80 × 80 km
-    /// box is roughly 350 KB in the worst region there is, and a 300 × 300 km
-    /// one is several megabytes of rows the limit would then throw away.
+    /// answers, which since the pre-built squares is not the one that minds
+    /// being asked: a wider search of the squares is more small downloads and
+    /// no time in a queue. See ``TrailCellLibrary/maximumCellsPerSearch`` for
+    /// what a search this wide reads.
     ///
-    /// There used to be two ceilings, 150 km there and 40 km here, described
-    /// as a deliberate difference. It was a gap: between them the pill was
-    /// enabled, a tap spent a CloudKit query, and this half answered `[]` with
-    /// no failure to report, so a hiker looking at 100 km of map got no trails
-    /// and nothing saying that zooming in was the answer.
+    /// Overpass has a ceiling of its own, well inside this one —
+    /// ``maximumOverpassRadiusMeters`` — and between the two only the squares
+    /// are asked.
     ///
-    /// The guard below is therefore unreachable from the app — the policy
-    /// refuses a wider region before anything is committed — and it stays as
-    /// the contract for callers that are not the policy: a search wider than
-    /// this answers `[]` rather than asking, which is the right answer when
-    /// the hiker is looking at half a continent.
-    static let maximumRadiusMeters: Double = 40_000
+    /// There were two ceilings once before, 150 km on the map and 40 km
+    /// here, and the band between them was a gap: the pill was enabled, a tap
+    /// spent a CloudKit query, and this half answered `[]` with no failure to
+    /// report, so a hiker looking at 100 km of map got no trails and nothing
+    /// saying that zooming in was the answer. The band between today's two is
+    /// not that one. Inside it the squares answer, and where they cannot the
+    /// search fails as one, under the pill, beside whatever the device
+    /// already holds: see ``CuratedTrailSource/listings(near:limit:)``.
+    ///
+    /// The guards below are unreachable from the app — the policy refuses a
+    /// wider region before anything is committed — and they stay as the
+    /// contract for callers that are not the policy: a search wider than this
+    /// answers `[]` rather than asking, which is the right answer when the
+    /// hiker is looking at half a continent.
+    static let maximumRadiusMeters: Double = 100_000
+
+    /// The widest search Overpass is asked about, in metres of radius.
+    ///
+    /// What the app's own ceiling was while Overpass was the only source,
+    /// and still what a wide box costs it: the listing pass scales with the
+    /// *area* of the box — 44 KB over a 17 × 28 km box in dense Alpine mapping
+    /// — so an 80 × 80 km box is roughly 350 KB in the worst region there is,
+    /// and a 200 × 200 km one is megabytes of rows the limit would then throw
+    /// away, from a server that holds every request in a queue first.
+    ///
+    /// So a search wider than this is the squares' alone. Where they have no
+    /// answer for one, Overpass is not asked instead: see
+    /// ``isWithinOverpassCeiling(_:)``.
+    static let maximumOverpassRadiusMeters: Double = 40_000
 
     /// The longest bounding-box diagonal a curated route may have, in metres.
     ///
@@ -232,21 +253,15 @@ nonisolated extension CuratedTrailQuery {
     /// stops telling distances apart — see ``CommunitySearchArea`` — and
     /// Overpass, which answers a box exactly, has no such floor to inherit.
     ///
-    /// The ceiling still holds, measured the way
-    /// ``CommunityQueryPolicy/visibleRadiusMeters(for:)`` measures the region
-    /// the span came from — half the longer edge, on the ground — so the two
-    /// cannot disagree about which rectangles are too wide. Longitude is
+    /// The ceiling still holds, measured by ``reachMeters(of:)``. Longitude is
     /// continuous here for the reason ``circumscribingBox(for:)`` gives.
     static func visibleBox(for area: CommunitySearchArea) -> BoundingBox? {
         guard let span = area.visibleSpan,
               span.latitudeDelta > 0, span.longitudeDelta > 0,
               span.latitudeDelta.isFinite, span.longitudeDelta.isFinite,
-              area.longitude.isFinite, abs(area.latitude) < polarLatitudeLimit
+              area.longitude.isFinite, abs(area.latitude) < polarLatitudeLimit,
+              reachMeters(of: area) <= maximumRadiusMeters
         else { return nil }
-        let metersPerDegree = RouteGeometry.metersPerDegreeLatitude
-        let halfHeight = span.latitudeDelta / 2 * metersPerDegree
-        let halfWidth = span.longitudeDelta / 2 * metersPerDegree * cos(area.latitude * .pi / 180)
-        guard max(halfHeight, halfWidth) <= maximumRadiusMeters else { return nil }
         let longitude = RouteGeometry.normalizedLongitude(area.longitude)
         return BoundingBox(
             south: max(-90, area.latitude - span.latitudeDelta / 2),
@@ -256,8 +271,34 @@ nonisolated extension CuratedTrailQuery {
         )
     }
 
-    /// The boxes a search of `area` asks Overpass about — the rectangle the
-    /// hiker could see when the area carries one, the square around its circle
+    /// How far what a search of `area` asks about reaches from its centre, in
+    /// metres: half the longer edge of the rectangle the hiker could see when
+    /// the area carries one, and its radius when it does not.
+    ///
+    /// What both ceilings are held against. The rectangle is measured the way
+    /// ``CommunityQueryPolicy/visibleRadiusMeters(for:)`` measures the region
+    /// its span came from — on the ground — so the two cannot disagree about
+    /// which rectangles are too wide.
+    static func reachMeters(of area: CommunitySearchArea) -> Double {
+        guard let span = area.visibleSpan else { return area.radiusMeters }
+        let metersPerDegree = RouteGeometry.metersPerDegreeLatitude
+        let halfHeight = span.latitudeDelta / 2 * metersPerDegree
+        let halfWidth = span.longitudeDelta / 2 * metersPerDegree * cos(area.latitude * .pi / 180)
+        return max(halfHeight, halfWidth)
+    }
+
+    /// Whether a search of `area` is one Overpass may be asked about: no
+    /// wider than ``maximumOverpassRadiusMeters``.
+    ///
+    /// Written as "within" rather than "past" for the reason
+    /// ``CommunityQueryPolicy/isWithinCeiling(_:)`` is: an area whose reach is
+    /// not a number is refused rather than asked about.
+    static func isWithinOverpassCeiling(_ area: CommunitySearchArea) -> Bool {
+        reachMeters(of: area) <= maximumOverpassRadiusMeters
+    }
+
+    /// The boxes a search of `area` asks about — the rectangle the hiker
+    /// could see when the area carries one, the square around its circle
     /// when it does not: one box, or **two** where it crosses the antimeridian,
     /// or none where there is nothing to ask.
     ///

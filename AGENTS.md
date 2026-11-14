@@ -1480,7 +1480,8 @@ is world-readable, because browsing needs no account.
   from the pre-built squares where they have an answer and from Overpass where
   they do not (*The trail squares*).
   - The `limit` is spent on CloudKit first, so a published hike never loses its
-    place.
+    place. A search wider than Overpass is asked about asks for a longer page
+    (`CommunityQueryPolicy.resultLimit(for:)`).
   - A curated failure comes back as a `CuratedTrailOutage` beside the rows,
     rather than failing the whole answer.
   - Calls route on `CommunityIdentity`, and `CommunityOrigin` is a sum type, so
@@ -1492,7 +1493,8 @@ is world-readable, because browsing needs no account.
   - `CommunityQueryPolicy` turns a pan into an *offer*, never a request.
   - Nothing is fetched until the *Community* tab opens.
   - The same request asks the squares first, and Overpass only when they have
-    no answer.
+    no answer, and never about a search wider than
+    `CuratedTrailQuery.maximumOverpassRadiusMeters`.
   - All requests share `OverpassConversation`'s gate and its single retry.
   - Relations are cached on disk (`CuratedTrailStore`), and a refused search
     falls back to them while still showing the outage.
@@ -1541,6 +1543,17 @@ by name. `TrailCellGrid` argues the design and has the measurements.
   read, `CuratedTrailSource` asks Overpass as it did before. So a build of the
   app can ship before the squares do, and an empty answer from the squares
   means *no trails here*.
+- **The squares reach further than Overpass is asked.** The search ceiling is
+  theirs (`CuratedTrailQuery.maximumRadiusMeters`), and Overpass keeps the
+  narrower one it had (`maximumOverpassRadiusMeters`). Between the two, a
+  search the squares cannot answer fails as a search does: the outage is
+  reported, the routes already on the device are drawn, and Overpass is asked
+  nothing. The squares that did arrive are kept, so the next try asks only
+  for the rest.
+- **A route is measured before it is drawn.** A wide search has thousands of
+  routes in its area and keeps a page of them, so the routes are ordered by
+  where their pins stand and a line is assembled for the page alone
+  (`CuratedTrailDecoding.drawn(_:limit:)`).
 - **A regional build is never read, even where its squares are.** It leaves
   out the routes that run out of its extract and holds nothing of the ones
   beyond it, so a record that is there cannot say what is missing from it. A
@@ -1788,7 +1801,11 @@ Reopening one needs new evidence, not a fresh reading of the same code.
     simulator with no iCloud account, read the manifest and the squares from
     development, and from production in a scratch build whose entitlements
     named that environment. A search of two squares took 0.3 seconds and one
-    of six 0.8, and each again from disk under 0.15. The upload has been
+    of six 0.8, and each again from disk under 0.15. The widest search, a
+    map 200 km across, took 3 to 17.5 seconds over ground with trails on
+    it, on Wi-Fi, and under 2 again from disk; nobody has watched one on a
+    cellular connection, where each of its requests has thirty seconds. The
+    upload has been
     watched in both environments: a server-to-server key acts as the
     developer who made it, wrote both `reviewer`-only types, and the asset
     store took each square as a request's raw body.

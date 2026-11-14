@@ -137,14 +137,14 @@ struct TrailPointQueryTests {
         #expect(TrailPointQuery.query(in: boxes) == nil, "and there is no request to make")
     }
 
-    /// A quarter of the community list's own ceiling, and deliberately: that
-    /// one lists relations, whose count grows slowly with area, and this lists
-    /// features, whose count grows with it directly.
+    /// A quarter of how wide a trail search Overpass is asked about, and
+    /// deliberately: that one lists relations, whose count grows slowly with
+    /// area, and this lists features, whose count grows with it directly.
     @Test("the ceiling is tighter than the curated one")
     func theCeilingIsTighterThanTheCuratedOne() {
-        #expect(TrailPointQuery.maximumRadiusMeters < CuratedTrailQuery.maximumRadiusMeters)
+        #expect(TrailPointQuery.maximumRadiusMeters < CuratedTrailQuery.maximumOverpassRadiusMeters)
 
-        let atCuratedCeiling = Self.area(radiusMeters: CuratedTrailQuery.maximumRadiusMeters)
+        let atCuratedCeiling = Self.area(radiusMeters: CuratedTrailQuery.maximumOverpassRadiusMeters)
         #expect(!CuratedTrailQuery.searchBoxes(for: atCuratedCeiling).isEmpty)
         #expect(
             TrailPointQuery.searchBoxes(for: atCuratedCeiling).isEmpty,

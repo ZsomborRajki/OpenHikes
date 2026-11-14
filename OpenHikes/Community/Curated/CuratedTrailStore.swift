@@ -60,7 +60,8 @@ import Foundation
 nonisolated struct CuratedTrailStore: Sendable {
     /// How many routes are kept on disk.
     ///
-    /// Eight pages of results, against the memory cache's four. A route's line
+    /// Eight pages of an ordinary search's results, against the memory cache's
+    /// four, and half as many of a wide one's. A route's line
     /// is a few hundred points, which is 10–30 KB of JSON, so this is a few
     /// megabytes at its fullest — the same order as the 64 graph tiles next to
     /// it, in a directory the system may reclaim at any time.

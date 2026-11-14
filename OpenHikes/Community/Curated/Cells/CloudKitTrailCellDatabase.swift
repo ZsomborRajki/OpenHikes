@@ -31,7 +31,8 @@ nonisolated struct CloudKitTrailCellDatabase: TrailCellFetching {
     /// silence, and a week for the whole — because of what waits behind a
     /// failure here: ``CuratedTrailSource`` asks Overpass instead, and a
     /// hiker should reach that in seconds rather than after a spinner has
-    /// outlasted their patience.
+    /// outlasted their patience. One request's time, and a wide search is
+    /// several: see ``TrailCellLibrary/maximumCellsPerRequest``.
     private static let requestTimeout: TimeInterval = 15
     private static let resourceTimeout: TimeInterval = 30
 

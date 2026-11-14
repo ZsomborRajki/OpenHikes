@@ -120,8 +120,10 @@ nonisolated enum CuratedTrailOutage: Equatable, Sendable {
     /// ``CuratedTrailSource``'s own check, which recomputes it against a clock
     /// it does hold.
     case rateLimited(retryAfter: TimeInterval)
-    /// Anything else: no network, a timeout, or the HTML error page an
-    /// overloaded Overpass mirror serves with a `200`.
+    /// Anything else: no network, a timeout, the HTML error page an
+    /// overloaded Overpass mirror serves with a `200`, or a search too wide
+    /// for Overpass that the pre-built squares could not answer — see
+    /// ``CuratedTrailSearchRefusal``.
     case unavailable
 
     /// The outage `error` amounts to, or `nil` when it is not one to report.

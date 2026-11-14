@@ -128,6 +128,47 @@ extension CuratedTrailQueryTests {
         #expect(CuratedTrailQuery.areaRequest(in: boxes) == nil)
     }
 
+    // MARK: - Overpass's own ceiling
+
+    /// The radius beside a rectangle is CloudKit's, floored at ten
+    /// kilometres, so it is not what says how wide the rectangle is.
+    @Test("a rectangle reaches half its longer edge on the ground, and a circle its radius")
+    func reachIsHalfTheLongerEdge() {
+        let tall = CommunitySearchArea.Span(latitudeDelta: 0.9, longitudeDelta: 0.2)
+        let wide = CommunitySearchArea.Span(latitudeDelta: 0.2, longitudeDelta: 0.9)
+        let halfInMeters = 0.45 * RouteGeometry.metersPerDegreeLatitude
+        let circle = CommunitySearchArea(coordinate: Self.visibleCenter, radiusMeters: 12_345)
+
+        #expect(CuratedTrailQuery.reachMeters(of: Self.visibleArea(tall))
+            .isApproximatelyEqual(to: halfInMeters, absoluteTolerance: 1))
+        #expect(CuratedTrailQuery.reachMeters(of: Self.visibleArea(wide)).isApproximatelyEqual(
+            to: halfInMeters * cos(Figures.latitude * .pi / 180),
+            absoluteTolerance: 1
+        ))
+        #expect(CuratedTrailQuery.reachMeters(of: circle) == circle.radiusMeters)
+    }
+
+    /// Between the two ceilings there is a box to ask the squares about, and
+    /// nothing to ask Overpass.
+    @Test("a rectangle wider than Overpass's ceiling is still a question, and not one for Overpass")
+    func aRectanglePastOverpassCeilingIsStillAsked() {
+        let ceilingInDegrees = 2 * CuratedTrailQuery.maximumOverpassRadiusMeters
+            / RouteGeometry.metersPerDegreeLatitude
+        let inside = CommunitySearchArea.Span(latitudeDelta: ceilingInDegrees * 0.99, longitudeDelta: 0.1)
+        let outside = CommunitySearchArea.Span(latitudeDelta: ceilingInDegrees * 1.01, longitudeDelta: 0.1)
+
+        #expect(CuratedTrailQuery.isWithinOverpassCeiling(Self.visibleArea(inside)))
+        #expect(!CuratedTrailQuery.isWithinOverpassCeiling(Self.visibleArea(outside)))
+        #expect(CuratedTrailQuery.searchBoxes(for: Self.visibleArea(outside)).count == 1)
+    }
+
+    @Test("an area whose reach is not a number is not one for Overpass")
+    func anUnmeasuredAreaIsNotForOverpass() {
+        let unmeasured = CommunitySearchArea(coordinate: Self.visibleCenter, radiusMeters: .nan)
+
+        #expect(!CuratedTrailQuery.isWithinOverpassCeiling(unmeasured))
+    }
+
     @Test("a rectangle with nothing in it is not a question")
     func anEmptyRectangleIsNotAsked() {
         let flat = CommunitySearchArea.Span(latitudeDelta: 0, longitudeDelta: 0.1)

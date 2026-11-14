@@ -15,6 +15,13 @@
 //  made it: the same nearest rows, kept in the same caches, opened and drawn
 //  without asking again.
 //
+//  **A search wider than Overpass is asked about is the squares' alone.** They
+//  reach two and a half times as far as it does — see
+//  ``CuratedTrailQuery/maximumRadiusMeters`` — and where they have no answer
+//  for such a search it fails, with ``CuratedTrailSearchRefusal``, rather than
+//  put the box the old ceiling was drawn to keep away from Overpass in its
+//  queue.
+//
 //  An actor for the reason ``OverpassTrailGraphProvider`` is one — it owns
 //  mutable state that arrives from concurrent requests. It still takes the
 //  same three seams a suite drives it through — an injectable transport, an
@@ -63,6 +70,21 @@ import OrderedCollections
 /// together for the reason ``CommunityNearbyAnswer``'s two fields do: a caller
 /// that reads only the first draws exactly what it drew before, and the
 /// caption under *Search this area* is the second one's whole audience.
+/// Why a search the pre-built squares could not answer was not put to
+/// Overpass instead.
+///
+/// Thrown rather than answered as `[]`, because an empty answer is a claim:
+/// *no waymarked day hikes here* is a sentence the caption under *Search this
+/// area* says in as many words. This is the other one, and
+/// ``CuratedTrailOutage/init(_:)`` reads it as it reads anything that is not
+/// Overpass speaking: the trails could not be had, and
+/// ``MergedCommunityTransport`` draws what the device already holds beside
+/// that.
+nonisolated enum CuratedTrailSearchRefusal: Error, Equatable {
+    /// The area is wider than ``CuratedTrailQuery/maximumOverpassRadiusMeters``.
+    case widerThanOverpassIsAsked
+}
+
 nonisolated struct CuratedCompletion: Equatable, Sendable {
     /// The listed routes in listing order — drawn where a line arrived, and
     /// lineless where one was refused.
@@ -104,6 +126,12 @@ nonisolated protocol CuratedTrailSourcing: Sendable {
     /// see ``CuratedTrailQuery/maximumRadiusMeters``. That is an answer: the
     /// hiker is looking at half a continent, where a list of village loops is
     /// not what they asked for.
+    ///
+    /// **`limit` is honoured in full only by the squares.** Their rows come
+    /// with their lines, so a page of them is as long as the caller asks. An
+    /// Overpass answer is still no longer than
+    /// ``CuratedTrailQuery/geometryBatchLimit``, which is what one geometry
+    /// pass draws.
     @concurrent
     func listings(near area: CommunitySearchArea, limit: Int) async throws -> [CuratedTrail]
 
@@ -215,10 +243,11 @@ actor CuratedTrailSource: CuratedTrailSourcing {
 
     /// How many routes are kept in memory.
     ///
-    /// Four pages of results. Enough that panning back and forth across two or
-    /// three areas is free, small enough that a long browse cannot grow
-    /// without bound — a line is a few hundred points, so this is on the order
-    /// of a megabyte at its fullest.
+    /// Four pages of an ordinary search's results, and two of a wide one's —
+    /// see ``CommunityQueryPolicy/resultLimit(for:)``. Enough that panning
+    /// back and forth across two or three areas is free, small enough that a
+    /// long browse cannot grow without bound — a line is a few hundred
+    /// points, so this is on the order of a megabyte at its fullest.
     private static let maximumCachedTrails = 100
 
     /// What the cache knows about one relation.
@@ -375,7 +404,7 @@ extension CuratedTrailSource {
         // same area asked twice keeps its rows: that is a refresh, not a move.
         if lastArea != area { forgetLastAnswer() }
         let boxes = CuratedTrailQuery.searchBoxes(for: area)
-        guard limit > 0, let request = CuratedTrailQuery.areaRequest(in: boxes) else {
+        guard limit > 0, !boxes.isEmpty else {
             forgetLastAnswer()
             return []
         }
@@ -383,9 +412,13 @@ extension CuratedTrailSource {
         // Whether the rows came with their lines: always from the squares,
         // and from Overpass when the area was small enough to ask for both.
         let drawsLines: Bool
+        // How many rows the page may hold: all that were asked for when the
+        // squares answer, and one geometry pass's worth when Overpass does.
+        let pageLimit: Int
         // The squares first. A source with none is one whose squares do not
         // reach anywhere, which is the same thing to a search.
-        switch try await cells?.trails(in: boxes) ?? .uncovered {
+        let center = area.coordinate
+        switch try await cells?.trails(in: boxes, nearest: center, limit: limit) ?? .uncovered {
         case .trails(let prebuilt):
             // A complete answer, an empty one included: no waymarked day
             // hikes there is something the squares can say, and asking
@@ -393,9 +426,15 @@ extension CuratedTrailSource {
             // search beside a lake.
             listed = prebuilt
             drawsLines = true
+            pageLimit = limit
 
         case .uncovered, .unreachable:
-            // No answer, so the question goes where it always went.
+            // No answer, so the question goes where it always went — unless
+            // it is wider than Overpass is asked about, and then it fails
+            // here: see ``CuratedTrailSearchRefusal``.
+            guard CuratedTrailQuery.isWithinOverpassCeiling(area),
+                  let request = CuratedTrailQuery.areaRequest(in: boxes)
+            else { throw CuratedTrailSearchRefusal.widerThanOverpassIsAsked }
             listed = try await conversation.fetch(
                 request.query,
                 awaiting: request.timeoutSeconds
@@ -405,6 +444,7 @@ extension CuratedTrailSource {
                     : CuratedTrailDecoding.trails(fromListing: body)
             }
             drawsLines = request.drawsLines
+            pageLimit = min(limit, CuratedTrailQuery.geometryBatchLimit)
         }
         // Nearest first, by the same measure the published half is sorted by,
         // so a merged list is ordered by one rule rather than by two that
@@ -417,10 +457,13 @@ extension CuratedTrailSource {
         // `min(count:)` is the shape ``OverpassCache/trim(_:keeping:)`` already uses
         // for the same question — *the k smallest, in order* — and it is what
         // `sorted().prefix()` was spelling the long way.
-        let center = area.coordinate
+        //
+        // The squares' page arrives chosen by this measure and in this order
+        // — see ``TrailCellLibrary`` — so for it this keeps every row where
+        // it was.
         let nearest = listed
             .map { (trail: $0, distance: RouteGeometry.distanceMeters(from: center, to: $0.coordinate)) }
-            .min(count: min(limit, CuratedTrailQuery.geometryBatchLimit)) { $0.distance < $1.distance }
+            .min(count: pageLimit) { $0.distance < $1.distance }
             .map(\.trail)
         // The lines a small search brought, kept the way a geometry pass keeps
         // its own, so drawing one of these rows or opening it asks nothing

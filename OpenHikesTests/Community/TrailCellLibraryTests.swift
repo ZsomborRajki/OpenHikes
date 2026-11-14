@@ -16,9 +16,23 @@
 //  the repository's *Deliberate test seams* section gives.
 //
 
+import CoreLocation
 import Foundation
 @testable import OpenHikes
 import Testing
+
+private extension TrailCellLibrary {
+    /// An ordinary page of `boxes`, sorted outward from the valley's middle:
+    /// what most cases here ask, since what they are about is whether there
+    /// is an answer at all.
+    func trails(in boxes: [CuratedTrailQuery.BoundingBox]) async throws -> TrailCellAnswer {
+        try await trails(
+            in: boxes,
+            nearest: TrailCellLibraryTests.valleyCenter,
+            limit: CommunityQueryPolicy.resultLimit
+        )
+    }
+}
 
 @Suite("Trail cell library")
 struct TrailCellLibraryTests {
@@ -28,6 +42,7 @@ struct TrailCellLibraryTests {
     /// `CuratedTrailSourceTests+OneRequest` searches — which is within reach
     /// of exactly two squares.
     static let valley = CuratedTrailQuery.BoundingBox(south: 47.598, west: 12.93675, north: 47.642, east: 13.00325)
+    static let valleyCenter = CLLocationCoordinate2D(latitude: 47.62, longitude: 12.97)
     static let westSquare = "trails1_550_771"
     static let eastSquare = "trails1_550_772"
 
@@ -46,7 +61,9 @@ struct TrailCellLibraryTests {
         to: TrailCellFixture.point(47.708, 13.06)
     )
 
-    private static func scratchDirectory() -> URL {
+    /// Internal rather than private, like the two helpers below, because
+    /// `TrailCellLibraryTests+Pages` drives the same library.
+    static func scratchDirectory() -> URL {
         FileManager.default.temporaryDirectory
             .appendingPathComponent("trail-cells-\(UUID().uuidString)")
     }
@@ -54,7 +71,7 @@ struct TrailCellLibraryTests {
     /// - Parameter directory: Where the library keeps squares. `nil`, the
     ///   default, is a library that keeps none, so every search is a request
     ///   and a case can count them.
-    private static func makeLibrary(
+    static func makeLibrary(
         _ database: StubTrailCellDatabase,
         directory: URL? = nil,
         clock: TestClock = TestClock()
@@ -64,7 +81,7 @@ struct TrailCellLibraryTests {
 
     /// The relations an answer offers, or a recorded issue when it is not an
     /// answer at all.
-    private static func offered(
+    static func offered(
         _ answer: TrailCellAnswer,
         sourceLocation: SourceLocation = #_sourceLocation
     ) -> [Int64] {
@@ -385,7 +402,7 @@ struct TrailCellLibraryTests {
     @Test("an area that would need more squares than a search may read is no answer, and no request")
     func tooManySquares() async throws {
         let database = StubTrailCellDatabase()
-        let polar = CuratedTrailQuery.BoundingBox(south: 88.9, west: 0, north: 89, east: 1)
+        let polar = CuratedTrailQuery.BoundingBox(south: 88.9, west: 0, north: 89, east: 90)
 
         let answer = try await Self.makeLibrary(database).trails(in: [polar])
 

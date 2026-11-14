@@ -99,8 +99,9 @@ nonisolated enum TrailPointQuery {
     /// rectangle inside the same 20 × 20 km — see
     /// ``TrailPointFinder/regionDidSettle(_:)``.
     ///
-    /// Deliberately a quarter of ``CuratedTrailQuery/maximumRadiusMeters``.
-    /// That one lists relations, whose count grows slowly with area; this
+    /// Deliberately a quarter of
+    /// ``CuratedTrailQuery/maximumOverpassRadiusMeters``, which is how wide a
+    /// trail search Overpass is asked about. That one lists relations, whose count grows slowly with area; this
     /// lists individual features, whose count grows with it directly — 40 km
     /// is roughly fifteen times the area, some 8,000 elements and well over a
     /// megabyte, to fill a map the hiker cannot read anyway.

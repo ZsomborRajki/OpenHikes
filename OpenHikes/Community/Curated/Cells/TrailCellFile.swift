@@ -12,7 +12,7 @@
 //  Which ways are the route, how they join into one walkable line and whether
 //  enough of them join to draw is ``CuratedTrailDecoding``'s to decide, and it
 //  decides it here on exactly what it decides it on for an Overpass answer:
-//  see ``CuratedTrailDecoding/trails(in:touching:)``. So a route reads the
+//  see ``CuratedTrailDecoding/drawn(_:limit:)``. So a route reads the
 //  same whichever of the two brought it, and a change to those rules is a
 //  change to the app rather than a rebuild of the world. What the tool that
 //  writes these does decide is only what cannot be left for later, because it
