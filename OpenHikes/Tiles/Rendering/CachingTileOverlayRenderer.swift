@@ -281,9 +281,8 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
         let zoom = Self.zoomLevel(for: zoomScale, tileWidth: overlay.tileSize.width)
         // Nothing at all when zoomed out past the overlay's floor — no
         // fallback, no fetch. Every base map leaves `minimumZ` at
-        // MKTileOverlay's zero, so this is the hiking-route layer's, whose
-        // tiles are not worth a request at a scale nobody walks: see
-        // ``TileLayer/minimumZ``.
+        // MKTileOverlay's zero today; the floor is for an overlay whose tiles
+        // are not worth a request at a scale nobody walks.
         guard zoom >= overlay.minimumZ else { return }
 
         let columns = Self.tiles(

@@ -73,7 +73,6 @@ struct PreviewAttributionTests {
         let footer = drawn.including(previews: Self.cards)
         let dataCredits = footer.credits.filter { $0.url == TileAttribution.Credit.openStreetMapData.url }
         #expect(dataCredits == [.openStreetMapData])
-        #expect(footer.credits.contains(.waymarkedTrails) == showsHikingRoutes)
         #expect(footer.credits.filter { $0 == .apple }.count == 1)
     }
 

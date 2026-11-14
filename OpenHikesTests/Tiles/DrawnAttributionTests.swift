@@ -4,7 +4,9 @@
 //
 //  What the credit line says when the hiking-route layer is drawn over a
 //  map: every party either of them is owed, each once, the map's first and
-//  in the map's own spelling.
+//  in the map's own spelling. The layer is OpenStreetMap's routes, so over a
+//  map that already credits OpenStreetMap it adds nothing, and over Apple's
+//  map it is the whole line.
 //
 
 import Foundation
@@ -13,7 +15,7 @@ import Testing
 
 @Suite("Drawn attribution")
 struct DrawnAttributionTests {
-    private let layer = TileLayer.waymarkedHiking.attribution
+    private let layer = TileLayer.hikingRoutes.attribution
 
     @Test("with no layer the map's credits are unchanged", arguments: TileProvider.all)
     func noLayerLeavesTheMapsCredits(provider: TileProvider) {
@@ -33,7 +35,7 @@ struct DrawnAttributionTests {
             base: TileProvider.openStreetMap.attribution,
             layer: layer
         ))
-        #expect(drawn.credits.map(\.title) == ["OpenStreetMap", "Waymarked Trails"])
+        #expect(drawn.credits.map(\.title) == ["OpenStreetMap"])
     }
 
     /// Thunderforest's terms require "Data ©" beside its own "Maps ©", so
@@ -44,7 +46,7 @@ struct DrawnAttributionTests {
             base: TileProvider.thunderforestOutdoors.attribution,
             layer: layer
         ))
-        #expect(drawn.credits == [.thunderforest, .openStreetMapData, .waymarkedTrails])
+        #expect(drawn.credits == [.thunderforest, .openStreetMapData])
     }
 
     /// MapKit's own **Legal** link credits Apple; the line on the map carries
@@ -63,6 +65,6 @@ struct DrawnAttributionTests {
     func noProviderCreditIsDropped(provider: TileProvider) throws {
         let drawn = try #require(TileAttribution.drawn(base: provider.attribution, layer: layer))
         #expect(Array(drawn.credits.prefix(provider.attribution.credits.count)) == provider.attribution.credits)
-        #expect(drawn.credits.contains(.waymarkedTrails))
+        #expect(drawn.credits.contains { $0.url == TileAttribution.Credit.openStreetMap.url })
     }
 }

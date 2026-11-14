@@ -125,7 +125,7 @@ extension MapView {
         var tilesOnTerrain = false
         /// The installed hiking-route layer and the id it was built for — see
         /// `MapCoordinator+TileLayer.swift`.
-        var layerOverlay: TileOverlay?
+        var layerOverlay: HikingRoutesOverlay?
         var tileLayerKey: String?
         /// The style the line is currently drawn in. Seeded and then kept
         /// current by `observeRouteStyle`, so it is what `rendererFor` reads
@@ -954,8 +954,9 @@ extension MapView.Coordinator {
     }
 
     func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
-        if let matchedTileOverlay = overlay as? TileOverlay {
-            return CachingTileOverlayRenderer(overlay: matchedTileOverlay)
+        // The map's tiles and the hiking routes over them.
+        if let renderer = groundRenderer(for: overlay) {
+            return renderer
         }
         // Every hike in the library but the selected one, in one overlay —
         // see `LibraryLinesRenderer.swift`.

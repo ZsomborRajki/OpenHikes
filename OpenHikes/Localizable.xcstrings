@@ -19854,36 +19854,36 @@
         }
       }
     },
-    "Marked trails from Waymarked Trails, drawn over any map when zoomed in." : {
+    "Marked trails from OpenStreetMap, drawn over any map." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Markierte Wege von Waymarked Trails, beim Hineinzoomen über jeder Karte eingezeichnet."
+            "value" : "Markierte Wege aus OpenStreetMap, über jeder Karte eingezeichnet."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Senderos señalizados de Waymarked Trails, dibujados sobre cualquier mapa al acercar la vista."
+            "value" : "Senderos señalizados de OpenStreetMap, dibujados sobre cualquier mapa."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sentiers balisés de Waymarked Trails, affichés par-dessus n’importe quelle carte en zoomant."
+            "value" : "Sentiers balisés d’OpenStreetMap, affichés par-dessus n’importe quelle carte."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sentieri segnalati forniti da Waymarked Trails, disegnati su qualsiasi mappa quando ingrandisci."
+            "value" : "Sentieri segnalati di OpenStreetMap, disegnati su qualsiasi mappa."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Маркированные тропы из Waymarked Trails, нарисованные поверх любой карты при увеличении."
+            "value" : "Маркированные тропы из OpenStreetMap, нарисованные поверх любой карты."
           }
         }
       }
