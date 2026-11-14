@@ -303,11 +303,11 @@ nonisolated final class TrailMakerUITests: XCTestCase {
             snap.frame.minY,
             "the routes switch should sit under Follow Paths"
         )
-        XCTAssertEqual(routes.value as? String, "0", "the layer is off until it is asked for")
+        XCTAssertEqual(routes.value as? String, "1", "the layer is on until it is switched off")
         // At the control's end of the row: a tap in the middle of a
         // `Toggle` row is inert.
         routes.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
-        XCTAssertTrue(waitUntil { (routes.value as? String) == "1" })
+        XCTAssertTrue(waitUntil { (routes.value as? String) == "0" })
 
         popScreen(in: app)
         XCTAssertTrue(waitUntil { element("map-sheet", in: app).exists })
@@ -316,7 +316,7 @@ nonisolated final class TrailMakerUITests: XCTestCase {
         XCTAssertTrue(scrollIntoView(inSettings, in: app))
         XCTAssertEqual(
             inSettings.value as? String,
-            "1",
+            "0",
             "the maker's switch should be the one in Settings"
         )
     }

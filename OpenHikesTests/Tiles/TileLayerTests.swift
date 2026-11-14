@@ -33,9 +33,9 @@ struct TileLayerTests {
         #expect(layer.attribution.credits.allSatisfy { $0.url != nil })
     }
 
-    @Test("the switch is off by default, and the layer follows it")
+    @Test("the switch is on by default, and the layer follows it")
     func layerFollowsTheSwitch() {
-        #expect(!SettingsDefault.showsHikingRoutes)
+        #expect(SettingsDefault.showsHikingRoutes)
         #expect(TileLayer.shown(isOn: false) == nil)
         #expect(TileLayer.shown(isOn: true) == layer)
     }

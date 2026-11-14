@@ -100,12 +100,13 @@ nonisolated final class SettingsUITests: XCTestCase {
         XCTAssertTrue(note.exists, "the note should name \(name)")
     }
 
-    /// The hiking routes are tiles, drawn over Apple's satellite map as over
-    /// any other — so with them on there *is* something to auto-save there,
-    /// and still nothing to bulk-download: the layer's server discourages it,
-    /// and Apple's imagery cannot be kept at all.
+    /// The hiking routes are on from the first launch, and over Apple's
+    /// satellite map they add nothing to save: the app draws them from
+    /// squares the layer keeps for itself, not from tiles, so the hike still
+    /// offers neither control. While the layer was somebody's tiles it
+    /// offered auto-save there, and a switch left behind would arm nothing.
     @MainActor
-    func testHikingRoutesOverSatelliteOfferAutoSaveOnly() {
+    func testHikingRoutesOverSatelliteAddNoTileControls() {
         let app = launchApp(
             arguments: [
                 "--ui-test-expanded-sheet",
@@ -119,16 +120,14 @@ nonisolated final class SettingsUITests: XCTestCase {
         row.tap()
         let routes = toggle("hiking-routes-toggle", in: app)
         XCTAssertTrue(scrollIntoView(routes, in: app))
-        XCTAssertFalse(toggleIsOn(routes), "the layer is off until it is asked for")
-        flip(routes)
-        XCTAssertTrue(waitUntilToggle(routes, is: true))
+        XCTAssertTrue(toggleIsOn(routes), "the layer is on until it is switched off")
         app.buttons["settings-close"].tap()
 
         openHikeDetail(in: app)
         scrollIntoView(element("route-style-row", in: app), in: app)
-        XCTAssertTrue(
+        XCTAssertFalse(
             app.switches["Auto-Save Tiles"].exists,
-            "the routes drawn over the imagery are tiles worth keeping"
+            "the routes are drawn from squares, not tiles, so there is nothing to auto-save"
         )
         XCTAssertFalse(
             element("offline-download-button", in: app).exists,
