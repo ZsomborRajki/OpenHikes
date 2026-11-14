@@ -58,6 +58,17 @@ extension View {
                     .fill(.quaternary)
             }
     }
+
+    /// The same fill under a grouped `List`'s rows, which the list rounds
+    /// into its own cards.
+    ///
+    /// A grouped list's default cards are the system's, and only a sheet draws
+    /// those translucent: on ``MapSidePanel``, which is no presentation, they
+    /// were opaque white, or near black in dark, beside a glass panel whose
+    /// other cards — this file's — let the map through.
+    func placeCardRows() -> some View {
+        listRowBackground(Rectangle().fill(.quaternary))
+    }
 }
 
 /// One action row at the foot of a place card — *Rename*, *Edit Route* —

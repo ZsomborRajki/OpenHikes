@@ -719,11 +719,16 @@ private extension MapSheetHikes {
     /// MapKit's place suggestions.
     func suggestionsList(matchingHikes: [Hike]) -> some View {
         List {
-            hikeSuggestionsSection(matchingHikes: matchingHikes)
-            communitySuggestionsSection()
-            mapSuggestionsSection(matchingHikes: matchingHikes)
-            mapSearchFallback(matchingHikes: matchingHikes)
-            nearbySuggestionsSection
+            Group {
+                hikeSuggestionsSection(matchingHikes: matchingHikes)
+                communitySuggestionsSection()
+                mapSuggestionsSection(matchingHikes: matchingHikes)
+                mapSearchFallback(matchingHikes: matchingHikes)
+                nearbySuggestionsSection
+            }
+            // On the panel's glass as well as the sheet's — see
+            // ``communityList``.
+            .listRowBackground(Color.clear)
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)

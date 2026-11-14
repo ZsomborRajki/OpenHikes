@@ -152,19 +152,27 @@ extension MapSheetHikes {
             // Above everything, the queue included: a walk under way outranks
             // a list — see ``MapSheetHikes/activeHikeSection``.
             activeHikeSection
-            reviewSection
-            if community.nearbyListings.isEmpty {
-                Section {
-                    communityEmptyRow
-                } header: {
-                    communitySectionHeader
-                } footer: {
-                    communitySectionFooter
+            Group {
+                reviewSection
+                if community.nearbyListings.isEmpty {
+                    Section {
+                        communityEmptyRow
+                    } header: {
+                        communitySectionHeader
+                    } footer: {
+                        communitySectionFooter
+                    }
+                } else {
+                    sharedSection
+                    curatedSection
                 }
-            } else {
-                sharedSection
-                curatedSection
             }
+            // Clear rows, as the hiker's own list has them. A sheet draws a
+            // plain list's rows on its glass without asking, but on
+            // ``MapSidePanel``, which is no presentation, every section was a
+            // white card beside the map. Not the walk under way's row, which
+            // brings its own background for its selected tint.
+            .listRowBackground(Color.clear)
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)

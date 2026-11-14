@@ -120,25 +120,32 @@ struct TrailDraftView: View {
 
     var body: some View {
         List {
-            TrailTravelModePicker(maker: maker)
-            routeSection
+            Group {
+                TrailTravelModePicker(maker: maker)
+                routeSection
 
-            // Withheld when this launch has no provider for the chosen mode.
-            // A switch that cannot change the line is worse than no switch.
-            if maker.canSnapToPaths {
-                TrailDraftSnapToggle(maker: maker)
+                // Withheld when this launch has no provider for the chosen
+                // mode. A switch that cannot change the line is worse than no
+                // switch.
+                if maker.canSnapToPaths {
+                    TrailDraftSnapToggle(maker: maker)
+                }
+
+                // The hike detail's *On the Map* card: the hiking routes, and
+                // the line's colours once it has some. Above the places — see
+                // ``TrailDraftMapSection``.
+                TrailDraftMapSection(maker: maker)
+
+                // Withheld with the pill it explains — a launch with no place
+                // source, which is a preview or a UI-test run.
+                if maker.finder.isAvailable {
+                    TrailPlaceFilterSection(maker: maker)
+                }
             }
-
-            // The hike detail's *On the Map* card: the hiking routes, and the
-            // line's colours once it has some. Above the places — see
-            // ``TrailDraftMapSection``.
-            TrailDraftMapSection(maker: maker)
-
-            // Withheld with the pill it explains — a launch with no place
-            // source, which is a preview or a UI-test run.
-            if maker.finder.isAvailable {
-                TrailPlaceFilterSection(maker: maker)
-            }
+            // The cards the hike detail's are, in the sheet and on the panel
+            // alike. A row that brings its own background, as the mode bar and
+            // the place chips do, keeps it.
+            .placeCardRows()
         }
         // The mode bar sits right under the title, as it does in Apple Maps'
         // directions card. A grouped list's own top margin left a blank row's
@@ -147,7 +154,7 @@ struct TrailDraftView: View {
         .contentMargins(.top, Self.topMargin, for: .scrollContent)
         // The sheet's glass shows through, as it does behind the sheet's other
         // lists. A grouped list otherwise paints its own opaque grey over it;
-        // the rows keep their own cards either way.
+        // the rows' cards are ``placeCardRows()``.
         .scrollContentBackground(.hidden)
         // The container the rows' `reorderable()` hands a drop to on iOS 27.
         // See `TrailStopReordering.swift`.

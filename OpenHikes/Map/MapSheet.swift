@@ -171,6 +171,12 @@ struct MapSheet: View {
                     // screens away redraw every row on the map screen.
                     .equatable()
             }
+            // The root on the panel's glass too. A sheet's root is clear
+            // without asking, but ``MapSidePanel`` is no presentation, so
+            // there the stack drew its opaque system background under the
+            // search field and both lists: a white slab beside the map, and
+            // glass again on every screen pushed over it.
+            .containerBackground(.clear, for: .navigation)
             .navigationDestination(for: SheetRoute.self, destination: pushedScreen)
             #if os(iOS)
             // The sheet's own screen has no navigation bar: the search field
@@ -479,21 +485,6 @@ struct MapSheet: View {
         )
     }
 
-    /// A destination on the sheet's own glass.
-    ///
-    /// A pushed screen otherwise gets the stack's opaque system background,
-    /// which the root never has: the sheet was clear glass on the search screen
-    /// and a white slab on every screen pushed over it, plainest at the compact
-    /// detent where only the bar shows. Cleared here, once, so every
-    /// destination shares the root's glass rather than each opting in.
-    private func pushedScreen(for route: SheetRoute) -> some View {
-        navigationDestinationView(for: route)
-            .containerBackground(.clear, for: .navigation)
-            // How deep the screen is, which decides whose claim on the map's
-            // pins and camera pill is in force — see ``ScreenClaims``.
-            .environment(\.sheetDepth, (presentation.path.firstIndex(of: route) ?? 0) + 1)
-    }
-
     @ViewBuilder
     private func navigationDestinationView(for route: SheetRoute) -> some View {
         switch route {
@@ -550,6 +541,26 @@ struct MapSheet: View {
             )
         case let .walk(walk): walkDestination(walk, route: route)
         }
+    }
+}
+
+// MARK: - The pushed screens
+
+private extension MapSheet {
+    /// A destination on the sheet's own glass.
+    ///
+    /// A pushed screen otherwise gets the stack's opaque system background,
+    /// which the sheet's root never has: the sheet was clear glass on the
+    /// search screen and a white slab on every screen pushed over it, plainest
+    /// at the compact detent where only the bar shows. Cleared here, once, so
+    /// every destination shares the root's glass rather than each opting in.
+    /// The panel's root needs the same, and has it in ``body``.
+    func pushedScreen(for route: SheetRoute) -> some View {
+        navigationDestinationView(for: route)
+            .containerBackground(.clear, for: .navigation)
+            // How deep the screen is, which decides whose claim on the map's
+            // pins and camera pill is in force — see ``ScreenClaims``.
+            .environment(\.sheetDepth, (presentation.path.firstIndex(of: route) ?? 0) + 1)
     }
 }
 
