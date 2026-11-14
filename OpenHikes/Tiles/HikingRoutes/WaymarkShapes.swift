@@ -14,10 +14,6 @@
 
 import CoreGraphics
 import Foundation
-import SwiftUI
-#if canImport(UIKit)
-import UIKit
-#endif
 
 nonisolated enum WaymarkShapes {
     /// The square in the middle of `frame`, as tall as it.
@@ -75,24 +71,18 @@ nonisolated enum WaymarkShapes {
         }
     }
 
-    private static let black = cgColor(Color(hex: "#000000") ?? .black)
-    private static let blue = cgColor(Color(hex: "#1F4FD8") ?? .blue)
-    private static let brown = cgColor(Color(hex: "#8B5A2B") ?? .brown)
-    private static let gray = cgColor(Color(hex: "#8E8E93") ?? .gray)
-    private static let green = cgColor(Color(hex: "#1E9E3A") ?? .green)
-    private static let orange = cgColor(Color(hex: "#F28C00") ?? .orange)
-    private static let purple = cgColor(Color(hex: "#7D31C6") ?? .purple)
-    private static let red = cgColor(Color(hex: "#E0260D") ?? .red)
-    private static let white = cgColor(Color(hex: "#FFFFFF") ?? .white)
-    private static let yellow = cgColor(Color(hex: "#FFD200") ?? .yellow)
-
-    private static func cgColor(_ color: Color) -> CGColor {
-        #if canImport(UIKit)
-        UIColor(color).cgColor
-        #else
-        NSColor(color).cgColor
-        #endif
-    }
+    // The paints as Waymarked Trails mixes them, so a red-white-red here is
+    // the red-white-red a hiker has seen on its map.
+    private static let black = HikingRoutesStyle.color("#000000")
+    private static let blue = HikingRoutesStyle.color("#0833FF")
+    private static let brown = HikingRoutesStyle.color("#96521C")
+    private static let gray = HikingRoutesStyle.color("#808080")
+    private static let green = HikingRoutesStyle.color("#57AD00")
+    private static let orange = HikingRoutesStyle.color("#FFA305")
+    private static let purple = HikingRoutesStyle.color("#B30FBD")
+    private static let red = HikingRoutesStyle.color("#E0260D")
+    private static let white = HikingRoutesStyle.color("#FFFFFF")
+    private static let yellow = HikingRoutesStyle.color("#E8E029")
 }
 
 // MARK: - The shapes

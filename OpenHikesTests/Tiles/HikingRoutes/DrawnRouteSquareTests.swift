@@ -3,12 +3,15 @@
 //  OpenHikesTests
 //
 //  A square as the layer strokes it: OpenStreetMap's short ways joined end to
-//  end within a network, whichever way each was drawn, and never across one.
+//  end where the same routes run, whichever way each was drawn, each line
+//  carrying its routes' networks and signs, and none kept that its zooms
+//  never draw.
 //
 
 import Foundation
 import MapKit
 @testable import OpenHikes
+import RealModule
 import Testing
 
 @Suite("Drawn route square")
@@ -17,10 +20,17 @@ struct DrawnRouteSquareTests {
         RouteSquareFile.Point(latitude: latitude, longitude: longitude)
     }
 
-    private static func square(_ lines: [(RouteNetwork, [RouteSquareFile.Point])]) -> RouteSquareFile {
+    /// A file of three routes — international, regional and local — and
+    /// `lines`, each along the routes it names.
+    private static func square(_ lines: [([Int], [RouteSquareFile.Point])]) -> RouteSquareFile {
         RouteSquareFile(
-            routes: [RouteSquareFile.Route(id: 1, tags: [:])],
-            lines: lines.map { RouteSquareFile.Line(network: $0.0, routes: [0], points: $0.1) },
+            routes: [
+                RouteSquareFile.Route(id: 1, tags: ["network": "iwn", "ref": "E4"]),
+                RouteSquareFile.Route(id: 2, tags: ["network": "rwn", "osmc:symbol": "red:white:red_bar:412:black"]),
+                RouteSquareFile.Route(id: 3, tags: ["network": "lwn", "osmc:symbol": "red:white:red_bar"]),
+                RouteSquareFile.Route(id: 4, tags: ["osmc:symbol": "red:white:red_bar"]),
+            ],
+            lines: lines.map { RouteSquareFile.Line(network: .international, routes: $0.0, points: $0.1) },
             coordinateScale: 1_000_000
         )
     }
@@ -50,58 +60,47 @@ struct DrawnRouteSquareTests {
         #expect(DrawnRouteSquare.joined([[Self.a, Self.b], [Self.c, Self.d]]).count == 2)
     }
 
-    @Test("ways of two networks are never joined, even where they meet")
-    func networksStayApart() {
-        let drawn = DrawnRouteSquare(Self.square([(.national, [Self.a, Self.b]), (.local, [Self.b, Self.c])]))
+    @Test("ways are joined where the same routes run, and a line ends where a route leaves")
+    func joinedAlongTheSameRoutes() {
+        let drawn = DrawnRouteSquare(Self.square([
+            ([0, 1], [Self.a, Self.b]),
+            ([0, 1], [Self.b, Self.c]),
+            ([0], [Self.c, Self.d]),
+        ]))
         #expect(drawn.lines.count == 2)
-        #expect(Set(drawn.lines.map(\.network)) == [.national, .local])
-        #expect(drawn.pointCount == 4)
+        #expect(drawn.lines.map(\.points.count).sorted() == [2, 3])
+        #expect(drawn.pointCount == 5)
     }
 
-    @Test("a line shared with a route of another network carries that network for its dots")
-    func secondaryNetwork() {
-        let file = RouteSquareFile(
-            routes: [
-                RouteSquareFile.Route(id: 1, tags: ["network": "iwn"]),
-                RouteSquareFile.Route(id: 2, tags: ["network": "rwn"]),
-                RouteSquareFile.Route(id: 3, tags: ["network": "lwn"]),
-            ],
-            lines: [
-                RouteSquareFile.Line(network: .international, routes: [0, 1, 2], points: [Self.a, Self.b]),
-                RouteSquareFile.Line(network: .international, routes: [0], points: [Self.b, Self.c]),
-            ],
-            coordinateScale: 1_000_000
-        )
-        let drawn = DrawnRouteSquare(file)
-        #expect(drawn.lines.count == 2, "a line with dots is not joined to one without")
-        #expect(Set(drawn.lines.map(\.secondary)) == [.regional, nil])
+    @Test("a line carries every network among its routes, and an untagged route counts as a local one")
+    func networks() {
+        let drawn = DrawnRouteSquare(Self.square([([0, 1, 2], [Self.a, Self.b]), ([3], [Self.c, Self.d])]))
+        #expect(Set(drawn.lines.map(\.networks)) == [[.international, .regional, .local], .local])
     }
 
-    @Test("a route's signs stand every so far along it, from half that far in, and not when zoomed out")
-    func signSpacing() throws {
-        // Due north for about 11 km: 0.1° of latitude.
-        let file = RouteSquareFile(
-            routes: [RouteSquareFile.Route(id: 7, tags: ["osmc:symbol": "red:white:red_bar", "network": "lwn"])],
-            lines: [
-                RouteSquareFile.Line(
-                    network: .local,
-                    routes: [0],
-                    points: [Self.point(47_500_000, 12_900_000), Self.point(47_600_000, 12_900_000)]
-                ),
-            ],
-            coordinateScale: 1_000_000
-        )
-        let detail = DrawnRouteSquare(file, level: .detail)
-        let spacing = try #require(DrawnRouteSquare.signSpacingMeters(at: .detail))
-        #expect(detail.waymarks.count == Int((11_054 - spacing / 2) / spacing) + 1)
-        #expect(detail.waymarks.allSatisfy { $0.routeID == 7 && $0.network == .local })
-        #expect(DrawnRouteSquare(file, level: .region).waymarks.isEmpty)
-        #expect(DrawnRouteSquare(file, level: .overview).waymarks.isEmpty)
+    @Test("a line carries each different sign among its routes once, the most important network's first")
+    func signs() throws {
+        let drawn = DrawnRouteSquare(Self.square([([0, 1, 2, 3], [Self.a, Self.b])]))
+        let line = try #require(drawn.lines.first)
+        let signs = line.signs.map { drawn.signs[$0] }
+        #expect(signs.map(\.network) == [.international, .regional, .local])
+        #expect(signs.first?.content == .reference("E4"))
+        #expect(drawn.signs.count == 3, "the local and the untagged route show the same waymark")
+        #expect(drawn.signSizes.count == drawn.signs.count)
     }
 
-    @Test("a joined line's box holds every point of it")
-    func boundsHoldTheLine() throws {
-        let drawn = DrawnRouteSquare(Self.square([(.regional, [Self.a, Self.b]), (.regional, [Self.b, Self.c])]))
+    @Test("a square keeps no line its zooms never stroke: local routes from a country's view")
+    func undrawnLinesAreLeftOut() {
+        let file = Self.square([([2], [Self.a, Self.b]), ([1], [Self.c, Self.d])])
+        let region = RouteSquareGrid.square(at: .region, latitude: 47.5, longitude: 12.9)
+        let area = RouteSquareGrid.square(at: .area, latitude: 47.5, longitude: 12.9)
+        #expect(DrawnRouteSquare(file, square: region).lines.map(\.networks) == [.regional])
+        #expect(DrawnRouteSquare(file, square: area).lines.count == 2)
+    }
+
+    @Test("a joined line's box holds every point of it, and its length is the sum of its steps")
+    func boundsAndLength() throws {
+        let drawn = DrawnRouteSquare(Self.square([([1], [Self.a, Self.b]), ([1], [Self.b, Self.c])]))
         let line = try #require(drawn.lines.first)
         #expect(drawn.lines.count == 1)
         #expect(line.points.count == 3)
@@ -109,5 +108,7 @@ struct DrawnRouteSquareTests {
             #expect(point.x >= line.bounds.minX && point.x <= line.bounds.maxX)
             #expect(point.y >= line.bounds.minY && point.y <= line.bounds.maxY)
         }
+        let steps = zip(line.points, line.points.dropFirst()).map { hypot($1.x - $0.x, $1.y - $0.y) }
+        #expect(line.length.isApproximatelyEqual(to: steps.reduce(0, +), absoluteTolerance: 1e-6))
     }
 }

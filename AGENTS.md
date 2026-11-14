@@ -1613,18 +1613,28 @@ beside them. `RouteSquareGrid` argues the design and has the measurements.
   for the missing ones, which redraw the tile when they arrive; a line never
   stops at the edge of a square that has not come. Nothing on MapKit's
   drawing threads waits on the disk or the network.
-- **Ways are joined end to end when a square loads** (`DrawnRouteSquare`),
-  and a tile strokes only vertices a pixel apart. A square holds
-  OpenStreetMap's ways, which split a route at every junction, and stroked
-  one way at a time a zoomed-out tile stalled every overlay on the map,
-  the base map's tiles included.
-- **Drawn the way Waymarked Trails taught hikers to read routes:** a width
-  for each network, no casing, and dots of a second network's colour where
-  two share a way. From zoom 12 each route's waymark is drawn along it from
-  its `osmc:symbol` (`OSMCSymbol`, `WaymarkSign`), or its number where a
-  regional route or above has no waymark; a sign the same as one close by is
-  left out. Shapes the wiki lists that `OSMCSymbol` does not draw are dropped,
-  not guessed.
+- **Ways are joined end to end when a square loads, where the same routes
+  run** (`DrawnRouteSquare`), and a tile strokes only vertices a pixel apart.
+  A square holds OpenStreetMap's ways, which split a route at every junction,
+  and stroked one way at a time a zoomed-out tile stalled every overlay on
+  the map, the base map's tiles included.
+- **The look is Waymarked Trails', figure for figure** (`HikingRoutesStyle`):
+  which networks are stroked at each zoom, how wide and in which colour, and
+  which routes get a sign. Routes that share a way are stacked, the most
+  important network widest and underneath. No local route is drawn before
+  zoom 12 or gets a sign before zoom 13. Every size is in tile pixels — a
+  256-pixel tile's, `1 / zoomScale` map points — because MapKit hands a
+  phone tiles one to two zooms deeper than its screen, and a size in points
+  stood half as large again as the layer this one replaced.
+- **A sign is a route's waymark, or its number** (`WaymarkSign`): its
+  `osmc:symbol` (`OSMCSymbol`), else its `ref`, else what its name shortens
+  to, framed in its network's colour. Shapes the wiki lists that `OSMCSymbol`
+  does not draw are dropped, not guessed.
+- **Signs are placed once for a square and a zoom, never tile by tile**
+  (`DrawnRouteSquare+Waymarks.swift`): along each line every so many pixels,
+  moved along it to stand clear of another sign, and left out within the
+  repeat distance of one the same. Every tile draws from that list, so a
+  sign across two tiles is whole in both.
 - **No suite reaches the squares.** `HikingRouteSquares.forThisLaunch()` is
   `nil` under `isRunningTests`, UI tests included, and the map then installs
   no layer whatever the switch says; suites hand the map a stub's squares.

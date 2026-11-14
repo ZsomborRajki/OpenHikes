@@ -15,16 +15,20 @@
 //
 //  **Only what this file can draw is kept.** A shape it does not know — the
 //  wiki lists hikers, shells, wolf hooks and more — is dropped rather than
-//  guessed at, and a tag that names no background at all is no symbol. The
-//  text and its colour are told from a third foreground by their places: two
-//  fields at the end, of which the last is a colour and the first is not a
-//  foreground.
+//  guessed at, and a tag that names no background at all is no symbol.
+//
+//  **The fields are told apart by their places**, as Waymarked Trails reads
+//  them: with one field after the foreground it is a second foreground when
+//  it names one and a text in black when it does not; with two they are the
+//  text and its colour; with three, a second foreground and then the text and
+//  its colour. A text longer than four characters is left out, not cut: a
+//  sign is sixteen pixels wide, and half a number is a different number.
 //
 
 import Foundation
 
 /// One `osmc:symbol`, as far as the layer draws it.
-nonisolated struct OSMCSymbol: Equatable, Sendable {
+nonisolated struct OSMCSymbol: Hashable, Sendable {
     /// The colours the wiki lists, `grey` read as `gray`.
     nonisolated enum Paint: String, Sendable {
         case black = "black"
@@ -86,19 +90,18 @@ nonisolated struct OSMCSymbol: Equatable, Sendable {
         case xShape = "x"
     }
 
-    nonisolated struct Background: Equatable, Sendable {
+    nonisolated struct Background: Hashable, Sendable {
         var paint: Paint
         var ground: Ground
     }
 
-    nonisolated struct Foreground: Equatable, Sendable {
+    nonisolated struct Foreground: Hashable, Sendable {
         var paint: Paint
         var shape: Shape
     }
 
-    /// The longest text a sign carries; past it the text is cut, as a sign
-    /// on a tree is.
-    static let maximumTextLength = 6
+    /// The longest text a sign carries; a longer one is left out.
+    static let maximumTextLength = 4
 
     var background: Background
     var foregrounds: [Foreground]
@@ -112,16 +115,37 @@ nonisolated struct OSMCSymbol: Equatable, Sendable {
             .map { $0.trimmingCharacters(in: .whitespaces)[...] }
         guard fields.count >= 2, let ground = Self.background(fields[1]) else { return nil }
         background = ground
-        var rest = Array(fields.dropFirst(2))
+        foregrounds = []
         text = nil
         textPaint = .black
-        if rest.count >= 2, let paint = Paint(tag: rest[rest.count - 1]), Self.foreground(rest[rest.count - 2]) == nil {
-            let words = rest[rest.count - 2]
-            text = words.isEmpty ? nil : String(words.prefix(Self.maximumTextLength))
-            textPaint = paint
-            rest.removeLast(2)
+        // What follows the first foreground: see this file's header.
+        let rest = Array(fields.dropFirst(Self.firstExtraField))
+        var marks = Array(fields.dropFirst(2).prefix(1))
+        switch rest.count {
+        case 0:
+            break
+        case 1:
+            if Self.foreground(rest[0]) == nil {
+                setText(rest[0], paint: nil)
+            } else {
+                marks.append(rest[0])
+            }
+        case 2:
+            setText(rest[0], paint: rest[1])
+        default:
+            marks.append(rest[0])
+            setText(rest[1], paint: rest[2])
         }
-        foregrounds = rest.compactMap(Self.foreground)
+        foregrounds = marks.compactMap(Self.foreground)
+    }
+
+    /// The first field past the way colour, the background and a foreground.
+    private static let firstExtraField = 3
+
+    private mutating func setText(_ words: Substring, paint: Substring?) {
+        guard !words.isEmpty, words.count <= Self.maximumTextLength else { return }
+        text = String(words)
+        textPaint = paint.flatMap(Paint.init(tag:)) ?? .black
     }
 
     private static func background(_ field: Substring) -> Background? {
