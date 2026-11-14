@@ -193,7 +193,7 @@ nonisolated private extension HikingRouteSquares {
         guard let bytes = store?.bytes(ofCellNamed: RouteSquareGrid.recordName(for: square)),
               let file = try? RouteSquareFile(decoding: bytes)
         else { return nil }
-        return DrawnRouteSquare(file)
+        return DrawnRouteSquare(file, level: square.level)
     }
 
     /// One request for `squares`, read into memory and kept on disk.
@@ -233,7 +233,7 @@ nonisolated private extension HikingRouteSquares {
                     failed.append(square)
                     continue
                 }
-                read.append((square, DrawnRouteSquare(file)))
+                read.append((square, DrawnRouteSquare(file, level: square.level)))
                 kept.append((name: name, bytes: bytes))
             case .absent:
                 // No record in a set that is the whole world: no routes here,

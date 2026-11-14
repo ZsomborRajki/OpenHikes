@@ -58,6 +58,47 @@ struct DrawnRouteSquareTests {
         #expect(drawn.pointCount == 4)
     }
 
+    @Test("a line shared with a route of another network carries that network for its dots")
+    func secondaryNetwork() {
+        let file = RouteSquareFile(
+            routes: [
+                RouteSquareFile.Route(id: 1, tags: ["network": "iwn"]),
+                RouteSquareFile.Route(id: 2, tags: ["network": "rwn"]),
+                RouteSquareFile.Route(id: 3, tags: ["network": "lwn"]),
+            ],
+            lines: [
+                RouteSquareFile.Line(network: .international, routes: [0, 1, 2], points: [Self.a, Self.b]),
+                RouteSquareFile.Line(network: .international, routes: [0], points: [Self.b, Self.c]),
+            ],
+            coordinateScale: 1_000_000
+        )
+        let drawn = DrawnRouteSquare(file)
+        #expect(drawn.lines.count == 2, "a line with dots is not joined to one without")
+        #expect(Set(drawn.lines.map(\.secondary)) == [.regional, nil])
+    }
+
+    @Test("a route's signs stand every so far along it, from half that far in, and not when zoomed out")
+    func signSpacing() throws {
+        // Due north for about 11 km: 0.1° of latitude.
+        let file = RouteSquareFile(
+            routes: [RouteSquareFile.Route(id: 7, tags: ["osmc:symbol": "red:white:red_bar", "network": "lwn"])],
+            lines: [
+                RouteSquareFile.Line(
+                    network: .local,
+                    routes: [0],
+                    points: [Self.point(47_500_000, 12_900_000), Self.point(47_600_000, 12_900_000)]
+                ),
+            ],
+            coordinateScale: 1_000_000
+        )
+        let detail = DrawnRouteSquare(file, level: .detail)
+        let spacing = try #require(DrawnRouteSquare.signSpacingMeters(at: .detail))
+        #expect(detail.waymarks.count == Int((11_054 - spacing / 2) / spacing) + 1)
+        #expect(detail.waymarks.allSatisfy { $0.routeID == 7 && $0.network == .local })
+        #expect(DrawnRouteSquare(file, level: .region).waymarks.isEmpty)
+        #expect(DrawnRouteSquare(file, level: .overview).waymarks.isEmpty)
+    }
+
     @Test("a joined line's box holds every point of it")
     func boundsHoldTheLine() throws {
         let drawn = DrawnRouteSquare(Self.square([(.regional, [Self.a, Self.b]), (.regional, [Self.b, Self.c])]))

@@ -24,42 +24,100 @@ import MapKit
 nonisolated struct DrawnRouteSquare: Sendable {
     nonisolated struct Line: Sendable {
         let network: RouteNetwork
+        /// The next most important network among the routes on this line,
+        /// drawn as dots along it: a regional route sharing an international
+        /// one's path.
+        let secondary: RouteNetwork?
         let points: [MKMapPoint]
         let bounds: MKMapRect
     }
 
+    /// Where one route's sign stands.
+    nonisolated struct Waymark: Sendable {
+        let point: MKMapPoint
+        let sign: WaymarkSign
+        /// The sign's size in points, measured once for the route rather
+        /// than at every draw.
+        let size: CGSize
+        /// The route's network, which decides whose sign stays where two
+        /// would overlap.
+        let network: RouteNetwork
+        let routeID: Int64
+    }
+
     let lines: [Line]
+    /// Every route's signs, the most important network's first.
+    let waymarks: [Waymark]
     /// Every line's points, counted: what a square costs to hold.
     let pointCount: Int
 
-    static let empty = Self(lines: [], pointCount: 0)
+    static let empty = Self(lines: [], waymarks: [], pointCount: 0)
 
-    private init(lines: [Line], pointCount: Int) {
+    private init(lines: [Line], waymarks: [Waymark], pointCount: Int) {
         self.lines = lines
+        self.waymarks = waymarks
         self.pointCount = pointCount
     }
 
-    /// The file's lines, joined end to end within each network, in map
-    /// points.
-    init(_ file: RouteSquareFile) {
+    /// The file's lines, joined end to end where they share their networks,
+    /// in map points, and — at the levels a sign is drawn at — where each
+    /// route's signs stand.
+    init(_ file: RouteSquareFile, level: RouteSquareLevel = .detail) {
         let scale = Double(file.coordinateScale)
+        let routeNetworks = file.routes.map { RouteNetwork(tag: $0.tags["network"]) }
         var count = 0
         var drawn: [Line] = []
-        let byNetwork = Dictionary(grouping: file.lines.filter { $0.points.count > 1 }, by: \.network)
-        for network in RouteNetwork.leastImportantFirst {
-            for run in Self.joined(byNetwork[network]?.map(\.points) ?? []) {
-                let points = run.map { point in
-                    MKMapPoint(CLLocationCoordinate2D(
-                        latitude: Double(point.latitude) / scale,
-                        longitude: Double(point.longitude) / scale
-                    ))
-                }
+        let grouped = Dictionary(grouping: file.lines.filter { $0.points.count > 1 }) { line in
+            Pairing(network: line.network, secondary: Self.secondary(of: line, among: routeNetworks))
+        }
+        for pairing in grouped.keys.sorted() {
+            for run in Self.joined(grouped[pairing]?.map(\.points) ?? []) {
+                let points = run.map { Self.mapPoint($0, scale: scale) }
                 count += points.count
-                drawn.append(Line(network: network, points: points, bounds: Self.bounds(of: points)))
+                drawn.append(Line(
+                    network: pairing.network,
+                    secondary: pairing.secondary,
+                    points: points,
+                    bounds: Self.bounds(of: points)
+                ))
             }
         }
         lines = drawn
+        waymarks = Self.waymarks(in: file, spacingMeters: Self.signSpacingMeters(at: level))
         pointCount = count
+    }
+
+    /// The most important network among a line's routes other than its own.
+    private static func secondary(of line: RouteSquareFile.Line, among networks: [RouteNetwork]) -> RouteNetwork? {
+        line.routes
+            .compactMap { networks.indices.contains($0) ? networks[$0] : nil }
+            .filter { $0 != line.network }
+            .max()
+    }
+
+    /// The two networks a line is drawn in, ordered the way lines are
+    /// stroked: least important first, and a line without dots before one
+    /// with them.
+    private struct Pairing: Hashable, Comparable {
+        let network: RouteNetwork
+        let secondary: RouteNetwork?
+
+        static func < (lhs: Self, rhs: Self) -> Bool {
+            if lhs.network != rhs.network { return lhs.network < rhs.network }
+            return rank(lhs.secondary) < rank(rhs.secondary)
+        }
+
+        /// No second network first, then the least important.
+        private static func rank(_ network: RouteNetwork?) -> Int {
+            network.map { Int($0.rawValue) + 1 } ?? 0
+        }
+    }
+
+    static func mapPoint(_ point: RouteSquareFile.Point, scale: Double) -> MKMapPoint {
+        MKMapPoint(CLLocationCoordinate2D(
+            latitude: Double(point.latitude) / scale,
+            longitude: Double(point.longitude) / scale
+        ))
     }
 
     /// `runs` joined wherever one ends where another starts or ends, each run
