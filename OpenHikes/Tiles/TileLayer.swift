@@ -29,8 +29,6 @@ nonisolated struct TileLayer: Identifiable, Hashable, Sendable {
     /// Names the layer to the map, which rebuilds its overlay only when this
     /// changes. Never the same as any provider's.
     let id: String
-    /// The shallowest zoom the layer is drawn at.
-    let minimumZ: Int
     /// Required credits, added to the selected map's own whenever the layer
     /// is drawn — see ``TileAttribution/drawn(base:layer:)``.
     let attribution: TileAttribution
@@ -43,7 +41,6 @@ nonisolated extension TileLayer {
     /// planet file, and the drawing is the app's.
     static let hikingRoutes = TileLayer(
         id: "hiking_routes",
-        minimumZ: RouteSquareLevel.minimumZoom,
         attribution: TileAttribution([.openStreetMap])
     )
 

@@ -2,8 +2,9 @@
 //  TileLayerTests.swift
 //  OpenHikesTests
 //
-//  The hiking-route layer as a catalog entry: which zooms it is drawn at, who
-//  it credits, and the thing it must never be — a choice of base map.
+//  The hiking-route layer as a catalog entry: who it credits, and the thing
+//  it must never be — a choice of base map. The zooms it is drawn at are its
+//  squares' — see `RouteSquareGridTests`.
 //
 
 import Foundation
@@ -13,13 +14,6 @@ import Testing
 @Suite("Tile layers")
 struct TileLayerTests {
     private let layer = TileLayer.hikingRoutes
-
-    @Test("the layer is drawn from the shallowest zoom its squares are filed for")
-    func zoomFloor() {
-        #expect(layer.minimumZ == RouteSquareLevel.minimumZoom)
-        #expect(RouteSquareLevel.level(forZoom: layer.minimumZ) != nil)
-        #expect(RouteSquareLevel.level(forZoom: layer.minimumZ - 1) == nil)
-    }
 
     /// A layer is not a map. In `TileProvider.all` it would be offered as a
     /// card, behind the paywall rules, and as a source a bulk download could

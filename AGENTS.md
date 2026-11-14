@@ -1612,7 +1612,14 @@ beside them. `RouteSquareGrid` argues the design and has the measurements.
 - **A tile waits for every square it overlaps.** `canDraw` answers no and asks
   for the missing ones, which redraw the tile when they arrive; a line never
   stops at the edge of a square that has not come. Nothing on MapKit's
-  drawing threads waits on the disk or the network.
+  drawing threads waits on the disk or the network, and the redraw is asked
+  for on the main thread.
+- **The disk never waits for the network, and the network is asked as a
+  tile's would be** (`HikingRouteSquares`). A square kept on disk is drawn
+  while the request for its neighbour is still out. A request is refused
+  where `TileNetworkPolicy` refuses a tile somebody is looking at, so Low
+  Data Mode stops the layer too. A square that was refused or failed is left
+  for a minute, and then the renderer is told to draw again.
 - **Ways are joined end to end when a square loads, where the same routes
   run** (`DrawnRouteSquare`), and a tile strokes only vertices a pixel apart.
   A square holds OpenStreetMap's ways, which split a route at every junction,
