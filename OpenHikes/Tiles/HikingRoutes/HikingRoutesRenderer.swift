@@ -18,6 +18,10 @@
 //  which redraw the tile when they arrive. Drawing with some of them would
 //  stop a line at the edge of a square that has not come yet.
 //
+//  **A redraw is asked for on the main thread.** The squares arrive on a
+//  thread of their own, and `setNeedsDisplay` belongs to the main one, as
+//  ``CachingTileOverlayRenderer`` found for its tiles.
+//
 
 import CoreLocation
 import MapKit
@@ -47,21 +51,54 @@ nonisolated final class HikingRoutesRenderer: MKOverlayRenderer, @unchecked Send
     init(overlay: HikingRoutesOverlay) {
         squares = overlay.squares
         super.init(overlay: overlay)
+        // A square that failed is left alone for a while, and nothing asks
+        // for it again on a map nobody moves: the squares say when to.
+        squares.wakes(self) { [weak self] in
+            Task { @MainActor [weak self] in self?.setNeedsDisplay() }
+        }
+    }
+
+    deinit {
+        squares.forget(ObjectIdentifier(self))
     }
 
     override func canDraw(_ mapRect: MKMapRect, zoomScale: MKZoomScale) -> Bool {
         let needed = HikingRoutesDrawing.neededSquares(for: mapRect, zoomScale: zoomScale)
         guard !needed.isEmpty else { return false }
         if squares.holdsAll(needed) { return true }
-        squares.request(needed) { [weak self] in
-            self?.setNeedsDisplay(mapRect, zoomScale: zoomScale)
-        }
+        request(needed, for: mapRect, zoomScale: zoomScale)
         return false
     }
 
     override func draw(_ mapRect: MKMapRect, zoomScale: MKZoomScale, in context: CGContext) {
-        let drawn = squares.drawable(HikingRoutesDrawing.neededSquares(for: mapRect, zoomScale: zoomScale))
-        guard !drawn.isEmpty else { return }
+        let needed = HikingRoutesDrawing.neededSquares(for: mapRect, zoomScale: zoomScale)
+        guard !needed.isEmpty else { return }
+        let drawn = squares.drawable(needed)
+        guard !drawn.isEmpty else {
+            // A square was let go between `canDraw` saying yes and this.
+            // MapKit would keep the empty tile as drawn, so it is asked for
+            // again — or simply drawn again, when the square is back already.
+            if !request(needed, for: mapRect, zoomScale: zoomScale) {
+                redraw(mapRect, zoomScale: zoomScale)
+            }
+            return
+        }
         HikingRoutesDrawing.draw(drawn, in: mapRect, zoomScale: zoomScale, context: context) { self.point(for: $0) }
+    }
+
+    /// Asks for `needed`, and draws the tile again when any of it arrives.
+    @discardableResult private func request(
+        _ needed: [RouteSquare],
+        for mapRect: MKMapRect,
+        zoomScale: MKZoomScale
+    ) -> Bool {
+        let tile = HikingRouteSquares.Tile(x: mapRect.minX, y: mapRect.minY, zoomScale: Double(zoomScale))
+        return squares.request(needed, for: tile) { [weak self] in
+            self?.redraw(mapRect, zoomScale: zoomScale)
+        }
+    }
+
+    private func redraw(_ mapRect: MKMapRect, zoomScale: MKZoomScale) {
+        Task { @MainActor [weak self] in self?.setNeedsDisplay(mapRect, zoomScale: zoomScale) }
     }
 }

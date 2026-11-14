@@ -7,9 +7,9 @@
 //  the public database.
 //
 //  It is compiled by that script, from the files in this directory and from
-//  three of the app's own — `TrailCellGrid.swift`, `TrailCellFile.swift` and
-//  `CommunitySchema.swift` — so what the tool writes and what the app reads
-//  are one source. The script is the front door: it finds osmium, the
+//  six of the app's own — each set's grid and file, the byte format they
+//  share and `CommunitySchema.swift`; the script's `tool_sources` names them
+//  — so what the tool writes and what the app reads are one source. The script is the front door: it finds osmium, the
 //  container's name and the key; this takes them as options and decides
 //  nothing about the machine it is on.
 //
