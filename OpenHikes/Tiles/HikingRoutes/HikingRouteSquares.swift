@@ -26,57 +26,6 @@ import MapKit
 import os
 import Synchronization
 
-/// One square, ready to stroke.
-nonisolated struct DrawnRouteSquare: Sendable {
-    nonisolated struct Line: Sendable {
-        let network: RouteNetwork
-        let points: [MKMapPoint]
-        let bounds: MKMapRect
-    }
-
-    let lines: [Line]
-    /// Every line's points, counted: what a square costs to hold.
-    let pointCount: Int
-
-    static let empty = Self(lines: [], pointCount: 0)
-
-    private init(lines: [Line], pointCount: Int) {
-        self.lines = lines
-        self.pointCount = pointCount
-    }
-
-    /// The file's lines in map points, each with its bounding rectangle, so
-    /// a tile no line crosses costs a pass over rectangles and nothing else.
-    init(_ file: RouteSquareFile) {
-        let scale = Double(file.coordinateScale)
-        var count = 0
-        lines = file.lines.compactMap { line in
-            guard line.points.count > 1 else { return nil }
-            let points = line.points.map { point in
-                MKMapPoint(CLLocationCoordinate2D(
-                    latitude: Double(point.latitude) / scale,
-                    longitude: Double(point.longitude) / scale
-                ))
-            }
-            count += points.count
-            var minX = Double.infinity, minY = Double.infinity
-            var maxX = -Double.infinity, maxY = -Double.infinity
-            for point in points {
-                minX = min(minX, point.x)
-                maxX = max(maxX, point.x)
-                minY = min(minY, point.y)
-                maxY = max(maxY, point.y)
-            }
-            return Line(
-                network: line.network,
-                points: points,
-                bounds: MKMapRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
-            )
-        }
-        pointCount = count
-    }
-}
-
 /// Where the layer's squares come from.
 nonisolated final class HikingRouteSquares: Sendable {
     private static let logger = Logger(subsystem: "OpenHikes", category: "HikingRoutes")
@@ -250,6 +199,7 @@ nonisolated private extension HikingRouteSquares {
     /// One request for `squares`, read into memory and kept on disk.
     func fetch(_ squares: [RouteSquare]) async {
         let names = squares.map(RouteSquareGrid.recordName(for:))
+        let started = ContinuousClock.now
         let answer: TrailCellFetch
         do {
             answer = try await database.fetch(cellsNamed: names)
@@ -268,6 +218,7 @@ nonisolated private extension HikingRouteSquares {
             state.withLock { $0.unavailableUntil = clock().addingTimeInterval(Self.unavailableRetry) }
             return
         case .unread:
+            Self.logger.error("The hiking route squares' manifest could not be read, so the squares wait a minute.")
             fail(squares)
             return
         }
@@ -296,6 +247,14 @@ nonisolated private extension HikingRouteSquares {
         store?.save(kept)
         hold(read)
         fail(failed)
+        // Counts only: which squares were read is where the hiker is looking.
+        Self.logger.notice(
+            """
+            Fetched \(read.count, privacy: .public) hiking route squares, \
+            \(kept.reduce(0) { $0 + $1.bytes.count }, privacy: .public) bytes, \
+            \(failed.count, privacy: .public) failed, in \(started.duration(to: .now), privacy: .public).
+            """
+        )
     }
 
     func hold(_ squares: [(RouteSquare, DrawnRouteSquare)]) {

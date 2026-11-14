@@ -73,6 +73,7 @@ nonisolated final class HikingRoutesRenderer: MKOverlayRenderer, @unchecked Send
         let width = Self.lineWidth(at: level) * contentScaleFactor / zoomScale
         let casing = width + Self.casingWidth * contentScaleFactor / zoomScale
         let near = mapRect.insetBy(dx: -Double(casing), dy: -Double(casing))
+        let step = Double(Self.minimumStep / zoomScale)
 
         var paths: [RouteNetwork: CGMutablePath] = [:]
         for square in drawn {
@@ -82,10 +83,7 @@ nonisolated final class HikingRoutesRenderer: MKOverlayRenderer, @unchecked Send
                     paths[line.network] = made
                     return made
                 }()
-                path.move(to: point(for: line.points[0]))
-                for vertex in line.points.dropFirst() {
-                    path.addLine(to: point(for: vertex))
-                }
+                add(line.points, to: path, skippingCloserThan: step)
             }
         }
         guard !paths.isEmpty else { return }
@@ -115,6 +113,25 @@ nonisolated final class HikingRoutesRenderer: MKOverlayRenderer, @unchecked Send
     }
 }
 
+nonisolated private extension HikingRoutesRenderer {
+    /// `points` as a subpath, leaving out each vertex closer than `step` to
+    /// the last one kept — on either axis, which is cheaper than a distance
+    /// and as good at telling a pixel's worth — and always keeping the last,
+    /// so joined lines still meet. Zoomed out, most of a line's vertices are
+    /// inside one pixel, and stroking them is the cost of a tile.
+    func add(_ points: [MKMapPoint], to path: CGMutablePath, skippingCloserThan step: Double) {
+        guard let first = points.first, let last = points.last else { return }
+        path.move(to: point(for: first))
+        var kept = first
+        for vertex in points.dropFirst().dropLast()
+        where abs(vertex.x - kept.x) >= step || abs(vertex.y - kept.y) >= step {
+            path.addLine(to: point(for: vertex))
+            kept = vertex
+        }
+        path.addLine(to: point(for: last))
+    }
+}
+
 // MARK: - Which squares, and how they are drawn
 
 nonisolated extension HikingRoutesRenderer {
@@ -126,6 +143,9 @@ nonisolated extension HikingRoutesRenderer {
     private static let casingAlpha: CGFloat = 0.7
     /// How much wider the casing is than its line, in points.
     private static let casingWidth: CGFloat = 1.5
+    /// How far apart two vertices have to be, in points, for both to be
+    /// stroked.
+    private static let minimumStep: CGFloat = 0.5
 
     private static let overviewLineWidth: CGFloat = 1.5
     private static let regionLineWidth: CGFloat = 2

@@ -1343,7 +1343,10 @@ in its source header. Do not weaken one without a measurement.
   export `md5 e2fd4f7c500b3911fae3d86a9b9d3f9c`. Both have the two
   trail-square record types, `CuratedTrailCell` and `CuratedTrailManifest`,
   neither with an index, and both hold the world's squares under a manifest
-  that says so (*The trail squares*). Both have a column for every attribute in
+  that says so (*The trail squares*). Development also holds the
+  hiking-routes layer's squares, built from planet-261109 and marked as the
+  whole world under `routes1_manifest`; production holds none, so a build
+  signed for production draws no layer (*The hiking-routes layer*). Both have a column for every attribute in
   `MirroredCloudKitSchema.recordTypes`. The only live columns the contract
   does not name are SwiftData's own `CD_entityName`, the
   to-one reference columns that the contract lists as relationships, and the
@@ -1610,6 +1613,11 @@ beside them. `RouteSquareGrid` argues the design and has the measurements.
   for the missing ones, which redraw the tile when they arrive; a line never
   stops at the edge of a square that has not come. Nothing on MapKit's
   drawing threads waits on the disk or the network.
+- **Ways are joined end to end when a square loads** (`DrawnRouteSquare`),
+  and a tile strokes only vertices a pixel apart. A square holds
+  OpenStreetMap's ways, which split a route at every junction, and stroked
+  one way at a time a zoomed-out tile stalled every overlay on the map,
+  the base map's tiles included.
 - **No suite reaches the squares.** `HikingRouteSquares.forThisLaunch()` is
   `nil` under `isRunningTests`, UI tests included, and the map then installs
   no layer whatever the switch says; suites hand the map a stub's squares.
