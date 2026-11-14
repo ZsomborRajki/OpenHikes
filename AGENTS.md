@@ -1618,6 +1618,13 @@ beside them. `RouteSquareGrid` argues the design and has the measurements.
   OpenStreetMap's ways, which split a route at every junction, and stroked
   one way at a time a zoomed-out tile stalled every overlay on the map,
   the base map's tiles included.
+- **Drawn the way Waymarked Trails taught hikers to read routes:** a width
+  for each network, no casing, and dots of a second network's colour where
+  two share a way. From zoom 12 each route's waymark is drawn along it from
+  its `osmc:symbol` (`OSMCSymbol`, `WaymarkSign`), or its number where a
+  regional route or above has no waymark; a sign the same as one close by is
+  left out. Shapes the wiki lists that `OSMCSymbol` does not draw are dropped,
+  not guessed.
 - **No suite reaches the squares.** `HikingRouteSquares.forThisLaunch()` is
   `nil` under `isRunningTests`, UI tests included, and the map then installs
   no layer whatever the switch says; suites hand the map a stub's squares.
