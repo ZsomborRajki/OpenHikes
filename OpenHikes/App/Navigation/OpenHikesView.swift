@@ -495,11 +495,6 @@ struct OpenHikesView: View {
             .onChange(of: tileProviderID) { _, _ in
                 appModel.tileProviderDidChange(selectedHike: selectedHike)
             }
-            // And the layer is a tile source of its own: over Apple's map it
-            // is the only thing auto-save has to save.
-            .onChange(of: showsHikingRoutes) { _, _ in
-                appModel.tileProviderDidChange(selectedHike: selectedHike)
-            }
             .onChange(of: currentRecordingHikeID) { _, id in
                 importSelectionGate.invalidate()
                 guard let id,

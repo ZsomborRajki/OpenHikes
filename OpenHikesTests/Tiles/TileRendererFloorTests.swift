@@ -2,9 +2,9 @@
 //  TileRendererFloorTests.swift
 //  OpenHikesTests
 //
-//  An overlay's `minimumZ` is a floor the renderer has to keep itself: the
-//  hiking-route layer sets one so it is not drawn — or fetched — at scales
-//  nobody walks, and a base map, which leaves it at zero, must not notice.
+//  An overlay's `minimumZ` is a floor the renderer has to keep itself, so an
+//  overlay that sets one is not drawn — or fetched — at scales nobody walks,
+//  and a base map, which leaves it at zero, must not notice.
 //
 //  Checked by drawing: the tile is already in the memory tier at both zooms,
 //  so the only thing that can stop the shallower one reaching the canvas is
