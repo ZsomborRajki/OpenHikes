@@ -223,9 +223,15 @@ final class SheetPresentation {
     /// nothing. Measured on an iPad Pro 13-inch simulator.
     ///
     /// Raised by the first write of ``layout``, which is the reader's first
-    /// report, and follows it from then on. Written back by SwiftUI when the
-    /// sheet is taken down from under it, and put back by that modifier.
+    /// report. After that the modifier makes it follow the layout, one update
+    /// behind — see there for the cards that order keeps. Written back by
+    /// SwiftUI when the sheet is taken down from under it, and put back by the
+    /// same modifier.
     var isSheetPresented = false
+
+    /// Whether ``layout`` has been written yet, which is what makes a write
+    /// the reader's first report.
+    @ObservationIgnored private var hasReportedLayout = false
 
     /// Which shape the contents are drawn in. Written by ``SheetLayoutReader``,
     /// which is where the window's shape is read — a change to it is a
@@ -243,7 +249,10 @@ final class SheetPresentation {
             // reports, so its first report changes nothing the root view reads
             // and still puts the sheet up: the only reader woken is the
             // modifier that presents it.
-            isSheetPresented = newValue == .bottomSheet
+            if !hasReportedLayout {
+                hasReportedLayout = true
+                isSheetPresented = newValue == .bottomSheet
+            }
             guard newValue != storedLayout else { return }
             withMutation(keyPath: \.layout) { storedLayout = newValue }
             recomputeDetentFlags()

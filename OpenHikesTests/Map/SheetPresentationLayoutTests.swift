@@ -80,15 +80,18 @@ struct SheetPresentationLayoutTests {
         #expect(uprightPhone.isSheetPresented, "a report of the shape it started in still raises it")
     }
 
-    @Test("a rotation takes the sheet down and puts it back with the panel")
-    func sheetFollowsTheLayout() {
+    /// A rotation is the presenter's to follow, one update after the panel is
+    /// drawn, and never this setter's: taken down in the same write as the
+    /// layout, a card open over the contents went with the sheet. See
+    /// `MapSheetPresenter.swift`; `MapSheetPresenterTests` turns a window.
+    @Test("only the first report decides; a rotation is left to the presenter")
+    func onlyTheFirstReportDecides() {
         let presentation = SheetPresentation()
         presentation.layout = .bottomSheet
 
         presentation.layout = .sidePanel
-        #expect(presentation.isSheetPresented == false)
-        presentation.layout = .bottomSheet
-        #expect(presentation.isSheetPresented)
+
+        #expect(presentation.isSheetPresented, "the setter must not take the sheet down with the layout")
     }
 
     @Test("the sheet's own flags are unchanged by a layout it never leaves")

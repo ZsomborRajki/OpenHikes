@@ -131,6 +131,23 @@ struct MapSheetPresenterTests {
         #expect(presentation.isSheetPresented)
     }
 
+    /// A rotation, or an iPhone Duo opening: the window widens past the
+    /// panel's width, so the contents go to the panel and the sheet comes down.
+    @Test("widening a phone-wide window takes the sheet down")
+    func wideningTakesTheSheetDown() async throws {
+        let presentation = SheetPresentation()
+        let counter = BodyCounter()
+        let host = try PresenterHost(size: PresenterHost.phoneWindow, presentation: presentation, counter: counter)
+        defer { host.dismiss() }
+        await host.settle(until: "the sheet came up") { host.presentsSheet }
+
+        host.resize(to: PresenterHost.panelWindow)
+
+        await host.settle(until: "the sheet went down with the panel's layout") {
+            presentation.layout == .sidePanel && !presentation.isSheetPresented && !host.presentsSheet
+        }
+    }
+
     /// The GPX document picker tears the sheet down as it closes, and SwiftUI
     /// writes that back through the binding. Where the window wants a sheet,
     /// the sheet is the whole of the app's surface, so it goes straight back up.
