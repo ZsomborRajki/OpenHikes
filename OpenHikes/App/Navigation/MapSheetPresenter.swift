@@ -52,5 +52,20 @@ private struct MapSheetPresenter<SheetContent: View>: ViewModifier {
                     presentation.isSheetPresented = true
                 }
             }
+            // A rotation, or an iPhone Duo opening, takes the sheet down and
+            // puts it back up: in a wide window the contents are in
+            // ``MapSidePanel`` and there is no sheet.
+            //
+            // In a change handler, so one update *after* the one that drew the
+            // new shape, and never in the same write as the layout. A card
+            // open over the contents — *Places Around Trail*'s, *Places
+            // Nearby*'s, a walk's share card — moves to the panel's copy of
+            // them only if that copy is built before the sheet goes. Taken
+            // down in the same update, the card went with the sheet, and four
+            // of `OrientationUITests`' and `MapModesUITests`' rotations failed
+            // on it.
+            .onChange(of: presentation.layout) { _, layout in
+                presentation.isSheetPresented = layout == .bottomSheet
+            }
     }
 }
