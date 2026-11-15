@@ -228,7 +228,9 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
     /// ``maximumMemoryRegions``.
     private var memory: OrderedDictionary<TrailGraphRegion, CachedGraph> = [:]
     private var inFlight: [TrailGraphRegion: InFlightFetch] = [:]
-    private var retryAfter: Date?
+    /// Overpass's `429`, which may be shared with the launch's other
+    /// provider — see ``OverpassRetryDeadline``.
+    private let retryDeadline: OverpassRetryDeadline
     /// Every caller currently suspended in ``joinFetch(for:startingIfNeeded:)``,
     /// keyed by the same ID as its claim in ``InFlightFetch/waiters``. Kept
     /// apart from `inFlight` because a fetch leaves `inFlight` the moment it
@@ -245,6 +247,7 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
         endpoint: URL = OverpassRequest.defaultEndpoint,
         clock: @escaping @Sendable () -> Date = { Date() },
         squares: TrailGraphSquareLibrary? = nil,
+        retryDeadline: OverpassRetryDeadline = OverpassRetryDeadline(),
         transport: Transport? = nil
     ) {
         self.directory = directory
@@ -253,6 +256,7 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
         self.endpoint = endpoint
         self.clock = clock
         self.squares = squares
+        self.retryDeadline = retryDeadline
         self.transport = transport ?? OverpassRequest.liveTransport()
     }
 
@@ -299,10 +303,8 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
             guard startingIfNeeded else { return nil }
             // Overpass's refusal is Overpass's: a provider with squares may
             // still have them answer, and asks before it would ask Overpass.
-            if squares == nil, let retryAfter, retryAfter > clock() {
-                throw TrailGraphProviderError.rateLimited(
-                    retryAfter: retryAfter.timeIntervalSince(clock())
-                )
+            if squares == nil, let delay = retryDeadline.delay(at: clock()) {
+                throw TrailGraphProviderError.rateLimited(retryAfter: delay)
             }
             fetch = beginFetch(for: key)
         }
@@ -427,8 +429,7 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
         clearFetch(key, fetchID: fetchID)
         guard let providerError = error as? TrailGraphProviderError,
               case .rateLimited(let delay) = providerError else { return }
-        let candidate = clock().addingTimeInterval(delay)
-        retryAfter = max(retryAfter ?? .distantPast, candidate)
+        retryDeadline.refuse(for: delay, at: clock())
     }
 
     private func clearFetch(_ key: TrailGraphRegion, fetchID: UUID) {
@@ -587,6 +588,7 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
                 at: directory,
                 withIntermediateDirectories: true
             )
+            Self.excludeFromBackup(directory)
             try JSONEncoder().encode(cached).write(
                 to: fileURL(for: key),
                 options: .atomic
@@ -617,8 +619,7 @@ extension OverpassTrailGraphProvider {
     /// not — checked before Overpass is asked by a provider with squares,
     /// which ``joinFetch(for:startingIfNeeded:)`` lets past it.
     func overpassRefusalDelay() -> TimeInterval? {
-        guard let retryAfter, retryAfter > clock() else { return nil }
-        return retryAfter.timeIntervalSince(clock())
+        retryDeadline.delay(at: clock())
     }
 
     /// A region's graph: from the squares when they answer, with when their
@@ -631,6 +632,7 @@ extension OverpassTrailGraphProvider {
         endpoint: URL,
         transport: Transport
     ) async throws -> (graph: TrailGraph, fetchedAt: Date?) {
+        try Task.checkCancellation()
         if case let .graph(prebuilt, fetchedAt) = await squares?.graph(for: key) ?? .uncovered {
             return (prebuilt, fetchedAt)
         }
@@ -645,6 +647,17 @@ extension OverpassTrailGraphProvider {
 }
 
 private extension OverpassTrailGraphProvider {
+    /// Leaves `directory` out of the device's backups: a region is
+    /// downloaded again whenever it is missing, so it spends none of the
+    /// hiker's iCloud backup, as the tile cache spends none. Asked on every
+    /// write, because a write is what makes the directory, and best effort.
+    nonisolated static func excludeFromBackup(_ directory: URL) {
+        var excluded = directory
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? excluded.setResourceValues(values)
+    }
+
     nonisolated static func regionKey(
         for coordinate: CLLocationCoordinate2D
     ) -> TrailGraphRegion {

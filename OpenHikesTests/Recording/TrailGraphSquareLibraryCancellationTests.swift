@@ -157,14 +157,35 @@ struct TrailGraphSquareLibraryCancellationTests {
         try await waitFor("the one to leave") { await library.waiterCount(forSquareNamed: name) == 1 }
         await database.gate.release()
         let answer = await kept.value
-        _ = await abandoned.value
+        let abandonedAnswer = await abandoned.value
 
         guard case .graph = answer else {
             Issue.record("the region still waiting was not answered: \(answer)")
             return
         }
+        guard case .unreachable = abandonedAnswer else {
+            Issue.record("the region that gave up was read out of the square for nobody: \(abandonedAnswer)")
+            return
+        }
         #expect(await database.gate.cancelledCount == 0)
         #expect(await database.gate.completedCount == 1)
+    }
+
+    @Test("a region given up on before it asks starts no request", .timeLimit(.minutes(1)))
+    func aRegionGivenUpOnAsksNothing() async {
+        let database = Self.makeDatabase()
+        let library = TrailGraphSquareLibrary(database: database, directory: nil)
+
+        let answer = await Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return await library.graph(for: Self.region)
+        }.value
+
+        guard case .unreachable = answer else {
+            Issue.record("a region given up on was answered: \(answer)")
+            return
+        }
+        #expect(await database.gate.startedCount == 0)
     }
 
     /// What the reference count is for: Stop cancels a recording's

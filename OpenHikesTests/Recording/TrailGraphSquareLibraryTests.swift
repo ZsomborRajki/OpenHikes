@@ -263,6 +263,30 @@ struct TrailGraphSquareLibraryTests {
         }
     }
 
+    /// A square too large for the signal would otherwise be downloaded again
+    /// from the start for every region it holds.
+    @Test("a square that could not be read is left for a minute")
+    func aFailedSquareIsLeftAlone() async {
+        let clock = TestClock()
+        let database = StubTrailCellDatabase(cells: [Self.squareName: .failed])
+        let library = TrailGraphSquareLibrary(database: database, directory: nil, clock: clock.read)
+        let regionBeside = TrailGraphRegion(zoom: 12, x: 2193, y: 1430)
+
+        let failed = await library.graph(for: Self.region)
+        database.hold(Self.found([Self.localPath]), as: Self.squareName)
+        let meanwhile = await library.graph(for: regionBeside)
+        let askedMeanwhile = database.requests.count
+        clock.advance(by: TrailGraphSquareLibrary.failedRetry + 1)
+        let after = await library.graph(for: regionBeside)
+
+        guard case .unreachable = failed, case .unreachable = meanwhile, case .graph = after else {
+            Issue.record("expected a failure, a minute left alone, then an answer: \(failed), \(meanwhile), \(after)")
+            return
+        }
+        #expect(askedMeanwhile == 1)
+        #expect(database.requests.count == 2)
+    }
+
     @Test("a region that is not one of the graph's asks nothing")
     func aRegionOfAnotherZoom() async {
         let database = StubTrailCellDatabase()

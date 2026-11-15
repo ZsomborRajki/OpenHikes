@@ -1822,9 +1822,11 @@ measurements.
 - **A square answers for the sixteen regions inside it**, on the trail
   squares' terms (*An answer is complete or it is not given*), through
   `TrailGraphSquareLibrary`; no answer sends the region to Overpass exactly
-  as before. A square is fetched once however many regions wait on it, and
-  its request is cancelled when the last of them stops waiting, as a
-  region's is. Overpass's `429` stops only a region that would ask Overpass.
+  as before. A square is fetched once however many regions wait on it, its
+  request is cancelled when the last of them stops waiting, as a region's
+  is, and one that could not be read is left for a minute. Overpass's `429`
+  stops only a region that would ask Overpass, and stops it in both
+  providers, which share its deadline (`OverpassRetryDeadline`).
 - **A region is as old as its square.** It is kept as fetched when the
   square was, so it expires with the square, not thirty days after it was
   read out of it.
