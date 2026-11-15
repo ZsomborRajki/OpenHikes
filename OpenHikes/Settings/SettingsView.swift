@@ -3,8 +3,10 @@
 //  OpenHikes
 //
 //  The profile/settings sheet reached from the button next to the search bar.
-//  Hosts the iCloud sync section, the map tile-provider selector, the photo
-//  and background-tracking switches, and the offline tile storage readout.
+//  Hosts the iCloud sync section, the photo and background-tracking switches,
+//  and the offline tile storage readout. Which map is drawn, and whether the
+//  hiking routes are drawn over it, is chosen on the map — see
+//  ``MapModesView``.
 //
 //  There is deliberately no data-use section. The app is meant to be walked
 //  with rather than configured, so the choice between cellular and Wi-Fi is
@@ -161,20 +163,17 @@ struct SettingsView: View {
 
     // MARK: Map tiles
 
-    /// What is drawn over the map, and the subscription that unlocks the
-    /// paid ones. Which map is drawn is chosen on the map itself — see
-    /// ``MapModesView`` — where a tap changes something the hiker can see.
-    private var mapProviderSection: some View {
-        Section {
-            // OpenStreetMap's hiking routes over whichever map is chosen
-            // — a layer rather than a sixth card, because it is drawn
-            // with any of them.
-            HikingRoutesToggle()
-            if entitlement.isEntitled {
+    /// The subscription that unlocks the paid maps, for a subscriber alone.
+    /// The maps themselves, and the hiking routes over them, are chosen on
+    /// the map — see ``MapModesView`` — where a tap changes something the
+    /// hiker can see.
+    @ViewBuilder private var mapProviderSection: some View {
+        if entitlement.isEntitled {
+            Section {
                 manageSubscriptionRow
+            } header: {
+                Text("Map Tiles")
             }
-        } header: {
-            Text("Map Tiles")
         }
     }
 

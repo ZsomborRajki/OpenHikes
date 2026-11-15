@@ -19,8 +19,9 @@ nonisolated final class MapModesUITests: XCTestCase {
     /// find the choice held.
     ///
     /// The map's own credit line is the witness that the map changed. It
-    /// credits the raster map's providers, and MapKit draws its own for
-    /// Apple's, so it is there over OpenStreetMap and gone over Apple Maps.
+    /// credits the raster map's providers and the routes over it, and MapKit
+    /// draws its own for Apple's, so with the routes off it is there over
+    /// OpenStreetMap and gone over Apple Maps.
     @MainActor
     func testChoosingAMapChangesTheMapBehindTheSheet() {
         let app = launchApp()
@@ -38,6 +39,11 @@ nonisolated final class MapModesUITests: XCTestCase {
         openMapModes(in: app)
         let openStreetMap = element("provider-row-osm", in: app)
         XCTAssertTrue(openStreetMap.isSelected, "the map being drawn should be the selected card")
+        // The routes are OpenStreetMap's and credited over any map, Apple's
+        // included, so the line tells the two maps apart only without them.
+        let clean = element("hiking-routes-off", in: app)
+        clean.tap()
+        XCTAssertTrue(waitUntilSelected(clean), "the clean map should become the chosen picture")
         XCTAssertTrue(
             element("tile-attribution", in: app).exists,
             "the cards' credits should stand along the foot of the sheet"
@@ -67,6 +73,11 @@ nonisolated final class MapModesUITests: XCTestCase {
 
     /// A sheet stays a sheet with the phone on its side, where one left to
     /// adapt would cover the map it is choosing.
+    ///
+    /// The map may show above the sheet or beside it. A phone on its side
+    /// draws the sheet as a card in the middle of the bottom edge, and a
+    /// card taller than the window — a build without API keys adds two
+    /// notes — reaches its top, with the map still on either side of it.
     @MainActor
     func testMapModesLeavesTheMapInViewInLandscape() {
         let app = launchApp()
@@ -78,11 +89,14 @@ nonisolated final class MapModesUITests: XCTestCase {
 
         openMapModes(in: app)
         let window = windowFrame(of: app)
-        let title = element("map-modes-title", in: app)
-        XCTAssertGreaterThan(
-            title.frame.minY,
-            window.minY + window.height * Self.leastMapShare,
-            "the sheet should stand at the foot of the window, with the map above it"
+        let title = element("map-modes-title", in: app).frame
+        let close = element("map-modes-close", in: app).frame
+        let mapAbove = title.minY > window.minY + window.height * Self.leastMapShare
+        let mapBeside = close.maxX < window.maxX - window.width * Self.leastMapShare
+        XCTAssertTrue(
+            mapAbove || mapBeside,
+            "the sheet should leave the map in view above it or beside it — title \(title), ✕ \(close), "
+                + "window \(window)"
         )
         closeMapModes(in: app)
     }
@@ -92,7 +106,10 @@ nonisolated final class MapModesUITests: XCTestCase {
     ///
     /// Skipped in a build without `OpenHikes/Secrets.plist`, where the card
     /// is disabled outright and the paywall's route is the About row — see
-    /// `SettingsUITests.testProIsReachableWithoutTheMapTilesSection`.
+    /// `SettingsUITests.testProIsReachableWithoutTheMapTilesSection`. The
+    /// card's value says so before anything is tapped, and is read first:
+    /// whether a disabled card reports itself disabled is the audit's
+    /// business, not this skip's.
     @MainActor
     func testALockedMapOpensThePaywall() throws {
         let app = launchApp()
@@ -100,10 +117,12 @@ nonisolated final class MapModesUITests: XCTestCase {
 
         let paid = element("provider-row-stadia_outdoors", in: app)
         XCTAssertTrue(paid.waitForExistence(timeout: UITestTimeout.navigation))
-        try XCTSkipUnless(
-            waitUntil { paid.isEnabled },
+        try XCTSkipIf(
+            (paid.value as? String) == "Needs API key",
             "a paid map's card is disabled in a build with no API key for it"
         )
+        // A paid card is also disabled while StoreKit has not answered.
+        XCTAssertTrue(waitUntil { paid.isEnabled }, "the paid card should be enabled once StoreKit has answered")
         paid.tap()
 
         XCTAssertTrue(
@@ -112,8 +131,52 @@ nonisolated final class MapModesUITests: XCTestCase {
         )
     }
 
-    /// How far down the window the sheet's title has to stand, as a share of
-    /// its height, for the map to count as in view above it.
+    /// *Hiking Routes*, as two pictures under the cards: the routes are
+    /// chosen at first, and the clean map takes them off the map behind the
+    /// sheet, held once the sheet is closed and opened again.
+    ///
+    /// Over Apple's map the map's credit line is the witness: the layer is
+    /// OpenStreetMap's routes, so the line names OpenStreetMap there only
+    /// while the layer is drawn. A launch for UI tests fetches no squares, so
+    /// the routes themselves never show.
+    @MainActor
+    func testHikingRoutesPicturesSwitchTheLayer() {
+        let app = launchApp()
+        openMapModes(in: app)
+        let apple = element("provider-row-apple_maps", in: app)
+        XCTAssertTrue(apple.waitForExistence(timeout: UITestTimeout.navigation))
+        apple.tap()
+        XCTAssertTrue(waitUntilSelected(apple), "the tapped map should become the selected one")
+
+        let clean = element("hiking-routes-off", in: app)
+        let routes = element("hiking-routes-on", in: app)
+        XCTAssertTrue(routes.isSelected, "the routes are on until they are switched off")
+        XCTAssertFalse(clean.isSelected)
+        XCTAssertEqual(routes.label, "Hiking Routes")
+        let credit = element("map-attribution", in: app)
+        XCTAssertTrue(
+            waitUntil { credit.exists && credit.label.contains("OpenStreetMap") },
+            "over Apple's map, the line should credit the routes drawn over it"
+        )
+
+        clean.tap()
+        XCTAssertTrue(waitUntilSelected(clean), "the tapped picture should become the chosen one")
+        XCTAssertFalse(routes.isSelected)
+        XCTAssertTrue(
+            waitUntil { !credit.exists },
+            "with the routes off, Apple's map owes its line nothing"
+        )
+
+        closeMapModes(in: app)
+        openMapModes(in: app)
+        XCTAssertTrue(
+            element("hiking-routes-off", in: app).isSelected,
+            "the choice should hold once the sheet has been closed and opened again"
+        )
+    }
+
+    /// How much of the window the map has to keep, as a share of its height
+    /// above the sheet or of its width beside it, to count as in view.
     private static let leastMapShare: CGFloat = 0.1
 
     /// A place card leaves the map live behind it, the pill included, and

@@ -283,10 +283,10 @@ nonisolated final class TrailMakerUITests: XCTestCase {
     }
 
     /// *Hiking Routes* in the maker's *On the Map* section, under *Follow
-    /// Paths*, and the same setting as Settings' switch: flipped here, it is
-    /// found on there.
+    /// Paths*, and the same setting as *Map Modes*' pictures: switched off
+    /// here, the clean map is the chosen picture there.
     @MainActor
-    func testHikingRoutesSwitchUnderFollowPathsIsTheSettingsOne() {
+    func testHikingRoutesSwitchUnderFollowPathsIsTheMapModesOne() {
         let app = launchApp(
             arguments: ["--ui-test-trail-graph=\(UITestFixture.trailGraphName)"]
         )
@@ -311,13 +311,11 @@ nonisolated final class TrailMakerUITests: XCTestCase {
 
         popScreen(in: app)
         XCTAssertTrue(waitUntil { element("map-sheet", in: app).exists })
-        element("settings-button", in: app).tap()
-        let inSettings = app.switches.matching(identifier: "hiking-routes-toggle").firstMatch
-        XCTAssertTrue(scrollIntoView(inSettings, in: app))
-        XCTAssertEqual(
-            inSettings.value as? String,
-            "0",
-            "the maker's switch should be the one in Settings"
+        lowerSheetToMapModesButton(in: app)
+        openMapModes(in: app)
+        XCTAssertTrue(
+            element("hiking-routes-off", in: app).isSelected,
+            "the maker's switch should be the setting Map Modes chooses"
         )
     }
 

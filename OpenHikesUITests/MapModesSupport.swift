@@ -3,8 +3,8 @@
 //  OpenHikesUITests
 //
 //  *Map Modes*, opened from the pill on the map, for every suite that needs a
-//  map other than the default: the settings tests, the labels, the audit and
-//  the screenshot set.
+//  map other than the default, or the hiking routes over it: the settings
+//  tests, the trail maker's, the labels, the audit and the screenshot set.
 //
 
 import XCTest
@@ -24,6 +24,34 @@ extension XCTestCase {
         XCTAssertTrue(
             element("map-modes-title", in: app).waitForExistence(timeout: UITestTimeout.navigation),
             "the map-modes button should open Map Modes",
+            file: file,
+            line: line
+        )
+    }
+
+    /// Drags the map sheet down from its large detent, which covers the
+    /// map-modes button, and waits until the button can be tapped: for a
+    /// test that comes back from a screen that raised the sheet.
+    @MainActor
+    func lowerSheetToMapModesButton(
+        in app: XCUIApplication,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let grabber = app.buttons["Sheet Grabber"]
+        XCTAssertTrue(
+            grabber.waitForExistence(timeout: UITestTimeout.navigation),
+            "the sheet offers a grabber",
+            file: file,
+            line: line
+        )
+        let middle = CGVector(dx: Self.mapModesMiddle, dy: Self.mapModesMiddle)
+        let foot = CGVector(dx: Self.mapModesMiddle, dy: Self.mapModesSheetFoot)
+        grabber.coordinate(withNormalizedOffset: middle)
+            .press(forDuration: Self.mapModesDragPress, thenDragTo: app.coordinate(withNormalizedOffset: foot))
+        XCTAssertTrue(
+            waitUntil { element("map-modes-button", in: app).isHittable },
+            "the map-modes button should be in reach once the sheet is down",
             file: file,
             line: line
         )
@@ -76,4 +104,37 @@ extension XCTestCase {
         )
         closeMapModes(in: app, file: file, line: line)
     }
+
+    /// Chooses one of the *Hiking Routes* pictures on *Map Modes* — the
+    /// routes when `shown`, the clean map otherwise — and closes the sheet.
+    @MainActor
+    func chooseHikingRoutes(
+        shown: Bool,
+        in app: XCUIApplication,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        openMapModes(in: app, file: file, line: line)
+        let picture = element(shown ? "hiking-routes-on" : "hiking-routes-off", in: app)
+        XCTAssertTrue(
+            picture.waitForExistence(timeout: UITestTimeout.navigation),
+            "Map Modes should offer the hiking routes under its cards",
+            file: file,
+            line: line
+        )
+        picture.tap()
+        XCTAssertTrue(
+            waitUntilSelected(picture),
+            "the tapped picture should become the chosen one",
+            file: file,
+            line: line
+        )
+        closeMapModes(in: app, file: file, line: line)
+    }
+
+    // The drag that lowers the sheet: a short press on the grabber, then down
+    // to the foot of the window.
+    private static let mapModesMiddle: CGFloat = 0.5
+    private static let mapModesSheetFoot: CGFloat = 0.95
+    private static let mapModesDragPress: TimeInterval = 0.1
 }

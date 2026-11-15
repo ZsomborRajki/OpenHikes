@@ -260,6 +260,8 @@ OpenHikes/Hikes/Walks/Share/WalkShareEditor.swift
 OpenHikes/Hikes/Walks/Share/WalkShareFlow.swift
 OpenHikes/Map/MapSheetHikes.swift
 OpenHikes/Map/MapSidePanel.swift
+OpenHikes/Map/Modes/HikingRoutesPicker.swift
+OpenHikes/Map/Modes/MapModeThumbnailFrame.swift
 OpenHikes/Map/Modes/MapModesSheet.swift
 OpenHikes/Map/Modes/MapStylePicker.swift
 OpenHikes/Map/Search/PlaceSearchRow.swift

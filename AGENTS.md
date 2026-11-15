@@ -871,8 +871,10 @@ a change to recording, the map, the sheet or the render path; the PR template,
 - **The map is chosen on the map.** *Map Modes* (`MapModesView`) is a sheet
   as tall as its cards, opened from the pill the "my location" button stands
   in, so the map above it turns over as a card is tapped. It holds the cards,
-  the selected map's summary and every card's credits. Settings keeps the
-  *Hiking Routes* switch and the subscription row.
+  the selected map's summary, *Hiking Routes* as two fixed pictures (clean,
+  and with the routes) and the credits of every picture on it. The trail
+  maker keeps its *Hiking Routes* switch; Settings keeps only a subscriber's
+  subscription row.
   - A place card leaves the map live behind it, the pill included, and the
     map sheet is already presenting the card. A sheet asked for from under it
     waits, and comes up when the card is closed. So the card presents *Map
@@ -1614,8 +1616,9 @@ by name. `TrailCellGrid` argues the design and has the measurements.
 
 ### The hiking-routes layer
 
-The *Hiking Routes* switch draws every `route=hiking` relation OpenStreetMap
-has over whichever map is selected, coloured by its network. The app draws it
+*Hiking Routes*, chosen on *Map Modes* or switched in the trail maker, draws
+every `route=hiking` relation OpenStreetMap has over whichever map is
+selected, coloured by its network. The app draws it
 (`HikingRoutesRenderer`), from squares built the trail squares' way and kept
 beside them. `RouteSquareGrid` argues the design and has the measurements.
 
@@ -1677,10 +1680,11 @@ beside them. `RouteSquareGrid` argues the design and has the measurements.
   256-pixel tile's, `1 / zoomScale` map points — because MapKit hands a
   phone tiles one to two zooms deeper than its screen, and a size in points
   stood half as large again as the layer this one replaced.
-- **The switch credits Waymarked Trails for the look** (`HikingRoutesToggle`).
-  The figures were read out of the map style that project publishes under
-  the GPL, and the owner settled on a credit in the switch's caption, in
-  every language. It stays for as long as the look does. The line on the
+- **The caption credits Waymarked Trails for the look**, under the maker's
+  switch (`HikingRoutesToggle`) and under *Map Modes*' pictures
+  (`HikingRoutesPicker`), in one string. The figures were read out of the
+  map style that project publishes under the GPL, and the owner settled on
+  a credit in the caption, in every language. It stays for as long as the look does. The line on the
   map still credits OpenStreetMap alone, whose data is drawn.
 - **A sign is a route's waymark, or its number** (`WaymarkSign`): its
   `osmc:symbol` (`OSMCSymbol`), else its `ref`, else what its name shortens

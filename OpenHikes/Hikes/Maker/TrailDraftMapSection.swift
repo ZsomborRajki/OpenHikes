@@ -6,10 +6,10 @@
 //  card of the same name, in the maker's list. It holds what changes how the
 //  map behind the sheet draws, rather than what the trail is.
 //
-//  **Hiking Routes** is the same switch as Settings', bound to the same
-//  synced setting — see ``HikingRoutesToggle``. It is here because the marked
-//  routes are what a hiker drawing a trail is most likely to want to draw
-//  along.
+//  **Hiking Routes** is the setting *Map Modes* offers as two pictures,
+//  bound to the same synced value — see ``HikingRoutesToggle``. It is here
+//  because the marked routes are what a hiker drawing a trail is most likely
+//  to want to draw along.
 //
 //  **Color By** is the same control as Route Style's, bound to the same
 //  setting, so *None* picked on an imported hike is *None* here too, and the
