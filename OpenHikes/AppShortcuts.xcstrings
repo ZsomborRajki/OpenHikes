@@ -49,6 +49,16 @@
             ]
           }
         },
+        "pl" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Ile dzisiaj przeszedłem w ${applicationName}",
+              "Ile dzisiaj przeszłam w ${applicationName}",
+              "Mój dzisiejszy dystans w ${applicationName}"
+            ]
+          }
+        },
         "ru" : {
           "stringSet" : {
             "state" : "translated",
@@ -106,6 +116,16 @@
             "values" : [
               "Quanta strada ho fatto in ${applicationName}",
               "Come va la mia escursione in ${applicationName}"
+            ]
+          }
+        },
+        "pl" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Ile już przeszedłem w ${applicationName}",
+              "Ile już przeszłam w ${applicationName}",
+              "Jak idzie moja wędrówka w ${applicationName}"
             ]
           }
         },
@@ -171,6 +191,16 @@
               "Quanto è durata la mia escursione in ${applicationName}",
               "Quanto era lunga la mia escursione in ${applicationName}",
               "Riassumi un’escursione in ${applicationName}"
+            ]
+          }
+        },
+        "pl" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Jak długo trwała moja wędrówka w ${applicationName}",
+              "Jak długa była moja wędrówka w ${applicationName}",
+              "Podsumuj wędrówkę w ${applicationName}"
             ]
           }
         },
@@ -244,6 +274,17 @@
             ]
           }
         },
+        "pl" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Otwórz wędrówkę w ${applicationName}",
+              "Pokaż wędrówkę w ${applicationName}",
+              "Otwórz ${hike} w ${applicationName}",
+              "Pokaż mi ${hike} w ${applicationName}"
+            ]
+          }
+        },
         "ru" : {
           "stringSet" : {
             "state" : "translated",
@@ -302,6 +343,15 @@
             "values" : [
               "Metti in pausa la mia escursione in ${applicationName}",
               "Metti in pausa la mia registrazione in ${applicationName}"
+            ]
+          }
+        },
+        "pl" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Wstrzymaj moją wędrówkę w ${applicationName}",
+              "Wstrzymaj moje nagrywanie w ${applicationName}"
             ]
           }
         },
@@ -369,6 +419,16 @@
             ]
           }
         },
+        "pl" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Nagrywaj na szlaku w ${applicationName}",
+              "Rozpocznij nagrywanie na szlaku ${hike} w ${applicationName}",
+              "Przejdź ${hike} z ${applicationName}"
+            ]
+          }
+        },
         "ru" : {
           "stringSet" : {
             "state" : "translated",
@@ -426,6 +486,15 @@
             "values" : [
               "Riprendi la mia escursione in ${applicationName}",
               "Riprendi la mia registrazione in ${applicationName}"
+            ]
+          }
+        },
+        "pl" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Wznów moją wędrówkę w ${applicationName}",
+              "Wznów moje nagrywanie w ${applicationName}"
             ]
           }
         },
@@ -490,6 +559,16 @@
               "Avvia un’escursione in ${applicationName}",
               "Inizia a registrare un’escursione in ${applicationName}",
               "Registra un’escursione con ${applicationName}"
+            ]
+          }
+        },
+        "pl" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Rozpocznij wędrówkę w ${applicationName}",
+              "Rozpocznij nagrywanie wędrówki w ${applicationName}",
+              "Nagraj wędrówkę w ${applicationName}"
             ]
           }
         },
@@ -558,6 +637,16 @@
             ]
           }
         },
+        "pl" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Zatrzymaj moją wędrówkę w ${applicationName}",
+              "Zakończ moją wędrówkę w ${applicationName}",
+              "Zapisz moją wędrówkę w ${applicationName}"
+            ]
+          }
+        },
         "ru" : {
           "stringSet" : {
             "state" : "translated",
@@ -615,6 +704,15 @@
             "values" : [
               "Qual è stata la mia ultima escursione in ${applicationName}",
               "Mostra la mia ultima escursione in ${applicationName}"
+            ]
+          }
+        },
+        "pl" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Jaka była moja ostatnia wędrówka w ${applicationName}",
+              "Pokaż moją ostatnią wędrówkę w ${applicationName}"
             ]
           }
         },

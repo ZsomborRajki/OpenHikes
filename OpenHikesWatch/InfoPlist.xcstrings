@@ -61,6 +61,12 @@
             "value" : "OpenHikes legge la tua frequenza cardiaca da Salute mentre registri un’escursione, così l’orologio può mostrarla mentre cammini. Nient’altro viene letto da Salute."
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes odczytuje Twoje tętno z aplikacji Zdrowie, gdy nagrywasz wędrówkę, aby zegarek mógł je pokazywać w trakcie marszu. Nic innego z aplikacji Zdrowie nie jest odczytywane."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -101,6 +107,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes avvia un allenamento di escursionismo in Salute mentre registri sull’orologio: è questo che mantiene attiva la registrazione a schermo spento. L’allenamento in sé non viene salvato – è il tuo iPhone a salvare l’escursione terminata."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gdy nagrywasz na zegarku, OpenHikes rozpoczyna w aplikacji Zdrowie trening typu Wędrówka, bo to on podtrzymuje nagrywanie przy wyłączonym ekranie. Sam trening nie jest zapisywany – ukończoną wędrówkę zapisuje Twój iPhone."
           }
         },
         "ru" : {
@@ -145,6 +157,12 @@
             "value" : "OpenHikes usa la tua posizione per mostrarti dove ti trovi sul sentiero che stai seguendo e per registrare la tua escursione."
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes używa Twojego położenia, aby pokazywać, gdzie jesteś na szlaku, którym idziesz, i nagrywać Twoją wędrówkę."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -185,6 +203,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes usa i sensori di movimento per migliorare l’altitudine registrata durante l’escursione."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes używa czujników ruchu, aby poprawiać wysokość nagraną podczas wędrówki."
           }
         },
         "ru" : {

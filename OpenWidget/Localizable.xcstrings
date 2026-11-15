@@ -43,6 +43,12 @@
             "value" : "%1$@ · mancano %2$@"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · pozostało %2$@"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -75,6 +81,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ percorsi"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Przebyto %@"
           }
         },
         "ru" : {
@@ -111,6 +123,12 @@
             "value" : "%@ di lunghezza"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Długość: %@"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -143,6 +161,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ per cento completato"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ukończono %@ procent"
           }
         },
         "ru" : {
@@ -179,6 +203,12 @@
             "value" : "%@ per cento percorso"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Przebyto %@ procent"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -211,6 +241,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "mancano %@"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pozostało %@"
           }
         },
         "ru" : {
@@ -251,6 +287,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@%2$@ · mancano %3$@"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@%2$@ · pozostało %3$@"
           }
         },
         "ru" : {
@@ -371,6 +413,36 @@
             }
           }
         },
+        "pl" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld pkt"
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld pkt"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld pkt"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld pkt"
+                }
+              }
+            }
+          }
+        },
         "ru" : {
           "variations" : {
             "plural" : {
@@ -429,6 +501,12 @@
             "value" : "Dislivello +"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Podejście"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -461,6 +539,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Velocità media"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Średnia prędkość"
           }
         },
         "ru" : {
@@ -498,6 +582,12 @@
             "value" : "Annulla"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anuluj"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -532,6 +622,12 @@
             "value" : "Completato"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ukończono"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -564,6 +660,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Distanza"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dystans"
           }
         },
         "ru" : {
@@ -601,6 +703,12 @@
             "value" : "Fine"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gotowe"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -633,6 +741,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Trascorso"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Upłynęło"
           }
         },
         "ru" : {
@@ -669,6 +783,12 @@
             "value" : "Altitudine"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wysokość"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -701,6 +821,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Terminata"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zakończono"
           }
         },
         "ru" : {
@@ -738,6 +864,12 @@
             "value" : "Escursione"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wędrówka"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -770,6 +902,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Registrazione escursione"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nagrywanie wędrówki"
           }
         },
         "ru" : {
@@ -806,6 +944,12 @@
             "value" : "Percorsi"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Przebyto"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -838,6 +982,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Lunghezza"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Długość"
           }
         },
         "ru" : {
@@ -874,6 +1024,12 @@
             "value" : "Fuori sentiero"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Poza szlakiem"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -903,6 +1059,12 @@
           }
         },
         "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes"
+          }
+        },
+        "pl" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes"
@@ -942,6 +1104,12 @@
             "value" : "OpenHikes non ha potuto farlo."
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nie udało się tego wykonać."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -977,6 +1145,12 @@
             "value" : "OpenHikes ha bisogno della tua posizione per poter registrare un’escursione."
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes potrzebuje Twojego położenia, zanim będzie można nagrać wędrówkę."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1009,6 +1183,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pausa"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wstrzymaj"
           }
         },
         "ru" : {
@@ -1046,6 +1226,12 @@
             "value" : "Metti in pausa l’escursione"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wstrzymaj wędrówkę"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1080,6 +1266,12 @@
             "value" : "In pausa"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wstrzymano"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1112,6 +1304,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "In pausa · "
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wstrzymano · "
           }
         },
         "ru" : {
@@ -1149,6 +1347,12 @@
             "value" : "Mette in pausa l’escursione in registrazione, dal suo pannello nella schermata di blocco."
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wstrzymuje nagrywaną wędrówkę z jej panelu na ekranie blokady."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1182,6 +1386,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Registrazione"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nagrywanie"
           }
         },
         "ru" : {
@@ -1218,6 +1428,12 @@
             "value" : "Registrazione in corso"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trwa nagrywanie wędrówki"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1250,6 +1466,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Registrazione in pausa"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nagrywanie wstrzymane"
           }
         },
         "ru" : {
@@ -1286,6 +1508,12 @@
             "value" : "Rimanenti"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pozostało"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1318,6 +1546,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Riprendi"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wznów"
           }
         },
         "ru" : {
@@ -1355,6 +1589,12 @@
             "value" : "Riprendi l’escursione"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wznów wędrówkę"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1388,6 +1628,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Riprende l’escursione in pausa, dal suo pannello nella schermata di blocco."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wznawia wstrzymaną wędrówkę z jej panelu na ekranie blokady."
           }
         },
         "ru" : {
@@ -1424,6 +1670,12 @@
             "value" : "Scegli un sentiero"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wybierz szlak"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1456,6 +1708,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Scegli un sentiero in OpenHikes"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wybierz szlak w OpenHikes"
           }
         },
         "ru" : {
@@ -1493,6 +1751,12 @@
             "value" : "Mostra un sentiero a tua scelta, il sentiero selezionato o un’escursione in fase di registrazione."
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pokazuje szlak, który wskażesz, szlak wybrany w aplikacji albo wędrówkę, która jest właśnie nagrywana."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1525,6 +1789,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mostra il sentiero selezionato o un’escursione in fase di registrazione."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pokazuje wybrany szlak albo wędrówkę, która jest właśnie nagrywana."
           }
         },
         "ru" : {
@@ -1561,6 +1831,12 @@
             "value" : "Avvia escursione"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rozpocznij wędrówkę"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1593,6 +1869,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Avvia o interrompi la registrazione di un’escursione."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rozpocznij lub zatrzymaj nagrywanie wędrówki."
           }
         },
         "ru" : {
@@ -1629,6 +1911,12 @@
             "value" : "Interrompi escursione"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zakończ wędrówkę"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1663,6 +1951,12 @@
             "value" : "Quell’escursione non è più in registrazione."
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ta wędrówka nie jest już nagrywana."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1695,6 +1989,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tempo rimanente"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pozostały czas"
           }
         },
         "ru" : {
@@ -1732,6 +2032,12 @@
             "value" : "Attiva/disattiva registrazione"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Przełącz nagrywanie wędrówki"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1764,6 +2070,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Punti GPS"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Punkty śladu"
           }
         },
         "ru" : {
@@ -1800,6 +2112,12 @@
             "value" : "Sentiero"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Szlak"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1834,6 +2152,12 @@
             "value" : "Lunghezza del sentiero"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Długość szlaku"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1866,6 +2190,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Attiva «Posizione esatta» in Impostazioni per continuare."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aby kontynuować, włącz „Dokładne położenie” w Ustawieniach."
           }
         },
         "ru" : {
@@ -1907,6 +2237,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ percorso"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Przebyto %@"
           }
         },
         "ru" : {
