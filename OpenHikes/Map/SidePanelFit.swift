@@ -63,7 +63,12 @@ final class SidePanelFit {
     /// The coordinate space each of the sheet's screens is laid out in, which
     /// its scroll view measures itself against. Named by
     /// `sidePanelScreen(depth:)`.
-    static let screenSpace = "side-panel-screen"
+    ///
+    /// `nonisolated` because it is read inside `onGeometryChange`'s transform,
+    /// which the iOS 26 SDK makes a `@Sendable` closure. Swift 6.4 lets the
+    /// main-actor default pass there, and the Swift 6.3 that CodeQL builds
+    /// with does not.
+    nonisolated static let screenSpace = "side-panel-screen"
 
     /// How tall the panel stands, or `nil` for the whole height of its window:
     /// at a compact height, under a photo viewer, and until the first screen
