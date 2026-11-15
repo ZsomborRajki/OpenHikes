@@ -120,6 +120,8 @@ struct HikePlaceAdder: View {
             }
         }
         .softScrollEdgeEffect(for: .top)
+        // What the side panel stands as tall as — see ``SidePanelFit``.
+        .fitsSidePanel()
         .disabled(session.isAdding)
         .navigationTitle(Text("New Place"))
         #if os(iOS)

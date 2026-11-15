@@ -30,6 +30,10 @@
 //  across the panel's width — and at no other time, so the root view
 //  re-renders for those and for nothing else.
 //
+//  The height class has a second reader in the same place: whether a panel
+//  has height to spare for standing only as tall as its screen. That goes to
+//  ``SidePanelFit``, which the panel reads and the root view does not.
+//
 
 import SwiftUI
 
@@ -111,6 +115,13 @@ struct SheetLayoutReader: View {
                 ) { _, layout in
                     presentation.layout = layout
                     if layout == .sidePanel { metrics.withdraw() }
+                }
+                // Whether a panel has height to spare for standing only as
+                // tall as its screen — see ``SidePanelFit/fitsContent``. On
+                // its own, because a panel can change height class and stay
+                // a panel: an iPhone Duo on its side, opened or closed.
+                .onChange(of: isCompactHeight, initial: true) { _, isCompact in
+                    presentation.panelFit.fitsContent = !isCompact
                 }
         }
         .ignoresSafeArea(.keyboard)

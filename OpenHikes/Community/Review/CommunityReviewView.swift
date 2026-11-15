@@ -127,6 +127,8 @@ struct CommunityReviewView: View {
             }
             CommunityHikeDecisionSection(pending: pending, review: review, publish: { publish() })
         }
+        // What the side panel stands as tall as — see ``SidePanelFit``.
+        .fitsSidePanel()
         .modifier(
             CommunityReviewChrome(
                 title: "Review",

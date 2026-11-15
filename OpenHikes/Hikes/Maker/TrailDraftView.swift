@@ -156,6 +156,8 @@ struct TrailDraftView: View {
         // lists. A grouped list otherwise paints its own opaque grey over it;
         // the rows' cards are ``placeCardRows()``.
         .scrollContentBackground(.hidden)
+        // What the side panel stands as tall as — see ``SidePanelFit``.
+        .fitsSidePanel()
         // The container the rows' `reorderable()` hands a drop to on iOS 27.
         // See `TrailStopReordering.swift`.
         .trailStopReorderContainer { moveRows($0, before: $1) }

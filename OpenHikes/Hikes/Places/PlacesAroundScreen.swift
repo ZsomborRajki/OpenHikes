@@ -62,6 +62,8 @@ struct PlacesAroundScreen<Content: View>: View {
                 .padding()
         }
         .softScrollEdgeEffect(for: .top)
+        // What the side panel stands as tall as — see ``SidePanelFit``.
+        .fitsSidePanel()
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif

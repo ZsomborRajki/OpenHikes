@@ -548,6 +548,8 @@ private extension MapSheetHikes {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        // What the side panel stands as tall as — see ``SidePanelFit``.
+        .fitsSidePanel(clearance: MapSidePanelLayout.listClearance)
         .environment(\.editMode, $editMode)
         // Hilliest validates cached relief against the stored route each time
         // this task starts, and afterwards only for a hike whose line may
@@ -732,6 +734,8 @@ private extension MapSheetHikes {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        // What the side panel stands as tall as — see ``SidePanelFit``.
+        .fitsSidePanel(clearance: MapSidePanelLayout.listClearance)
     }
 
     /// What the list says when the query has matched nothing yet.

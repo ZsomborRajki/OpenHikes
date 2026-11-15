@@ -25,6 +25,15 @@
 //  numbers the map is told as well so its own controls stay clear of the
 //  panel rather than behind it.
 //
+//  How tall it stands depends on what the window has. A compact height is
+//  less than nearly every screen wants, so there the panel is the window's.
+//  Where there is height to spare — an iPad, an unfolded iPhone Duo on its
+//  side — it stands as tall as the screen on top needs, in the middle of the
+//  leading edge: a recording's card of figures is a third of an iPad's
+//  height, and the rest was a slab of glass over map. ``SidePanelFit`` has
+//  the measuring. The map's controls keep the panel's width clear either
+//  way, so nothing on the map moves when the panel grows.
+//
 //  One screen is the exception: a photo viewer. In portrait it raises the sheet
 //  to `.large`; here the equivalent is the whole window, so the panel widens to
 //  it — edge to edge, past the safe area, the way a photograph is shown — and
@@ -56,6 +65,17 @@ enum MapSidePanelLayout {
 
     static let cornerRadius: CGFloat = 24
 
+    /// The least a panel fitted to its screen stands — see ``SidePanelFit``.
+    /// As tall as it is wide: room for the search field and a row or two
+    /// under it, so a library of one hike is still a panel and not a bar.
+    static let minimumHeight: CGFloat = width
+
+    /// The room a fitted panel leaves under a plain list's last row, which
+    /// would otherwise end in the panel's rounded corners. The panel's own
+    /// margin, so the row stands as far from the glass's edge as the glass
+    /// does from the window's.
+    static let listClearance: CGFloat = margin
+
     /// How far the map's own controls have to be pushed off the leading edge
     /// to clear the panel. Handed to ``MapView``, which spends it as
     /// additional safe-area inset, so the credit line and the camera pill sit
@@ -67,6 +87,10 @@ struct MapSidePanel<Content: View>: View {
     /// Whether the panel covers the whole window — while a photo viewer is the
     /// screen on top. See ``SheetPresentation/isShowingFullHeightScreen``.
     var fillsWindow = false
+    /// How tall the panel stands where the window has height to spare. Read
+    /// here and by nothing above, so a screen that grows a row re-runs this
+    /// body and not the root view's — see ``SidePanelFit``.
+    var fit: SidePanelFit
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -74,8 +98,17 @@ struct MapSidePanel<Content: View>: View {
         // keeps the content's identity — a branch would rebuild the navigation
         // stack, and the gallery with it, mid-push.
         content
+            // Where the screens inside say how tall they are. Only here, so
+            // the same screens in a sheet report to nobody.
+            .environment(\.sidePanelFit, fit)
             .frame(width: fillsWindow ? nil : MapSidePanelLayout.width)
-            .frame(maxWidth: fillsWindow ? .infinity : nil, maxHeight: .infinity)
+            // A ceiling rather than a height, so a screen longer than the
+            // window is given the window and scrolls. The stack this is
+            // inside centers what is left over, above and below.
+            .frame(
+                maxWidth: fillsWindow ? .infinity : nil,
+                maxHeight: fillsWindow ? .infinity : fit.height ?? .infinity
+            )
             // An overlay has no system sheet material of its own. Use
             // adaptive glass here too, bounded by the panel's four edges —
             // or, below iOS 26, the material ``glassSurface(_:in:)`` stands

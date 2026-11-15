@@ -241,7 +241,7 @@ struct OpenHikesView: View {
         ZStack(alignment: .leading) {
             mapSurface
             if usesSidePanel {
-                MapSidePanel(fillsWindow: panelCoversMap) { mapSheet() }
+                MapSidePanel(fillsWindow: panelCoversMap, fit: sheet.panelFit) { mapSheet() }
             }
         }
             .overlay(alignment: .topLeading) {

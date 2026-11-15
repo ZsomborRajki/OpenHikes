@@ -51,6 +51,9 @@ struct HikeWalkHistory: View {
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
+                // What the side panel stands as tall as — see
+                // ``SidePanelFit``.
+                .fitsSidePanel(clearance: MapSidePanelLayout.listClearance)
             }
         }
     }

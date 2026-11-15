@@ -102,6 +102,8 @@ struct RecordingView: View {
                 withAnimation { proxy.scrollTo(Self.cardID, anchor: .top) }
             }
         }
+        // What the side panel stands as tall as — see ``SidePanelFit``.
+        .fitsSidePanel()
         .navigationTitle("Record Hike")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)

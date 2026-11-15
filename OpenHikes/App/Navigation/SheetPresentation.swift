@@ -181,7 +181,8 @@ final class SheetPresentation {
     private(set) var isCompact: Bool
 
     /// True where the sheet's contents have the full height available to them:
-    /// the largest detent, or a side panel, which is always that tall.
+    /// the largest detent, or a side panel, which is as tall as its screen
+    /// asks or as its window allows.
     private(set) var isFullHeight: Bool
 
     /// Whether the top of the stack is a screen that wants the whole sheet —
@@ -225,8 +226,17 @@ final class SheetPresentation {
             guard newValue != storedLayout else { return }
             withMutation(keyPath: \.layout) { storedLayout = newValue }
             recomputeDetentFlags()
+            // The panel went with the layout, and what its screens asked of
+            // it goes too — see ``SidePanelFit/forget()``.
+            if newValue != .sidePanel { panelFit.forget() }
         }
     }
+
+    /// How tall the side panel stands, which follows the screen on top of
+    /// ``path`` — see ``SidePanelFit``. Owned here because the path is, and
+    /// told of every change to it; read by ``MapSidePanel`` and by nothing in
+    /// this type, so it is no input of any flag above.
+    @ObservationIgnored let panelFit = SidePanelFit()
 
     /// The hosts are replaced on rotation, but their destinations keep these
     /// objects until the corresponding route is popped — and the pop's own
@@ -707,6 +717,7 @@ final class SheetPresentation {
         if isTrailDraftPresented != drafting { isTrailDraftPresented = drafting }
         let pushed = !storedPath.isEmpty
         if hasPushedScreen != pushed { hasPushedScreen = pushed }
+        panelFit.show(depth: storedPath.count, fillingPanel: storedPath.last?.prefersFullHeight ?? false)
         applyFullHeightPolicy()
     }
 
