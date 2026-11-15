@@ -1407,10 +1407,10 @@ in its source header. Do not weaken one without a measurement.
   neither with an index, and both hold the world's squares under a manifest
   that says so (*The trail squares*). Both also hold the same build of the
   hiking-routes layer's squares, from planet-261109, marked as the whole
-  world under `routes1_manifest` (*The hiking-routes layer*). Development
-  alone holds the places' squares, from planet-261109, marked as the whole
-  world under `places1_manifest` (*The place squares*; checked 2026-11-15);
-  production has none yet. Both have a column for every attribute in
+  world under `routes1_manifest` (*The hiking-routes layer*), and the same
+  build of the places' squares, from planet-261109, marked as the whole
+  world under `places1_manifest` (*The place squares*; checked 2026-11-15).
+  Both have a column for every attribute in
   `MirroredCloudKitSchema.recordTypes`. The only live columns the contract
   does not name are SwiftData's own `CD_entityName`, the
   to-one reference columns that the contract lists as relationships, and the
