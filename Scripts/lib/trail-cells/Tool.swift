@@ -145,6 +145,9 @@ private extension TrailCellsTool {
         if summary.withoutPositions > 0 {
             print("  left out \(summary.withoutPositions) running out of the extract")
         }
+        if summary.acrossSquares > 0 {
+            print("  filed \(summary.acrossSquares) under more than one square, reaching over a square's edge")
+        }
         if let largest = summary.largest {
             print("The largest square is \(largest.name), \(largest.bytes) bytes for \(largest.places) places.")
         }
@@ -261,6 +264,7 @@ enum Inspection {
                 "element": place.element.name,
                 "id": place.id,
                 "point": [place.point.latitude, place.point.longitude],
+                "box": [place.box.south, place.box.west, place.box.north, place.box.east],
                 "tags": place.tags,
             ]
         }

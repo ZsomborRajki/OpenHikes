@@ -9,11 +9,15 @@
 //  What is filed is what the app's own Overpass search would have been handed:
 //  a node carrying the tag of one of `PlaceSquareFile.kinds`, or a way or a
 //  relation carrying the tag of one that is mapped as an area. Named or not,
-//  because most of them are not (see `TrailPointQuery.swift`). A way's point is
-//  the middle of the box around its nodes, and a relation's the middle of the
-//  box around its member ways — what Overpass's `out center` puts on one, less
-//  any member nodes, as the day hikes' boxes leave them out. One that runs out
-//  of a regional extract is left out rather than placed short.
+//  because most of them are not (see `TrailPointQuery.swift`). A way's box is
+//  the box around its nodes, and a relation's the box around its member nodes
+//  and ways, which are what Overpass measures `out center` from and finds one
+//  by; member relations count for neither. One that runs out of a regional
+//  extract is left out rather than placed short.
+//
+//  **A place is filed under every square its box touches**, so a search that
+//  reads the squares its own boxes touch finds every place reaching into them,
+//  as Overpass would. See `PlaceSquareGrid` for how few that is.
 //
 //  **The same extract always gives the same squares.** Places are written by
 //  element and id, and nothing in a square depends on the clock, so a square's
@@ -35,6 +39,9 @@ enum PlaceSquareBuild {
         /// Ways and relations left out for having no position to put a pin
         /// at.
         var withoutPositions = 0
+        /// Places filed under more than one square, because their box
+        /// reaches over a square's edge.
+        var acrossSquares = 0
         var squares = 0
         var bytes = 0
         var largest: (name: String, bytes: Int, places: Int)?
@@ -66,16 +73,21 @@ enum PlaceSquareBuild {
         var filed: [PlaceSquare: [PlaceSquareFile.Place]] = [:]
         func file(_ place: PlaceSquareFile.Place) {
             let scale = Double(PlaceSquareFile.standardCoordinateScale)
-            let square = PlaceSquareGrid.square(
-                containingLatitude: Double(place.point.latitude) / scale,
-                longitude: Double(place.point.longitude) / scale
-            )
-            filed[square, default: []].append(place)
+            let squares = PlaceSquareGrid.squares(covering: TrailCellBounds(
+                south: Double(place.box.south) / scale,
+                west: Double(place.box.west) / scale,
+                north: Double(place.box.north) / scale,
+                east: Double(place.box.east) / scale
+            ))
+            for square in squares {
+                filed[square, default: []].append(place)
+            }
+            if squares.count > 1 { summary.acrossSquares += 1 }
         }
 
         let relations = try areaRelations(at: options.relationsPath)
-        var memberBoxes: [Int64: Box] = [:]
-        let wanted = Set(relations.flatMap(\.wayIDs))
+        var memberWays: [Int64: PlaceSquareFile.Box] = [:]
+        let wantedWays = Set(relations.flatMap(\.wayIDs))
         var waysRead = 0
         var waysWithPositions = 0
         try OPLFile(path: options.waysPath).forEachLine { line in
@@ -83,15 +95,15 @@ enum PlaceSquareBuild {
                 return
             }
             waysRead += 1
-            let box = way.points.flatMap(Box.init)
+            let box = way.points.flatMap(PlaceSquareFile.Box.init)
             if box != nil { waysWithPositions += 1 }
-            if wanted.contains(way.id), let box { memberBoxes[way.id] = box }
+            if wantedWays.contains(way.id), let box { memberWays[way.id] = box }
             guard PlaceSquareFile.isPlace(.way, tags: way.tags) else { return }
             guard let box else {
                 summary.withoutPositions += 1
                 return
             }
-            file(PlaceSquareFile.Place(element: .way, id: way.id, point: box.center, tags: kept(way.tags)))
+            file(PlaceSquareFile.Place(element: .way, id: way.id, box: box, tags: kept(way.tags)))
             summary.ways += 1
         }
         // Not one way with a position, and ways that lacked them: the file
@@ -101,31 +113,32 @@ enum PlaceSquareBuild {
             throw BuildError.waysCarryNoPositions(options.waysPath)
         }
 
+        // The places that are nodes, and every node a relation names, which
+        // the script asks osmium to keep though most have no tags.
+        let wantedNodes = Set(relations.flatMap(\.nodeIDs))
+        var memberNodes: [Int64: PlaceSquareFile.Box] = [:]
+        try OPLFile(path: nodesPath).forEachLine { line in
+            guard let node = try OPL.node(line, scale: PlaceSquareFile.standardCoordinateScale),
+                  let point = node.point.map(PlaceSquareFile.Box.init)
+            else { return }
+            if wantedNodes.contains(node.id) { memberNodes[node.id] = point }
+            guard PlaceSquareFile.isPlace(.node, tags: node.tags) else { return }
+            file(PlaceSquareFile.Place(element: .node, id: node.id, box: point, tags: kept(node.tags)))
+            summary.nodes += 1
+        }
+
         for relation in relations {
-            // Every member way, or no pin: a hut whose outline runs out of
-            // the extract would be placed by the part of it that is in.
-            let boxes = relation.wayIDs.compactMap { memberBoxes[$0] }
-            guard let first = boxes.first, boxes.count == relation.wayIDs.count else {
+            // Every member node and way, or no pin: a hut whose outline runs
+            // out of the extract would be placed by the part of it that is in.
+            let boxes = relation.wayIDs.compactMap { memberWays[$0] }
+                + relation.nodeIDs.compactMap { memberNodes[$0] }
+            guard let first = boxes.first, boxes.count == relation.wayIDs.count + relation.nodeIDs.count else {
                 summary.withoutPositions += 1
                 continue
             }
             let box = boxes.dropFirst().reduce(first) { $0.union($1) }
-            file(PlaceSquareFile.Place(element: .relation, id: relation.id, point: box.center, tags: relation.tags))
+            file(PlaceSquareFile.Place(element: .relation, id: relation.id, box: box, tags: relation.tags))
             summary.relations += 1
-        }
-
-        try OPLFile(path: nodesPath).forEachLine { line in
-            guard let node = try OPL.node(line, scale: PlaceSquareFile.standardCoordinateScale),
-                  PlaceSquareFile.isPlace(.node, tags: node.tags),
-                  let point = node.point
-            else { return }
-            file(PlaceSquareFile.Place(
-                element: .node,
-                id: node.id,
-                point: PlaceSquareFile.Point(latitude: point.latitude, longitude: point.longitude),
-                tags: kept(node.tags)
-            ))
-            summary.nodes += 1
         }
 
         try TrailCellBuild.prepare(options.outputDirectory)
@@ -147,11 +160,13 @@ enum PlaceSquareBuild {
 // MARK: - Reading the extract
 
 private extension PlaceSquareBuild {
-    /// A relation that is a place, with the ways its point is measured from.
+    /// A relation that is a place, with the members its box is measured
+    /// from.
     struct AreaRelation {
         var id: Int64
         var tags: [String: String]
         var wayIDs: [Int64]
+        var nodeIDs: [Int64]
     }
 
     /// The relations that are places. osmium hands over the relations a
@@ -166,7 +181,8 @@ private extension PlaceSquareBuild {
             kept.append(AreaRelation(
                 id: relation.id,
                 tags: Self.kept(relation.tags),
-                wayIDs: relation.members.filter { $0.kind == UInt8(ascii: "w") }.map(\.ref)
+                wayIDs: relation.members.filter { $0.kind == UInt8(ascii: "w") }.map(\.ref),
+                nodeIDs: relation.members.filter { $0.kind == UInt8(ascii: "n") }.map(\.ref)
             ))
         }
         return kept
@@ -177,45 +193,18 @@ private extension PlaceSquareBuild {
         tags.filter { PlaceSquareFile.keptTagKeys.contains($0.key) }
     }
 
-    /// The box around some points, in coordinate units.
-    ///
-    /// The plain minimum and maximum, as Overpass computes one: a hut does not
-    /// straddle the date line.
-    struct Box {
-        var south: Int32
-        var west: Int32
-        var north: Int32
-        var east: Int32
+}
 
-        init?(_ points: [TrailCellFile.Point]) {
-            guard let first = points.first else { return nil }
-            south = first.latitude
-            north = first.latitude
-            west = first.longitude
-            east = first.longitude
-            for point in points.dropFirst() {
-                south = min(south, point.latitude)
-                north = max(north, point.latitude)
-                west = min(west, point.longitude)
-                east = max(east, point.longitude)
-            }
-        }
+private extension PlaceSquareFile.Box {
+    /// A node's box, from the point osmium wrote.
+    init(_ point: TrailCellFile.Point) {
+        self.init(PlaceSquareFile.Point(latitude: point.latitude, longitude: point.longitude))
+    }
 
-        var center: PlaceSquareFile.Point {
-            PlaceSquareFile.Point(
-                latitude: Int32((Int64(south) + Int64(north)) / 2),
-                longitude: Int32((Int64(west) + Int64(east)) / 2)
-            )
-        }
-
-        func union(_ other: Box) -> Box {
-            var box = self
-            box.south = min(south, other.south)
-            box.north = max(north, other.north)
-            box.west = min(west, other.west)
-            box.east = max(east, other.east)
-            return box
-        }
+    /// The box around a way's nodes, or `nil` for a way with none.
+    init?(_ points: [TrailCellFile.Point]) {
+        guard let first = points.first else { return nil }
+        self = points.dropFirst().reduce(Self(first)) { $0.union(Self($1)) }
     }
 }
 

@@ -17,7 +17,7 @@
 //  fetches the few squares it needs by name. See ``PlaceSquareLibrary`` for
 //  the reading and ``PlaceSquareFile`` for what one square holds.
 //
-//  ## A whole degree, and a place filed where it stands
+//  ## A whole degree, and a place filed under every square it reaches
 //
 //  Measured on planet-261109: 3,512,600 places, 55.6 MB in 14,795 squares a
 //  degree each way, the median square 588 bytes, one in a hundred over 58 KB,
@@ -34,10 +34,15 @@
 //  Place* to offer where there is no signal. See
 //  ``PlaceSquareLibrary/keptPlaces(near:limit:)``.
 //
-//  A place is a point, so it is filed under the square it stands in and
-//  nothing reaches out of a square. A search reads the squares its boxes touch
-//  and no more, where ``TrailCellGrid`` reads ten kilometres further for the
-//  routes that reach out of theirs.
+//  A node is filed under the square it stands in, and a way or a relation — a
+//  hut, a campsite — under every square the box around it touches. So a search
+//  reads the squares its own boxes touch and no more, and finds every place
+//  that reaches into them, as Overpass finds a way by any of its nodes:
+//  ``TrailCellGrid`` files a route once and reads ten kilometres further for
+//  the ones that reach out of their squares, and a reach here would have to be
+//  as wide as the widest campsite. Few reach over an edge: on planet-261109,
+//  390 of 522,178 ways and 24 of 3,873 relations, the widest of them half a
+//  degree across.
 //
 //  ## Compiled twice
 //
@@ -76,22 +81,18 @@ nonisolated enum PlaceSquareGrid {
     static var columnCount: Int { Int(fullTurnDegrees) * squaresPerDegree }
 }
 
-// MARK: - Which square
+// MARK: - Which squares
 
 nonisolated extension PlaceSquareGrid {
-    /// The square that holds a point.
-    ///
-    /// Any longitude is taken, however many times it has wrapped, and the
-    /// north pole itself belongs to the last row rather than to one past it.
-    static func square(containingLatitude latitude: Double, longitude: Double) -> PlaceSquare {
-        PlaceSquare(row: row(ofLatitude: latitude), column: wrapped(unwrappedColumn(ofLongitude: longitude)))
-    }
-
-    /// Every square `box` touches, each once.
+    /// Every square `box` touches, each once: the ones a search reads, and
+    /// the ones a place is filed under.
     ///
     /// `box` is one a search has already split at the antimeridian — see
-    /// ``CuratedTrailQuery/searchBoxes(for:)`` — so its `east` is never west
-    /// of its `west`. Empty for a box that is not one.
+    /// ``CuratedTrailQuery/searchBoxes(for:)`` — or a place's, which is never
+    /// split (see ``PlaceSquareFile/Box``), so its `east` is never west of its
+    /// `west`. Any longitude is taken, however many times it has wrapped, and
+    /// the north pole itself belongs to the last row rather than to one past
+    /// it. Empty for a box that is not one.
     static func squares(covering box: TrailCellBounds) -> [PlaceSquare] {
         guard box.south.isFinite, box.west.isFinite, box.north.isFinite, box.east.isFinite,
               box.south <= box.north, box.west <= box.east

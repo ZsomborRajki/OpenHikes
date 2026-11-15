@@ -13,28 +13,38 @@ import Testing
 
 @Suite("Place square grid")
 struct PlaceSquareGridTests {
+    /// The squares a point's own box touches: where a node is filed.
+    static func squares(atLatitude latitude: Double, longitude: Double) -> [PlaceSquare] {
+        PlaceSquareGrid.squares(covering: TrailCellBounds(
+            south: latitude,
+            west: longitude,
+            north: latitude,
+            east: longitude
+        ))
+    }
+
     /// The square a hiker in the Berchtesgaden valley reads: a degree each
     /// way, counted from the south pole and the antimeridian.
-    @Test("a place is filed under the degree it stands in")
-    func aPlaceIsFiledWhereItStands() {
-        let square = PlaceSquareGrid.square(containingLatitude: 47.62, longitude: 12.97)
+    @Test("a node is filed under the degree it stands in")
+    func aNodeIsFiledWhereItStands() {
+        let squares = Self.squares(atLatitude: 47.62, longitude: 12.97)
 
-        #expect(square == PlaceSquare(row: 137, column: 192))
-        #expect(PlaceSquareGrid.recordName(for: square) == "places1_137_192")
+        #expect(squares == [PlaceSquare(row: 137, column: 192)])
+        #expect(squares.map(PlaceSquareGrid.recordName(for:)) == ["places1_137_192"])
     }
 
     @Test("the poles and the antimeridian are inside the grid")
     func theEdgesAreInside() {
-        #expect(PlaceSquareGrid.square(containingLatitude: 90, longitude: 0).row == 179)
-        #expect(PlaceSquareGrid.square(containingLatitude: -90, longitude: 0).row == 0)
-        #expect(PlaceSquareGrid.square(containingLatitude: 0, longitude: 180).column == 0)
-        #expect(PlaceSquareGrid.square(containingLatitude: 0, longitude: -180).column == 0)
-        #expect(PlaceSquareGrid.square(containingLatitude: 0, longitude: 539.5).column == 359)
+        #expect(Self.squares(atLatitude: 90, longitude: 0).map(\.row) == [179])
+        #expect(Self.squares(atLatitude: -90, longitude: 0).map(\.row) == [0])
+        #expect(Self.squares(atLatitude: 0, longitude: 180).map(\.column) == [0])
+        #expect(Self.squares(atLatitude: 0, longitude: -180).map(\.column) == [0])
+        #expect(Self.squares(atLatitude: 0, longitude: 539.5).map(\.column) == [359])
     }
 
-    /// A place is a point and reaches out of nothing, so a search reads the
-    /// squares its box touches and not one more.
-    @Test("a search reads the squares its box touches, and no others")
+    /// The same squares a search reads are where a hut or a campsite is
+    /// filed, so the two meet in every square they share and no other.
+    @Test("a box reads the squares it touches, and no others")
     func aSearchReadsWhatItTouches() {
         let inside = TrailCellBounds(south: 47.598, west: 12.86675, north: 47.642, east: 12.93325)
         let straddling = TrailCellBounds(south: 47.9, west: 12.9, north: 48.1, east: 13.1)
