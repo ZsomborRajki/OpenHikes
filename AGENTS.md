@@ -772,8 +772,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
     against (`FirstRunTipsTests`), and the name of `AppTips.isNewHiker`,
     the TipKit parameter that keeps a new hiker
   - the trail squares' record names, which every installed build asks for
-    (`TrailCellGridTests`; see *The trail squares*), and the hiking-routes
-    layer's (`RouteSquareGridTests`; see *The hiking-routes layer*)
+    (`TrailCellGridTests`; see *The trail squares*), the hiking-routes
+    layer's (`RouteSquareGridTests`; see *The hiking-routes layer*) and the
+    places' (`PlaceSquareGridTests`; see *The place squares*)
 
 ## Conventions
 
@@ -1439,7 +1440,7 @@ is world-readable, because browsing needs no account.
 | `CommunityPhotoSubmission` (offered photos) | any signed-in account / `reviewer` | **none** |
 | `CommunityPhotoContribution` (published photos) | `reviewer` / `reviewer` | `listing`, `photoSubmission`, `publishedAt` |
 | `CommunitySubmissionNotice` (the queue; `reviewer` reads it) | any signed-in account / `reviewer` | `___recordID`, `___createTime` |
-| `CuratedTrailCell` (OpenStreetMap's day hikes, and the hiking-routes layer, by map square) | `reviewer` / `reviewer` | **none** |
+| `CuratedTrailCell` (OpenStreetMap's day hikes, the hiking-routes layer and the places, by map square) | `reviewer` / `reviewer` | **none** |
 | `CuratedTrailManifest` (what the squares cover) | `reviewer` / `reviewer` | **none** |
 
 - **A submission is write-once.** A listing points at its submission, so an
@@ -1462,8 +1463,8 @@ is world-readable, because browsing needs no account.
   (`Users` grants `WRITE TO "_creator"`) is unverified, so test it before
   trusting the role in production.
 - **The last two types hold nothing a hiker made.** They are a copy of
-  OpenStreetMap's routes that a script uploads; see *The trail squares* and
-  *The hiking-routes layer*.
+  OpenStreetMap's routes and places that a script uploads; see *The trail
+  squares*, *The hiking-routes layer* and *The place squares*.
 
 ### Rules that hold it up
 
@@ -1640,9 +1641,10 @@ by name. `TrailCellGrid` argues the design and has the measurements.
 - **The file's generation is in every record name** (`trails1_…`). An
   installed build keeps asking for the names it knows, so a file it cannot
   read goes under a new generation beside the old one, never over it.
-- **Six of the app's files are compiled into the tool:** `PackedBytes.swift`,
-  `TrailCellGrid.swift`, `TrailCellFile.swift`, `RouteSquareGrid.swift`,
-  `RouteSquareFile.swift` and `CommunitySchema.swift`. They import nothing of
+- **Eight of the app's files are compiled into the tool:**
+  `PackedBytes.swift`, `TrailCellGrid.swift`, `TrailCellFile.swift`,
+  `RouteSquareGrid.swift`, `RouteSquareFile.swift`, `PlaceSquareGrid.swift`,
+  `PlaceSquareFile.swift` and `CommunitySchema.swift`. They import nothing of
   the app's, and `Scripts/run-script-tests.sh` builds the tool, which is what
   holds them to that.
 - **Building and uploading** is `Scripts/trail-cells.sh`:
@@ -1755,6 +1757,41 @@ beside them. `RouteSquareGrid` argues the design and has the measurements.
 - **Building and uploading** is the trail squares' procedure with
   `build-routes` for `build`: `build-routes <planet.osm.pbf> --world`, then
   `upload` to development, then to production.
+
+### The place squares
+
+What a place search offers — the summits, springs, huts, viewpoints,
+campsites and car parks of *Search this area*, *Places Around Trail*, *Add
+Place* and *Places Nearby* — is built ahead of time the same way: every
+element `TrailPointQuery` asks Overpass for, filed by one-degree square, one
+`CuratedTrailCell` a square named `places1_<row>_<col>`, under
+`places1_manifest`. `PlaceSquareGrid` argues the size and has the
+measurements.
+
+- **The squares first, Overpass second** (`TrailPointSource`). The squares
+  answer on the trail squares' terms (*An answer is complete or it is not
+  given*), through `PlaceSquareLibrary`, and no answer sends the search to
+  Overpass exactly as before. An empty answer means nothing of those kinds
+  is mapped there.
+- **A place is filed where it stands**, so a search reads only the squares
+  its boxes touch, one to four for the widest. A way's or a relation's point
+  is the middle of its ways' box, as Overpass's `out center` has it.
+- **The tool keeps the kinds and the tags in lists of its own**
+  (`PlaceSquareFile.kinds` and `keptTagKeys`), because it cannot compile
+  `TrailPointQuery`. `PlaceSquareFileTests` holds them to the query's kinds
+  and to what a place card reads; a new kind or fact is a rebuild.
+- **The symbol is the app's.** A square holds tags, and
+  `TrailPointDecoding.place(…)` reads them as it reads an Overpass element.
+  On both paths a way or a relation is only ever a kind asked for as an area.
+- **What is kept answers with no signal.** `cachedPlaces(near:limit:)` reads
+  the kept squares beside the Overpass store, so *Add Place* offers what is
+  mapped where the hiker stands before its search answers.
+- **No suite reaches the squares.** `makeTrailPointSource()` is `nil` under
+  `isRunningTests`, as it was for Overpass alone.
+- **Building and uploading** is the trail squares' procedure with
+  `build-places` for `build`, which writes `places-manifest.json`:
+  `build-places <planet.osm.pbf> --world`, then `upload` to development,
+  then to production.
 
 ## The watch app
 

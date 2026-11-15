@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 #
 # trail-cells.sh — file OpenStreetMap's waymarked day hikes into the squares the
-# Community tab's search reads, and put them in the public database.
+# Community tab's search reads, and put them in the public database. The same
+# for the hiking-routes layer's squares, and for the places a place search
+# offers.
 #
 # The search used to be a question for Overpass, and the answer was a wait in a
 # public server's queue. So the answer is built ahead of time, here: every
@@ -25,6 +27,7 @@
 # Usage:
 #   Scripts/trail-cells.sh build <extract.osm.pbf> [--out <dir>] [--world] [--keep-work]
 #   Scripts/trail-cells.sh build-routes <extract.osm.pbf> [--out <dir>] [--world] [--keep-work]
+#   Scripts/trail-cells.sh build-places <extract.osm.pbf> [--out <dir>] [--world] [--keep-work]
 #   Scripts/trail-cells.sh upload <dir> --environment development|production
 #                                 [--dry-run] [--yes] [--replace-world]
 #   Scripts/trail-cells.sh whoami --environment development|production
@@ -42,9 +45,15 @@
 #             File every hiking route's ways into the hiking-routes layer's
 #             squares in <dir> (default .build/trail-cells/routes), four levels
 #             of them: see OpenHikes/Tiles/HikingRoutes/RouteSquareGrid.swift.
-#             --world, --out and --keep-work as for build. `upload` sends either
+#             --world, --out and --keep-work as for build. `upload` sends any
 #             kind of build; each has a manifest record of its own, and the
 #             layer's build writes routes-manifest.json, never manifest.json.
+#   build-places
+#             File the summits, springs, huts and the rest a place search
+#             offers into the places' squares in <dir> (default
+#             .build/trail-cells/places): see
+#             OpenHikes/Hikes/Places/Squares/PlaceSquareGrid.swift. --world,
+#             --out and --keep-work as for build; it writes places-manifest.json.
 #   upload    Make the public database hold what <dir> does: send the squares
 #             that changed, delete the ones that are gone, then say what the
 #             squares cover. --dry-run reads and plans, and changes nothing.
@@ -101,6 +110,8 @@ tool_sources() {
         "$repository_root/OpenHikes/Community/Curated/Cells/TrailCellFile.swift" \
         "$repository_root/OpenHikes/Tiles/HikingRoutes/RouteSquareGrid.swift" \
         "$repository_root/OpenHikes/Tiles/HikingRoutes/RouteSquareFile.swift" \
+        "$repository_root/OpenHikes/Hikes/Places/Squares/PlaceSquareGrid.swift" \
+        "$repository_root/OpenHikes/Hikes/Places/Squares/PlaceSquareFile.swift" \
         "$repository_root/OpenHikes/Community/Transport/CommunitySchema.swift"
 }
 
@@ -131,8 +142,9 @@ container_identifier() {
     printf '%s\n' "$identifier"
 }
 
-# `build` and `build-routes`: the same osmium steps, then the tool's command of
-# the same name, into a directory of its own by default.
+# `build`, `build-routes` and `build-places`: osmium's steps, then the tool's
+# command of the same name, into a directory of its own by default. The two
+# routes' builds share their steps; the places' finds other things.
 build() {
     local tool_command="$1" extract="" out="$build_dir/$2" world=false keep_work=false
     shift 2
@@ -170,14 +182,28 @@ build() {
     local work="$out.work"
     mkdir -p "$work"
 
-    echo "Finding the hiking relations in $extract …"
-    osmium tags-filter "$extract" r/route=hiking -o "$work/hiking.osm.pbf" --overwrite
+    local found="$work/hiking.osm.pbf"
+    if [[ "$tool_command" == build-places ]]; then
+        # The tool says what a place is, so the filter and the build are one
+        # list: see PlaceSquareFile.kinds.
+        local filters=() filter
+        while IFS= read -r filter; do
+            filters+=("$filter")
+        done < <("$tool" place-filters)
+        [[ ${#filters[@]} -gt 0 ]] || die "the trail-cells tool named no places to find."
+        found="$work/places.osm.pbf"
+        echo "Finding the places in $extract …"
+        osmium tags-filter "$extract" "${filters[@]}" -o "$found" --overwrite
+    else
+        echo "Finding the hiking relations in $extract …"
+        osmium tags-filter "$extract" r/route=hiking -o "$found" --overwrite
+    fi
     # Every node's position, put on the ways that use it, which is what lets
     # the next step read a way without a table of the planet's nodes. A way
     # that runs out of a regional extract keeps its place with no positions,
     # and the tool leaves its relation out.
     echo "Putting positions on their ways …"
-    osmium add-locations-to-ways "$work/hiking.osm.pbf" --ignore-missing-nodes \
+    osmium add-locations-to-ways "$found" --ignore-missing-nodes \
         -o "$work/located.osm.pbf" --overwrite
     # Relations and ways apart, because a relation says which ways are wanted
     # and comes after them in the file. `locations_on_ways` is what writes the
@@ -186,6 +212,13 @@ build() {
         -o "$work/relations.opl" --overwrite
     osmium cat "$work/located.osm.pbf" -t way -f opl,add_metadata=false,locations_on_ways=true \
         -o "$work/ways.opl" --overwrite
+    # A place is most often a node, which the routes' builds never read. The
+    # positions osmium put on the ways took the nodes that held only a
+    # position, so what is left is the nodes with tags.
+    if [[ "$tool_command" == build-places ]]; then
+        osmium cat "$work/located.osm.pbf" -t node -f opl,add_metadata=false \
+            -o "$work/nodes.opl" --overwrite
+    fi
 
     # When the data was current, off the extract's own header. A planet file
     # and a Geofabrik extract both say; a file that does not is built without.
@@ -196,9 +229,10 @@ build() {
     fi
 
     local arguments=("$tool_command" --relations "$work/relations.opl" --ways "$work/ways.opl" --out "$out")
+    [[ "$tool_command" != build-places ]] || arguments+=(--nodes "$work/nodes.opl")
     [[ "$world" == false ]] || arguments+=(--world)
     [[ -z "$timestamp" ]] || arguments+=(--osm-timestamp "$timestamp")
-    echo "Filing the routes …"
+    echo "Filing them …"
     "$tool" "${arguments[@]}"
 
     if [[ "$keep_work" == false ]]; then
@@ -262,6 +296,9 @@ case "$command" in
         ;;
     build-routes)
         build build-routes routes "$@"
+        ;;
+    build-places)
+        build build-places places "$@"
         ;;
     upload|whoami)
         with_database "$command" "$@"

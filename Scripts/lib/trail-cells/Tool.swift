@@ -7,7 +7,7 @@
 //  the public database.
 //
 //  It is compiled by that script, from the files in this directory and from
-//  six of the app's own — each set's grid and file, the byte format they
+//  eight of the app's own — each set's grid and file, the byte format they
 //  share and `CommunitySchema.swift`; the script's `tool_sources` names them
 //  — so what the tool writes and what the app reads are one source. The script is the front door: it finds osmium, the
 //  container's name and the key; this takes them as options and decides
@@ -29,6 +29,11 @@ enum TrailCellsTool {
                File the relations of an extract into squares under <dir>.
       build-routes --relations <opl> --ways <opl> --out <dir> [--world] [--osm-timestamp <ISO 8601>]
                File every hiking route's ways into the hiking-routes layer's squares under <dir>.
+      build-places --nodes <opl> --relations <opl> --ways <opl> --out <dir> [--world]
+               [--osm-timestamp <ISO 8601>]
+               File the places a place search offers into the places' squares under <dir>.
+      place-filters
+               Print the expressions osmium tags-filter finds the places with, one a line.
       upload   <dir> --container <id> --environment development|production
                --key-id <id> --key-file <pem> [--dry-run] [--yes] [--replace-world]
                Make the public database hold what <dir> does.
@@ -62,6 +67,11 @@ enum TrailCellsTool {
             try build(&options)
         case "build-routes":
             try buildRoutes(&options)
+        case "build-places":
+            try buildPlaces(&options)
+        case "place-filters":
+            try options.finish()
+            PlaceSquareBuild.osmiumFilters.forEach { print($0) }
         case "upload":
             try await Upload.run(&options)
         case "whoami":
@@ -125,6 +135,25 @@ private extension TrailCellsTool {
                 + "Pass --world for a build of the whole planet.")
     }
 
+    static func buildPlaces(_ options: inout Options) throws {
+        let nodesPath = try options.required("--nodes")
+        var build = try buildOptions(&options)
+        build.nodesPath = nodesPath
+        let summary = try PlaceSquareBuild.run(build)
+        print("Filed \(summary.places) places — \(summary.nodes) nodes, \(summary.ways) ways and "
+            + "\(summary.relations) relations — in \(summary.squares) squares, \(summary.bytes) bytes in all.")
+        if summary.withoutPositions > 0 {
+            print("  left out \(summary.withoutPositions) running out of the extract")
+        }
+        if let largest = summary.largest {
+            print("The largest square is \(largest.name), \(largest.bytes) bytes for \(largest.places) places.")
+        }
+        print(build.coversTheWorld
+            ? "Marked complete: a square with no file is a square with no places."
+            : "Not marked complete: the app reads only squares that are the whole world, and keeps asking "
+                + "Overpass. Pass --world for a build of the whole planet.")
+    }
+
     static func build(_ options: inout Options) throws {
         let build = try buildOptions(&options)
         let summary = try TrailCellBuild.run(build)
@@ -149,6 +178,18 @@ private extension TrailCellsTool {
         let path = try options.positional("a square's file")
         try options.finish()
         let data = try Data(contentsOf: URL(fileURLWithPath: path))
+        if let places = try? PlaceSquareFile(decoding: data) {
+            if asJSON {
+                print(try Inspection.json(of: places))
+                return
+            }
+            print("scale \(places.coordinateScale), \(places.places.count) places")
+            for place in places.places {
+                print("\(place.element.name)/\(place.id)\t\(place.point.latitude) \(place.point.longitude)\t"
+                    + (place.tags["name"] ?? ""))
+            }
+            return
+        }
         if let routes = try? RouteSquareFile(decoding: data) {
             if asJSON {
                 print(try Inspection.json(of: routes))
@@ -212,6 +253,18 @@ enum Inspection {
             ]
         }
         return try serialized(["scale": file.coordinateScale, "routes": routes, "lines": lines])
+    }
+
+    static func json(of file: PlaceSquareFile) throws -> String {
+        let places: [[String: Any]] = file.places.map { place in
+            [
+                "element": place.element.name,
+                "id": place.id,
+                "point": [place.point.latitude, place.point.longitude],
+                "tags": place.tags,
+            ]
+        }
+        return try serialized(["scale": file.coordinateScale, "places": places])
     }
 
     private static func serialized(_ object: [String: Any]) throws -> String {

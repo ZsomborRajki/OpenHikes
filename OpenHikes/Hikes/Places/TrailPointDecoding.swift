@@ -64,10 +64,36 @@ nonisolated enum TrailPointDecoding {
     /// pin and read as "Place", which is a thing the hiker marked themselves
     /// rather than an answer to *what is here*.
     private static func found(in element: Element, showing symbols: Set<TrailPlaceSymbol>) -> TrailPlace? {
-        guard let symbol = TrailPointQuery.symbol(for: element.tags, among: symbols) else { return nil }
-        guard let type = element.type, let id = element.id else { return nil }
-        guard let latitude = element.lat ?? element.center?.lat,
-              let longitude = element.lon ?? element.center?.lon,
+        guard let type = element.type, let id = element.id,
+              let latitude = element.lat ?? element.center?.lat,
+              let longitude = element.lon ?? element.center?.lon
+        else { return nil }
+        return place(
+            elementType: type,
+            id: id,
+            latitude: latitude,
+            longitude: longitude,
+            tags: element.tags,
+            showing: symbols
+        )
+    }
+
+    /// One element as a place, from its parts: what an Overpass answer and a
+    /// pre-built square are both read through, so a place reads the same
+    /// whichever brought it — see ``PlaceSquareLibrary``.
+    ///
+    /// `nil` for an element carrying none of the tags of a kind drawn as one
+    /// of `symbols` — of a kind asked for as an area, for a way or a relation —
+    /// and for a coordinate the projection cannot take.
+    static func place(
+        elementType type: String,
+        id: Int64,
+        latitude: Double,
+        longitude: Double,
+        tags: [String: String],
+        showing symbols: Set<TrailPlaceSymbol>
+    ) -> TrailPlace? {
+        guard let symbol = TrailPointQuery.symbol(for: tags, among: symbols, isArea: type != "node"),
               Mercator.isRepresentable(latitude: latitude, longitude: longitude)
         else { return nil }
         let coordinate = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
@@ -77,15 +103,15 @@ nonisolated enum TrailPointDecoding {
             // Bounded where it enters, like every other name that arrives
             // unattended — see ``HikeTitle``. `nil` becomes empty, which is how
             // a hiker says *unnamed* and what the vast majority of these are.
-            name: BoundedText.boundedOrEmpty(element.tags["name"], to: .title),
+            name: BoundedText.boundedOrEmpty(tags["name"], to: .title),
             symbol: symbol,
             osm: TrailPlaceOSM(
                 elementType: type,
                 elementID: id,
-                facts: TrailPlaceFact.facts(in: element.tags),
+                facts: TrailPlaceFact.facts(in: tags),
                 // What the place card asks Wikipedia about — see
                 // ``WikidataPlaceLookup``.
-                wikidata: TrailPlaceOSM.wikidataItem(fromTag: element.tags["wikidata"])
+                wikidata: TrailPlaceOSM.wikidataItem(fromTag: tags["wikidata"])
             )
         )
     }

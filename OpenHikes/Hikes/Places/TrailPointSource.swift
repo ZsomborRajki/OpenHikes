@@ -22,6 +22,15 @@
 //  index this repository has already declined once, and a box that merely
 //  overlaps answers partially while looking complete.
 //
+//  **Overpass is the second place asked, not the first.** The places are built
+//  ahead of time into squares of the public database — see
+//  ``PlaceSquareGrid`` — and a search asks them first, through
+//  ``PlaceSquareLibrary``, as the day hikes' search asks theirs. An answer
+//  from them is the whole of the area's places, and an empty one means there
+//  are none; only where they have no answer is Overpass asked, exactly as
+//  before there were squares. What the squares keep on this device is read
+//  beside the store wherever the store is: see ``cachedPlaces(near:limit:)``.
+//
 //  The manners — the rate-limit gate, the one retry a busy answer gets, the
 //  `User-Agent`, the reading of a `200` carrying a `remark` — are
 //  ``OverpassConversation``'s and are not written again here. This type is the
@@ -32,6 +41,7 @@
 //  store is a value over a directory, like ``CuratedTrailStore``.
 //
 
+import Algorithms
 import Foundation
 import OpenHikesData
 
@@ -100,6 +110,13 @@ nonisolated struct TrailPointSource: TrailPointSourcing {
     /// write — which is what a `Caches` directory the system will not name
     /// looks like.
     private let store: TrailPointStore?
+    /// The pre-built squares a search asks before it asks Overpass.
+    ///
+    /// `nil` for a source that has none, which is every suite's unless it
+    /// passes one, and then every search is Overpass's as it always was. The
+    /// composition root hands the real one over: see
+    /// ``OpenHikesModel/makeTrailPointSource()``.
+    private let squares: PlaceSquareLibrary?
 
     /// - Parameters:
     ///   - clock: See *Deliberate test seams* in the repository instructions.
@@ -107,6 +124,7 @@ nonisolated struct TrailPointSource: TrailPointSourcing {
     ///     is holding, and so is a stored place's age.
     ///   - directory: where answers are kept. `nil` keeps nothing, which is
     ///     what a suite about the wire format wants.
+    ///   - squares: the pre-built squares asked first, or `nil` for none.
     ///   - transport: `nil` builds the live one, which is the only thing here
     ///     that reaches the network.
     init(
@@ -116,6 +134,7 @@ nonisolated struct TrailPointSource: TrailPointSourcing {
             try await Task.sleep(for: .seconds(seconds))
         },
         directory: URL? = TrailPointStore.defaultDirectory(),
+        squares: PlaceSquareLibrary? = nil,
         transport: Transport? = nil
     ) {
         conversation = OverpassConversation(
@@ -126,6 +145,7 @@ nonisolated struct TrailPointSource: TrailPointSourcing {
             transport: transport
         )
         store = directory.map { TrailPointStore(directory: $0, clock: clock) }
+        self.squares = squares
     }
 
     /// `symbols` defaults to every one, which is a search with no switch
@@ -136,6 +156,12 @@ nonisolated struct TrailPointSource: TrailPointSourcing {
     ) async throws -> [TrailPlace] {
         let boxes = TrailPointQuery.searchBoxes(for: area)
         guard let query = TrailPointQuery.query(in: boxes, symbols: symbols) else { return [] }
+        // The squares first. An answer from them, an empty one included, is
+        // the area's places, and asking Overpass to confirm it would bring
+        // the wait back. Theirs is kept as squares, not in the store.
+        if case .places(let prebuilt) = try await squares?.places(in: boxes, showing: symbols) ?? .uncovered {
+            return prebuilt
+        }
         let found = try await conversation.fetch(
             query,
             awaiting: TrailPointQuery.timeoutSeconds
@@ -157,8 +183,23 @@ nonisolated struct TrailPointSource: TrailPointSourcing {
     /// waiting on — and it is what the requirement asks for, so a version
     /// without it would be witnessed by the protocol extension's `[]` instead
     /// and this would quietly never run.
+    ///
+    /// The squares this device keeps are read beside the store, and a place
+    /// both hold is offered once, from its square.
     @concurrent
     func cachedPlaces(near area: CommunitySearchArea, limit: Int) async -> [TrailPlace] {
-        store?.places(near: area, limit: limit) ?? []
+        let kept = await squares?.keptPlaces(near: area, limit: limit) ?? []
+        let stored = store?.places(near: area, limit: limit) ?? []
+        guard !kept.isEmpty else { return stored }
+        let center = area.coordinate
+        var seen: Set<String> = []
+        return (kept + stored)
+            .filter { place in
+                guard let osm = place.osm else { return true }
+                return seen.insert("\(osm.elementType)/\(osm.elementID)").inserted
+            }
+            .map { (place: $0, distance: RouteGeometry.distanceMeters(from: center, to: $0.clCoordinate)) }
+            .min(count: limit) { $0.distance < $1.distance }
+            .map(\.place)
     }
 }

@@ -336,7 +336,11 @@ extension OpenHikesModel {
         }
         #endif
         guard !AppLaunchEnvironment.isRunningTests else { return nil }
-        return TrailPointSource()
+        // The places' squares, under their own manifest: see
+        // ``PlaceSquareGrid``. Behind the same guard as Overpass, because
+        // there is no sandbox for a public database either.
+        let squares = CloudKitTrailCellDatabase(manifestRecordName: PlaceSquareGrid.manifestRecordName)
+        return TrailPointSource(squares: PlaceSquareLibrary(database: squares))
     }
 }
 

@@ -262,10 +262,21 @@ nonisolated enum TrailPointQuery {
     /// viewpoint and comes back as one, rather than as a summit the finder
     /// would then have to throw away. Still one answer for one choice of
     /// switches, which is what the order is for.
+    ///
+    /// For an area — a way or a relation — only the kinds asked for as areas
+    /// compete, because those are the only filters that could have brought
+    /// one: a shelter's roof also tagged as the spring beneath it is a
+    /// shelter, never the spring ``query(in:symbols:)`` asks for as nodes
+    /// alone. That is also
+    /// what lets the pre-built squares answer exactly as Overpass does: see
+    /// ``PlaceSquareFile/isPlace(_:tags:)``.
     static func symbol(
         for tags: [String: String],
-        among symbols: Set<TrailPlaceSymbol> = Set(TrailPlaceSymbol.allCases)
+        among symbols: Set<TrailPlaceSymbol> = Set(TrailPlaceSymbol.allCases),
+        isArea: Bool = false
     ) -> TrailPlaceSymbol? {
-        kinds.first { kind in symbols.contains(kind.symbol) && tags[kind.key] == kind.value }?.symbol
+        kinds.first { kind in
+            symbols.contains(kind.symbol) && (!isArea || kind.includesAreas) && tags[kind.key] == kind.value
+        }?.symbol
     }
 }

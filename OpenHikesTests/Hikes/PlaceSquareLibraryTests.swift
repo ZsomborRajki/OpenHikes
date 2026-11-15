@@ -1,0 +1,329 @@
+//
+//  PlaceSquareLibraryTests.swift
+//  OpenHikesTests
+//
+//  What the places' pre-built squares answer a search with — and, as much,
+//  when they decline to answer.
+//
+//  The contract is the day hikes' (see `TrailCellLibraryTests`): an answer is
+//  complete or it is not given. ``TrailPointSource`` takes an empty answer to
+//  mean nothing of those kinds is mapped there, and no answer to mean *ask
+//  Overpass*. So the cases worth having are the ones on that line, and what is
+//  kept on the device on either side of it, which is also what *Add Place*
+//  offers with no signal.
+//
+//  The database is the day hikes' stub and the directory is the case's own,
+//  for the reason the repository's *Deliberate test seams* section gives.
+//
+
+import CoreLocation
+import Foundation
+@testable import OpenHikes
+import OpenHikesData
+import RealModule
+import Testing
+
+@Suite("Place square library")
+struct PlaceSquareLibraryTests {
+    // MARK: - Fixtures
+
+    /// The map above a half-height sheet over the Berchtesgaden valley's
+    /// western half: one square, the degree it stands in, which ends at 13°E.
+    static let valley = CuratedTrailQuery.BoundingBox(south: 47.598, west: 12.86675, north: 47.642, east: 12.93325)
+    static let valleyArea = CommunitySearchArea(
+        coordinate: CLLocationCoordinate2D(latitude: 47.62, longitude: 12.90),
+        radiusMeters: 3000
+    )
+    /// A map that straddles 13°E, and so two squares.
+    static let straddling = CuratedTrailQuery.BoundingBox(south: 47.6, west: 12.85, north: 47.65, east: 13.05)
+    static let valleySquare = "places1_137_192"
+    static let eastSquare = "places1_137_193"
+
+    static func node(
+        _ id: Int64,
+        _ latitude: Double,
+        _ longitude: Double,
+        _ tags: [String: String]
+    ) -> PlaceSquareFile.Place {
+        place(.node, id, latitude, longitude, tags)
+    }
+
+    static func place(
+        _ element: PlaceSquareFile.Element,
+        _ id: Int64,
+        _ latitude: Double,
+        _ longitude: Double,
+        _ tags: [String: String]
+    ) -> PlaceSquareFile.Place {
+        let scale = Double(PlaceSquareFile.standardCoordinateScale)
+        return PlaceSquareFile.Place(
+            element: element,
+            id: id,
+            point: PlaceSquareFile.Point(
+                latitude: Int32((latitude * scale).rounded()),
+                longitude: Int32((longitude * scale).rounded())
+            ),
+            tags: tags
+        )
+    }
+
+    /// In the valley: a named summit, an unnamed spring, a hut mapped as a
+    /// building, and a car park.
+    static let summit = node(1, 47.60, 12.88, ["natural": "peak", "name": "Watzmann", "ele": "2713"])
+    static let spring = node(2, 47.61, 12.89, ["natural": "spring"])
+    static let hut = place(.way, 3, 47.62, 12.90, ["tourism": "alpine_hut", "name": "Kärlingerhaus"])
+    static let carPark = node(4, 47.635, 12.915, ["amenity": "parking"])
+    /// In the valley's square, and north of the map.
+    static let farFall = node(5, 47.9, 12.5, ["waterway": "waterfall"])
+    /// East of 13°E.
+    static let eastViewpoint = node(6, 47.62, 13.02, ["tourism": "viewpoint"])
+
+    static func found(_ places: [PlaceSquareFile.Place]) -> TrailCellFetch.Cell {
+        .found(PlaceSquareFile(places: places).encoded())
+    }
+
+    static func scratchDirectory() -> URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent("place-squares-\(UUID().uuidString)")
+    }
+
+    /// - Parameter directory: Where the library keeps squares. `nil`, the
+    ///   default, keeps none, so every search is a request.
+    static func makeLibrary(_ database: StubTrailCellDatabase, directory: URL? = nil) -> PlaceSquareLibrary {
+        PlaceSquareLibrary(database: database, directory: directory, clock: TestClock().read)
+    }
+
+    /// The OpenStreetMap ids an answer offers, in id order, or a recorded
+    /// issue when it is not an answer at all.
+    static func offered(_ answer: PlaceSquareAnswer, sourceLocation: SourceLocation = #_sourceLocation) -> [Int64] {
+        guard case .places(let places) = answer else {
+            Issue.record("the squares gave no answer: \(answer)", sourceLocation: sourceLocation)
+            return []
+        }
+        return places.compactMap(\.osm?.elementID).sorted()
+    }
+
+    static let everything = Set(TrailPlaceSymbol.allCases)
+
+    // MARK: - An answer
+
+    @Test("a search asks once, for the squares its map touches, and offers the places on the map")
+    func aSearchIsAnswered() async throws {
+        let database = StubTrailCellDatabase(cells: [
+            Self.valleySquare: Self.found([Self.summit, Self.spring, Self.hut, Self.carPark, Self.farFall]),
+        ])
+
+        let answer = try await Self.makeLibrary(database).places(in: [Self.valley], showing: Self.everything)
+
+        #expect(database.requests == [[Self.valleySquare]])
+        #expect(Self.offered(answer) == [1, 2, 3, 4], "the waterfall is in the square, and not on the map")
+        guard case .places(let places) = answer,
+              let watzmann = places.first(where: { $0.osm?.elementID == 1 })
+        else { return }
+        #expect(watzmann.name == "Watzmann")
+        #expect(watzmann.symbol == .summit)
+        #expect(watzmann.osm?.elementType == "node")
+        #expect(watzmann.osm?.facts == [TrailPlaceFact(kind: .elevation, value: "2713")])
+        #expect(watzmann.longitude.isApproximatelyEqual(to: 12.88, absoluteTolerance: 1e-9))
+        #expect(places.first { $0.osm?.elementID == 3 }?.osm?.elementType == "way")
+    }
+
+    @Test("a map across two squares reads both, in one request")
+    func twoSquaresAreOneRequest() async throws {
+        let database = StubTrailCellDatabase(cells: [
+            Self.valleySquare: Self.found([Self.spring, Self.hut]),
+            Self.eastSquare: Self.found([Self.eastViewpoint]),
+        ])
+
+        let answer = try await Self.makeLibrary(database).places(in: [Self.straddling], showing: Self.everything)
+
+        #expect(database.requests == [[Self.valleySquare, Self.eastSquare]])
+        #expect(Self.offered(answer) == [2, 3, 6])
+    }
+
+    /// What a maker's switch turned off means, as it does in the Overpass
+    /// request: the kind is not offered.
+    @Test("a kind switched off is not offered")
+    func aSwitchedOffKindIsLeftOut() async throws {
+        let database = StubTrailCellDatabase(cells: [
+            Self.valleySquare: Self.found([Self.summit, Self.spring, Self.hut, Self.carPark]),
+        ])
+
+        let answer = try await Self.makeLibrary(database).places(in: [Self.valley], showing: [.summit, .shelter])
+
+        #expect(Self.offered(answer) == [1, 3])
+    }
+
+    /// The Overpass request asks for car parks and springs as nodes alone, so
+    /// a way is only ever there as a kind mapped as an area — and a square
+    /// read the same way gives the same answer.
+    @Test("a way is a place only as a kind mapped as an area")
+    func aWayIsOnlyAnArea() async throws {
+        let parkingLot = Self.place(.way, 7, 47.62, 12.90, ["amenity": "parking"])
+        let roofOverSpring = Self.place(.way, 8, 47.62, 12.90, ["natural": "spring", "amenity": "shelter"])
+        let database = StubTrailCellDatabase(cells: [Self.valleySquare: Self.found([parkingLot, roofOverSpring])])
+
+        let answer = try await Self.makeLibrary(database).places(in: [Self.valley], showing: Self.everything)
+
+        guard case .places(let places) = answer else {
+            Issue.record("the squares gave no answer: \(answer)")
+            return
+        }
+        #expect(places.map(\.osm?.elementID) == [8])
+        #expect(places.first?.symbol == .shelter, "a spring is asked for as a node, and a shelter as an area too")
+    }
+
+    /// No waterfalls in the valley is something the squares can say, and
+    /// asking Overpass to confirm it would bring the wait back.
+    @Test("a square with no record, in squares that are the whole world, is ground with no places")
+    func anAbsentSquareIsEmptyGround() async throws {
+        let directory = Self.scratchDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let database = StubTrailCellDatabase()
+        let library = Self.makeLibrary(database, directory: directory)
+
+        let first = try await library.places(in: [Self.valley], showing: Self.everything)
+        let second = try await library.places(in: [Self.valley], showing: Self.everything)
+
+        #expect(Self.offered(first).isEmpty)
+        #expect(Self.offered(second).isEmpty)
+        #expect(database.requests.count == 1, "the empty square is kept as one")
+    }
+
+    @Test("a square kept on the device is read from it, and nothing is asked")
+    func aKeptSquareIsNotAskedAgain() async throws {
+        let directory = Self.scratchDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let database = StubTrailCellDatabase(cells: [Self.valleySquare: Self.found([Self.summit])])
+        let library = Self.makeLibrary(database, directory: directory)
+
+        _ = try await library.places(in: [Self.valley], showing: Self.everything)
+        let again = try await library.places(in: [Self.valley], showing: [.summit])
+
+        #expect(database.requests == [[Self.valleySquare]])
+        #expect(Self.offered(again) == [1])
+    }
+
+    // MARK: - No answer
+
+    @Test("squares that are not the whole world give no answer, and none is kept", arguments: [
+        TrailCellFetch.Manifest.absent, .partial,
+    ])
+    func partOfTheWorldIsNoAnswer(manifest: TrailCellFetch.Manifest) async throws {
+        let directory = Self.scratchDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let database = StubTrailCellDatabase(manifest: manifest, cells: [Self.valleySquare: Self.found([Self.summit])])
+        let library = Self.makeLibrary(database, directory: directory)
+
+        let first = try await library.places(in: [Self.valley], showing: Self.everything)
+        _ = try await library.places(in: [Self.valley], showing: Self.everything)
+        let kept = await library.keptPlaces(near: Self.valleyArea, limit: 10)
+
+        guard case .uncovered = first else {
+            Issue.record("a set that is part of the world answered: \(first)")
+            return
+        }
+        #expect(database.requests.count == 2, "nothing of a set that is part of the world is kept")
+        #expect(kept.isEmpty)
+    }
+
+    @Test("a manifest that could not be read gives no answer")
+    func anUnreadManifestIsUnreachable() async throws {
+        let database = StubTrailCellDatabase(manifest: .unread, cells: [Self.valleySquare: Self.found([Self.summit])])
+
+        let answer = try await Self.makeLibrary(database).places(in: [Self.valley], showing: Self.everything)
+
+        guard case .unreachable = answer else {
+            Issue.record("an unread manifest answered: \(answer)")
+            return
+        }
+    }
+
+    /// The four squares that did arrive are no answer, and they are four the
+    /// next search does not fetch.
+    @Test("a square that could not be read gives no answer, and the one that arrived is kept")
+    func anUnreadSquareKeepsTheRest() async throws {
+        let directory = Self.scratchDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let database = StubTrailCellDatabase(cells: [
+            Self.valleySquare: Self.found([Self.spring]),
+            Self.eastSquare: .failed,
+        ])
+        let library = Self.makeLibrary(database, directory: directory)
+
+        let first = try await library.places(in: [Self.straddling], showing: Self.everything)
+        database.hold(Self.found([Self.eastViewpoint]), as: Self.eastSquare)
+        let second = try await library.places(in: [Self.straddling], showing: Self.everything)
+
+        guard case .unreachable = first else {
+            Issue.record("a search with a square missing answered: \(first)")
+            return
+        }
+        #expect(database.requests == [[Self.valleySquare, Self.eastSquare], [Self.eastSquare]])
+        #expect(Self.offered(second) == [2, 6])
+    }
+
+    @Test("a request that fails as a whole gives no answer")
+    func aFailedRequestIsUnreachable() async throws {
+        let database = StubTrailCellDatabase(cells: [Self.valleySquare: Self.found([Self.summit])])
+        database.fail(with: URLError(.notConnectedToInternet))
+
+        let answer = try await Self.makeLibrary(database).places(in: [Self.valley], showing: Self.everything)
+
+        guard case .unreachable = answer else {
+            Issue.record("a failed request answered: \(answer)")
+            return
+        }
+    }
+
+    /// A search superseded mid-fetch is not an unreachable square: reported
+    /// as one, it would send a request to Overpass for nobody.
+    @Test("a cancelled search throws rather than giving no answer")
+    func aCancelledSearchThrows() async {
+        let database = StubTrailCellDatabase(cells: [Self.valleySquare: Self.found([Self.summit])])
+        database.cancelCallers()
+        let library = Self.makeLibrary(database)
+
+        await #expect(throws: CancellationError.self) {
+            _ = try await library.places(in: [Self.valley], showing: Self.everything)
+        }
+    }
+
+    @Test("a search that would need more squares than one request names asks nothing")
+    func tooManySquaresIsUncovered() async throws {
+        let database = StubTrailCellDatabase()
+        let wide = CuratedTrailQuery.BoundingBox(south: 40, west: 0, north: 50, east: 10)
+
+        let answer = try await Self.makeLibrary(database).places(in: [wide], showing: Self.everything)
+
+        guard case .uncovered = answer else {
+            Issue.record("a search past the limit answered: \(answer)")
+            return
+        }
+        #expect(database.requests.isEmpty)
+    }
+
+    // MARK: - What is kept
+
+    /// What *Add Place* offers before its search answers, and with no signal
+    /// at all: every kind, nearest first, and no request.
+    @Test("the places of a kept square are offered nearest first, asking nothing")
+    func keptPlacesAreOfferedNearestFirst() async throws {
+        let directory = Self.scratchDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let database = StubTrailCellDatabase(cells: [
+            Self.valleySquare: Self.found([Self.summit, Self.spring, Self.hut, Self.carPark, Self.farFall]),
+        ])
+        let library = Self.makeLibrary(database, directory: directory)
+        let nothingYet = await library.keptPlaces(near: Self.valleyArea, limit: 10)
+        _ = try await library.places(in: [Self.valley], showing: [.summit])
+
+        let kept = await library.keptPlaces(near: Self.valleyArea, limit: 2)
+
+        #expect(nothingYet.isEmpty)
+        #expect(
+            kept.compactMap(\.osm?.elementID) == [3, 2],
+            "the hut in the middle, then the spring: a switch is no filter here"
+        )
+        #expect(database.requests.count == 1)
+    }
+}

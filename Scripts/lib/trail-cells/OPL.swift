@@ -11,9 +11,13 @@
 //
 //      r49583 Tname=P%20%(Írott-kő),route=hiking Mw353807034@,w99376544@forward
 //
-//  and a way, once `osmium add-locations-to-ways` has run, is
+//  a way, once `osmium add-locations-to-ways` has run, is
 //
 //      w3427032 Thighway=path Nn15722546x18.1503587y46.1449026,n15722543x18.15y46.14
+//
+//  and a node, which the places' build reads, is
+//
+//      n26863613 Tele=2713,name=Hoher%20%Göll,natural=peak x13.0670457 y47.5937383
 //
 //  Fields are separated by one space and named by their first letter, so the
 //  ones osmium adds when metadata is left on are skipped rather than counted.
@@ -44,6 +48,17 @@ struct OPLWay {
     /// a way that crosses out of a regional extract, which no line can be
     /// drawn from honestly.
     var points: [TrailCellFile.Point]?
+    /// Read only when asked for: the routes' builds have no use for them, and
+    /// they read millions of ways.
+    var tags: [String: String] = [:]
+}
+
+/// One node line: its id, its tags and its position.
+struct OPLNode {
+    var id: Int64
+    var tags: [String: String]
+    /// `nil` for a node written without a position.
+    var point: TrailCellFile.Point?
 }
 
 enum OPLError: Error, CustomStringConvertible {
@@ -127,9 +142,10 @@ enum OPL {
 
     /// A way line, or `nil` for a line that is some other object.
     ///
-    /// - Parameter scale: The coordinate units in a degree the points are
-    ///   rounded to.
-    static func way(_ line: UnsafeBufferPointer<UInt8>, scale: Int32) throws -> OPLWay? {
+    /// - Parameters:
+    ///   - scale: The coordinate units in a degree the points are rounded to.
+    ///   - readsTags: Whether the way's tags are read as well as its points.
+    static func way(_ line: UnsafeBufferPointer<UInt8>, scale: Int32, readsTags: Bool = false) throws -> OPLWay? {
         guard line.first == UInt8(ascii: "w") else { return nil }
         var fields = line.split(separator: ASCII.space, omittingEmptySubsequences: true).makeIterator()
         guard let head = fields.next(), let id = integer(head.dropFirst()) else {
@@ -137,10 +153,47 @@ enum OPL {
         }
         var way = OPLWay(id: id, points: [])
         while let field = fields.next() {
-            guard field.first == UInt8(ascii: "N") else { continue }
-            way.points = try points(field.dropFirst(), scale: Int64(scale), line: line)
+            switch field.first {
+            case UInt8(ascii: "N"):
+                way.points = try points(field.dropFirst(), scale: Int64(scale), line: line)
+            case UInt8(ascii: "T") where readsTags:
+                way.tags = tags(field.dropFirst())
+            default:
+                continue
+            }
         }
         return way
+    }
+
+    /// A node line, or `nil` for a line that is some other object.
+    ///
+    /// - Parameter scale: The coordinate units in a degree the position is
+    ///   rounded to.
+    static func node(_ line: UnsafeBufferPointer<UInt8>, scale: Int32) throws -> OPLNode? {
+        guard line.first == UInt8(ascii: "n") else { return nil }
+        var fields = line.split(separator: ASCII.space, omittingEmptySubsequences: true).makeIterator()
+        guard let head = fields.next(), let id = integer(head.dropFirst()) else {
+            throw OPLError.malformed(line: text(line))
+        }
+        var node = OPLNode(id: id, tags: [:], point: nil)
+        var longitude: Int32?
+        var latitude: Int32?
+        while let field = fields.next() {
+            switch field.first {
+            case UInt8(ascii: "T"):
+                node.tags = tags(field.dropFirst())
+            case UInt8(ascii: "x"):
+                longitude = try position(field.dropFirst(), scale: Int64(scale), line: line)
+            case UInt8(ascii: "y"):
+                latitude = try position(field.dropFirst(), scale: Int64(scale), line: line)
+            default:
+                continue
+            }
+        }
+        if let latitude, let longitude {
+            node.point = TrailCellFile.Point(latitude: latitude, longitude: longitude)
+        }
+        return node
     }
 
     /// The id a way line carries, without reading the rest of it — which is
@@ -178,6 +231,14 @@ private extension OPL {
                 role: unescaped(member[member.index(after: separator)...])
             )
         }
+    }
+
+    /// One of a node's two coordinates, or `nil` for a node written without
+    /// a position, which is the mark with nothing after it.
+    static func position(_ field: Bytes, scale: Int64, line: UnsafeBufferPointer<UInt8>) throws -> Int32? {
+        guard !field.isEmpty else { return nil }
+        guard let value = coordinate(field, scale: scale) else { throw OPLError.malformed(line: text(line)) }
+        return value
     }
 
     /// A way's points, or `nil` when one of its nodes has no position.

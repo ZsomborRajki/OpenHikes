@@ -55,18 +55,20 @@ import Foundation
 enum Upload {
     /// Which set of squares a build is, and so which manifest it replaces.
     ///
-    /// The two sets share their record types — a square's file as an asset
+    /// The three sets share their record types — a square's file as an asset
     /// and its digest, a manifest listing every square — and nothing else:
     /// each has a manifest record of its own and record names of its own, so
-    /// an upload of one never reads, lists or deletes a record of the other.
+    /// an upload of one never reads, lists or deletes a record of another.
     enum Dataset {
         case dayHikes
         case hikingRoutes
+        case places
 
         init(kind: String?) throws {
             switch kind {
             case nil: self = .dayHikes
             case RouteSquareBuild.manifestKind: self = .hikingRoutes
+            case PlaceSquareBuild.manifestKind: self = .places
             case let other?: throw CloudKitError(description: "this tool does not know a build of kind '\(other)'.")
             }
         }
@@ -75,6 +77,7 @@ enum Upload {
             switch self {
             case .dayHikes: TrailCellGrid.manifestRecordName
             case .hikingRoutes: RouteSquareGrid.manifestRecordName
+            case .places: PlaceSquareGrid.manifestRecordName
             }
         }
 
@@ -82,6 +85,7 @@ enum Upload {
             switch self {
             case .dayHikes: TrailCellGrid.generation
             case .hikingRoutes: RouteSquareGrid.generation
+            case .places: PlaceSquareGrid.generation
             }
         }
 
@@ -91,6 +95,15 @@ enum Upload {
             switch self {
             case .dayHikes: TrailCellGrid.cell(named: name) != nil
             case .hikingRoutes: RouteSquareGrid.square(named: name) != nil
+            case .places: PlaceSquareGrid.square(named: name) != nil
+            }
+        }
+
+        /// What a build's count is a count of.
+        var itemName: String {
+            switch self {
+            case .dayHikes, .hikingRoutes: "routes"
+            case .places: "places"
             }
         }
 
@@ -99,6 +112,7 @@ enum Upload {
             switch self {
             case .dayHikes: "send every search back to Overpass"
             case .hikingRoutes: "leave the hiking-routes layer drawing nothing"
+            case .places: "send every place search back to Overpass"
             }
         }
     }
@@ -229,7 +243,7 @@ extension Upload {
         }
         try confirm(plan, in: database.environment, isConfirmed: isConfirmed)
         try await apply(plan, of: local, from: directory, to: database, manifest: dataset.manifestRecordName)
-        print("Done: \(local.cells.count) squares, \(local.routeCount) routes, "
+        print("Done: \(local.cells.count) squares, \(local.routeCount) \(dataset.itemName), "
             + (local.complete ? "marked as the whole world." : "not marked as the whole world."))
     }
 

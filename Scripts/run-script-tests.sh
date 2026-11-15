@@ -381,12 +381,12 @@ esac
 STUB
 
 # Answers the four osmium commands Scripts/trail-cells.sh makes, and records
-# each. It reads no extract. `cat` writes the OPL fixture STUB_OSMIUM_RELATIONS
-# or STUB_OSMIUM_WAYS names, whichever `-t` asks for, to the file `-o` names —
-# and writes the ways without their nodes' positions unless the format asks for
-# them, which is what the real one does and is the option the script must not
-# lose. STUB_OSMIUM_NO_POSITIONS leaves them out even then. `fileinfo` prints
-# STUB_OSMIUM_TIMESTAMP.
+# each. It reads no extract. `cat` writes the OPL fixture STUB_OSMIUM_RELATIONS,
+# STUB_OSMIUM_NODES or STUB_OSMIUM_WAYS names, whichever `-t` asks for, to the
+# file `-o` names — and writes the ways without their nodes' positions unless
+# the format asks for them, which is what the real one does and is the option
+# the script must not lose. STUB_OSMIUM_NO_POSITIONS leaves them out even then.
+# `fileinfo` prints STUB_OSMIUM_TIMESTAMP.
 cat > "$stub_bin/osmium" <<'STUB'
 #!/usr/bin/env bash
 printf 'osmium %s\n' "$*" >> "$STUB_CALL_LOG"
@@ -408,6 +408,8 @@ case "$command" in
     cat)
         if [[ "$kind" == relation ]]; then
             cp "$STUB_OSMIUM_RELATIONS" "$output"
+        elif [[ "$kind" == node ]]; then
+            cp "$STUB_OSMIUM_NODES" "$output"
         elif [[ "$format" == *locations_on_ways=true* && -z "${STUB_OSMIUM_NO_POSITIONS:-}" ]]; then
             cp "$STUB_OSMIUM_WAYS" "$output"
         else
@@ -4537,6 +4539,97 @@ run_script "trail-cells upload plans the hiking-routes layer's squares under its
 if expect_status 0 \
     && expect_contains "$output" \
         "iCloud.tappium.com.OpenHikes, development, routes1_manifest: 7 squares to upload, 0 to delete, 0 unchanged." \
+        "the plan"; then
+    pass
+fi
+
+# The places' build files what a place search would have been handed: a node
+# of any kind, and a way or a relation only of a kind mapped as an area. Node 4
+# is a guidepost and node 5 has no tags; way 11 is a car park drawn as an area,
+# which the search asks for as nodes alone; way 12 runs out of the extract;
+# relation 41 is a route. The hut is placed at the middle of its outline's box,
+# and the multipolygon hut at the middle of its two ways' boxes, and a tag no
+# place is read from is left behind.
+cat > "$cells_work/place-nodes.opl" <<'PLACES'
+n1 Tele=2522,name=Hoher%20%Goell,natural=peak,source=survey x13.0670457 y47.5937383
+n2 Tnatural=spring x12.97 y47.62
+n3 Tamenity=parking x12.98 y47.63
+n4 Ttourism=information x12.99 y47.64
+n5 T x12.9 y47.6
+n6 Tnatural=peak x14.5 y46.5
+PLACES
+cat > "$cells_work/place-ways.opl" <<'PLACES'
+w10 Tname=Hut,tourism=alpine_hut Nn20x12.95y47.61,n21x12.96y47.61,n22x12.96y47.62,n20x12.95y47.61
+w11 Tamenity=parking Nn23x12.9y47.6,n24x12.91y47.61
+w12 Tamenity=shelter Nn25x12.9y47.6,n26xy
+w13 Tbuilding=yes Nn30x13.01y47.65,n31x13.03y47.67
+w14 Tbuilding=yes Nn32x13.02y47.66,n33x13.04y47.66
+PLACES
+cat > "$cells_work/place-relations.opl" <<'PLACES'
+r40 Ttourism=wilderness_hut,type=multipolygon Mw13@outer,w14@outer
+r41 Tname=Loop,route=hiking Mw10@
+PLACES
+places_squares="$cells_work/places"
+STUB_OSMIUM_NODES="$cells_work/place-nodes.opl" \
+    STUB_OSMIUM_WAYS="$cells_work/place-ways.opl" \
+    STUB_OSMIUM_RELATIONS="$cells_work/place-relations.opl" \
+    run_script "trail-cells build-places asks osmium for the places the app searches for, and files them where they stand" \
+    "$trail_cells" build-places "$cells_work/extract.osm.pbf" --out "$places_squares" --world
+place_filters="n/amenity=drinking_water,parking n/natural=peak,saddle,spring n/tourism=viewpoint n/waterway=waterfall"
+place_filters+=" nwr/amenity=shelter nwr/tourism=alpine_hut,wilderness_hut,camp_site"
+if expect_status 0 \
+    && expect_contains "$calls" \
+        "osmium tags-filter $cells_work/extract.osm.pbf $place_filters -o $places_squares.work/places.osm.pbf --overwrite" \
+        "the recorded calls" \
+    && expect_contains "$calls" \
+        "osmium add-locations-to-ways $places_squares.work/places.osm.pbf --ignore-missing-nodes" \
+        "the recorded calls" \
+    && expect_contains "$calls" "-t node -f opl,add_metadata=false -o $places_squares.work/nodes.opl" \
+        "the recorded calls" \
+    && expect_contains "$output" "Filed 6 places — 4 nodes, 1 ways and 1 relations — in 3 squares" "the summary" \
+    && expect_contains "$output" "left out 1 running out of the extract" "the summary" \
+    && expect_contains "$output" "Marked complete" "the summary"; then
+    places_manifest="$(cat "$places_squares/places-manifest.json")"
+    if [[ "$(ls "$places_squares/cells")" != $'places1_136_194.cell\nplaces1_137_192.cell\nplaces1_137_193.cell' ]]; then
+        fail "the squares are not the ones the places stand in" "$(ls "$places_squares/cells")"
+    elif [[ "$places_manifest" != *'"kind" : "places"'* || "$places_manifest" != *'"routeCount" : 6'* ]]; then
+        fail "the manifest does not say it is the places', or how many there are" "$places_manifest"
+    elif [[ -e "$places_squares/manifest.json" ]]; then
+        fail "the places' manifest was written where the day hikes' goes"
+    else
+        pass
+    fi
+fi
+
+# What the app's decoder is held to as well, in PlaceSquareFileTests: by
+# element and then by id, OpenStreetMap's seventh decimal rounded away, and
+# only the tags a place is read from.
+places_expected='{"places":[{"element":"node","id":2,"point":[47620000,12970000],"tags":{"natural":"spring"}},{"element":"node","id":3,"point":[47630000,12980000],"tags":{"amenity":"parking"}},{"element":"way","id":10,"point":[47615000,12955000],"tags":{"name":"Hut","tourism":"alpine_hut"}}],"scale":1000000}'
+run_script "trail-cells inspect reads back the places a square was built from" \
+    "$trail_cells" inspect "$places_squares/cells/places1_137_192.cell" --json
+if expect_status 0; then
+    if [[ "$output" == "$places_expected" ]]; then
+        pass
+    else
+        fail "the square does not hold the places" "$output"
+    fi
+fi
+
+run_script "trail-cells build-places places a multipolygon by its ways and keeps a place's name unescaped" \
+    "$trail_cells" inspect "$places_squares/cells/places1_137_193.cell"
+if expect_status 0 \
+    && expect_contains "$output" "scale 1000000, 2 places" "the square" \
+    && expect_contains "$output" $'node/1\t47593738 13067046\tHoher Goell' "the square" \
+    && expect_contains "$output" $'relation/40\t47660000 13025000\t' "the square" \
+    && expect_absent "$output" "survey" "the square"; then
+    pass
+fi
+
+run_script "trail-cells upload plans the places' squares under their own manifest" \
+    "$trail_cells" upload "$places_squares" --environment development --dry-run --against "$cells_work/routes-remote.json"
+if expect_status 0 \
+    && expect_contains "$output" \
+        "iCloud.tappium.com.OpenHikes, development, places1_manifest: 3 squares to upload, 0 to delete, 0 unchanged." \
         "the plan"; then
     pass
 fi

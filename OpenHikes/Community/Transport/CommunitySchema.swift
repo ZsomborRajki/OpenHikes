@@ -236,14 +236,17 @@
 //  They are a copy of OpenStreetMap's waymarked day hikes, filed by square of
 //  the map — see ``TrailCellGrid`` — which `Scripts/trail-cells.sh` builds
 //  from an extract and uploads, so that a curated search is a fetch of a few
-//  records by name rather than a wait in Overpass's queue.
+//  records by name rather than a wait in Overpass's queue. The lines the
+//  hiking-routes layer draws, and the places a place search offers, are
+//  filed the same way under names of their own.
 //
 //  - **`_world` reads both**, for the reason it reads a listing: browsing
 //    needs no account.
 //  - **Create and write are the `reviewer` role's and nobody else's.** Not a
 //    role of their own, because it would guard nothing new: what a square
-//    holds is drawn on a hiker's map as a trail to walk, which is the trust a
-//    published listing already is, and a reviewer can publish one of those.
+//    holds is drawn on a hiker's map as a trail to walk or a place to stop,
+//    which is the trust a published listing already is, and a reviewer can
+//    publish one of those.
 //  - **No index on either.** Nothing queries them: a square is fetched by the
 //    name its place on the map gives it — see
 //    ``TrailCellGrid/recordName(for:)`` — and the manifest by its one fixed
@@ -301,17 +304,21 @@ nonisolated enum CommunitySchema {
     static let contributionType = "CommunityPhotoContribution"
     /// One square of OpenStreetMap's waymarked day hikes, written by
     /// `Scripts/trail-cells.sh` and fetched by name. See *The third family*
-    /// in this file's header. The hiking-routes layer's squares are records
-    /// of this type too, under names of their own — see ``RouteSquareGrid``.
+    /// in this file's header. The hiking-routes layer's squares and the
+    /// places' are records of this type too, under names of their own — see
+    /// ``RouteSquareGrid`` and ``PlaceSquareGrid``.
     static let trailCellType = "CuratedTrailCell"
     /// What one generation of those squares covers: a single record, under
-    /// ``TrailCellGrid/manifestRecordName`` — and the hiking-routes layer's,
-    /// under ``RouteSquareGrid/manifestRecordName``.
+    /// ``TrailCellGrid/manifestRecordName`` — and the hiking-routes layer's
+    /// and the places', under ``RouteSquareGrid/manifestRecordName`` and
+    /// ``PlaceSquareGrid/manifestRecordName``.
     static let trailManifestType = "CuratedTrailManifest"
 
     /// Fields on ``trailCellType``.
     enum TrailCell {
-        /// The square's routes, a ``TrailCellFile``, carried as an asset.
+        /// The square's routes, a ``TrailCellFile``, carried as an asset — or
+        /// the layer's ``RouteSquareFile`` or the places' ``PlaceSquareFile``,
+        /// under their names.
         ///
         /// An asset rather than a field for the reason ``Submission/route``
         /// is one: a `CKRecord`'s fields have to add up to under a megabyte,
