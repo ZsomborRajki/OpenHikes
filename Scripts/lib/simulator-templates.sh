@@ -90,6 +90,24 @@ newest_simulator_runtime() {
     done | sort -V | tail -1
 }
 
+# The identifier `simctl` gives the device type with exactly this name, or
+# nothing when it lists none. Read rather than derived: an `iPhone Duo` is
+# `…SimDeviceType.iPhone-Duo`, but an `iPad Pro 13-inch (M5)` is
+# `…SimDeviceType.iPad-Pro-13-inch-M5-12GB`, which no rule over the name
+# arrives at, and the `iPad Pro 13-inch (M5) (16GB)` listed beside it begins
+# with the same name.
+simulator_device_type_identifier() {
+    local json index=0 name
+    json="$(xcrun simctl list devicetypes --json 2>/dev/null)" || return 0
+    while name="$(/usr/bin/plutil -extract "devicetypes.$index.name" raw -o - -- - <<< "$json" 2>/dev/null)"; do
+        if [[ "$name" == "$1" ]]; then
+            /usr/bin/plutil -extract "devicetypes.$index.identifier" raw -o - -- - <<< "$json" 2>/dev/null || true
+            return 0
+        fi
+        index=$((index + 1))
+    done
+}
+
 # `OpenHikes Template (iPhone 18 Pro, iOS 27.0)` for an iPhone 18 Pro on
 # `com.apple.CoreSimulator.SimRuntime.iOS-27-0`.
 simulator_template_name() {

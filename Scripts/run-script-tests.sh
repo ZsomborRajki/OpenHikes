@@ -131,7 +131,8 @@ mkdir -p "$stub_bin"
 # it made is appended to the fixture — under its last runtime, so a fixture
 # that should grow ends with an iOS one. STUB_CLONED_UDID is the same for
 # `simctl clone`. `delete` and `rename` edit the fixture as the real ones edit
-# the machine, and `list runtimes` answers from STUB_RUNTIMES.
+# the machine, `list runtimes` answers from STUB_RUNTIMES and `list
+# devicetypes` from STUB_DEVICE_TYPES.
 export STUB_REAL_SWIFT="$(xcrun --find swift)"
 export STUB_REAL_MACOS_SDK="$(xcrun --sdk macosx --show-sdk-path)"
 cat > "$stub_bin/xcrun" <<'STUB'
@@ -208,6 +209,8 @@ case "${1:-}" in
     list)
         if [[ "${2:-}" == "runtimes" ]]; then
             cat "${STUB_RUNTIMES:-/dev/null}"
+        elif [[ "${2:-}" == "devicetypes" ]]; then
+            cat "${STUB_DEVICE_TYPES:-/dev/null}"
         else
             cat "$STUB_DEVICES"
         fi
@@ -537,6 +540,13 @@ cat > "$work/runtimes.json" <<'EOF'
 {"runtimes":[{"identifier":"com.apple.CoreSimulator.SimRuntime.iOS-27-0"},{"identifier":"com.apple.CoreSimulator.SimRuntime.watchOS-27-0"}]}
 EOF
 export STUB_RUNTIMES="$work/runtimes.json"
+# The device types the scripts name, with the identifier simctl gives each. An
+# iPad's is not its name with dashes, and the 16 GB iPad's name begins with the
+# other's, so a lookup has to match the whole name.
+cat > "$work/device-types.json" <<'EOF'
+{"devicetypes":[{"name":"iPhone 18 Pro","identifier":"com.apple.CoreSimulator.SimDeviceType.iPhone-18-Pro"},{"name":"iPhone 18 Pro Max","identifier":"com.apple.CoreSimulator.SimDeviceType.iPhone-18-Pro-Max"},{"name":"iPhone Duo","identifier":"com.apple.CoreSimulator.SimDeviceType.iPhone-Duo"},{"name":"iPad Pro 13-inch (M5) (16GB)","identifier":"com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-16GB"},{"name":"iPad Pro 13-inch (M5)","identifier":"com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB"}]}
+EOF
+export STUB_DEVICE_TYPES="$work/device-types.json"
 
 # Writes the table `mobileassetd` keeps of its download jobs under way, with
 # that many jobs in it, for the device with this UDID.
@@ -2645,6 +2655,36 @@ run_script "screenshots refuses a prepared device with the wrong type" \
     "$screenshots_light" --prepared-device "$pro_udid" --device-type 'iPhone Duo' --pool-owner screenshot-tests
 if expect_status 2 \
     && expect_contains "$output" "expected iPhone Duo" "the error" \
+    && expect_absent "$calls" "simctl bootstatus" "the recorded calls"; then pass; fi
+
+# A pool iPad's identifier is not its name with dashes: simctl calls an
+# `iPad Pro 13-inch (M5)` `iPad-Pro-13-inch-M5-12GB`.
+printf '{"deviceType":"com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB"}' \
+    > "$OPENHIKES_SIM_DEVICES_DIR/$pro_udid/device.plist"
+run_script "screenshots takes a pool iPad, whose type identifier is not its name" \
+    "$screenshots_light" --frame 7 --no-photos --no-retry --prepared-device "$pro_udid" \
+    --device-type 'iPad Pro 13-inch (M5)' --pool-owner screenshot-tests \
+    --derived-data "$screens_dd" --output "$work/screens-out"
+if expect_status 1 \
+    && expect_absent "$output" "expected iPad Pro 13-inch (M5)" "the output" \
+    && expect_contains "$calls" "simctl bootstatus $pro_udid -b" "the recorded calls"; then pass; fi
+
+printf '{"deviceType":"com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-16GB"}' \
+    > "$OPENHIKES_SIM_DEVICES_DIR/$pro_udid/device.plist"
+run_script "screenshots refuses the 16 GB iPad for the one whose name it begins with" \
+    "$screenshots_light" --prepared-device "$pro_udid" --device-type 'iPad Pro 13-inch (M5)' \
+    --pool-owner screenshot-tests
+if expect_status 2 \
+    && expect_contains "$output" "expected iPad Pro 13-inch (M5)" "the error" \
+    && expect_absent "$calls" "simctl bootstatus" "the recorded calls"; then pass; fi
+printf '{"deviceType":"com.apple.CoreSimulator.SimDeviceType.iPhone-18-Pro-Max"}' \
+    > "$OPENHIKES_SIM_DEVICES_DIR/$pro_udid/device.plist"
+
+STUB_DEVICE_TYPES=/dev/null \
+    run_script "screenshots refuses a prepared device when simctl names no such device type" \
+    "$screenshots_light" --prepared-device "$pro_udid" --pool-owner screenshot-tests
+if expect_status 2 \
+    && expect_contains "$output" "no device type named iPhone 18 Pro Max" "the error" \
     && expect_absent "$calls" "simctl bootstatus" "the recorded calls"; then pass; fi
 
 printf 'owner=screenshot-tests\nreleased=1\n' > "$OPENHIKES_SIM_POOL_DIR/$pro_udid.claim"
