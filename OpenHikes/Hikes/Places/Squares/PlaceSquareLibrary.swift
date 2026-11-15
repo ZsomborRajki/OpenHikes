@@ -75,7 +75,7 @@ nonisolated struct PlaceSquareLibrary: Sendable {
     ///
     /// A square is a degree each way and a search reads four at most, so this
     /// is the ground of a long trip's searches. The largest square measured
-    /// is 217 KB, and the one around Berchtesgaden 142 KB; a third more once
+    /// is 229 KB, and the one around Berchtesgaden 146 KB; a third more once
     /// it is a file here. In `Caches`, where the system takes the lot back
     /// when it wants the room.
     static let maximumFiles = 100

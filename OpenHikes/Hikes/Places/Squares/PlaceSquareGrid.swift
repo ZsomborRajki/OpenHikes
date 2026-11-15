@@ -19,10 +19,10 @@
 //
 //  ## A whole degree, and a place filed under every square it reaches
 //
-//  Measured on planet-261109: 3,512,600 places, 55.6 MB in 14,795 squares a
-//  degree each way, the median square 588 bytes, one in a hundred over 58 KB,
-//  and the largest, around Zürich, 217 KB for 16,478 places. The square around
-//  Berchtesgaden is 142 KB for 7,265.
+//  Measured on planet-261109: 3,512,623 places, 57.6 MB in 14,795 squares a
+//  degree each way, the median square 599 bytes, one in a hundred over 61 KB,
+//  and the largest, around Zürich, 229 KB for 16,478 places. The square around
+//  Berchtesgaden is 146 KB for 7,265.
 //
 //  Quarter-degree squares, the day hikes' size, were measured too: 109,341 of
 //  them, the median 185 bytes and the largest 72 KB. A square that small saves
@@ -41,8 +41,8 @@
 //  ``TrailCellGrid`` files a route once and reads ten kilometres further for
 //  the ones that reach out of their squares, and a reach here would have to be
 //  as wide as the widest campsite. Few reach over an edge: on planet-261109,
-//  390 of 522,178 ways and 24 of 3,873 relations, the widest of them half a
-//  degree across.
+//  413 places, the widest of them half a degree across, and none across the
+//  date line.
 //
 //  ## Compiled twice
 //
