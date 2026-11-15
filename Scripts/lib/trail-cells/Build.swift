@@ -31,6 +31,8 @@ import Foundation
 struct BuildOptions {
     var relationsPath: String
     var waysPath: String
+    /// The places' build's nodes, which the routes' builds do not read.
+    var nodesPath: String?
     var outputDirectory: URL
     /// Whether the extract was the whole planet, so every square holds all
     /// of its routes and a square with no file is a square with no routes.
@@ -59,13 +61,17 @@ struct BuildManifest: Codable {
     /// the day hikes' and plan to delete every one of theirs. Under a name of
     /// its own, it finds no build in the directory at all.
     static let routesFileName = "routes-manifest.json"
+    /// The places', under a name of its own for the same reason.
+    static let placesFileName = "places-manifest.json"
+    /// Every name a build's manifest is written under.
+    static let fileNames = [fileName, routesFileName, placesFileName]
     static let cellDirectoryName = "cells"
     static let cellFileExtension = "cell"
 
     /// Which set of squares this is: `nil` for the day hikes' — the only set
-    /// there was when the first manifests were written — or
-    /// `RouteSquareBuild.manifestKind` for the hiking-routes layer's. See
-    /// `Upload.Dataset`.
+    /// there was when the first manifests were written —
+    /// `RouteSquareBuild.manifestKind` for the hiking-routes layer's, or
+    /// `PlaceSquareBuild.manifestKind` for the places'. See `Upload.Dataset`.
     var kind: String?
     var generation: Int
     /// Whether these squares are every square there is. Only then does the
@@ -80,11 +86,15 @@ struct BuildManifest: Codable {
 
     /// The file a manifest of `kind` is written to.
     static func fileName(ofKind kind: String?) -> String {
-        kind == RouteSquareBuild.manifestKind ? routesFileName : fileName
+        switch kind {
+        case RouteSquareBuild.manifestKind: routesFileName
+        case PlaceSquareBuild.manifestKind: placesFileName
+        default: fileName
+        }
     }
 
     static func read(from directory: URL) throws -> BuildManifest {
-        let found = [fileName, routesFileName].filter { name in
+        let found = fileNames.filter { name in
             FileManager.default.fileExists(atPath: directory.appendingPathComponent(name).path)
         }
         guard found.count == 1, let name = found.first else {
@@ -127,11 +137,12 @@ enum BuildError: Error, CustomStringConvertible {
             "no way in \(path) carries its nodes' positions. It has to be written from the output of "
                 + "`osmium add-locations-to-ways`, with `-f opl,locations_on_ways=true`."
         case .outputIsNotABuild(let path):
-            "\(path) holds files and no \(BuildManifest.fileName) or \(BuildManifest.routesFileName), so it is "
+            "\(path) holds files and no \(BuildManifest.fileNames.joined(separator: " or ")), so it is "
                 + "not an earlier build to replace. Name an empty directory, or a previous build's."
         case .noOneManifest(let path):
-            "\(path) is not a build: it needs one \(BuildManifest.fileName), for the day hikes' squares, or one "
-                + "\(BuildManifest.routesFileName), for the hiking-routes layer's."
+            "\(path) is not a build: it needs one \(BuildManifest.fileName), for the day hikes' squares, one "
+                + "\(BuildManifest.routesFileName), for the hiking-routes layer's, or one "
+                + "\(BuildManifest.placesFileName), for the places'."
         case .manifestUnderAnotherName(let path):
             "\(path) is not the file its kind of build writes. Build it again with this tool."
         case .cellTooLarge(let name, let bytes):
@@ -326,7 +337,7 @@ extension TrailCellBuild {
         // Hidden files are the Finder's, not a reason to refuse.
         let existing = ((try? manager.contentsOfDirectory(atPath: directory.path)) ?? [])
             .filter { !$0.hasPrefix(".") }
-        let manifests = [BuildManifest.fileName, BuildManifest.routesFileName]
+        let manifests = BuildManifest.fileNames
         if !existing.isEmpty {
             guard existing.contains(where: manifests.contains) else {
                 throw BuildError.outputIsNotABuild(directory.path)

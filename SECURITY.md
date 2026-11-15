@@ -79,13 +79,15 @@ reporting:
   author holds. Its `authorID` is unindexed for the reason `CommunityHike`'s
   is, and a query on it is the same enumeration finding.
 - **`CuratedTrailCell`** and **`CuratedTrailManifest`** — copies of
-  OpenStreetMap's waymarked day hikes and of the lines the *Hiking Routes*
-  layer draws, filed by square of the map, and for each set the one record
+  OpenStreetMap's waymarked day hikes, of the lines the *Hiking Routes*
+  layer draws and of the places a place search offers, filed by square of
+  the map, and for each set the one record
   that says what its squares cover. Nothing in either was made by a
   user. `_world` read; create and write granted to the `reviewer` role alone,
   as on `CommunityHike`; **no index on either**. A write by an account outside
   the role is a finding of the same weight as one on `CommunityHike`: what a
-  square holds is drawn on every hiker's map as a trail to walk. A read is
+  square holds is drawn on every hiker's map as a trail to walk or a place
+  to stop. A read is
   not one, since every byte is OpenStreetMap's.
 
 **Known and accepted, so a report of it is not new:** an unreviewed submission

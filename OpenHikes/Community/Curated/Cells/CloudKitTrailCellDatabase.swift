@@ -34,14 +34,16 @@ nonisolated struct CloudKitTrailCellDatabase: TrailCellFetching {
     /// outlasted their patience. One request's time, and a wide search is
     /// several: see ``TrailCellLibrary/maximumCellsPerRequest``. The
     /// hiking-routes layer has nothing to fall back on, and sets its own —
-    /// see ``HikingRouteSquares``.
+    /// see ``HikingRouteSquares``. A place search has Overpass behind it
+    /// too, and takes these — see ``PlaceSquareLibrary``.
     static let searchRequestTimeout: TimeInterval = 15
     static let searchResourceTimeout: TimeInterval = 30
 
     let containerIdentifier: String
     /// The record that says what the squares asked about cover: the day
-    /// hikes' manifest, or the hiking-routes layer's, whose squares are read
-    /// through this same fetch — see ``HikingRouteSquares``.
+    /// hikes' manifest, the hiking-routes layer's or the places', whose
+    /// squares are read through this same fetch — see ``HikingRouteSquares``
+    /// and ``PlaceSquareLibrary``.
     let manifestRecordName: String
     let requestTimeout: TimeInterval
     let resourceTimeout: TimeInterval
