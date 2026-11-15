@@ -8,8 +8,9 @@
 //  `OpenHikesView`, so what a new selection, or a recording starting or
 //  stopping, does to the badge is kept with the weather rather than in the
 //  body that draws the map. That handling is what it isolates, and with it
-//  the hiker's position: `hiker` is a closure, called only when a recording
-//  starts, so no body reads a value that changes with every fix.
+//  the hiker's position: `hiker` is a closure, called only by the change
+//  handler when `isRecording` is true as the view appears or turns true, so
+//  no body reads a value that changes with every fix.
 //
 //  The two values it compares are not isolated. `trail:` and `isRecording:`
 //  are arguments, and a modifier's arguments are evaluated by the body that

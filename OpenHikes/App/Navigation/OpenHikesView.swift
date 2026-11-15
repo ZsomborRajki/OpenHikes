@@ -491,7 +491,8 @@ struct OpenHikesView: View {
             // Which place the weather badge is about — see ``WeatherFocus``.
             // `trail:` and `isRecording:` are read here, by this body, as any
             // modifier's arguments are; the modifier keeps only what their
-            // changes do, and calls `hiker` only when a recording starts.
+            // changes do, and calls `hiker` only when `isRecording` is true
+            // as the view appears or turns true.
             .weatherFocus(
                 appModel.weatherFocus,
                 trail: selectedTrailSubject,
