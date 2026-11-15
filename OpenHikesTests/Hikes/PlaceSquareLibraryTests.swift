@@ -78,6 +78,37 @@ struct PlaceSquareLibraryTests {
     /// East of 13°E.
     static let eastViewpoint = node(6, 47.62, 13.02, ["tourism": "viewpoint"])
 
+    /// A way covering the box from `southWest` to `northEast`, as the tool
+    /// files one.
+    static func area(
+        _ id: Int64,
+        from southWest: (latitude: Double, longitude: Double),
+        to northEast: (latitude: Double, longitude: Double),
+        _ tags: [String: String]
+    ) -> PlaceSquareFile.Place {
+        let scale = Double(PlaceSquareFile.standardCoordinateScale)
+        return PlaceSquareFile.Place(
+            element: .way,
+            id: id,
+            box: PlaceSquareFile.Box(
+                south: Int32((southWest.latitude * scale).rounded()),
+                west: Int32((southWest.longitude * scale).rounded()),
+                north: Int32((northEast.latitude * scale).rounded()),
+                east: Int32((northEast.longitude * scale).rounded())
+            ),
+            tags: tags
+        )
+    }
+
+    /// A campsite whose fence crosses 13°E, so the tool files it under the
+    /// valley's square and the one east of it.
+    static let acrossCampsite = area(
+        9,
+        from: (latitude: 47.70, longitude: 12.99),
+        to: (latitude: 47.71, longitude: 13.01),
+        ["tourism": "camp_site"]
+    )
+
     static func found(_ places: [PlaceSquareFile.Place]) -> TrailCellFetch.Cell {
         .found(PlaceSquareFile(places: places).encoded())
     }
@@ -138,6 +169,66 @@ struct PlaceSquareLibraryTests {
 
         #expect(database.requests == [[Self.valleySquare, Self.eastSquare]])
         #expect(Self.offered(answer) == [2, 3, 6])
+    }
+
+    /// Overpass finds a way by its nodes, so a campsite reaching into the
+    /// corner of a small map is in its answer though its middle, where the
+    /// pin stands, is off the map. Only the middle, and the squares would
+    /// leave it out of an answer Overpass is then never asked to correct.
+    @Test("a place reaching into the map is offered, though its pin is off it")
+    func aPlaceReachingInIsOffered() async throws {
+        let campsite = Self.area(
+            8,
+            from: (latitude: 47.620, longitude: 12.900),
+            to: (latitude: 47.622, longitude: 12.902),
+            ["tourism": "camp_site"]
+        )
+        let corner = CommunitySearchArea(
+            coordinate: CLLocationCoordinate2D(latitude: 47.620, longitude: 12.900),
+            radiusMeters: 100,
+            visibleSpan: CommunitySearchArea.Span(latitudeDelta: 0.001, longitudeDelta: 0.001)
+        )
+        let database = StubTrailCellDatabase(cells: [Self.valleySquare: Self.found([campsite])])
+
+        let answer = try await Self.makeLibrary(database).places(
+            in: TrailPointQuery.searchBoxes(for: corner),
+            showing: Self.everything
+        )
+
+        #expect(Self.offered(answer) == [8])
+        guard case .places(let places) = answer, let offered = places.first else { return }
+        #expect(offered.latitude.isApproximatelyEqual(to: 47.621, absoluteTolerance: 1e-9), "its middle, off the map")
+    }
+
+    /// The tool files a place under every square its box touches, so a map
+    /// on either side of the line finds it — and a map across the line,
+    /// reading both squares, finds it once.
+    @Test("a place filed under two squares is found from either, and offered once")
+    func aPlaceAcrossSquaresIsOfferedOnce() async throws {
+        let directory = Self.scratchDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let eastOfTheLine = CuratedTrailQuery.BoundingBox(south: 47.69, west: 13.005, north: 47.72, east: 13.05)
+        let acrossTheLine = CuratedTrailQuery.BoundingBox(south: 47.69, west: 12.95, north: 47.72, east: 13.05)
+        let database = StubTrailCellDatabase(cells: [
+            Self.valleySquare: Self.found([Self.spring, Self.acrossCampsite]),
+            Self.eastSquare: Self.found([Self.acrossCampsite, Self.eastViewpoint]),
+        ])
+        let library = Self.makeLibrary(database, directory: directory)
+
+        let east = try await library.places(in: [eastOfTheLine], showing: Self.everything)
+        let across = try await library.places(in: [acrossTheLine], showing: Self.everything)
+        let kept = await library.keptPlaces(
+            near: CommunitySearchArea(
+                coordinate: CLLocationCoordinate2D(latitude: 47.705, longitude: 13.0),
+                radiusMeters: 3000
+            ),
+            limit: 10
+        )
+
+        #expect(database.requests == [[Self.eastSquare], [Self.valleySquare]])
+        #expect(Self.offered(east) == [9])
+        #expect(Self.offered(across) == [9])
+        #expect(kept.compactMap(\.osm?.elementID) == [9])
     }
 
     /// What a maker's switch turned off means, as it does in the Overpass

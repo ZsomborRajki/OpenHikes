@@ -28,13 +28,13 @@ struct PlaceSquareFileTests {
     private static let hut = PlaceSquareFile.Place(
         element: .way,
         id: 31_008_412,
-        point: PlaceSquareFile.Point(latitude: 47_563_041, longitude: 12_936_290),
+        box: PlaceSquareFile.Box(south: 47_562_980, west: 12_936_201, north: 47_563_102, east: 12_936_379),
         tags: ["name": "Kärlingerhaus", "tourism": "alpine_hut"]
     )
     private static let shelter = PlaceSquareFile.Place(
         element: .relation,
         id: 1234,
-        point: PlaceSquareFile.Point(latitude: -33_900_000, longitude: -70_100_000),
+        box: PlaceSquareFile.Box(south: -33_900_400, west: -70_100_300, north: -33_899_600, east: -70_099_700),
         tags: ["amenity": "shelter"]
     )
 
@@ -45,6 +45,17 @@ struct PlaceSquareFileTests {
         let read = try PlaceSquareFile(decoding: file.encoded())
 
         #expect(read == file)
+        #expect(read.places.map(\.box) == [Self.peak, Self.hut, Self.shelter].map(\.box))
+    }
+
+    /// As Overpass's `out center` has it: a node's pin is its own point, and
+    /// an area's the middle of its box.
+    @Test("a place's pin is the middle of its box")
+    func thePinIsTheMiddle() {
+        #expect(Self.peak.point == PlaceSquareFile.Point(latitude: 47_593_738, longitude: 13_067_046))
+        #expect(Self.peak.box.south == Self.peak.box.north)
+        #expect(Self.hut.point == PlaceSquareFile.Point(latitude: 47_563_041, longitude: 12_936_290))
+        #expect(Self.shelter.point == PlaceSquareFile.Point(latitude: -33_900_000, longitude: -70_100_000))
     }
 
     /// A square's digest is taken over its body, so the same places have to
@@ -71,6 +82,15 @@ struct PlaceSquareFileTests {
                 tags: [:]
             ),
         ])
+        // A corner on the Earth whose box reaches past the pole.
+        let reachingOff = PlaceSquareFile(places: [
+            PlaceSquareFile.Place(
+                element: .way,
+                id: 1,
+                box: PlaceSquareFile.Box(south: 89_000_000, west: 0, north: 91_000_000, east: 1),
+                tags: [:]
+            ),
+        ])
 
         #expect(throws: PlaceSquareFileError.notASquare) {
             try PlaceSquareFile(decoding: TrailCellFile(relations: []).encoded())
@@ -82,6 +102,25 @@ struct PlaceSquareFileTests {
         }
         #expect(throws: PlaceSquareFileError.corrupt) {
             try PlaceSquareFile(decoding: offTheEarth.encoded())
+        }
+        #expect(throws: PlaceSquareFileError.corrupt) {
+            try PlaceSquareFile(decoding: reachingOff.encoded())
+        }
+    }
+
+    /// Version 1 put a pin where version 2 puts a box, so its bytes would
+    /// read as other places entirely. The squares uploaded before the box
+    /// are refused instead, and a search asks Overpass.
+    @Test("a square of the first version, which kept no box, is refused")
+    func theFirstVersionIsRefused() {
+        let firstVersion = PackedEnvelope.file(
+            magic: Array("OHPS".utf8),
+            version: 1,
+            body: PlaceSquareFile(places: [Self.peak]).encodedBody()
+        )
+
+        #expect(throws: PlaceSquareFileError.unsupportedVersion(1)) {
+            try PlaceSquareFile(decoding: firstVersion)
         }
     }
 

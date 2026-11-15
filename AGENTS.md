@@ -1410,6 +1410,8 @@ in its source header. Do not weaken one without a measurement.
   world under `routes1_manifest` (*The hiking-routes layer*), and the same
   build of the places' squares, from planet-261109, marked as the whole
   world under `places1_manifest` (*The place squares*; checked 2026-11-15).
+  Those are in `PlaceSquareFile`'s first format, which the app refuses, so
+  its place searches ask Overpass in both until they are uploaded again.
   Both have a column for every attribute in
   `MirroredCloudKitSchema.recordTypes`. The only live columns the contract
   does not name are SwiftData's own `CD_entityName`, the
@@ -1775,9 +1777,12 @@ measurements.
   given*), through `PlaceSquareLibrary`, and no answer sends the search to
   Overpass exactly as before. An empty answer means nothing of those kinds
   is mapped there.
-- **A place is filed where it stands**, so a search reads only the squares
-  its boxes touch, one to four for the widest. A way's or a relation's point
-  is the middle of its ways' box, as Overpass's `out center` has it.
+- **A place is filed under every square its box touches**, and its box is
+  kept beside its pin, so a search reads only the squares its own boxes
+  touch, one to four for the widest, and finds a hut or a campsite that only
+  reaches into its map, as Overpass does. A way's box is around its nodes
+  and a relation's around its member nodes and ways, and the pin is the
+  middle of it, as Overpass's `out center` has it.
 - **The tool keeps the kinds and the tags in lists of its own**
   (`PlaceSquareFile.kinds` and `keptTagKeys`), because it cannot compile
   `TrailPointQuery`. `PlaceSquareFileTests` holds them to the query's kinds

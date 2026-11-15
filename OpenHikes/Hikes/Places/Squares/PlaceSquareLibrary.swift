@@ -4,7 +4,17 @@
 //
 //  A place search answered from the pre-built squares: which squares the
 //  search's boxes touch, the ones this device already holds, one request for
-//  the rest, and the places in them that stand in the boxes.
+//  the rest, and the places in them that reach into the boxes.
+//
+//  **Reaching in is what Overpass answers.** Its box filter finds a way or a
+//  relation by its members, so a campsite whose outline crosses the edge of
+//  the map is found though its middle, where its pin stands, is off it. Each
+//  place's box is kept for that, and tested here; and a place is filed under
+//  every square its box touches, so the squares a search's boxes touch hold
+//  every place that reaches into them (see ``PlaceSquareGrid``). The box is
+//  the whole of an outline's corners, so a hut whose outline only comes close
+//  is offered too: never fewer places than Overpass's answer, and at most a
+//  campsite's corner more.
 //
 //  ``TrailPointSource`` asks this first and Overpass only when this has no
 //  answer, on the terms ``TrailCellLibrary`` keeps for the day hikes and for
@@ -126,12 +136,10 @@ nonisolated struct PlaceSquareLibrary: Sendable {
                 return .unreachable
             }
         }
-        var found: [TrailPlace] = []
-        for name in names {
-            guard let square = held[name] else { return .unreachable }
-            found += Self.places(in: square, showing: symbols) { coordinate in
-                boxes.contains { $0.holds(coordinate) }
-            }
+        let squares = names.compactMap { held[$0] }
+        guard squares.count == names.count else { return .unreachable }
+        let found = Self.places(in: squares, showing: symbols) { _, ground in
+            boxes.contains { $0.overlaps(ground) }
         }
         // Counts only: which squares were read is where the hiker is looking.
         Self.logger.notice(
@@ -157,10 +165,12 @@ nonisolated struct PlaceSquareLibrary: Sendable {
         let names = Self.recordNames(covering: CuratedTrailQuery.searchBoxes(for: area))
         guard limit > 0, names.count <= Self.maximumSquaresPerSearch else { return [] }
         let center = area.coordinate
-        return kept(names).values
-            .flatMap { square in
-                Self.places(in: square, showing: Set(TrailPlaceSymbol.allCases), where: area.contains)
-            }
+        // By where the pin stands, as the store's places are: see
+        // ``CommunitySearchArea/contains(_:)``.
+        let inArea = Self.places(in: kept(names).values, showing: Set(TrailPlaceSymbol.allCases)) { pin, _ in
+            area.contains(pin)
+        }
+        return inArea
             .map { (place: $0, distance: RouteGeometry.distanceMeters(from: center, to: $0.clCoordinate)) }
             .min(count: limit) { $0.distance < $1.distance }
             .map(\.place)
@@ -170,33 +180,56 @@ nonisolated struct PlaceSquareLibrary: Sendable {
 // MARK: - Reading a square
 
 nonisolated extension PlaceSquareLibrary {
-    /// The places of `square` standing where `isWanted` says, drawn as one of
-    /// `symbols`, read as an Overpass answer's are — see
+    /// The places of `squares` that `isWanted` says yes to, given where each
+    /// one's pin stands and the ground it covers, drawn as one of `symbols`
+    /// and read as an Overpass answer's are — see
     /// ``TrailPointDecoding/place(elementType:id:latitude:longitude:tags:showing:)``.
     ///
-    /// Where a place stands is asked first: a busy square holds thousands,
-    /// and a search wants the few in its boxes.
+    /// A place filed under more than one of them is offered once. Where a
+    /// place is is asked first: a busy square holds thousands, and a search
+    /// wants the few in its boxes.
     static func places(
-        in square: PlaceSquareFile,
+        in squares: some Sequence<PlaceSquareFile>,
         showing symbols: Set<TrailPlaceSymbol>,
-        where isWanted: (CLLocationCoordinate2D) -> Bool
+        where isWanted: (_ pin: CLLocationCoordinate2D, _ ground: CuratedTrailQuery.BoundingBox) -> Bool
     ) -> [TrailPlace] {
-        let scale = Double(square.coordinateScale)
-        return square.places.compactMap { place in
-            let coordinate = CLLocationCoordinate2D(
-                latitude: Double(place.point.latitude) / scale,
-                longitude: Double(place.point.longitude) / scale
-            )
-            guard isWanted(coordinate) else { return nil }
-            return TrailPointDecoding.place(
-                elementType: place.element.name,
-                id: place.id,
-                latitude: coordinate.latitude,
-                longitude: coordinate.longitude,
-                tags: place.tags,
-                showing: symbols
-            )
+        var offered: Set<Filed> = []
+        var found: [TrailPlace] = []
+        for square in squares {
+            let scale = Double(square.coordinateScale)
+            for place in square.places {
+                let pin = CLLocationCoordinate2D(
+                    latitude: Double(place.point.latitude) / scale,
+                    longitude: Double(place.point.longitude) / scale
+                )
+                let ground = CuratedTrailQuery.BoundingBox(
+                    south: Double(place.box.south) / scale,
+                    west: Double(place.box.west) / scale,
+                    north: Double(place.box.north) / scale,
+                    east: Double(place.box.east) / scale
+                )
+                guard isWanted(pin, ground),
+                      offered.insert(Filed(element: place.element, id: place.id)).inserted,
+                      let read = TrailPointDecoding.place(
+                          elementType: place.element.name,
+                          id: place.id,
+                          latitude: pin.latitude,
+                          longitude: pin.longitude,
+                          tags: place.tags,
+                          showing: symbols
+                      )
+                else { continue }
+                found.append(read)
+            }
         }
+        return found
+    }
+
+    /// Which element a place is, which is what one filed under two squares
+    /// has in both.
+    private struct Filed: Hashable {
+        var element: PlaceSquareFile.Element
+        var id: Int64
     }
 
     /// The record names of every square `boxes` touch, each once.
@@ -308,9 +341,9 @@ nonisolated private extension PlaceSquareLibrary {
 }
 
 nonisolated private extension CuratedTrailQuery.BoundingBox {
-    /// Whether `coordinate` stands in the box, edges included, as Overpass's
+    /// Whether `ground` reaches into the box, edges included, as Overpass's
     /// own box filter has it.
-    func holds(_ coordinate: CLLocationCoordinate2D) -> Bool {
-        (south...north).contains(coordinate.latitude) && (west...east).contains(coordinate.longitude)
+    func overlaps(_ ground: Self) -> Bool {
+        ground.south <= north && south <= ground.north && ground.west <= east && west <= ground.east
     }
 }

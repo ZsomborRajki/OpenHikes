@@ -8,10 +8,14 @@
 //  ## What a square holds: the elements an Overpass search would answer with
 //
 //  Each place is its element — a node, or the way or relation a hut or a
-//  campsite is mapped as — with one point and the tags a place is read from.
-//  The point is the node's own, or the middle of the box around a way's or a
-//  relation's ways, which is what Overpass's `out center` puts on one. Which
-//  symbol a place is drawn as, and whether it is one at all, stays
+//  campsite is mapped as — with the box it covers and the tags a place is read
+//  from. The box is a node's own point, or the box around a way's nodes or
+//  around a relation's member nodes and ways. Its middle is where the pin
+//  stands, which is what Overpass's `out center` puts on a way or a relation,
+//  and the box itself is what a search tests, because Overpass finds a hut
+//  whose outline reaches into the map wherever its middle is: see
+//  ``PlaceSquareLibrary``. Which symbol a place is drawn as, and whether it is
+//  one at all, stays
 //  ``TrailPointDecoding``'s to decide, on exactly what it decides it on for an
 //  Overpass answer, so a place reads the same whichever of the two brought it.
 //
@@ -32,7 +36,8 @@
 //      count, then each place:
 //          element                    0 a node, 1 a way, 2 a relation
 //          id                         as the step from the place before
-//          point                      as the step from the place before
+//          box's south-west corner    as the step from the place before
+//          box's height, then width   0 and 0 for a node
 //          count, then each tag       two indices into the strings
 //
 //  Places are written by element and then by id, and steps are zigzag-encoded,
@@ -73,13 +78,32 @@ nonisolated struct PlaceSquareFile: Equatable, Sendable {
         var longitude: Int32
     }
 
+    /// The ground an element covers, in ``coordinateScale`` units, edges
+    /// included.
+    ///
+    /// The plain least and greatest of each coordinate, as Overpass takes
+    /// one: a hut does not straddle the date line.
+    nonisolated struct Box: Hashable, Sendable {
+        var south: Int32
+        var west: Int32
+        var north: Int32
+        var east: Int32
+    }
+
     /// One place.
     nonisolated struct Place: Equatable, Sendable {
         var element: Element
         var id: Int64
-        var point: Point
+        /// A node's own point, or the box around a way's nodes or a
+        /// relation's member nodes and ways.
+        var box: Box
         /// The element's tags that ``keptTagKeys`` names.
         var tags: [String: String]
+
+        /// Where the place's pin stands: the middle of ``box``, which is a
+        /// node's own point and what Overpass's `out center` puts on a way or
+        /// a relation.
+        var point: Point { box.center }
     }
 
     /// One kind of place: the tag that makes an element one, and whether a
@@ -93,7 +117,11 @@ nonisolated struct PlaceSquareFile: Equatable, Sendable {
     /// The only version this build reads or writes. A file of another
     /// version is refused — see ``PlaceSquareGrid/generation`` for where one
     /// would be put.
-    static let formatVersion: UInt8 = 1
+    ///
+    /// Version 1 kept a pin without its box. No release read it, so 2
+    /// replaced it under the same generation, and a square of 1 left in a
+    /// database or on a device is refused rather than read as this layout.
+    static let formatVersion: UInt8 = 2
 
     /// The scale the tool writes: millionths of a degree, about 11 cm, the
     /// day hikes' squares' own. See ``TrailCellFile/standardCoordinateScale``.
@@ -157,6 +185,40 @@ nonisolated enum PlaceSquareFileError: Error, Equatable {
     case unsupportedVersion(UInt8)
 }
 
+// MARK: - Boxes
+
+nonisolated extension PlaceSquareFile.Box {
+    /// A point's own box, which is the point: a node's.
+    init(_ point: PlaceSquareFile.Point) {
+        self.init(south: point.latitude, west: point.longitude, north: point.latitude, east: point.longitude)
+    }
+
+    /// The middle, rounded toward the equator and Greenwich.
+    var center: PlaceSquareFile.Point {
+        PlaceSquareFile.Point(
+            latitude: Int32((Int64(south) + Int64(north)) / 2),
+            longitude: Int32((Int64(west) + Int64(east)) / 2)
+        )
+    }
+
+    /// The box around both.
+    func union(_ other: Self) -> Self {
+        Self(
+            south: min(south, other.south),
+            west: min(west, other.west),
+            north: max(north, other.north),
+            east: max(east, other.east)
+        )
+    }
+}
+
+nonisolated extension PlaceSquareFile.Place {
+    /// A place that is one point: a node.
+    init(element: PlaceSquareFile.Element, id: Int64, point: PlaceSquareFile.Point, tags: [String: String]) {
+        self.init(element: element, id: id, box: PlaceSquareFile.Box(point), tags: tags)
+    }
+}
+
 // MARK: - Writing
 
 nonisolated extension PlaceSquareFile {
@@ -178,12 +240,15 @@ nonisolated extension PlaceSquareFile {
         var previousID: Int64 = 0
         var previous = Point(latitude: 0, longitude: 0)
         for place in places.sorted(by: Self.isWrittenBefore) {
+            let box = place.box
             written.write(UInt64(place.element.rawValue))
             written.write(step: place.id &- previousID)
             previousID = place.id
-            written.write(step: Int64(place.point.latitude) - Int64(previous.latitude))
-            written.write(step: Int64(place.point.longitude) - Int64(previous.longitude))
-            previous = place.point
+            written.write(step: Int64(box.south) - Int64(previous.latitude))
+            written.write(step: Int64(box.west) - Int64(previous.longitude))
+            previous = Point(latitude: box.south, longitude: box.west)
+            written.write(UInt64(Int64(box.north) - Int64(box.south)))
+            written.write(UInt64(Int64(box.east) - Int64(box.west)))
             let tags = place.tags.sorted { $0.key < $1.key }
             written.write(UInt64(tags.count))
             for (key, value) in tags {
@@ -252,8 +317,8 @@ nonisolated private extension PlaceSquareFileError {
     }
 }
 
-/// Where the last place left off, which the next one steps from — and how far
-/// a point may be from the equator and from Greenwich before it is not one.
+/// Where the last place's box began, which the next one steps from — and how
+/// far a point may be from the equator and from Greenwich before it is not one.
 nonisolated private struct PlaceCursor {
     private static let poleDegrees: Int64 = 90
     private static let antimeridianDegrees: Int64 = 180
@@ -267,10 +332,30 @@ nonisolated private struct PlaceCursor {
         self.unitsPerDegree = unitsPerDegree
     }
 
-    /// The point the cursor stands on, or `nil` when that is off the Earth.
-    /// Held between two bounds rather than measured with `abs`, for the
-    /// reason the day hikes' cursor is: see `TrailCellFile.swift`.
-    var point: PlaceSquareFile.Point? {
+    /// The box whose south-west corner the cursor stands on, reaching
+    /// `height` north and `width` east of it, or `nil` when any of it is off
+    /// the Earth.
+    ///
+    /// The corner is checked before anything is added to it, so a cursor
+    /// that a corrupt step left anywhere at all cannot overflow.
+    func box(height: UInt64, width: UInt64) -> PlaceSquareFile.Box? {
+        let span = UInt64(2 * Self.antimeridianDegrees * unitsPerDegree)
+        guard height <= span, width <= span,
+              let southWest = point(latitude: latitude, longitude: longitude),
+              let northEast = point(latitude: latitude + Int64(height), longitude: longitude + Int64(width))
+        else { return nil }
+        return PlaceSquareFile.Box(
+            south: southWest.latitude,
+            west: southWest.longitude,
+            north: northEast.latitude,
+            east: northEast.longitude
+        )
+    }
+
+    /// The point at `latitude` and `longitude`, or `nil` when that is off the
+    /// Earth. Held between two bounds rather than measured with `abs`, for
+    /// the reason the day hikes' cursor is: see `TrailCellFile.swift`.
+    private func point(latitude: Int64, longitude: Int64) -> PlaceSquareFile.Point? {
         let pole = Self.poleDegrees * unitsPerDegree
         let antimeridian = Self.antimeridianDegrees * unitsPerDegree
         guard (-pole...pole).contains(latitude),
@@ -291,12 +376,14 @@ nonisolated private extension PackedReader {
         cursor.id &+= try readStep()
         cursor.latitude &+= try readStep()
         cursor.longitude &+= try readStep()
-        guard let point = cursor.point else { throw PlaceSquareFileError.corrupt }
+        guard let box = try cursor.box(height: readVarint(), width: readVarint()) else {
+            throw PlaceSquareFileError.corrupt
+        }
         var tags: [String: String] = [:]
         for _ in try 0..<readCount() {
             let key = try readIndexedString(strings)
             tags[key] = try readIndexedString(strings)
         }
-        return PlaceSquareFile.Place(element: element, id: cursor.id, point: point, tags: tags)
+        return PlaceSquareFile.Place(element: element, id: cursor.id, box: box, tags: tags)
     }
 }

@@ -201,9 +201,13 @@ build() {
     # Every node's position, put on the ways that use it, which is what lets
     # the next step read a way without a table of the planet's nodes. A way
     # that runs out of a regional extract keeps its place with no positions,
-    # and the tool leaves its relation out.
+    # and the tool leaves its relation out. A place relation is measured from
+    # its member nodes too, as Overpass measures one, so the places' build
+    # keeps those though most carry no tags.
+    local locating=(--ignore-missing-nodes)
+    [[ "$tool_command" != build-places ]] || locating+=(--keep-member-nodes)
     echo "Putting positions on their ways …"
-    osmium add-locations-to-ways "$found" --ignore-missing-nodes \
+    osmium add-locations-to-ways "$found" "${locating[@]}" \
         -o "$work/located.osm.pbf" --overwrite
     # Relations and ways apart, because a relation says which ways are wanted
     # and comes after them in the file. `locations_on_ways` is what writes the
@@ -214,7 +218,8 @@ build() {
         -o "$work/ways.opl" --overwrite
     # A place is most often a node, which the routes' builds never read. The
     # positions osmium put on the ways took the nodes that held only a
-    # position, so what is left is the nodes with tags.
+    # position, so what is left is the nodes with tags and the ones a
+    # relation names.
     if [[ "$tool_command" == build-places ]]; then
         osmium cat "$work/located.osm.pbf" -t node -f opl,add_metadata=false \
             -o "$work/nodes.opl" --overwrite
