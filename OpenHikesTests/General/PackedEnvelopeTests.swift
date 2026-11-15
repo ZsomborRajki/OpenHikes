@@ -67,14 +67,15 @@ struct PackedEnvelopeTests {
         }
     }
 
-    /// The decoder hands a large body back over several calls — 192 KB at a
-    /// time, measured on macOS 27 — and a reader that took one call's worth
-    /// as the end of the stream would refuse every busy square past it.
+    /// The decoder hands a body that packs as tightly as this one back over
+    /// several calls — 128 KB on the first and 64 KB on each after it,
+    /// measured on macOS 27 and iOS 18.6 — and a reader that took one call's
+    /// worth as the end of the stream would refuse every such square past it.
     @Test("a body unpacked in several pieces reads whole", arguments: PackedSquareFormat.allCases)
     func aLargeBody(_ format: PackedSquareFormat) throws {
         let pointCount = 250_000
         let body = format.body(points: pointCount)
-        try #require(body.count > 2 * 192 * 1024, "the body is long enough to take several calls")
+        try #require(body.count > 2 * 128 * 1024, "the body is long enough to take several calls")
 
         let file = format.file(body: body)
 

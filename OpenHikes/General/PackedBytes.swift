@@ -261,10 +261,13 @@ nonisolated enum PackedDeflate {
     /// How many bytes the whole of `source` unpacks to, when its stream ends
     /// before `buffer` is full.
     ///
-    /// The decoder hands back a large body over several calls — about 192 KB
-    /// at a time, measured on macOS 27 — so it is called until it ends,
-    /// fails, fills the buffer or stops moving, which is where a stream cut
-    /// short leaves it.
+    /// The decoder can hand a body back over several calls — one that packs
+    /// as tightly as a square of even steps comes 128 KB on the first call
+    /// and 64 KB on each after it, measured on macOS 27 and iOS 18.6 — so it
+    /// is called until it ends, fails, fills the buffer or stops moving. A
+    /// stream cut short fails on the call after its last byte of output; a
+    /// call that moves nothing is taken as the same answer, so that no
+    /// decoder can keep the loop going for ever.
     private static func unpacked(
         _ source: UnsafeBufferPointer<UInt8>,
         into buffer: UnsafeMutableBufferPointer<UInt8>

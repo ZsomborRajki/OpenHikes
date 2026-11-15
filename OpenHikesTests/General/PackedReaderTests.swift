@@ -3,7 +3,7 @@
 //  OpenHikesTests
 //
 //  The integers both kinds of pre-built square are spelled in. Ten groups of
-//  seven bits hold every 64-bit number with a bit to spare at the top, so
+//  seven bits hold every 64-bit number with six bits to spare at the top, so
 //  the largest number there is reads as itself, and a tenth group that spells
 //  anything past it is refused — never shifted out of the number, which
 //  read a scale of 2⁶⁴ + 1 as a scale of 1 that every later check passed.
