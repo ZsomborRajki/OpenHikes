@@ -224,8 +224,9 @@ nonisolated private struct RouteSigns {
             .sorted { lhs, rhs in
                 table[lhs].network != table[rhs].network ? table[lhs].network > table[rhs].network : lhs < rhs
             }
-        let long = different.filter { table[$0].network > .local }
-        let local = different.filter { table[$0].network <= .local }
+        // `partitioned(by:)` answers (does not satisfy, satisfies), and each
+        // half keeps the order above.
+        let (local, long) = different.partitioned { table[$0].network > .local }
         return Array(long.prefix(DrawnRouteSquare.maximumSignsPerLine))
             + local.prefix(DrawnRouteSquare.maximumSignsPerLine)
     }
