@@ -8,7 +8,7 @@
 //  reasoning for that is worth restating before the reasoning for this,
 //  because it was right about the thing it was about: a z12 tile file of the
 //  kind ``OverpassTrailGraphProvider`` keeps is 6.9 km across at 47°N, and a
-//  community search is 10–40 km of *radius*, so the smallest search this
+//  community search is 10–100 km of *radius*, so the smallest search this
 //  feature allows already spans about 25 tiles. Tiles are the wrong unit here.
 //  The unit is the **relation**, and that has not changed.
 //

@@ -76,25 +76,29 @@ nonisolated struct TrailCellLibrary: Sendable {
     ///
     /// The widest search the app allows — see
     /// ``CuratedTrailQuery/maximumRadiusMeters`` — needs up to 117 at 47°N,
-    /// 162 at 60°N, 225 at 70°N and 369 at 78°N, where Svalbard's settlements
-    /// are and a square is under six kilometres wide. Past this the area is
-    /// close enough to a pole that the count runs away, and the squares give
-    /// no answer: Overpass is asked instead, where the search is one it may
-    /// be asked about.
+    /// 162 at 60°N, 225 at 70°N and 477 short of 81°N, past the northernmost
+    /// of Svalbard's islands, where a square is under five kilometres wide.
+    /// Each is the most a map can need there wherever it stands on the grid,
+    /// which is what a limit has to cover: a map panned north of Longyearbyen
+    /// needs 378, and one over Ny-Ålesund 387. Past this the area is close
+    /// enough to a pole that the count runs away, and the squares give no
+    /// answer: Overpass is asked instead where the search is one it may be
+    /// asked about, and a wider one fails.
     ///
     /// The count is not the cost. A square with no record costs nothing to
     /// be told of, and the far north is nearly all such squares: measured on
     /// 2026-11-14 against development, 369 of them were answered in 0.35
     /// seconds. What a search pays for is the squares that hold routes, a
     /// file each: see ``maximumCellsPerRequest`` for what those measured.
-    static let maximumCellsPerSearch = 370
+    static let maximumCellsPerSearch = 480
 
     /// The most squares one request names.
     ///
-    /// Sixty is what the widest search named before the ceiling was raised,
-    /// at 70°N, so no request is larger than the ones
-    /// ``CloudKitTrailCellDatabase``'s thirty seconds were set for. A wider
-    /// search is two requests at 47°N and three at 60°N, sent one after
+    /// Thirty-five is what the widest search named before the ceiling was
+    /// raised, at 47°N, so no request there covers more ground than the ones
+    /// ``CloudKitTrailCellDatabase``'s thirty seconds were set for, and
+    /// further north, where a square is narrower, none covers as much. A
+    /// wider search is four requests at 47°N and five at 60°N, sent one after
     /// another, and each one's squares are kept as it lands.
     ///
     /// One after another, because sending them together bought nothing.
@@ -105,13 +109,16 @@ nonisolated struct TrailCellLibrary: Sendable {
     /// square that held routes when they were asked for in one request, and
     /// 25 to 135 in eight requests at once: the wait is CloudKit handing
     /// over a file per square, not the line. The same searches again, from
-    /// this device, took under two seconds.
+    /// this device, took under two seconds. Those were requests of sixty,
+    /// and have not been timed again in requests of this size.
     ///
     /// That is also why the requests are small. A request that fails as a
     /// whole gives back nothing, however many of its squares had arrived, so
-    /// on a slow connection one request for a whole wide search could run
-    /// out of time every time it was tried.
-    static let maximumCellsPerRequest = 60
+    /// a request that a slow connection cannot carry in its thirty seconds
+    /// runs out of time every time it is tried, and the squares of the
+    /// requests after it are never asked for. Around Stuttgart, the busiest
+    /// ground measured, 117 squares were 12 MB of files.
+    static let maximumCellsPerRequest = 35
 
     private let database: any TrailCellFetching
     /// `nil` for a launch with nowhere to keep squares, which costs a fetch
@@ -209,9 +216,14 @@ nonisolated private extension TrailCellLibrary {
     /// A request that could not be read whole ends the fetch: the ones after
     /// it would be asked on behalf of a search that already has no answer.
     /// What the requests before it brought is kept — see this file's header.
+    /// So does a cancellation, for the same reason.
     func fetched(_ names: [String]) async throws -> Fetched {
         var cells: [String: TrailCellFile] = [:]
         for request in names.chunks(ofCount: Self.maximumCellsPerRequest) {
+            // Asked before every request rather than left to the request
+            // that is out, which may finish rather than hear of it: the
+            // browser starts the next search only once this one has ended.
+            try Task.checkCancellation()
             switch try await fetched(request: Array(request)) {
             case .cells(let arrived):
                 cells.merge(arrived) { _, fresh in fresh }

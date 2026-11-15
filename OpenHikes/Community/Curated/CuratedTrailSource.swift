@@ -10,8 +10,9 @@
 //  **The squares are asked first, because Overpass's answer is a wait.** See
 //  ``TrailCellGrid`` for the measurement and ``TrailCellLibrary`` for what the
 //  squares can and cannot say. What they hand back is what a small search's
-//  one Overpass request hands back — every day hike in the area with its line
-//  — so everything below the first request is unchanged by which of the two
+//  one Overpass request hands back — day hikes in the area, each with its
+//  line — chosen already: the nearest of them, no more than were asked for.
+//  So everything below the first request is unchanged by which of the two
 //  made it: the same nearest rows, kept in the same caches, opened and drawn
 //  without asking again.
 //

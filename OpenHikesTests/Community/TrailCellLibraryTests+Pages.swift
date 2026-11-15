@@ -18,7 +18,7 @@ import Foundation
 import OpenHikesData
 import Testing
 
-// The coordinates of four routes and the latitudes of five searches, which
+// The coordinates of four routes and the latitudes of six searches, which
 // have no better names than their own digits.
 // swiftlint:disable no_magic_numbers
 
@@ -109,11 +109,13 @@ extension TrailCellLibraryTests {
 
     // MARK: - How many squares a search reads
 
-    /// As far north as Svalbard's settlements, which is past anywhere a
-    /// waymarked route has been mapped.
+    /// As far north as Svalbard's islands go. A map's count depends on where
+    /// it stands on the grid as well as how far north, so the last two are
+    /// where it falls worst: a map panned north of Longyearbyen, which needs
+    /// 378 squares, and one short of 81°N, which needs 468.
     @Test(
-        "the widest search the app makes is answered from the squares, each asked for once, in requests of sixty",
-        arguments: [0, 47, 60, 70, 78] as [Double]
+        "the widest search the app makes is answered from the squares, each asked for once, a request at a time",
+        arguments: [0, 47, 60, 70, 78.45, 80.758] as [Double]
     )
     func theWidestSearchIsAnswered(latitude: Double) async throws {
         let database = StubTrailCellDatabase(manifest: .complete)
@@ -152,10 +154,10 @@ extension TrailCellLibraryTests {
 
     // MARK: - A fetch that got some of them
 
-    /// Three requests at 60°N, and a square of the second cannot be read.
-    /// The third would be asked on behalf of a search that already has no
-    /// answer; what the first brought, and the rest of the second, is what
-    /// the next try does not have to ask for.
+    /// Several requests at 60°N, and a square of the second cannot be read.
+    /// The ones after it would be asked on behalf of a search that already
+    /// has no answer; what the first brought, and the rest of the second, is
+    /// what the next try does not have to ask for.
     @Test("a request that could not be read whole ends the fetch, and the next search asks only for what is left")
     func aFailedRequestEndsTheFetch() async throws {
         let boxes = Self.widestSearch(atLatitude: 60)
@@ -163,18 +165,46 @@ extension TrailCellLibraryTests {
         let rehearsal = StubTrailCellDatabase(manifest: .complete)
         _ = try await Self.makeLibrary(rehearsal).trails(in: boxes, nearest: center, limit: 50)
         let requests = rehearsal.requests
-        try #require(requests.count == 3, "precondition: this search is three requests")
+        try #require(requests.count > 2, "precondition: this search is more than two requests")
         let unreadable = try #require(requests[1].first)
 
         let database = StubTrailCellDatabase(manifest: .complete, cells: [unreadable: .failed])
         let library = Self.makeLibrary(database, directory: Self.scratchDirectory())
         let first = try await library.trails(in: boxes, nearest: center, limit: 50)
+        let firstAsked: [[String]] = database.requests
         database.hold(TrailCellFixture.found([]), as: unreadable)
         let second = try await library.trails(in: boxes, nearest: center, limit: 50)
+        let secondAsked: [String] = database.requests.dropFirst(2).flatMap(\.self)
+        let left: [String] = [unreadable] + requests.dropFirst(2).flatMap(\.self)
 
         #expect(first == .unreachable)
         #expect(second == .trails([]))
-        #expect(database.requests == [requests[0], requests[1], [unreadable] + requests[2]])
+        #expect(firstAsked == Array(requests.prefix(2)))
+        #expect(secondAsked == left)
+    }
+
+    /// The request that was out finished rather than heard of it, as one may.
+    /// The browser starts the next search only once this one has ended, so
+    /// the requests after it would be time the hiker waits through.
+    @Test("a wide search superseded while a request is out asks for nothing after it")
+    func aSupersededWideSearchStops() async {
+        let database = StubTrailCellDatabase(manifest: .complete)
+        database.cancelCallers(answering: true)
+        let library = Self.makeLibrary(database)
+
+        // A task of its own, because it is the one the stub cancels.
+        let search = Task {
+            try await library.trails(
+                in: Self.widestSearch(atLatitude: 60),
+                nearest: Self.searchCenter(atLatitude: 60),
+                limit: CommunityQueryPolicy.wideResultLimit
+            )
+        }
+
+        await #expect(throws: CancellationError.self) {
+            try await search.value
+        }
+        #expect(database.requests.count == 1)
     }
 
     /// What lets a wide search finish on a connection too slow to carry it in

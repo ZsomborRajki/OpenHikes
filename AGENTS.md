@@ -1540,9 +1540,10 @@ by name. `TrailCellGrid` argues the design and has the measurements.
   is answered from the squares only when the manifest says they are the whole
   world, and every square within reach of the search was read or has no
   record. With no manifest, a regional set, or a square that could not be
-  read, `CuratedTrailSource` asks Overpass as it did before. So a build of the
-  app can ship before the squares do, and an empty answer from the squares
-  means *no trails here*.
+  read, `CuratedTrailSource` asks Overpass as it did before, about a search
+  Overpass may be asked about (next point). So a search that narrow fills
+  without the squares, and an empty answer from the squares means *no trails
+  here*.
 - **The squares reach further than Overpass is asked.** The search ceiling is
   theirs (`CuratedTrailQuery.maximumRadiusMeters`), and Overpass keeps the
   narrower one it had (`maximumOverpassRadiusMeters`). Between the two, a

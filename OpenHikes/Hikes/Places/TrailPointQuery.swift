@@ -196,7 +196,7 @@ nonisolated enum TrailPointQuery {
     /// ``CuratedTrailQuery/searchBoxes(for:)`` does the arithmetic, including
     /// the date-line split, because turning an area into boxes is the same
     /// geometry problem whichever feature is asking. What is this type's own
-    /// is the ceiling in front of it: that one refuses at 40 km and this
+    /// is the ceiling in front of it: that one refuses at 100 km and this
     /// refuses at 10, so the guard here is what makes the header's figures
     /// true.
     ///

@@ -33,16 +33,16 @@ nonisolated struct TrailCellStore: Sendable {
     /// How many squares are kept.
     ///
     /// A search of the map above the sheet reads four to nine, and the widest
-    /// search the app allows reads 117 at 47°N, so this is three of those,
+    /// search the app allows reads 117 at 47°N, so this is four of those,
     /// and never fewer than one search may read — see
     /// ``TrailCellLibrary/maximumCellsPerSearch`` — or a search would push
     /// out squares it had just kept. Measured over Hungary, the median square
     /// is 5 KB and the largest of 166 is 168 KB, a third more than that once
     /// it is a file here. The densest ground measured, a map two hundred
-    /// kilometres across around Stuttgart, was 12 MB of files, so three such
-    /// searches are 36 MB; in `Caches`, where the system takes the lot back
+    /// kilometres across around Stuttgart, was 12 MB of files, so four such
+    /// searches are 48 MB; in `Caches`, where the system takes the lot back
     /// when it wants the room.
-    static let maximumFiles = 400
+    static let maximumFiles = 500
 
     /// Where the files live for an ordinary launch. `Caches`, for the reason
     /// ``CuratedTrailStore/defaultDirectory()`` gives.
