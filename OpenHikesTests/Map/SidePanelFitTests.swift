@@ -29,7 +29,7 @@ struct SidePanelFitTests {
     @Test("the panel stands as tall as its screen and the bars around it")
     func standsAsTallAsTheScreenOnTop() {
         let fit = fit()
-        fit.show(depth: 1, fillingPanel: false)
+        fit.show(depth: 1, keeping: 0, fillingPanel: false)
 
         fit.report(bars: 54, atDepth: 1)
         fit.report(content: 390.2, from: fit.nameScreen(), atDepth: 1)
@@ -86,7 +86,7 @@ struct SidePanelFitTests {
     func holdsItsHeightUntilThePushedScreenAsks() {
         let fit = fit()
 
-        fit.show(depth: 1, fillingPanel: false)
+        fit.show(depth: 1, keeping: 0, fillingPanel: false)
         #expect(fit.height == 400)
 
         fit.report(bars: 54, atDepth: 1)
@@ -100,11 +100,11 @@ struct SidePanelFitTests {
     @Test("a pop returns to what the screen underneath asked for")
     func aPopReturnsToTheScreenUnderneath() {
         let fit = fit()
-        fit.show(depth: 1, fillingPanel: false)
+        fit.show(depth: 1, keeping: 0, fillingPanel: false)
         fit.report(bars: 54, atDepth: 1)
         fit.report(content: 700, from: fit.nameScreen(), atDepth: 1)
 
-        fit.show(depth: 0, fillingPanel: false)
+        fit.show(depth: 0, keeping: 0, fillingPanel: false)
 
         #expect(fit.height == 400)
     }
@@ -112,27 +112,45 @@ struct SidePanelFitTests {
     @Test("what a popped screen asked for is not the next screen's")
     func forgetsWhatAPoppedScreenAsked() {
         let fit = fit()
-        fit.show(depth: 1, fillingPanel: false)
+        fit.show(depth: 1, keeping: 0, fillingPanel: false)
         fit.report(bars: 54, atDepth: 1)
         fit.report(content: 700, from: fit.nameScreen(), atDepth: 1)
-        fit.show(depth: 0, fillingPanel: false)
+        fit.show(depth: 0, keeping: 0, fillingPanel: false)
 
-        fit.show(depth: 1, fillingPanel: false)
+        fit.show(depth: 1, keeping: 0, fillingPanel: false)
 
         #expect(fit.height == 400, "the root's height, held, and not the last screen's 754")
+    }
+
+    /// A tap on a trail's line, or *Record*, assigns the whole path, so the
+    /// screen it opens takes the place of every screen pushed — the covered
+    /// ones as well as the one on top.
+    @Test("what a screen replaced from deeper in the stack asked for is not the next one's")
+    func forgetsWhatAReplacedScreenAsked() {
+        let fit = fit()
+        fit.show(depth: 1, keeping: 0, fillingPanel: false)
+        fit.report(bars: 54, atDepth: 1)
+        fit.report(content: 700, from: fit.nameScreen(), atDepth: 1)
+        fit.show(depth: 2, keeping: 1, fillingPanel: false)
+        fit.report(bars: 54, atDepth: 2)
+        fit.report(content: 300, from: fit.nameScreen(), atDepth: 2)
+
+        fit.show(depth: 1, keeping: 0, fillingPanel: false)
+
+        #expect(fit.height == 354, "held for the new screen, and not the 754 of the one it replaced")
     }
 
     @Test("a screen being popped is not heard")
     func aScreenBeingPoppedIsNotHeard() {
         let fit = fit()
-        fit.show(depth: 1, fillingPanel: false)
+        fit.show(depth: 1, keeping: 0, fillingPanel: false)
         let pushed = fit.nameScreen()
         fit.report(bars: 54, atDepth: 1)
         fit.report(content: 700, from: pushed, atDepth: 1)
-        fit.show(depth: 0, fillingPanel: false)
+        fit.show(depth: 0, keeping: 0, fillingPanel: false)
 
         fit.report(content: 900, from: pushed, atDepth: 1)
-        fit.show(depth: 1, fillingPanel: false)
+        fit.show(depth: 1, keeping: 0, fillingPanel: false)
 
         #expect(fit.height == 400, "nothing was kept for the next screen at that depth")
     }
@@ -142,7 +160,7 @@ struct SidePanelFitTests {
     @Test("of two screens at one depth, the newer is the one heard")
     func theNewerScreenAtADepthIsHeard() {
         let fit = fit()
-        fit.show(depth: 1, fillingPanel: false)
+        fit.show(depth: 1, keeping: 0, fillingPanel: false)
         fit.report(bars: 54, atDepth: 1)
         let leaving = fit.nameScreen()
         fit.report(content: 700, from: leaving, atDepth: 1)
@@ -181,10 +199,10 @@ struct SidePanelFitTests {
     func aPhotoViewerTakesTheWindowsHeight() {
         let fit = fit()
 
-        fit.show(depth: 1, fillingPanel: true)
+        fit.show(depth: 1, keeping: 0, fillingPanel: true)
         #expect(fit.height == nil)
 
-        fit.show(depth: 0, fillingPanel: false)
+        fit.show(depth: 0, keeping: 0, fillingPanel: false)
         #expect(fit.height == 400)
     }
 

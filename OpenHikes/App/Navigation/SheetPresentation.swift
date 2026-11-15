@@ -108,8 +108,11 @@ final class SheetPresentation {
             return storedPath
         }
         set {
+            // How many of the pushed screens stay the ones they were, for the
+            // side panel's height — see ``SidePanelFit/show(depth:keeping:fillingPanel:)``.
+            let kept = zip(storedPath, newValue).prefix { $0 == $1 }.count
             withMutation(keyPath: \.path) { storedPath = newValue }
-            pathDidChange()
+            pathDidChange(keeping: kept)
         }
     }
 
@@ -718,7 +721,9 @@ final class SheetPresentation {
         withAnimation { detent = .large }
     }
 
-    private func pathDidChange() {
+    /// - Parameter kept: How many of the pushed screens are the ones that
+    ///   were there before the change.
+    private func pathDidChange(keeping kept: Int) {
         let stack = storedPath
         let isOnPath = { (route: SheetRoute) in stack.contains(route) }
         hikeInteractions.release { id in stack.contains { $0.shows(hikeID: id) } }
@@ -748,7 +753,11 @@ final class SheetPresentation {
         if isTrailDraftPresented != drafting { isTrailDraftPresented = drafting }
         let pushed = !storedPath.isEmpty
         if hasPushedScreen != pushed { hasPushedScreen = pushed }
-        panelFit.show(depth: storedPath.count, fillingPanel: storedPath.last?.prefersFullHeight ?? false)
+        panelFit.show(
+            depth: storedPath.count,
+            keeping: kept,
+            fillingPanel: storedPath.last?.prefersFullHeight ?? false
+        )
         applyFullHeightPolicy()
     }
 
