@@ -22,6 +22,15 @@
 //  stand on its own ground, so two squares never both place one; they do
 //  not see each other's signs, and along a square's edge two may crowd.
 //
+//  **No deeper than ``deepestPlacementZoom``.** A square is placed whole,
+//  on whichever drawing thread asks first, and each zoom deeper doubles the
+//  pixels along its lines. The densest detail square of the world's build,
+//  in the Ardennes, placed 27,135 signs in 35 ms at zoom 18 and 462,852 in
+//  0.59 s at zoom 22, the depth of a phone's deepest tiles, measured in a
+//  release build on a Mac. Deeper than that zoom, its places are kept, so
+//  the signs stand as far apart on the ground as they do there, and further
+//  apart on the screen.
+//
 
 import Algorithms
 import CoreGraphics
@@ -55,11 +64,15 @@ nonisolated final class WaymarkPlacements: Sendable {
 }
 
 nonisolated extension DrawnRouteSquare {
+    /// The deepest zoom signs are placed for. See this file's header.
+    static let deepestPlacementZoom = 18
+
     /// The square's signs as they stand at `zoom`.
     func waymarks(atZoom zoom: Int) -> [PlacedWaymark] {
         guard !signs.isEmpty else { return [] }
-        return placements.at(zoom) {
-            var placer = WaymarkPlacer(self, zoom: zoom)
+        let placedAt = min(zoom, Self.deepestPlacementZoom)
+        return placements.at(placedAt) {
+            var placer = WaymarkPlacer(self, zoom: placedAt)
             return placer.place()
         }
     }

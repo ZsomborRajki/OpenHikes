@@ -1661,12 +1661,16 @@ beside them. `RouteSquareGrid` argues the design and has the measurements.
 - **A sign is a route's waymark, or its number** (`WaymarkSign`): its
   `osmc:symbol` (`OSMCSymbol`), else its `ref`, else what its name shortens
   to, framed in its network's colour. Shapes the wiki lists that `OSMCSymbol`
-  does not draw are dropped, not guessed.
+  does not draw are dropped, not guessed. A number is never cut: one too wide
+  for a tile's reach (`WaymarkSign.maximumWidth`) leaves the route without a
+  sign, because two routes cut to the same characters would share one.
 - **Signs are placed once for a square and a zoom, never tile by tile**
   (`DrawnRouteSquare+Waymarks.swift`): along each line every so many pixels,
   moved along it to stand clear of another sign, and left out within the
   repeat distance of one the same. Every tile draws from that list, so a
-  sign across two tiles is whole in both.
+  sign across two tiles is whole in both. Deeper than
+  `DrawnRouteSquare.deepestPlacementZoom` the places are kept: each zoom
+  deeper doubles the places a whole square tries, on a drawing thread.
 - **No suite reaches the squares.** `HikingRouteSquares.forThisLaunch()` is
   `nil` under `isRunningTests`, UI tests included, and the map then installs
   no layer whatever the switch says; suites hand the map a stub's squares.

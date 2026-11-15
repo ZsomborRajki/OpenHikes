@@ -32,11 +32,24 @@ struct WaymarkSignTests {
         #expect(WaymarkSign(tags: ["network": "rwn", "ref": "7"]) != WaymarkSign(tags: ["network": "lwn", "ref": "7"]))
     }
 
+    /// Spain's paths are numbered by island: two routes cut to the same five
+    /// characters would be one sign, and the repeat distance would leave
+    /// one of them out as the other.
+    @Test("a number is never cut: one too long to draw whole leaves the route without a sign")
+    func longNumbers() throws {
+        let twelve = try #require(WaymarkSign(tags: ["ref": "PR-LP 12"]))
+        #expect(twelve.content == .reference("PR-LP12"))
+        #expect(twelve != WaymarkSign(tags: ["ref": "PR-LP 13"]))
+        #expect(twelve.size.width <= WaymarkSign.maximumWidth)
+        #expect(WaymarkSign(tags: ["ref": "Zuweg Rheinsteig 12"]) == nil)
+    }
+
     @Test(
         "a route with no number is called by its name: whole when short, by its capitals, or by its start",
         arguments: [
             (["ref": "VA A44"], "VAA44"),
             (["ref": "01 A"], "01A"),
+            (["ref": "SL-LP 101"], "SL-LP101"),
             (["name": "Arn"], "Arn"),
             (["name": "Salzburger Almenweg"], "SA"),
             (["name": "Tauernhöhenweg 502"], "T502"),
