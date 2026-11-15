@@ -75,8 +75,8 @@ struct HikePlaceAroundCard: View {
         // see.
         .presentationCompactAdaptation(.none)
         // The map's own buttons stay live behind the card, and this sheet is
-        // what a sheet they open has to come up over.
-        .presentsMapModesOverCard()
+        // what anything they open has to come up over.
+        .presentsMapControlsOverCard()
     }
 
     /// What the card is about: a place the hike has, or one found around it.

@@ -866,8 +866,17 @@ a change to recording, the map, the sheet or the render path; the PR template,
   permanently in portrait. A `.sheet`, cover, picker, importer or alert attached
   beside it never presents, and an alert can even take the sheet down. Every map
   alert lives in `MapScreenAlerts`, and `MapScreenAlertUITests` checks them,
-  except the trail maker's missed-photo alert: it is attached beside them on the
-  same contents, because a seventh parameter is past the lint limit.
+  except two attached beside them on the same contents: the trail maker's
+  missed-photo alert, which carries an object rather than a binding, and the
+  refused location button's, which goes with the map controls' (below).
+  - **What a map control opens goes through `MapControlModals`.** A place card
+    leaves the map live behind it, the pill and the weather badge included,
+    and the map sheet is already presenting the card. A sheet asked for from
+    under it waits, and comes up when the card is closed; an alert comes up
+    at once and takes the card down. So the card presents *Map Modes*, the
+    location alert and the forecast over itself while it is up
+    (`presentsMapControlsOverCard()`), and anything new a map control opens
+    joins them there.
 - **The map is chosen on the map.** *Map Modes* (`MapModesView`) is a sheet
   as tall as its cards, opened from the pill the "my location" button stands
   in, so the map above it turns over as a card is tapped. It holds the cards,
@@ -875,11 +884,6 @@ a change to recording, the map, the sheet or the render path; the PR template,
   and with the routes) and the credits of every picture on it. The trail
   maker keeps its *Hiking Routes* switch; Settings keeps only a subscriber's
   subscription row.
-  - A place card leaves the map live behind it, the pill included, and the
-    map sheet is already presenting the card. A sheet asked for from under it
-    waits, and comes up when the card is closed. So the card presents *Map
-    Modes* over itself while it is up (`MapModesPresentation`), and any
-    other sheet a map control opens has to do the same.
 - **The primary surface has two shapes: a sheet in a narrow window, a panel
   beside the map in a wide or a short one.**
   - At a compact height a sheet left to adapt is presented full-screen, its

@@ -71,24 +71,24 @@ enum LocationAccessNeed {
 /// this one is observed rather than handed a closure.
 ///
 /// ``isShowing`` is the only thing on it, and it changes twice per refusal
-/// the hiker actually taps into. It is presented by ``MapScreenAlerts``, from
-/// inside the sheet's contents — see that file for why the root view is the
-/// one place this alert cannot be attached, and ``isShowingBinding`` for which
-/// body attaching it there makes a reader of this flag.
+/// the hiker actually taps into. It is presented from inside the sheet's
+/// contents, or from a place card over them — see ``MapControlModals``, and
+/// ``MapScreenAlerts`` for why the root view is the one place this alert
+/// cannot be attached.
 @MainActor
 @Observable
 final class LocationAccessPrompt {
     var isShowing = false
 
-    /// Drives `.alert(isPresented:)`. Building it reads the flag —
+    /// The flag, for ``MapControlModals/binding(_:for:)`` to drive
+    /// `.alert(isPresented:)` from. Building it reads the flag —
     /// `Binding(get:set:)` calls its getter as it is made — so whichever body
     /// builds it is a reader of this flag, and runs again on the two changes
-    /// a refusal makes. It is built with the sheet's contents. In portrait
-    /// that is inside the `.sheet` modifier's body, around them, and the root
-    /// view's own body is not a reader; in landscape it is the root view's
-    /// body, because ``MapSidePanel`` takes its contents as a view built
-    /// there rather than as a closure of its own to call. See *Render
-    /// isolation, in practice* in the repository instructions.
+    /// a refusal makes. A modifier builds it in its own body, so that is all
+    /// that runs again: built along with the sheet's contents, it made a
+    /// reader of the root view's body in landscape, where ``MapSidePanel``
+    /// takes those contents as a view built there. See *Render isolation, in
+    /// practice* in the repository instructions.
     var isShowingBinding: Binding<Bool> {
         Binding(get: { self.isShowing }, set: { self.isShowing = $0 })
     }
@@ -101,6 +101,15 @@ final class LocationAccessPrompt {
 }
 
 extension View {
+    /// Presents the map's refusal from `presenter` — the map sheet's contents,
+    /// or a place card over them. See ``MapControlModals``.
+    func locationAccessAlert(
+        _ modals: MapControlModals,
+        from presenter: MapControlModals.Presenter
+    ) -> some View {
+        modifier(MapLocationAccessAlert(modals: modals, presenter: presenter))
+    }
+
     /// Presents ``LocationAccessNeed``'s wording, with the one button that can
     /// do anything about it — see ``OpenSettingsLink``.
     func locationAccessAlert(
@@ -113,5 +122,19 @@ extension View {
         } message: {
             Text(need.message)
         }
+    }
+}
+
+/// The map's refusal, as a modifier so that its own body, and nothing above
+/// it, builds the binding and so reads the flag.
+private struct MapLocationAccessAlert: ViewModifier {
+    let modals: MapControlModals
+    let presenter: MapControlModals.Presenter
+
+    func body(content: Content) -> some View {
+        content.locationAccessAlert(
+            .whileUsing,
+            isPresented: modals.binding(modals.locationAccess.isShowingBinding, for: presenter)
+        )
     }
 }

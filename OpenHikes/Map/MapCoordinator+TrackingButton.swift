@@ -431,7 +431,7 @@ extension MapView {
     /// Maps' own glyph for it, in the label colour as the arrow under it is
     /// at rest: both are on glass, so the pair stays legible whatever the
     /// tiles underneath are doing. The sheet it opens is not the map's to
-    /// present — see ``MapModesPresentation``.
+    /// present — see ``MapControlModals``.
     private func makeMapModesButton() -> UIButton {
         var configuration = UIButton.Configuration.plain()
         configuration.image = MapGlassPill.symbol("map.fill")

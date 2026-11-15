@@ -46,12 +46,13 @@ struct OpenHikesView: View {
     /// The sheet's live top edge, observed directly by the map so dragging the
     /// sheet never re-renders this view or the sheet's contents.
     @State private var sheetMetrics = SheetMetrics()
-    /// Whether the weather badge's detail sheet is up. A reference type for
-    /// the reason ``SheetPresentation`` is one — and *presented* from inside
-    /// `MapSheet`, because a modal attached beside a sheet that is never
-    /// dismissed is never presented at all. See the `.weatherDetailSheet`
-    /// call below.
-    @State private var weatherDetail = WeatherDetailPresentation()
+    /// What the map's own controls open — *Map Modes*, the refused "my
+    /// location" button's alert and the weather badge's forecast. A reference
+    /// type for the reason ``SheetPresentation`` is one — and *presented*
+    /// from inside `MapSheet`, because a modal attached beside a sheet that
+    /// is never dismissed is never presented at all, or from a place card
+    /// over it. See the `.mapControlModals` call below.
+    @State private var mapControls = MapControlModals()
     /// Where the open hike's photos were taken, observed directly by the map.
     /// Owned here for the same reason ``photoCapture`` is: the pins are drawn
     /// on the map and the photos live on a screen inside the sheet.
@@ -76,15 +77,6 @@ struct OpenHikesView: View {
     /// ``photoPins`` is: the line is drawn by MapKit and the screen it opens
     /// is a push into the stack this view owns. See ``DrawnRouteTap``.
     @State var drawnRouteTap = DrawnRouteTap()
-    /// Raised by the map's refused "my location" button, presented by
-    /// ``MapScreenAlerts`` on the sheet's contents. Owned here because the map
-    /// raising it and the alert presenting it are on opposite sides of this
-    /// view, and nothing between them can hold state.
-    @State var locationAccessPrompt = LocationAccessPrompt()
-    /// Raised by the map's map-modes button, presented from inside the
-    /// sheet's contents for the reason the weather detail is. See the
-    /// `.mapModesSheet` call below.
-    @State private var mapModes = MapModesPresentation()
     /// Which screen a photo would be filed under. Owned here because the map's
     /// camera pill and the screens that offer it live on opposite sides of the
     /// sheet; see ``PhotoCaptureController``.
@@ -258,7 +250,7 @@ struct OpenHikesView: View {
                         state: appModel.weatherManager.state,
                         keepsLight: activeBase.keepsChromeLight
                     ) {
-                        weatherDetail.present()
+                        mapControls.weatherDetail.present()
                     }
                         // Beside the panel in landscape, for the same reason
                         // the map's own controls are moved off that edge —
@@ -317,8 +309,8 @@ struct OpenHikesView: View {
             hikingRouteSquares: appModel.hikingRouteSquares,
             mapController: mapController,
             drawnRouteTap: drawnRouteTap,
-            locationAccessPrompt: locationAccessPrompt,
-            mapModes: mapModes,
+            locationAccessPrompt: mapControls.locationAccess,
+            mapModes: mapControls.mapModes,
             photoCapture: photoCapture,
             photoPins: photoPins,
             placePins: appModel.placePins,
@@ -565,8 +557,8 @@ extension OpenHikesView {
     /// The two callbacks are the whole difference: a side panel does not move,
     /// rests at no detent, and has nothing to report to ``SheetMetrics``.
     ///
-    /// The camera, the library picker, the weather detail and *Map Modes* are
-    /// attached here rather than beside the presentation, for the reason the
+    /// The camera, the library picker and what the map's own controls open
+    /// are attached here rather than beside the presentation, for the reason the
     /// repository instructions give under *Present modals from inside the
     /// sheet's contents*: a view
     /// can only have one modal up at a time, and in portrait this sheet is
@@ -603,18 +595,12 @@ extension OpenHikesView {
                 onCaptured: attachCapturedPhoto,
                 onPicked: attachPickedPhotos
             )
-            .weatherDetailSheet(weatherDetail, weather: appModel.weatherManager)
-            .mapModesSheet(
-                mapModes,
-                entitlement: appModel.entitlement,
-                locationManager: appModel.locationManager
-            )
+            .mapControlModals(mapControls, model: appModel)
             .gpxTrackChoice(gpxTrackChoice)
             .mapScreenAlerts(
                 importReport: $importReport,
                 searchFailure: $searchFailure,
                 startupIssue: showingStorageStartupIssue,
-                locationAccess: locationAccessPrompt.isShowingBinding,
                 photoCapture: $photoPresentation,
                 refusals: MapScreenRefusals(
                     walkEnd: Bindable(appModel.recordingEntry).walkEndRefused,

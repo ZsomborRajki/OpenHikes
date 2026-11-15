@@ -14,79 +14,48 @@
 //  The button that opens it is in the map's own pill, over the "my location"
 //  button — see `MapCoordinator+TrackingButton.swift` — and the sheet is
 //  presented from inside the map sheet's contents, for the reason
-//  ``weatherDetailSheet(_:weather:)`` is: a modal attached beside a sheet that
-//  is never dismissed is never presented at all. ``MapModesPresentation``
-//  carries the tap from one to the other, and says which sheet presents it.
+//  ``MapScreenAlerts`` gives: a modal attached beside a sheet that is never
+//  dismissed is never presented at all. ``MapModesPresentation`` carries the
+//  tap from one to the other, and ``MapControlModals`` says which sheet
+//  presents it.
 //
 
 import SwiftUI
 
 extension View {
-    /// Attaches *Map Modes* to the view it can actually be presented from:
-    /// the map sheet's contents, not the view that presents the sheet. The
-    /// presentation goes into the environment too, for the place cards.
+    /// Attaches *Map Modes* to `presenter`: the map sheet's contents, not the
+    /// view that presents the sheet, or a place card over them — see
+    /// ``MapControlModals``.
     func mapModesSheet(
-        _ presentation: MapModesPresentation,
+        _ modals: MapControlModals,
+        from presenter: MapControlModals.Presenter,
         entitlement: MapEntitlementStore,
         locationManager: LocationManager
     ) -> some View {
         modifier(
             MapModesSheetModifier(
-                presentation: presentation,
-                presenter: .mapSheet,
+                modals: modals,
+                presenter: presenter,
                 entitlement: entitlement,
                 locationManager: locationManager
             )
         )
-        .environment(presentation)
-    }
-
-    /// For a place card that leaves the map live behind it: presents *Map
-    /// Modes* over the card while the card is up — see
-    /// ``MapModesPresentation``.
-    func presentsMapModesOverCard() -> some View {
-        modifier(MapModesOverCard())
     }
 }
 
 private struct MapModesSheetModifier: ViewModifier {
-    let presentation: MapModesPresentation
-    let presenter: MapModesPresentation.Presenter
+    let modals: MapControlModals
+    let presenter: MapControlModals.Presenter
     let entitlement: MapEntitlementStore
     let locationManager: LocationManager
 
     func body(content: Content) -> some View {
-        content.sheet(isPresented: presentation.binding(for: presenter)) {
+        content.sheet(isPresented: modals.binding(modals.mapModes.isPresentedBinding, for: presenter)) {
             MapModesView(
                 entitlement: entitlement,
                 locationManager: locationManager,
-                onClose: presentation.dismiss
+                onClose: modals.mapModes.dismiss
             )
-        }
-    }
-}
-
-/// Reads the presentation and the model from the environment, so a card is
-/// handed neither. Both are absent in a preview, which then presents nothing.
-private struct MapModesOverCard: ViewModifier {
-    @Environment(MapModesPresentation.self) private var presentation: MapModesPresentation?
-    @Environment(OpenHikesModel.self) private var appModel: OpenHikesModel?
-
-    func body(content: Content) -> some View {
-        if let presentation, let appModel {
-            content
-                .onAppear(perform: presentation.cardDidAppear)
-                .onDisappear(perform: presentation.cardDidDisappear)
-                .modifier(
-                    MapModesSheetModifier(
-                        presentation: presentation,
-                        presenter: .card,
-                        entitlement: appModel.entitlement,
-                        locationManager: appModel.locationManager
-                    )
-                )
-        } else {
-            content
         }
     }
 }
