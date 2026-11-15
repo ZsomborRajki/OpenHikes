@@ -31,13 +31,24 @@
 //    and was not.
 //
 //  Either of the last two sends the search to Overpass exactly as it went
-//  before there were squares, so no search is worse than it was.
+//  before there were squares, so no answer is worse than it was. What no
+//  answer costs is the wait for it first: on a connection too poor to bring
+//  the squares, up to ``CloudKitTrailCellDatabase``'s search timeouts, the
+//  day hikes' own, before Overpass is asked on the same connection.
+//
+//  **Asked on any network**, as Overpass was and as the day hikes' squares
+//  are, because a search is something the hiker asked for. The hiking-routes
+//  layer's squares are refused where a tile would be, because nobody asks for
+//  those: see ``HikingRouteSquares``.
 //
 //  **What arrived is kept**, whatever the rest did, and so is a square with
 //  no record in a set that is the whole world, as a square with no places in
 //  it — see ``TrailCellStore``. What is kept is also what
 //  ``keptPlaces(near:limit:)`` reads, with no request at all: what *Add Place*
-//  offers before its search answers, and what a refused search draws.
+//  offers before its search answers, and what a refused search draws. A
+//  square is read from the disk for each search rather than held in memory:
+//  the largest, 16,478 places, decodes in 4 ms on a Mac, 44 in a Debug build,
+//  and *Places Around Trail* asks one stretch at a time.
 //
 
 import Algorithms
