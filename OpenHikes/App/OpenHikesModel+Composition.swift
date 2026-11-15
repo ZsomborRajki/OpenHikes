@@ -84,6 +84,7 @@ extension OpenHikesModel {
             trailGraphProvider: parts.graphProvider,
             movementReminders: parts.reminders,
             communityTransport: parts.communityTransport,
+            hikingRouteSquares: HikingRouteSquares.forThisLaunch(),
             selectedLine: parts.selectedLine,
             defaults: launchDefaults,
             startupIssue: load.startupIssue,
