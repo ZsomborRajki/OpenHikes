@@ -25,7 +25,7 @@
 //  data, and the trails among them 85.5 million ways, 1.0 billion nodes and
 //  6.9 GB. Everything but the maker reads trails alone, so the squares hold
 //  trails alone, and the maker keeps asking Overpass for the graph it routes
-//  over — see `OpenHikesModel.makeLaunchDependencies`.
+//  over — see `OpenHikesModel.makeTrailGraphProviders()`.
 //
 //  ## Slippy-map squares, so a region is in exactly one
 //

@@ -23,13 +23,18 @@ extension OpenHikesModel {
         let routing: OverpassTrailGraphProvider
     }
 
+    ///
+    /// Two providers, and still one address to Overpass, so a `429` either
+    /// earns stops both: they share its deadline (``OverpassRetryDeadline``).
     static func makeTrailGraphProviders() -> TrailGraphProviders {
-        TrailGraphProviders(
+        let retryDeadline = OverpassRetryDeadline()
+        return TrailGraphProviders(
             trails: OverpassTrailGraphProvider(
                 directory: OverpassTrailGraphProvider.trailsDirectory(),
-                squares: TrailGraphSquareLibrary.forThisLaunch()
+                squares: TrailGraphSquareLibrary.forThisLaunch(),
+                retryDeadline: retryDeadline
             ),
-            routing: OverpassTrailGraphProvider()
+            routing: OverpassTrailGraphProvider(retryDeadline: retryDeadline)
         )
     }
 

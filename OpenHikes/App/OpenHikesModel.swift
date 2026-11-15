@@ -53,11 +53,13 @@ final class OpenHikesModel {
     /// a position. Only the weather poll uses it today. Armed and disarmed
     /// with the foreground — see ``sceneDidBecomeActive()``.
     let significantLocations: SignificantLocationFeed
-    /// The OSM walking graph, shared with ``hikeRecorder`` rather than built
-    /// per consumer: it owns a durable cache, an in-flight request table and
-    /// the retry deadline Overpass hands back when it rate-limits us. A second
-    /// instance would keep its own copy of all three and double the request
-    /// rate against a volunteer-run API.
+    /// The OSM trail graph, shared with ``hikeRecorder`` rather than built
+    /// per consumer: it owns a durable cache and an in-flight request table,
+    /// and a second instance would keep its own copy of both and double the
+    /// requests. The trail maker has the one other provider, for the roads
+    /// the squares leave out, and the two share the retry deadline Overpass
+    /// hands back when it rate-limits us — see
+    /// ``makeTrailGraphProviders()``.
     let trailGraphProvider: (any TrailGraphProviding)?
     /// Reports on the CloudKit mirroring SwiftData does for the store built
     /// above, and remembers whether the user wants it at all.

@@ -32,7 +32,13 @@
 //  while any region waits on it, and is cancelled when the last one stops
 //  waiting, so a recording's Stop ends the request rather than leaving it to
 //  run out its timeout. Awaiting a task's value does not pass a cancellation
-//  on to the task, which is why the count is kept here.
+//  on to the task, which is why the count is kept here. A region given up on
+//  starts no request and reads nothing out of a square that arrives.
+//
+//  A square that could not be read is left for a minute, as the
+//  hiking-routes layer leaves one: its regions go to Overpass meanwhile, and
+//  a square too large for the signal is not downloaded again from the start
+//  for each of the sixteen regions it holds.
 //
 //  ## As old as the square
 //
@@ -95,6 +101,10 @@ actor TrailGraphSquareLibrary {
     /// it if it fails.
     static let requestTimeout: TimeInterval = 30
     static let resourceTimeout: TimeInterval = 120
+    /// How long a square that could not be read is left before it is asked
+    /// for again, in seconds: ``HikingRouteSquares/failedRetry``, for the
+    /// same reason.
+    static let failedRetry: TimeInterval = HikingRouteSquares.failedRetry
 
     /// Where the files live for an ordinary launch: `Caches`, beside the
     /// other sets' squares.
@@ -144,6 +154,8 @@ actor TrailGraphSquareLibrary {
     private let clock: @Sendable () -> Date
     private var fetches: [String: SquareFetch] = [:]
     private var recent: Recent?
+    /// The squares that could not be read, and until when they are left.
+    private var failedUntil: [String: Date] = [:]
 
     /// - Parameter directory: Where fetched squares are kept between
     ///   launches. A suite passes one of its own, and must: the default is
@@ -165,6 +177,9 @@ actor TrailGraphSquareLibrary {
         }
         switch await read(TrailGraphSquareGrid.recordName(for: square)) {
         case let .square(file, fetchedAt):
+            // Read for nobody otherwise, and a large square's read is the
+            // costly part of a region.
+            guard !Task.isCancelled else { return .unreachable }
             return .graph(Self.graph(of: file, crossing: Self.bounds(of: region)), fetchedAt: fetchedAt)
 
         case .uncovered:
@@ -200,7 +215,13 @@ actor TrailGraphSquareLibrary {
             recent = Recent(name: name, square: square, fetchedAt: kept.fetchedAt)
             return .square(square, fetchedAt: kept.fetchedAt)
         }
-        let fetch = fetches[name] ?? beginFetch(name)
+        let fetch: SquareFetch
+        if let running = fetches[name] {
+            fetch = running
+        } else {
+            guard !Task.isCancelled, !hasFailedRecently(name) else { return .unreachable }
+            fetch = beginFetch(name)
+        }
         let fetchID = fetch.id
         let waiter = UUID()
         fetches[name]?.waiters.insert(waiter)
@@ -213,10 +234,31 @@ actor TrailGraphSquareLibrary {
         }
         // Finished, so whichever region comes back first lets it go.
         if fetches[name]?.id == fetchID { fetches[name] = nil }
-        if case let .square(square, fetchedAt) = read {
+        switch read {
+        case let .square(square, fetchedAt):
             recent = Recent(name: name, square: square, fetchedAt: fetchedAt)
+
+        case .unreachable where !fetch.task.isCancelled:
+            // A request nobody wanted any more did not fail.
+            let now = clock()
+            failedUntil = failedUntil.filter { $0.value > now }
+            failedUntil[name] = now.addingTimeInterval(Self.failedRetry)
+
+        case .unreachable, .uncovered:
+            break
         }
         return read
+    }
+
+    /// Whether the square named `name` could not be read less than
+    /// ``failedRetry`` ago.
+    private func hasFailedRecently(_ name: String) -> Bool {
+        guard let until = failedUntil[name] else { return false }
+        guard until > clock() else {
+            failedUntil[name] = nil
+            return false
+        }
+        return true
     }
 
     private func beginFetch(_ name: String) -> SquareFetch {

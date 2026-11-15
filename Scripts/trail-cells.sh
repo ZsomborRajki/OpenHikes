@@ -60,8 +60,8 @@
 #             its squares in <dir> (default .build/trail-cells/graph): see
 #             OpenHikes/Recording/Squares/TrailGraphSquareGrid.swift. --world,
 #             --out and --keep-work as for build; it writes graph-manifest.json.
-#             A planet's trails are a billion nodes: the work files take some
-#             60 GB and the build an hour or more.
+#             What a planet's build needs is in AGENTS.md, under
+#             *The trail graph squares*.
 #   upload    Make the public database hold what <dir> does: send the squares
 #             that changed, delete the ones that are gone, then say what the
 #             squares cover. --dry-run reads and plans, and changes nothing.
