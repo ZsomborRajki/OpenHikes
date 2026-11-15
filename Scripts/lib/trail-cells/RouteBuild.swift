@@ -11,6 +11,10 @@
 //  without positions — one running out of a regional extract — is left out,
 //  and the rest of its route is drawn.
 //
+//  **A way that crosses the date line is read the short way**, when it is
+//  simplified and when its squares are found, and filed as it is written:
+//  see `Antimeridian`.
+//
 //  **The same extract always gives the same squares.** Ways are read in the
 //  order osmium writes them, which is by id, routes are numbered by relation
 //  id, and nothing depends on the clock, so a square's digest changes exactly
@@ -208,7 +212,8 @@ private struct RouteFiling {
     }
 
     /// Cuts a line into one run a square, a segment going to every square its
-    /// box touches — see `RouteSquareGrid`'s header.
+    /// box touches — see `RouteSquareGrid`'s header, and `Antimeridian` for a
+    /// segment that crosses it.
     private mutating func cut(
         _ points: [RouteSquareFile.Point],
         at level: RouteSquareLevel,
@@ -219,13 +224,9 @@ private struct RouteFiling {
         var open: [RouteSquare: [RouteSquareFile.Point]] = [:]
         for index in 1..<points.count {
             let start = points[index - 1], end = points[index]
-            let box = RouteSquareBounds(
-                south: Double(min(start.latitude, end.latitude)) / units,
-                west: Double(min(start.longitude, end.longitude)) / units,
-                north: Double(max(start.latitude, end.latitude)) / units,
-                east: Double(max(start.longitude, end.longitude)) / units
-            )
-            let touched = Set(RouteSquareGrid.squares(at: level, covering: box))
+            let touched = Set(Antimeridian.boxes(from: start, to: end, units: units).flatMap { box in
+                RouteSquareGrid.squares(at: level, covering: box)
+            })
             for (square, run) in open where !touched.contains(square) {
                 close(run, in: square, routes: routes, network: network)
                 open[square] = nil
@@ -253,8 +254,72 @@ private struct RouteFiling {
     }
 }
 
+/// Where OpenStreetMap's longitudes jump from 180° to −180°, and a way that
+/// crosses it is written as it is mapped: a node at 179.9° and the next at
+/// −179.9°, about 21 km apart where the line crosses Fiji.
+///
+/// Read as plain numbers that segment runs 359.8° the long way round, and its
+/// box is every column of the grid: one such way was filed in 2,610 squares
+/// round the world, Greenwich's among them, and the simplifier measured it as
+/// a line across the planet. Each step from one point to the next is read the
+/// short way instead — the only way a path is walked. The points themselves
+/// are filed as they are written, so a square on either side of the line
+/// holds the segment as OpenStreetMap has it, as it would any segment that
+/// crosses its edge.
+enum Antimeridian {
+    private static let halfTurnDegrees: Double = 180
+    private static let fullTurnDegrees: Double = 360
+
+    /// Each longitude moved by whole turns to stand the short way from the one
+    /// before it, so a line that crosses the antimeridian runs on past ±180°
+    /// rather than jumping round the world. A line that never crosses it comes
+    /// back exactly as it went in.
+    ///
+    /// - Parameter longitudes: OpenStreetMap's, each within ±180°, so one
+    ///   step crosses the antimeridian once at most.
+    static func unwrapped(_ longitudes: [Double]) -> [Double] {
+        var turns = 0.0
+        return longitudes.indices.map { index in
+            if index > 0 {
+                let step = longitudes[index] - longitudes[index - 1]
+                if step > halfTurnDegrees {
+                    turns -= 1
+                } else if step < -halfTurnDegrees {
+                    turns += 1
+                }
+            }
+            return longitudes[index] + turns * fullTurnDegrees
+        }
+    }
+
+    /// The boxes a segment's squares are found from: its own, or for one that
+    /// crosses the antimeridian the short way, its two pieces either side of
+    /// it — a box `RouteSquareGrid.squares(at:covering:)` takes only uncrossed.
+    static func boxes(
+        from start: RouteSquareFile.Point,
+        to end: RouteSquareFile.Point,
+        units: Double
+    ) -> [RouteSquareBounds] {
+        let south = Double(min(start.latitude, end.latitude)) / units
+        let north = Double(max(start.latitude, end.latitude)) / units
+        let west = Double(min(start.longitude, end.longitude)) / units
+        let east = Double(max(start.longitude, end.longitude)) / units
+        guard east - west > halfTurnDegrees else {
+            return [RouteSquareBounds(south: south, west: west, north: north, east: east)]
+        }
+        // The short way runs east from the larger longitude to 180°, and on
+        // from −180° to the smaller one.
+        return [
+            RouteSquareBounds(south: south, west: east, north: north, east: halfTurnDegrees),
+            RouteSquareBounds(south: south, west: -halfTurnDegrees, north: north, east: west)
+        ]
+    }
+}
+
 /// Douglas–Peucker over a local flat projection, which at the few kilometres
-/// a way spans is the ground to well under the tolerance.
+/// a way spans is the ground to well under the tolerance. Longitudes are
+/// projected unwrapped (`Antimeridian`), so a way across the date line is
+/// measured as the ground it covers, and its points come back as written.
 enum Simplification {
     private static let metersPerDegreeLatitude = 110_540.0
     private static let metersPerDegreeLongitude = 111_320.0
@@ -266,7 +331,8 @@ enum Simplification {
         guard tolerance > 0, points.count > 2 else { return points }
         let kx = metersPerDegreeLongitude * cos(points[0].latitude * .pi / 180)
         let ky = metersPerDegreeLatitude
-        let xy = points.map { (x: $0.longitude * kx, y: $0.latitude * ky) }
+        let longitudes = Antimeridian.unwrapped(points.map(\.longitude))
+        let xy = zip(points, longitudes).map { point, longitude in (x: longitude * kx, y: point.latitude * ky) }
         var keep = [Bool](repeating: false, count: points.count)
         keep[0] = true
         keep[points.count - 1] = true
