@@ -150,6 +150,10 @@ private extension TrailCellsTool {
         try options.finish()
         let data = try Data(contentsOf: URL(fileURLWithPath: path))
         if let routes = try? RouteSquareFile(decoding: data) {
+            if asJSON {
+                print(try Inspection.json(of: routes))
+                return
+            }
             print("scale \(routes.coordinateScale), \(routes.routes.count) routes, \(routes.lines.count) lines, "
                 + "\(routes.lines.reduce(0) { $0 + $1.points.count }) points")
             for route in routes.routes {
@@ -182,7 +186,8 @@ private extension TrailCellsTool {
     }
 }
 
-/// A square written out as JSON, for comparing against a fixture.
+/// A square of either set written out as JSON, for comparing against a
+/// fixture.
 enum Inspection {
     static func json(of file: TrailCellFile) throws -> String {
         let relations: [[String: Any]] = file.relations.map { relation in
@@ -194,10 +199,23 @@ enum Inspection {
                 },
             ]
         }
-        let data = try JSONSerialization.data(
-            withJSONObject: ["scale": file.coordinateScale, "relations": relations],
-            options: [.sortedKeys, .withoutEscapingSlashes]
-        )
+        return try serialized(["scale": file.coordinateScale, "relations": relations])
+    }
+
+    static func json(of file: RouteSquareFile) throws -> String {
+        let routes: [[String: Any]] = file.routes.map { ["id": $0.id, "tags": $0.tags] }
+        let lines: [[String: Any]] = file.lines.map { line in
+            [
+                "network": "\(line.network)",
+                "routes": line.routes,
+                "points": line.points.map { [$0.latitude, $0.longitude] },
+            ]
+        }
+        return try serialized(["scale": file.coordinateScale, "routes": routes, "lines": lines])
+    }
+
+    private static func serialized(_ object: [String: Any]) throws -> String {
+        let data = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes])
         return String(decoding: data, as: UTF8.self)
     }
 }

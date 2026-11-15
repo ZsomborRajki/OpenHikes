@@ -4430,6 +4430,19 @@ if expect_status 0 \
     fi
 fi
 
+# The same square as JSON: the line once, at the most important network among
+# its routes, with OpenStreetMap's own tags on each route and nothing else.
+routes_expected='{"lines":[{"network":"international","points":[[46000000,14000000],[46010000,14010000]],"routes":[0,1,2]}],"routes":[{"id":107,"tags":{"name":"Elsewhere"}},{"id":108,"tags":{"name":"Trail","network":"nwn"}},{"id":110,"tags":{"name":"E-Path","network":"iwn","ref":"E1"}}],"scale":1000000}'
+run_script "trail-cells inspect writes a hiking-routes square as JSON when asked" \
+    "$trail_cells" inspect "$routes_squares/cells/routes1_z14_544_776.cell" --json
+if expect_status 0; then
+    if [[ "$output" == "$routes_expected" ]]; then
+        pass
+    else
+        fail "the square is not the JSON it holds" "$output"
+    fi
+fi
+
 # The layer's squares are planned against the layer's own manifest: an empty
 # database means every square is sent and nothing of the day hikes' is read.
 printf '%s\n' '{ "manifestExists": false, "complete": false, "listed": [], "digests": {} }' \
