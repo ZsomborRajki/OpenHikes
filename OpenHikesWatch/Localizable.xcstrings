@@ -37,6 +37,12 @@
             "value" : "%@ in totale"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Łącznie %@"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -75,6 +81,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ di dislivello positivo, %2$@ di dislivello negativo"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Podejście: %1$@, zejście: %2$@"
           }
         },
         "ru" : {
@@ -195,6 +207,36 @@
             }
           }
         },
+        "pl" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld wędrówki czekają na Twojego iPhone’a"
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld wędrówek czeka na Twojego iPhone’a"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld wędrówka czeka na Twojego iPhone’a"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld wędrówki czeka na Twojego iPhone’a"
+                }
+              }
+            }
+          }
+        },
         "ru" : {
           "variations" : {
             "plural" : {
@@ -251,6 +293,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld per cento"
+          }
+        },
+        "pl" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld procent"
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld procent"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld procent"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld procent"
+                }
+              }
+            }
           }
         },
         "ru" : {
@@ -311,6 +383,12 @@
             "value" : "Escursione interrotta – vai a «Registra»"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wędrówka została przerwana – zobacz „Nagrywanie”"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -343,6 +421,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Impossibile avviare un allenamento: la registrazione non continuerebbe a schermo spento."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nie udało się rozpocząć treningu, więc nagrywanie nie przetrwałoby wygaszenia ekranu."
           }
         },
         "ru" : {
@@ -379,6 +463,12 @@
             "value" : "Richiesta dei sentieri all’iPhone…"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pobieranie Twoich szlaków z iPhone’a…"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -411,6 +501,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Velocità media"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Średnia prędkość"
           }
         },
         "ru" : {
@@ -447,6 +543,12 @@
             "value" : "Vel. media"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Śr. prędkość"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -479,6 +581,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Avvicina il tuo iPhone, con l’app OpenHikes installata, per trasferire i tuoi sentieri."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zbliż iPhone’a z zainstalowaną aplikacją OpenHikes, aby przesłać szlaki."
           }
         },
         "ru" : {
@@ -516,6 +624,12 @@
             "value" : "Annulla"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anuluj"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -548,6 +662,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dislivello +"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Podejście"
           }
         },
         "ru" : {
@@ -584,6 +704,12 @@
             "value" : "Continua"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kontynuuj"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -616,6 +742,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Scarta"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Odrzuć"
           }
         },
         "ru" : {
@@ -652,6 +784,12 @@
             "value" : "Scarta escursione"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Odrzuć wędrówkę"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -686,6 +824,12 @@
             "value" : "Scartare questa escursione?"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Odrzucić tę wędrówkę?"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -718,6 +862,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Distanza"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dystans"
           }
         },
         "ru" : {
@@ -755,6 +905,12 @@
             "value" : "Fine"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gotowe"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -787,6 +943,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Recupero del sentiero dall’iPhone…"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pobieranie tego szlaku z iPhone’a…"
           }
         },
         "ru" : {
@@ -823,6 +985,12 @@
             "value" : "Ricerca della tua posizione sul sentiero…"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ustalanie Twojego miejsca na szlaku…"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -855,6 +1023,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ricerca della tua posizione…"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ustalanie położenia…"
           }
         },
         "ru" : {
@@ -891,6 +1065,12 @@
             "value" : "Arrivo"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meta"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -923,6 +1103,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Segui la tua posizione"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Podążaj za położeniem"
           }
         },
         "ru" : {
@@ -966,6 +1152,12 @@
             "value" : "Completato"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Przebyto"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -998,6 +1190,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Battito"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tętno"
           }
         },
         "ru" : {
@@ -1035,6 +1233,12 @@
             "value" : "Escursione"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wędrówka"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1067,6 +1271,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Escursione interrotta"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wędrówka przerwana"
           }
         },
         "ru" : {
@@ -1103,6 +1313,12 @@
             "value" : "Escursione conservata"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wędrówka zachowana"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1135,6 +1351,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Escursione non salvata"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wędrówka niezapisana"
           }
         },
         "ru" : {
@@ -1171,6 +1393,12 @@
             "value" : "Importa un file GPX o registra un’escursione sul tuo iPhone e comparirà qui."
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zaimportuj plik GPX lub nagraj wędrówkę na iPhonie, a pojawi się tutaj."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1203,6 +1431,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Installa OpenHikes sull’iPhone abbinato a questo orologio per trasferire i sentieri."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zainstaluj OpenHikes na iPhonie połączonym w parę z tym zegarkiem, aby przesyłać szlaki."
           }
         },
         "ru" : {
@@ -1239,6 +1473,12 @@
             "value" : "Non è stata salvata da nessuna parte, quindi non può essere recuperata."
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nie została nigdzie zapisana, więc nie da się jej odzyskać."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1271,6 +1511,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ultima escursione non salvata"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ostatnia wędrówka niezapisana"
           }
         },
         "ru" : {
@@ -1307,6 +1553,12 @@
             "value" : "Ultimo sentiero: %@"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ostatni szlak: %@"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1339,6 +1591,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rimanenti"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pozostało"
           }
         },
         "ru" : {
@@ -1375,6 +1633,12 @@
             "value" : "La localizzazione è disattivata, quindi la tua posizione non viene mostrata."
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dostęp do położenia jest wyłączony, więc nie widać, gdzie jesteś."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1407,6 +1671,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mappa di %@"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mapa: %@"
           }
         },
         "ru" : {
@@ -1443,6 +1713,12 @@
             "value" : "OpenHikes non è sul tuo iPhone"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Brak OpenHikes na Twoim iPhonie"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1475,6 +1751,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ancora nessun sentiero"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nie ma jeszcze szlaków"
           }
         },
         "ru" : {
@@ -1511,6 +1793,12 @@
             "value" : "Impossibile registrare"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nagrywanie nie trwa"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1543,6 +1831,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Deviazione"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Od szlaku"
           }
         },
         "ru" : {
@@ -1580,6 +1874,12 @@
             "value" : "Nessuna"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Na szlaku"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1612,6 +1912,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sul tuo iPhone"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Na Twoim iPhonie"
           }
         },
         "ru" : {
@@ -1648,6 +1954,12 @@
             "value" : "OpenHikes ha bisogno dell’accesso alla posizione per registrare un’escursione."
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes potrzebuje dostępu do położenia, aby nagrać wędrówkę."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1680,6 +1992,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes ha bisogno dell’autorizzazione ad avviare un allenamento: è ciò che mantiene attiva la registrazione."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes potrzebuje pozwolenia na rozpoczęcie treningu, bo to on podtrzymuje nagrywanie."
           }
         },
         "ru" : {
@@ -1717,6 +2035,12 @@
             "value" : "OpenHikes ha bisogno della tua posizione per poter registrare un’escursione."
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes potrzebuje Twojego położenia, zanim będzie można nagrać wędrówkę."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1749,6 +2073,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pausa"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wstrzymaj"
           }
         },
         "ru" : {
@@ -1786,6 +2116,12 @@
             "value" : "Metti in pausa l’escursione"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wstrzymaj wędrówkę"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1818,6 +2154,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Metti in pausa la registrazione"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wstrzymaj nagrywanie"
           }
         },
         "ru" : {
@@ -1854,6 +2196,12 @@
             "value" : "Metti in pausa la registrazione sull’iPhone"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wstrzymaj nagrywanie na iPhonie"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1886,6 +2234,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "In pausa. La strada che fai ora non fa parte dell’escursione."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wstrzymano. Droga, którą teraz pokonujesz, nie jest częścią wędrówki."
           }
         },
         "ru" : {
@@ -1923,6 +2277,12 @@
             "value" : "Mette in pausa l’escursione in registrazione, dal suo pannello nella schermata di blocco."
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wstrzymuje nagrywaną wędrówkę z jej panelu na ekranie blokady."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1955,6 +2315,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Progressi lungo il sentiero"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Postęp na szlaku"
           }
         },
         "ru" : {
@@ -1991,6 +2357,12 @@
             "value" : "Registra"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nagrywanie"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2023,6 +2395,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Registra questa escursione"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nagraj tę wędrówkę"
           }
         },
         "ru" : {
@@ -2059,6 +2437,12 @@
             "value" : "In registrazione"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trwa nagrywanie"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2091,6 +2475,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Registrazione interrotta alle %@. Tutto ciò che precede è stato conservato."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nagrywanie zatrzymało się o %@. Wszystko sprzed tej chwili zostało zachowane."
           }
         },
         "ru" : {
@@ -2127,6 +2517,12 @@
             "value" : "Registra su questo orologio, con o senza iPhone. L’escursione passa all’iPhone quando torna a portata."
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nagrywa na tym zegarku, z iPhone’em lub bez niego. Wędrówka trafi na iPhone’a, gdy znów będzie w zasięgu."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2159,6 +2555,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Riprendi"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wznów"
           }
         },
         "ru" : {
@@ -2196,6 +2598,12 @@
             "value" : "Riprendi l’escursione"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wznów wędrówkę"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2230,6 +2638,12 @@
             "value" : "Riprendi la registrazione"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wznów nagrywanie"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2262,6 +2676,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Riprendi la registrazione sull’iPhone"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wznów nagrywanie na iPhonie"
           }
         },
         "ru" : {
@@ -2299,6 +2719,12 @@
             "value" : "Riprende l’escursione in pausa, dal suo pannello nella schermata di blocco."
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wznawia wstrzymaną wędrówkę z jej panelu na ekranie blokady."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2331,6 +2757,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Salva escursione"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zapisz wędrówkę"
           }
         },
         "ru" : {
@@ -2367,6 +2799,12 @@
             "value" : "Salvataggio…"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zapisywanie…"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2399,6 +2837,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Inviata al tuo iPhone."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wysłano na Twojego iPhone’a."
           }
         },
         "ru" : {
@@ -2436,6 +2880,12 @@
             "value" : "Mostra un sentiero a tua scelta, il sentiero selezionato o un’escursione in fase di registrazione."
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pokazuje szlak, który wskażesz, szlak wybrany w aplikacji albo wędrówkę, która jest właśnie nagrywana."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2468,6 +2918,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Partenza"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start"
           }
         },
         "ru" : {
@@ -2504,6 +2960,12 @@
             "value" : "Avvia escursione"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rozpocznij wędrówkę"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2536,6 +2998,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Avvio…"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uruchamianie…"
           }
         },
         "ru" : {
@@ -2572,6 +3040,12 @@
             "value" : "Interrompi"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zatrzymaj"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2604,6 +3078,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Smetti di seguire la tua posizione"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Przestań podążać za położeniem"
           }
         },
         "ru" : {
@@ -2640,6 +3120,12 @@
             "value" : "Interrompi la registrazione"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zatrzymaj nagrywanie"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2672,6 +3158,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Interrompi la registrazione sull’iPhone"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zatrzymaj nagrywanie na iPhonie"
           }
         },
         "ru" : {
@@ -2708,6 +3200,12 @@
             "value" : "La richiesta non è arrivata all’iPhone."
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "To nie dotarło do Twojego iPhone’a."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2740,6 +3238,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Quell’escursione era troppo breve per essere conservata."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ta wędrówka była zbyt krótka, aby ją zachować."
           }
         },
         "ru" : {
@@ -2776,6 +3280,12 @@
             "value" : "Questo orologio non può avviare un allenamento, quindi la registrazione non potrebbe restare attiva."
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ten zegarek nie może rozpocząć treningu, więc nagrywanie nie mogłoby trwać."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2810,6 +3320,12 @@
             "value" : "Lo spazio su questo orologio è esaurito. Libera dello spazio, poi riprova."
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Na tym zegarku zabrakło miejsca. Zwolnij trochę miejsca i spróbuj ponownie."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2842,6 +3358,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tempo in cammino"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Czas wędrówki"
           }
         },
         "ru" : {
@@ -2879,6 +3401,12 @@
             "value" : "Attiva/disattiva registrazione"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Przełącz nagrywanie wędrówki"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2911,6 +3439,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sentiero"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Szlak"
           }
         },
         "ru" : {
@@ -2947,6 +3481,12 @@
             "value" : "Dati del sentiero"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dane szlaku"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2979,6 +3519,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sentieri"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Szlaki"
           }
         },
         "ru" : {
@@ -3015,6 +3561,12 @@
             "value" : "Riprova"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spróbuj ponownie"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3047,6 +3599,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ruota la mappa mentre cammini"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Obracaj mapę podczas wędrówki"
           }
         },
         "ru" : {
@@ -3083,6 +3641,12 @@
             "value" : "In attesa dell’iPhone"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oczekiwanie na iPhone’a"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3115,6 +3679,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "In attesa che l’iPhone torni a portata…"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oczekiwanie, aż Twój iPhone znów będzie w zasięgu…"
           }
         },
         "ru" : {
@@ -3151,6 +3721,12 @@
             "value" : "In attesa dell’iPhone. Il trasferimento avverrà da solo."
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oczekiwanie na iPhone’a. Przesyłanie rozpocznie się samo."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3183,6 +3759,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Il tuo iPhone non ha potuto rispondere."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Twój iPhone nie mógł na to odpowiedzieć."
           }
         },
         "ru" : {
@@ -3219,6 +3801,12 @@
             "value" : "Il tuo iPhone è fuori portata."
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Twój iPhone jest poza zasięgiem."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3251,6 +3839,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Il tuo iPhone sta registrando"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Twój iPhone nagrywa"
           }
         },
         "ru" : {

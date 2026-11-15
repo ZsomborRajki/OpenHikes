@@ -28,6 +28,12 @@
             "value" : "Annulla"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anuluj"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -61,6 +67,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fine"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gotowe"
           }
         },
         "ru" : {
@@ -98,6 +110,12 @@
             "value" : "Escursione"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wędrówka"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -127,6 +145,12 @@
           }
         },
         "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes"
+          }
+        },
+        "pl" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes"
@@ -167,6 +191,12 @@
             "value" : "OpenHikes ha bisogno della tua posizione per poter registrare un’escursione."
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes potrzebuje Twojego położenia, zanim będzie można nagrać wędrówkę."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -200,6 +230,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Metti in pausa l’escursione"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wstrzymaj wędrówkę"
           }
         },
         "ru" : {
@@ -236,6 +272,12 @@
             "value" : "In pausa"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wstrzymano"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -268,6 +310,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "In pausa, %@"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wstrzymano, %@"
           }
         },
         "ru" : {
@@ -305,6 +353,12 @@
             "value" : "Mette in pausa l’escursione in registrazione, dal suo pannello nella schermata di blocco."
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wstrzymuje nagrywaną wędrówkę z jej panelu na ekranie blokady."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -339,6 +393,12 @@
             "value" : "In registrazione"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trwa nagrywanie"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -371,6 +431,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "In registrazione, %@"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trwa nagrywanie, %@"
           }
         },
         "ru" : {
@@ -408,6 +474,12 @@
             "value" : "Riprendi l’escursione"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wznów wędrówkę"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -441,6 +513,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Riprende l’escursione in pausa, dal suo pannello nella schermata di blocco."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wznawia wstrzymaną wędrówkę z jej panelu na ekranie blokady."
           }
         },
         "ru" : {
@@ -478,6 +556,12 @@
             "value" : "Mostra un sentiero a tua scelta, il sentiero selezionato o un’escursione in fase di registrazione."
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pokazuje szlak, który wskażesz, szlak wybrany w aplikacji albo wędrówkę, która jest właśnie nagrywana."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -512,6 +596,12 @@
             "value" : "Avvia una registrazione o guarda quella in corso."
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rozpocznij nagrywanie albo zobacz to, które trwa."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -544,6 +634,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tocca per registrare un’escursione"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stuknij, aby nagrać wędrówkę"
           }
         },
         "ru" : {
@@ -581,6 +677,12 @@
             "value" : "Attiva/disattiva registrazione"
           }
         },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Przełącz nagrywanie wędrówki"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -614,6 +716,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sentiero"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Szlak"
           }
         },
         "ru" : {
