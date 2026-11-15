@@ -390,7 +390,11 @@ validate() {
         echo "$validate_target has an expired pool claim; acquire it again first." >&2
         return 1
     fi
-    expected="com.apple.CoreSimulator.SimDeviceType.${device_type// /-}"
+    expected="$(simulator_device_type_identifier "$device_type")"
+    if [[ -z "$expected" ]]; then
+        echo "$validate_target cannot be checked: simctl lists no device type named $device_type." >&2
+        return 1
+    fi
     device_identifier="$(/usr/bin/plutil -extract deviceType raw -o - \
         "$template_devices_root/$validate_target/device.plist" 2>/dev/null || true)"
     if [[ "$device_identifier" != "$expected" ]]; then

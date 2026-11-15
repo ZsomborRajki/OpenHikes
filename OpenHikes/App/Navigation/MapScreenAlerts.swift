@@ -16,9 +16,10 @@
 //
 //  - An alert raised **while the sheet is settled** — the map's refused "my
 //    location" button — opened, *and took the sheet down with it*. The sheet
-//    never came back: `showSheet` is still `true`, so the `onChange` that
-//    re-presents it never fires, and the app spends the rest of the launch as
-//    a bare map with no search field and no way back short of relaunching.
+//    never came back: the flag that presents it is still `true`, so the
+//    handler that re-presents it never fires, and the app spends the rest of
+//    the launch as a bare map with no search field and no way back short of
+//    relaunching.
 //    That is the hiker's report this file was written for.
 //  - An alert raised **while the sheet is going up** — a GPX fixture that
 //    could not be read — never appeared at all. No error, no alert, just a

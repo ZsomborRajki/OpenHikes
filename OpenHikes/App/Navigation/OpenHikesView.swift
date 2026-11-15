@@ -20,7 +20,6 @@ struct OpenHikesView: View {
     @Environment(OpenHikesModel.self) var appModel
     @Environment(\.modelContext) var modelContext
 
-    @State private var showSheet = true
     @State private var highlight = RouteHighlight()
     /// The stretches of the drawn route a finished walk covered, observed
     /// directly by the map — see ``WalkHighlight``.
@@ -386,7 +385,13 @@ struct OpenHikesView: View {
             }
             .task { await importRequestedGPXFixture() }
             .task { await seedRequestedLaunchFixtures() }
-            .sheet(isPresented: $showSheet) {
+            // Up in a narrow window and nowhere else: in a wide one the
+            // contents are in ``MapSidePanel`` and there is no sheet. Whether
+            // it is up is read by the modifier and not here — see
+            // `MapSheetPresenter.swift` — and it stays down until the window's
+            // shape is known, so a launch straight into a wide window never
+            // presents it.
+            .presentsMapSheet(sheet) {
                 mapSheet(
                     onSheetTopChange: { topY in
                         // Read when the sheet reports, not when this body runs:
@@ -421,30 +426,6 @@ struct OpenHikesView: View {
                     // On the sheet and not on the panel, which is no
                     // presentation: the window's bars stay the system's.
                     .horizontalSheetToolbar()
-            }
-            // The sheet is the app's primary surface in portrait and must always
-            // stay up there. The GPX document picker (a UIKit controller
-            // presented from within a detented sheet) tears the sheet down on
-            // dismissal — a known SwiftUI issue — so if it ever goes away, bring
-            // it right back. The side panel is the one dismissal that is meant,
-            // and the condition below is what tells the two apart.
-            .onChange(of: showSheet) { _, shown in
-                if !shown, !usesSidePanel { showSheet = true }
-            }
-            // A rotation, or an iPhone Duo opening, takes the sheet down and
-            // puts it back up: in a wide window the contents are in
-            // ``MapSidePanel`` and there is no sheet.
-            //
-            // Written into the flag rather than filtered through a `Binding`
-            // built here, because such a binding is a new one on every pass of
-            // this body and re-runs the sheet's content with it — measured as
-            // one or two extra evaluations of `MapSheet`'s body per run. No
-            // `initial:` for the same reason: a portrait launch, which is
-            // nearly all of them, then writes nothing at all. A launch
-            // straight into landscape is a real change of
-            // ``SheetPresentation/layout`` and arrives here as one.
-            .onChange(of: usesSidePanel) { _, isPanel in
-                showSheet = !isPanel
             }
             .onOpenURL { url in openInboundURL(url) }
             // Navigation asked for from outside the view tree: an intent or
