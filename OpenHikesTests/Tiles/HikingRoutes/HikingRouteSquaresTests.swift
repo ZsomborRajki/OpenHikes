@@ -5,8 +5,8 @@
 //  Where the hiking-routes layer's squares come from: one request for what
 //  is missing, the disk before the network and never waiting on it, nothing
 //  drawn from squares that are not the whole world, no request where the
-//  network may not be asked or while a failure is fresh, and a redraw when
-//  one lapses.
+//  network may not be asked or while a failure is fresh, and a redraw of the
+//  tiles it refused when one lapses.
 //
 //  The database is a stub and every directory the case's own — see
 //  *Deliberate test seams* in the repository instructions.
@@ -59,6 +59,42 @@ nonisolated private final class HeldBackDatabase: TrailCellFetching, Sendable {
             if isOpen { continuation.resume() }
         }
         return try await answers.fetch(cellsNamed: names)
+    }
+}
+
+/// A back-off that lasts until the case lets it go.
+nonisolated private final class HeldBackPause: Sendable {
+    private struct Gate {
+        var waited: [TimeInterval] = []
+        var waiting: [CheckedContinuation<Void, Never>] = []
+        var isOpen = false
+    }
+
+    private let gate = Mutex(Gate())
+
+    var isWaiting: Bool { gate.withLock { !$0.waiting.isEmpty } }
+    var waited: [TimeInterval] { gate.withLock { $0.waited } }
+
+    func release() {
+        let waiting = gate.withLock { gate in
+            gate.isOpen = true
+            defer { gate.waiting = [] }
+            return gate.waiting
+        }
+        for continuation in waiting {
+            continuation.resume()
+        }
+    }
+
+    func wait(_ delay: TimeInterval) async {
+        await withCheckedContinuation { continuation in
+            let isOpen = gate.withLock { gate in
+                gate.waited.append(delay)
+                if !gate.isOpen { gate.waiting.append(continuation) }
+                return gate.isOpen
+            }
+            if isOpen { continuation.resume() }
+        }
     }
 }
 
@@ -180,7 +216,7 @@ struct HikingRouteSquaresTests {
         await Self.bringIn([Self.square], from: library)
 
         #expect(library.drawable([Self.square]).isEmpty)
-        #expect(!library.request([Self.square], for: Self.tile) { /* never called: the request is refused */ })
+        #expect(library.request([Self.square], for: Self.tile) { /* kept until the wait is over */ })
         #expect(database.requests.count == 1)
 
         clock.advance(by: HikingRouteSquares.unavailableRetry + 1)
@@ -197,7 +233,7 @@ struct HikingRouteSquaresTests {
         await Self.bringIn([Self.square], from: library)
 
         #expect(library.drawable([Self.square]).isEmpty)
-        #expect(!library.request([Self.square], for: Self.tile) { /* never called: the request is refused */ })
+        #expect(library.request([Self.square], for: Self.tile) { /* kept until the back-off lapses */ })
         #expect(database.requests.count == 1)
 
         clock.advance(by: HikingRouteSquares.failedRetry + 1)
@@ -240,34 +276,52 @@ struct HikingRouteSquaresTests {
         #expect(database.requests.count == 1, "only the first launch's request was made")
         #expect(library.drawable([Self.square]).count == 1)
         #expect(!library.holdsAll([Self.neighbor]))
-        #expect(!library.request([Self.neighbor], for: Self.tile) { /* never called: refused a moment ago */ })
+        #expect(library.request([Self.neighbor], for: Self.tile) { /* kept: refused a moment ago */ })
+        #expect(database.requests.count == 1)
     }
 
-    /// Nothing else would ask again on a map nobody is moving.
-    @Test("when a failure's back-off lapses, every renderer is told to draw again")
-    func wakesWhenABackOffLapses() async {
+    /// Nothing else would ask again on a map nobody is moving — and a tile
+    /// already drawn whole has nothing to ask, so an afternoon offline does
+    /// not stroke it again every minute.
+    @Test("when a failure's back-off lapses, the tiles it refused are drawn again, and no other")
+    func refusedTilesAreDrawnAgainWhenABackOffLapses() async {
         let clock = TestClock()
-        let database = StubTrailCellDatabase()
-        database.fail(with: URLError(.notConnectedToInternet))
-        let waited = Mutex<[TimeInterval]>([])
-        let woken = Mutex(0)
+        let database = StubTrailCellDatabase(cells: [Self.name(Self.neighbor): .found(Self.file.encoded())])
+        let backOff = HeldBackPause()
         let library = HikingRouteSquares(
             database: database,
             directory: nil,
             clock: clock.read,
-            pause: { delay in waited.withLock { $0.append(delay) } }
+            pause: { delay in await backOff.wait(delay) }
         )
-        let renderer = NSObject()
-        library.wakes(renderer) { woken.withLock { $0 += 1 } }
-        await Self.bringIn([Self.square], from: library)
-
-        await settleDelegateHop(until: "the renderer is woken") { woken.withLock { $0 } == 1 }
-        #expect(waited.withLock { $0 } == [HikingRouteSquares.failedRetry])
-
-        library.forget(ObjectIdentifier(renderer))
         await Self.bringIn([Self.neighbor], from: library)
-        await settleDelegateHop(until: "the second back-off is waited out") { waited.withLock { $0.count } == 2 }
-        #expect(woken.withLock { $0 } == 1, "a renderer that has gone is not woken")
+        database.fail(with: URLError(.notConnectedToInternet))
+        await Self.bringIn([Self.square], from: library)
+        await settleDelegateHop(until: "the back-off is being waited out") { backOff.isWaiting }
+
+        let refused = Mutex(0)
+        let whole = Mutex(0)
+        #expect(library.request([Self.square], for: Self.tile) { refused.withLock { $0 += 1 } })
+        let drawnTile = HikingRouteSquares.Tile(x: 1, y: 0, zoomScale: 1)
+        #expect(!library.request([Self.neighbor], for: drawnTile) { whole.withLock { $0 += 1 } })
+        #expect(refused.withLock { $0 } == 0, "the tile waits out the back-off")
+
+        clock.advance(by: HikingRouteSquares.failedRetry)
+        backOff.release()
+        await settleDelegateHop(until: "the refused tile is told") { refused.withLock { $0 } == 1 }
+        #expect(backOff.waited == [HikingRouteSquares.failedRetry])
+        #expect(whole.withLock { $0 } == 0, "a tile that has its squares is left as it is")
+        #expect(database.requests.count == 2, "nothing was asked for during the back-off")
+    }
+
+    /// Built, never asked: nothing here reaches CloudKit, which only a fetch
+    /// would.
+    @Test("the layer reads its own manifest, and waits longer for its squares than a search does")
+    func liveDatabase() {
+        let database = HikingRouteSquares.liveDatabase()
+        #expect(database.manifestRecordName == RouteSquareGrid.manifestRecordName)
+        #expect(database.requestTimeout > CloudKitTrailCellDatabase.searchRequestTimeout)
+        #expect(database.resourceTimeout > CloudKitTrailCellDatabase.searchResourceTimeout)
     }
 
     /// MapKit asks about a waiting tile on every region change.

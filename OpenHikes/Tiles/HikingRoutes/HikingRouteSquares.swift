@@ -23,8 +23,9 @@
 //  may be asked is ``TileNetworkPolicy``'s answer for a tile somebody is
 //  looking at, so Low Data Mode stops the layer where it stops the map. A
 //  square that was refused, or that failed, is left for a minute, and then
-//  every renderer is told to draw again — nothing else would ask, on a map
-//  nobody is moving.
+//  the tiles that asked for it meanwhile are drawn again — nothing else would
+//  ask, on a map nobody is moving. Only those: a tile already drawn whole is
+//  not stroked again every minute of an afternoon offline.
 //
 //  Like the day hikes' search, this draws only from squares a manifest calls
 //  the whole world — see ``TrailCellFetch/Manifest`` — because only then is a
@@ -56,6 +57,12 @@ nonisolated final class HikingRouteSquares: Sendable {
     static let maximumStoredSquares = 600
     /// How many squares one request asks for.
     static let squaresPerRequest = 40
+    /// How long a request may go quiet, and how long it may take in all, in
+    /// seconds. Longer than the day hikes' search allows itself: nothing waits
+    /// behind a failure here but the same request a minute later, and a
+    /// region's few megabytes take most of a minute over one bar of signal.
+    static let requestTimeout: TimeInterval = 30
+    static let resourceTimeout: TimeInterval = 120
     /// How long a square that could not be read is left before it is asked
     /// for again, in seconds.
     static let failedRetry: TimeInterval = 60
@@ -80,9 +87,10 @@ nonisolated final class HikingRouteSquares: Sendable {
         var failedUntil: [RouteSquare: Date] = [:]
         var unavailableUntil: Date?
         var waiting: [Tile: @Sendable () -> Void] = [:]
+        /// The tiles refused while a square they need waits out a back-off,
+        /// drawn again when the next one lapses.
+        var afterBackOff: [Tile: @Sendable () -> Void] = [:]
         var isWorking = false
-        /// What draws each renderer again, by the renderer.
-        var wakes: [ObjectIdentifier: @Sendable () -> Void] = [:]
         var isWakeScheduled = false
 
         /// `square` if it is held, now the one drawn most recently.
@@ -144,9 +152,16 @@ nonisolated final class HikingRouteSquares: Sendable {
         let tilesMayBeFetched: @Sendable () -> Bool = {
             TileNetworkPolicy.decide(.interactive, conditions: TileCache.shared.networkConditions).isAllowed
         }
-        return HikingRouteSquares(
-            database: CloudKitTrailCellDatabase(manifestRecordName: RouteSquareGrid.manifestRecordName),
-            allowsFetching: tilesMayBeFetched
+        return HikingRouteSquares(database: liveDatabase(), allowsFetching: tilesMayBeFetched)
+    }
+
+    /// The public database, as the layer reads it: under its own manifest,
+    /// never the day hikes', and on its own timeouts.
+    static func liveDatabase() -> CloudKitTrailCellDatabase {
+        CloudKitTrailCellDatabase(
+            manifestRecordName: RouteSquareGrid.manifestRecordName,
+            requestTimeout: requestTimeout,
+            resourceTimeout: resourceTimeout
         )
     }
 
@@ -188,11 +203,11 @@ nonisolated extension HikingRouteSquares {
     /// calls `whenDone` once any of them is, or once they cannot be; a tile
     /// still short of a square asks again and is kept waiting. Nothing is
     /// asked about a square that failed a moment ago, or while the layer
-    /// knows there are no squares to read; `whenDone` is not kept then, and
-    /// the tile is drawn again when the back-off lapses — see
-    /// ``wakes(_:_:)``.
+    /// knows there are no squares to read; `whenDone` is kept then until the
+    /// back-off lapses.
     ///
-    /// - Returns: whether `whenDone` will be called.
+    /// - Returns: whether `whenDone` will be called — every time but when
+    ///   all of `squares` are in memory already.
     @discardableResult func request(
         _ squares: [RouteSquare],
         for tile: Tile,
@@ -200,14 +215,21 @@ nonisolated extension HikingRouteSquares {
     ) -> Bool {
         let now = clock()
         let (kept, starts) = state.withLock { state -> (Bool, Bool) in
-            if let until = state.unavailableUntil, until > now { return (false, false) }
+            if let until = state.unavailableUntil, until > now {
+                state.afterBackOff[tile] = whenDone
+                return (true, false)
+            }
             let wanted = squares.filter { square in
                 state.held[square] == nil
                     && !state.inFlight.contains(square)
                     && (state.failedUntil[square].map { $0 <= now } ?? true)
             }
             let waitsOnSomething = squares.contains { state.inFlight.contains($0) || state.pending.contains($0) }
-            guard !wanted.isEmpty || waitsOnSomething else { return (false, false) }
+            guard !wanted.isEmpty || waitsOnSomething else {
+                guard squares.contains(where: { state.held[$0] == nil }) else { return (false, false) }
+                state.afterBackOff[tile] = whenDone
+                return (true, false)
+            }
             state.pending.formUnion(wanted)
             state.waiting[tile] = whenDone
             guard !state.isWorking else { return (true, false) }
@@ -220,17 +242,6 @@ nonisolated extension HikingRouteSquares {
         return kept
     }
 
-    /// Has `wake` called whenever a back-off lapses, so `renderer` can draw
-    /// its tiles again: a square that failed is not asked for until then,
-    /// and on a map nobody moves nothing else would ask.
-    func wakes(_ renderer: AnyObject, _ wake: @escaping @Sendable () -> Void) {
-        state.withLock { $0.wakes[ObjectIdentifier(renderer)] = wake }
-    }
-
-    /// Stops waking a renderer that is going away.
-    func forget(_ renderer: ObjectIdentifier) {
-        state.withLock { $0.wakes[renderer] = nil }
-    }
 }
 
 // MARK: - Bringing squares in
@@ -382,8 +393,10 @@ nonisolated private extension HikingRouteSquares {
         scheduleWake()
     }
 
-    /// Has every renderer draw again when the soonest back-off lapses: one
-    /// wake at a time, however many squares are waiting one out.
+    /// Draws again, when the soonest back-off lapses, every tile refused
+    /// while it lasted: one wake at a time, however many squares are waiting
+    /// one out. A tile still short of a square in a later back-off is
+    /// refused again, and waits for that one.
     ///
     /// - Parameter last: The back-off the wake before this one waited out.
     ///   Only a later one is waited for, so a clock that stands still — a
@@ -400,12 +413,13 @@ nonisolated private extension HikingRouteSquares {
         guard let due else { return }
         Task {
             await pause(due.timeIntervalSince(now))
-            let wakes = state.withLock { state in
+            let refused = state.withLock { state in
                 state.isWakeScheduled = false
-                return Array(state.wakes.values)
+                defer { state.afterBackOff = [:] }
+                return Array(state.afterBackOff.values)
             }
-            for wake in wakes {
-                wake()
+            for whenDone in refused {
+                whenDone()
             }
             // A square that failed after this wake was set is still waiting.
             scheduleWake(after: due)
