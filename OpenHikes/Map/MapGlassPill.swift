@@ -19,8 +19,8 @@ import UIKit
 enum MapGlassPill {
     /// The height every floating control on this map shares, so they line up
     /// across it rather than merely sitting near each other. The tracking
-    /// button's capsule and the *Search this area* pills take their size from
-    /// here too — see ``MapView/makeTrackingButton(for:_:)``.
+    /// pill and the *Search this area* pills take their size from here too —
+    /// see ``MapView/makeTrackingPill(for:_:)``.
     ///
     /// The audit's minimum, because it is what each glyph button is sized to:
     /// a control on this map is exactly as big as it has to be to be hit.

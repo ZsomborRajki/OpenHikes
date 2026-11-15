@@ -2,9 +2,9 @@
 //  SettingsUITests.swift
 //  OpenHikesUITests
 //
-//  The settings screen and what it governs: which tile provider is in use and
-//  what that provider is allowed to do, and the two toggles that outlive the
-//  screen they are set on.
+//  The settings screen and what it governs, with what the map chosen on *Map
+//  Modes* is allowed to do, and the two toggles that outlive the screen they
+//  are set on.
 //
 
 import XCTest
@@ -26,7 +26,7 @@ nonisolated final class SettingsUITests: XCTestCase {
             ]
         )
 
-        element("settings-button", in: app).tap()
+        openMapModes(in: app)
         let osm = element("provider-row-osm", in: app)
         XCTAssertTrue(
             osm.waitForExistence(timeout: UITestTimeout.navigation)
@@ -35,7 +35,7 @@ nonisolated final class SettingsUITests: XCTestCase {
             osm.isSelected,
             "OpenStreetMap is the keyless default this app ships on"
         )
-        app.buttons["settings-close"].tap()
+        closeMapModes(in: app)
 
         openHikeDetail(in: app)
         scrollIntoView(element("route-style-row", in: app), in: app)
@@ -73,14 +73,7 @@ nonisolated final class SettingsUITests: XCTestCase {
             ]
         )
 
-        element("settings-button", in: app).tap()
-        let row = element("provider-row-\(providerID)", in: app)
-        XCTAssertTrue(
-            row.waitForExistence(timeout: UITestTimeout.navigation)
-        )
-        row.tap()
-        XCTAssertTrue(row.isSelected, "the tapped source should become the selected one")
-        app.buttons["settings-close"].tap()
+        selectMap(providerID, in: app)
 
         openHikeDetail(in: app)
         scrollIntoView(element("route-style-row", in: app), in: app)
@@ -114,10 +107,8 @@ nonisolated final class SettingsUITests: XCTestCase {
             ]
         )
 
+        selectMap("apple_satellite", in: app)
         element("settings-button", in: app).tap()
-        let row = element("provider-row-apple_satellite", in: app)
-        XCTAssertTrue(row.waitForExistence(timeout: UITestTimeout.navigation))
-        row.tap()
         let routes = toggle("hiking-routes-toggle", in: app)
         XCTAssertTrue(scrollIntoView(routes, in: app))
         XCTAssertTrue(toggleIsOn(routes), "the layer is on until it is switched off")
@@ -233,7 +224,7 @@ nonisolated final class SettingsUITests: XCTestCase {
     /// The paywall had exactly one entry point in the whole app, and a build
     /// without `Secrets.plist` disables it.
     ///
-    /// `MapPaywallView` was reached only from a locked row in Map Tiles, and
+    /// `MapPaywallView` was reached only from a locked card on *Map Modes*, and
     /// `MapStylePicker` disables any source whose key did not resolve — which is
     /// every source in a build without the gitignored plist. An archive cut on
     /// a machine that lacks it therefore sells a subscription nobody can buy,

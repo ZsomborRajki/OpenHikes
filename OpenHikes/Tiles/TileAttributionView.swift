@@ -21,7 +21,7 @@ struct TileAttributionView: View {
 
     var body: some View {
         Text(attributedCredits)
-            // The links inherit this; without it they render in the footer's
+            // The links inherit this; without it they render in the notes'
             // secondary grey and read as plain text.
             .tint(.accentColor)
             .fixedSize(horizontal: false, vertical: true)
@@ -30,9 +30,9 @@ struct TileAttributionView: View {
             // Voice Control aim at nodes, so a link node is a target nobody
             // can hit; the audit says so. Combined, the line is one target of
             // at least the minimum size, and each licence stays reachable as
-            // a named action. It sat below the fold in Settings until the map
-            // choice became one row of cards, which is when the audit saw it.
-            .frame(minHeight: AccessibilityMetrics.minimumTapTarget, alignment: .leading)
+            // a named action. Centred along the foot of *Map Modes*, where
+            // Maps puts its own credits.
+            .frame(maxWidth: .infinity, minHeight: AccessibilityMetrics.minimumTapTarget)
             .contentShape(.rect)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(attribution.plainText)
@@ -72,17 +72,13 @@ struct TileAttributionView: View {
 }
 
 #Preview("Attribution") {
-    Form {
-        Section {
-            // Verbatim for the same reason as SettingsView's DEBUG line:
-            // Xcode's catalog sync skips previews and deleted the key.
-            Text(verbatim: "Map")
-        } footer: {
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(TileProvider.all) { provider in
-                    TileAttributionView(attribution: provider.attribution)
-                }
-            }
+    VStack(spacing: 8) {
+        ForEach(TileProvider.all) { provider in
+            TileAttributionView(attribution: provider.attribution)
         }
     }
+    .font(.caption)
+    .foregroundStyle(.secondary)
+    .multilineTextAlignment(.center)
+    .padding()
 }

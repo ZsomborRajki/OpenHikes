@@ -62,6 +62,7 @@ struct MapCoordinatorTests {
     /// What the refused "my location" button raises — see
     /// `MapCoordinatorTests+LocationAccess.swift`.
     let locationAccessPrompt = LocationAccessPrompt()
+    let mapModes = MapModesPresentation()
     private let routeStyle = RouteStyle()
     /// Driven by a clock the test owns: `SheetMetrics` tells a resting sheet
     /// from a moving one by the gap between reports, so it would otherwise
@@ -149,6 +150,7 @@ struct MapCoordinatorTests {
             mapController: mapController,
             drawnRouteTap: drawnRouteTap,
             locationAccessPrompt: locationAccessPrompt,
+            mapModes: mapModes,
             photoCapture: photoCapture,
             photoPins: photoPins,
             placePins: placePins ?? self.placePins,

@@ -3,7 +3,7 @@
 //  OpenHikes
 //
 //  The one screen that sells anything. Reached only from a locked control —
-//  a map row in Settings, or *Elevation* under the trail maker's *Color By* —
+//  a map card on *Map Modes*, or *Elevation* under the trail maker's *Color By* —
 //  never presented on its own: a hiking app that opens on a price is not the
 //  app this is trying to be.
 //

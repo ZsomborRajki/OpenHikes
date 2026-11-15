@@ -5,10 +5,10 @@
 //  The credit line drawn *on the map*, which is where every provider here
 //  requires it to be.
 //
-//  Settings shows the same credits with the same links, and that is not a
+//  *Map Modes* shows the same credits with the same links, and that is not a
 //  substitute: the OSM Foundation's tile policy asks for attribution "on the
 //  map", and Stadia's terms forbid "obscuring" theirs. A credit reachable only
-//  by opening a settings screen is attribution of the app, not of the map.
+//  by opening a sheet is attribution of the app, not of the map.
 //
 //  UIKit rather than a SwiftUI overlay, for the same reason the camera pill is
 //  — see ``MapPhotoControlsView``. It belongs to the map, not to the screen
@@ -30,7 +30,7 @@
 //  ``TileAttribution/plainText``. This is the one placement the licences call
 //  space-constrained, so it names every required party once and drops nothing
 //  but the repeated "©", "Maps ©", "Data ©" and "contributors" decoration.
-//  Settings and VoiceOver keep the canonical form, and both have the room.
+//  *Map Modes* and VoiceOver keep the canonical form, and both have the room.
 //
 
 import Foundation

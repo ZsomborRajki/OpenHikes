@@ -36,6 +36,18 @@ struct EarlierMapGlassViewTests {
         #expect(glass.layer.cornerRadius.isApproximatelyEqual(to: 30, absoluteTolerance: 0.001))
     }
 
+    /// The tracking pill stands on end, two controls tall and one wide. Half
+    /// its height would be a radius wider than the pill.
+    @Test("a capsule standing on end is rounded by its width")
+    func aStandingCapsuleFollowsItsWidth() {
+        let glass = EarlierMapGlassView(shape: .capsule)
+
+        glass.frame = CGRect(x: 0, y: 0, width: 44, height: 88)
+        glass.setNeedsLayout()
+        glass.layoutIfNeeded()
+        #expect(glass.layer.cornerRadius.isApproximatelyEqual(to: 22, absoluteTolerance: 0.001))
+    }
+
     @Test("fixed corners keep their radius whatever the height")
     func fixedCornersStayFixed() {
         let glass = EarlierMapGlassView(shape: .rounded(12))

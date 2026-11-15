@@ -2,11 +2,12 @@
 //  MapCoordinator+TrackingButton.swift
 //  OpenHikes
 //
-//  The "my location" button: what it is made of, where it sits, and when it
-//  gets out of the way.
+//  The "my location" button and the map-modes button over it, in one pill as
+//  Maps has them: what it is made of, where it sits, and when it gets out of
+//  the way.
 //
 //  MapKit gives the button no placement of its own on iOS, and this app puts a
-//  persistent sheet over the bottom of the map, so the button has to ride above
+//  persistent sheet over the bottom of the map, so the pill has to ride above
 //  whatever detent the sheet is resting at. It follows the sheet imperatively —
 //  a drag reaches the constraint without a SwiftUI pass in between, the same
 //  arrangement `observeHighlight` and `observeRouteStyle` use.
@@ -50,9 +51,9 @@ extension MapView.Coordinator {
     /// Gap kept between the button and whatever bounds it — the sheet below it,
     /// or the top safe area above.
     private static let trackingButtonSpacing: CGFloat = 16
-    /// Used only before the button has been laid out or measured: the height
-    /// its capsule is built at, see ``MapView/makeTrackingButton(for:_:)``.
-    private static let trackingButtonFallbackHeight = MapGlassPill.controlSize
+    /// Used only before the pill has been laid out or measured: the height
+    /// it is built at, see ``MapView/makeTrackingPill(for:_:)``.
+    private static let trackingButtonFallbackHeight = MapView.trackingPillHeight
     /// How tall the credit MapKit draws on its own maps stands, logo and
     /// **Legal** link: measured, since MapKit says nothing of it.
     private static let systemCreditHeight: CGFloat = 21
@@ -216,7 +217,7 @@ extension MapView.Coordinator {
         max(limit - clearOfStatusBar(in: mapView), trackingButtonHeight)
     }
 
-    /// The button's own height, measured where possible.
+    /// The pill's own height, measured where possible.
     var trackingButtonHeight: CGFloat {
         #if canImport(UIKit)
         guard let trackingButton else { return Self.trackingButtonFallbackHeight }
@@ -257,7 +258,7 @@ extension MapView.Coordinator {
             attributionView.alpha = alpha
         }
         #if os(iOS)
-        // The 2D button stands on the tracking button, and has a second reason
+        // The 2D button stands on the tracking pill, and has a second reason
         // to be hidden too: a map lying flat.
         applyFlattenButtonAlpha(alpha)
         #endif
@@ -287,7 +288,7 @@ extension MapView.Coordinator {
     /// The button used to be accent green at all times, which spent the one
     /// colour the app reserves for "this is on" on a control that is almost
     /// always off — and spent it against map tiles, where it could not be read
-    /// (see ``MapView/makeTrackingButton(for:_:)``). Now the capsule carries
+    /// (see ``MapView/makeTrackingPill(for:_:)``). Now the capsule carries
     /// the legibility and the glyph carries the state: label colour at rest,
     /// accent while the map is following the hiker.
     ///
@@ -356,7 +357,11 @@ extension MapView {
     /// stand-in has to look like it belongs to the same set.
     private static let refusedSymbolPointSize: CGFloat = 17
 
-    /// The "my location" button, inside a glass capsule of its own.
+    /// How tall the pill stands: one control for each of its two buttons.
+    static let trackingPillHeight = MapGlassPill.controlSize * 2
+
+    /// The pill on the trailing edge: the map-modes button over the "my
+    /// location" button, in one glass capsule, as Maps has them.
     ///
     /// `MKUserTrackingButton` arrives with no chrome: it draws its glyph
     /// straight onto whatever the map is showing, in the tint it inherits —
@@ -370,11 +375,13 @@ extension MapView {
     ///
     /// So the contrast is carried by a surface rather than by the glyph, which
     /// is what the camera pill and *Search this area* already do — same
-    /// effect, same corner, same 44pt — and the column of controls now reads
-    /// as one set instead of two pills and a loose arrow. The glyph's own
-    /// colour is then free to say something: see
-    /// ``MapView/Coordinator/applyTrackingTint(for:)``.
-    func makeTrackingButton(
+    /// effect, same corner, same 44pt. The glyph's own colour is then free to
+    /// say something: see ``MapView/Coordinator/applyTrackingTint(for:)``.
+    ///
+    /// One capsule rather than the two the leading pills merge, because Maps'
+    /// is one: the two buttons are one control about the map itself — which
+    /// map it is, and where on it the hiker stands.
+    func makeTrackingPill(
         for mapView: MKMapView,
         _ coordinator: Coordinator
     ) -> UIVisualEffectView {
@@ -384,27 +391,63 @@ extension MapView {
         // one appearing behind a capsule would show as a square inside it.
         tracking.backgroundColor = .clear
 
-        let glass = MapGlass.view(.capsule)
-        glass.contentView.addSubview(tracking)
-
+        // The lower half: MapKit's button, or the one that stands in for it.
+        let location = UIView()
+        location.addSubview(tracking)
         let refused = makeRefusedTrackingButton(coordinator)
-        glass.contentView.addSubview(refused)
+        location.addSubview(refused)
+
+        let stack = UIStackView(arrangedSubviews: [makeMapModesButton(), location])
+        stack.axis = .vertical
+        stack.distribution = .fillEqually
+        stack.translatesAutoresizingMaskIntoConstraints = false
+
+        let glass = MapGlass.view(.capsule)
+        glass.contentView.addSubview(stack)
 
         NSLayoutConstraint.activate([
             glass.widthAnchor.constraint(equalToConstant: MapGlassPill.controlSize),
-            glass.heightAnchor.constraint(equalToConstant: MapGlassPill.controlSize),
-            tracking.centerXAnchor.constraint(equalTo: glass.contentView.centerXAnchor),
-            tracking.centerYAnchor.constraint(equalTo: glass.contentView.centerYAnchor),
-            refused.leadingAnchor.constraint(equalTo: glass.contentView.leadingAnchor),
-            refused.trailingAnchor.constraint(equalTo: glass.contentView.trailingAnchor),
-            refused.topAnchor.constraint(equalTo: glass.contentView.topAnchor),
-            refused.bottomAnchor.constraint(equalTo: glass.contentView.bottomAnchor),
+            glass.heightAnchor.constraint(equalToConstant: Self.trackingPillHeight),
+            stack.leadingAnchor.constraint(equalTo: glass.contentView.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: glass.contentView.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: glass.contentView.topAnchor),
+            stack.bottomAnchor.constraint(equalTo: glass.contentView.bottomAnchor),
+            tracking.centerXAnchor.constraint(equalTo: location.centerXAnchor),
+            tracking.centerYAnchor.constraint(equalTo: location.centerYAnchor),
+            refused.leadingAnchor.constraint(equalTo: location.leadingAnchor),
+            refused.trailingAnchor.constraint(equalTo: location.trailingAnchor),
+            refused.topAnchor.constraint(equalTo: location.topAnchor),
+            refused.bottomAnchor.constraint(equalTo: location.bottomAnchor),
         ])
 
         coordinator.trackingGlyph = tracking
         coordinator.refusedTrackingButton = refused
         coordinator.applyTrackingTint(for: mapView.userTrackingMode)
         return glass
+    }
+
+    /// The upper half of the pill: what opens *Map Modes*.
+    ///
+    /// Maps' own glyph for it, in the label colour as the arrow under it is
+    /// at rest: both are on glass, so the pair stays legible whatever the
+    /// tiles underneath are doing. The sheet it opens is not the map's to
+    /// present — see ``MapModesPresentation``.
+    private func makeMapModesButton() -> UIButton {
+        var configuration = UIButton.Configuration.plain()
+        configuration.image = MapGlassPill.symbol("map.fill")
+        configuration.baseForegroundColor = .label
+
+        let button = UIButton(
+            configuration: configuration,
+            // The presentation itself, as the camera pill's closures keep
+            // their controller: it holds nothing of the map's, so no loop.
+            primaryAction: UIAction { [mapModes] _ in mapModes.present() }
+        )
+        // A glyph is not a label, and `performAccessibilityAudit` measures
+        // both — the same rule the camera pill's buttons carry.
+        button.accessibilityLabel = String(localized: "Map Modes")
+        button.accessibilityIdentifier = "map-modes-button"
+        return button
     }
 
     /// The button that stands in the capsule when the hiker has refused
@@ -422,7 +465,7 @@ extension MapView {
     ///
     /// `location.slash` in the secondary label colour, against the same glass
     /// that carries the ordinary glyph's legibility — see
-    /// ``makeTrackingButton(for:_:)`` for why that surface exists. Secondary
+    /// ``makeTrackingPill(for:_:)`` for why that surface exists. Secondary
     /// rather than the accent or `.label`, because the capsule is now saying
     /// "not available" and a full-strength glyph reads as a control waiting to
     /// be used.

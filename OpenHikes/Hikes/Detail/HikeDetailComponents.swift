@@ -515,7 +515,7 @@ struct OfflineStorageStatus: View {
     private func autoSaveNote(_ local: HikeLocalState?, autoSavedCount count: Int) -> String? {
         if let systemMapName {
             return String(localized: """
-            \(systemMapName) uses no downloadable tiles. Choose another map in Settings to save \
+            \(systemMapName) uses no downloadable tiles. Choose another map in Map Modes to save \
             this hike for offline use.
             """)
         }

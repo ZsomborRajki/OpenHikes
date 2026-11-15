@@ -44,7 +44,7 @@ nonisolated enum MapEntitlementState: Sendable, Equatable {
         return self != .notEntitled
     }
 
-    /// What a tap on `provider`'s row in Settings should do.
+    /// What a tap on `provider`'s card on *Map Modes* should do.
     ///
     /// Stricter than ``allows(_:)`` in exactly one state, and that asymmetry is
     /// the point. Drawing a paid source through the unresolved window costs a

@@ -65,6 +65,20 @@ nonisolated final class AccessibilityUITests: XCTestCase {
         try audit(app)
     }
 
+    /// *Map Modes*: the cards, the selected map's summary and the credits
+    /// along its foot, which the Settings audit swept while they were there.
+    @MainActor
+    func testMapModesPassesAccessibilityAudit() throws {
+        let app = launchApp()
+        openMapModes(in: app)
+        XCTAssertTrue(
+            element("tile-attribution", in: app).waitForExistence(timeout: UITestTimeout.existence),
+            "the audit is worth nothing against a sheet that has not drawn its credits yet"
+        )
+
+        try audit(app)
+    }
+
     /// The published hikes list, which no audit had ever seen.
     ///
     /// ``OpenHikesModel/makeCommunityTransport()`` hands back `nil` for a test

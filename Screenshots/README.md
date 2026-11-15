@@ -454,7 +454,7 @@ The gallery is positioned inside the panel’s scrolling viewport, and the
 share editor’s figures are moved beside its route. The hero opens the next
 photo pin down: a callout on the topmost one makes MapKit push the trail’s
 finish off the bottom on this display.
-The nearby frame selects the free Apple Maps style through Settings on this
+The nearby frame selects the free Apple Maps style through Map Modes on this
 display, avoiding the raster map’s stalled top row after the camera move.
 
 **Three things XCTest does differently on a Duo**, each answered in the test

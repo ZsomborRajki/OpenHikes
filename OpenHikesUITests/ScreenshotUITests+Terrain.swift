@@ -101,23 +101,6 @@ extension ScreenshotUITests {
         capture(as: .terrain, of: app)
     }
 
-    /// Picks one of the catalog's maps in Settings, by its provider id.
-    ///
-    /// A paid one is only listed for an entitled launch with its key bundled,
-    /// which is what the failure says.
-    @MainActor
-    func selectMap(_ providerID: String, in app: XCUIApplication) {
-        element("settings-button", in: app).tap()
-        let provider = element("provider-row-\(providerID)", in: app)
-        XCTAssertTrue(
-            provider.waitForExistence(timeout: UITestTimeout.navigation),
-            "Settings should offer \(providerID) — a paid map needs --ui-test-entitled and its key in "
-                + "OpenHikes/Secrets.plist"
-        )
-        provider.tap()
-        app.buttons["settings-close"].tap()
-    }
-
     /// Tilts the map to ``wantedPitch`` with two fingers drawn up the open
     /// part of it, which MapKit reads as a tilt away from straight down.
     ///
