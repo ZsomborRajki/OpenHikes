@@ -153,6 +153,34 @@ struct TrailCellLibraryTests {
         #expect(Self.offered(answer) == [11])
     }
 
+    /// The two copies are two revisions of the route, and the one met first —
+    /// in the western square, and nearer the valley's middle — is in pieces.
+    @Test("a route two squares hold as different revisions is offered from the one that draws")
+    func aRouteRevisedAcrossTwoSquares() async throws {
+        let inPieces = TrailCellFile.Relation(
+            id: Self.nearLoop.id,
+            tags: Self.nearLoop.tags,
+            ways: [
+                TrailCellFile.Way(
+                    role: "",
+                    points: [TrailCellFixture.point(47.619, 12.969), TrailCellFixture.point(47.6195, 12.9695)]
+                ),
+                TrailCellFile.Way(
+                    role: "",
+                    points: [TrailCellFixture.point(47.6205, 12.9705), TrailCellFixture.point(47.621, 12.971)]
+                ),
+            ]
+        )
+        let database = StubTrailCellDatabase(cells: [
+            Self.westSquare: TrailCellFixture.found([inPieces]),
+            Self.eastSquare: TrailCellFixture.found([Self.nearLoop]),
+        ])
+
+        let answer = try await Self.makeLibrary(database).trails(in: [Self.valley])
+
+        #expect(Self.offered(answer) == [11])
+    }
+
     // MARK: - A square that is not there
 
     @Test("in squares that are the whole world, a missing square is one with no routes")

@@ -94,17 +94,25 @@ nonisolated extension CuratedTrailDecoding {
     }
 
     /// The first `limit` of `candidates` that are day hikes with a line to
-    /// draw, in the order they come.
+    /// draw, in the order they come, each relation once.
     ///
     /// A candidate past the one that fills the page is never asked for, which
     /// is what keeps a wide search from drawing thousands of lines to keep a
     /// page of them. A sequence rather than an array so that a suite can count
     /// what was asked for.
+    ///
+    /// A route is filed under one square, but an upload replaces squares one
+    /// at a time, so for its duration a route whose box moved can be in the
+    /// old square and the new — two revisions, of which perhaps only one
+    /// draws. So a relation is passed over only once a copy of it has drawn,
+    /// never for having been measured.
     static func drawn(_ candidates: some Sequence<CellCandidate>, limit: Int) -> [CuratedTrail] {
         var page: [CuratedTrail] = []
         guard limit > 0 else { return page }
-        for candidate in candidates {
+        var onPage: Set<Int64> = []
+        for candidate in candidates where !onPage.contains(candidate.relation.id) {
             guard let trail = offered(Element(candidate)) else { continue }
+            onPage.insert(trail.relationID)
             page.append(trail)
             if page.count == limit { break }
         }

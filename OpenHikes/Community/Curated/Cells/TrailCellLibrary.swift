@@ -172,18 +172,13 @@ nonisolated struct TrailCellLibrary: Sendable {
         }
 
         // Every route in the area is measured, and only the page is drawn:
-        // see ``CuratedTrailDecoding/trails(nearestOf:limit:)``.
+        // see ``CuratedTrailDecoding/trails(nearestOf:limit:)``. A route two
+        // squares both hold is measured twice and drawn once — see
+        // ``CuratedTrailDecoding/drawn(_:limit:)``.
         var candidates: [CuratedTrailDecoding.CellCandidate] = []
-        // A route is filed under one square, but an upload replaces squares
-        // one at a time, so for its duration a route whose box moved can be
-        // in the old square and the new.
-        var measured: Set<Int64> = []
         for name in names {
             guard let cell = held[name] else { return .unreachable }
-            for candidate in CuratedTrailDecoding.candidates(in: cell, touching: boxes, from: center)
-            where measured.insert(candidate.relation.id).inserted {
-                candidates.append(candidate)
-            }
+            candidates += CuratedTrailDecoding.candidates(in: cell, touching: boxes, from: center)
         }
         let trails = CuratedTrailDecoding.trails(nearestOf: candidates, limit: limit)
         // Counts only: which squares were read is where the hiker is looking.
