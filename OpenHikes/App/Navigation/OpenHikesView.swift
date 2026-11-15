@@ -309,6 +309,7 @@ struct OpenHikesView: View {
             sheetMetrics: sheetMetrics,
             base: activeBase,
             tileLayer: TileLayer.shown(isOn: showsHikingRoutes),
+            hikingRouteSquares: appModel.hikingRouteSquares,
             mapController: mapController,
             drawnRouteTap: drawnRouteTap,
             locationAccessPrompt: locationAccessPrompt,
@@ -492,11 +493,6 @@ struct OpenHikesView: View {
             // for a map that draws no tiles, and picking a tile source back
             // again would leave it off until the selection changed.
             .onChange(of: tileProviderID) { _, _ in
-                appModel.tileProviderDidChange(selectedHike: selectedHike)
-            }
-            // And the layer is a tile source of its own: over Apple's map it
-            // is the only thing auto-save has to save.
-            .onChange(of: showsHikingRoutes) { _, _ in
                 appModel.tileProviderDidChange(selectedHike: selectedHike)
             }
             .onChange(of: currentRecordingHikeID) { _, id in

@@ -28,8 +28,8 @@
 //
 //  ## The bytes
 //
-//  An envelope — four letters, a version, how the rest is packed and how long
-//  it is unpacked — and then the body, which is unsigned LEB128 integers
+//  An envelope — `OHTC`, a version, how the rest is packed and how long it is
+//  unpacked; see ``PackedEnvelope`` — and then the body, which is unsigned LEB128 integers
 //  throughout:
 //
 //      scale                          coordinate units in one degree
@@ -56,10 +56,11 @@
 //  ## Compiled twice
 //
 //  By the app and by the tool, for the reason ``TrailCellGrid`` gives, so this
-//  file imports Foundation and Compression and nothing of the app's.
+//  file imports Foundation and nothing of the app's. The envelope and the
+//  integers are `PackedBytes.swift`'s, which the hiking-routes layer's squares
+//  are written in too.
 //
 
-import Compression
 import Foundation
 
 /// The routes filed under one square of ``TrailCellGrid``.
@@ -126,14 +127,7 @@ nonisolated extension TrailCellFile {
     /// The file: the envelope and the body, packed when that makes it
     /// smaller.
     func encoded() -> Data {
-        let body = encodedBody()
-        let packed = Deflate.compressed(body)
-        var file = Data(Envelope.magic)
-        file.append(Self.formatVersion)
-        file.append((packed == nil ? Envelope.Method.stored : .deflate).rawValue)
-        file.append(contentsOf: Varint.bytes(of: UInt64(body.count)))
-        file.append(packed ?? body)
-        return file
+        PackedEnvelope.file(magic: Self.magic, version: Self.formatVersion, body: encodedBody())
     }
 
     /// The body alone, unpacked: what a square's digest is taken over.
@@ -144,8 +138,8 @@ nonisolated extension TrailCellFile {
     /// compressor to the next. So the tool compares squares by this, and a
     /// new macOS does not look like a new world.
     func encodedBody() -> Data {
-        var strings = StringTable()
-        var routes = ByteWriter()
+        var strings = PackedStringTable()
+        var routes = PackedWriter()
         var previousID: Int64 = 0
         var previous = Point(latitude: 0, longitude: 0)
         for relation in relations {
@@ -169,14 +163,9 @@ nonisolated extension TrailCellFile {
             }
         }
 
-        var body = ByteWriter()
+        var body = PackedWriter()
         body.write(UInt64(coordinateScale))
-        body.write(UInt64(strings.all.count))
-        for string in strings.all {
-            let text = Array(string.utf8)
-            body.write(UInt64(text.count))
-            body.bytes.append(contentsOf: text)
-        }
+        body.write(strings: strings)
         body.write(UInt64(relations.count))
         body.bytes.append(contentsOf: routes.bytes)
         return Data(body.bytes)
@@ -194,37 +183,18 @@ nonisolated extension TrailCellFile {
     /// a map: bytes that are not a square have to be an error, never a route
     /// across an ocean.
     init(decoding file: Data) throws {
-        var envelope = ByteReader(bytes: Array(file))
-        guard try envelope.readBytes(Envelope.magic.count) == Envelope.magic else {
-            throw TrailCellFileError.notACell
+        do {
+            self = try Self(body: PackedEnvelope.body(of: file, magic: Self.magic, version: Self.formatVersion))
+        } catch let error as PackedFileError {
+            throw TrailCellFileError(error)
         }
-        let version = try envelope.readByte()
-        guard version == Self.formatVersion else {
-            throw TrailCellFileError.unsupportedVersion(version)
-        }
-        let methodByte = try envelope.readByte()
-        guard let method = Envelope.Method(rawValue: methodByte) else {
-            throw TrailCellFileError.unsupportedCompression(methodByte)
-        }
-        let length = try envelope.readCount(atMost: Envelope.maximumBodyBytes)
-        let packed = envelope.remainder
-        let body: [UInt8]
-        switch method {
-        case .deflate:
-            body = try Deflate.decompressed(packed, count: length)
-
-        case .stored:
-            guard packed.count == length else { throw TrailCellFileError.truncated }
-            body = packed
-        }
-        try self.init(body: body)
     }
 
     private init(body: [UInt8]) throws {
-        var reader = ByteReader(bytes: body)
+        var reader = PackedReader(bytes: body)
         let scale = try reader.readVarint()
         guard scale > 0, scale <= UInt64(Int32.max) else { throw TrailCellFileError.corrupt }
-        let strings = try (0..<reader.readCount()).map { _ in try reader.readString() }
+        let strings = try reader.readStrings()
         var relations: [Relation] = []
         var cursor = Cursor(unitsPerDegree: Int64(scale))
         for _ in try 0..<reader.readCount() {
@@ -233,26 +203,22 @@ nonisolated extension TrailCellFile {
         guard reader.isAtEnd else { throw TrailCellFileError.corrupt }
         self.init(relations: relations, coordinateScale: Int32(scale))
     }
+
+    /// The four letters a square's file starts with.
+    private static let magic: [UInt8] = Array("OHTC".utf8)
 }
 
-// MARK: - The envelope
-
-nonisolated private enum Envelope {
-    /// How the body is packed.
-    enum Method: UInt8 {
-        /// Raw DEFLATE, RFC 1951 — what the system's `COMPRESSION_ZLIB` reads
-        /// and writes, and what any zlib does with no header asked for.
-        case deflate = 1
-        /// As it is. What a body too small to shrink is written as.
-        case stored = 0
+nonisolated private extension TrailCellFileError {
+    /// The shared reader's reason, in this file's words.
+    init(_ error: PackedFileError) {
+        switch error {
+        case .corrupt: self = .corrupt
+        case .wrongFormat: self = .notACell
+        case .truncated: self = .truncated
+        case .unsupportedCompression(let method): self = .unsupportedCompression(method)
+        case .unsupportedVersion(let version): self = .unsupportedVersion(version)
+        }
     }
-
-    static let magic: [UInt8] = Array("OHTC".utf8)
-
-    /// The largest body a reader will unpack: far past any square — the
-    /// largest of Hungary's 166 is 168 KB packed — and small enough that a
-    /// file lying about its length cannot ask for the phone's memory.
-    static let maximumBodyBytes = 64 * 1024 * 1024
 }
 
 /// Where the last relation and the last point left off, which the next ones
@@ -289,113 +255,7 @@ nonisolated private struct Cursor {
     }
 }
 
-// MARK: - Integers and strings
-
-nonisolated private enum Varint {
-    static let payloadBits = 7
-    static let payloadMask: UInt64 = 0x7F
-    static let continuation: UInt8 = 0x80
-    /// A 64-bit value is ten groups of seven bits at most.
-    static let maximumBytes = 10
-
-    static func bytes(of value: UInt64) -> [UInt8] {
-        var remaining = value
-        var bytes: [UInt8] = []
-        while remaining > payloadMask {
-            bytes.append(UInt8(remaining & payloadMask) | continuation)
-            remaining >>= UInt64(payloadBits)
-        }
-        bytes.append(UInt8(remaining))
-        return bytes
-    }
-}
-
-nonisolated private struct ByteWriter {
-    var bytes: [UInt8] = []
-
-    mutating func write(_ value: UInt64) {
-        bytes.append(contentsOf: Varint.bytes(of: value))
-    }
-
-    /// A signed step, zigzag-encoded: 0, −1, 1, −2 … become 0, 1, 2, 3 …
-    mutating func write(step: Int64) {
-        write(UInt64(bitPattern: (step << 1) ^ (step >> (Int64.bitWidth - 1))))
-    }
-}
-
-/// Numbers each distinct string in the order it is first met.
-nonisolated private struct StringTable {
-    private(set) var all: [String] = []
-    private var indices: [String: UInt64] = [:]
-
-    mutating func index(of string: String) -> UInt64 {
-        if let known = indices[string] { return known }
-        let index = UInt64(all.count)
-        all.append(string)
-        indices[string] = index
-        return index
-    }
-}
-
-nonisolated private struct ByteReader {
-    let bytes: [UInt8]
-    private(set) var offset = 0
-
-    init(bytes: [UInt8]) {
-        self.bytes = bytes
-    }
-
-    var isAtEnd: Bool { offset == bytes.count }
-    var remainder: [UInt8] { Array(bytes[offset...]) }
-
-    mutating func readByte() throws -> UInt8 {
-        guard offset < bytes.count else { throw TrailCellFileError.truncated }
-        defer { offset += 1 }
-        return bytes[offset]
-    }
-
-    mutating func readBytes(_ count: Int) throws -> [UInt8] {
-        guard count <= bytes.count - offset else { throw TrailCellFileError.truncated }
-        defer { offset += count }
-        return Array(bytes[offset..<offset + count])
-    }
-
-    mutating func readVarint() throws -> UInt64 {
-        var value: UInt64 = 0
-        for index in 0..<Varint.maximumBytes {
-            let byte = try readByte()
-            value |= (UInt64(byte) & Varint.payloadMask) << UInt64(index * Varint.payloadBits)
-            if byte & Varint.continuation == 0 { return value }
-        }
-        throw TrailCellFileError.corrupt
-    }
-
-    mutating func readStep() throws -> Int64 {
-        let zigzag = try readVarint()
-        return Int64(bitPattern: zigzag >> 1) ^ -Int64(bitPattern: zigzag & 1)
-    }
-
-    /// A count of things that follow, each of which is at least one byte —
-    /// so a count past what is left is a lie, told before anything is
-    /// allocated for it.
-    mutating func readCount(atMost limit: Int? = nil) throws -> Int {
-        let count = try readVarint()
-        guard count <= UInt64(limit ?? bytes.count - offset) else { throw TrailCellFileError.corrupt }
-        return Int(count)
-    }
-
-    mutating func readString() throws -> String {
-        let text = try readBytes(readCount())
-        guard let string = String(bytes: text, encoding: .utf8) else { throw TrailCellFileError.corrupt }
-        return string
-    }
-
-    mutating func readIndexedString(_ strings: [String]) throws -> String {
-        let index = try readVarint()
-        guard index < UInt64(strings.count) else { throw TrailCellFileError.corrupt }
-        return strings[Int(index)]
-    }
-
+nonisolated private extension PackedReader {
     mutating func readRelation(strings: [String], cursor: inout Cursor) throws -> TrailCellFile.Relation {
         cursor.relationID &+= try readStep()
         var tags: [String: String] = [:]
@@ -417,42 +277,5 @@ nonisolated private struct ByteReader {
         cursor.longitude &+= try readStep()
         guard let point = cursor.point else { throw TrailCellFileError.corrupt }
         return point
-    }
-}
-
-// MARK: - Packing
-
-/// Raw DEFLATE through the system's Compression framework.
-nonisolated private enum Deflate {
-    /// `body` packed, or `nil` when packing does not make it smaller — the
-    /// encoder answers nothing for a result that does not fit a buffer one
-    /// byte shorter than what it was given.
-    static func compressed(_ body: Data) -> Data? {
-        guard body.count > 1 else { return nil }
-        var packed = [UInt8](repeating: 0, count: body.count - 1)
-        let written = body.withUnsafeBytes { source -> Int in
-            guard let input = source.bindMemory(to: UInt8.self).baseAddress else { return 0 }
-            return packed.withUnsafeMutableBufferPointer { buffer in
-                guard let output = buffer.baseAddress else { return 0 }
-                return compression_encode_buffer(output, buffer.count, input, source.count, nil, COMPRESSION_ZLIB)
-            }
-        }
-        return written > 0 ? Data(packed.prefix(written)) : nil
-    }
-
-    /// `packed` unpacked to exactly `count` bytes, which is what the envelope
-    /// said it would be. Anything else is not a body this format wrote.
-    static func decompressed(_ packed: [UInt8], count: Int) throws -> [UInt8] {
-        guard count > 0, !packed.isEmpty else { throw TrailCellFileError.corrupt }
-        var body = [UInt8](repeating: 0, count: count)
-        let written = packed.withUnsafeBufferPointer { source -> Int in
-            guard let input = source.baseAddress else { return 0 }
-            return body.withUnsafeMutableBufferPointer { buffer in
-                guard let output = buffer.baseAddress else { return 0 }
-                return compression_decode_buffer(output, buffer.count, input, source.count, nil, COMPRESSION_ZLIB)
-            }
-        }
-        guard written == count else { throw TrailCellFileError.corrupt }
-        return body
     }
 }

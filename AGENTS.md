@@ -772,7 +772,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
     against (`FirstRunTipsTests`), and the name of `AppTips.isNewHiker`,
     the TipKit parameter that keeps a new hiker
   - the trail squares' record names, which every installed build asks for
-    (`TrailCellGridTests`; see *The trail squares*)
+    (`TrailCellGridTests`; see *The trail squares*), and the hiking-routes
+    layer's (`RouteSquareGridTests`; see *The hiking-routes layer*)
 
 ## Conventions
 
@@ -912,8 +913,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
 ### Tiles
 
 - **Respect provider policy.** `TileProvider.supportsBulkDownload` gates
-  prefetching, and OpenStreetMap is auto-save only. Waymarked Trails is a
-  `TileLayer` with no bulk download, and stays out of `TileProvider.all`.
+  prefetching, and OpenStreetMap is auto-save only. The hiking routes are a
+  `TileLayer` the app draws itself (*The hiking-routes layer*), and stay out
+  of `TileProvider.all`.
 - **A tile is identified by provider plus z/x/y**, never by scale
   (`TileCacheKey`).
 - **Never turn a render miss into synchronous disk or network work**, and never
@@ -1341,7 +1343,10 @@ in its source header. Do not weaken one without a measurement.
   export `md5 e2fd4f7c500b3911fae3d86a9b9d3f9c`. Both have the two
   trail-square record types, `CuratedTrailCell` and `CuratedTrailManifest`,
   neither with an index, and both hold the world's squares under a manifest
-  that says so (*The trail squares*). Both have a column for every attribute in
+  that says so (*The trail squares*). Development also holds the
+  hiking-routes layer's squares, built from planet-261109 and marked as the
+  whole world under `routes1_manifest`; production holds none, so a build
+  signed for production draws no layer (*The hiking-routes layer*). Both have a column for every attribute in
   `MirroredCloudKitSchema.recordTypes`. The only live columns the contract
   does not name are SwiftData's own `CD_entityName`, the
   to-one reference columns that the contract lists as relationships, and the
@@ -1373,7 +1378,7 @@ is world-readable, because browsing needs no account.
 | `CommunityPhotoSubmission` (offered photos) | any signed-in account / `reviewer` | **none** |
 | `CommunityPhotoContribution` (published photos) | `reviewer` / `reviewer` | `listing`, `photoSubmission`, `publishedAt` |
 | `CommunitySubmissionNotice` (the queue; `reviewer` reads it) | any signed-in account / `reviewer` | `___recordID`, `___createTime` |
-| `CuratedTrailCell` (OpenStreetMap's day hikes, by map square) | `reviewer` / `reviewer` | **none** |
+| `CuratedTrailCell` (OpenStreetMap's day hikes, and the hiking-routes layer, by map square) | `reviewer` / `reviewer` | **none** |
 | `CuratedTrailManifest` (what the squares cover) | `reviewer` / `reviewer` | **none** |
 
 - **A submission is write-once.** A listing points at its submission, so an
@@ -1396,7 +1401,8 @@ is world-readable, because browsing needs no account.
   (`Users` grants `WRITE TO "_creator"`) is unverified, so test it before
   trusting the role in production.
 - **The last two types hold nothing a hiker made.** They are a copy of
-  OpenStreetMap's routes that a script uploads; see *The trail squares*.
+  OpenStreetMap's routes that a script uploads; see *The trail squares* and
+  *The hiking-routes layer*.
 
 ### Rules that hold it up
 
@@ -1572,10 +1578,11 @@ by name. `TrailCellGrid` argues the design and has the measurements.
 - **The file's generation is in every record name** (`trails1_…`). An
   installed build keeps asking for the names it knows, so a file it cannot
   read goes under a new generation beside the old one, never over it.
-- **Three of the app's files are compiled into the tool:**
-  `TrailCellGrid.swift`, `TrailCellFile.swift` and `CommunitySchema.swift`.
-  They import nothing of the app's, and `Scripts/run-script-tests.sh` builds
-  the tool, which is what holds them to that.
+- **Six of the app's files are compiled into the tool:** `PackedBytes.swift`,
+  `TrailCellGrid.swift`, `TrailCellFile.swift`, `RouteSquareGrid.swift`,
+  `RouteSquareFile.swift` and `CommunitySchema.swift`. They import nothing of
+  the app's, and `Scripts/run-script-tests.sh` builds the tool, which is what
+  holds them to that.
 - **Building and uploading** is `Scripts/trail-cells.sh`:
   1. `build <planet.osm.pbf> --world`. Only a build of the whole planet takes
      `--world`, which is what marks the squares complete.
@@ -1594,6 +1601,96 @@ by name. `TrailCellGrid` argues the design and has the measurements.
 - **Both record types are added by schema import before the first upload**
   to an environment, for the reason *A new field arrives indexed* gives. The
   deployment state under *CloudKit* says which environments have them.
+
+### The hiking-routes layer
+
+The *Hiking Routes* switch draws every `route=hiking` relation OpenStreetMap
+has over whichever map is selected, coloured by its network. The app draws it
+(`HikingRoutesRenderer`), from squares built the trail squares' way and kept
+beside them. `RouteSquareGrid` argues the design and has the measurements.
+
+- **On unless the hiker turns it off, and nothing of it is a tile.** A
+  stored answer outranks the default (`SettingsDefault`). Auto-save and
+  downloads ask the selected map alone, so over Apple's maps a hike offers
+  neither, whatever the switch says.
+- **One way, once.** `Scripts/trail-cells.sh build-routes` keeps each member
+  way of every hiking relation once, with the routes it is drawn as and the
+  most important network among them, and files it at four levels of detail,
+  each simplified to what its zooms show and holding the networks they draw
+  (`RouteSquareLevel`). Nothing is left out for being long, unnamed or big;
+  a route OpenStreetMap calls proposed is, and so is a relation whose `type`
+  is not `route` or `superroute`: a `network` tagged `route=hiking` gathers
+  routes and is none of them.
+- **A way is drawn as its topmost relations.** A stage relation inside a
+  relation of its own network is that route, not one more, so its ways are
+  filed under the whole route alone; a relation inside one of another
+  network is filed beside it (`RouteCatalogue` in `RouteBuild.swift`). A
+  square's routes are therefore the relations a way is drawn as, not every
+  relation that names it.
+- **The trail squares' record types and upload, under names of their own.**
+  A routes square is a `CuratedTrailCell` named `routes1_z<zoom>_<row>_<col>`,
+  and the layer's manifest is `routes1_manifest`. The build's manifest says
+  `"kind": "routes"`, and `upload` reads that to choose the manifest record.
+  It is written to `routes-manifest.json`, never `manifest.json`, because a
+  tool from before the layer reads only that name and no `kind`, and would
+  take the layer's squares for the day hikes'. An upload leaves alone any
+  name its manifest lists that is not one of its own set's squares, and
+  refuses a build that lists one. No schema change was needed.
+- **Drawn only from a set that is the whole world**, for the reason *An
+  answer is complete or it is not given* is: until then a missing record means
+  nothing, and the layer draws nothing (`HikingRouteSquares`).
+- **A tile waits for every square it overlaps.** `canDraw` answers no and asks
+  for the missing ones, which redraw the tile when they arrive, or draws at
+  once when they came in while it was asking; a line never
+  stops at the edge of a square that has not come. Nothing on MapKit's
+  drawing threads waits on the disk or the network, and the redraw is asked
+  for on the main thread.
+- **The disk never waits for the network, and the network is asked as a
+  tile's would be** (`HikingRouteSquares`). A square kept on disk is drawn
+  while the request for its neighbour is still out. A request is refused
+  where `TileNetworkPolicy` refuses a tile somebody is looking at, so Low
+  Data Mode stops the layer too. A square that was refused or failed is left
+  for a minute, and then the tiles that asked for it meanwhile are drawn
+  again, and no others. Nothing else would ask on a map nobody moves. The
+  layer's requests take longer to time out than the day hikes' search, which
+  has Overpass to fall back on.
+- **Ways are joined end to end when a square loads, where the same routes
+  run** (`DrawnRouteSquare`), and a tile strokes only vertices a pixel apart.
+  A square holds OpenStreetMap's ways, which split a route at every junction,
+  and stroked one way at a time a zoomed-out tile stalled every overlay on
+  the map, the base map's tiles included.
+- **The look is Waymarked Trails', figure for figure** (`HikingRoutesStyle`):
+  which networks are stroked at each zoom, how wide and in which colour, and
+  which routes get a sign. Routes that share a way are stacked, the most
+  important network widest and underneath. No local route is drawn before
+  zoom 12 or gets a sign before zoom 13. Every size is in tile pixels — a
+  256-pixel tile's, `1 / zoomScale` map points — because MapKit hands a
+  phone tiles one to two zooms deeper than its screen, and a size in points
+  stood half as large again as the layer this one replaced.
+- **The switch credits Waymarked Trails for the look** (`HikingRoutesToggle`).
+  The figures were read out of the map style that project publishes under
+  the GPL, and the owner settled on a credit in the switch's caption, in
+  every language. It stays for as long as the look does. The line on the
+  map still credits OpenStreetMap alone, whose data is drawn.
+- **A sign is a route's waymark, or its number** (`WaymarkSign`): its
+  `osmc:symbol` (`OSMCSymbol`), else its `ref`, else what its name shortens
+  to, framed in its network's colour. Shapes the wiki lists that `OSMCSymbol`
+  does not draw are dropped, not guessed. A number is never cut: one too wide
+  for a tile's reach (`WaymarkSign.maximumWidth`) leaves the route without a
+  sign, because two routes cut to the same characters would share one.
+- **Signs are placed once for a square and a zoom, never tile by tile**
+  (`DrawnRouteSquare+Waymarks.swift`): along each line every so many pixels,
+  moved along it to stand clear of another sign, and left out within the
+  repeat distance of one the same. Every tile draws from that list, so a
+  sign across two tiles is whole in both. Deeper than
+  `DrawnRouteSquare.deepestPlacementZoom` the places are kept: each zoom
+  deeper doubles the places a whole square tries, on a drawing thread.
+- **No suite reaches the squares.** `HikingRouteSquares.forThisLaunch()` is
+  `nil` under `isRunningTests`, UI tests included, and the map then installs
+  no layer whatever the switch says; suites hand the map a stub's squares.
+- **Building and uploading** is the trail squares' procedure with
+  `build-routes` for `build`: `build-routes <planet.osm.pbf> --world`, then
+  `upload` to development, then to production.
 
 ## The watch app
 

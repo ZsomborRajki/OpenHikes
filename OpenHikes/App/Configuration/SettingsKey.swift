@@ -20,8 +20,8 @@ import Foundation
 /// UserDefaults / `@AppStorage` key shared between the settings UI and the map.
 nonisolated enum SettingsKey {
     static let tileProviderID = "settings.tileProviderID"
-    /// Whether Waymarked Trails' hiking routes are drawn over the selected
-    /// map — see ``TileLayer/waymarkedHiking``. Synced through
+    /// Whether OpenStreetMap's hiking routes are drawn over the selected
+    /// map — see ``TileLayer/hikingRoutes``. Synced through
     /// ``SyncedSettingsMirror`` beside ``tileProviderID``: it is a choice of
     /// what the map looks like, which is the person's rather than the phone's.
     static let showsHikingRoutes = "settings.showsHikingRoutes"
@@ -238,10 +238,13 @@ nonisolated enum SettingsDefault {
     /// it exists for is narrow and real enough to be worth a switch, and
     /// narrow enough not to be worth assuming: see ``ScreenWakePolicy``.
     static let keepScreenAwake = false
-    /// Off. The layer is a second tile request for every one the map makes,
-    /// to a server a volunteer runs, and the hiker who has not asked for it
-    /// should cost neither of them anything.
-    static let showsHikingRoutes = false
+    /// On. The marked routes are what a hiking map is read for, and the app
+    /// draws them itself from squares it keeps once they have been seen, so
+    /// the layer costs a new area a few hundred kilobytes and nobody's server
+    /// a request. It was off while it was Waymarked Trails' tiles: a second
+    /// request for every one the map made, to a server a volunteer runs. A
+    /// hiker who switched it off keeps it off: a stored answer outranks this.
+    static let showsHikingRoutes = true
     /// Off. Everything this app writes elsewhere is the hiker's own library;
     /// Health is somebody else's, and an app that helped itself to it because
     /// a walk finished would be taking a decision that is theirs.

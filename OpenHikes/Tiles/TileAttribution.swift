@@ -204,15 +204,6 @@ nonisolated extension TileAttribution.Credit {
         compactTitle: "OpenStreetMap"
     )
 
-    /// The hiking-route layer's own credit. Its overlay is published under
-    /// CC BY-SA 3.0 DE on the condition that "the OpenStreetMap project and
-    /// this site are mentioned", so it links to the site — whose legal page
-    /// carries the licence — and always travels with an OpenStreetMap credit.
-    static let waymarkedTrails = Self(
-        title: "Waymarked Trails",
-        prefix: "Routes ©",
-        url: URL(string: "https://hiking.waymarkedtrails.org/")!
-    )
     // swiftlint:enable force_unwrapping
 
     static let apple = Self(title: "Apple", prefix: "Map data ©", url: nil)

@@ -301,10 +301,12 @@ nonisolated enum CommunitySchema {
     static let contributionType = "CommunityPhotoContribution"
     /// One square of OpenStreetMap's waymarked day hikes, written by
     /// `Scripts/trail-cells.sh` and fetched by name. See *The third family*
-    /// in this file's header.
+    /// in this file's header. The hiking-routes layer's squares are records
+    /// of this type too, under names of their own — see ``RouteSquareGrid``.
     static let trailCellType = "CuratedTrailCell"
     /// What one generation of those squares covers: a single record, under
-    /// ``TrailCellGrid/manifestRecordName``.
+    /// ``TrailCellGrid/manifestRecordName`` — and the hiking-routes layer's,
+    /// under ``RouteSquareGrid/manifestRecordName``.
     static let trailManifestType = "CuratedTrailManifest"
 
     /// Fields on ``trailCellType``.

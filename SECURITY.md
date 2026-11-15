@@ -78,9 +78,10 @@ reporting:
   live — and both queries need a name that is already public or that only the
   author holds. Its `authorID` is unindexed for the reason `CommunityHike`'s
   is, and a query on it is the same enumeration finding.
-- **`CuratedTrailCell`** and **`CuratedTrailManifest`** — a copy of
-  OpenStreetMap's waymarked day hikes, filed by square of the map, and the one
-  record that says what the squares cover. Nothing in either was made by a
+- **`CuratedTrailCell`** and **`CuratedTrailManifest`** — copies of
+  OpenStreetMap's waymarked day hikes and of the lines the *Hiking Routes*
+  layer draws, filed by square of the map, and for each set the one record
+  that says what its squares cover. Nothing in either was made by a
   user. `_world` read; create and write granted to the `reviewer` role alone,
   as on `CommunityHike`; **no index on either**. A write by an account outside
   the role is a finding of the same weight as one on `CommunityHike`: what a
@@ -115,9 +116,8 @@ enumerable, but a name rather than a permission. What would be new is a way to
 ## What is not in scope
 
 - Anything requiring physical access to an unlocked, already-trusted device.
-- Map data and tiles served by OpenStreetMap, Stadia Maps, Thunderforest or
-  Waymarked Trails — those are the providers' to secure. Report abuse to
-  them.
+- Map data and tiles served by OpenStreetMap, Stadia Maps or Thunderforest —
+  those are the providers' to secure. Report abuse to them.
 - Vulnerabilities in Apple's frameworks. Report those to
   [Apple](https://security.apple.com/).
 

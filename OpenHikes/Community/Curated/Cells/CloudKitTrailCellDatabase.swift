@@ -24,30 +24,46 @@ import os
 nonisolated struct CloudKitTrailCellDatabase: TrailCellFetching {
     private static let logger = Logger(subsystem: "OpenHikes", category: "TrailCells")
 
-    /// How long the request may go quiet, and how long it may take in all,
-    /// in seconds.
+    /// How long the day hikes' search lets the request go quiet, and take in
+    /// all, in seconds.
     ///
     /// Short, and set rather than left at CloudKit's own — a minute of
     /// silence, and a week for the whole — because of what waits behind a
     /// failure here: ``CuratedTrailSource`` asks Overpass instead, and a
     /// hiker should reach that in seconds rather than after a spinner has
     /// outlasted their patience. One request's time, and a wide search is
-    /// several: see ``TrailCellLibrary/maximumCellsPerRequest``.
-    private static let requestTimeout: TimeInterval = 15
-    private static let resourceTimeout: TimeInterval = 30
+    /// several: see ``TrailCellLibrary/maximumCellsPerRequest``. The
+    /// hiking-routes layer has nothing to fall back on, and sets its own —
+    /// see ``HikingRouteSquares``.
+    static let searchRequestTimeout: TimeInterval = 15
+    static let searchResourceTimeout: TimeInterval = 30
 
     let containerIdentifier: String
+    /// The record that says what the squares asked about cover: the day
+    /// hikes' manifest, or the hiking-routes layer's, whose squares are read
+    /// through this same fetch — see ``HikingRouteSquares``.
+    let manifestRecordName: String
+    let requestTimeout: TimeInterval
+    let resourceTimeout: TimeInterval
 
-    init(containerIdentifier: String = CloudSyncCoordinator.containerIdentifier) {
+    init(
+        containerIdentifier: String = CloudSyncCoordinator.containerIdentifier,
+        manifestRecordName: String = TrailCellGrid.manifestRecordName,
+        requestTimeout: TimeInterval = Self.searchRequestTimeout,
+        resourceTimeout: TimeInterval = Self.searchResourceTimeout
+    ) {
         self.containerIdentifier = containerIdentifier
+        self.manifestRecordName = manifestRecordName
+        self.requestTimeout = requestTimeout
+        self.resourceTimeout = resourceTimeout
     }
 
     @concurrent
     func fetch(cellsNamed names: [String]) async throws -> TrailCellFetch {
-        let ids = ([TrailCellGrid.manifestRecordName] + names).map { CKRecord.ID(recordName: $0) }
+        let ids = ([manifestRecordName] + names).map { CKRecord.ID(recordName: $0) }
         let configuration = CKOperation.Configuration()
-        configuration.timeoutIntervalForRequest = Self.requestTimeout
-        configuration.timeoutIntervalForResource = Self.resourceTimeout
+        configuration.timeoutIntervalForRequest = requestTimeout
+        configuration.timeoutIntervalForResource = resourceTimeout
         // The hiker is waiting on this. It also keeps CloudKit from holding
         // the request for a network that is not there: at this priority it
         // fails instead, and the failure is what falls back.
@@ -70,7 +86,7 @@ nonisolated struct CloudKitTrailCellDatabase: TrailCellFetching {
         for (id, result) in fetched {
             results[id.recordName] = result
         }
-        return Self.answer(from: results, names: names)
+        return Self.answer(from: results, names: names, manifestRecordName: manifestRecordName)
     }
 }
 
@@ -89,10 +105,11 @@ nonisolated extension CloudKitTrailCellDatabase {
     /// network tell a hiker there are no trails where they are standing.
     static func answer(
         from results: [String: Result<CKRecord, any Error>],
-        names: [String]
+        names: [String],
+        manifestRecordName: String = TrailCellGrid.manifestRecordName
     ) -> TrailCellFetch {
         let manifest: TrailCellFetch.Manifest
-        switch results[TrailCellGrid.manifestRecordName] {
+        switch results[manifestRecordName] {
         case .success(let record):
             let flag = record[CommunitySchema.TrailManifest.complete] as? Int
             manifest = flag == completeFlag ? .complete : .partial

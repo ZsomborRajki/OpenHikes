@@ -2,7 +2,7 @@
 //  HikingRoutesToggle.swift
 //  OpenHikes
 //
-//  The *Hiking Routes* switch: Waymarked Trails' marked routes over whichever
+//  The *Hiking Routes* switch: OpenStreetMap's marked routes over whichever
 //  map is chosen — see ``TileLayer``.
 //
 //  One view on two screens — Settings' *Map Tiles* and the trail maker's
@@ -13,6 +13,12 @@
 //  there is that hike's, so a switch among them reads as this hike's, and it
 //  is every map's on every device the setting syncs to. The maker earns one
 //  because the marked routes are what a trail is drawn along.
+//
+//  Its caption names both of the layer's sources: OpenStreetMap, whose routes
+//  these are, and Waymarked Trails, whose map style the lines and signs are
+//  drawn to — see ``HikingRoutesStyle``. The line on the map credits only
+//  whose data is drawn, so this is the one place the app says where the look
+//  came from, and it stays while the look does.
 //
 //  Its own `View` so the setting is read here: a flip redraws this row, and
 //  the screens it sits on read the setting themselves only where what they
@@ -29,7 +35,7 @@ struct HikingRoutesToggle: View {
             Label {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Hiking Routes")
-                    Text("Marked trails from Waymarked Trails, drawn over any map when zoomed in.")
+                    Text("Marked trails from OpenStreetMap, drawn over any map in the style of Waymarked Trails.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

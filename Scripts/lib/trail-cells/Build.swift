@@ -52,10 +52,21 @@ struct BuildManifest: Codable {
         var routes: Int
     }
 
+    /// The day hikes' manifest's file: the name every tool has read.
     static let fileName = "manifest.json"
+    /// The hiking-routes layer's. A tool from before the layer reads only
+    /// ``fileName`` and no ``kind``, so it would take the layer's squares for
+    /// the day hikes' and plan to delete every one of theirs. Under a name of
+    /// its own, it finds no build in the directory at all.
+    static let routesFileName = "routes-manifest.json"
     static let cellDirectoryName = "cells"
     static let cellFileExtension = "cell"
 
+    /// Which set of squares this is: `nil` for the day hikes' — the only set
+    /// there was when the first manifests were written — or
+    /// `RouteSquareBuild.manifestKind` for the hiking-routes layer's. See
+    /// `Upload.Dataset`.
+    var kind: String?
     var generation: Int
     /// Whether these squares are every square there is. Only then does the
     /// app read them, and take a missing one to mean *no routes here*. A
@@ -67,20 +78,33 @@ struct BuildManifest: Codable {
     var routeCount: Int
     var cells: [Cell]
 
+    /// The file a manifest of `kind` is written to.
+    static func fileName(ofKind kind: String?) -> String {
+        kind == RouteSquareBuild.manifestKind ? routesFileName : fileName
+    }
+
     static func read(from directory: URL) throws -> BuildManifest {
+        let found = [fileName, routesFileName].filter { name in
+            FileManager.default.fileExists(atPath: directory.appendingPathComponent(name).path)
+        }
+        guard found.count == 1, let name = found.first else {
+            throw BuildError.noOneManifest(directory.path)
+        }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        return try decoder.decode(
-            BuildManifest.self,
-            from: Data(contentsOf: directory.appendingPathComponent(fileName))
-        )
+        let manifest = try decoder.decode(BuildManifest.self, from: Data(contentsOf: directory.appendingPathComponent(name)))
+        guard fileName(ofKind: manifest.kind) == name else {
+            throw BuildError.manifestUnderAnotherName(directory.appendingPathComponent(name).path)
+        }
+        return manifest
     }
 
     func write(to directory: URL) throws {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try encoder.encode(self).write(to: directory.appendingPathComponent(Self.fileName), options: .atomic)
+        try encoder.encode(self)
+            .write(to: directory.appendingPathComponent(Self.fileName(ofKind: kind)), options: .atomic)
     }
 
     static func cellFile(named name: String, in directory: URL) -> URL {
@@ -94,6 +118,8 @@ enum BuildError: Error, CustomStringConvertible {
     case outputIsNotABuild(String)
     case cellTooLarge(name: String, bytes: Int)
     case waysCarryNoPositions(String)
+    case noOneManifest(String)
+    case manifestUnderAnotherName(String)
 
     var description: String {
         switch self {
@@ -101,8 +127,13 @@ enum BuildError: Error, CustomStringConvertible {
             "no way in \(path) carries its nodes' positions. It has to be written from the output of "
                 + "`osmium add-locations-to-ways`, with `-f opl,locations_on_ways=true`."
         case .outputIsNotABuild(let path):
-            "\(path) holds files and no \(BuildManifest.fileName), so it is not an earlier build to replace. "
-                + "Name an empty directory, or a previous build's."
+            "\(path) holds files and no \(BuildManifest.fileName) or \(BuildManifest.routesFileName), so it is "
+                + "not an earlier build to replace. Name an empty directory, or a previous build's."
+        case .noOneManifest(let path):
+            "\(path) is not a build: it needs one \(BuildManifest.fileName), for the day hikes' squares, or one "
+                + "\(BuildManifest.routesFileName), for the hiking-routes layer's."
+        case .manifestUnderAnotherName(let path):
+            "\(path) is not the file its kind of build writes. Build it again with this tool."
         case .cellTooLarge(let name, let bytes):
             "\(name) is \(bytes) bytes, past what one asset upload takes "
                 + "(\(TrailCellBuild.maximumCellBytes)). The grid needs smaller squares before this can ship."
@@ -143,6 +174,7 @@ enum TrailCellBuild {
         try prepare(options.outputDirectory)
         let cells = try write(filed, to: options.outputDirectory, summary: &summary)
         try BuildManifest(
+            kind: nil,
             generation: TrailCellGrid.generation,
             complete: options.coversTheWorld,
             builtAt: Date(),
@@ -285,25 +317,30 @@ private extension TrailCellBuild {
 
 // MARK: - Writing
 
-private extension TrailCellBuild {
+extension TrailCellBuild {
     /// Empties a previous build out of `directory`, and refuses a directory
-    /// that holds anything else.
+    /// that holds anything else. Both builds' first step.
     static func prepare(_ directory: URL) throws {
         let manager = FileManager.default
         let cells = directory.appendingPathComponent(BuildManifest.cellDirectoryName, isDirectory: true)
         // Hidden files are the Finder's, not a reason to refuse.
         let existing = ((try? manager.contentsOfDirectory(atPath: directory.path)) ?? [])
             .filter { !$0.hasPrefix(".") }
+        let manifests = [BuildManifest.fileName, BuildManifest.routesFileName]
         if !existing.isEmpty {
-            guard existing.contains(BuildManifest.fileName) else {
+            guard existing.contains(where: manifests.contains) else {
                 throw BuildError.outputIsNotABuild(directory.path)
             }
             try? manager.removeItem(at: cells)
-            try? manager.removeItem(at: directory.appendingPathComponent(BuildManifest.fileName))
+            for manifest in manifests {
+                try? manager.removeItem(at: directory.appendingPathComponent(manifest))
+            }
         }
         try manager.createDirectory(at: cells, withIntermediateDirectories: true)
     }
+}
 
+private extension TrailCellBuild {
     static func write(
         _ filed: [TrailCell: [TrailCellFile.Relation]],
         to directory: URL,

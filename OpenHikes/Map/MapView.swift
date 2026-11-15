@@ -77,11 +77,14 @@ struct MapView: MapViewRepresentable, Equatable {
     /// update — on the same `MKMapView` either way.
     var base: MapBase
 
-    /// The transparent layer drawn over that map — Waymarked Trails' hiking
-    /// routes — or `nil` while the switch for it is off. Over every map,
-    /// Apple's included, and beneath every line; see
-    /// `MapCoordinator+TileLayer.swift`.
+    /// The layer drawn over that map — OpenStreetMap's hiking routes — or
+    /// `nil` while the switch for it is off. Over every map, Apple's
+    /// included, and beneath every line; see `MapCoordinator+TileLayer.swift`.
     var tileLayer: TileLayer?
+
+    /// Where the layer's squares come from, or `nil` for a launch that may
+    /// fetch none — every suite. Compared by identity.
+    var hikingRouteSquares: HikingRouteSquares?
 
     /// Observed directly by the map so the detail view's Zoom button can re-fit
     /// the route without re-rendering any view.
@@ -781,7 +784,7 @@ extension MapView {
     /// Puts the hiking-route layer on, takes it off, and credits it either
     /// way. No-op while nothing about it changed.
     private func applyTileLayer(to mapView: MKMapView, _ coordinator: Coordinator) {
-        guard coordinator.applyTileLayer(tileLayer, on: mapView) else { return }
+        guard coordinator.applyTileLayer(tileLayer, squares: hikingRouteSquares, on: mapView) else { return }
         #if os(iOS)
         // A layer over Apple's map is the one case where the line comes back
         // although the map's own credit is MapKit's: the layer's are owed
@@ -883,6 +886,7 @@ extension MapView {
             && lhs.sheetMetrics === rhs.sheetMetrics
             && lhs.base == rhs.base
             && lhs.tileLayer == rhs.tileLayer
+            && lhs.hikingRouteSquares === rhs.hikingRouteSquares
             && lhs.mapController === rhs.mapController
             && lhs.drawnRouteTap === rhs.drawnRouteTap
             && lhs.locationAccessPrompt === rhs.locationAccessPrompt

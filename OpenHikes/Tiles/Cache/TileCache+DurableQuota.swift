@@ -63,11 +63,12 @@ nonisolated extension TileCache {
         candidateProviderIDs.first { name.hasPrefix($0 + "_") }
     }
 
-    /// Layers included: a layer's tiles are namespaced by its id exactly as a
-    /// provider's are, and none of them carries a ceiling — but a layer file
-    /// matched to no id at all would be one nothing can attribute.
+    /// Longest first, for the reason above. A file named for no provider —
+    /// one of the Waymarked Trails tiles the hiking-route layer saved before
+    /// it drew its own — counts against no ceiling, which is what it carried
+    /// then too.
     private static let candidateProviderIDs: [String] = {
-        (TileProvider.all.map(\.id) + TileLayer.all.map(\.id)).sorted { $0.count > $1.count }
+        TileProvider.all.map(\.id).sorted { $0.count > $1.count }
     }()
 
     /// The quota `providerID`'s durable tiles count against, or `nil` where
