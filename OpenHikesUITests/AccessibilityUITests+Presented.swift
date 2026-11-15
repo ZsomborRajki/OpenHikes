@@ -35,23 +35,23 @@ extension AccessibilityUITests {
     /// likely to be read by App Review.
     ///
     /// Reached through *OpenHikes Pro* in the About section rather than
-    /// through a locked row in Map Tiles, for the reason
-    /// `SettingsUITests.testProIsReachableWithoutTheMapTilesSection` exists:
+    /// through a locked card on *Map Modes*, for the reason
+    /// `SettingsUITests.testProIsReachableWithoutMapModes` exists:
     /// that is the entry point which reads no entitlement, no product and no
     /// key, so it is the one that works in a build without `Secrets.plist` and
     /// the one an audit can rely on.
     ///
     /// **Only the unentitled state, and that is not an omission being made
     /// quietly.** The issue this closes asks for both, and the other one is
-    /// not a screen: the row is absent for a subscriber — they have *Manage
-    /// Subscription* in Map Tiles — and `MapPaywallView` dismisses itself the
-    /// moment the store answers, which is what
+    /// not a screen: the row is absent for a subscriber — they have
+    /// *OpenHikes Pro* under Subscription — and `MapPaywallView` dismisses
+    /// itself the moment the store answers, which is what
     /// `SettingsUITests.testProRowIsAbsentForASubscriber` and the comment on
     /// `testPrivacyPolicyIsReachableWithoutThePaywall` already pin. There is
     /// nothing on screen for an audit to walk. The *disabled-row* state that
     /// issue also names is a build without API keys, which this one is not —
-    /// `testProIsReachableWithoutTheMapTilesSection` says the same thing in
-    /// the same words.
+    /// `testProIsReachableWithoutMapModes` says the same thing in the same
+    /// words.
     @MainActor
     func testPaywallPassesAccessibilityAudit() throws {
         let app = launchApp()
@@ -64,7 +64,7 @@ extension AccessibilityUITests {
         let pro = element("about-pro-link", in: app)
         XCTAssertTrue(
             scrollIntoView(pro, in: app),
-            "Settings should offer OpenHikes Pro outside the Map Tiles section"
+            "Settings should offer OpenHikes Pro in the About section"
         )
         pro.tap()
 
