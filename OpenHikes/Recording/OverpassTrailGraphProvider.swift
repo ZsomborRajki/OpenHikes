@@ -378,7 +378,7 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
         let capturedSquares = squares
         let task = Task { [weak self] () throws -> TrailGraph in
             do {
-                let graph = try await Self.fetchRegion(
+                let region = try await Self.fetchRegion(
                     key,
                     squares: capturedSquares,
                     refusal: { [weak self] in await self?.overpassRefusalDelay() },
@@ -386,8 +386,8 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
                     transport: capturedTransport
                 )
                 try Task.checkCancellation()
-                try await self?.finishFetch(of: graph, for: key, fetchID: fetchID)
-                return graph
+                try await self?.finishFetch(of: region.graph, fetchedAt: region.fetchedAt, for: key, fetchID: fetchID)
+                return region.graph
             } catch {
                 await self?.failFetch(with: error, for: key, fetchID: fetchID)
                 throw error
@@ -401,13 +401,19 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
     /// Caching lives in the task rather than in the awaiting path, so a region
     /// downloaded for a caller that has since gone away is still recorded once
     /// — and once only, however many waiters there were.
+    ///
+    /// - Parameter fetchedAt: When what the region was read from was fetched,
+    ///   for a region read out of a square fetched before it, which expires
+    ///   with the square — see ``TrailGraphSquareLibrary``. `nil` for one
+    ///   Overpass has just answered.
     private func finishFetch(
         of graph: TrailGraph,
+        fetchedAt: Date?,
         for key: TrailGraphRegion,
         fetchID: UUID
     ) throws {
         clearFetch(key, fetchID: fetchID)
-        let cached = CachedGraph(fetchedAt: clock(), graph: graph, format: Self.cacheFormat)
+        let cached = CachedGraph(fetchedAt: fetchedAt ?? clock(), graph: graph, format: Self.cacheFormat)
         remember(cached, for: key)
         try write(cached, for: key)
         OverpassCache.trim(directory, keeping: Self.maximumCacheFiles, at: clock())
@@ -615,22 +621,26 @@ extension OverpassTrailGraphProvider {
         return retryAfter.timeIntervalSince(clock())
     }
 
-    /// A region's graph: from the squares when they answer, and otherwise
-    /// from Overpass, unless Overpass has asked to be left alone.
+    /// A region's graph: from the squares when they answer, with when their
+    /// square was fetched, and otherwise from Overpass, unless Overpass has
+    /// asked to be left alone.
     nonisolated static func fetchRegion(
         _ key: TrailGraphRegion,
         squares: TrailGraphSquareLibrary?,
         refusal: @Sendable () async -> TimeInterval?,
         endpoint: URL,
         transport: Transport
-    ) async throws -> TrailGraph {
-        if case .graph(let prebuilt) = await squares?.graph(for: key) ?? .uncovered {
-            return prebuilt
+    ) async throws -> (graph: TrailGraph, fetchedAt: Date?) {
+        if case let .graph(prebuilt, fetchedAt) = await squares?.graph(for: key) ?? .uncovered {
+            return (prebuilt, fetchedAt)
         }
+        // A region given up on while the squares were asked would otherwise
+        // go on to ask Overpass for nobody.
+        try Task.checkCancellation()
         if let delay = await refusal() {
             throw TrailGraphProviderError.rateLimited(retryAfter: delay)
         }
-        return try await fetchGraph(for: key, endpoint: endpoint, transport: transport)
+        return (try await fetchGraph(for: key, endpoint: endpoint, transport: transport), nil)
     }
 }
 

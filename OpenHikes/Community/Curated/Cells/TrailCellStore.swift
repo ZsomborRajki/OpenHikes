@@ -86,6 +86,13 @@ nonisolated extension TrailCellStore {
         files.value(named: name)
     }
 
+    /// The square named `name` and when it was fetched, on the same terms:
+    /// for the trail graph, whose regions read out of a square expire with
+    /// it — see ``TrailGraphSquareLibrary``.
+    func cell(named name: String) -> StoredCell? {
+        files.entry(named: name)
+    }
+
     /// Keeps a search's worth of squares, and trims once.
     func save(_ cells: [(name: String, bytes: Data)]) {
         files.save(cells.map { (name: $0.name, value: $0.bytes) })
