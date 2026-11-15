@@ -63,6 +63,34 @@ struct SheetPresentationLayoutTests {
         #expect(presentation.isAtMiddleDetent, "and the sheet comes back at the new height")
     }
 
+    /// The launch the sheet used to be presented at for a second: nothing
+    /// knows the window's shape until the layout reader's first report, so
+    /// the sheet waits for it, and a window that takes the panel never asks
+    /// for one at all.
+    @Test("the sheet stays down until the window's shape is known, and down in a panel window")
+    func sheetWaitsForTheWindowsShape() {
+        let panelWindow = SheetPresentation()
+        #expect(panelWindow.isSheetPresented == false, "nothing knows the window's shape yet")
+        panelWindow.layout = .sidePanel
+        #expect(panelWindow.isSheetPresented == false)
+
+        let uprightPhone = SheetPresentation()
+        #expect(uprightPhone.isSheetPresented == false)
+        uprightPhone.layout = .bottomSheet
+        #expect(uprightPhone.isSheetPresented, "a report of the shape it started in still raises it")
+    }
+
+    @Test("a rotation takes the sheet down and puts it back with the panel")
+    func sheetFollowsTheLayout() {
+        let presentation = SheetPresentation()
+        presentation.layout = .bottomSheet
+
+        presentation.layout = .sidePanel
+        #expect(presentation.isSheetPresented == false)
+        presentation.layout = .bottomSheet
+        #expect(presentation.isSheetPresented)
+    }
+
     @Test("the sheet's own flags are unchanged by a layout it never leaves")
     func bottomSheetFlagsAreUnchanged() {
         let presentation = SheetPresentation(detent: .large)

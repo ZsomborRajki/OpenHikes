@@ -210,6 +210,23 @@ final class SheetPresentation {
     /// resting height for. A side panel rests at no detent and reports none.
     private(set) var isAtMiddleDetent: Bool
 
+    /// Whether the sheet is up. Read only by the modifier that presents it —
+    /// see `MapSheetPresenter.swift` — and never by `OpenHikesView`, which
+    /// would re-run the whole map screen for it.
+    ///
+    /// **Down until the window's shape is known.** It used to be `@State` on
+    /// the root view that started `true`, and the window is read only after
+    /// the first body pass — see ``SheetLayoutReader`` — so a launch into a
+    /// window that takes the side panel asked for the sheet before anything
+    /// knew better. The sheet rose beside the panel and dropped again about
+    /// a second later, and its hikes list, `@Query` and rows were built for
+    /// nothing. Measured on an iPad Pro 13-inch simulator.
+    ///
+    /// Raised by the first write of ``layout``, which is the reader's first
+    /// report, and follows it from then on. Written back by SwiftUI when the
+    /// sheet is taken down from under it, and put back by that modifier.
+    var isSheetPresented = false
+
     /// Which shape the contents are drawn in. Written by ``SheetLayoutReader``,
     /// which is where the window's shape is read — a change to it is a
     /// rotation, or an iPhone Duo opening or closing. Read by `OpenHikesView`,
@@ -222,6 +239,11 @@ final class SheetPresentation {
             return storedLayout
         }
         set {
+            // Before the guard. A phone held upright starts in the shape it
+            // reports, so its first report changes nothing the root view reads
+            // and still puts the sheet up: the only reader woken is the
+            // modifier that presents it.
+            isSheetPresented = newValue == .bottomSheet
             guard newValue != storedLayout else { return }
             withMutation(keyPath: \.layout) { storedLayout = newValue }
             recomputeDetentFlags()

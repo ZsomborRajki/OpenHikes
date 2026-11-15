@@ -28,7 +28,9 @@
 //  ``SheetPresentation/layout`` changes when the window changes shape — a
 //  rotation, an iPhone Duo opening or closing, or an iPad window resized
 //  across the panel's width — and at no other time, so the root view
-//  re-renders for those and for nothing else.
+//  re-renders for those and for nothing else. The first report also raises
+//  the sheet where the window wants one, which only the modifier presenting
+//  it hears.
 //
 
 import SwiftUI
@@ -104,7 +106,10 @@ struct SheetLayoutReader: View {
             Color.clear
                 .accessibilityHidden(true)
                 // `initial`, because a launch straight into a wide window is
-                // a change nothing here ever sees.
+                // a change nothing here ever sees — and because the first
+                // report is what puts the sheet up at all, in a window that
+                // wants one. Until then nobody knows which shape it will be;
+                // see ``SheetPresentation/isSheetPresented``.
                 .onChange(
                     of: SheetLayout(windowSize: proxy.size, isCompactHeight: isCompactHeight),
                     initial: true

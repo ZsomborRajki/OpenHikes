@@ -177,6 +177,34 @@ struct SheetPresentationIsolationTests {
         )
     }
 
+    /// What the wait for the window's shape costs a phone held upright, which
+    /// is nearly every launch: nothing. The first report there is the shape
+    /// the presentation started in, so it must raise the sheet for the
+    /// modifier that presents it and wake none of what the root view reads —
+    /// the flag used to be `@State` out there, where raising it would have
+    /// re-run the whole map screen.
+    @Test("an upright phone's first report raises the sheet and wakes nothing the root view reads")
+    func uprightFirstReportWakesOnlyThePresenter() async {
+        let presentation = SheetPresentation()
+
+        let presenterCounter = ObservationCounter { _ = presentation.isSheetPresented }
+        let rootCounter = ObservationCounter {
+            _ = presentation.layout
+            _ = presentation.isCompact
+            _ = presentation.isFullHeight
+            _ = presentation.isAtMiddleDetent
+            _ = presentation.hasPushedScreen
+            _ = presentation.isRecordingPresented
+        }
+        await rootCounter.settle()
+
+        presentation.layout = .bottomSheet
+        await presenterCounter.settle()
+
+        #expect(presenterCounter.count == 1, "precondition: the sheet really was raised")
+        #expect(rootCounter.count == 0, "the root view must not be re-run to put the sheet up")
+    }
+
     /// The structural half, and the one that fails if somebody puts it back.
     ///
     /// `@State` invalidates its declaring view whether or not the body reads
