@@ -21,6 +21,14 @@
 //  ``HikingRoutesStyle`` strokes by: where a route leaves, the line ends and
 //  another begins.
 //
+//  **The short way round the antimeridian.** A step from 179.9° to −179.9°
+//  is 21 km of ground, and taken as two map points it was a line back across
+//  the whole map, through Greenwich. Each step of a line here takes the short
+//  way instead, so a line that crosses runs on past the world's east or west
+//  edge, its first point where the map has it, and its box, its length and
+//  where its signs stand along it are all of the ground it crosses. The tiles
+//  at both edges of the map draw it — see ``HikingRoutesDrawing``.
+//
 
 import Algorithms
 import CoreLocation
@@ -37,7 +45,10 @@ nonisolated struct DrawnRouteSquare: Sendable {
         /// ``DrawnRouteSquare/signs``: each different sign once, the most
         /// important network's first.
         let signs: [Int]
+        /// Off the world's east or west edge where the line crosses the
+        /// antimeridian. See this file's header.
         let points: [MKMapPoint]
+        /// The points' box, past the world's edge with them.
         let bounds: MKMapRect
         /// The line's length, in map points.
         let length: Double
@@ -86,7 +97,7 @@ nonisolated struct DrawnRouteSquare: Sendable {
             if let level = square?.level, !HikingRoutesStyle.isDrawn(networks, at: level) { continue }
             let shown = routes.signs(of: shared)
             for run in Self.joined(ways.map(\.points)) {
-                let points = run.map { Self.mapPoint($0, scale: scale) }
+                let points = Self.mapPoints(run, scale: scale)
                 count += points.count
                 drawn.append(Line(
                     networks: networks,
@@ -105,6 +116,21 @@ nonisolated struct DrawnRouteSquare: Sendable {
             latitude: Double(point.latitude) / scale,
             longitude: Double(point.longitude) / scale
         ))
+    }
+
+    /// `run` in map points, each step the short way round: a step across the
+    /// antimeridian goes on past the world's edge, by the world's width.
+    static func mapPoints(_ run: [RouteSquareFile.Point], scale: Double) -> [MKMapPoint] {
+        let width = MKMapSize.world.width
+        var previous: MKMapPoint?
+        return run.map { point in
+            var projected = mapPoint(point, scale: scale)
+            if let previous {
+                projected.x -= ((projected.x - previous.x) / width).rounded() * width
+            }
+            previous = projected
+            return projected
+        }
     }
 
     /// `runs` joined wherever one ends where another starts or ends, each run
@@ -149,6 +175,23 @@ nonisolated struct DrawnRouteSquare: Sendable {
             joined.append(Array(line))
         }
         return joined
+    }
+}
+
+// MARK: - Across the antimeridian
+
+nonisolated extension DrawnRouteSquare {
+    /// How far a line or a sign is moved to draw it on each copy of the world
+    /// a tile can meet it on: none, and a world's width either way. MapKit
+    /// names every tile on the world's own copy, and a line across the
+    /// antimeridian runs off that copy's edge.
+    static let worldCopies = [0, -MKMapSize.world.width, MKMapSize.world.width]
+
+    /// `point` moved onto the world's own copy, where MapKit names its tiles
+    /// and a square's ground is.
+    static func onTheWorld(_ point: MKMapPoint) -> MKMapPoint {
+        let width = MKMapSize.world.width
+        return MKMapPoint(x: point.x - (point.x / width).rounded(.down) * width, y: point.y)
     }
 }
 

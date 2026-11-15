@@ -4,8 +4,8 @@
 //
 //  A square as the layer strokes it: OpenStreetMap's short ways joined end to
 //  end where the same routes run, whichever way each was drawn, each line
-//  carrying its routes' networks and signs, and none kept that its zooms
-//  never draw.
+//  carrying its routes' networks and signs, none kept that its zooms never
+//  draw, and a line across the antimeridian taken the short way round.
 //
 
 import Foundation
@@ -174,5 +174,42 @@ struct DrawnRouteSquareTests {
         }
         let steps = zip(line.points, line.points.dropFirst()).map { hypot($1.x - $0.x, $1.y - $0.y) }
         #expect(line.length.isApproximatelyEqual(to: steps.reduce(0, +), absoluteTolerance: 1e-6))
+    }
+
+    /// Taveuni, in Fiji, is cut by the antimeridian. A way across it goes on
+    /// past the map's edge rather than back across the whole map, so its box
+    /// and its length are those of the ground it crosses: its first point
+    /// stays where the map has it, and the box reaches past the east edge for
+    /// a way that crosses eastward, past the west edge for one going west.
+    @Test(
+        "a line across the date line takes the short way round, whichever way it crosses",
+        arguments: [
+            ([179.9, -179.9], 0.2, 0.2),
+            ([-179.9, 179.9], 0.2, 0.2),
+            ([179.9, -179.9, 179.8], 0.3, 0.5),
+        ]
+    )
+    func acrossTheDateLine(longitudes: [Double], widthDegrees: Double, lengthDegrees: Double) throws {
+        let file = RouteSquareFile(
+            routes: [RouteSquareFile.Route(id: 1, tags: ["network": "nwn"])],
+            lines: [
+                RouteSquareFile.Line(
+                    network: .national,
+                    routes: [0],
+                    points: longitudes.map { Self.point(-16_800_000, Int32(($0 * 1_000_000).rounded())) }
+                ),
+            ],
+            coordinateScale: 1_000_000
+        )
+        let line = try #require(DrawnRouteSquare(file).lines.first)
+        let world = MKMapSize.world.width
+        let degree = world / 360
+        let start = try #require(line.points.first)
+        let first = MKMapPoint(CLLocationCoordinate2D(latitude: -16.8, longitude: longitudes[0]))
+        #expect(start.x.isApproximatelyEqual(to: first.x, absoluteTolerance: 1e-6))
+        #expect(line.bounds.width.isApproximatelyEqual(to: widthDegrees * degree, absoluteTolerance: 2))
+        #expect(line.length.isApproximatelyEqual(to: lengthDegrees * degree, absoluteTolerance: 2))
+        let edge = longitudes[0] > 0 ? world : 0
+        #expect(line.bounds.minX < edge && line.bounds.maxX > edge)
     }
 }

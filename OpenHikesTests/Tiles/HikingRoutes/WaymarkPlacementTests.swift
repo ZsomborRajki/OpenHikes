@@ -4,7 +4,8 @@
 //
 //  Where a square's signs stand at a zoom: which routes get one, how far
 //  apart along a line, never crowding another sign or repeating one close
-//  by, and only on the square's own ground.
+//  by, only on the square's own ground, and along a line across the
+//  antimeridian the short way round.
 //
 //  Distances are read back in tile pixels at the zoom asked about, which is
 //  what the rules are written in.
@@ -152,6 +153,24 @@ struct WaymarkPlacementTests {
         #expect(!placed.isEmpty)
         #expect(placed.count < whole.count)
         #expect(placed.allSatisfy { ground.contains($0.center) })
+    }
+
+    /// Taveuni, in Fiji, is cut by the antimeridian. Its way's signs stand
+    /// along the 0.2° it crosses, on the world's own copy, each placed by the
+    /// square at the edge of the map it stands on. Measured the long way
+    /// round, they stood out along the squares' whole width.
+    @Test("a way across the date line has its signs along the ground it crosses, at both edges of the map")
+    func acrossTheDateLine() {
+        let file = Self.square([Self.local], [Self.way(along: [0], from: 179.9, to: -179.9, latitude: -16.8)])
+        let marks = [179.99, -179.99].flatMap { longitude in
+            let square = RouteSquareGrid.square(at: .detail, latitude: -16.8, longitude: longitude)
+            return DrawnRouteSquare(file, square: square).waymarks(atZoom: 14)
+        }
+        let world = MKMapSize.world.width
+        let reach = 0.1 * world / 360 + 1
+        #expect(marks.allSatisfy { (0..<world).contains($0.center.x) })
+        #expect(marks.allSatisfy { $0.center.x < reach || $0.center.x > world - reach })
+        #expect(marks.contains { $0.center.x < reach } && marks.contains { $0.center.x > world - reach })
     }
 
     @Test("a square's signs at a zoom are placed once, and the same every time they are asked for")

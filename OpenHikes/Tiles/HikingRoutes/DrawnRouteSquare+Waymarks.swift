@@ -40,6 +40,7 @@ import Synchronization
 
 /// Where one sign stands.
 nonisolated struct PlacedWaymark: Sendable {
+    /// On the world's own copy, even along a line that runs off its edge.
     let center: MKMapPoint
     /// An index into the square's ``DrawnRouteSquare/signs``.
     let sign: Int
@@ -151,7 +152,11 @@ nonisolated private struct WaymarkPlacer {
             for shift in Self.shifts {
                 let along = wanted + shift
                 guard along >= 0, along <= length else { continue }
-                let point = Self.point(at: along / scale, on: line.points, distances: distances)
+                // On the world's own copy, which the square's ground is on: a
+                // line across the antimeridian runs off its edge.
+                let point = DrawnRouteSquare.onTheWorld(
+                    Self.point(at: along / scale, on: line.points, distances: distances)
+                )
                 if let ground = square.ground, !ground.contains(point) { continue }
                 if take(sign, at: point) { break }
             }
