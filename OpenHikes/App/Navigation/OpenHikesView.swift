@@ -489,8 +489,10 @@ struct OpenHikesView: View {
                 highlight.move(to: nil)
             }
             // Which place the weather badge is about — see ``WeatherFocus``.
-            // In a modifier so the recorder's phase and the route's geometry
-            // are read there rather than here.
+            // `trail:` and `isRecording:` are read here, by this body, as any
+            // modifier's arguments are; the modifier keeps only what their
+            // changes do, and calls `hiker` only when `isRecording` is true
+            // as the view appears or turns true.
             .weatherFocus(
                 appModel.weatherFocus,
                 trail: selectedTrailSubject,

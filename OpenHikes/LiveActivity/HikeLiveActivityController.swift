@@ -11,7 +11,8 @@
 //  refuses outright under `xcodebuild test` — so the seam is what makes the
 //  interesting behaviour reachable at all.
 //
-//  Three rules, each of which has a counterpart elsewhere in this project:
+//  The rules it applies, each naming its counterpart elsewhere in this
+//  project where it has one:
 //
 //  - **A recording outranks a followed trail.** They can genuinely overlap —
 //    a hiker records their own track along an imported route — and the system

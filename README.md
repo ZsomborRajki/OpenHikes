@@ -105,7 +105,7 @@ The source is released under the [MIT License](LICENSE). The data and imagery th
 
 The app displays the credit each provider requires (`OpenHikes/Tiles/TileAttribution.swift`). A fork that changes tile providers, or redistributes cached tiles, takes on those obligations itself.
 
-The app ships `swift-algorithms`, `swift-collections` and `swift-async-algorithms`, all Apache-2.0; `swift-numerics`, also Apache-2.0, reaches it only through `swift-algorithms`. SwiftLint runs at build time and is not linked.
+The app ships `swift-algorithms`, `swift-collections`, `swift-async-algorithms` and `swift-numerics`, all Apache-2.0. SwiftLint runs at build time and is not linked.
 
 ## Contact
 

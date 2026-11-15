@@ -9,6 +9,7 @@
 import MapKit
 import Observation
 import os
+import RealModule
 
 @Observable
 final class SearchCompleter: NSObject, MKLocalSearchCompleterDelegate {
@@ -73,15 +74,22 @@ final class SearchCompleter: NSObject, MKLocalSearchCompleterDelegate {
     /// Whether two regions are close enough that re-asking would return the
     /// same suggestions. Exact `==` is not available on `MKCoordinateRegion`,
     /// and floating-point drift in the last decimal places is not a move.
+    ///
+    /// The tolerance is absolute, a millionth of a degree in each of the four
+    /// numbers whatever the zoom, and the relation is not transitive, so it is
+    /// no `Equatable` conformance: settles that each drift a little add up to
+    /// a move, which is why ``regionDidSettle(_:)`` compares against the
+    /// region MapKit holds rather than the last one it was offered.
+    /// `SearchCompleterRegionTests` holds it to that.
     private static func isEquivalent(
         _ lhs: MKCoordinateRegion,
         _ rhs: MKCoordinateRegion
     ) -> Bool {
         let tolerance = 1e-6
-        return abs(lhs.center.latitude - rhs.center.latitude) < tolerance
-            && abs(lhs.center.longitude - rhs.center.longitude) < tolerance
-            && abs(lhs.span.latitudeDelta - rhs.span.latitudeDelta) < tolerance
-            && abs(lhs.span.longitudeDelta - rhs.span.longitudeDelta) < tolerance
+        return lhs.center.latitude.isApproximatelyEqual(to: rhs.center.latitude, absoluteTolerance: tolerance)
+            && lhs.center.longitude.isApproximatelyEqual(to: rhs.center.longitude, absoluteTolerance: tolerance)
+            && lhs.span.latitudeDelta.isApproximatelyEqual(to: rhs.span.latitudeDelta, absoluteTolerance: tolerance)
+            && lhs.span.longitudeDelta.isApproximatelyEqual(to: rhs.span.longitudeDelta, absoluteTolerance: tolerance)
     }
 
     /// Feeds the latest query to the completer, or clears results when empty.
