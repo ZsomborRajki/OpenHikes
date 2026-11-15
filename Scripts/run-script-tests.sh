@@ -4546,8 +4546,9 @@ fi
 # The places' build files what a place search would have been handed: a node
 # of any kind, and a way or a relation only of a kind mapped as an area. Node 4
 # is a guidepost and node 5 has no tags; way 11 is a car park drawn as an area,
-# which the search asks for as nodes alone; way 12 runs out of the extract, and
-# so does relation 44's one node; relation 41 is a route. The hut is placed at
+# which the search asks for as nodes alone; node 7 has no position, way 12 runs
+# out of the extract, and so does relation 44's one node; relation 41 is a
+# route. The hut is placed at
 # the middle of its outline's box, the multipolygon hut at the middle of its two
 # ways' boxes, the campsite relation 42 by its two untagged nodes alone and 43
 # by its fence and its node together, as Overpass's `out center` places them.
@@ -4560,6 +4561,7 @@ n3 Tamenity=parking x12.98 y47.63
 n4 Ttourism=information x12.99 y47.64
 n5 T x12.9 y47.6
 n6 Tnatural=peak x14.5 y46.5
+n7 Tnatural=saddle x y
 n50 T x13.1 y47.5
 n51 T x13.2 y47.52
 n52 T x13.3 y47.64
@@ -4598,7 +4600,7 @@ if expect_status 0 \
     && expect_contains "$calls" "-t node -f opl,add_metadata=false -o $places_squares.work/nodes.opl" \
         "the recorded calls" \
     && expect_contains "$output" "Filed 9 places — 4 nodes, 2 ways and 3 relations — in 3 squares" "the summary" \
-    && expect_contains "$output" "left out 2 running out of the extract" "the summary" \
+    && expect_contains "$output" "left out 3 running out of the extract" "the summary" \
     && expect_contains "$output" "filed 1 under more than one square" "the summary" \
     && expect_contains "$output" "Marked complete" "the summary"; then
     places_manifest="$(cat "$places_squares/places-manifest.json")"

@@ -36,8 +36,7 @@ enum PlaceSquareBuild {
         var nodes = 0
         var ways = 0
         var relations = 0
-        /// Ways and relations left out for having no position to put a pin
-        /// at.
+        /// Places left out for having no position to put a pin at.
         var withoutPositions = 0
         /// Places filed under more than one square, because their box
         /// reaches over a square's edge.
@@ -118,11 +117,14 @@ enum PlaceSquareBuild {
         let wantedNodes = Set(relations.flatMap(\.nodeIDs))
         var memberNodes: [Int64: PlaceSquareFile.Box] = [:]
         try OPLFile(path: nodesPath).forEachLine { line in
-            guard let node = try OPL.node(line, scale: PlaceSquareFile.standardCoordinateScale),
-                  let point = node.point.map(PlaceSquareFile.Box.init)
-            else { return }
-            if wantedNodes.contains(node.id) { memberNodes[node.id] = point }
+            guard let node = try OPL.node(line, scale: PlaceSquareFile.standardCoordinateScale) else { return }
+            let point = node.point.map(PlaceSquareFile.Box.init)
+            if let point, wantedNodes.contains(node.id) { memberNodes[node.id] = point }
             guard PlaceSquareFile.isPlace(.node, tags: node.tags) else { return }
+            guard let point else {
+                summary.withoutPositions += 1
+                return
+            }
             file(PlaceSquareFile.Place(element: .node, id: node.id, box: point, tags: kept(node.tags)))
             summary.nodes += 1
         }
@@ -169,9 +171,9 @@ private extension PlaceSquareBuild {
         var nodeIDs: [Int64]
     }
 
-    /// The relations that are places. osmium hands over the relations a
-    /// matching one is a member of too, whatever they are, so the tags are
-    /// asked about again here.
+    /// The relations that are places. osmium hands over every member of a
+    /// matching relation too, relations among them, whatever they are, so
+    /// the tags are asked about again here.
     static func areaRelations(at path: String) throws -> [AreaRelation] {
         var kept: [AreaRelation] = []
         try OPLFile(path: path).forEachLine { line in
