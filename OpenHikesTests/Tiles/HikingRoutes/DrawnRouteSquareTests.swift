@@ -4,8 +4,8 @@
 //
 //  A square as the layer strokes it: OpenStreetMap's short ways joined end to
 //  end where the same routes run, whichever way each was drawn, each line
-//  carrying its routes' networks and signs, and none kept that its zooms
-//  never draw.
+//  carrying its routes' networks and signs, none kept that its zooms never
+//  draw, and a line across the antimeridian taken the short way round.
 //
 
 import Foundation
@@ -60,6 +60,27 @@ struct DrawnRouteSquareTests {
         #expect(DrawnRouteSquare.joined([[Self.a, Self.b], [Self.c, Self.d]]).count == 2)
     }
 
+    @Test("ways that come back to where they started are one line, closed")
+    func loop() {
+        #expect(DrawnRouteSquare.joined([[Self.a, Self.b], [Self.c, Self.b], [Self.c, Self.a]])
+            == [[Self.a, Self.b, Self.c, Self.a]])
+    }
+
+    /// OpenStreetMap numbers ways in no walking order, so a line can grow from
+    /// either of its ends: from its first way forward, or from its last way
+    /// backward, each a few hundred times. Either way it is the same line,
+    /// running the way its first way was drawn.
+    @Test(
+        "a chain of ways is one line, whichever order the ways come in and whichever way each was drawn",
+        arguments: [(false, false), (true, false), (false, true), (true, true)]
+    )
+    func chain(lastWayFirst: Bool, eachWayReversed: Bool) {
+        let points = (0...400).map { Self.point(47_500_000, 12_900_000 + Int32($0) * 100) }
+        let ways = zip(points, points.dropFirst()).map { eachWayReversed ? [$1, $0] : [$0, $1] }
+        let joined = DrawnRouteSquare.joined(lastWayFirst ? ways.reversed() : ways)
+        #expect(joined == [eachWayReversed ? points.reversed() : points])
+    }
+
     @Test("ways are joined where the same routes run, and a line ends where a route leaves")
     func joinedAlongTheSameRoutes() {
         let drawn = DrawnRouteSquare(Self.square([
@@ -89,6 +110,49 @@ struct DrawnRouteSquareTests {
         #expect(drawn.signSizes.count == drawn.signs.count)
     }
 
+    /// Seven long routes' signs and six local ones', two of them met twice,
+    /// and named by the lines in an order of their own: the long half is
+    /// ordered by network, a tie by when its sign was first met, and each
+    /// half is cut to five apart from the other.
+    @Test("a line shows five long routes' signs, then five local ones', each half cut apart from the other")
+    func signsPerHalf() {
+        let references: [(network: String?, ref: String)] = [
+            ("lwn", "L1"), ("rwn", "R1"), (nil, "L2"), ("iwn", "E1"), ("nwn", "N1"), ("lwn", "L3"),
+            ("rwn", "R2"), ("rwn", "R1"), ("lwn", "L4"), ("nwn", "N2"), ("lwn", "L5"), ("iwn", "E2"),
+            ("lwn", "L6"), ("rwn", "R3"), ("lwn", "L1"),
+        ]
+        let file = RouteSquareFile(
+            routes: references.enumerated().map { index, route in
+                var tags = ["ref": route.ref]
+                tags["network"] = route.network
+                return RouteSquareFile.Route(id: Int64(index), tags: tags)
+            },
+            lines: [
+                RouteSquareFile.Line(
+                    network: .international,
+                    routes: Array(references.indices.reversed()),
+                    points: [Self.a, Self.b]
+                ),
+                RouteSquareFile.Line(
+                    network: .regional,
+                    routes: [12, 10, 8, 7, 5, 2, 1, 0, 14],
+                    points: [Self.c, Self.d]
+                ),
+            ],
+            coordinateScale: 1_000_000
+        )
+        let drawn = DrawnRouteSquare(file)
+        #expect(drawn.signs.count == 13, "a route whose sign was met already adds none")
+        let shown = drawn.lines.map { line in
+            line.signs.map { index -> String in
+                guard case .reference(let reference) = drawn.signs[index].content else { return "" }
+                return reference
+            }
+        }
+        #expect(shown.contains(["E1", "E2", "N1", "N2", "R1", "L1", "L2", "L3", "L4", "L5"]))
+        #expect(shown.contains(["R1", "L1", "L2", "L3", "L4", "L5"]), "one long sign leaves the local five as they are")
+    }
+
     @Test("a square keeps no line its zooms never stroke: local routes from a country's view")
     func undrawnLinesAreLeftOut() {
         let file = Self.square([([2], [Self.a, Self.b]), ([1], [Self.c, Self.d])])
@@ -110,5 +174,42 @@ struct DrawnRouteSquareTests {
         }
         let steps = zip(line.points, line.points.dropFirst()).map { hypot($1.x - $0.x, $1.y - $0.y) }
         #expect(line.length.isApproximatelyEqual(to: steps.reduce(0, +), absoluteTolerance: 1e-6))
+    }
+
+    /// Taveuni, in Fiji, is cut by the antimeridian. A way across it goes on
+    /// past the map's edge rather than back across the whole map, so its box
+    /// and its length are those of the ground it crosses: its first point
+    /// stays where the map has it, and the box reaches past the east edge for
+    /// a way that crosses eastward, past the west edge for one going west.
+    @Test(
+        "a line across the date line takes the short way round, whichever way it crosses",
+        arguments: [
+            ([179.9, -179.9], 0.2, 0.2),
+            ([-179.9, 179.9], 0.2, 0.2),
+            ([179.9, -179.9, 179.8], 0.3, 0.5),
+        ]
+    )
+    func acrossTheDateLine(longitudes: [Double], widthDegrees: Double, lengthDegrees: Double) throws {
+        let file = RouteSquareFile(
+            routes: [RouteSquareFile.Route(id: 1, tags: ["network": "nwn"])],
+            lines: [
+                RouteSquareFile.Line(
+                    network: .national,
+                    routes: [0],
+                    points: longitudes.map { Self.point(-16_800_000, Int32(($0 * 1_000_000).rounded())) }
+                ),
+            ],
+            coordinateScale: 1_000_000
+        )
+        let line = try #require(DrawnRouteSquare(file).lines.first)
+        let world = MKMapSize.world.width
+        let degree = world / 360
+        let start = try #require(line.points.first)
+        let first = MKMapPoint(CLLocationCoordinate2D(latitude: -16.8, longitude: longitudes[0]))
+        #expect(start.x.isApproximatelyEqual(to: first.x, absoluteTolerance: 1e-6))
+        #expect(line.bounds.width.isApproximatelyEqual(to: widthDegrees * degree, absoluteTolerance: 2))
+        #expect(line.length.isApproximatelyEqual(to: lengthDegrees * degree, absoluteTolerance: 2))
+        let edge = longitudes[0] > 0 ? world : 0
+        #expect(line.bounds.minX < edge && line.bounds.maxX > edge)
     }
 }

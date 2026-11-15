@@ -15,6 +15,16 @@
 //  pixel is `1 / zoomScale` map points, which is the unit the context MapKit
 //  hands a renderer is in.
 //
+//  **Both edges of the map at the antimeridian.** MapKit names every tile on
+//  the world's own copy: a map centred on the 180th meridian, on an iOS 27.2
+//  simulator, asked a world-sized overlay for the last tiles of the world
+//  and the first, and set them side by side itself. A line across the antimeridian
+//  runs off one edge of that copy (see ``DrawnRouteSquare``), so a tile
+//  draws each line and each sign where it is and a world's width to either
+//  side, and needs the squares beyond the edge its reach crosses. A tile
+//  named a world's width past the edge would be drawn just the same, so
+//  nothing here rests on which copy MapKit names a tile on.
+//
 
 import CoreGraphics
 import CoreLocation
@@ -41,23 +51,35 @@ nonisolated enum HikingRoutesDrawing {
     }
 
     /// The squares a tile needs: every square of its zoom's level that the
-    /// tile, and a line's width or a sign's reach around it, overlaps. None
-    /// where the layer draws nothing.
+    /// tile, and a line's width or a sign's reach around it, overlaps —
+    /// across the antimeridian too, at either edge of the map. None where the
+    /// layer draws nothing.
     static func neededSquares(for mapRect: MKMapRect, zoomScale: MKZoomScale) -> [RouteSquare] {
         let zoom = zoom(for: zoomScale)
         guard let level = RouteSquareLevel.level(forZoom: zoom) else { return [] }
         let reach = Double(max(HikingRoutesStyle.widestStroke(atZoom: zoom), signReach) / zoomScale)
-        let rect = mapRect.insetBy(dx: -reach, dy: -reach).intersection(.world)
+        let reached = mapRect.insetBy(dx: -reach, dy: -reach)
+        // Cut at the poles only: east and west, the grid wraps a longitude
+        // past ±180° round to the squares on the other side.
+        let rect = reached.intersection(
+            MKMapRect(x: reached.minX, y: 0, width: reached.width, height: MKMapSize.world.height)
+        )
         guard !rect.isNull, !rect.isEmpty else { return [] }
-        let northWest = MKMapPoint(x: rect.minX, y: rect.minY).coordinate
-        let southEast = MKMapPoint(x: rect.maxX, y: rect.maxY).coordinate
         let box = RouteSquareBounds(
-            south: southEast.latitude,
-            west: northWest.longitude,
-            north: northWest.latitude,
-            east: southEast.longitude
+            south: MKMapPoint(x: 0, y: rect.maxY).coordinate.latitude,
+            west: longitude(atX: rect.minX),
+            north: MKMapPoint(x: 0, y: rect.minY).coordinate.latitude,
+            east: longitude(atX: rect.maxX)
         )
         return RouteSquareGrid.squares(at: level, covering: box)
+    }
+
+    /// The longitude `x` map points across, counted on past ±180° off the
+    /// world's edge.
+    private static func longitude(atX x: Double) -> Double {
+        let width = MKMapSize.world.width
+        let turns = (x / width).rounded(.down)
+        return MKMapPoint(x: x - turns * width, y: 0).coordinate.longitude + turns * 360
     }
 
     /// Draws the part of `squares` inside `mapRect` into `context`, which is
@@ -95,10 +117,14 @@ nonisolated private extension HikingRoutesDrawing {
         let step = Double(minimumStep * pixel)
         var paths: [RouteNetworkSet: CGMutablePath] = [:]
         for square in squares {
-            for line in square.lines where line.bounds.intersects(near) {
-                let path = paths[line.networks] ?? CGMutablePath()
-                paths[line.networks] = path
-                add(line.points, to: path, skippingCloserThan: step, point: point)
+            for line in square.lines {
+                forEachWorldCopy(of: line.bounds, reaching: near) { shift in
+                    let path = paths[line.networks] ?? CGMutablePath()
+                    paths[line.networks] = path
+                    add(line.points, to: path, skippingCloserThan: step) { vertex in
+                        point(MKMapPoint(x: vertex.x + shift, y: vertex.y))
+                    }
+                }
             }
         }
         guard !paths.isEmpty else { return }
@@ -124,7 +150,8 @@ nonisolated private extension HikingRoutesDrawing {
 
     /// Draws each sign that reaches into the tile, from the list its square
     /// placed for this zoom — the same list every tile draws from, so a sign
-    /// across two tiles is whole.
+    /// across two tiles is whole, and one on the antimeridian is drawn at
+    /// both edges of the map.
     static func drawWaymarks(
         of squares: [DrawnRouteSquare],
         in mapRect: MKMapRect,
@@ -143,15 +170,32 @@ nonisolated private extension HikingRoutesDrawing {
                     width: width,
                     height: height
                 )
-                guard frame.intersects(mapRect) else { continue }
-                context.saveGState()
-                let center = point(mark.center)
-                context.translateBy(x: center.x, y: center.y)
-                context.scaleBy(x: pixel, y: pixel)
-                square.signs[mark.sign].draw(in: context)
-                context.restoreGState()
+                forEachWorldCopy(of: frame, reaching: mapRect) { shift in
+                    context.saveGState()
+                    let center = point(MKMapPoint(x: mark.center.x + shift, y: mark.center.y))
+                    context.translateBy(x: center.x, y: center.y)
+                    context.scaleBy(x: pixel, y: pixel)
+                    square.signs[mark.sign].draw(in: context)
+                    context.restoreGState()
+                }
             }
         }
+    }
+
+    /// Calls `body` with each shift `rect` is drawn at to reach `tile`: none,
+    /// and a world's width west or east, where a line runs off one edge of
+    /// the world's own copy, on which MapKit names every tile, or something
+    /// at one edge of the map reaches a tile at the other. Away from the
+    /// edges, each shifted copy is ruled out by one comparison, so a tile
+    /// tests an ordinary line or sign once. Tested in full at all three
+    /// shifts, a dense square's tiles took three to four times as long to
+    /// sort out what reaches them as with the one test before; this way,
+    /// half as long again, measured in a release build on a Mac.
+    static func forEachWorldCopy(of rect: MKMapRect, reaching tile: MKMapRect, _ body: (Double) -> Void) {
+        let width = MKMapSize.world.width
+        if rect.intersects(tile) { body(0) }
+        if rect.maxX - width > tile.minX, rect.offsetBy(dx: -width, dy: 0).intersects(tile) { body(-width) }
+        if rect.minX + width < tile.maxX, rect.offsetBy(dx: width, dy: 0).intersects(tile) { body(width) }
     }
 
     /// `points` as a subpath, leaving out each vertex closer than `step` to

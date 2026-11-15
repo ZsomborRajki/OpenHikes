@@ -222,8 +222,9 @@ nonisolated extension RouteSquareGrid {
         RouteSquare(level: level, row: row(of: latitude, at: level), column: column(of: longitude, at: level))
     }
 
-    /// Every square of `level` that overlaps `box`, which does not cross the
-    /// antimeridian. Empty for a box that is not one.
+    /// Every square of `level` that overlaps `box`, whose longitudes run west
+    /// to east and may go on past ±180°: its columns wrap round to the squares
+    /// across the antimeridian. Empty for a box that is not one.
     static func squares(at level: RouteSquareLevel, covering box: RouteSquareBounds) -> [RouteSquare] {
         guard box.south.isFinite, box.west.isFinite, box.north.isFinite, box.east.isFinite,
               box.south <= box.north, box.west <= box.east

@@ -21,15 +21,15 @@ import Testing
 @Suite("Hiking routes renderer")
 struct HikingRoutesRendererTests {
     /// The tile side MapKit draws in, in tile pixels.
-    private static let tileSide = 256.0
+    static let tileSide = 256.0
 
     /// The zoom scale MapKit draws zoom `zoom` at.
-    private static func zoomScale(_ zoom: Int) -> MKZoomScale {
+    static func zoomScale(_ zoom: Int) -> MKZoomScale {
         MKZoomScale(pow(2, Double(zoom) - 20))
     }
 
     /// The tile at `zoom` holding a point, as MapKit names its ground.
-    private static func tile(at zoom: Int, latitude: Double, longitude: Double) -> MKMapRect {
+    static func tile(at zoom: Int, latitude: Double, longitude: Double) -> MKMapRect {
         let side = MKMapSize.world.width / pow(2, Double(zoom))
         let point = MKMapPoint(CLLocationCoordinate2D(latitude: latitude, longitude: longitude))
         return MKMapRect(
@@ -159,7 +159,7 @@ struct HikingRoutesRendererTests {
 
     /// Draws `tile` the way MapKit would, into a bitmap one tile pixel a
     /// pixel.
-    private static func draw(
+    static func draw(
         _ tile: MKMapRect,
         zoomScale: MKZoomScale,
         with renderer: HikingRoutesRenderer
@@ -183,7 +183,7 @@ struct HikingRoutesRendererTests {
         return context.makeImage()
     }
 
-    private static func pixel(in image: CGImage, x: Int, y: Int) -> (red: UInt8, blue: UInt8, alpha: UInt8) {
+    static func pixel(in image: CGImage, x: Int, y: Int) -> (red: UInt8, blue: UInt8, alpha: UInt8) {
         guard let data = image.dataProvider?.data, let bytes = CFDataGetBytePtr(data) else { return (0, 0, 0) }
         let offset = y * image.bytesPerRow + x * 4
         return (bytes[offset], bytes[offset + 2], bytes[offset + 3])
