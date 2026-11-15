@@ -773,8 +773,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
     the TipKit parameter that keeps a new hiker
   - the trail squares' record names, which every installed build asks for
     (`TrailCellGridTests`; see *The trail squares*), the hiking-routes
-    layer's (`RouteSquareGridTests`; see *The hiking-routes layer*) and the
-    places' (`PlaceSquareGridTests`; see *The place squares*)
+    layer's (`RouteSquareGridTests`; see *The hiking-routes layer*), the
+    places' (`PlaceSquareGridTests`; see *The place squares*) and the trail
+    graph's (`TrailGraphSquareGridTests`; see *The trail graph squares*)
 
 ## Conventions
 
@@ -1442,7 +1443,7 @@ is world-readable, because browsing needs no account.
 | `CommunityPhotoSubmission` (offered photos) | any signed-in account / `reviewer` | **none** |
 | `CommunityPhotoContribution` (published photos) | `reviewer` / `reviewer` | `listing`, `photoSubmission`, `publishedAt` |
 | `CommunitySubmissionNotice` (the queue; `reviewer` reads it) | any signed-in account / `reviewer` | `___recordID`, `___createTime` |
-| `CuratedTrailCell` (OpenStreetMap's day hikes, the hiking-routes layer and the places, by map square) | `reviewer` / `reviewer` | **none** |
+| `CuratedTrailCell` (OpenStreetMap's day hikes, the hiking-routes layer, the places and the trail graph, by map square) | `reviewer` / `reviewer` | **none** |
 | `CuratedTrailManifest` (what the squares cover) | `reviewer` / `reviewer` | **none** |
 
 - **A submission is write-once.** A listing points at its submission, so an
@@ -1465,8 +1466,9 @@ is world-readable, because browsing needs no account.
   (`Users` grants `WRITE TO "_creator"`) is unverified, so test it before
   trusting the role in production.
 - **The last two types hold nothing a hiker made.** They are a copy of
-  OpenStreetMap's routes and places that a script uploads; see *The trail
-  squares*, *The hiking-routes layer* and *The place squares*.
+  OpenStreetMap's routes, places and trails that a script uploads; see *The
+  trail squares*, *The hiking-routes layer*, *The place squares* and *The
+  trail graph squares*.
 
 ### Rules that hold it up
 
@@ -1643,10 +1645,12 @@ by name. `TrailCellGrid` argues the design and has the measurements.
 - **The file's generation is in every record name** (`trails1_…`). An
   installed build keeps asking for the names it knows, so a file it cannot
   read goes under a new generation beside the old one, never over it.
-- **Eight of the app's files are compiled into the tool:**
+- **Eleven of the app's files are compiled into the tool:**
   `PackedBytes.swift`, `TrailCellGrid.swift`, `TrailCellFile.swift`,
   `RouteSquareGrid.swift`, `RouteSquareFile.swift`, `PlaceSquareGrid.swift`,
-  `PlaceSquareFile.swift` and `CommunitySchema.swift`. They import nothing of
+  `PlaceSquareFile.swift`, `TrailGraphSquareGrid.swift`,
+  `TrailGraphSquareFile.swift`, `TrailGraphHighway.swift` and
+  `CommunitySchema.swift`. They import nothing of
   the app's, and `Scripts/run-script-tests.sh` builds the tool, which is what
   holds them to that.
 - **Building and uploading** is `Scripts/trail-cells.sh`:
@@ -1797,6 +1801,45 @@ measurements.
   `build-places` for `build`, which writes `places-manifest.json`:
   `build-places <planet.osm.pbf> --world`, then `upload` to development,
   then to production.
+
+### The trail graph squares
+
+The trail graph a recording is matched against, a hike's surface and
+difficulty are read from and a route is coloured by is built ahead of time
+too: every trail OpenStreetMap has (`TrailGraphHighway.trails`) that may be
+walked, whole, with its nodes' ids, filed by slippy-map tile at zoom 10, one
+`CuratedTrailCell` a square named `graph1_z10_<x>_<y>`, under
+`graph1_manifest`. `TrailGraphSquareGrid` argues the design and has the
+measurements.
+
+- **Trails, never the roads that join them.** The roads were most of the
+  planet, so the squares leave them out, and nothing that reads roads may
+  read the squares. The trail maker routes over both, so it has a provider of
+  its own that asks Overpass for the whole graph, in the `TrailGraphs`
+  directory every earlier build used; every other reader shares one that asks
+  the squares first and keeps its regions in `TrailGraphTrails`
+  (`OpenHikesModel.makeDependencies`).
+- **A square answers for the sixteen regions inside it**, on the trail
+  squares' terms (*An answer is complete or it is not given*), through
+  `TrailGraphSquareLibrary`; no answer sends the region to Overpass exactly
+  as before. A square is fetched once however many regions wait on it, and
+  Overpass's `429` stops only a region that would ask Overpass.
+- **A region read from a square is the graph Overpass gives** for the same
+  trails, joined at the same node ids, so the two merge in the provider's
+  cache. `TrailGraphSquareLibraryTests` holds them to one answer, and the
+  walking and hiking-route rules are written once, in `TrailGraphSquareFile`,
+  for the decoder and the tool.
+- **A way is filed under every square its box touches**, whole, because an
+  Overpass region answers with every way that crosses it from end to end.
+- **No suite reaches the squares.** `TrailGraphSquareLibrary.forThisLaunch()`
+  is `nil` under `isRunningTests`.
+- **Building and uploading** is the trail squares' procedure with
+  `build-graph` for `build`, which writes `graph-manifest.json`. A planet's
+  trails are a billion nodes: the tool spools them to disk a few gigabytes at
+  a time, and the build needs some 60 GB of work files and about forty
+  minutes. The squares are 5 GB in 124,279 records, ten times every other set
+  together; check the public database's allowance in the CloudKit Console
+  before an upload.
 
 ## The watch app
 

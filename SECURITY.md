@@ -80,8 +80,9 @@ reporting:
   is, and a query on it is the same enumeration finding.
 - **`CuratedTrailCell`** and **`CuratedTrailManifest`** — copies of
   OpenStreetMap's waymarked day hikes, of the lines the *Hiking Routes*
-  layer draws and of the places a place search offers, filed by square of
-  the map, and for each set the one record
+  layer draws, of the places a place search offers and of the trails a
+  recording is matched against, filed by square of the map, and for each
+  set the one record
   that says what its squares cover. Nothing in either was made by a
   user. `_world` read; create and write granted to the `reviewer` role alone,
   as on `CommunityHike`; **no index on either**. A write by an account outside

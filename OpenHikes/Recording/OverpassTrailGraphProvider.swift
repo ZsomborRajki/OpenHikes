@@ -5,6 +5,12 @@
 //  Bounded OSM trail-graph prefetch and durable cache. Only the map region is
 //  sent to Overpass; the recorded trace never leaves the device.
 //
+//  A provider handed the trail graph's squares asks them first, and Overpass
+//  only for a region they cannot answer — see ``TrailGraphSquareLibrary``.
+//  The squares hold trails and not the roads that join them, so such a
+//  provider is for everything but the trail maker, which routes over both and
+//  has one of its own: see `OpenHikesModel.makeDependencies`.
+//
 
 import Algorithms
 import CoreLocation
@@ -214,6 +220,9 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
     private let endpoint: URL
     private let transport: Transport
     private let clock: @Sendable () -> Date
+    /// The pre-built squares asked before Overpass, or `nil` for a provider
+    /// that asks Overpass alone.
+    private let squares: TrailGraphSquareLibrary?
     /// Ordered least to most recently used: a hit moves its region to the
     /// back, and ``remember(_:for:)`` drops from the front past
     /// ``maximumMemoryRegions``.
@@ -235,6 +244,7 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
         .appendingPathComponent("TrailGraphs", isDirectory: true),
         endpoint: URL = OverpassRequest.defaultEndpoint,
         clock: @escaping @Sendable () -> Date = { Date() },
+        squares: TrailGraphSquareLibrary? = nil,
         transport: Transport? = nil
     ) {
         self.directory = directory
@@ -242,6 +252,7 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
                 .appendingPathComponent("OpenHikes-TrailGraphs", isDirectory: true)
         self.endpoint = endpoint
         self.clock = clock
+        self.squares = squares
         self.transport = transport ?? OverpassRequest.liveTransport()
     }
 
@@ -286,7 +297,9 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
             fetch = existing
         } else {
             guard startingIfNeeded else { return nil }
-            if let retryAfter, retryAfter > clock() {
+            // Overpass's refusal is Overpass's: a provider with squares may
+            // still have them answer, and asks before it would ask Overpass.
+            if squares == nil, let retryAfter, retryAfter > clock() {
                 throw TrailGraphProviderError.rateLimited(
                     retryAfter: retryAfter.timeIntervalSince(clock())
                 )
@@ -362,10 +375,13 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
         let fetchID = UUID()
         let capturedEndpoint = endpoint
         let capturedTransport = transport
+        let capturedSquares = squares
         let task = Task { [weak self] () throws -> TrailGraph in
             do {
-                let graph = try await Self.fetchGraph(
-                    for: key,
+                let graph = try await Self.fetchRegion(
+                    key,
+                    squares: capturedSquares,
+                    refusal: { [weak self] in await self?.overpassRefusalDelay() },
                     endpoint: capturedEndpoint,
                     transport: capturedTransport
                 )
@@ -578,6 +594,43 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
         directory.appendingPathComponent(
             "\(key.zoom)-\(key.x)-\(key.y).\(OverpassCache.fileExtension)"
         )
+    }
+}
+
+extension OverpassTrailGraphProvider {
+    /// Where a provider that asks the squares keeps its regions: apart from
+    /// the maker's, because a region read from a square holds no roads, and
+    /// the maker's own directory has to go on holding what it routes over.
+    static func trailsDirectory() -> URL? {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
+            .first?
+            .appendingPathComponent("TrailGraphTrails", isDirectory: true)
+    }
+
+    /// How long Overpass has asked to be left alone, or `nil` when it has
+    /// not — checked before Overpass is asked by a provider with squares,
+    /// which ``joinFetch(for:startingIfNeeded:)`` lets past it.
+    func overpassRefusalDelay() -> TimeInterval? {
+        guard let retryAfter, retryAfter > clock() else { return nil }
+        return retryAfter.timeIntervalSince(clock())
+    }
+
+    /// A region's graph: from the squares when they answer, and otherwise
+    /// from Overpass, unless Overpass has asked to be left alone.
+    nonisolated static func fetchRegion(
+        _ key: TrailGraphRegion,
+        squares: TrailGraphSquareLibrary?,
+        refusal: @Sendable () async -> TimeInterval?,
+        endpoint: URL,
+        transport: Transport
+    ) async throws -> TrailGraph {
+        if case .graph(let prebuilt) = await squares?.graph(for: key) ?? .uncovered {
+            return prebuilt
+        }
+        if let delay = await refusal() {
+            throw TrailGraphProviderError.rateLimited(retryAfter: delay)
+        }
+        return try await fetchGraph(for: key, endpoint: endpoint, transport: transport)
     }
 }
 

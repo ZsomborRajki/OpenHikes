@@ -63,15 +63,19 @@ struct BuildManifest: Codable {
     static let routesFileName = "routes-manifest.json"
     /// The places', under a name of its own for the same reason.
     static let placesFileName = "places-manifest.json"
+    /// The trail graph's, likewise.
+    static let graphFileName = "graph-manifest.json"
     /// Every name a build's manifest is written under.
-    static let fileNames = [fileName, routesFileName, placesFileName]
+    static let fileNames = [fileName, routesFileName, placesFileName, graphFileName]
     static let cellDirectoryName = "cells"
     static let cellFileExtension = "cell"
 
     /// Which set of squares this is: `nil` for the day hikes' — the only set
     /// there was when the first manifests were written —
-    /// `RouteSquareBuild.manifestKind` for the hiking-routes layer's, or
-    /// `PlaceSquareBuild.manifestKind` for the places'. See `Upload.Dataset`.
+    /// `RouteSquareBuild.manifestKind` for the hiking-routes layer's,
+    /// `PlaceSquareBuild.manifestKind` for the places', or
+    /// `TrailGraphSquareBuild.manifestKind` for the trail graph's. See
+    /// `Upload.Dataset`.
     var kind: String?
     var generation: Int
     /// Whether these squares are every square there is. Only then does the
@@ -89,6 +93,7 @@ struct BuildManifest: Codable {
         switch kind {
         case RouteSquareBuild.manifestKind: routesFileName
         case PlaceSquareBuild.manifestKind: placesFileName
+        case TrailGraphSquareBuild.manifestKind: graphFileName
         default: fileName
         }
     }
@@ -141,8 +146,9 @@ enum BuildError: Error, CustomStringConvertible {
                 + "not an earlier build to replace. Name an empty directory, or a previous build's."
         case .noOneManifest(let path):
             "\(path) is not a build: it needs one \(BuildManifest.fileName), for the day hikes' squares, one "
-                + "\(BuildManifest.routesFileName), for the hiking-routes layer's, or one "
-                + "\(BuildManifest.placesFileName), for the places'."
+                + "\(BuildManifest.routesFileName), for the hiking-routes layer's, one "
+                + "\(BuildManifest.placesFileName), for the places', or one "
+                + "\(BuildManifest.graphFileName), for the trail graph's."
         case .manifestUnderAnotherName(let path):
             "\(path) is not the file its kind of build writes. Build it again with this tool."
         case .cellTooLarge(let name, let bytes):

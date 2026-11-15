@@ -81,7 +81,8 @@ extension OpenHikesModel {
             locationManager: parts.locationManager,
             weatherManager: parts.weatherManager,
             significantLocations: parts.significantLocations,
-            trailGraphProvider: parts.graphProvider,
+            trailGraphProvider: parts.graphs.trails,
+            routingGraphProvider: parts.graphs.routing,
             movementReminders: parts.reminders,
             communityTransport: parts.communityTransport,
             hikingRouteSquares: HikingRouteSquares.forThisLaunch(),
@@ -310,37 +311,6 @@ extension OpenHikesModel {
             && !AppLaunchEnvironment.asksLiveMakerServices
         guard !isStubbed else { return nil }
         return StadiaElevationSource()
-    }
-
-    /// Where the maker's *Search this area* asks, or `nil` for a launch that
-    /// must not ask anything.
-    ///
-    /// Guarded on ``AppLaunchEnvironment/isRunningTests`` exactly as
-    /// ``makeCommunityTransport()`` is, and for the harder half of the same
-    /// reason: this one reaches a **volunteer-run** public API that hands out
-    /// a handful of slots per address, so a suite that fell into it would be
-    /// spending a real hiker's quota to assert on a stub's worth of rows.
-    ///
-    /// The `nil` is not a stub and is not a failure either: it withdraws the
-    /// pill, the same shape ``TrailDraftController/canSnapToPaths`` takes for
-    /// a launch with no trail graph. A control that cannot answer is worse
-    /// than no control.
-    ///
-    /// The one way past the guard is ``SeededTrailPointSource``, which a
-    /// scenario has to ask for by name — the exception
-    /// ``makeCommunityTransport()`` makes, and on the same terms.
-    static func makeTrailPointSource() -> (any TrailPointSourcing)? {
-        #if DEBUG
-        if let scenario = SeededTrailPointSource.Scenario(argument: AppLaunchEnvironment.trailPointScenarioName) {
-            return SeededTrailPointSource(scenario: scenario)
-        }
-        #endif
-        guard !AppLaunchEnvironment.isRunningTests else { return nil }
-        // The places' squares, under their own manifest: see
-        // ``PlaceSquareGrid``. Behind the same guard as Overpass, because
-        // there is no sandbox for a public database either.
-        let squares = CloudKitTrailCellDatabase(manifestRecordName: PlaceSquareGrid.manifestRecordName)
-        return TrailPointSource(squares: PlaceSquareLibrary(database: squares))
     }
 }
 
@@ -739,9 +709,9 @@ private extension OpenHikesModel {
     /// does not fit beside the assembly it feeds. It is otherwise the same
     /// code in the same order — a hoist, not a reordering, which matters
     /// because `liveActivities` and `reminders` are each shared by two
-    /// consumers and `graphProvider` by three.
+    /// consumers and the trails' graph by three.
     struct LaunchDependencies {
-        let graphProvider: OverpassTrailGraphProvider
+        let graphs: TrailGraphProviders
         let reminders: MovementReminderController?
         let backgroundTracker: BackgroundTrailTracker
         let autoSave: AutoSaveController
@@ -761,7 +731,7 @@ private extension OpenHikesModel {
     ) -> LaunchDependencies {
         // Built one at a time and in this order, and the order is load-bearing
         // below rather than cosmetic: `liveActivities` and `reminders` are
-        // handed to the recorder, and `graphProvider` to the matcher.
+        // handed to the recorder, and `graphs.trails` to the matcher.
         //
         // Last measured on a Simulator, this whole block was about 100-130 ms
         // of the main thread at launch, of which opening the SwiftData
@@ -770,7 +740,7 @@ private extension OpenHikesModel {
         // that figure no longer happens here at all: the stored reading is
         // restored after the first frame instead, from `OpenHikesView`. See
         // ``WeatherManager/restoreLastReading()``.
-        let graphProvider = OverpassTrailGraphProvider()
+        let graphs = Self.makeTrailGraphProviders()
         let liveActivities = Self.makeLiveActivityController(defaults: defaults)
         let reminders = Self.makeMovementReminderController(defaults: defaults)
         let significantLocationRegistration = Self.makeSignificantLocationRegistration()
@@ -814,7 +784,7 @@ private extension OpenHikesModel {
         )
         let recorder = Self.makeRecorder(
             container: container,
-            trailGraphProvider: graphProvider,
+            trailGraphProvider: graphs.trails,
             defaults: defaults,
             liveActivityController: liveActivities,
             movementReminders: reminders,
@@ -833,7 +803,7 @@ private extension OpenHikesModel {
         let communityTransport = Self.makeCommunityTransport()
 
         return LaunchDependencies(
-            graphProvider: graphProvider,
+            graphs: graphs,
             reminders: reminders,
             backgroundTracker: backgroundTracker,
             autoSave: autoSave,
