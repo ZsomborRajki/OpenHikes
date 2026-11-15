@@ -107,12 +107,16 @@ nonisolated final class SettingsUITests: XCTestCase {
             ]
         )
 
-        selectMap("apple_satellite", in: app)
-        element("settings-button", in: app).tap()
-        let routes = toggle("hiking-routes-toggle", in: app)
-        XCTAssertTrue(scrollIntoView(routes, in: app))
-        XCTAssertTrue(toggleIsOn(routes), "the layer is on until it is switched off")
-        app.buttons["settings-close"].tap()
+        openMapModes(in: app)
+        let satellite = element("provider-row-apple_satellite", in: app)
+        XCTAssertTrue(satellite.waitForExistence(timeout: UITestTimeout.navigation))
+        satellite.tap()
+        XCTAssertTrue(waitUntilSelected(satellite), "the tapped map should become the selected one")
+        XCTAssertTrue(
+            element("hiking-routes-on", in: app).isSelected,
+            "the layer is on until it is switched off"
+        )
+        closeMapModes(in: app)
 
         openHikeDetail(in: app)
         scrollIntoView(element("route-style-row", in: app), in: app)

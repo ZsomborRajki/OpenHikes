@@ -5,9 +5,10 @@
 //  The *Hiking Routes* switch: OpenStreetMap's marked routes over whichever
 //  map is chosen — see ``TileLayer``.
 //
-//  One view on two screens — Settings' *Map Tiles* and the trail maker's
-//  *On the Map* section — bound to the one synced setting, so flipping it on
-//  either is flipping it on both, and on the map behind the sheet.
+//  The trail maker's *On the Map* section draws it. *Map Modes* offers the
+//  same synced setting as two pictures instead (``HikingRoutesPicker``), so
+//  flipping it on either is flipping it on both, and on the map behind the
+//  sheet.
 //
 //  Not on the hike detail's *On the Map* card, deliberately: every other row
 //  there is that hike's, so a switch among them reads as this hike's, and it

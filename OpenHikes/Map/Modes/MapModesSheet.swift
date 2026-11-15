@@ -3,8 +3,9 @@
 //  OpenHikes
 //
 //  *Map Modes*: which map is drawn, chosen on the map it changes, as in Apple
-//  Maps. A row of cards, the selected map's summary, and every card's credits
-//  along the bottom.
+//  Maps. A row of cards, the selected map's summary, the *Hiking Routes*
+//  choice drawn over whichever map that is, and every card's credits along
+//  the bottom.
 //
 //  It was a section of Settings, where a tap changed a map nobody could see:
 //  Settings covers it. Here the sheet is only as tall as its cards, so the
@@ -109,6 +110,7 @@ struct MapModesView: View {
     private static let topPadding: CGFloat = 14
     private static let bottomPadding: CGFloat = 8
     private static let noteSpacing: CGFloat = 6
+    private static let headerSpacing: CGFloat = 8
 
     /// The provider the map is really drawing with, which is not always the
     /// stored one — see ``TileProvider/renderable(id:entitlement:)``. The
@@ -123,13 +125,16 @@ struct MapModesView: View {
 
     /// The map's credits and the layer's, as the line on the map draws them,
     /// then every other source a card shows imagery from: a card is that
-    /// provider's imagery too.
+    /// provider's imagery too. So is the *Hiking Routes* picture, which shows
+    /// the layer whether or not it is switched on.
     private var credits: TileAttribution? {
-        TileAttribution.drawn(
+        let pictured = TileProvider.all.filter(Secrets.canLoadTiles).map(\.attribution)
+            + [TileLayer.shown(isOn: true)].compactMap { $0?.attribution }
+        return TileAttribution.drawn(
             base: selectedProvider.attribution,
             layer: TileLayer.shown(isOn: showsHikingRoutes)?.attribution
         )?
-        .including(previews: TileProvider.all.filter(Secrets.canLoadTiles).map(\.attribution))
+        .including(previews: pictured)
     }
 
     var body: some View {
@@ -145,6 +150,7 @@ struct MapModesView: View {
                     locationManager: locationManager,
                     showPaywall: { showPaywall = true }
                 )
+                HikingRoutesPicker(showsHikingRoutes: $showsHikingRoutes)
                 footer
             }
             .padding(.top, Self.topPadding)
@@ -174,20 +180,31 @@ struct MapModesView: View {
     /// The title in the middle and the ✕ at the trailing edge, as Maps has
     /// them. The button is the place cards', which copy the same app.
     private var header: some View {
-        // A stack rather than an overlay on the title, so the row is as tall
-        // as the button and the ✕ stands inside the sheet's top edge.
-        ZStack(alignment: .trailing) {
+        // A row rather than an overlay on the title, so it is as tall as the
+        // button and the ✕ stands inside the sheet's top edge. An unseen copy
+        // of the button holds the leading side, so the title stays centered
+        // and wraps between the two at the largest text sizes rather than
+        // running under the ✕.
+        HStack(alignment: .center, spacing: Self.headerSpacing) {
+            closeButton
+                .hidden()
+                .accessibilityHidden(true)
             Text("Map Modes")
                 .font(.headline)
+                .multilineTextAlignment(.center)
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityIdentifier("map-modes-title")
                 .frame(maxWidth: .infinity)
-            Button("Close", systemImage: "xmark", action: onClose)
-                .glassButtonStyle()
-                .placeCardControl()
+            closeButton
                 .accessibilityIdentifier("map-modes-close")
         }
         .padding(.horizontal, Self.horizontalMargin)
+    }
+
+    private var closeButton: some View {
+        Button("Close", systemImage: "xmark", action: onClose)
+            .glassButtonStyle()
+            .placeCardControl()
     }
 
     /// What the glyphs on the cards mean, then the credits, last of all:
