@@ -98,7 +98,7 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 CloudSyncSection(sync: cloudSync)
-                mapProviderSection
+                subscriptionSection
                 photosSection
                 healthSection
                 BackgroundTrackingSection(
@@ -161,18 +161,18 @@ struct SettingsView: View {
         .accessibilityIdentifier("settings-screen")
     }
 
-    // MARK: Map tiles
+    // MARK: Subscription
 
     /// The subscription that unlocks the paid maps, for a subscriber alone.
     /// The maps themselves, and the hiking routes over them, are chosen on
     /// the map — see ``MapModesView`` — where a tap changes something the
     /// hiker can see.
-    @ViewBuilder private var mapProviderSection: some View {
+    @ViewBuilder private var subscriptionSection: some View {
         if entitlement.isEntitled {
             Section {
                 manageSubscriptionRow
             } header: {
-                Text("Map Tiles")
+                Text("Subscription")
             }
         }
     }

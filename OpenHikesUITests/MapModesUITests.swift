@@ -106,7 +106,7 @@ nonisolated final class MapModesUITests: XCTestCase {
     ///
     /// Skipped in a build without `OpenHikes/Secrets.plist`, where the card
     /// is disabled outright and the paywall's route is the About row — see
-    /// `SettingsUITests.testProIsReachableWithoutTheMapTilesSection`. The
+    /// `SettingsUITests.testProIsReachableWithoutMapModes`. The
     /// card's value says so before anything is tapped, and is read first:
     /// whether a disabled card reports itself disabled is the audit's
     /// business, not this skip's.

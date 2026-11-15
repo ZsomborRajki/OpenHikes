@@ -241,7 +241,7 @@ nonisolated final class SettingsUITests: XCTestCase {
     /// product and no key. Tapped, rather than merely present — a row that
     /// opens nothing is the same dead end in a different place.
     @MainActor
-    func testProIsReachableWithoutTheMapTilesSection() {
+    func testProIsReachableWithoutMapModes() {
         let app = launchApp()
 
         element("settings-button", in: app).tap()
@@ -253,7 +253,7 @@ nonisolated final class SettingsUITests: XCTestCase {
         let pro = element("about-pro-link", in: app)
         XCTAssertTrue(
             scrollIntoView(pro, in: app),
-            "Settings should offer OpenHikes Pro outside the Map Tiles section"
+            "Settings should offer OpenHikes Pro in the About section"
         )
         pro.tap()
 
@@ -265,7 +265,7 @@ nonisolated final class SettingsUITests: XCTestCase {
     }
 
     /// The row is for buying, so a subscriber does not get it — they have
-    /// *Manage Subscription* in Map Tiles, and `MapPaywallView` dismisses
+    /// *OpenHikes Pro* under Subscription, and `MapPaywallView` dismisses
     /// itself the moment the store answers, so opening it would flash a sheet
     /// shut in their face.
     @MainActor
