@@ -275,9 +275,6 @@ if [[ "${1:-}" == test-without-building ]]; then
         printf 'screenshot locale %s\n' "$TEST_RUNNER_OPENHIKES_SCREENSHOT_LOCALE" >> "$STUB_CALL_LOG"
         printf 'screenshot strings %s\n' "${TEST_RUNNER_OPENHIKES_SCREENSHOT_STRINGS:-}" >> "$STUB_CALL_LOG"
     fi
-    if [[ -n "${TEST_RUNNER_OPENHIKES_SCREENSHOT_ORIENTATION:-}" ]]; then
-        printf 'screenshot orientation %s\n' "$TEST_RUNNER_OPENHIKES_SCREENSHOT_ORIENTATION" >> "$STUB_CALL_LOG"
-    fi
     if [[ -n "${STUB_SCREENSHOT_RESULTS:-}" ]]; then
         while [[ $# -gt 0 ]]; do
             if [[ "$1" == -resultBundlePath ]]; then mkdir -p "$2"; break; fi
@@ -2558,7 +2555,7 @@ run_script "screenshots shoots map frames without location, and retries only wha
     "$screenshots_light" --frame 7 --frame 3 --no-photos --device "$pro_udid" \
     --derived-data "$screens_dd" --output "$work/screens-out"
 reset_at="$(call_line "simctl privacy $pro_udid reset location")"
-plain_at="$(call_line "testCapturesWalkHistory")"
+plain_at="$(call_line "testCapturesChoosingTheMap")"
 grant_at="$(call_line "simctl privacy $pro_udid grant location-always")"
 located_at="$(call_line "testCapturesNearbyTrails")"
 runs="$(printf '%s\n' "$calls" | grep -c "xcodebuild test-without-building" || true)"
@@ -2722,7 +2719,7 @@ fi
 run_script "screenshots selects a repeated frame only once" \
     "$screenshots_light" --frame 7 --frame 07 --no-photos --no-retry --prepared-device "$pro_udid" \
     --pool-owner screenshot-tests --derived-data "$screens_dd" --output "$work/screens-out"
-selections="$(printf '%s\n' "$calls" | grep -o 'only-testing:OpenHikesUITests/ScreenshotUITests/testCapturesWalkHistory' \
+selections="$(printf '%s\n' "$calls" | grep -o 'only-testing:OpenHikesUITests/ScreenshotUITests/testCapturesChoosingTheMap' \
     | wc -l | tr -d ' ')"
 if expect_status 1; then
     if [[ "$selections" == 1 ]]; then pass; else fail "selected the repeated frame $selections times" "$calls"; fi
@@ -2826,51 +2823,23 @@ if expect_status 2 \
     pass
 fi
 
-run_script "screenshots refuses an orientation for any pose but open, before touching a device" \
-    "$screenshots_light" --pose closed --orientation landscape --device "$pro_udid"
+run_script "screenshots takes no orientation: an open Duo is on its side, every other set upright" \
+    "$screenshots_light" --pose open --orientation portrait --device-type "iPhone Duo" --device "$pro_udid"
 if expect_status 2 \
-    && expect_contains "$output" "--orientation needs --pose open" "the error" \
+    && expect_contains "$output" "Unknown option: --orientation" "the error" \
     && expect_absent "$calls" "simctl erase" "the recorded calls"; then
     pass
 fi
 
-# An iPad has no pose to take, so the test class turns it, and is told which
-# way through its runner's environment. An iPhone's run tells it nothing: an
-# open iPhone Duo is turned before the build, by Scripts/duo-pose.sh.
-run_script "screenshots shoots an iPad upright unless asked, and tells its runner which way" \
+# An iPad is shot upright and only upright: a landscape set beside a portrait
+# one looked wrong in the App Store's gallery. See *The iPad* at the top of
+# Scripts/lib/screenshots.sh.
+run_script "screenshots shoots an iPad upright, into a set named for the device alone" \
     "$screenshots_light" --frame 7 --no-photos --no-retry --device "$pro_udid" \
     --device-type 'iPad Pro 13-inch (M5)' --derived-data "$screens_dd" --output "$work/screens-out"
 if expect_status 1 \
-    && expect_contains "$calls" "screenshot orientation portrait" "the runner environment" \
-    && expect_contains "$output" "ipad_pro_13_inch_m5_portrait_en_ie_$screenshot_test_date/light" "the output"; then
-    pass
-fi
-
-run_script "screenshots shoots an iPad on its side when asked" \
-    "$screenshots_dark" --frame 7 --no-photos --no-retry --device "$pro_udid" \
-    --device-type 'iPad Pro 13-inch (M5)' --orientation landscape \
-    --derived-data "$screens_dd" --output "$work/screens-out"
-if expect_status 1 \
-    && expect_contains "$calls" "screenshot orientation landscape" "the runner environment" \
-    && expect_contains "$output" "ipad_pro_13_inch_m5_landscape_en_ie_$screenshot_test_date/dark" "the output"; then
-    pass
-fi
-
-TEST_RUNNER_OPENHIKES_SCREENSHOT_ORIENTATION=landscape \
-    run_script "screenshots asks an iPhone's runner for no orientation, whatever its caller exported" \
-    "$screenshots_light" --frame 7 --no-photos --no-retry --device "$pro_udid" \
-    --derived-data "$screens_dd" --output "$work/screens-out"
-if expect_status 1 \
     && expect_contains "$calls" "xcodebuild test-without-building" "the recorded calls" \
-    && expect_absent "$calls" "screenshot orientation" "the runner environment"; then
-    pass
-fi
-
-run_script "screenshots refuses an orientation on an iPhone that has no pose, before touching a device" \
-    "$screenshots_light" --orientation landscape --device "$pro_udid"
-if expect_status 2 \
-    && expect_contains "$output" "--orientation needs --pose open or an iPad" "the error" \
-    && expect_absent "$calls" "simctl erase" "the recorded calls"; then
+    && expect_contains "$output" "ipad_pro_13_inch_m5_en_ie_$screenshot_test_date/light" "the output"; then
     pass
 fi
 
@@ -3045,12 +3014,12 @@ if expect_status 0 \
     pass
 fi
 
-# Open and upright, where the run asked for landscape: the orientation has to
-# reach Scripts/duo-pose.sh, whose read-back then stops the run before it
+# Open and upright, where an open set is shot on its side: the orientation has
+# to reach Scripts/duo-pose.sh, whose read-back then stops the run before it
 # builds, rather than a landscape set coming out upright.
 STUB_DISPLAYS="$work/displays-open.json" \
-    run_script "screenshots asks for the orientation it was given, and stops when it is not taken" \
-    "$screenshots_light" --frame 7 --pose open --orientation landscape --no-photos --device "$pro_udid" \
+    run_script "screenshots opens the Duo on its side, and stops when it does not turn" \
+    "$screenshots_light" --frame 7 --pose open --no-photos --device "$pro_udid" \
     --derived-data "$screens_dd" --output "$work/screens-out"
 if expect_status 1 \
     && expect_contains "$output" "The inner display did not turn to landscape" "the output" \

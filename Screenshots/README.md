@@ -9,8 +9,8 @@ reasoning behind the parts that are not obvious.
 uploads a single 6.9" iPhone set — 1320 × 2868 — and every smaller iPhone size
 is scaled from it. The iPhone Duo has a slot of its own; see *The iPhone Duo
 set* below. OpenHikes builds for iPad too, and App Store Connect will not take
-an iPad build without a 13-inch iPad set, 2064 × 2752 either way up; see *The
-iPad set*.
+an iPad build without a 13-inch iPad set, 2064 × 2752 upright; see *The iPad
+set*.
 
 **Between one and ten of them.** Not ten: only the first three appear in search
 results, and every frame past the first few is one more thing to re-shoot when
@@ -30,7 +30,7 @@ rather than the order they are worth.
 | 4 | `04-following-the-trail` | Where on the walk you are, and how much of it is left |
 | 5 | `05-recording-a-hike` | It records, with the figures and the line two hours in |
 | 6 | `06-the-trail-in-3d` | The walk on a tilted map, the mountains risen under it, on Thunderforest Outdoors — OpenHikes Pro |
-| 7 | `07-walk-summary` | A trail walked end to end |
+| 7 | `07-choose-your-map` | Every map the walk can be drawn on, chosen over the map it changes |
 | 8 | `08-draw-your-own-trail` | Plan Saturday: search three places and walk between them |
 | 9 | `09-a-place-and-its-photos` | A place on the walk, kept with its own photographs |
 | 10 | `10-share-a-hike` | The walk as a picture to send: its figures and line over one of its photographs |
@@ -115,6 +115,16 @@ flat on Stadia Outdoors before that, and the offline frame before that: the
 hike's screen raised over the very map it was about, with an idle *Offline*
 button the only sign of the feature. The button is not pressed in any frame: a
 route's download is up to four thousand billed Stadia tiles.
+
+**07, Map Modes**, is the sheet the map is chosen on, raised over the hero's
+walk: the walk opened and fitted with *Zoom*, the map sheet lowered, and *Map
+Modes* opened from the pill on the map. Its cards preview the ground the map
+is on, and with no location granted that is `TilePreviewFrame`'s fallback,
+which is this valley, so each card is a picture of the ground under it. The
+frame is shot without `--ui-test-entitled`, so the paid maps carry their locks
+and the sheet says they need OpenHikes Pro, rather than the frame showing
+every map as included. It replaced the summary of a finished walk, which frame
+10 still passes through on its way to the share card.
 
 **08, the drawn trail**, is the walk frame 1 is of, planned rather than
 imported: *Schönau am Königssee*, *Kühroint* and *St. Bartholomä*, picked from
@@ -390,8 +400,7 @@ a gesture known to disturb the screen and correct afterwards.
 
 ## Before uploading
 
-- The iPhone frames are 1320 × 2868, and the iPad's 2064 × 2752 or
-  2752 × 2064. The scripts print each one's size; anything else is the wrong
+- The iPhone frames are 1320 × 2868, and the iPad's 2064 × 2752. The scripts print each one's size; anything else is the wrong
   device.
 - The OpenStreetMap attribution has to stay visible in every map frame. It is a
   licence condition, not decoration.
@@ -411,17 +420,19 @@ a gesture known to disturb the screen and correct afterwards.
 # Closed: the cover display, 1398 × 2034
 Scripts/screenshots.sh --device "OpenHikes Screenshots Duo" --device-type "iPhone Duo" \
     --pose closed --append
-# Open: the inner display, upright, 2007 × 2853
-Scripts/screenshots.sh --device "OpenHikes Screenshots Duo" --device-type "iPhone Duo" \
-    --pose open --append
 # Open the way it unfolds: the inner display in landscape, 2853 × 2007
 Scripts/screenshots.sh --device "OpenHikes Screenshots Duo" --device-type "iPhone Duo" \
-    --pose open --orientation landscape --append
+    --pose open --append
 ```
 
 App Store Connect takes an iPhone Duo frame of either display, either way up:
 1398 × 2034 or 2034 × 1398 from the cover, 2007 × 2853 or 2853 × 2007 from the
-inner one. The same ten frames are shot on each, from the same test class, so a
+inner one. Two of those are shot: the cover upright, and the inner display on
+its side. The inner display upright used to be shot too, and dropped, for the
+reason the iPad's landscape set was (*The iPad set*): one device's frames are
+one gallery, and two orientations in it looked wrong. The cover's set is
+upright and the open one is not, so upload one or the other to the Duo slot,
+not both. The same ten frames are shot on each, from the same test class, so a
 frame that breaks on the Duo is a frame that breaks — the Duo is the same app
 in a window of another shape, which is the point of shooting it. Their named
 output directories keep them separate from the 6.9" set, whose file names they
@@ -435,9 +446,8 @@ system's models, then clones.
 **Opening it.** A simulator boots closed, and Xcode 27.1 opens a Duo only by
 hand, in Device Hub. `--pose open` runs `Scripts/duo-pose.sh` on the clean
 device, which has hinge post the event Device Hub's hinge slider posts and
-reads the display state back: open, with the inner display upright — or on
-its side with `--orientation landscape`, the way it unfolds — or the run
-stops. hinge is an optional tool (*The iPhone Duo* in `AGENTS.md`), and on a
+reads the display state back: open, with the inner display on its side, the
+way it unfolds, or the run stops. hinge is an optional tool (*The iPhone Duo* in `AGENTS.md`), and on a
 machine without it an open set is skipped, with a message saying so, before a
 simulator is touched. One unfold from cold is what that script can be relied
 on for; see its header for the one that did not take, and what folding back
@@ -497,35 +507,27 @@ maker returns to its middle detent after searching so its route stays visible.
 # Upright, 2064 × 2752
 Scripts/screenshots.sh --device "OpenHikes Screenshots iPad" \
     --device-type "iPad Pro 13-inch (M5)" --append
-# On its side, 2752 × 2064
-Scripts/screenshots.sh --device "OpenHikes Screenshots iPad" \
-    --device-type "iPad Pro 13-inch (M5)" --orientation landscape --append
 ```
 
-App Store Connect takes a 13-inch iPad frame at 2064 × 2752 or 2752 × 2064,
-which is what an iPad Pro 13-inch (M5) simulator captures, and scales every
-smaller iPad's from it. The same ten frames are shot from the same test class,
-into `ipad_pro_13_inch_m5_portrait_en_ie_YYYY_MM_DD/` or `…_landscape_…`. Add
-`--locale de_DE` for German.
+App Store Connect takes a 13-inch iPad frame at 2064 × 2752, which is what an
+iPad Pro 13-inch (M5) simulator captures upright, and scales every smaller
+iPad's from it. The same ten frames are shot from the same test class, into
+`ipad_pro_13_inch_m5_en_ie_YYYY_MM_DD/`. Add `--locale de_DE` for German.
 
-**The test class turns the device.** An iPad has nothing to open, so there is
-no `--pose`: the script tells the runner which way up it was asked for
-(`OPENHIKES_SCREENSHOT_ORIENTATION`), and `ScreenshotUITests` turns the device
-once, before its frames run, so the app opens that way up in each, and turns
-it upright again after them. An iPhone's run tells it nothing.
+**Upright only.** App Store Connect takes 2752 × 2064 too, and the set used to
+be shot both ways up. But the App Store draws a device's frames as one gallery,
+and the landscape ones looked wrong in it beside the portrait ones, so only
+the open iPhone Duo is shot on its side.
 
-**Either way up is the side panel**, since an iPad is wide enough for a map
-beside it upright too (*The map screen* in `AGENTS.md`). The frames come out
-in the shape the open Duo's landscape set has, with three differences:
+**Upright is the side panel**, since an iPad is wide enough for a map beside
+it (*The map screen* in `AGENTS.md`). The frames come out in the shape the
+open Duo's landscape set has, with two differences:
 
 - Upright, the panel is tall enough to show the chart and the gallery at
   once, so frame 02 is left as it stands rather than scrolled until the
   gallery meets the panel's bottom edge, which nothing could bring it to.
 - The nearby frame keeps OpenStreetMap. The open Duo's switches to Apple Maps
   for a raster row that stalls there, and an iPad's has not stalled.
-- The nearby frame steps out by the ground its map shows rather than by a
-  count of steps. The map opens on the same ground whatever draws it, so an
-  iPad on its side takes two steps to the scale the phone reaches in one.
 
 `isHittable` answers no for everything in the panel on an iPad, as on the
 open Duo on its side, so the shared helpers take a centre in the window as
@@ -633,12 +635,16 @@ because the app is genuinely gone.
 
 ## The home page
 
-The site's home page, `docs/index.html`, shows five of the iPhone frames —
-04, 05, 08, 03 and 07, from the English light set — and watch frames 03 and
-04, as WebP copies in `docs/images/`. Frames 01, 02, 06, 09 and 10 are not
-among them: they carry the stock photographs, which stay out of this
-repository's history (*Photographs*). Frame 08 shows a Pro feature, the drawn
-trail's climb, so the page's Pro paragraph has to keep naming elevation.
+The site's home page, `docs/index.html`, shows four of the iPhone frames —
+04, 05, 08 and 03, from the English light set — and watch frames 03 and 04,
+as WebP copies in `docs/images/`. Frames 01, 02, 06, 09 and 10 are not among
+them: they carry the stock photographs, which stay out of this repository's
+history (*Photographs*). Frame 08 shows a Pro feature, the drawn trail's
+climb, so the page's Pro paragraph has to keep naming elevation.
+
+The page's fifth phone picture, `07-walk-summary.webp`, is the summary of a
+finished walk, which frame 07 shot before it became *Map Modes*. No frame
+shoots it now, so a reshoot leaves it as it is.
 
 After a reshoot, remake the copies from the new sets with `cwebp`, from
 Homebrew's `webp`:
@@ -646,7 +652,7 @@ Homebrew's `webp`:
 ```sh
 phone=Screenshots/Output/iphone_18_pro_max_en_ie_YYYY_MM_DD/light
 for frame in 03-nearby-trails 04-following-the-trail 05-recording-a-hike \
-    07-walk-summary 08-draw-your-own-trail; do
+    08-draw-your-own-trail; do
   cwebp -q 82 -m 6 -sharp_yuv -resize 600 0 "$phone/$frame.png" -o "docs/images/$frame.webp"
 done
 watch=Screenshots/Output/apple_watch_ultra_4_49mm_en_ie_YYYY_MM_DD
