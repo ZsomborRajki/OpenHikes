@@ -43,7 +43,8 @@
 #             squares in <dir> (default .build/trail-cells/routes), four levels
 #             of them: see OpenHikes/Tiles/HikingRoutes/RouteSquareGrid.swift.
 #             --world, --out and --keep-work as for build. `upload` sends either
-#             kind of build; each has a manifest record of its own.
+#             kind of build; each has a manifest record of its own, and the
+#             layer's build writes routes-manifest.json, never manifest.json.
 #   upload    Make the public database hold what <dir> does: send the squares
 #             that changed, delete the ones that are gone, then say what the
 #             squares cover. --dry-run reads and plans, and changes nothing.
