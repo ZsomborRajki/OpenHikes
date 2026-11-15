@@ -60,6 +60,27 @@ struct DrawnRouteSquareTests {
         #expect(DrawnRouteSquare.joined([[Self.a, Self.b], [Self.c, Self.d]]).count == 2)
     }
 
+    @Test("ways that come back to where they started are one line, closed")
+    func loop() {
+        #expect(DrawnRouteSquare.joined([[Self.a, Self.b], [Self.c, Self.b], [Self.c, Self.a]])
+            == [[Self.a, Self.b, Self.c, Self.a]])
+    }
+
+    /// OpenStreetMap numbers ways in no walking order, so a line can grow from
+    /// either of its ends: from its first way forward, or from its last way
+    /// backward, each a few hundred times. Either way it is the same line,
+    /// running the way its first way was drawn.
+    @Test(
+        "a chain of ways is one line, whichever order the ways come in and whichever way each was drawn",
+        arguments: [(false, false), (true, false), (false, true), (true, true)]
+    )
+    func chain(lastWayFirst: Bool, eachWayReversed: Bool) {
+        let points = (0...400).map { Self.point(47_500_000, 12_900_000 + Int32($0) * 100) }
+        let ways = zip(points, points.dropFirst()).map { eachWayReversed ? [$1, $0] : [$0, $1] }
+        let joined = DrawnRouteSquare.joined(lastWayFirst ? ways.reversed() : ways)
+        #expect(joined == [eachWayReversed ? points.reversed() : points])
+    }
+
     @Test("ways are joined where the same routes run, and a line ends where a route leaves")
     func joinedAlongTheSameRoutes() {
         let drawn = DrawnRouteSquare(Self.square([
