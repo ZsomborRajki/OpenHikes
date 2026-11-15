@@ -4371,15 +4371,19 @@ fi
 # is a stage of a national trail, which is the trail and not one more route,
 # and the trail is part of an E-path, which is one more, so the way is the
 # trail's, the E-path's and the unmarked route's, and international enough
-# for the overview. And a route that is only proposed is not filed at all.
-# The ways with no network on them are too local for a country's view, so
-# the region level has way 14's square alone.
+# for the overview. A route that is only proposed is not filed at all, and nor
+# is a network of the trail's own network that lists it: a network gathers
+# routes and is not one, and taken for one it would be the trail's topmost
+# relation, and the trail's name and sign would go. The ways with no network
+# on them are too local for a country's view, so the region level has way
+# 14's square alone.
 {
     cat "$cells_work/relations.opl"
     printf '%s\n' 'r108 Tname=Trail,network=nwn,route=hiking,type=superroute Mr109@'
     printf '%s\n' 'r109 Tname=Stage,network=nwn,ref=S1,route=hiking Mw14@'
     printf '%s\n' 'r110 Tname=E-Path,network=iwn,ref=E1,route=hiking,type=superroute Mr108@'
     printf '%s\n' 'r111 Tname=Planned,ref=P1,route=hiking,state=proposed Mw14@'
+    printf '%s\n' 'r112 Tname=Every%20%Trail,network=nwn,route=hiking,type=network Mr108@'
 } > "$cells_work/routes-relations.opl"
 routes_squares="$cells_work/routes"
 STUB_OSMIUM_RELATIONS="$cells_work/routes-relations.opl" \
@@ -4390,16 +4394,20 @@ if expect_status 0 \
     && expect_contains "$calls" \
         "osmium tags-filter $cells_work/extract.osm.pbf r/route=hiking -o $routes_squares.work/hiking.osm.pbf --overwrite" \
         "the recorded calls" \
-    && expect_contains "$output" "Read 12 relations: 10 hiking routes, 4 ways and 8 points." "the summary" \
+    && expect_contains "$output" "Read 13 relations: 10 hiking routes, 4 ways and 8 points." "the summary" \
     && expect_contains "$output" "overview (zoom 7 on): 1 squares" "the summary" \
     && expect_contains "$output" "region (zoom 10 on): 1 squares" "the summary" \
     && expect_contains "$output" "detail (zoom 14 on): 3 squares" "the summary" \
     && expect_contains "$output" "Marked complete" "the summary"; then
-    routes_manifest="$(cat "$routes_squares/manifest.json")"
+    routes_manifest="$(cat "$routes_squares/routes-manifest.json")"
     if [[ "$(ls "$routes_squares/cells")" != "$routes_expected_files" ]]; then
         fail "the squares are not the ones the ways are in" "$(ls "$routes_squares/cells")"
     elif [[ "$routes_manifest" != *'"kind" : "routes"'* || "$routes_manifest" != *'"complete" : true'* ]]; then
         fail "the manifest does not say it is the layer's, or that it is the world" "$routes_manifest"
+    elif [[ -e "$routes_squares/manifest.json" ]]; then
+        # The one name a tool from before the layer reads: it would take
+        # these squares for the day hikes', and delete every one of theirs.
+        fail "the layer's manifest was written where the day hikes' goes"
     else
         pass
     fi
@@ -4416,15 +4424,15 @@ if expect_status 0 \
     pass
 fi
 
-run_script "trail-cells build-routes files a stage under the routes it is a stage of, and no proposed route" \
+run_script "trail-cells build-routes files a stage under the routes it is a stage of, and no proposed route or network" \
     "$trail_cells" inspect "$routes_squares/cells/routes1_z14_544_776.cell"
 if expect_status 0 \
     && expect_contains "$output" "scale 1000000, 3 routes, 1 lines, 2 points" "the square" \
     && expect_contains "$output" $'107\t-\t-\tElsewhere' "the square" \
     && expect_contains "$output" $'108\tnwn\t-\tTrail' "the square" \
     && expect_contains "$output" $'110\tiwn\tE1\tE-Path' "the square"; then
-    if [[ "$output" == *Stage* || "$output" == *Planned* ]]; then
-        fail "the stage or the proposed route was filed as a route of its own" "$output"
+    if [[ "$output" == *Stage* || "$output" == *Planned* || "$output" == *"Every Trail"* ]]; then
+        fail "the stage, the proposed route or the network was filed as a route of its own" "$output"
     else
         pass
     fi
@@ -4451,7 +4459,8 @@ run_script "trail-cells upload plans the hiking-routes layer's squares under its
     "$trail_cells" upload "$routes_squares" --environment development --dry-run --against "$cells_work/routes-remote.json"
 if expect_status 0 \
     && expect_contains "$output" \
-        "iCloud.tappium.com.OpenHikes, development: 7 squares to upload, 0 to delete, 0 unchanged." "the plan"; then
+        "iCloud.tappium.com.OpenHikes, development, routes1_manifest: 7 squares to upload, 0 to delete, 0 unchanged." \
+        "the plan"; then
     pass
 fi
 
@@ -4541,9 +4550,41 @@ run_script "trail-cells upload plans to send what changed, delete what is gone a
     "$trail_cells" upload "$cells_squares" --environment development --dry-run --against "$cells_work/remote.json"
 if expect_status 0 \
     && expect_contains "$output" \
-        "iCloud.tappium.com.OpenHikes, development: 1 squares to upload, 1 to delete, 1 unchanged." "the plan" \
+        "iCloud.tappium.com.OpenHikes, development, trails1_manifest: 1 squares to upload, 1 to delete, 1 unchanged." \
+        "the plan" \
     && expect_absent "$output" "no longer the whole world" "the plan of a world refreshed with a world" \
     && expect_contains "$output" "nothing was changed" "the output"; then
+    pass
+fi
+
+# A tool from before there were two sets would take the layer's build for the
+# day hikes' and list the layer's squares under the day hikes' manifest. The
+# next upload of the day hikes leaves those records alone rather than delete
+# a square of the layer's for every one it does not have.
+cat > "$cells_work/remote-mixed.json" <<EOF
+{
+  "manifestExists": true,
+  "complete": true,
+  "listed": ["trails1_550_771", "routes1_z14_550_771", "routes1_z7_34_48"],
+  "digests": { "trails1_550_771": "$cells_digest", "routes1_z14_550_771": "0000", "routes1_z7_34_48": "0000" }
+}
+EOF
+run_script "trail-cells upload leaves alone the other set's squares that a manifest lists" \
+    "$trail_cells" upload "$cells_squares" --environment development --dry-run --against "$cells_work/remote-mixed.json"
+if expect_status 0 \
+    && expect_contains "$output" "Leaving alone 2 records trails1_manifest lists that are not its squares." "the plan" \
+    && expect_contains "$output" ", trails1_manifest: 1 squares to upload, 0 to delete, 1 unchanged." "the plan"; then
+    pass
+fi
+
+# A build whose manifest names the other set's squares is not uploaded under
+# this one's: here the layer's build, with its kind taken off.
+mkdir -p "$cells_work/routes-as-trails"
+sed 's/"kind" : "routes",//' "$routes_squares/routes-manifest.json" > "$cells_work/routes-as-trails/manifest.json"
+run_script "trail-cells upload refuses a build that lists another set's squares" \
+    "$trail_cells" upload "$cells_work/routes-as-trails" --environment development --dry-run \
+    --against "$cells_work/remote.json"
+if expect_status 1 && expect_contains "$output" "which is not one of the squares under trails1_manifest" "the error"; then
     pass
 fi
 
@@ -4551,14 +4592,15 @@ fi
 # everywhere else, and send every search back to Overpass.
 run_script "trail-cells upload refuses to put a region where the whole world is" \
     "$trail_cells" upload "$cells_work/region" --environment production --dry-run --against "$cells_work/remote.json"
-if expect_status 1 && expect_contains "$output" "--replace-world" "the error"; then
+if expect_status 1 && expect_contains "$output" "--replace-world" "the error" \
+    && expect_contains "$output" "send every search back to Overpass" "the error"; then
     pass
 fi
 
 run_script "trail-cells upload replaces the world with a region when it is told that is meant" \
     "$trail_cells" upload "$cells_work/region" --environment production --dry-run --replace-world \
     --against "$cells_work/remote.json"
-if expect_status 0 && expect_contains "$output" ", production: 1 squares to upload, 1 to delete" "the plan" \
+if expect_status 0 && expect_contains "$output" ", production, trails1_manifest: 1 squares to upload, 1 to delete" "the plan" \
     && expect_contains "$output" "Before any square is touched" "the plan"; then
     pass
 fi
@@ -4581,7 +4623,8 @@ EOF
 run_script "trail-cells upload stops calling the squares the whole world before it deletes one, with no name to list" \
     "$trail_cells" upload "$cells_work/region" --environment production --dry-run --replace-world \
     --against "$cells_work/remote-world.json"
-if expect_status 0 && expect_contains "$output" ", production: 0 squares to upload, 1 to delete, 2 unchanged." "the plan" \
+if expect_status 0 && expect_contains "$output" ", production, trails1_manifest: 0 squares to upload, 1 to delete, 2 unchanged." \
+    "the plan" \
     && expect_contains "$output" "Before any square is touched" "the plan"; then
     pass
 fi

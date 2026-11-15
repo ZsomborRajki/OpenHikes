@@ -1604,7 +1604,9 @@ beside them. `RouteSquareGrid` argues the design and has the measurements.
   most important network among them, and files it at four levels of detail,
   each simplified to what its zooms show and holding the networks they draw
   (`RouteSquareLevel`). Nothing is left out for being long, unnamed or big;
-  a route OpenStreetMap calls proposed is.
+  a route OpenStreetMap calls proposed is, and so is a relation whose `type`
+  is not `route` or `superroute`: a `network` tagged `route=hiking` gathers
+  routes and is none of them.
 - **A way is drawn as its topmost relations.** A stage relation inside a
   relation of its own network is that route, not one more, so its ways are
   filed under the whole route alone; a relation inside one of another
@@ -1614,9 +1616,12 @@ beside them. `RouteSquareGrid` argues the design and has the measurements.
 - **The trail squares' record types and upload, under names of their own.**
   A routes square is a `CuratedTrailCell` named `routes1_z<zoom>_<row>_<col>`,
   and the layer's manifest is `routes1_manifest`. The build's manifest says
-  `"kind": "routes"`, and `upload` reads that to choose the manifest record,
-  so an upload of one set never reads, lists or deletes the other's. No
-  schema change was needed.
+  `"kind": "routes"`, and `upload` reads that to choose the manifest record.
+  It is written to `routes-manifest.json`, never `manifest.json`, because a
+  tool from before the layer reads only that name and no `kind`, and would
+  take the layer's squares for the day hikes'. An upload leaves alone any
+  name its manifest lists that is not one of its own set's squares, and
+  refuses a build that lists one. No schema change was needed.
 - **Drawn only from a set that is the whole world**, for the reason *An
   answer is complete or it is not given* is: until then a missing record means
   nothing, and the layer draws nothing (`HikingRouteSquares`).

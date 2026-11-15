@@ -88,8 +88,14 @@ enum RouteSquareBuild {
 /// in a square are: the relations it is drawn as, not the ones that name it.
 ///
 /// A route OpenStreetMap calls proposed is left out: nothing marks it on the
-/// ground yet.
+/// ground yet. So is a relation of any type but a route's: a `network` or a
+/// `collection` tagged `route=hiking` gathers a region's routes and is none of
+/// them, and taken for one it would be the topmost relation of every route it
+/// lists of its own network, whose numbers and waymarks would be lost under
+/// its name. One with no type at all is taken for the route it is tagged as.
 private struct RouteCatalogue {
+    private static let routeTypes: Set<String?> = ["route", "superroute", nil]
+
     private(set) var ids: [Int64] = []
     private(set) var tags: [[String: String]] = []
     private var networks: [RouteNetwork] = []
@@ -102,7 +108,9 @@ private struct RouteCatalogue {
             summary.relationsRead += 1
             // osmium hands over a hiking relation's member relations too,
             // whatever they are, so the tag is asked about again here.
-            guard relation.tags["route"] == "hiking", relation.tags["state"] != "proposed" else { return }
+            guard relation.tags["route"] == "hiking", relation.tags["state"] != "proposed",
+                  Self.routeTypes.contains(relation.tags["type"])
+            else { return }
             relations.append(relation)
         }
         relations.sort { $0.id < $1.id }
