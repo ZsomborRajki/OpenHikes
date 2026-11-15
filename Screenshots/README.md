@@ -635,16 +635,14 @@ because the app is genuinely gone.
 
 ## The home page
 
-The site's home page, `docs/index.html`, shows four of the iPhone frames —
-04, 05, 08 and 03, from the English light set — and watch frames 03 and 04,
-as WebP copies in `docs/images/`. Frames 01, 02, 06, 09 and 10 are not among
-them: they carry the stock photographs, which stay out of this repository's
-history (*Photographs*). Frame 08 shows a Pro feature, the drawn trail's
-climb, so the page's Pro paragraph has to keep naming elevation.
-
-The page's fifth phone picture, `07-walk-summary.webp`, is the summary of a
-finished walk, which frame 07 shot before it became *Map Modes*. No frame
-shoots it now, so a reshoot leaves it as it is.
+The site's home page, `docs/index.html`, shows five of the iPhone frames —
+04, 05, 08, 03 and 07, from the English light set — and watch frames 03 and
+04, as WebP copies in `docs/images/`. Frames 01, 02, 06, 09 and 10 are not
+among them: they carry the stock photographs, which stay out of this
+repository's history (*Photographs*). Frame 08 shows a Pro feature, the drawn
+trail's climb, so the page's Pro paragraph has to keep naming elevation.
+Frame 07 shows the other maps' previews beside OpenStreetMap's, credited in
+its own bottom row, so the page's footer says they are credited there.
 
 After a reshoot, remake the copies from the new sets with `cwebp`, from
 Homebrew's `webp`:
@@ -652,7 +650,7 @@ Homebrew's `webp`:
 ```sh
 phone=Screenshots/Output/iphone_18_pro_max_en_ie_YYYY_MM_DD/light
 for frame in 03-nearby-trails 04-following-the-trail 05-recording-a-hike \
-    08-draw-your-own-trail; do
+    07-choose-your-map 08-draw-your-own-trail; do
   cwebp -q 82 -m 6 -sharp_yuv -resize 600 0 "$phone/$frame.png" -o "docs/images/$frame.webp"
 done
 watch=Screenshots/Output/apple_watch_ultra_4_49mm_en_ie_YYYY_MM_DD
