@@ -9,7 +9,8 @@
 //  recording has anything to say in: a card of figures at the top and glass
 //  under it down to the bottom edge, over map the hiker could have been
 //  reading. So at a regular height the panel is as tall as the screen on top
-//  of the sheet's stack needs, and stands in the middle of the leading edge.
+//  of the sheet's stack needs, and stands at the top of the leading edge, so
+//  the search field and the bar stay where they were as it changes height.
 //
 //  ## What a screen asks for
 //
@@ -31,9 +32,9 @@
 //  on the answer has nothing to chase.
 //
 //  The keyboard is in none of them. The panel is laid out inside the safe
-//  area, the keyboard's included, so it stands in the middle of what is left
-//  above the keys and is never under them; a list of suggestions longer than
-//  that is given all of it, and scrolls.
+//  area, the keyboard's included, so it is never under the keys; a list of
+//  suggestions longer than what is left above them is given all of it, and
+//  scrolls.
 //
 //  ## Which screen is asked
 //

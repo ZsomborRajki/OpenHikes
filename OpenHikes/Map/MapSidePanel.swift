@@ -28,7 +28,7 @@
 //  How tall it stands depends on what the window has. A compact height is
 //  less than nearly every screen wants, so there the panel is the window's.
 //  Where there is height to spare — an iPad, an unfolded iPhone Duo on its
-//  side — it stands as tall as the screen on top needs, in the middle of the
+//  side — it stands as tall as the screen on top needs, at the top of the
 //  leading edge: a recording's card of figures is a third of an iPad's
 //  height, and the rest was a slab of glass over map. ``SidePanelFit`` has
 //  the measuring. The map's controls keep the panel's width clear either
@@ -104,7 +104,7 @@ struct MapSidePanel<Content: View>: View {
             .frame(width: fillsWindow ? nil : MapSidePanelLayout.width)
             // A ceiling rather than a height, so a screen longer than the
             // window is given the window and scrolls. The stack this is
-            // inside centers what is left over, above and below.
+            // inside stands it at the top, and leaves the map what is under it.
             .frame(
                 maxWidth: fillsWindow ? .infinity : nil,
                 maxHeight: fillsWindow ? .infinity : fit.height ?? .infinity
