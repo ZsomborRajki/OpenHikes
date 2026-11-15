@@ -94,8 +94,8 @@ struct TrailPlaceSheet: View {
         // job is the map.
         .presentationCompactAdaptation(.none)
         // The map's own buttons stay live behind the card, and this sheet is
-        // what a sheet they open has to come up over.
-        .presentsMapModesOverCard()
+        // what anything they open has to come up over.
+        .presentsMapControlsOverCard()
     }
 }
 

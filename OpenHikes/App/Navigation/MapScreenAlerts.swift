@@ -28,7 +28,7 @@
 //  the first: a swallowed alert leaves nothing behind to report.
 //
 //  Attaching them here fixes both, and is the same arrangement — for the same
-//  reason — as ``weatherDetailSheet(_:weather:)`` and ``MapSheet``'s own
+//  reason — as ``weatherDetailSheet(_:from:weather:)`` and ``MapSheet``'s own
 //  `.fileImporter`. "The sheet's contents" rather than "the sheet" is what
 //  keeps the answer right in landscape, where ``MapSidePanel`` holds the same
 //  contents and there is no sheet to be inside of.
@@ -39,11 +39,13 @@
 //  loses the box and not the reason for it. That includes the hikes list's own
 //  refused *Delete*: the list is inside the sheet, and so is rebuilt with it.
 //
-//  One more is attached beside these rather than through them, for the same
-//  reason and on the same contents: the trail maker's missed photographs —
-//  see ``TrailDraftPhotoCopy``, whose state lives on the app model's maker.
-//  Beside, because it carries an object rather than a binding, and a seventh
-//  argument is past what the linter allows here.
+//  Two more are attached beside these rather than through them, for the same
+//  reason and on the same contents. The trail maker's missed photographs —
+//  see ``TrailDraftPhotoCopy``, whose state lives on the app model's maker —
+//  because it carries an object rather than a binding. And the map's refused
+//  "my location" button, because a place card can be up over these contents
+//  when it is tapped, and the card has to present it then: see
+//  ``MapControlModals``.
 //
 
 import SwiftUI
@@ -57,15 +59,12 @@ extension View {
     ///     became one without every place — see ``HikeImportReport``.
     ///   - searchFailure: A search that couldn't be answered.
     ///   - startupIssue: Whether this launch is on temporary storage.
-    ///   - locationAccess: Whether the map's refused "my location" button has
-    ///     been tapped — see ``LocationAccessPrompt``.
     ///   - photoCapture: The camera and library pickers' own failures.
     ///   - refusals: What the store turned down — see ``MapScreenRefusals``.
     func mapScreenAlerts(
         importReport: Binding<HikeImportReport>,
         searchFailure: Binding<SearchFailure?>,
         startupIssue: Binding<Bool>,
-        locationAccess: Binding<Bool>,
         photoCapture: Binding<PhotoCaptureState>,
         refusals: MapScreenRefusals
     ) -> some View {
@@ -74,7 +73,6 @@ extension View {
                 importReport: importReport,
                 searchFailure: searchFailure,
                 startupIssue: startupIssue,
-                locationAccess: locationAccess,
                 photoCapture: photoCapture,
                 walkEndRefused: refusals.walkEnd,
                 hikeDeletionRefused: refusals.hikeDeletion
@@ -87,8 +85,7 @@ extension View {
 /// and put back, so that nothing changed: one alert each, and each says so.
 ///
 /// One argument for the two rather than one each, because they are one
-/// subject — and ``View/mapScreenAlerts(importReport:searchFailure:startupIssue:locationAccess:photoCapture:refusals:)``
-/// is at the parameter count the linter allows.
+/// subject.
 struct MapScreenRefusals {
     /// The record button's End Hike and Record — see
     /// ``RecordingEntry/walkEndRefused``.
@@ -102,7 +99,6 @@ private struct MapScreenAlerts: ViewModifier {
     @Binding var importReport: HikeImportReport
     @Binding var searchFailure: SearchFailure?
     @Binding var startupIssue: Bool
-    @Binding var locationAccess: Bool
     @Binding var photoCapture: PhotoCaptureState
     @Binding var walkEndRefused: Bool
     @Binding var hikeDeletionRefused: Bool
@@ -145,7 +141,6 @@ private struct MapScreenAlerts: ViewModifier {
                         """
                 )
             }
-            .locationAccessAlert(.whileUsing, isPresented: $locationAccess)
             .photoCaptureAlerts($photoCapture)
             // The detail's End says the same, in the same words — see
             // ``WalkControls``. Nothing recorded: the walk is still under way.

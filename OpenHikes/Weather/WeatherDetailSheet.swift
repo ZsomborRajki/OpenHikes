@@ -17,9 +17,10 @@
 //  dismissed, and a view can only have one modal presented at a time — so a
 //  `.sheet` attached to the badge, or to the map, or anywhere else in the root
 //  hierarchy, is never presented at all. No error, no sheet, just a control
-//  that does nothing. ``weatherDetailSheet(_:weather:)`` is attached to the
-//  sheet's *content* instead, beside `.photoCapturePickers`, and layers above
-//  it the same way the Settings sheet does.
+//  that does nothing. ``weatherDetailSheet(_:from:weather:)`` is attached to
+//  the sheet's *content* instead, beside `.photoCapturePickers`, and layers
+//  above it the same way the Settings sheet does — or to a place card over
+//  that content, while one is up: see ``MapControlModals``.
 //
 //  That splits the tap from the presentation, which is what
 //  ``WeatherDetailPresentation`` is for: the badge is over the map and the
@@ -32,11 +33,11 @@ import SwiftUI
 
 /// Whether the weather detail sheet is up.
 ///
-/// A reference type held in `@State` rather than a `@State` `Bool`, for the
-/// reason ``SheetPresentation`` is one: `@State` invalidates the view that
-/// declares it whether or not its body reads it, and the view that would have
-/// declared it is the one drawing the map. The reference never changes, so
-/// opening the sheet costs the root view nothing.
+/// A reference type rather than a `@State` `Bool`, for the reason
+/// ``SheetPresentation`` is one: `@State` invalidates the view that declares
+/// it whether or not its body reads it, and the view that would have declared
+/// it is the one drawing the map. The reference never changes, so opening the
+/// sheet costs the root view nothing. ``MapControlModals`` holds it.
 @Observable
 final class WeatherDetailPresentation {
     /// Non-isolated so releasing the last reference never requires proving
@@ -45,7 +46,8 @@ final class WeatherDetailPresentation {
 
     private(set) var isPresented = false
 
-    /// Drives `.sheet(isPresented:)`. Building it reads the flag —
+    /// The flag, for ``MapControlModals/binding(_:for:)`` to drive
+    /// `.sheet(isPresented:)` from. Building it reads the flag —
     /// `Binding(get:set:)` calls its getter as it is made — so the modifier
     /// below, which builds it in its body, is a reader of this flag: the one
     /// view whose business the flag is. See *Render isolation, in practice*
@@ -60,19 +62,21 @@ final class WeatherDetailPresentation {
 }
 
 extension View {
-    /// Attaches the weather detail sheet to the view it can actually be
+    /// Attaches the weather detail sheet to a view it can actually be
     /// presented from — the sheet's content, not the view that presents the
-    /// sheet.
+    /// sheet, or a place card over that content. See ``MapControlModals``.
     func weatherDetailSheet(
-        _ presentation: WeatherDetailPresentation,
+        _ modals: MapControlModals,
+        from presenter: MapControlModals.Presenter,
         weather: WeatherManager
     ) -> some View {
-        modifier(WeatherDetailSheetModifier(presentation: presentation, weather: weather))
+        modifier(WeatherDetailSheetModifier(modals: modals, presenter: presenter, weather: weather))
     }
 }
 
 private struct WeatherDetailSheetModifier: ViewModifier {
-    let presentation: WeatherDetailPresentation
+    let modals: MapControlModals
+    let presenter: MapControlModals.Presenter
     let weather: WeatherManager
     // periphery:ignore - read only as `$detent`, the binding
     // `.presentationDetents(_:selection:)` takes.
@@ -89,7 +93,7 @@ private struct WeatherDetailSheetModifier: ViewModifier {
     @State private var detent: PresentationDetent = .large
 
     func body(content: Content) -> some View {
-        content.sheet(isPresented: presentation.isPresentedBinding) {
+        content.sheet(isPresented: modals.binding(modals.weatherDetail.isPresentedBinding, for: presenter)) {
             WeatherDetailView(weather: weather)
                 // Both, not one: at an accessibility text size the credits and
                 // the legal link stop fitting a half sheet, and a legal notice

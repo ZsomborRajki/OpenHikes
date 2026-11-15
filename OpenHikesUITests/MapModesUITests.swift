@@ -184,7 +184,7 @@ nonisolated final class MapModesUITests: XCTestCase {
     /// from under it used to wait, and come up when the card was closed.
     @MainActor
     func testMapModesOpensOverAPlaceCard() {
-        let app = launchApp(arguments: Self.placeArguments)
+        let app = launchApp(arguments: PlaceFixture.aroundArguments)
         let card = openFoundPlaceCard(in: app)
 
         openMapModes(in: app)
@@ -206,15 +206,7 @@ nonisolated final class MapModesUITests: XCTestCase {
     @MainActor
     func testMapModesOpensOverTheMakersPlaceCard() {
         let app = launchApp()
-        let map = element("trail-map", in: app)
-        XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
-        openTrailMaker(in: app)
-        dropPin(at: Self.pinSpot, on: map)
-        let card = element("trail-place-sheet", in: app)
-        XCTAssertTrue(
-            card.waitForExistence(timeout: UITestTimeout.navigation),
-            "a press on the map should open the place card"
-        )
+        let card = openMakersPlaceCard(in: app)
 
         openMapModes(in: app)
         closeMapModes(in: app)
@@ -226,7 +218,7 @@ nonisolated final class MapModesUITests: XCTestCase {
     /// the map sheet the presenter again, or the pill opens nothing.
     @MainActor
     func testMapModesOpensAfterACardWentThroughARotation() {
-        let app = launchApp(arguments: Self.placeArguments)
+        let app = launchApp(arguments: PlaceFixture.aroundArguments)
         addTeardownBlock {
             await MainActor.run { XCUIDevice.shared.orientation = .portrait }
         }
@@ -242,31 +234,5 @@ nonisolated final class MapModesUITests: XCTestCase {
 
         openMapModes(in: app)
         closeMapModes(in: app)
-    }
-
-    /// A hike with mapped places around it, for the cards above.
-    private static let placeArguments = [
-        "--ui-test-import-gpx=\(PlaceFixture.gpxName)",
-        "--ui-test-trail-points=seeded",
-    ]
-
-    /// Where a press drops the maker's pin: high on the map, clear of the
-    /// sheet and of the controls along the map's edges.
-    private static let pinSpot = CGVector(dx: 0.5, dy: 0.25)
-
-    /// Opens the hike, searches around it, and opens a found place's card.
-    @MainActor
-    private func openFoundPlaceCard(in app: XCUIApplication) -> XCUIElement {
-        openHikeDetail(in: app, titled: PlaceFixture.hikeTitle)
-        scrollToTap(element("hike-place-search", in: app), in: app)
-        XCTAssertTrue(
-            element("places-around-nearby", in: app).waitForExistence(timeout: UITestTimeout.navigation),
-            "the search should have answered before a place is opened"
-        )
-        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Thumsee Kopf")).firstMatch
-        scrollToTap(row, in: app)
-        let card = element("places-around-card-title", in: app)
-        XCTAssertTrue(card.waitForExistence(timeout: UITestTimeout.navigation), "a found place's row opens its card")
-        return card
     }
 }

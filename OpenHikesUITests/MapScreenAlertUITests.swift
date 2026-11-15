@@ -65,6 +65,58 @@ nonisolated final class MapScreenAlertUITests: XCTestCase {
         )
     }
 
+    /// A place card leaves the map live behind it, the refused location
+    /// button included, and the map sheet is already presenting the card.
+    /// The alert asked for from under it waited, and came up only once the
+    /// card was closed, over a map the hiker had moved on from (#1403).
+    @MainActor
+    func testTheLocationAlertOpensOverAPlaceCard() {
+        let app = launchApp(arguments: PlaceFixture.aroundArguments)
+        let card = openFoundPlaceCard(in: app)
+
+        answerTheLocationAlert(in: app)
+        XCTAssertTrue(card.exists, "the card should still be up under it")
+
+        app.buttons["places-around-card-close"].tap()
+        XCTAssertTrue(waitUntil { !card.exists })
+        // An alert that had queued behind the card comes up only once the
+        // card has finished going, so this waits out that much.
+        XCTAssertFalse(
+            app.alerts.firstMatch.waitForExistence(timeout: UITestTimeout.brief),
+            "closing the card should bring nothing back"
+        )
+    }
+
+    /// The trail maker's place card is the other card that leaves the map
+    /// live, and puts the alert up over itself the same way.
+    @MainActor
+    func testTheLocationAlertOpensOverTheMakersPlaceCard() {
+        let app = launchApp()
+        let card = openMakersPlaceCard(in: app)
+
+        answerTheLocationAlert(in: app)
+        XCTAssertTrue(card.exists, "the card should still be up under it")
+    }
+
+    /// Taps the refused location button and answers the alert it raises.
+    @MainActor
+    private func answerTheLocationAlert(
+        in app: XCUIApplication,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        tapWhenReady(element("location-access-refused", in: app), file: file, line: line)
+        let alert = app.alerts["Location Access Off"]
+        XCTAssertTrue(
+            alert.waitForExistence(timeout: UITestTimeout.navigation),
+            "the button should say why it can't do anything, over the card",
+            file: file,
+            line: line
+        )
+        alert.buttons["Not Now"].tap()
+        XCTAssertTrue(waitUntil { !alert.exists }, "Not Now should close the alert", file: file, line: line)
+    }
+
     /// A file that couldn't be read is reported. It used to be swallowed:
     /// the alert was raised while the sheet was going up, and never opened.
     @MainActor
