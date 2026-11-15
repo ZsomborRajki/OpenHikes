@@ -326,14 +326,17 @@ nonisolated enum CommunitySchema {
         static let digest = "digest"
     }
 
-    // periphery:ignore - all but `complete` are written and read by the tool
-    // behind `Scripts/trail-cells.sh`, which compiles this file.
-    /// Fields on ``trailManifestType``.
+    /// Fields on ``trailManifestType``. All but ``complete`` are written and
+    /// read by the tool behind `Scripts/trail-cells.sh`, which compiles this
+    /// file, and by nothing in the app.
     enum TrailManifest {
+        // periphery:ignore - the tool's.
         /// When the squares were built.
         static let builtAt = "builtAt"
+        // periphery:ignore - the tool's.
         /// How many squares there are.
         static let cellCount = "cellCount"
+        // periphery:ignore - the tool's.
         /// Every square's record name, one a line, carried as an asset: the
         /// only record of which squares exist. See *The third family* in this
         /// file's header. The upload reads it; the app never asks for it.
@@ -343,9 +346,11 @@ nonisolated enum CommunitySchema {
         /// else, and the app reads none of the squares and asks Overpass —
         /// see ``TrailCellFetch/Manifest``.
         static let complete = "complete"
+        // periphery:ignore - the tool's.
         /// When the OpenStreetMap data the squares were built from was
         /// current.
         static let osmTimestamp = "osmTimestamp"
+        // periphery:ignore - the tool's.
         /// How many routes the squares hold between them.
         static let routeCount = "routeCount"
     }

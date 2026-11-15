@@ -69,6 +69,8 @@ nonisolated struct RouteSquareFile: Equatable, Sendable {
     static let formatVersion: UInt8 = 1
 
     // swiftlint:disable american_spelling_in_copy
+    // periphery:ignore - read by the tool behind `Scripts/trail-cells.sh`,
+    // which compiles this file, when it files a route.
     /// The tags a route keeps in a square: what a label, a waymark or the
     /// colour of a line would be drawn from — `colour` spelled as
     /// OpenStreetMap spells its key. The rest of a relation's tags are
