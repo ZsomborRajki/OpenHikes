@@ -44,7 +44,9 @@
 //  already downloaded near the searched area is drawn in its place — see
 //  ``listCurated(near:limit:for:)`` — and the outage is reported anyway,
 //  because those rows are what happens to be on the device rather than an
-//  answer to the question.
+//  answer to the question. A search too wide for Overpass that the pre-built
+//  squares could not answer ends the same way, with nothing asked of
+//  Overpass: see ``CuratedTrailSearchRefusal``.
 //
 //  **Overpass is asked only when the question asks for it.** Every nearby
 //  request used to reach both sources, which meant refilling the list after a
@@ -591,7 +593,7 @@ nonisolated private extension MergedCommunityTransport {
         let stored = await curated.cachedTrails(near: area, limit: limit)
         Self.logger.notice(
             """
-            Overpass refused a curated search; drawing \(stored.count, privacy: .public) \
+            A curated search had no answer; drawing \(stored.count, privacy: .public) \
             trails already on this device.
             """
         )

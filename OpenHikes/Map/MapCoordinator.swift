@@ -125,7 +125,7 @@ extension MapView {
         var tilesOnTerrain = false
         /// The installed hiking-route layer and the id it was built for — see
         /// `MapCoordinator+TileLayer.swift`.
-        var layerOverlay: TileOverlay?
+        var layerOverlay: HikingRoutesOverlay?
         var tileLayerKey: String?
         /// The style the line is currently drawn in. Seeded and then kept
         /// current by `observeRouteStyle`, so it is what `rendererFor` reads
@@ -147,14 +147,15 @@ extension MapView {
         var trackingBottomConstraint: NSLayoutConstraint?
 
         #if canImport(UIKit)
-        /// The "my location" button itself, so the clamp that keeps it out of
-        /// the top safe area can measure it rather than assume its size.
+        /// The pill the "my location" button stands in, under the map-modes
+        /// button, so the clamp that keeps it out of the top safe area can
+        /// measure it rather than assume its size.
         ///
         /// The glass capsule, not the `MKUserTrackingButton` inside it — see
-        /// ``MapView/makeTrackingButton(for:_:)``. That is the view with the
+        /// ``MapView/makeTrackingPill(for:_:)``. That is the view with the
         /// control's real size and the one the sheet moves and fades, and the
-        /// tap-claim walk up the hierarchy reaches it from anything the button
-        /// puts under a finger.
+        /// tap-claim walk up the hierarchy reaches it from anything either
+        /// button puts under a finger.
         weak var trackingButton: UIView?
         /// The button inside that capsule, held only to recolour its glyph as
         /// tracking turns on and off — see ``applyTrackingTint(for:)``.
@@ -954,8 +955,9 @@ extension MapView.Coordinator {
     }
 
     func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
-        if let matchedTileOverlay = overlay as? TileOverlay {
-            return CachingTileOverlayRenderer(overlay: matchedTileOverlay)
+        // The map's tiles and the hiking routes over them.
+        if let renderer = groundRenderer(for: overlay) {
+            return renderer
         }
         // Every hike in the library but the selected one, in one overlay —
         // see `LibraryLinesRenderer.swift`.

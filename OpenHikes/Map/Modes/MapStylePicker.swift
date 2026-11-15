@@ -2,7 +2,7 @@
 //  MapStylePicker.swift
 //  OpenHikes
 //
-//  The map choice in Settings: one card per catalog entry, in a row that
+//  The map choice on *Map Modes*: one card per catalog entry, in a row that
 //  scrolls sideways, each drawn from that source's own tiles over the ground
 //  the hiker is standing on. The selected map's summary sits once under the
 //  row rather than on every card.
@@ -20,7 +20,7 @@ struct MapStylePicker: View {
     @Binding var tileProviderID: String
     /// The provider the map is really drawing with — see
     /// ``TileProvider/renderable(id:entitlement:)``. The ring and the summary
-    /// follow this, not the stored id, for the reason `SettingsView` gives.
+    /// follow this, not the stored id, for the reason ``MapModesView`` gives.
     let selected: TileProvider
     let entitlement: MapEntitlementStore
     /// Read once, in a task, for where to draw the cards — never from a body.
@@ -36,9 +36,10 @@ struct MapStylePicker: View {
     /// phone's row: the part is what says the row scrolls.
     private static let cardSpacing: CGFloat = 10
     private static let horizontalMargin: CGFloat = 16
+    private static let summaryLines = 2
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(spacing: 10) {
             ScrollViewReader { proxy in
                 ScrollView(.horizontal) {
                     HStack(alignment: .top, spacing: Self.cardSpacing) {
@@ -60,6 +61,10 @@ struct MapStylePicker: View {
             Text(selected.summary)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                // Room for the longer summaries whichever is showing, so the
+                // sheet around this does not change height at every tap.
+                .lineLimit(Self.summaryLines...)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, Self.horizontalMargin)
                 .accessibilityIdentifier("map-style-summary")
@@ -130,21 +135,13 @@ private struct MapStyleCard: View {
 
     @Environment(\.colorScheme) private var colorScheme
     /// Grows with Dynamic Type, so the name under it never outgrows the card.
-    @ScaledMetric(relativeTo: .caption) private var side: CGFloat = 84
+    @ScaledMetric(relativeTo: .caption) private var side = MapModeThumbnailFrame.side
     @State private var preview: UIImage?
     /// Whether the last request has answered, so a card that cannot be drawn
     /// stops spinning and says so.
     @State private var hasAnswered = false
 
-    private static let cornerRadius: CGFloat = 12
-    private static let ringWidth: CGFloat = 3
-    /// Between the image and the ring, so selection never moves the image.
-    private static let ringGap: CGFloat = 2
     private static let disabledOpacity: Double = 0.55
-    /// A hairline round every image, so a pale map does not bleed into the
-    /// sheet behind it.
-    private static let edgeOpacity: Double = 0.12
-    private static let edgeWidth: CGFloat = 0.5
     private static let lockInset: CGFloat = 6
     private static let lockPadding: CGFloat = 5
     private static let lockBackdropOpacity: Double = 0.55
@@ -162,21 +159,10 @@ private struct MapStyleCard: View {
             VStack(spacing: 6) {
                 thumbnail
                     .frame(width: side, height: side)
-                    .clipShape(.rect(cornerRadius: Self.cornerRadius))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: Self.cornerRadius)
-                            .strokeBorder(.primary.opacity(Self.edgeOpacity), lineWidth: Self.edgeWidth)
-                    }
                     .overlay(alignment: .topTrailing) {
                         if isLocked { lock }
                     }
-                    .padding(Self.ringWidth + Self.ringGap)
-                    .overlay {
-                        if isSelected {
-                            RoundedRectangle(cornerRadius: Self.cornerRadius + Self.ringWidth + Self.ringGap)
-                                .strokeBorder(Color.accentColor, lineWidth: Self.ringWidth)
-                        }
-                    }
+                    .modifier(MapModeThumbnailFrame(isSelected: isSelected))
 
                 Text(provider.name)
                     .font(.caption.weight(isSelected ? .semibold : .regular))
@@ -188,13 +174,15 @@ private struct MapStyleCard: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .frame(width: side + 2 * (Self.ringWidth + Self.ringGap))
+            .frame(width: MapModeThumbnailFrame.width(around: side))
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
         .opacity(isUsable && !isWaiting ? 1 : Self.disabledOpacity)
         .disabled(!isUsable || isWaiting)
-        .accessibilityElement(children: .ignore)
+        // The button itself is the element, not a wrapper made round it: a
+        // wrapper reported itself enabled while the button in it was not,
+        // so VoiceOver never said "dimmed" of a card nobody could choose.
         .accessibilityLabel(provider.name)
         .accessibilityValue(isUsable ? Text(verbatim: "") : Text("Needs API key"))
         .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)

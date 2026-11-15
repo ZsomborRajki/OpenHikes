@@ -1217,42 +1217,42 @@
         }
       }
     },
-    "%@ uses no downloadable tiles. Choose another map in Settings to save this hike for offline use." : {
+    "%@ uses no downloadable tiles. Choose another map in Map Modes to save this hike for offline use." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ verwendet keine herunterladbaren Kacheln. Wähle in den Einstellungen eine andere Karte, um diese Wanderung für die Offlinenutzung zu speichern."
+            "value" : "%@ verwendet keine herunterladbaren Kacheln. Wähle unter „Kartenmodi“ eine andere Karte, um diese Wanderung für die Offlinenutzung zu speichern."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ no usa teselas descargables. Elige otro mapa en Ajustes para guardar esta excursión y usarla sin conexión."
+            "value" : "%@ no usa teselas descargables. Elige otro mapa en «Modos de mapa» para guardar esta excursión y usarla sin conexión."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ n’utilise pas de tuiles téléchargeables. Choisissez une autre carte dans Réglages pour enregistrer cette randonnée pour une utilisation hors ligne."
+            "value" : "%@ n’utilise pas de tuiles téléchargeables. Choisissez une autre carte dans « Modes de carte » pour enregistrer cette randonnée pour une utilisation hors ligne."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ non usa tasselli scaricabili. Scegli un’altra mappa in Impostazioni per salvare questa escursione e usarla offline."
+            "value" : "%@ non usa tasselli scaricabili. Scegli un’altra mappa in «Modalità mappa» per salvare questa escursione e usarla offline."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Styl mapy „%@” nie używa kafelków, które można pobrać. Wybierz inną mapę w ustawieniach, aby zapisać tę wędrówkę do użytku offline."
+            "value" : "Styl mapy „%@” nie używa kafelków, które można pobrać. Wybierz inną mapę w panelu „Tryby mapy”, aby zapisać tę wędrówkę do użytku offline."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Карта «%@» не использует загружаемые тайлы. Чтобы сохранить этот поход для использования офлайн, выберите другую карту в настройках."
+            "value" : "Карта «%@» не использует загружаемые тайлы. Чтобы сохранить этот поход для использования офлайн, выберите другую карту в разделе «Режимы карт»."
           }
         }
       }
@@ -8197,7 +8197,7 @@
       }
     },
     "Apple Maps" : {
-      "comment" : "The name of a map style in Settings",
+      "comment" : "The name of a map style on Map Modes",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -8318,7 +8318,7 @@
       }
     },
     "Apple Satellite" : {
-      "comment" : "The name of a map style in Settings",
+      "comment" : "The name of a map style on Map Modes",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -11418,6 +11418,46 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Выберите, какие места и фото поиск на карте находит рядом с вашей тропой. Если выключить тип, его метки тоже скроются."
+          }
+        }
+      }
+    },
+    "Clean Map" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schlichte Karte"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mapa limpio"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Carte épurée"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mappa pulita"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Czysta mapa"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Чистая карта"
           }
         }
       }
@@ -23142,6 +23182,46 @@
         }
       }
     },
+    "Map Modes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kartenmodi"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modos de mapa"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modes de carte"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modalità mappa"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tryby mapy"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Режимы карт"
+          }
+        }
+      }
+    },
     "Map Tiles" : {
       "localizations" : {
         "de" : {
@@ -23502,42 +23582,42 @@
         }
       }
     },
-    "Marked trails from Waymarked Trails, drawn over any map when zoomed in." : {
+    "Marked trails from OpenStreetMap, drawn over any map in the style of Waymarked Trails." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Markierte Wege von Waymarked Trails, beim Hineinzoomen über jeder Karte eingezeichnet."
+            "value" : "Markierte Wege aus OpenStreetMap, im Stil von Waymarked Trails über jeder Karte eingezeichnet."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Senderos señalizados de Waymarked Trails, dibujados sobre cualquier mapa al acercar la vista."
+            "value" : "Senderos señalizados de OpenStreetMap, dibujados sobre cualquier mapa al estilo de Waymarked Trails."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sentiers balisés de Waymarked Trails, affichés par-dessus n’importe quelle carte en zoomant."
+            "value" : "Sentiers balisés d’OpenStreetMap, affichés par-dessus n’importe quelle carte dans le style de Waymarked Trails."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sentieri segnalati forniti da Waymarked Trails, disegnati su qualsiasi mappa quando ingrandisci."
+            "value" : "Sentieri segnalati di OpenStreetMap, disegnati su qualsiasi mappa nello stile di Waymarked Trails."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Znakowane szlaki z Waymarked Trails, rysowane na dowolnej mapie po przybliżeniu."
+            "value" : "Znakowane szlaki z OpenStreetMap, rysowane na dowolnej mapie w stylu Waymarked Trails."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Маркированные тропы из Waymarked Trails, нарисованные поверх любой карты при увеличении."
+            "value" : "Маркированные тропы из OpenStreetMap, нарисованные поверх любой карты в стиле Waymarked Trails."
           }
         }
       }
@@ -30429,7 +30509,7 @@
       }
     },
     "OpenStreetMap" : {
-      "comment" : "The name of a map style in Settings",
+      "comment" : "The name of a map style on Map Modes",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -41779,7 +41859,7 @@
       }
     },
     "Stadia Outdoors" : {
-      "comment" : "The name of a map style in Settings",
+      "comment" : "The name of a map style on Map Modes",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -41820,7 +41900,7 @@
       }
     },
     "Stamen Terrain" : {
-      "comment" : "The name of a map style in Settings",
+      "comment" : "The name of a map style on Map Modes",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -47765,7 +47845,7 @@
       }
     },
     "Thunderforest Outdoors" : {
-      "comment" : "The name of a map style in Settings",
+      "comment" : "The name of a map style on Map Modes",
       "localizations" : {
         "de" : {
           "stringUnit" : {

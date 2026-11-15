@@ -3,7 +3,7 @@
 //  OpenHikes
 //
 //  Which of MapKit's own maps a catalog entry draws, and the configuration
-//  the map view and the Settings card are given for it.
+//  the map view and the *Map Modes* card are given for it.
 //
 
 import MapKit

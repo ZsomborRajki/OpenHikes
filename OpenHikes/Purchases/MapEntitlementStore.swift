@@ -51,7 +51,7 @@ private enum EntitlementEvent: Sendable {
     case transaction(VerificationResult<Transaction>)
 }
 
-/// Drives the paywall and the locked rows in Settings.
+/// Drives the paywall and the locked cards on *Map Modes*.
 ///
 /// Main-actor isolated because everything it feeds is: the store is created
 /// once by ``OpenHikesModel`` and read from SwiftUI bodies. The answer that

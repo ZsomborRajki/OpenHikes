@@ -9,8 +9,9 @@
 //  iOS 26's `UIGlassEffect` and shaped by its `cornerConfiguration`. Below 26
 //  neither exists, so each piece is the thin material iOS 18's own map
 //  controls sit on, clipped to the same shape — ``EarlierMapGlassView``. Its
-//  capsule recomputes its corners from its height on every layout, because a
-//  layer radius is a number where a corner configuration is a shape. A tint
+//  capsule recomputes its corners from its shorter side on every layout,
+//  because a layer radius is a number where a corner configuration is a shape:
+//  a pill lies on its side or, as the tracking pill does, stands on end. A tint
 //  is a fill under the content rather than colour in the glass. The container
 //  that merges neighbouring capsules into one pill is a plain view there, so
 //  they stand as the separate circles iOS 18's map controls are.
@@ -103,7 +104,7 @@ final class EarlierMapGlassView: UIVisualEffectView {
     override func layoutSubviews() {
         super.layoutSubviews()
         if shape == .capsule {
-            layer.cornerRadius = bounds.height / 2
+            layer.cornerRadius = min(bounds.width, bounds.height) / 2
         }
     }
 }

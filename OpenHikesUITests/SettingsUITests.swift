@@ -2,9 +2,9 @@
 //  SettingsUITests.swift
 //  OpenHikesUITests
 //
-//  The settings screen and what it governs: which tile provider is in use and
-//  what that provider is allowed to do, and the two toggles that outlive the
-//  screen they are set on.
+//  The settings screen and what it governs, with what the map chosen on *Map
+//  Modes* is allowed to do, and the two toggles that outlive the screen they
+//  are set on.
 //
 
 import XCTest
@@ -26,7 +26,7 @@ nonisolated final class SettingsUITests: XCTestCase {
             ]
         )
 
-        element("settings-button", in: app).tap()
+        openMapModes(in: app)
         let osm = element("provider-row-osm", in: app)
         XCTAssertTrue(
             osm.waitForExistence(timeout: UITestTimeout.navigation)
@@ -35,7 +35,7 @@ nonisolated final class SettingsUITests: XCTestCase {
             osm.isSelected,
             "OpenStreetMap is the keyless default this app ships on"
         )
-        app.buttons["settings-close"].tap()
+        closeMapModes(in: app)
 
         openHikeDetail(in: app)
         scrollIntoView(element("route-style-row", in: app), in: app)
@@ -73,14 +73,7 @@ nonisolated final class SettingsUITests: XCTestCase {
             ]
         )
 
-        element("settings-button", in: app).tap()
-        let row = element("provider-row-\(providerID)", in: app)
-        XCTAssertTrue(
-            row.waitForExistence(timeout: UITestTimeout.navigation)
-        )
-        row.tap()
-        XCTAssertTrue(row.isSelected, "the tapped source should become the selected one")
-        app.buttons["settings-close"].tap()
+        selectMap(providerID, in: app)
 
         openHikeDetail(in: app)
         scrollIntoView(element("route-style-row", in: app), in: app)
@@ -100,12 +93,13 @@ nonisolated final class SettingsUITests: XCTestCase {
         XCTAssertTrue(note.exists, "the note should name \(name)")
     }
 
-    /// The hiking routes are tiles, drawn over Apple's satellite map as over
-    /// any other — so with them on there *is* something to auto-save there,
-    /// and still nothing to bulk-download: the layer's server discourages it,
-    /// and Apple's imagery cannot be kept at all.
+    /// The hiking routes are on from the first launch, and over Apple's
+    /// satellite map they add nothing to save: the app draws them from
+    /// squares the layer keeps for itself, not from tiles, so the hike still
+    /// offers neither control. While the layer was somebody's tiles it
+    /// offered auto-save there, and a switch left behind would arm nothing.
     @MainActor
-    func testHikingRoutesOverSatelliteOfferAutoSaveOnly() {
+    func testHikingRoutesOverSatelliteAddNoTileControls() {
         let app = launchApp(
             arguments: [
                 "--ui-test-expanded-sheet",
@@ -113,22 +107,22 @@ nonisolated final class SettingsUITests: XCTestCase {
             ]
         )
 
-        element("settings-button", in: app).tap()
-        let row = element("provider-row-apple_satellite", in: app)
-        XCTAssertTrue(row.waitForExistence(timeout: UITestTimeout.navigation))
-        row.tap()
-        let routes = toggle("hiking-routes-toggle", in: app)
-        XCTAssertTrue(scrollIntoView(routes, in: app))
-        XCTAssertFalse(toggleIsOn(routes), "the layer is off until it is asked for")
-        flip(routes)
-        XCTAssertTrue(waitUntilToggle(routes, is: true))
-        app.buttons["settings-close"].tap()
+        openMapModes(in: app)
+        let satellite = element("provider-row-apple_satellite", in: app)
+        XCTAssertTrue(satellite.waitForExistence(timeout: UITestTimeout.navigation))
+        satellite.tap()
+        XCTAssertTrue(waitUntilSelected(satellite), "the tapped map should become the selected one")
+        XCTAssertTrue(
+            element("hiking-routes-on", in: app).isSelected,
+            "the layer is on until it is switched off"
+        )
+        closeMapModes(in: app)
 
         openHikeDetail(in: app)
         scrollIntoView(element("route-style-row", in: app), in: app)
-        XCTAssertTrue(
+        XCTAssertFalse(
             app.switches["Auto-Save Tiles"].exists,
-            "the routes drawn over the imagery are tiles worth keeping"
+            "the routes are drawn from squares, not tiles, so there is nothing to auto-save"
         )
         XCTAssertFalse(
             element("offline-download-button", in: app).exists,
@@ -234,7 +228,7 @@ nonisolated final class SettingsUITests: XCTestCase {
     /// The paywall had exactly one entry point in the whole app, and a build
     /// without `Secrets.plist` disables it.
     ///
-    /// `MapPaywallView` was reached only from a locked row in Map Tiles, and
+    /// `MapPaywallView` was reached only from a locked card on *Map Modes*, and
     /// `MapStylePicker` disables any source whose key did not resolve — which is
     /// every source in a build without the gitignored plist. An archive cut on
     /// a machine that lacks it therefore sells a subscription nobody can buy,

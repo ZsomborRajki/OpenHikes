@@ -2,12 +2,12 @@
 //  PlaceSupport.swift
 //  OpenHikesUITests
 //
-//  The way onto a saved hike's place screens, for the two suites that go
-//  there.
+//  The way onto a saved hike's place screens, for the suites that go there.
 //
 //  Its own file for the reason `TrailMakerSupport.swift` is one: rather than a
 //  copy in each suite. ``PlaceUITests`` is what presses the buttons on these
-//  screens; ``AccessibilityUITests`` needs only the way in.
+//  screens; ``AccessibilityUITests`` needs only the way in, and the map's own
+//  controls' suites need only a card up over the map.
 //
 
 import XCTest
@@ -20,6 +20,16 @@ nonisolated enum PlaceFixture {
     static let hikeTitle = "Thumsee Loop (places)"
     static let ownPlace = "Boathouse"
     static let mappedPlace = "Thumsee Spring"
+    /// A summit *Places Around Trail* finds near the loop, from the seeded
+    /// OpenStreetMap places.
+    static let foundPlace = "Thumsee Kopf"
+
+    /// The hike, with OpenStreetMap's places around it for
+    /// ``XCTestCase/openFoundPlaceCard(in:)`` to find.
+    static let aroundArguments = [
+        "--ui-test-import-gpx=\(gpxName)",
+        "--ui-test-trail-points=seeded",
+    ]
 }
 
 extension XCTestCase {
@@ -31,6 +41,25 @@ extension XCTestCase {
         let title = element("hike-place-title", in: app)
         XCTAssertTrue(title.waitForExistence(timeout: UITestTimeout.navigation), "a place row should open its screen")
         XCTAssertEqual(title.label, name)
+    }
+
+    /// Opens the fixture hike, searches around it, and opens a found place's
+    /// card: a sheet over the map sheet that leaves the map live behind it,
+    /// the map's own controls included. For a launch with
+    /// ``PlaceFixture/aroundArguments``.
+    @MainActor
+    @discardableResult func openFoundPlaceCard(in app: XCUIApplication) -> XCUIElement {
+        openHikeDetail(in: app, titled: PlaceFixture.hikeTitle)
+        scrollToTap(element("hike-place-search", in: app), in: app)
+        XCTAssertTrue(
+            element("places-around-nearby", in: app).waitForExistence(timeout: UITestTimeout.navigation),
+            "the search should have answered before a place is opened"
+        )
+        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", PlaceFixture.foundPlace)).firstMatch
+        scrollToTap(row, in: app)
+        let card = element("places-around-card-title", in: app)
+        XCTAssertTrue(card.waitForExistence(timeout: UITestTimeout.navigation), "a found place's row opens its card")
+        return card
     }
 
     /// Opens the fixture hike and *Add Place* from the map's pill.

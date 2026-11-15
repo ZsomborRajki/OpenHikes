@@ -27,9 +27,10 @@ import OpenHikesData
 /// moved, so a screen reading one re-runs when that setting changes and not
 /// when something else is written beside it.
 ///
-/// Who writes these is unchanged. The settings screen and the route-layer
-/// switch keep their `@AppStorage` bindings — a screen that is only up while it
-/// is being used can afford them — and their writes reach this through the
+/// Who writes these is unchanged. *Map Modes*, the settings screen and the
+/// maker's route-layer switch keep their `@AppStorage` bindings — a screen
+/// that is only up while it is being used can afford them — and their writes
+/// reach this through the
 /// notification, as iCloud's copy does through ``SyncedSettingsMirror``. The
 /// list's order is the exception, written here by the list's own menu.
 @Observable
@@ -37,7 +38,7 @@ final class StoredSettings {
     /// The chosen map — see ``TileProvider/renderable(id:entitlement:)`` for
     /// the one actually drawn.
     private(set) var tileProviderID: String
-    /// Whether Waymarked Trails' hiking routes are drawn over it.
+    /// Whether OpenStreetMap's hiking routes are drawn over it.
     private(set) var showsHikingRoutes: Bool
     /// The hikes list's order, as ``HikeListSort``'s raw value.
     private(set) var hikeListSort: String
@@ -59,7 +60,7 @@ final class StoredSettings {
         savesPhotosToLibrary = Self.savesPhotosToLibrary(in: defaults)
         // Scoped to this suite, never the process-wide notification. A write
         // made on the main thread is delivered before it returns, so an
-        // `@AppStorage` binding in Settings and the screens reading this move
+        // `@AppStorage` binding on *Map Modes* and the screens reading this move
         // in the same update.
         preferenceObservation.observe(defaults: defaults) { [weak self] in
             self?.refresh()

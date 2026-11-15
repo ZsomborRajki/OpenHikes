@@ -29,8 +29,16 @@
 //  A build that is not the whole world over a database that says it holds the
 //  whole world. That is somebody refreshing a region against the wrong
 //  environment, and what it would do is delete every other region and send
-//  every search back to Overpass, because the app reads only squares that are
-//  the whole world. `--replace-world` is for the day that is really meant.
+//  every search back to Overpass, or leave the hiking-routes layer drawing
+//  nothing, because the app reads only squares that are the whole world.
+//  `--replace-world` is for the day that is really meant.
+//
+//  ## Each set keeps to its own names
+//
+//  A name a manifest lists that is not one of its own set's squares is left
+//  alone, never deleted: a tool from before there were two sets could have
+//  written the layer's names into the day hikes' manifest. And a build that
+//  lists a square of the other set's is refused.
 //
 //  On that day the first write is also what says the squares are no longer
 //  the whole world, **before the first square is deleted** and whether or not
@@ -45,6 +53,56 @@
 import Foundation
 
 enum Upload {
+    /// Which set of squares a build is, and so which manifest it replaces.
+    ///
+    /// The two sets share their record types — a square's file as an asset
+    /// and its digest, a manifest listing every square — and nothing else:
+    /// each has a manifest record of its own and record names of its own, so
+    /// an upload of one never reads, lists or deletes a record of the other.
+    enum Dataset {
+        case dayHikes
+        case hikingRoutes
+
+        init(kind: String?) throws {
+            switch kind {
+            case nil: self = .dayHikes
+            case RouteSquareBuild.manifestKind: self = .hikingRoutes
+            case let other?: throw CloudKitError(description: "this tool does not know a build of kind '\(other)'.")
+            }
+        }
+
+        var manifestRecordName: String {
+            switch self {
+            case .dayHikes: TrailCellGrid.manifestRecordName
+            case .hikingRoutes: RouteSquareGrid.manifestRecordName
+            }
+        }
+
+        var generation: Int {
+            switch self {
+            case .dayHikes: TrailCellGrid.generation
+            case .hikingRoutes: RouteSquareGrid.generation
+            }
+        }
+
+        /// Whether `name` is one of this set's squares: a name its own grid
+        /// reads back as one.
+        func owns(_ name: String) -> Bool {
+            switch self {
+            case .dayHikes: TrailCellGrid.cell(named: name) != nil
+            case .hikingRoutes: RouteSquareGrid.square(named: name) != nil
+            }
+        }
+
+        /// What the app does once these squares are not the whole world.
+        var withoutTheWorld: String {
+            switch self {
+            case .dayHikes: "send every search back to Overpass"
+            case .hikingRoutes: "leave the hiking-routes layer drawing nothing"
+            }
+        }
+    }
+
     /// What the database holds now, as far as an upload needs to know.
     struct Remote: Decodable {
         var manifestExists = false
@@ -126,27 +184,39 @@ extension Upload {
         try options.finish()
 
         let local = try BuildManifest.read(from: directory)
-        guard local.generation == TrailCellGrid.generation else {
+        let dataset = try Dataset(kind: local.kind)
+        guard local.generation == dataset.generation else {
             throw CloudKitError(description: "\(directory.path) is generation \(local.generation); "
-                + "this tool writes generation \(TrailCellGrid.generation).")
+                + "this tool writes generation \(dataset.generation).")
         }
-        let remote: Remote
+        if let stray = local.cells.first(where: { !dataset.owns($0.name) }) {
+            throw CloudKitError(description: "\(directory.path) lists \(stray.name), which is not one of the "
+                + "squares under \(dataset.manifestRecordName).")
+        }
+        var remote: Remote
         if let savedRemote {
             guard isDryRun else { throw UsageError(description: "--against only plans; pass --dry-run.") }
             remote = try JSONDecoder().decode(Remote.self, from: Data(contentsOf: URL(fileURLWithPath: savedRemote)))
         } else if let database {
-            remote = try await remoteState(of: database, names: local.cells.map(\.name))
+            remote = try await remoteState(of: database, manifest: dataset.manifestRecordName, names: local.cells.map(\.name))
         } else {
             return
         }
 
+        let foreign = remote.listed.union(remote.digests.keys).filter { !dataset.owns($0) }
+        if !foreign.isEmpty {
+            print("Leaving alone \(foreign.count) records \(dataset.manifestRecordName) lists that are not its squares.")
+            remote.listed.subtract(foreign)
+            remote.digests = remote.digests.filter { !foreign.contains($0.key) }
+        }
+
         let plan = Self.plan(local: local, remote: remote)
-        print("\(target.container), \(target.environment): \(plan.upload.count) squares to upload, "
-            + "\(plan.delete.count) to delete, \(plan.unchanged) unchanged.")
+        print("\(target.container), \(target.environment), \(dataset.manifestRecordName): "
+            + "\(plan.upload.count) squares to upload, \(plan.delete.count) to delete, \(plan.unchanged) unchanged.")
         if remote.complete, !local.complete, !mayReplaceWorld {
             throw CloudKitError(description: "the database says its squares are the whole world and this build "
                 + "is not, so uploading it would delete \(plan.delete.count) squares of everywhere else and "
-                + "send every search back to Overpass. Pass --replace-world if that is what is meant.")
+                + "\(dataset.withoutTheWorld). Pass --replace-world if that is what is meant.")
         }
         // Said from the plan, so that a dry run shows the write is in it.
         if remote.complete, plan.opening?.saysNotTheWorld == true {
@@ -158,7 +228,7 @@ extension Upload {
             return
         }
         try confirm(plan, in: database.environment, isConfirmed: isConfirmed)
-        try await apply(plan, of: local, from: directory, to: database)
+        try await apply(plan, of: local, from: directory, to: database, manifest: dataset.manifestRecordName)
         print("Done: \(local.cells.count) squares, \(local.routeCount) routes, "
             + (local.complete ? "marked as the whole world." : "not marked as the whole world."))
     }
@@ -230,9 +300,8 @@ extension Upload {
 // MARK: - Reading what is there
 
 private extension Upload {
-    static func remoteState(of database: PublicDatabase, names: [String]) async throws -> Remote {
+    static func remoteState(of database: PublicDatabase, manifest manifestName: String, names: [String]) async throws -> Remote {
         var remote = Remote()
-        let manifestName = TrailCellGrid.manifestRecordName
         let manifestAnswer = try await database.lookup(
             [manifestName],
             desiredKeys: [CommunitySchema.TrailManifest.complete, CommunitySchema.TrailManifest.cells]
@@ -282,7 +351,8 @@ private extension Upload {
         _ plan: Plan,
         of local: BuildManifest,
         from directory: URL,
-        to database: PublicDatabase
+        to database: PublicDatabase,
+        manifest manifestName: String
     ) async throws {
         if let opening = plan.opening {
             // The first write of the two — see this file's header. An update
@@ -292,6 +362,7 @@ private extension Upload {
                 listing: opening.listing,
                 fields: opening.saysNotTheWorld ? [CommunitySchema.TrailManifest.complete: .integer(0)] : [:],
                 operation: "forceUpdate",
+                name: manifestName,
                 to: database
             )
         }
@@ -323,6 +394,7 @@ private extension Upload {
             listing: Set(local.cells.map(\.name)),
             fields: fields,
             operation: "forceReplace",
+            name: manifestName,
             to: database
         )
     }
@@ -377,9 +449,9 @@ private extension Upload {
         listing names: Set<String>,
         fields: [String: Operation.Field],
         operation: String,
+        name manifestName: String,
         to database: PublicDatabase
     ) async throws {
-        let manifestName = TrailCellGrid.manifestRecordName
         let list = Data(names.sorted().joined(separator: "\n").utf8)
         let urls = try await database.uploadURLs(for: [
             TokenRequest.Token(

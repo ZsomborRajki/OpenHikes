@@ -247,7 +247,7 @@ nonisolated final class AccessibilityLabelUITests: XCTestCase {
     @MainActor
     func testTileProviderSelectionIsExposed() {
         let app = launchApp()
-        openSettings(in: app)
+        openMapModes(in: app)
 
         let openStreetMap = element("provider-row-osm", in: app)
         XCTAssertTrue(

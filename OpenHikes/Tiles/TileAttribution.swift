@@ -90,7 +90,7 @@ nonisolated struct TileAttribution: Hashable, Sendable {
     /// links, forty per cent of the width, and one line at most Dynamic Type
     /// sizes instead of three.
     ///
-    /// ``plainText`` remains the canonical form and is what Settings draws and
+    /// ``plainText`` remains the canonical form and is what *Map Modes* draws and
     /// what VoiceOver speaks, both of which have the room. Every credit the app
     /// draws here is a copyright notice, which is what lets one symbol lead.
     var compactText: String {
@@ -125,7 +125,7 @@ nonisolated struct TileAttribution: Hashable, Sendable {
     /// These credits, then every party in `previews` not already named — for
     /// a screen that shows other sources' imagery beside the map it credits.
     ///
-    /// Settings is that screen: each of its map cards is drawn from its own
+    /// *Map Modes* is that screen: each of its map cards is drawn from its own
     /// source's tiles, or a MapKit snapshot, whichever map is selected, and a
     /// thumbnail of a provider's imagery is still its imagery. So the line
     /// under the cards credits all of them, not only the selected one.
@@ -135,13 +135,28 @@ nonisolated struct TileAttribution: Hashable, Sendable {
     /// source requires OpenStreetMap's longer data credit, that wording wins:
     /// Thunderforest's preview needs it even when another map is selected.
     /// Apple's unlinked credit is kept, once: a snapshot carries no **Legal**
-    /// link of its own, so in Settings nothing else names Apple.
+    /// link of its own, so on *Map Modes* nothing else names Apple.
     func including(previews: [Self]) -> Self {
         let candidates = credits + previews.flatMap(\.credits)
         let needsDataCredit = candidates.contains(.openStreetMapData)
         return Self(candidates.uniqued(on: Self.identity(of:)).map { credit in
             needsDataCredit && credit == .openStreetMap ? .openStreetMapData : credit
         })
+    }
+
+    /// The line along the foot of *Map Modes*: `selected` and the layer
+    /// over it, as the map's own line credits them, then every other source
+    /// the sheet shows a picture of — each of `cards`, and the two *Hiking
+    /// Routes* pictures, which are OpenStreetMap's map with and without the
+    /// layer over it, whichever of them is chosen.
+    static func mapModes(selected: TileProvider, showsHikingRoutes: Bool, cards: [TileProvider]) -> Self {
+        let routesPictures = [TileProvider.openStreetMap.attribution, TileLayer.hikingRoutes.attribution]
+        let pictured = cards.map(\.attribution) + routesPictures
+        let drawn = drawn(
+            base: selected.attribution,
+            layer: TileLayer.shown(isOn: showsHikingRoutes)?.attribution
+        ) ?? selected.attribution
+        return drawn.including(previews: pictured)
     }
 
     private static func identity(of credit: Credit) -> String {
@@ -204,15 +219,6 @@ nonisolated extension TileAttribution.Credit {
         compactTitle: "OpenStreetMap"
     )
 
-    /// The hiking-route layer's own credit. Its overlay is published under
-    /// CC BY-SA 3.0 DE on the condition that "the OpenStreetMap project and
-    /// this site are mentioned", so it links to the site — whose legal page
-    /// carries the licence — and always travels with an OpenStreetMap credit.
-    static let waymarkedTrails = Self(
-        title: "Waymarked Trails",
-        prefix: "Routes ©",
-        url: URL(string: "https://hiking.waymarkedtrails.org/")!
-    )
     // swiftlint:enable force_unwrapping
 
     static let apple = Self(title: "Apple", prefix: "Map data ©", url: nil)

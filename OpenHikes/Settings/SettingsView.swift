@@ -3,8 +3,10 @@
 //  OpenHikes
 //
 //  The profile/settings sheet reached from the button next to the search bar.
-//  Hosts the iCloud sync section, the map tile-provider selector, the photo
-//  and background-tracking switches, and the offline tile storage readout.
+//  Hosts the iCloud sync section, the photo and background-tracking switches,
+//  and the offline tile storage readout. Which map is drawn, and whether the
+//  hiking routes are drawn over it, is chosen on the map — see
+//  ``MapModesView``.
 //
 //  There is deliberately no data-use section. The app is meant to be walked
 //  with rather than configured, so the choice between cellular and Wi-Fi is
@@ -66,8 +68,6 @@ struct SettingsView: View {
     let cloudSync: CloudSyncCoordinator
     let entitlement: MapEntitlementStore
 
-    @AppStorage(SettingsKey.tileProviderID) private var tileProviderID = TileProvider.default.id
-    @AppStorage(SettingsKey.showsHikingRoutes) private var showsHikingRoutes = SettingsDefault.showsHikingRoutes
     @AppStorage(SettingsKey.liveActivitiesEnabled) private var liveActivitiesEnabled =
         SettingsDefault.liveActivitiesEnabled
     @AppStorage(SettingsKey.savePhotosToLibrary) private var savePhotosToLibrary = SettingsDefault.savePhotosToLibrary
@@ -87,17 +87,6 @@ struct SettingsView: View {
     @State private var showDeleteAll = false
     @State private var showPaywall = false
     @State private var showManageSubscription = false
-
-    /// The provider the map is really drawing with, which is not always the
-    /// stored one — see ``TileProvider/renderable(id:entitlement:)``. The
-    /// attribution and the selected card both follow this: showing Stadia's
-    /// attribution over OpenStreetMap tiles would be wrong twice over.
-    ///
-    /// Reads `entitlement.state` rather than letting `renderable` default to
-    /// the process-wide answer, so this recomputes when StoreKit resolves.
-    private var selectedProvider: TileProvider {
-        TileProvider.renderable(id: tileProviderID, entitlement: entitlement.state)
-    }
 
     var body: some View {
         // This screen is a `Form` of eleven sections in one body, so every
@@ -127,7 +116,7 @@ struct SettingsView: View {
                 // put in this screen's reach.
                 BlockedHikersSection(blocks: blocks)
                 // The paywall's second entry point, and the only one a build
-                // with no `Secrets.plist` still has — the provider rows that
+                // with no `Secrets.plist` still has — the map cards that
                 // used to be its sole route are disabled outright there. Not
                 // drawn for a subscriber, who has `manageSubscriptionRow`
                 // above and for whom `MapPaywallView` dismisses itself the
@@ -174,63 +163,16 @@ struct SettingsView: View {
 
     // MARK: Map tiles
 
-    private var mapProviderSection: some View {
-        Section {
-            MapStylePicker(
-                tileProviderID: $tileProviderID,
-                selected: selectedProvider,
-                entitlement: entitlement,
-                locationManager: locationManager,
-                showPaywall: { showPaywall = true }
-            )
-            // Edge to edge, so the row scrolls out from under the section's
-            // rounded corners rather than stopping short of them.
-            .listRowInsets(EdgeInsets())
-            // Waymarked Trails' hiking routes over whichever map is chosen
-            // above — a layer rather than a sixth card, because it is drawn
-            // with any of them.
-            HikingRoutesToggle()
-            if entitlement.isEntitled {
+    /// The subscription that unlocks the paid maps, for a subscriber alone.
+    /// The maps themselves, and the hiking routes over them, are chosen on
+    /// the map — see ``MapModesView`` — where a tap changes something the
+    /// hiker can see.
+    @ViewBuilder private var mapProviderSection: some View {
+        if entitlement.isEntitled {
+            Section {
                 manageSubscriptionRow
-            }
-        } header: {
-            Text("Map Tiles")
-        } footer: {
-            VStack(alignment: .leading, spacing: 6) {
-                // The map's credits and the layer's, as the line on the map
-                // draws them, then every other source a card above shows
-                // imagery from: a card is that provider's imagery too.
-                if let drawn = TileAttribution.drawn(
-                    base: selectedProvider.attribution,
-                    layer: TileLayer.shown(isOn: showsHikingRoutes)?.attribution
-                ) {
-                    TileAttributionView(attribution: drawn.including(
-                        previews: TileProvider.all.filter(Secrets.canLoadTiles).map(\.attribution)
-                    ))
-                }
-                // What each map saves for offline use is said once, in the
-                // selected map's summary above, rather than again down here.
-                if TileProvider.all.contains(where: { !Secrets.canLoadTiles($0) }) {
-                    // A sentence a hiker can act on, and — under `#if DEBUG`
-                    // — the one a contributor needs. It used to be the second
-                    // half alone, which named a file in the project to
-                    // whoever was reading it. That is a contributor's
-                    // instruction shown to a customer, and it could only ever
-                    // appear in a build where the paid rows are dead, which
-                    // is the build this text most needs to not read like a
-                    // half-finished app.
-                    Text("Maps marked \u{201C}Needs API key\u{201D} aren’t available in this build.")
-                    #if DEBUG
-                    // Verbatim: only a contributor reads it, so it is not
-                    // for translation, and Xcode's own catalog sync leaves
-                    // `#if DEBUG` code out and deleted the key on every build.
-                    Text(verbatim: "Adding one is a build-time step — see Secrets.example.plist in the project.")
-                    #endif
-                }
-                if !entitlement.isEntitled,
-                   TileProvider.all.contains(where: \.requiresPaidAccess) {
-                    Text("Maps with a lock need OpenHikes Pro.")
-                }
+            } header: {
+                Text("Map Tiles")
             }
         }
     }

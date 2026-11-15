@@ -77,11 +77,14 @@ struct MapView: MapViewRepresentable, Equatable {
     /// update — on the same `MKMapView` either way.
     var base: MapBase
 
-    /// The transparent layer drawn over that map — Waymarked Trails' hiking
-    /// routes — or `nil` while the switch for it is off. Over every map,
-    /// Apple's included, and beneath every line; see
-    /// `MapCoordinator+TileLayer.swift`.
+    /// The layer drawn over that map — OpenStreetMap's hiking routes — or
+    /// `nil` while the switch for it is off. Over every map, Apple's
+    /// included, and beneath every line; see `MapCoordinator+TileLayer.swift`.
     var tileLayer: TileLayer?
+
+    /// Where the layer's squares come from, or `nil` for a launch that may
+    /// fetch none — every suite. Compared by identity.
+    var hikingRouteSquares: HikingRouteSquares?
 
     /// Observed directly by the map so the detail view's Zoom button can re-fit
     /// the route without re-rendering any view.
@@ -103,6 +106,16 @@ struct MapView: MapViewRepresentable, Equatable {
     /// question, and it is read from ``locationManager`` above rather than
     /// passed here — see ``Coordinator/observeLocationAccess(_:on:)``.
     var locationAccessPrompt: LocationAccessPrompt
+
+    /// Where a tap on the map-modes button goes — the top half of the pill
+    /// the "my location" button stands in.
+    ///
+    /// Handed over in the same direction and for the same reason as
+    /// ``locationAccessPrompt``: the tap is the map's and the sheet it opens
+    /// is presented from inside the map sheet's contents. The button keeps
+    /// it, as the camera pill keeps ``photoCapture``. See
+    /// ``MapModesPresentation``.
+    var mapModes: MapModesPresentation
 
     /// Whether a photo can be taken right now, and the two requests the camera
     /// pill raises. Observed directly by the map (not via SwiftUI) so pushing
@@ -391,9 +404,9 @@ struct MapView: MapViewRepresentable, Equatable {
     }
 
     /// Enables MapKit's standard controls. Compass and scale are built-in flags;
-    /// the "my location" button and the 2D button over it have no flag on
-    /// iOS, so they're added as subviews — and so is the camera pill facing
-    /// them across the map.
+    /// the "my location" button, the map-modes button it shares a pill with
+    /// and the 2D button over them have no flag on iOS, so they're added as
+    /// subviews — and so is the camera pill facing them across the map.
     private func addControls(to mapView: MKMapView, _ coordinator: Coordinator) {
         mapView.showsCompass = true
         mapView.showsScale = true
@@ -402,7 +415,7 @@ struct MapView: MapViewRepresentable, Equatable {
         mapView.showsZoomControls = true
         mapView.showsPitchControl = true
         #elseif os(iOS)
-        let glass = makeTrackingButton(for: mapView, coordinator)
+        let glass = makeTrackingPill(for: mapView, coordinator)
         mapView.addSubview(glass)
         coordinator.trackingButton = glass
 
@@ -417,8 +430,8 @@ struct MapView: MapViewRepresentable, Equatable {
             glass.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -Self.controlInset),
             bottom,
         ])
-        // And the 2D button standing on it, there only while the map is
-        // tilted — see `MapCoordinator+FlattenButton.swift`.
+        // And the 2D button standing on the pill, there only while the map
+        // is tilted — see `MapCoordinator+FlattenButton.swift`.
         addFlattenButton(to: mapView, coordinator, above: glass)
 
         // The credit line first: the camera pill is constrained against it
@@ -781,7 +794,7 @@ extension MapView {
     /// Puts the hiking-route layer on, takes it off, and credits it either
     /// way. No-op while nothing about it changed.
     private func applyTileLayer(to mapView: MKMapView, _ coordinator: Coordinator) {
-        guard coordinator.applyTileLayer(tileLayer, on: mapView) else { return }
+        guard coordinator.applyTileLayer(tileLayer, squares: hikingRouteSquares, on: mapView) else { return }
         #if os(iOS)
         // A layer over Apple's map is the one case where the line comes back
         // although the map's own credit is MapKit's: the layer's are owed
@@ -883,9 +896,11 @@ extension MapView {
             && lhs.sheetMetrics === rhs.sheetMetrics
             && lhs.base == rhs.base
             && lhs.tileLayer == rhs.tileLayer
+            && lhs.hikingRouteSquares === rhs.hikingRouteSquares
             && lhs.mapController === rhs.mapController
             && lhs.drawnRouteTap === rhs.drawnRouteTap
             && lhs.locationAccessPrompt === rhs.locationAccessPrompt
+            && lhs.mapModes === rhs.mapModes
             && lhs.locationManager === rhs.locationManager
             && lhs.photoCapture === rhs.photoCapture
             && lhs.photoPins === rhs.photoPins

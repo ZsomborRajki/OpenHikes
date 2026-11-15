@@ -507,7 +507,7 @@ extension MapSheetHikes {
                     .font(.subheadline.weight(.medium))
                 // Not *a whole country* any more, and deliberately not a
                 // figure either. The old sentence described the old 150 km
-                // ceiling; this one is OpenStreetMap's 40 km — see
+                // ceiling; this one is OpenStreetMap's — see
                 // ``CommunityQueryPolicy/maximumRadiusMeters`` — which a
                 // regional view reaches long before a country does. Spelling
                 // the distance instead would put a number in a string beside

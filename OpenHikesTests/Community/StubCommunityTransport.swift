@@ -37,6 +37,10 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
         /// so a case can read the rectangle the map handed over as well as the
         /// circle CloudKit is asked.
         var nearbyRequests: [CommunitySearchArea] = []
+        /// How many rows each nearby search asked for, in order. What proves
+        /// a wide search asks for the longer page: the stub answers with the
+        /// same rows whatever it is asked for.
+        var nearbyLimits: [Int] = []
         var titleQueries: [String] = []
         var detailRequests: [String] = []
         /// The submission ids a publication check asked about, in order. What
@@ -239,6 +243,7 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     ) async throws -> CommunityNearbyAnswer {
         state.withLock { recording in
             recording.nearbyRequests.append(area)
+            recording.nearbyLimits.append(limit)
             recording.exclusions.append(excluding)
             recording.nearbyScopes.append(scope)
         }

@@ -8,9 +8,10 @@
 //  `showsPitchControl` are macOS and Mac Catalyst only, which is why only the
 //  macOS branch of `MapView.addControls` turns the flag on, and SwiftUI's
 //  `MapPitchToggle` drives a SwiftUI `Map` through its scope, never an
-//  `MKMapView`. So this is a capsule of the app's own: the tracking button's
-//  size and glass, standing directly on top of it, and riding the sheet with
-//  it because it is constrained to it.
+//  `MKMapView`. So this is a capsule of the app's own: the tracking pill's
+//  width and glass, standing directly on top of it — over the map-modes
+//  button, as in Maps — and riding the sheet with it because it is
+//  constrained to it.
 //
 //  There only while the map is tilted, as in Maps: a map seen from straight
 //  above has nothing for it to do. Tilted means the line the terrain rises
@@ -87,7 +88,7 @@ extension MapView.Coordinator {
     }
 
     /// Applies the sheet's fade, which the button shares with the tracking
-    /// button it stands on.
+    /// pill it stands on.
     ///
     /// Remembered apart from whether the button is up, as the camera pill's
     /// is, so a tilt mid-drag fades it in to the sheet's opacity rather than
@@ -100,16 +101,17 @@ extension MapView.Coordinator {
 }
 
 extension MapView {
-    /// The gap between the 2D button and the tracking button under it: two
+    /// The gap between the 2D button and the tracking pill under it: two
     /// controls in one column, not one pill.
     private static let flattenButtonSpacing: CGFloat = 8
     private static let flattenTitlePointSize: CGFloat = 15
 
-    /// The 2D button, in a glass capsule of its own over `tracking`.
+    /// The 2D button, in a glass capsule of its own over `tracking`, the
+    /// pill.
     ///
     /// Words rather than a glyph, because Maps says *2D* and there is no
-    /// symbol a hiker would read as it. In the label colour, as the tracking
-    /// glyph is at rest: it is on glass, so the pair stays legible whatever
+    /// symbol a hiker would read as it. In the label colour, as the pill's
+    /// glyphs are at rest: it is on glass, so they stay legible whatever
     /// the tiles underneath are doing.
     func addFlattenButton(
         to mapView: MKMapView,

@@ -26,8 +26,8 @@ struct HikeDetailView: View {
     /// snapshot that cannot invalidate this body is a snapshot that lets a
     /// lapsed subscription start a bulk download against a paid key.
     let entitlement: MapEntitlementStore
-    /// The map the hiker chose and whether its route layer is on, which decide
-    /// what this screen offers to save. Handed in rather than held as
+    /// The map the hiker chose, which decides what this screen offers to
+    /// save. Handed in rather than held as
     /// `@AppStorage` — see ``StoredSettings``.
     let settings: StoredSettings
     /// Source of the user's live location. Auto-follow consumes
@@ -89,12 +89,9 @@ struct HikeDetailView: View {
     /// list, so this screen is rebuilt on that transition either way.
     var isSheetCompact = false
 
-    /// The active tile source, mirrored from Settings so offline downloads use the
+    /// The active tile source, mirrored from *Map Modes* so offline downloads use the
     /// same provider (and API key) the map is currently drawing.
     private var tileProviderID: String { settings.tileProviderID }
-    /// Whether the hiking-route layer is drawn too, which is a map that
-    /// fetches tiles — and so has tiles to auto-save — even over Apple's.
-    private var showsHikingRoutes: Bool { settings.showsHikingRoutes }
     // Shared with the offline-storage and community helpers in the
     // companion extension files.
     // swiftlint:disable private_swiftui_state
@@ -526,10 +523,12 @@ private extension HikeDetailView {
     /// there is nothing a download could fetch.
     private var activeTileSource: ActiveTileSource? { activeProvider.renderedSource }
 
-    /// Whether anything on the map is fetched as tiles: the selected map, or
-    /// the hiking-route layer over it. Never a reason to offer a *download* —
-    /// the layer has none, so ``canDownload`` asks the provider alone.
-    private var mapRendersTiles: Bool { !activeProvider.usesSystemBaseMap || showsHikingRoutes }
+    /// Whether the selected map is fetched as tiles, which is what auto-save
+    /// keeps. The hiking-route layer over it is not: it is drawn from squares
+    /// the layer keeps for itself (``HikingRouteSquares``), so over Apple's
+    /// map it leaves nothing to save — the answer
+    /// `OpenHikesModel.makeAutoSaveController` gives the controller.
+    private var mapRendersTiles: Bool { !activeProvider.usesSystemBaseMap }
 
     // MARK: Header
 

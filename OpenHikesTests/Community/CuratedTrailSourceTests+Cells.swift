@@ -68,9 +68,30 @@ extension CuratedTrailSourceTests {
             ways: [way("", [(47.6, 12.94), (49, 15)])]
         )
 
+        /// More routes than one geometry pass draws, each a step further
+        /// east of the valley's middle than the one before.
+        static let crowd: [TrailCellFile.Relation] = (0..<30).map { index in
+            let longitude = 12.97 + Double(index) * 0.001
+            return TrailCellFile.Relation(
+                id: Int64(100 + index),
+                tags: ["name": "Crowd \(index)", "route": "hiking"],
+                ways: [way("", [(47.62, longitude), (47.621, longitude)])]
+            )
+        }
+
         static func way(_ role: String, _ points: [(Double, Double)]) -> TrailCellFile.Way {
             TrailCellFile.Way(role: role, points: points.map { TrailCellFixture.point($0.0, $0.1) })
         }
+    }
+
+    /// A map 120 km across around the valley: wider than Overpass is asked
+    /// about, and inside the app's own ceiling.
+    private static var regionArea: CommunitySearchArea {
+        CommunitySearchArea(
+            coordinate: visibleArea.coordinate,
+            radiusMeters: 60_000,
+            visibleSpan: CommunitySearchArea.Span(latitudeDelta: 1.08, longitudeDelta: 1.6)
+        )
     }
 
     /// The same four relations ``Squares`` holds, as Overpass answers them:
@@ -178,6 +199,72 @@ extension CuratedTrailSourceTests {
 
         #expect(listed.isEmpty)
         #expect(await overpass.requestCount == 0)
+    }
+
+    // MARK: - A search only the squares can answer
+
+    /// The squares' rows come with their lines, so their page is as long as
+    /// was asked for. Overpass's is one geometry pass's worth: see
+    /// ``anOverpassPageIsOneBatch()``.
+    @Test("a wide search the squares answer offers as many rows as it was asked for")
+    func aWideSearchOffersAsManyRowsAsWereAskedFor() async throws {
+        let database = StubTrailCellDatabase(cells: [Squares.west: TrailCellFixture.found(Squares.crowd)])
+        let (source, overpass) = Self.makeSource(squares: database)
+        let page = CommunityQueryPolicy.resultLimit(for: Self.regionArea)
+
+        let completion = try await Self.completion(source, area: Self.regionArea, limit: page)
+
+        #expect(page > CuratedTrailQuery.geometryBatchLimit, "precondition: a wide page is longer than a batch")
+        #expect(completion.trails.map(\.relationID) == Squares.crowd.map(\.id), "all thirty, nearest first")
+        #expect(completion.trails.allSatisfy { $0.route.count > 1 })
+        #expect(completion.outage == nil)
+        #expect(await overpass.requestCount == 0)
+    }
+
+    @Test("an Overpass answer is no longer than one geometry pass draws, however many rows were asked for")
+    func anOverpassPageIsOneBatch() async throws {
+        let batch = CuratedTrailQuery.geometryBatchLimit
+        let (source, _) = Self.makeSource([Self.ok(Self.crowd(of: batch + 5))])
+
+        let listed = try await source.listings(near: Self.visibleArea, limit: batch * 2)
+
+        #expect(listed.count == batch)
+    }
+
+    /// The box the old ceiling was drawn to keep away from Overpass. The
+    /// search fails as one, for ``MergedCommunityTransport`` to report and
+    /// to draw what the device holds beside.
+    @Test(
+        "a wide search the squares cannot answer fails, and Overpass is asked nothing",
+        arguments: [TrailCellFetch.Manifest.absent, .partial, .unread]
+    )
+    func aWideSearchIsNotPutToOverpass(manifest: TrailCellFetch.Manifest) async throws {
+        let (source, overpass) = Self.makeSource(
+            squares: StubTrailCellDatabase(manifest: manifest),
+            overpass: [Self.ok(Self.areaWithLinesBody)]
+        )
+
+        await #expect(throws: CuratedTrailSearchRefusal.widerThanOverpassIsAsked) {
+            try await source.listings(near: Self.regionArea, limit: 50)
+        }
+        #expect(await overpass.requestCount == 0)
+    }
+
+    @Test("a wide search with no squares to ask fails the same way")
+    func aWideSearchWithoutSquares() async throws {
+        let (source, overpass) = Self.makeSource([Self.ok(Self.areaWithLinesBody)])
+
+        await #expect(throws: CuratedTrailSearchRefusal.widerThanOverpassIsAsked) {
+            try await source.listings(near: Self.regionArea, limit: 50)
+        }
+        #expect(await overpass.requestCount == 0)
+    }
+
+    /// Not *no trails here*, which is a claim about the place, and not
+    /// *busy*, which is about Overpass and would be untrue of it.
+    @Test("a wide search that failed reads as trails that could not be had")
+    func aRefusedWideSearchIsAnOutage() {
+        #expect(CuratedTrailOutage(CuratedTrailSearchRefusal.widerThanOverpassIsAsked) == .unavailable)
     }
 
     // MARK: - Where the squares have no answer

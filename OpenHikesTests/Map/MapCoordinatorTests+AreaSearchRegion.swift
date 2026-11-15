@@ -51,8 +51,8 @@ extension MapCoordinatorTests {
 
     /// The span of ``nearTheCeiling``, in degrees.
     private enum Wide {
-        static let latitudeSpan = 1.1
-        static let longitudeSpan = 0.75
+        static let latitudeSpan = 2.75
+        static let longitudeSpan = 1.875
     }
 
     /// A zoom at which the map above the sheet's middle detent is inside the

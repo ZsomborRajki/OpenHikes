@@ -143,8 +143,9 @@ struct CuratedTrailSourceTests {
     ///
     /// Each is a single two-point way, which is all the cache stores anything
     /// about — what is under test is how many entries there are and which of
-    /// them survives, not what is in them.
-    private static func crowd(of count: Int) -> String {
+    /// them survives, not what is in them. Internal rather than private
+    /// because `CuratedTrailSourceTests+Cells` overruns a page with it.
+    static func crowd(of count: Int) -> String {
         let elements = (0..<count).map { index -> String in
             let latitude = 47.0 + Double(index) / 10_000
             return """

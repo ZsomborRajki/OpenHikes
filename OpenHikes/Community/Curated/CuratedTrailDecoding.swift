@@ -191,7 +191,7 @@ nonisolated extension CuratedTrailDecoding {
     /// One spelling of *offered with its line* for the two things that hand
     /// over relations already carrying their geometry — a small search's
     /// Overpass answer above, and a pre-built square, see
-    /// ``trails(in:touching:)`` — so the same route is offered, and drawn the
+    /// ``drawn(_:limit:)`` — so the same route is offered, and drawn the
     /// same way, whichever of them it came from.
     static func offered(_ element: Element) -> CuratedTrail? {
         guard element.type == "relation",

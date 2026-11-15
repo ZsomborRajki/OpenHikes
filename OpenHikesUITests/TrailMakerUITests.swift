@@ -283,10 +283,10 @@ nonisolated final class TrailMakerUITests: XCTestCase {
     }
 
     /// *Hiking Routes* in the maker's *On the Map* section, under *Follow
-    /// Paths*, and the same setting as Settings' switch: flipped here, it is
-    /// found on there.
+    /// Paths*, and the same setting as *Map Modes*' pictures: switched off
+    /// here, the clean map is the chosen picture there.
     @MainActor
-    func testHikingRoutesSwitchUnderFollowPathsIsTheSettingsOne() {
+    func testHikingRoutesSwitchUnderFollowPathsIsTheMapModesOne() {
         let app = launchApp(
             arguments: ["--ui-test-trail-graph=\(UITestFixture.trailGraphName)"]
         )
@@ -303,21 +303,19 @@ nonisolated final class TrailMakerUITests: XCTestCase {
             snap.frame.minY,
             "the routes switch should sit under Follow Paths"
         )
-        XCTAssertEqual(routes.value as? String, "0", "the layer is off until it is asked for")
+        XCTAssertEqual(routes.value as? String, "1", "the layer is on until it is switched off")
         // At the control's end of the row: a tap in the middle of a
         // `Toggle` row is inert.
         routes.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
-        XCTAssertTrue(waitUntil { (routes.value as? String) == "1" })
+        XCTAssertTrue(waitUntil { (routes.value as? String) == "0" })
 
         popScreen(in: app)
         XCTAssertTrue(waitUntil { element("map-sheet", in: app).exists })
-        element("settings-button", in: app).tap()
-        let inSettings = app.switches.matching(identifier: "hiking-routes-toggle").firstMatch
-        XCTAssertTrue(scrollIntoView(inSettings, in: app))
-        XCTAssertEqual(
-            inSettings.value as? String,
-            "1",
-            "the maker's switch should be the one in Settings"
+        lowerSheetToMapModesButton(in: app)
+        openMapModes(in: app)
+        XCTAssertTrue(
+            element("hiking-routes-off", in: app).isSelected,
+            "the maker's switch should be the setting Map Modes chooses"
         )
     }
 

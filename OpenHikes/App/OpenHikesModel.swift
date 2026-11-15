@@ -174,6 +174,10 @@ final class OpenHikesModel {
     /// ``makeCommunityTransport()``. Held so the share sheet and the preview
     /// screen use the same one the browser does.
     let communityTransport: (any CommunityTransporting)?
+    /// Where the hiking-routes layer's squares come from, or `nil` for a
+    /// launch that must not reach CloudKit — a suite's, a UI test's or a
+    /// preview's; see ``HikingRouteSquares/forThisLaunch()``.
+    let hikingRouteSquares: HikingRouteSquares?
     /// The link to a paired Apple Watch, or `nil` for a launch that must not
     /// open one — see ``makeWatchLink(container:recorder:defaults:)``.
     ///
@@ -215,6 +219,7 @@ final class OpenHikesModel {
         movementReminders: MovementReminderController? = nil,
         walkSession: TrailWalkSession? = nil,
         communityTransport: (any CommunityTransporting)? = nil,
+        hikingRouteSquares: HikingRouteSquares? = nil,
         selectedLine: SelectedLine = SelectedLine(),
         defaults: UserDefaults = .standard,
         startupIssue: StorageStartupIssue? = nil,
@@ -235,6 +240,7 @@ final class OpenHikesModel {
             session?.recordingDidSave(hikeID: hikeID)
         }
         self.communityTransport = communityTransport
+        self.hikingRouteSquares = hikingRouteSquares
         // Before the maker, which asks it whether its line may be coloured by
         // elevation.
         let store = Self.makeEntitlement(defaults: defaults)
@@ -297,25 +303,29 @@ final class OpenHikesModel {
         // and the buttons act on the recorder and the session. Only a launch
         // that has a controller registers a delegate — a suite has neither.
         if let movementReminders {
-            movementReminders.hasActiveRecording = { [weak hikeRecorder] in
-                hikeRecorder?.isActive ?? false
-            }
-            // A second `HikeIntentCoordinator` beside the one `OpenHikesApp`
-            // registers with `AppDependencyManager`, and deliberately: the
-            // coordinator owns no state of its own — it holds this recorder
-            // and this container and reads the phase back — so the two cannot
-            // disagree, and reaching for the registered one would mean asking
-            // `AppDependencyManager` for something a test launch never
-            // registers, which traps rather than returning nil.
-            reminderActions = MovementReminderActions(
-                recording: HikeIntentCoordinator(
-                    recorder: hikeRecorder,
-                    container: container,
-                    walkUnderWay: { [weak walkSession = self.walkSession] in walkSession?.walkUnderWayTitle }
-                ),
-                walkSession: self.walkSession
-            ).registerAsNotificationDelegate()
+            wire(movementReminders)
         }
+    }
+
+    private func wire(_ movementReminders: MovementReminderController) {
+        movementReminders.hasActiveRecording = { [weak hikeRecorder] in
+            hikeRecorder?.isActive ?? false
+        }
+        // A second `HikeIntentCoordinator` beside the one `OpenHikesApp`
+        // registers with `AppDependencyManager`, and deliberately: the
+        // coordinator owns no state of its own — it holds this recorder and
+        // this container and reads the phase back — so the two cannot
+        // disagree, and reaching for the registered one would mean asking
+        // `AppDependencyManager` for something a test launch never registers,
+        // which traps rather than returning nil.
+        reminderActions = MovementReminderActions(
+            recording: HikeIntentCoordinator(
+                recorder: hikeRecorder,
+                container: container,
+                walkUnderWay: { [weak walkSession] in walkSession?.walkUnderWayTitle }
+            ),
+            walkSession: walkSession
+        ).registerAsNotificationDelegate()
     }
 
     /// Where a test host's stubbed entitlement remembers its answer.

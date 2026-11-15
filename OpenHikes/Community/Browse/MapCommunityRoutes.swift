@@ -180,9 +180,9 @@ extension MapView.Coordinator {
     /// the same reason, and these belong there too.
     ///
     /// Being underneath is therefore a position within that level rather than
-    /// a level of its own: each line goes just above the tile overlays — the
-    /// map's, and the hiking-route layer's when it is on, which is what
-    /// ``groundOverlay`` names — the bottom of everything the app draws. The
+    /// a level of its own: each line goes just above the ground — the map's
+    /// tiles, and the hiking-route layer over them when it is on, which is
+    /// what ``groundOverlay`` names — the bottom of everything the app draws. The
     /// library's lines go on over the topmost of these, and `MapView`'s own
     /// route over those, so the hiker's stay on top however they arrive — see
     /// `MapLibraryLines.swift`. All but one: the open preview's own line,

@@ -2,7 +2,7 @@
 //  TrailMakerSupport.swift
 //  OpenHikesUITests
 //
-//  Opening the trail maker and drawing on it, for the two suites that do.
+//  Opening the trail maker and drawing on it, for the suites that do.
 //
 //  Its own file rather than a few more members on `UITestSupport.swift`, which
 //  is at the length the linter allows — and rather than a copy in each suite,
@@ -94,6 +94,27 @@ extension XCTestCase {
             )
         }
     }
+
+    /// Opens the trail maker and drops a pin, which opens its place card: the
+    /// maker's sheet over the map sheet that leaves the map live behind it,
+    /// the map's own controls included.
+    @MainActor
+    @discardableResult func openMakersPlaceCard(in app: XCUIApplication) -> XCUIElement {
+        let map = element("trail-map", in: app)
+        XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
+        openTrailMaker(in: app)
+        dropPin(at: Self.placeCardPinSpot, on: map)
+        let card = element("trail-place-sheet", in: app)
+        XCTAssertTrue(
+            card.waitForExistence(timeout: UITestTimeout.navigation),
+            "a press on the map should open the place card"
+        )
+        return card
+    }
+
+    /// Where ``openMakersPlaceCard(in:)`` drops its pin: high on the map,
+    /// clear of the sheet and of the controls along the map's edges.
+    private static let placeCardPinSpot = CGVector(dx: 0.5, dy: 0.25)
 
     /// Drops a pin on the map, which is a press and hold rather than a tap —
     /// a tap only ever closes the card that is up.

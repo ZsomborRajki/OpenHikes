@@ -18,11 +18,11 @@ import Foundation
 /// has nothing for an actor to protect.
 nonisolated struct TileProvider: Identifiable, Hashable, Sendable {
     let id: String
-    /// The name Settings shows. Worded through the String Catalog like the
-    /// rest of the screen, product names included, so a translation sees each
+    /// The name *Map Modes* shows. Worded through the String Catalog like the
+    /// rest of the sheet, product names included, so a translation sees each
     /// one and can keep it (#1028).
     let name: String
-    /// One-line description shown under the name in Settings.
+    /// One-line description shown under the cards on *Map Modes*.
     let summary: String
     /// URL template with `{z}/{x}/{y}` and an optional `{key}` placeholder.
     let urlTemplate: String
@@ -146,7 +146,7 @@ nonisolated extension TileProvider {
     /// The current default: OpenStreetMap's standard raster tiles.
     static let openStreetMap = TileProvider(
         id: "osm",
-        name: String(localized: "OpenStreetMap", comment: "The name of a map style in Settings"),
+        name: String(localized: "OpenStreetMap", comment: "The name of a map style on Map Modes"),
         summary: String(localized: "Standard street map. Tiles you view are auto-saved for offline use."),
         urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
         maximumZ: osmMaximumZ,
@@ -172,7 +172,7 @@ nonisolated extension TileProvider {
     /// installs no overlay.
     static let appleMaps = TileProvider(
         id: "apple_maps",
-        name: String(localized: "Apple Maps", comment: "The name of a map style in Settings"),
+        name: String(localized: "Apple Maps", comment: "The name of a map style on Map Modes"),
         summary: String(localized: """
             The system’s built-in map. Uses the least battery and data, but OpenHikes \
             can’t save it for offline use.
@@ -203,7 +203,7 @@ nonisolated extension TileProvider {
     /// than borrowing Apple Maps' "least battery and data" wording.
     static let appleSatellite = TileProvider(
         id: "apple_satellite",
-        name: String(localized: "Apple Satellite", comment: "The name of a map style in Settings"),
+        name: String(localized: "Apple Satellite", comment: "The name of a map style on Map Modes"),
         summary: String(localized: """
             Satellite imagery with road and place names. Needs a connection, and can’t be \
             saved for offline use.
@@ -224,7 +224,7 @@ nonisolated extension TileProvider {
     /// within the 100 MB per-device ceiling its terms set.
     static let stadiaOutdoors = TileProvider(
         id: "stadia_outdoors",
-        name: String(localized: "Stadia Outdoors", comment: "The name of a map style in Settings"),
+        name: String(localized: "Stadia Outdoors", comment: "The name of a map style on Map Modes"),
         summary: String(localized: """
             Topographic hiking map with contour lines and trails. Routes can be downloaded \
             for offline use.
@@ -250,7 +250,7 @@ nonisolated extension TileProvider {
     /// Stadia's attribution page requires, ahead of OpenMapTiles.
     static let stamenTerrain = TileProvider(
         id: "stadia_stamen_terrain",
-        name: String(localized: "Stamen Terrain", comment: "The name of a map style in Settings"),
+        name: String(localized: "Stamen Terrain", comment: "The name of a map style on Map Modes"),
         summary: String(localized: "Hillshaded terrain in natural colors. Routes can be downloaded for offline use."),
         urlTemplate: "https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}.png?api_key={key}",
         maximumZ: stadiaMaximumZ,
@@ -274,7 +274,7 @@ nonisolated extension TileProvider {
     /// Restoring the flag means buying that plan first.
     static let thunderforestOutdoors = TileProvider(
         id: "thunderforest_outdoors",
-        name: String(localized: "Thunderforest Outdoors", comment: "The name of a map style in Settings"),
+        name: String(localized: "Thunderforest Outdoors", comment: "The name of a map style on Map Modes"),
         summary: String(localized: """
             Topographic map with sharp close-up detail. Tiles you view are auto-saved for \
             offline use.
@@ -364,7 +364,7 @@ nonisolated extension TileProvider {
     /// source this device isn't entitled to — in either case the (keyless,
     /// free) default.
     ///
-    /// Settings won't let such a provider be *selected* — see `MapStylePicker` —
+    /// *Map Modes* won't let such a provider be *selected* — see `MapStylePicker` —
     /// but a build that once had a `Secrets.plist` can leave the id behind in
     /// `UserDefaults` after the key is gone, and a lapsed subscription (or a
     /// choice synced from a device that still has one) leaves a paid id behind
