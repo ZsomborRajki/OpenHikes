@@ -123,18 +123,15 @@ struct MapModesView: View {
         TileProvider.renderable(id: tileProviderID, entitlement: entitlement.state)
     }
 
-    /// The map's credits and the layer's, as the line on the map draws them,
-    /// then every other source a card shows imagery from: a card is that
-    /// provider's imagery too. So is the *Hiking Routes* picture, which shows
-    /// the layer whether or not it is switched on.
-    private var credits: TileAttribution? {
-        let pictured = TileProvider.all.filter(Secrets.canLoadTiles).map(\.attribution)
-            + [TileLayer.shown(isOn: true)].compactMap { $0?.attribution }
-        return TileAttribution.drawn(
-            base: selectedProvider.attribution,
-            layer: TileLayer.shown(isOn: showsHikingRoutes)?.attribution
-        )?
-        .including(previews: pictured)
+    /// The map's credits and the layer's, then every source the sheet shows
+    /// a picture of — see ``TileAttribution/mapModes(selected:showsHikingRoutes:cards:)``.
+    /// A card is drawn only from a source whose key resolved.
+    private var credits: TileAttribution {
+        TileAttribution.mapModes(
+            selected: selectedProvider,
+            showsHikingRoutes: showsHikingRoutes,
+            cards: TileProvider.all.filter(Secrets.canLoadTiles)
+        )
     }
 
     var body: some View {
@@ -225,9 +222,7 @@ struct MapModesView: View {
             if !entitlement.isEntitled, TileProvider.all.contains(where: \.requiresPaidAccess) {
                 Text("Maps with a lock need OpenHikes Pro.")
             }
-            if let credits {
-                TileAttributionView(attribution: credits)
-            }
+            TileAttributionView(attribution: credits)
         }
         .font(.caption)
         .foregroundStyle(.secondary)

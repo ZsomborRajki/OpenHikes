@@ -143,14 +143,15 @@ struct OpenHikesView: View {
     /// and is not re-run by a photograph being opened inside the sheet.
     private var panelCoversMap: Bool { usesSidePanel && sheet.isShowingFullHeightScreen }
 
-    /// The selected tile provider, persisted by the settings sheet.
+    /// The selected tile provider, persisted by *Map Modes*.
     ///
     /// This and the two below are read from ``StoredSettings`` and never held
     /// as `@AppStorage`, which re-runs the view declaring it on every write any
     /// part of the app makes to its defaults — for this view, the whole map
     /// screen. See that type.
     private var tileProviderID: String { appModel.storedSettings.tileProviderID }
-    /// Whether the hiking-route layer is drawn over that map, set in Settings.
+    /// Whether the hiking-route layer is drawn over that map, set on *Map
+    /// Modes* or in the trail maker.
     private var showsHikingRoutes: Bool { appModel.storedSettings.showsHikingRoutes }
 
     /// Opt-in second copy, in the system photo library, of every photo taken

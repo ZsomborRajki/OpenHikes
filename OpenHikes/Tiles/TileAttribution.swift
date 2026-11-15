@@ -144,6 +144,21 @@ nonisolated struct TileAttribution: Hashable, Sendable {
         })
     }
 
+    /// The line along the foot of *Map Modes*: `selected` and the layer
+    /// over it, as the map's own line credits them, then every other source
+    /// the sheet shows a picture of — each of `cards`, and the two *Hiking
+    /// Routes* pictures, which are OpenStreetMap's map with and without the
+    /// layer over it, whichever of them is chosen.
+    static func mapModes(selected: TileProvider, showsHikingRoutes: Bool, cards: [TileProvider]) -> Self {
+        let routesPictures = [TileProvider.openStreetMap.attribution, TileLayer.hikingRoutes.attribution]
+        let pictured = cards.map(\.attribution) + routesPictures
+        let drawn = drawn(
+            base: selected.attribution,
+            layer: TileLayer.shown(isOn: showsHikingRoutes)?.attribution
+        ) ?? selected.attribution
+        return drawn.including(previews: pictured)
+    }
+
     private static func identity(of credit: Credit) -> String {
         credit.url?.absoluteString ?? credit.title
     }
