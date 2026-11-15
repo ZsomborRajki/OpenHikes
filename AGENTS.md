@@ -1343,10 +1343,10 @@ in its source header. Do not weaken one without a measurement.
   export `md5 e2fd4f7c500b3911fae3d86a9b9d3f9c`. Both have the two
   trail-square record types, `CuratedTrailCell` and `CuratedTrailManifest`,
   neither with an index, and both hold the world's squares under a manifest
-  that says so (*The trail squares*). Development also holds the
-  hiking-routes layer's squares, built from planet-261109 and marked as the
-  whole world under `routes1_manifest`; production holds none, so a build
-  signed for production draws no layer (*The hiking-routes layer*). Both have a column for every attribute in
+  that says so (*The trail squares*). Both also hold the same build of the
+  hiking-routes layer's squares, from planet-261109, marked as the whole
+  world under `routes1_manifest` (*The hiking-routes layer*). Both have a
+  column for every attribute in
   `MirroredCloudKitSchema.recordTypes`. The only live columns the contract
   does not name are SwiftData's own `CD_entityName`, the
   to-one reference columns that the contract lists as relationships, and the
