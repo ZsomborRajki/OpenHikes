@@ -868,6 +868,16 @@ a change to recording, the map, the sheet or the render path; the PR template,
   alert lives in `MapScreenAlerts`, and `MapScreenAlertUITests` checks them,
   except the trail maker's missed-photo alert: it is attached beside them on the
   same contents, because a seventh parameter is past the lint limit.
+- **The map is chosen on the map.** *Map Modes* (`MapModesView`) is a sheet
+  as tall as its cards, opened from the pill the "my location" button stands
+  in, so the map above it turns over as a card is tapped. It holds the cards,
+  the selected map's summary and every card's credits. Settings keeps the
+  *Hiking Routes* switch and the subscription row.
+  - A place card leaves the map live behind it, the pill included, and the
+    map sheet is already presenting the card. A sheet asked for from under it
+    waits, and comes up when the card is closed. So the card presents *Map
+    Modes* over itself while it is up (`MapModesPresentation`), and any
+    other sheet a map control opens has to do the same.
 - **The primary surface has two shapes: a sheet in a narrow window, a panel
   beside the map in a wide or a short one.**
   - At a compact height a sheet left to adapt is presented full-screen, its

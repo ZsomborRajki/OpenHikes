@@ -2,7 +2,7 @@
 //  TilePreviewRenderer.swift
 //  OpenHikes
 //
-//  Draws the map cards in Settings: four of a provider's own tiles, through
+//  Draws the map cards on *Map Modes*: four of a provider's own tiles, through
 //  the same cache the map reads, or a MapKit snapshot of the same ground for
 //  the entries that draw Apple's maps.
 //
@@ -23,10 +23,10 @@ import UIKit
 /// auto-save: a card is not a map anybody browsed.
 @MainActor
 enum TilePreviewRenderer {
-    /// Finished cards, so reopening Settings, or scrolling a card away and
+    /// Finished cards, so reopening *Map Modes*, or scrolling a card away and
     /// back, costs nothing. A handful of cards at a few hundred pixels each;
     /// emptied outright past ``finishedLimit``, which a hiker only reaches by
-    /// opening Settings in many places, where the old cards are no use anyway.
+    /// opening it in many places, where the old cards are no use anyway.
     private static var finished: [String: UIImage] = [:]
     private static let finishedLimit = 24
 

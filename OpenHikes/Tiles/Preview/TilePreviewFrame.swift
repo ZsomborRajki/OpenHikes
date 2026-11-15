@@ -2,7 +2,7 @@
 //  TilePreviewFrame.swift
 //  OpenHikes
 //
-//  The patch of ground a map card in Settings is drawn from, and what each
+//  The patch of ground a map card on *Map Modes* is drawn from, and what each
 //  catalog entry draws it with. Pure, so both halves are tested without a
 //  tile server or a snapshotter; `TilePreviewRenderer` is what spends them.
 //
@@ -17,7 +17,7 @@ import OpenHikesShared
 /// Snapped to the tile grid rather than centred on the hiker exactly. A card
 /// is a sample of a map's style, not a locator, and a block that only moves
 /// when the hiker crosses a tile boundary is one the cache already holds the
-/// next time Settings opens — which, for the two commercial sources, is the
+/// next time *Map Modes* opens — which, for the two commercial sources, is the
 /// difference between a billed request per visit and one per neighbourhood.
 nonisolated struct TilePreviewFrame: Hashable, Sendable {
     /// Trail level: paths, contours and hillshading all draw, and the block

@@ -34,9 +34,9 @@ struct AboutSection: View {
     /// the purchase disclosure on ``MapPaywallView`` — the one screen that
     /// cannot be relied on to be reachable. It dismisses itself once the store
     /// reports the subscription, so a subscriber has no route back to it; the
-    /// provider rows that open it are disabled outright in a build whose paid
+    /// map cards that open it are disabled outright in a build whose paid
     /// sources have no API key; and while StoreKit is still answering, a paid
-    /// row is disabled too. The policy has to survive all three, so nothing
+    /// card is disabled too. The policy has to survive all three, so nothing
     /// here reads an entitlement, a product or a key. The disclosure link stays
     /// where it is as well: 3.1.2(a) wants it on the screen that takes the
     /// money, and this is not that screen.
@@ -48,7 +48,7 @@ struct AboutSection: View {
             // First, because it is the row this section exists to guarantee.
             //
             // `MapPaywallView` had exactly one entry point in the whole app —
-            // a locked provider row in Map Tiles — and that row is disabled
+            // a locked card on *Map Modes* — and that card is disabled
             // whenever `Secrets.canLoadTiles` is false, which is every build
             // without the gitignored `OpenHikes/Secrets.plist`. A Release
             // archive cut without that file therefore shipped an app in which

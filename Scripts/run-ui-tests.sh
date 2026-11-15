@@ -19,6 +19,7 @@ suites=(
   OpenHikesUITests
   HikeOrderUITests
   LibraryLinesUITests
+  MapModesUITests
   MapScreenAlertUITests
   OrientationUITests
   RecordingUITests

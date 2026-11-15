@@ -81,6 +81,10 @@ struct OpenHikesView: View {
     /// raising it and the alert presenting it are on opposite sides of this
     /// view, and nothing between them can hold state.
     @State var locationAccessPrompt = LocationAccessPrompt()
+    /// Raised by the map's map-modes button, presented from inside the
+    /// sheet's contents for the reason the weather detail is. See the
+    /// `.mapModesSheet` call below.
+    @State private var mapModes = MapModesPresentation()
     /// Which screen a photo would be filed under. Owned here because the map's
     /// camera pill and the screens that offer it live on opposite sides of the
     /// sheet; see ``PhotoCaptureController``.
@@ -313,6 +317,7 @@ struct OpenHikesView: View {
             mapController: mapController,
             drawnRouteTap: drawnRouteTap,
             locationAccessPrompt: locationAccessPrompt,
+            mapModes: mapModes,
             photoCapture: photoCapture,
             photoPins: photoPins,
             placePins: appModel.placePins,
@@ -559,10 +564,10 @@ extension OpenHikesView {
     /// The two callbacks are the whole difference: a side panel does not move,
     /// rests at no detent, and has nothing to report to ``SheetMetrics``.
     ///
-    /// The camera, the library picker and the weather detail are attached here
-    /// rather than beside the presentation, for the reason the repository
-    /// instructions give under *Present modals from inside the sheet's
-    /// contents*: a view
+    /// The camera, the library picker, the weather detail and *Map Modes* are
+    /// attached here rather than beside the presentation, for the reason the
+    /// repository instructions give under *Present modals from inside the
+    /// sheet's contents*: a view
     /// can only have one modal up at a time, and in portrait this sheet is
     /// never taken down, so a picker attached alongside it is never presented
     /// at all. In landscape there is no sheet and the panel is an ordinary
@@ -598,6 +603,11 @@ extension OpenHikesView {
                 onPicked: attachPickedPhotos
             )
             .weatherDetailSheet(weatherDetail, weather: appModel.weatherManager)
+            .mapModesSheet(
+                mapModes,
+                entitlement: appModel.entitlement,
+                locationManager: appModel.locationManager
+            )
             .gpxTrackChoice(gpxTrackChoice)
             .mapScreenAlerts(
                 importReport: $importReport,

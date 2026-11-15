@@ -303,7 +303,7 @@
     ]
   },
   {
-    "path": "OpenHikes/Settings/SettingsView.swift",
+    "path": "OpenHikes/Map/Modes/MapModesSheet.swift",
     "reason": "The explicitly verbatim DEBUG-only contributor instruction; it is absent from shipping builds.",
     "literals": [
       "\"Adding one is a build-time step — see Secrets.example.plist in the project.\""

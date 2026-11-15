@@ -1049,36 +1049,36 @@
         }
       }
     },
-    "%@ uses no downloadable tiles. Choose another map in Settings to save this hike for offline use." : {
+    "%@ uses no downloadable tiles. Choose another map in Map Modes to save this hike for offline use." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ verwendet keine herunterladbaren Kacheln. Wähle in den Einstellungen eine andere Karte, um diese Wanderung für die Offlinenutzung zu speichern."
+            "value" : "%@ verwendet keine herunterladbaren Kacheln. Wähle unter „Kartenmodi“ eine andere Karte, um diese Wanderung für die Offlinenutzung zu speichern."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ no usa teselas descargables. Elige otro mapa en Ajustes para guardar esta excursión y usarla sin conexión."
+            "value" : "%@ no usa teselas descargables. Elige otro mapa en «Modos de mapa» para guardar esta excursión y usarla sin conexión."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ n’utilise pas de tuiles téléchargeables. Choisissez une autre carte dans Réglages pour enregistrer cette randonnée pour une utilisation hors ligne."
+            "value" : "%@ n’utilise pas de tuiles téléchargeables. Choisissez une autre carte dans « Modes de carte » pour enregistrer cette randonnée pour une utilisation hors ligne."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ non usa tasselli scaricabili. Scegli un’altra mappa in Impostazioni per salvare questa escursione e usarla offline."
+            "value" : "%@ non usa tasselli scaricabili. Scegli un’altra mappa in «Modalità mappa» per salvare questa escursione e usarla offline."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Карта «%@» не использует загружаемые тайлы. Чтобы сохранить этот поход для использования офлайн, выберите другую карту в настройках."
+            "value" : "Карта «%@» не использует загружаемые тайлы. Чтобы сохранить этот поход для использования офлайн, выберите другую карту в разделе «Режимы карт»."
           }
         }
       }
@@ -6847,7 +6847,7 @@
       }
     },
     "Apple Maps" : {
-      "comment" : "The name of a map style in Settings",
+      "comment" : "The name of a map style on Map Modes",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -6950,7 +6950,7 @@
       }
     },
     "Apple Satellite" : {
-      "comment" : "The name of a map style in Settings",
+      "comment" : "The name of a map style on Map Modes",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -19548,6 +19548,40 @@
         }
       }
     },
+    "Map Modes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kartenmodi"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modos de mapa"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modes de carte"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modalità mappa"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Режимы карт"
+          }
+        }
+      }
+    },
     "Map Tiles" : {
       "localizations" : {
         "de" : {
@@ -25743,7 +25777,7 @@
       }
     },
     "OpenStreetMap" : {
-      "comment" : "The name of a map style in Settings",
+      "comment" : "The name of a map style on Map Modes",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -35395,7 +35429,7 @@
       }
     },
     "Stadia Outdoors" : {
-      "comment" : "The name of a map style in Settings",
+      "comment" : "The name of a map style on Map Modes",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -35430,7 +35464,7 @@
       }
     },
     "Stamen Terrain" : {
-      "comment" : "The name of a map style in Settings",
+      "comment" : "The name of a map style on Map Modes",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -40481,7 +40515,7 @@
       }
     },
     "Thunderforest Outdoors" : {
-      "comment" : "The name of a map style in Settings",
+      "comment" : "The name of a map style on Map Modes",
       "localizations" : {
         "de" : {
           "stringUnit" : {

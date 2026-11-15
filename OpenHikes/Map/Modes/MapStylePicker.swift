@@ -2,7 +2,7 @@
 //  MapStylePicker.swift
 //  OpenHikes
 //
-//  The map choice in Settings: one card per catalog entry, in a row that
+//  The map choice on *Map Modes*: one card per catalog entry, in a row that
 //  scrolls sideways, each drawn from that source's own tiles over the ground
 //  the hiker is standing on. The selected map's summary sits once under the
 //  row rather than on every card.
@@ -20,7 +20,7 @@ struct MapStylePicker: View {
     @Binding var tileProviderID: String
     /// The provider the map is really drawing with — see
     /// ``TileProvider/renderable(id:entitlement:)``. The ring and the summary
-    /// follow this, not the stored id, for the reason `SettingsView` gives.
+    /// follow this, not the stored id, for the reason ``MapModesView`` gives.
     let selected: TileProvider
     let entitlement: MapEntitlementStore
     /// Read once, in a task, for where to draw the cards — never from a body.
@@ -36,9 +36,10 @@ struct MapStylePicker: View {
     /// phone's row: the part is what says the row scrolls.
     private static let cardSpacing: CGFloat = 10
     private static let horizontalMargin: CGFloat = 16
+    private static let summaryLines = 2
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(spacing: 10) {
             ScrollViewReader { proxy in
                 ScrollView(.horizontal) {
                     HStack(alignment: .top, spacing: Self.cardSpacing) {
@@ -60,6 +61,10 @@ struct MapStylePicker: View {
             Text(selected.summary)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                // Room for the longer summaries whichever is showing, so the
+                // sheet around this does not change height at every tap.
+                .lineLimit(Self.summaryLines...)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, Self.horizontalMargin)
                 .accessibilityIdentifier("map-style-summary")

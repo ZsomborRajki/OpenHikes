@@ -90,7 +90,7 @@ nonisolated struct TileAttribution: Hashable, Sendable {
     /// links, forty per cent of the width, and one line at most Dynamic Type
     /// sizes instead of three.
     ///
-    /// ``plainText`` remains the canonical form and is what Settings draws and
+    /// ``plainText`` remains the canonical form and is what *Map Modes* draws and
     /// what VoiceOver speaks, both of which have the room. Every credit the app
     /// draws here is a copyright notice, which is what lets one symbol lead.
     var compactText: String {
@@ -125,7 +125,7 @@ nonisolated struct TileAttribution: Hashable, Sendable {
     /// These credits, then every party in `previews` not already named — for
     /// a screen that shows other sources' imagery beside the map it credits.
     ///
-    /// Settings is that screen: each of its map cards is drawn from its own
+    /// *Map Modes* is that screen: each of its map cards is drawn from its own
     /// source's tiles, or a MapKit snapshot, whichever map is selected, and a
     /// thumbnail of a provider's imagery is still its imagery. So the line
     /// under the cards credits all of them, not only the selected one.
@@ -135,7 +135,7 @@ nonisolated struct TileAttribution: Hashable, Sendable {
     /// source requires OpenStreetMap's longer data credit, that wording wins:
     /// Thunderforest's preview needs it even when another map is selected.
     /// Apple's unlinked credit is kept, once: a snapshot carries no **Legal**
-    /// link of its own, so in Settings nothing else names Apple.
+    /// link of its own, so on *Map Modes* nothing else names Apple.
     func including(previews: [Self]) -> Self {
         let candidates = credits + previews.flatMap(\.credits)
         let needsDataCredit = candidates.contains(.openStreetMapData)
