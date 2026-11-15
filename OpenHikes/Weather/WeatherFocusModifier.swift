@@ -5,12 +5,25 @@
 //  The two edges in the root view that point the weather badge somewhere.
 //
 //  A modifier rather than two `.onChange` handlers written out in
-//  `OpenHikesView`, for the reason ``DismissButton`` is one: a `ViewModifier`
-//  is a boundary the same way a `View` is, so the recorder's phase and the
-//  selected route's geometry are read *here* rather than becoming inputs of
-//  the body that draws the map. The third edge — search — is not here because
-//  it is not a change handler: `MapSheet` sets the subject in the same breath
-//  as it zooms the map, which is the moment it belongs to.
+//  `OpenHikesView`, so what a new selection, or a recording starting or
+//  stopping, does to the badge is kept with the weather rather than in the
+//  body that draws the map. That handling is what it isolates, and with it
+//  the hiker's position: `hiker` is a closure, called only when a recording
+//  starts, so no body reads a value that changes with every fix.
+//
+//  The two values it compares are not isolated. `trail:` and `isRecording:`
+//  are arguments, and a modifier's arguments are evaluated by the body that
+//  applies it (*Render isolation, in practice* in AGENTS.md): the selected
+//  hike's name and displayed route, and the recorder's phase behind
+//  `isActive`, stay inputs of `OpenHikesView` however they are compared
+//  here. They move with the selection, its line or its name, and the
+//  recording's phase, not with each fix, and no trace has put a cost on
+//  them; taking them out of that body would mean moving the observation
+//  itself, and measuring it.
+//
+//  The third edge — search — is not here because it is not a change handler:
+//  `MapSheet` sets the subject in the same breath as it zooms the map, which
+//  is the moment it belongs to.
 //
 //  The precedence between the two is not here either. `WeatherFocus` decides
 //  what a search may do while a recording is running; a call site that decided
