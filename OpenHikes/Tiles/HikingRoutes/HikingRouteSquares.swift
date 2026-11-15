@@ -8,24 +8,35 @@
 //
 //  The renderer asks synchronously whether every square a tile needs is in
 //  memory — see ``drawable(_:)`` — and that is all it ever waits on. Anything
-//  else is ``request(_:for:whenDone:)``: the disk, then one request for the
+//  else is ``request(_:for:whenDone:)``: the disk, then the network for the
 //  rest, off the main thread and off MapKit's drawing threads, after which
 //  the tile is drawn again. A tile that needs a square nobody can read stays
 //  empty rather than being drawn without it, so a line never stops at the
 //  edge of a square that failed.
 //
 //  **The disk never waits for the network.** A round reads what is kept,
-//  tells the tiles that were waiting, and hands the rest to a request it
+//  tells the tiles that were waiting, and queues the rest for a request it
 //  does not wait for, so a valley seen yesterday draws at once beside one
 //  that is still on its way over one bar of signal.
 //
+//  **One request at a time.** Every tile's missing squares join one queue,
+//  and a request takes up to ``squaresPerRequest`` of them once the one
+//  before it has answered, so whatever queued meanwhile goes out together.
+//  A pan over unseen ground asks every few tiles, and a request for each
+//  kept as many open at once, each for up to ``resourceTimeout``.
+//  Sending several together bought nothing when the day hikes' squares were
+//  timed — see ``TrailCellLibrary/maximumCellsPerRequest``. The squares
+//  asked for most recently go first, because they are the ground the map is
+//  on now.
+//
 //  **A request is a tile's, and is refused like one.** Whether the network
 //  may be asked is ``TileNetworkPolicy``'s answer for a tile somebody is
-//  looking at, so Low Data Mode stops the layer where it stops the map. A
-//  square that was refused, or that failed, is left for a minute, and then
-//  the tiles that asked for it meanwhile are drawn again — nothing else would
-//  ask, on a map nobody is moving. Only those: a tile already drawn whole is
-//  not stroked again every minute of an afternoon offline.
+//  looking at, asked again before every request, so Low Data Mode stops the
+//  layer where it stops the map, even with a request out. A square that was
+//  refused, or that failed, is left for a minute, and then the tiles that
+//  asked for it meanwhile are drawn again — nothing else would ask, on a map
+//  nobody is moving. Only those: a tile already drawn whole is not stroked
+//  again every minute of an afternoon offline.
 //
 //  Like the day hikes' search, this draws only from squares a manifest calls
 //  the whole world — see ``TrailCellFetch/Manifest`` — because only then is a
@@ -83,7 +94,12 @@ nonisolated final class HikingRouteSquares: Sendable {
         var held: OrderedDictionary<RouteSquare, DrawnRouteSquare> = [:]
         var heldPoints = 0
         var pending: Set<RouteSquare> = []
+        /// Every square on its way: being read from the disk, queued for a
+        /// request, or in one.
         var inFlight: Set<RouteSquare> = []
+        /// The squares the disk did not have, waiting for a request, the
+        /// one asked for most recently last.
+        var queued: OrderedSet<RouteSquare> = []
         var failedUntil: [RouteSquare: Date] = [:]
         var unavailableUntil: Date?
         var waiting: [Tile: @Sendable () -> Void] = [:]
@@ -91,6 +107,8 @@ nonisolated final class HikingRouteSquares: Sendable {
         /// drawn again when the next one lapses.
         var afterBackOff: [Tile: @Sendable () -> Void] = [:]
         var isWorking = false
+        /// Whether the one request there may be is out, or about to be.
+        var isSending = false
         var isWakeScheduled = false
 
         /// `square` if it is held, now the one drawn most recently.
@@ -247,8 +265,25 @@ nonisolated extension HikingRouteSquares {
 // MARK: - Bringing squares in
 
 nonisolated private extension HikingRouteSquares {
+    /// What ``sendQueued()`` does next with what is queued.
+    enum Turn {
+        /// Asks the database for these, in one request.
+        case send([RouteSquare])
+        /// Lets these go unsent, because the network may not be asked.
+        case refuse([RouteSquare])
+        /// Lets these go unsent, because the squares are not the whole
+        /// world and the layer draws nothing until it asks again.
+        case skip([RouteSquare])
+
+        var squares: [RouteSquare] {
+            switch self {
+            case .send(let squares), .refuse(let squares), .skip(let squares): squares
+            }
+        }
+    }
+
     /// Takes what is pending until nothing is: the disk at once, and the
-    /// rest handed to a request this does not wait for.
+    /// rest queued for a request this does not wait for.
     @concurrent
     func work() async {
         while true {
@@ -267,24 +302,77 @@ nonisolated private extension HikingRouteSquares {
             let stored = Set(fromDisk.map(\.0))
             if !stored.isEmpty { finish(stored) }
             let missing = batch.filter { !stored.contains($0) }
-            guard !missing.isEmpty else { continue }
-            Task { await self.bringIn(missing) }
+            if !missing.isEmpty { queue(missing) }
         }
     }
 
-    /// Asks the database for `missing`, a request's worth at a time, when
-    /// the network may be asked at all.
-    @concurrent
-    func bringIn(_ missing: [RouteSquare]) async {
-        if allowsFetching() {
-            for chunk in missing.chunks(ofCount: Self.squaresPerRequest) {
-                await fetch(Array(chunk))
-            }
-        } else {
-            Self.logger.notice("Hiking route squares are not fetched on this connection.")
-            fail(missing)
+    /// Queues `missing` for a request, and starts sending when nothing is
+    /// being sent.
+    func queue(_ missing: [RouteSquare]) {
+        let starts = state.withLock { state -> Bool in
+            state.queued.append(contentsOf: missing)
+            guard !state.isSending else { return false }
+            state.isSending = true
+            return true
         }
-        finish(Set(missing))
+        if starts {
+            Task { await self.sendQueued() }
+        }
+    }
+
+    /// Sends what is queued, a request's worth at a time and one request at
+    /// a time, until nothing is.
+    ///
+    /// Whether the network may be asked is asked again before each request,
+    /// because each can be a minute over one bar of signal, long enough for
+    /// Low Data Mode to be turned on. When it may not be, or the layer has
+    /// since learned there are no squares to read, nothing queued is sent:
+    /// it is let go as a refused square is, and its tiles wait out the
+    /// back-off. What earlier requests brought in is kept.
+    @concurrent
+    func sendQueued() async {
+        while let turn = nextTurn() {
+            switch turn {
+            case .send(let squares):
+                await fetch(squares)
+            case .refuse(let squares):
+                Self.logger.notice("Hiking route squares are not fetched on this connection.")
+                fail(squares)
+            case .skip:
+                break
+            }
+            finish(Set(turn.squares))
+            // After they are let go, so nothing the wake is for is still on
+            // its way.
+            scheduleWake()
+        }
+    }
+
+    /// What ``sendQueued()`` does next, or `nil` when nothing is queued —
+    /// and then it has stopped.
+    func nextTurn() -> Turn? {
+        state.withLock { state in
+            guard !state.queued.isEmpty else {
+                state.isSending = false
+                return nil
+            }
+            // Both asked with the queue in hand rather than before it, so a
+            // square queued meanwhile — by a tile asking again once a
+            // back-off lapsed — is not judged by an answer from inside it.
+            guard allowsFetching() else {
+                defer { state.queued = [] }
+                return .refuse(Array(state.queued))
+            }
+            if let until = state.unavailableUntil, until > clock() {
+                defer { state.queued = [] }
+                return .skip(Array(state.queued))
+            }
+            // The squares asked for most recently first: the ground the map
+            // is on now.
+            let squares = Array(state.queued.suffix(Self.squaresPerRequest))
+            state.queued.removeLast(squares.count)
+            return .send(squares)
+        }
     }
 
     /// Lets go of `squares` and tells every waiting tile to ask again.
@@ -326,7 +414,6 @@ nonisolated private extension HikingRouteSquares {
         case .absent, .partial:
             Self.logger.notice("The hiking route squares are not the whole world, so the layer draws nothing.")
             state.withLock { $0.unavailableUntil = clock().addingTimeInterval(Self.unavailableRetry) }
-            scheduleWake()
             return
         case .unread:
             Self.logger.error("The hiking route squares' manifest could not be read, so the squares wait a minute.")
@@ -382,6 +469,8 @@ nonisolated private extension HikingRouteSquares {
         }
     }
 
+    /// Leaves `squares` alone for ``failedRetry``. The wake that ends the
+    /// back-off is set by ``sendQueued()``, once they are let go.
     func fail(_ squares: [RouteSquare]) {
         guard !squares.isEmpty else { return }
         let until = clock().addingTimeInterval(Self.failedRetry)
@@ -390,7 +479,6 @@ nonisolated private extension HikingRouteSquares {
                 state.failedUntil[square] = until
             }
         }
-        scheduleWake()
     }
 
     /// Draws again, when the soonest back-off lapses, every tile refused

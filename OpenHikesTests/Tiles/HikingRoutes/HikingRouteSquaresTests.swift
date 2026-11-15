@@ -63,7 +63,7 @@ nonisolated private final class HeldBackDatabase: TrailCellFetching, Sendable {
 }
 
 /// A back-off that lasts until the case lets it go.
-nonisolated private final class HeldBackPause: Sendable {
+nonisolated final class HeldBackPause: Sendable {
     private struct Gate {
         var waited: [TimeInterval] = []
         var waiting: [CheckedContinuation<Void, Never>] = []
@@ -100,7 +100,7 @@ nonisolated private final class HeldBackPause: Sendable {
 
 @Suite("Hiking route squares")
 struct HikingRouteSquaresTests {
-    private static let square = RouteSquareGrid.square(at: .detail, latitude: 47.55, longitude: 12.98)
+    static let square = RouteSquareGrid.square(at: .detail, latitude: 47.55, longitude: 12.98)
     private static let neighbor = RouteSquare(level: .detail, row: square.row, column: square.column + 1)
 
     /// One national route across the square, as its file.
@@ -120,11 +120,11 @@ struct HikingRouteSquaresTests {
     )
 
     /// The tile every case asks on behalf of.
-    private static let tile = HikingRouteSquares.Tile(x: 0, y: 0, zoomScale: 1)
+    static let tile = HikingRouteSquares.Tile(x: 0, y: 0, zoomScale: 1)
 
     /// A library over `database` that waits out no back-off: a case has no
     /// map to draw again, and nothing to gain from a minute's sleep.
-    private static func library(
+    static func library(
         _ database: any TrailCellFetching,
         directory: URL? = nil,
         clock: @escaping @Sendable () -> Date = { Date() },
@@ -139,17 +139,22 @@ struct HikingRouteSquaresTests {
         )
     }
 
-    private static func name(_ square: RouteSquare) -> String {
+    static func name(_ square: RouteSquare) -> String {
         RouteSquareGrid.recordName(for: square)
     }
 
-    private static func scratchDirectory() -> URL {
+    static func scratchDirectory() -> URL {
         FileManager.default.temporaryDirectory.appendingPathComponent("route-squares-\(UUID().uuidString)")
     }
 
-    /// Asks for `squares` and waits until they have been brought in, or
-    /// records an issue when the library says it will not call back.
-    private static func bringIn(_ squares: [RouteSquare], from library: HikingRouteSquares) async {
+    /// Asks for `squares` and waits until the library calls back — once
+    /// they are in when one request carries them all — or records an issue
+    /// when it says it will not.
+    static func bringIn(
+        _ squares: [RouteSquare],
+        from library: HikingRouteSquares,
+        for tile: HikingRouteSquares.Tile = Self.tile
+    ) async {
         await withCheckedContinuation { continuation in
             let willCall = library.request(squares, for: tile) { continuation.resume() }
             if !willCall {
@@ -349,10 +354,16 @@ struct HikingRouteSquaresTests {
         let first = row[0], second = row[1]
         await Self.bringIn([first], from: library)
         await Self.bringIn([second], from: library)
-        await Self.bringIn(Array(row.dropFirst(2)), from: library)
+        let rest = Array(row.dropFirst(2))
+        await Self.bringIn(rest, from: library)
+        // More than one request carries them, and the tile is told after
+        // each: waited for by what it brings in, not by the call back.
+        await settleDelegateHop(until: "the rest are in") { library.holdsAll(rest) }
         #expect(library.holdsAll([first]), "drawn again, so no longer the one drawn longest ago")
 
-        await Self.bringIn([RouteSquare(level: .detail, row: Self.square.row + 1, column: 0)], from: library)
+        let beyond = RouteSquare(level: .detail, row: Self.square.row + 1, column: 0)
+        await Self.bringIn([beyond], from: library)
+        await settleDelegateHop(until: "the square past the limit is in") { library.holdsAll([beyond]) }
         #expect(library.holdsAll([first]))
         #expect(!library.holdsAll([second]), "the one drawn longest ago went")
     }
