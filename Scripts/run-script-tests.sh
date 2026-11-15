@@ -4465,6 +4465,69 @@ if expect_status 0; then
     fi
 fi
 
+# A way across the date line, as OpenStreetMap writes one: from 179.9° to
+# −179.9° where the line crosses Fiji, with a node either side of it. Read as
+# plain numbers its middle step runs round the world, and was filed in every
+# column of every level, Greenwich's among them: 2,610 squares. Read the short
+# way, it is the column either side of ±180° at each level and no other, and
+# the line along the parallel is straight, so a level that simplifies keeps
+# its two ends alone.
+printf '%s\n' 'r200 Tname=Date%20%Line,network=nwn,route=hiking,type=route Mw200@' \
+    > "$cells_work/dateline-relations.opl"
+printf '%s\n' 'w200 Thighway=path Nn200x179.9y-16.8,n201x179.95y-16.8,n202x-179.95y-16.8,n203x-179.9y-16.8' \
+    > "$cells_work/dateline-ways.opl"
+dateline_squares="$cells_work/dateline"
+STUB_OSMIUM_RELATIONS="$cells_work/dateline-relations.opl" STUB_OSMIUM_WAYS="$cells_work/dateline-ways.opl" \
+    run_script "trail-cells build-routes files a way across the date line either side of it, and nowhere else" \
+    "$trail_cells" build-routes "$cells_work/extract.osm.pbf" --out "$dateline_squares" --world
+dateline_expected_files=$'routes1_z10_73_0.cell\nroutes1_z10_73_359.cell\nroutes1_z12_146_0.cell\nroutes1_z12_146_719.cell\nroutes1_z14_292_0.cell\nroutes1_z14_292_1439.cell\nroutes1_z7_18_0.cell\nroutes1_z7_18_89.cell'
+if expect_status 0 \
+    && expect_contains "$output" "overview (zoom 7 on): 2 squares" "the summary" \
+    && expect_contains "$output" "region (zoom 10 on): 2 squares" "the summary" \
+    && expect_contains "$output" "area (zoom 12 on): 2 squares" "the summary" \
+    && expect_contains "$output" "detail (zoom 14 on): 2 squares" "the summary"; then
+    dateline_files="$(ls "$dateline_squares/cells")"
+    if [[ "$dateline_files" == *routes1_z14_292_720.cell* || "$dateline_files" == *routes1_z7_18_45.cell* ]]; then
+        fail "the way was filed at Greenwich" "$dateline_files"
+    elif [[ "$dateline_files" != "$dateline_expected_files" ]]; then
+        fail "the squares are not the column either side of the line at each level" "$dateline_files"
+    else
+        pass
+    fi
+fi
+
+# Each side's square holds the steps that touch it as they are written, the
+# one across the line among them, as a square holds any step across its edge.
+dateline_route='"routes":[0]}],"routes":[{"id":200,"tags":{"name":"Date Line","network":"nwn"}}],"scale":1000000}'
+dateline_west='{"lines":[{"network":"national","points":[[-16800000,179900000],[-16800000,179950000],[-16800000,-179950000]],'
+dateline_east='{"lines":[{"network":"national","points":[[-16800000,179950000],[-16800000,-179950000],[-16800000,-179900000]],'
+run_script "trail-cells build-routes keeps the step across the date line in the square west of it" \
+    "$trail_cells" inspect "$dateline_squares/cells/routes1_z14_292_1439.cell" --json
+if expect_status 0; then
+    if [[ "$output" == "$dateline_west$dateline_route" ]]; then
+        pass
+    else
+        fail "the square does not hold the way up to and across the line" "$output"
+    fi
+fi
+
+run_script "trail-cells build-routes keeps the step across the date line in the square east of it" \
+    "$trail_cells" inspect "$dateline_squares/cells/routes1_z14_292_0.cell" --json
+if expect_status 0; then
+    if [[ "$output" == "$dateline_east$dateline_route" ]]; then
+        pass
+    else
+        fail "the square does not hold the way across the line and on" "$output"
+    fi
+fi
+
+run_script "trail-cells build-routes simplifies a way across the date line as the ground it covers" \
+    "$trail_cells" inspect "$dateline_squares/cells/routes1_z7_18_89.cell"
+if expect_status 0 \
+    && expect_contains "$output" "scale 10000, 1 routes, 1 lines, 2 points" "the square"; then
+    pass
+fi
+
 # The layer's squares are planned against the layer's own manifest: an empty
 # database means every square is sent and nothing of the day hikes' is read.
 printf '%s\n' '{ "manifestExists": false, "complete": false, "listed": [], "digests": {} }' \
