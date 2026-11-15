@@ -1823,12 +1823,20 @@ measurements.
   squares' terms (*An answer is complete or it is not given*), through
   `TrailGraphSquareLibrary`; no answer sends the region to Overpass exactly
   as before. A square is fetched once however many regions wait on it, and
-  Overpass's `429` stops only a region that would ask Overpass.
+  its request is cancelled when the last of them stops waiting, as a
+  region's is. Overpass's `429` stops only a region that would ask Overpass.
+- **A region is as old as its square.** It is kept as fetched when the
+  square was, so it expires with the square, not thirty days after it was
+  read out of it.
 - **A region read from a square is the graph Overpass gives** for the same
   trails, joined at the same node ids, so the two merge in the provider's
   cache. `TrailGraphSquareLibraryTests` holds them to one answer, and the
   walking and hiking-route rules are written once, in `TrailGraphSquareFile`,
-  for the decoder and the tool.
+  for the decoder and the tool. The one difference: a square holds positions
+  to a millionth of a degree, where two of a way's nodes can fall on one
+  point, and it keeps the segment between them, with no length, which the
+  decoder would leave out, so the trail is not cut there
+  (`TrailGraphSquareLibrary.graph(of:crossing:)`).
 - **A way is filed under every square its box touches**, whole, because an
   Overpass region answers with every way that crosses it from end to end.
 - **No suite reaches the squares.** `TrailGraphSquareLibrary.forThisLaunch()`

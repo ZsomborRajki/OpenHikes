@@ -108,4 +108,35 @@ struct OverpassTrailGraphSquaresTests {
         #expect(await overpass.requests == 1)
         #expect(try await provider.cachedGraph(covering: [Self.hut])?.edges.count == 1)
     }
+
+    /// A square fetched on one day and read for a new region thirty days
+    /// later is a month old, and the region is as old as it.
+    @Test("a region read out of a kept square expires with the square")
+    func aRegionExpiresWithItsSquare() async throws {
+        let directory = Self.scratchDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let clock = TestClock()
+        let day: TimeInterval = 24 * 3600
+        let database = StubTrailCellDatabase(cells: [TrailGraphSquareLibraryTests.squareName: Self.square])
+        let overpass = CountingOverpass()
+        let provider = OverpassTrailGraphProvider(
+            directory: directory,
+            clock: clock.read,
+            squares: TrailGraphSquareLibrary(database: database, directory: nil, clock: clock.read),
+            transport: { _ in await overpass.respond() }
+        )
+        // The region beside the hut's, in the same square.
+        let beside = CLLocationCoordinate2D(latitude: 47.60, longitude: 12.80)
+
+        try await provider.prefetch(around: Self.hut)
+        clock.advance(by: OverpassCache.lifetime - day)
+        try await provider.prefetch(around: beside)
+        let keptOnTheSquaresLastDay = await provider.hasCompleteCachedGraph(covering: [beside])
+        clock.advance(by: 2 * day)
+
+        #expect(keptOnTheSquaresLastDay)
+        #expect(await !provider.hasCompleteCachedGraph(covering: [beside]), "not thirty days after it was read")
+        #expect(database.requests.count == 1, "both regions were read out of the one square")
+        #expect(await overpass.requests == 0)
+    }
 }

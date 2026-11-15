@@ -55,11 +55,16 @@ struct TrailGraphSquareLibraryTests {
         _ answer: TrailGraphSquareAnswer,
         sourceLocation: SourceLocation = #_sourceLocation
     ) -> TrailGraph? {
-        guard case .graph(let graph) = answer else {
+        guard case .graph(let graph, _) = answer else {
             Issue.record("the squares gave no answer: \(answer)", sourceLocation: sourceLocation)
             return nil
         }
         return graph
+    }
+
+    static func fetchedAt(_ answer: TrailGraphSquareAnswer) -> Date? {
+        guard case .graph(_, let fetchedAt) = answer else { return nil }
+        return fetchedAt
     }
 
     // MARK: - The same graph as Overpass's
@@ -104,6 +109,39 @@ struct TrailGraphSquareLibraryTests {
         #expect(graph.nodes.map(\.id) == [3, 4], "the whole way, as Overpass hands over every node of it")
     }
 
+    /// Two of a way's nodes a centimetre apart are one point at a square's
+    /// millionths of a degree, and the segment between them is all that
+    /// joins the trail on either side.
+    @Test("a segment whose two nodes round to one point keeps the trail joined")
+    func nodesOnOnePointStayJoined() async throws {
+        let approach = TrailGraphSquareFile.Way(
+            id: 30,
+            highway: "path",
+            tags: [:],
+            nodes: [Self.node(1, 47.629, 12.86), Self.node(2, 47.63, 12.86)]
+        )
+        let joint = TrailGraphSquareFile.Way(
+            id: 31,
+            highway: "path",
+            tags: [:],
+            nodes: [Self.node(2, 47.63, 12.86), Self.node(3, 47.6300001, 12.86)]
+        )
+        let onward = TrailGraphSquareFile.Way(
+            id: 32,
+            highway: "path",
+            tags: [:],
+            nodes: [Self.node(3, 47.6300001, 12.86), Self.node(4, 47.631, 12.86)]
+        )
+        let database = StubTrailCellDatabase(cells: [Self.squareName: Self.found([approach, joint, onward])])
+
+        let graph = try #require(Self.graph(await TrailGraphSquareLibrary(database: database, directory: nil)
+            .graph(for: Self.region)))
+
+        #expect(joint.nodes[0].latitude == joint.nodes[1].latitude, "the fixture's two nodes are one point here")
+        #expect(graph.edges.map(\.id.wayID) == [30, 31, 32])
+        #expect(zip(graph.edges, graph.edges.dropFirst()).allSatisfy { $0.toNodeID == $1.fromNodeID }, "one trail")
+    }
+
     // MARK: - One square, many regions
 
     @Test("the regions of one square share one request, and a kept square asks nothing")
@@ -144,6 +182,45 @@ struct TrailGraphSquareLibraryTests {
         #expect(first?.isEmpty == true)
         #expect(second?.isEmpty == true)
         #expect(database.requests.count == 1, "the empty square is kept as one")
+    }
+
+    // MARK: - As old as the square
+
+    /// What the provider keeps a region as fetched at, so it expires with
+    /// the square rather than thirty days after it was read out of it.
+    @Test("an answer from a kept square says when the square was fetched")
+    func anAnswerIsAsOldAsItsSquare() async {
+        let directory = Self.scratchDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let clock = TestClock()
+        let fetchedAt = clock.now
+        let database = StubTrailCellDatabase(cells: [Self.squareName: Self.found([Self.localPath])])
+        let library = TrailGraphSquareLibrary(database: database, directory: directory, clock: clock.read)
+        let fetched = await library.graph(for: Self.region)
+
+        clock.advance(by: OverpassCache.lifetime - 60)
+        let fromDisk = await TrailGraphSquareLibrary(database: database, directory: directory, clock: clock.read)
+            .graph(for: Self.region)
+        let readLast = await library.graph(for: Self.region)
+
+        #expect(Self.fetchedAt(fetched) == fetchedAt)
+        #expect(Self.fetchedAt(fromDisk) == fetchedAt)
+        #expect(Self.fetchedAt(readLast) == fetchedAt)
+        #expect(database.requests.count == 1)
+    }
+
+    @Test("the square read last is not answered from once it has expired")
+    func theSquareReadLastExpires() async {
+        let clock = TestClock()
+        let database = StubTrailCellDatabase(cells: [Self.squareName: Self.found([Self.localPath])])
+        let library = TrailGraphSquareLibrary(database: database, directory: nil, clock: clock.read)
+        _ = await library.graph(for: Self.region)
+
+        clock.advance(by: OverpassCache.lifetime + 60)
+        let again = await library.graph(for: Self.region)
+
+        #expect(database.requests.count == 2)
+        #expect(Self.fetchedAt(again) == clock.now)
     }
 
     // MARK: - No answer

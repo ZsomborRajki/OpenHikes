@@ -181,6 +181,13 @@ nonisolated extension OverpassFileStore {
     /// it, the routes a hiker keeps coming back to would be the oldest files
     /// in the directory, and the first trim would take exactly those.
     func value(named name: String) -> Entry.Value? {
+        entry(named: name)?.value
+    }
+
+    /// The whole entry filed under `name`, when it was fetched included, on
+    /// the terms ``value(named:)`` reads it: for a cache whose values are
+    /// read into another that has to expire with them.
+    func entry(named name: String) -> Entry? {
         let url = fileURL(named: name)
         guard let data = try? Data(contentsOf: url),
               let stored = try? JSONDecoder().decode(Entry.self, from: data)
@@ -193,7 +200,7 @@ nonisolated extension OverpassFileStore {
             return nil
         }
         touch(url)
-        return stored.value
+        return stored
     }
 
     /// Writes every entry down, replacing whatever was filed under its name,

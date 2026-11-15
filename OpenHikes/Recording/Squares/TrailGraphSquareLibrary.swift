@@ -28,14 +28,30 @@
 //  many regions are waiting on it, the last one read is kept decoded, and
 //  every square fetched is kept on disk, in a store of its own.
 //
+//  The fetch is counted the way the provider counts a region's: it goes on
+//  while any region waits on it, and is cancelled when the last one stops
+//  waiting, so a recording's Stop ends the request rather than leaving it to
+//  run out its timeout. Awaiting a task's value does not pass a cancellation
+//  on to the task, which is why the count is kept here.
+//
+//  ## As old as the square
+//
+//  A square is trusted for the thirty days ``OverpassCache`` trusts anything
+//  OpenStreetMap said, from when it was fetched. Every answer carries that
+//  moment, and the provider keeps a region read out of a square as fetched
+//  then, not when the region was read — or a square read on its last day
+//  would lend a region thirty more.
+//
 //  ## The same graph as Overpass's
 //
-//  A region's graph is read from a square exactly as
-//  `OverpassTrailGraphDecoding` reads an Overpass answer for the region's box:
-//  every way that crosses the box, whole, an edge for each segment between
-//  two different nodes that has a length, joined at the nodes' ids. What a
-//  square leaves out is the roads, which only the trail maker asks about —
-//  see ``TrailGraphSquareGrid`` — and so this is never what the maker reads.
+//  A region's graph is read from a square as `OverpassTrailGraphDecoding`
+//  reads an Overpass answer for the region's box: every way that crosses the
+//  box, whole, an edge for each segment between two different nodes, joined
+//  at the nodes' ids. The one difference is a segment with no length, which
+//  a square keeps and the decoder leaves out — see
+//  ``graph(of:crossing:)``. What a square leaves out is the roads, which only
+//  the trail maker asks about — see ``TrailGraphSquareGrid`` — and so this is
+//  never what the maker reads.
 //
 
 import Algorithms
@@ -47,8 +63,9 @@ import os
 
 /// What the pre-built squares had to say about a region of the trail graph.
 nonisolated enum TrailGraphSquareAnswer: Sendable {
-    /// The trails that cross the region, which may be none.
-    case graph(TrailGraph)
+    /// The trails that cross the region, which may be none, and when the
+    /// square they were read out of was fetched.
+    case graph(TrailGraph, fetchedAt: Date)
     /// The squares do not reach this region, so nothing is known from them.
     case uncovered
     /// The square the region needs could not be read.
@@ -103,15 +120,30 @@ actor TrailGraphSquareLibrary {
 
     /// What reading one square came to.
     nonisolated enum Read: Sendable {
-        case square(TrailGraphSquareFile)
+        case square(TrailGraphSquareFile, fetchedAt: Date)
         case uncovered
         case unreachable
     }
 
+    /// The square read last, and when it was fetched.
+    private struct Recent {
+        let name: String
+        let square: TrailGraphSquareFile
+        let fetchedAt: Date
+    }
+
+    /// One square's request, and the regions waiting on it.
+    private struct SquareFetch {
+        let id: UUID
+        let task: Task<Read, Never>
+        var waiters: Set<UUID>
+    }
+
     private let database: any TrailCellFetching
     private let store: TrailCellStore?
-    private var fetches: [String: Task<Read, Never>] = [:]
-    private var recent: (name: String, square: TrailGraphSquareFile)?
+    private let clock: @Sendable () -> Date
+    private var fetches: [String: SquareFetch] = [:]
+    private var recent: Recent?
 
     /// - Parameter directory: Where fetched squares are kept between
     ///   launches. A suite passes one of its own, and must: the default is
@@ -122,6 +154,7 @@ actor TrailGraphSquareLibrary {
         clock: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.database = database
+        self.clock = clock
         store = directory.map { TrailCellStore(directory: $0, maximumFiles: Self.maximumFiles, clock: clock) }
     }
 
@@ -131,8 +164,8 @@ actor TrailGraphSquareLibrary {
             return .uncovered
         }
         switch await read(TrailGraphSquareGrid.recordName(for: square)) {
-        case .square(let file):
-            return .graph(Self.graph(of: file, crossing: Self.bounds(of: region)))
+        case let .square(file, fetchedAt):
+            return .graph(Self.graph(of: file, crossing: Self.bounds(of: region)), fetchedAt: fetchedAt)
 
         case .uncovered:
             return .uncovered
@@ -142,44 +175,98 @@ actor TrailGraphSquareLibrary {
         }
     }
 
+    /// How many regions are waiting on the request for the square named
+    /// `name`.
+    ///
+    /// A test seam, as ``OverpassTrailGraphProvider/waiterCount(for:)`` is:
+    /// the count is what keeps one region giving up from cancelling another's
+    /// square, and nothing else shows it. Nothing in the app reads it.
+    func waiterCount(forSquareNamed name: String) -> Int {
+        fetches[name]?.waiters.count ?? 0
+    }
+
     /// The square named `name`: the one read last, the one on disk, or one
     /// request, shared by every region that asks for it while it is out.
     private func read(_ name: String) async -> Read {
-        if let recent, recent.name == name { return .square(recent.square) }
-        if let bytes = store?.bytes(ofCellNamed: name), let square = try? TrailGraphSquareFile(decoding: bytes) {
-            recent = (name: name, square: square)
-            return .square(square)
+        // Held to the same thirty days as the file it was read from, or a
+        // long launch would go on answering from it after the file expired.
+        if let recent, recent.name == name {
+            if clock().timeIntervalSince(recent.fetchedAt) <= OverpassCache.lifetime {
+                return .square(recent.square, fetchedAt: recent.fetchedAt)
+            }
+            self.recent = nil
         }
-        let fetch: Task<Read, Never>
-        if let running = fetches[name] {
-            fetch = running
-        } else {
-            let source = database
-            let keeping = store
-            fetch = Task.detached { await Self.fetched(name, from: source, keepingIn: keeping) }
-            fetches[name] = fetch
+        if let kept = store?.cell(named: name), let square = try? TrailGraphSquareFile(decoding: kept.bytes) {
+            recent = Recent(name: name, square: square, fetchedAt: kept.fetchedAt)
+            return .square(square, fetchedAt: kept.fetchedAt)
         }
-        let read = await fetch.value
-        fetches[name] = nil
-        if case .square(let square) = read { recent = (name: name, square: square) }
+        let fetch = fetches[name] ?? beginFetch(name)
+        let fetchID = fetch.id
+        let waiter = UUID()
+        fetches[name]?.waiters.insert(waiter)
+        let read = await withTaskCancellationHandler {
+            await fetch.task.value
+        } onCancel: {
+            // Synchronous wherever the cancellation landed, so it hops; the
+            // claim it drops was made before this region suspended.
+            Task { await self.stopWaiting(waiter, on: name, fetchID: fetchID) }
+        }
+        // Finished, so whichever region comes back first lets it go.
+        if fetches[name]?.id == fetchID { fetches[name] = nil }
+        if case let .square(square, fetchedAt) = read {
+            recent = Recent(name: name, square: square, fetchedAt: fetchedAt)
+        }
         return read
+    }
+
+    private func beginFetch(_ name: String) -> SquareFetch {
+        let source = database
+        let keeping = store
+        let stamping = clock
+        let fetch = SquareFetch(
+            id: UUID(),
+            task: Task.detached { await Self.fetched(name, from: source, keepingIn: keeping, clock: stamping) },
+            waiters: []
+        )
+        fetches[name] = fetch
+        return fetch
+    }
+
+    /// One region giving up on a square: its claim goes, and the request with
+    /// it once no other region is waiting.
+    private func stopWaiting(_ waiter: UUID, on name: String, fetchID: UUID) {
+        guard var fetch = fetches[name], fetch.id == fetchID else { return }
+        fetch.waiters.remove(waiter)
+        guard fetch.waiters.isEmpty else {
+            fetches[name] = fetch
+            return
+        }
+        fetches[name] = nil
+        fetch.task.cancel()
     }
 
     /// One square, asked for by name with the manifest beside it, and kept
     /// on disk when it is one the whole world's squares say is there or is
-    /// not — see ``TrailCellLibrary`` for why nothing else is kept.
+    /// not — see ``TrailCellLibrary`` for why nothing else is kept. A request
+    /// cancelled because no region waits on it any more keeps nothing.
     private static func fetched(
         _ name: String,
         from database: any TrailCellFetching,
-        keepingIn store: TrailCellStore?
+        keepingIn store: TrailCellStore?,
+        clock: @Sendable () -> Date
     ) async -> Read {
         let fetch: TrailCellFetch
         do {
             fetch = try await database.fetch(cellsNamed: [name])
         } catch {
-            logger.error("A trail graph square could not be reached: \(error.localizedDescription, privacy: .public)")
+            if !Task.isCancelled {
+                logger.error(
+                    "A trail graph square could not be reached: \(error.localizedDescription, privacy: .public)"
+                )
+            }
             return .unreachable
         }
+        guard !Task.isCancelled else { return .unreachable }
         switch fetch.manifest {
         case .complete:
             break
@@ -197,14 +284,14 @@ actor TrailGraphSquareLibrary {
                 return .unreachable
             }
             store?.save([(name: name, bytes: bytes)])
-            return .square(square)
+            return .square(square, fetchedAt: clock())
 
         case .absent:
             // No record, in a set that is the whole world: ground with no
             // trails on it, and worth remembering as such.
             let empty = TrailGraphSquareFile(ways: [])
             store?.save([(name: name, bytes: empty.encoded())])
-            return .square(empty)
+            return .square(empty, fetchedAt: clock())
 
         case .failed:
             return .unreachable
@@ -237,6 +324,16 @@ nonisolated extension TrailGraphSquareLibrary {
     /// The graph of every way of `square` that crosses `bounds`, whole, read
     /// as `OverpassTrailGraphDecoding` reads an Overpass answer: an edge for
     /// each segment between two nodes, numbered by its place in the way.
+    ///
+    /// Except that a segment with no length is kept. A square holds positions
+    /// to a millionth of a degree (``TrailGraphSquareFile/standardCoordinateScale``),
+    /// so two of a way's nodes a few centimetres apart can be one point here,
+    /// and leaving out the segment between them, as the decoder leaves out
+    /// one with no length, would cut the trail in two at it: 330 of 75
+    /// million segments, in two samples of the planet's trails. A square
+    /// cannot tell those from the rarer nodes OpenStreetMap itself has on one
+    /// spot, which the decoder leaves out, so it keeps those too; either way
+    /// the trail stays joined where OpenStreetMap joins it.
     static func graph(of square: TrailGraphSquareFile, crossing bounds: Bounds) -> TrailGraph {
         let scale = Double(square.coordinateScale)
         var nodes: [Int64: TrailGraphNode] = [:]
@@ -256,7 +353,7 @@ nonisolated extension TrailGraphSquareLibrary {
                       Mercator.isRepresentable(latitude: toCoordinate.latitude, longitude: toCoordinate.longitude)
                 else { continue }
                 let length = RouteGeometry.distanceMeters(from: fromCoordinate, to: toCoordinate)
-                guard length.isFinite, length > 0 else { continue }
+                guard length.isFinite else { continue }
                 nodes[from.id] = TrailGraphNode(id: from.id, coordinate: fromCoordinate)
                 nodes[to.id] = TrailGraphNode(id: to.id, coordinate: toCoordinate)
                 edges.append(TrailGraphEdge(
