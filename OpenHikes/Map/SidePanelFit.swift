@@ -141,17 +141,20 @@ final class SidePanelFit {
         settle()
     }
 
-    /// The sheet's stack changed: `depth` screens are pushed, and the one on
-    /// top takes the panel's whole height if `fillingPanel`.
+    /// The sheet's stack changed: `depth` screens are pushed, the first `kept`
+    /// of them are the screens that were there before, and the one on top
+    /// takes the panel's whole height if `fillingPanel`.
     ///
-    /// What the popped screens asked for goes with them. The next screen
-    /// pushed to that depth is another screen, and the panel would otherwise
-    /// open to the last one's height on its way to the new one's.
-    func show(depth: Int, fillingPanel: Bool) {
+    /// What any other screen asked for goes with it. A screen popped is
+    /// gone, and so is one a jump replaced from deeper in the stack — a tap
+    /// on a trail's line, or *Record*, assigns the whole path. The next
+    /// screen at that depth is another screen, and the panel would otherwise
+    /// open to the old one's height on its way to the new one's.
+    func show(depth: Int, keeping kept: Int, fillingPanel: Bool) {
         self.depth = depth
         topFillsPanel = fillingPanel
-        bars = bars.filter { $0.key <= depth }
-        contents = contents.filter { $0.key <= depth }
+        bars = bars.filter { $0.key <= kept }
+        contents = contents.filter { $0.key <= kept }
         settle()
     }
 
