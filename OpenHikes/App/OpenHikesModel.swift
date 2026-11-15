@@ -216,6 +216,7 @@ final class OpenHikesModel {
         weatherManager: WeatherManager,
         significantLocations: SignificantLocationFeed,
         trailGraphProvider: (any TrailGraphProviding)? = nil,
+        routingGraphProvider: (any TrailGraphProviding)? = nil,
         movementReminders: MovementReminderController? = nil,
         walkSession: TrailWalkSession? = nil,
         communityTransport: (any CommunityTransporting)? = nil,
@@ -245,9 +246,12 @@ final class OpenHikesModel {
         // elevation.
         let store = Self.makeEntitlement(defaults: defaults)
         entitlement = store
+        // The maker routes over roads as well as trails, so it reads a graph
+        // of its own where a launch has one: see
+        // ``makeDependencies(container:defaults:)``.
         trailMaker = Self.makeTrailMaker(
             container: container,
-            graph: trailGraphProvider,
+            graph: routingGraphProvider ?? trailGraphProvider,
             defaults: defaults,
             entitlement: store
         )

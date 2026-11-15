@@ -74,16 +74,15 @@ extension OverpassTrailGraphProvider {
     nonisolated static func extractHikingRouteNames(
         from elementsByKey: [String: OverpassElement]
     ) -> [Int64: String] {
+        // The rule is the trail graph squares' too, written once where the
+        // tool that builds them can compile it — see ``TrailGraphSquareFile``.
         var hikingRouteNames: [Int64: String] = [:]
         for element in elementsByKey.values where element.type == "relation" {
-            guard element.tags["route"] == "hiking",
-                  let name = element.tags["name"] ?? element.tags["ref"] else { continue }
+            guard let name = TrailGraphSquareFile.hikingRouteName(element.tags) else { continue }
             for member in element.members where member.type == "way" {
-                if let existing = hikingRouteNames[member.ref] {
-                    hikingRouteNames[member.ref] = min(existing, name)
-                } else {
-                    hikingRouteNames[member.ref] = name
-                }
+                hikingRouteNames[member.ref] = TrailGraphSquareFile.hikingRouteName(
+                    of: [hikingRouteNames[member.ref], name].compactMap(\.self)
+                )
             }
         }
         return hikingRouteNames
@@ -132,12 +131,11 @@ extension OverpassTrailGraphProvider {
         return (graphNodes, edges)
     }
 
+    /// The squares' rule, so a trail is walkable or not whichever brought
+    /// it — see ``TrailGraphSquareFile/permitsWalking(_:)``.
     nonisolated static func permitsWalking(
         _ tags: [String: String]
     ) -> Bool {
-        if let foot = tags["foot"], foot == "no" || foot == "private" { return false }
-        guard let access = tags["access"],
-              access == "no" || access == "private" else { return true }
-        return ["yes", "designated", "permissive"].contains(tags["foot"])
+        TrailGraphSquareFile.permitsWalking(tags)
     }
 }

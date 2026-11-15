@@ -63,12 +63,14 @@ enum Upload {
         case dayHikes
         case hikingRoutes
         case places
+        case trailGraph
 
         init(kind: String?) throws {
             switch kind {
             case nil: self = .dayHikes
             case RouteSquareBuild.manifestKind: self = .hikingRoutes
             case PlaceSquareBuild.manifestKind: self = .places
+            case TrailGraphSquareBuild.manifestKind: self = .trailGraph
             case let other?: throw CloudKitError(description: "this tool does not know a build of kind '\(other)'.")
             }
         }
@@ -78,6 +80,7 @@ enum Upload {
             case .dayHikes: TrailCellGrid.manifestRecordName
             case .hikingRoutes: RouteSquareGrid.manifestRecordName
             case .places: PlaceSquareGrid.manifestRecordName
+            case .trailGraph: TrailGraphSquareGrid.manifestRecordName
             }
         }
 
@@ -86,6 +89,7 @@ enum Upload {
             case .dayHikes: TrailCellGrid.generation
             case .hikingRoutes: RouteSquareGrid.generation
             case .places: PlaceSquareGrid.generation
+            case .trailGraph: TrailGraphSquareGrid.generation
             }
         }
 
@@ -96,6 +100,7 @@ enum Upload {
             case .dayHikes: TrailCellGrid.cell(named: name) != nil
             case .hikingRoutes: RouteSquareGrid.square(named: name) != nil
             case .places: PlaceSquareGrid.square(named: name) != nil
+            case .trailGraph: TrailGraphSquareGrid.square(named: name) != nil
             }
         }
 
@@ -104,6 +109,7 @@ enum Upload {
             switch self {
             case .dayHikes, .hikingRoutes: "routes"
             case .places: "places"
+            case .trailGraph: "trails"
             }
         }
 
@@ -113,6 +119,7 @@ enum Upload {
             case .dayHikes: "send every search back to Overpass"
             case .hikingRoutes: "leave the hiking-routes layer drawing nothing"
             case .places: "send every place search back to Overpass"
+            case .trailGraph: "send every trail graph region back to Overpass"
             }
         }
     }

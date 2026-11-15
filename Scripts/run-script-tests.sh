@@ -4653,6 +4653,76 @@ if expect_status 0 \
     pass
 fi
 
+# The trail graph's build files every trail that may be walked, whole, with its
+# nodes' ids, under every square its box touches, and names it after the first
+# hiking route it is part of. Way 301 is private, way 303 is a road, which only
+# the maker routes over, and way 304 runs out of the extract; way 302 reaches
+# west over a square's edge, so it is filed under both squares, and a cycle
+# route names nothing.
+cat > "$cells_work/graph-relations.opl" <<'GRAPH'
+r200 Tname=Zugspitzweg,route=hiking Mw300@,w301@
+r201 Tname=Alpine%20%Route,route=hiking Mw300@
+r202 Tref=E4,route=hiking Mw302@
+r203 Tname=Velo,route=bicycle Mw300@
+GRAPH
+cat > "$cells_work/graph-ways.opl" <<'GRAPH'
+w300 Thighway=path,name=Local%20%Path,surface=gravel,source=survey Nn1x12.86y47.63,n2x12.86y47.631
+w301 Thighway=track,access=private Nn2x12.86y47.631,n3x12.87y47.632
+w302 Thighway=footway,access=private,foot=designated Nn3x12.87y47.632,n4x12.65y47.632
+w303 Thighway=residential Nn5x12.86y47.63,n6x12.861y47.63
+w304 Thighway=path Nn7xy,n8x12.86y47.63
+GRAPH
+graph_squares="$cells_work/graph"
+STUB_OSMIUM_WAYS="$cells_work/graph-ways.opl" \
+    STUB_OSMIUM_RELATIONS="$cells_work/graph-relations.opl" \
+    run_script "trail-cells build-graph asks osmium for the trails and the hiking routes, and files every trail it may walk" \
+    "$trail_cells" build-graph "$cells_work/extract.osm.pbf" --out "$graph_squares" --world
+if expect_status 0 \
+    && expect_contains "$calls" \
+        "osmium tags-filter $cells_work/extract.osm.pbf r/route=hiking w/highway=bridleway,cycleway,footway,path,steps,track,via_ferrata -o $graph_squares.work/graph.osm.pbf --overwrite" \
+        "the recorded calls" \
+    && expect_absent "$calls" "-o $graph_squares.work/nodes.opl" "the recorded calls" \
+    && expect_contains "$output" "Filed 2 trails (4 nodes) in 2 squares" "the summary" \
+    && expect_contains "$output" "left out 1 that may not be walked" "the summary" \
+    && expect_contains "$output" "left out 1 running out of the extract" "the summary" \
+    && expect_contains "$output" "Marked complete" "the summary"; then
+    graph_manifest="$(cat "$graph_squares/graph-manifest.json")"
+    if [[ "$(ls "$graph_squares/cells")" != $'graph1_z10_547_357.cell\ngraph1_z10_548_357.cell' ]]; then
+        fail "the squares are not the ones the trails touch" "$(ls "$graph_squares/cells")"
+    elif [[ "$graph_manifest" != *'"kind" : "graph"'* || -e "$graph_squares/manifest.json" ]]; then
+        fail "the manifest does not say it is the trail graph's, or was written where the day hikes' goes" \
+            "$graph_manifest"
+    elif [[ -e "$graph_squares.spool" ]]; then
+        fail "the spool was left behind"
+    else
+        pass
+    fi
+fi
+
+# What the app reads a region out of, held to Overpass's graph in
+# TrailGraphSquareLibraryTests: the ways by id with every node's id and
+# position, the six tags an edge keeps and no other, and the first hiking
+# route's name.
+graph_expected='{"scale":1000000,"ways":[{"highway":"path","id":300,"nodes":[[1,47630000,12860000],[2,47631000,12860000]],"tags":{"hikingRoute":"Alpine Route","name":"Local Path","surface":"gravel"}},{"highway":"footway","id":302,"nodes":[[3,47632000,12870000],[4,47632000,12650000]],"tags":{"access":"private","hikingRoute":"E4"}}]}'
+run_script "trail-cells inspect reads back the trails a square was built from" \
+    "$trail_cells" inspect "$graph_squares/cells/graph1_z10_548_357.cell" --json
+if expect_status 0; then
+    if [[ "$output" == "$graph_expected" ]]; then
+        pass
+    else
+        fail "the square does not hold the trails" "$output"
+    fi
+fi
+
+run_script "trail-cells upload plans the trail graph's squares under their own manifest" \
+    "$trail_cells" upload "$graph_squares" --environment development --dry-run --against "$cells_work/routes-remote.json"
+if expect_status 0 \
+    && expect_contains "$output" \
+        "iCloud.tappium.com.OpenHikes, development, graph1_manifest: 2 squares to upload, 0 to delete, 0 unchanged." \
+        "the plan"; then
+    pass
+fi
+
 # The digest is what an upload compares, so the same extract has to give the
 # same squares, or every refresh would send the whole world again.
 run_script "trail-cells build files the same extract into the same squares, and says a region is not the world" \

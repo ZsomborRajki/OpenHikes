@@ -51,6 +51,9 @@ struct OPLWay {
     /// Read only when asked for: the routes' builds have no use for them, and
     /// they read millions of ways.
     var tags: [String: String] = [:]
+    /// The way's node ids, in order, read only when asked for: the trail
+    /// graph joins its ways at them.
+    var nodeIDs: [Int64] = []
 }
 
 /// One node line: its id, its tags and its position.
@@ -145,7 +148,13 @@ enum OPL {
     /// - Parameters:
     ///   - scale: The coordinate units in a degree the points are rounded to.
     ///   - readsTags: Whether the way's tags are read as well as its points.
-    static func way(_ line: UnsafeBufferPointer<UInt8>, scale: Int32, readsTags: Bool = false) throws -> OPLWay? {
+    ///   - readsNodeIDs: Whether its nodes' ids are read as well.
+    static func way(
+        _ line: UnsafeBufferPointer<UInt8>,
+        scale: Int32,
+        readsTags: Bool = false,
+        readsNodeIDs: Bool = false
+    ) throws -> OPLWay? {
         guard line.first == UInt8(ascii: "w") else { return nil }
         var fields = line.split(separator: ASCII.space, omittingEmptySubsequences: true).makeIterator()
         guard let head = fields.next(), let id = integer(head.dropFirst()) else {
@@ -156,6 +165,9 @@ enum OPL {
             switch field.first {
             case UInt8(ascii: "N"):
                 way.points = try points(field.dropFirst(), scale: Int64(scale), line: line)
+                if readsNodeIDs {
+                    way.nodeIDs = try nodeIDs(field.dropFirst(), line: line)
+                }
             case UInt8(ascii: "T") where readsTags:
                 way.tags = tags(field.dropFirst())
             default:
@@ -239,6 +251,17 @@ private extension OPL {
         guard !field.isEmpty else { return nil }
         guard let value = coordinate(field, scale: scale) else { throw OPLError.malformed(line: text(line)) }
         return value
+    }
+
+    /// A way's node ids: the number after each `n`, up to its position.
+    static func nodeIDs(_ field: Bytes, line: UnsafeBufferPointer<UInt8>) throws -> [Int64] {
+        try field.split(separator: ASCII.comma).map { node in
+            let end = node.firstIndex(of: UInt8(ascii: "x")) ?? node.endIndex
+            guard node.first == UInt8(ascii: "n"), let id = integer(node[node.index(after: node.startIndex)..<end]) else {
+                throw OPLError.malformed(line: text(line))
+            }
+            return id
+        }
     }
 
     /// A way's points, or `nil` when one of its nodes has no position.

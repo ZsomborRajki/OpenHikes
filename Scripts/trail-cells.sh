@@ -28,6 +28,7 @@
 #   Scripts/trail-cells.sh build <extract.osm.pbf> [--out <dir>] [--world] [--keep-work]
 #   Scripts/trail-cells.sh build-routes <extract.osm.pbf> [--out <dir>] [--world] [--keep-work]
 #   Scripts/trail-cells.sh build-places <extract.osm.pbf> [--out <dir>] [--world] [--keep-work]
+#   Scripts/trail-cells.sh build-graph <extract.osm.pbf> [--out <dir>] [--world] [--keep-work]
 #   Scripts/trail-cells.sh upload <dir> --environment development|production
 #                                 [--dry-run] [--yes] [--replace-world]
 #   Scripts/trail-cells.sh whoami --environment development|production
@@ -54,6 +55,13 @@
 #             .build/trail-cells/places): see
 #             OpenHikes/Hikes/Places/Squares/PlaceSquareGrid.swift. --world,
 #             --out and --keep-work as for build; it writes places-manifest.json.
+#   build-graph
+#             File every trail the trail graph matches a recording against into
+#             its squares in <dir> (default .build/trail-cells/graph): see
+#             OpenHikes/Recording/Squares/TrailGraphSquareGrid.swift. --world,
+#             --out and --keep-work as for build; it writes graph-manifest.json.
+#             A planet's trails are a billion nodes: the work files take some
+#             60 GB and the build an hour or more.
 #   upload    Make the public database hold what <dir> does: send the squares
 #             that changed, delete the ones that are gone, then say what the
 #             squares cover. --dry-run reads and plans, and changes nothing.
@@ -112,6 +120,9 @@ tool_sources() {
         "$repository_root/OpenHikes/Tiles/HikingRoutes/RouteSquareFile.swift" \
         "$repository_root/OpenHikes/Hikes/Places/Squares/PlaceSquareGrid.swift" \
         "$repository_root/OpenHikes/Hikes/Places/Squares/PlaceSquareFile.swift" \
+        "$repository_root/OpenHikes/Recording/Squares/TrailGraphSquareGrid.swift" \
+        "$repository_root/OpenHikes/Recording/Squares/TrailGraphSquareFile.swift" \
+        "$repository_root/OpenHikes/Recording/TrailGraphHighway.swift" \
         "$repository_root/OpenHikes/Community/Transport/CommunitySchema.swift"
 }
 
@@ -142,9 +153,10 @@ container_identifier() {
     printf '%s\n' "$identifier"
 }
 
-# `build`, `build-routes` and `build-places`: osmium's steps, then the tool's
-# command of the same name, into a directory of its own by default. The two
-# routes' builds share their steps; the places' finds other things.
+# `build`, `build-routes`, `build-places` and `build-graph`: osmium's steps,
+# then the tool's command of the same name, into a directory of its own by
+# default. The two routes' builds share their steps; the places' and the trail
+# graph's find other things, and the tool says what.
 build() {
     local tool_command="$1" extract="" out="$build_dir/$2" world=false keep_work=false
     shift 2
@@ -183,16 +195,21 @@ build() {
     mkdir -p "$work"
 
     local found="$work/hiking.osm.pbf"
-    if [[ "$tool_command" == build-places ]]; then
-        # The tool says what a place is, so the filter and the build are one
-        # list: see PlaceSquareFile.kinds.
-        local filters=() filter
+    if [[ "$tool_command" == build-places || "$tool_command" == build-graph ]]; then
+        # The tool says what a place or a trail is, so the filter and the
+        # build are one list: see PlaceSquareFile.kinds and
+        # TrailGraphHighway.trails.
+        local filters=() filter kind=places listing=place-filters
+        if [[ "$tool_command" == build-graph ]]; then
+            kind=graph
+            listing=graph-filters
+        fi
         while IFS= read -r filter; do
             filters+=("$filter")
-        done < <("$tool" place-filters)
-        [[ ${#filters[@]} -gt 0 ]] || die "the trail-cells tool named no places to find."
-        found="$work/places.osm.pbf"
-        echo "Finding the places in $extract …"
+        done < <("$tool" "$listing")
+        [[ ${#filters[@]} -gt 0 ]] || die "the trail-cells tool named nothing to find."
+        found="$work/$kind.osm.pbf"
+        echo "Finding the $kind in $extract …"
         osmium tags-filter "$extract" "${filters[@]}" -o "$found" --overwrite
     else
         echo "Finding the hiking relations in $extract …"
@@ -304,6 +321,9 @@ case "$command" in
         ;;
     build-places)
         build build-places places "$@"
+        ;;
+    build-graph)
+        build build-graph graph "$@"
         ;;
     upload|whoami)
         with_database "$command" "$@"
