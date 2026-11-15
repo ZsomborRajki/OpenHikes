@@ -900,7 +900,7 @@ a change to recording, the map, the sheet or the render path; the PR template,
   - `verticalSizeClass` and the window's size are read only in
     `SheetLayoutReader`.
   - Where the window is of regular height the panel stands as tall as the
-    screen on top needs, in the middle of the leading edge, and never shorter
+    screen on top needs, at the top of the leading edge, and never shorter
     than it is wide; at a compact height it keeps the window's
     (`SidePanelFit`). A screen pushed into the sheet marks the scroll view it
     is built around with `fitsSidePanel()`, or the panel keeps the height it

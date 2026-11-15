@@ -237,7 +237,13 @@ struct OpenHikesView: View {
         // panel under the Dynamic Island — which in landscape sits on the very
         // edge the panel is against. Here the map ignores the safe area on its
         // own and the panel is laid out inside it.
-        ZStack(alignment: .leading) {
+        //
+        // At the top of that edge, where a panel shorter than the window
+        // stands — see ``SidePanelFit``. Its search field and its bar stay
+        // put while it grows and shrinks below them. In the middle, the field
+        // the hiker was typing in moved with every keystroke that changed how
+        // many suggestions there were.
+        ZStack(alignment: .topLeading) {
             mapSurface
             if usesSidePanel {
                 MapSidePanel(fillsWindow: panelCoversMap, fit: sheet.panelFit) { mapSheet() }
