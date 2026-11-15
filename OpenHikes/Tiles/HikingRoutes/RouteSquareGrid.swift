@@ -126,6 +126,8 @@ nonisolated enum RouteSquareLevel: Int, Sendable {
         }
     }
 
+    // periphery:ignore - read by the tool behind `Scripts/trail-cells.sh`,
+    // which compiles this file, when it simplifies a level's lines.
     /// How far a simplified line may stray from the way, in meters: under a
     /// pixel at the level's deepest zoom. `0` keeps every point.
     var toleranceMeters: Double {
@@ -137,6 +139,8 @@ nonisolated enum RouteSquareLevel: Int, Sendable {
         }
     }
 
+    // periphery:ignore - read by the tool behind `Scripts/trail-cells.sh`,
+    // which compiles this file, when it writes a level's squares.
     /// How many coordinate units make a degree in this level's files.
     var coordinateScale: Int32 {
         switch self {
