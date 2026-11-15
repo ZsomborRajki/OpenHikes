@@ -1410,8 +1410,6 @@ in its source header. Do not weaken one without a measurement.
   world under `routes1_manifest` (*The hiking-routes layer*), and the same
   build of the places' squares, from planet-261109, marked as the whole
   world under `places1_manifest` (*The place squares*; checked 2026-11-15).
-  Those are in `PlaceSquareFile`'s first format, which the app refuses, so
-  its place searches ask Overpass in both until they are uploaded again.
   Both have a column for every attribute in
   `MirroredCloudKitSchema.recordTypes`. The only live columns the contract
   does not name are SwiftData's own `CD_entityName`, the
