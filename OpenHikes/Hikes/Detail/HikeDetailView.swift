@@ -26,8 +26,8 @@ struct HikeDetailView: View {
     /// snapshot that cannot invalidate this body is a snapshot that lets a
     /// lapsed subscription start a bulk download against a paid key.
     let entitlement: MapEntitlementStore
-    /// The map the hiker chose and whether its route layer is on, which decide
-    /// what this screen offers to save. Handed in rather than held as
+    /// The map the hiker chose, which decides what this screen offers to
+    /// save. Handed in rather than held as
     /// `@AppStorage` — see ``StoredSettings``.
     let settings: StoredSettings
     /// Source of the user's live location. Auto-follow consumes

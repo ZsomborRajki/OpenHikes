@@ -189,19 +189,20 @@ extension MapCoordinatorTests {
         #endif
     }
 
-    @Test("over a raster map the line credits the map and then the layer")
-    func layerIsCreditedAfterTheMap() throws {
+    /// Every raster map the app offers is drawn from OpenStreetMap's data and
+    /// credits it already, and the layer credits OpenStreetMap alone, so over
+    /// one the line is the map's own: the party it names twice is named once.
+    /// Over Apple's maps the layer's credit is the line's only one, which the
+    /// tests beside this hold.
+    @Test("over a raster map the line is the map's own credit, OpenStreetMap named once")
+    func layerAddsNoSecondCreditOverARasterMap() throws {
         #if os(iOS)
         let coordinator = MapView.Coordinator()
         let map = makeMap(layeredMapView(), coordinator)
         defer { detach(map) }
         let credit = try #require(coordinator.attributionView)
 
-        let expected = TileAttribution.drawn(
-            base: Self.osm.attribution,
-            layer: Self.routesLayer.attribution
-        )
-        #expect(spokenCredit(credit) == expected?.plainText)
+        #expect(spokenCredit(credit) == Self.osm.attribution.plainText)
         #endif
     }
 }
