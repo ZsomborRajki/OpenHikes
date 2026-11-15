@@ -18,8 +18,8 @@ import Foundation
 /// has nothing for an actor to protect.
 nonisolated struct TileProvider: Identifiable, Hashable, Sendable {
     let id: String
-    /// The name Settings shows. Worded through the String Catalog like the
-    /// rest of the screen, product names included, so a translation sees each
+    /// The name *Map Modes* shows. Worded through the String Catalog like the
+    /// rest of the sheet, product names included, so a translation sees each
     /// one and can keep it (#1028).
     let name: String
     /// One-line description shown under the cards on *Map Modes*.

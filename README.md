@@ -100,6 +100,7 @@ The source is released under the [MIT License](LICENSE). The data and imagery th
 
 - OpenStreetMap data is © OpenStreetMap contributors, under the [Open Database License](https://www.openstreetmap.org/copyright).
 - The Stadia Maps and Thunderforest styles are used under their own terms.
+- The two *Hiking Routes* pictures on *Map Modes* (`OpenHikes/Assets.xcassets/MapModes*.imageset`) are crops of OpenStreetMap's standard map, one with the app's own hiking-route layer drawn over it, under the terms on OpenStreetMap's [copyright page](https://www.openstreetmap.org/copyright).
 - Wikimedia Commons photographs are shown under the licence each one names, with its credit. The Wikipedia text on a place's card is CC BY-SA 4.0, linked to its article, and is never stored or shared.
 
 The app displays the credit each provider requires (`OpenHikes/Tiles/TileAttribution.swift`). A fork that changes tile providers, or redistributes cached tiles, takes on those obligations itself.

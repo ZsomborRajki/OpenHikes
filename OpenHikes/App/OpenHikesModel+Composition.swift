@@ -667,7 +667,7 @@ private extension OpenHikesModel {
     /// "which map the user picked" is a choice about the environment, and the
     /// controller takes it as a closure so a suite can decide it outright
     /// instead of inheriting whatever the host app has stored. Read on each
-    /// call rather than captured once, so a change made in Settings takes
+    /// call rather than captured once, so a change made on *Map Modes* takes
     /// effect on the next selection without rebuilding anything.
     static func makeAutoSaveController(defaults: UserDefaults, lines: SelectedLine) -> AutoSaveController {
         AutoSaveController(lines: lines) {

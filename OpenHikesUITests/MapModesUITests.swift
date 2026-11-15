@@ -184,12 +184,79 @@ nonisolated final class MapModesUITests: XCTestCase {
     /// from under it used to wait, and come up when the card was closed.
     @MainActor
     func testMapModesOpensOverAPlaceCard() {
-        let app = launchApp(
-            arguments: [
-                "--ui-test-import-gpx=\(PlaceFixture.gpxName)",
-                "--ui-test-trail-points=seeded",
-            ]
+        let app = launchApp(arguments: Self.placeArguments)
+        let card = openFoundPlaceCard(in: app)
+
+        openMapModes(in: app)
+        closeMapModes(in: app)
+        XCTAssertTrue(card.exists, "the card should still be up under it")
+
+        app.buttons["places-around-card-close"].tap()
+        XCTAssertTrue(waitUntil { !card.exists })
+        // A sheet that had queued behind the card comes up only once the
+        // card has finished going, so this waits out that much.
+        XCTAssertFalse(
+            element("map-modes-title", in: app).waitForExistence(timeout: UITestTimeout.brief),
+            "closing the card should bring nothing back"
         )
+    }
+
+    /// The trail maker's place card is the other card that leaves the map
+    /// live, and presents *Map Modes* over itself the same way.
+    @MainActor
+    func testMapModesOpensOverTheMakersPlaceCard() {
+        let app = launchApp()
+        let map = element("trail-map", in: app)
+        XCTAssertTrue(map.waitForExistence(timeout: UITestTimeout.navigation))
+        openTrailMaker(in: app)
+        dropPin(at: Self.pinSpot, on: map)
+        let card = element("trail-place-sheet", in: app)
+        XCTAssertTrue(
+            card.waitForExistence(timeout: UITestTimeout.navigation),
+            "a press on the map should open the place card"
+        )
+
+        openMapModes(in: app)
+        closeMapModes(in: app)
+        XCTAssertTrue(card.exists, "the card should still be up under it")
+    }
+
+    /// Which sheet presents *Map Modes* follows the cards' own appearing and
+    /// going. A card taken through a turn of the phone and closed must leave
+    /// the map sheet the presenter again, or the pill opens nothing.
+    @MainActor
+    func testMapModesOpensAfterACardWentThroughARotation() {
+        let app = launchApp(arguments: Self.placeArguments)
+        addTeardownBlock {
+            await MainActor.run { XCUIDevice.shared.orientation = .portrait }
+        }
+        let card = openFoundPlaceCard(in: app)
+
+        XCUIDevice.shared.orientation = .landscapeLeft
+        XCTAssertTrue(waitForLandscape(app))
+        XCUIDevice.shared.orientation = .portrait
+        XCTAssertTrue(waitForPortrait(app))
+        XCTAssertTrue(card.waitForExistence(timeout: UITestTimeout.navigation), "the card should survive the turn")
+        app.buttons["places-around-card-close"].tap()
+        XCTAssertTrue(waitUntil { !card.exists })
+
+        openMapModes(in: app)
+        closeMapModes(in: app)
+    }
+
+    /// A hike with mapped places around it, for the cards above.
+    private static let placeArguments = [
+        "--ui-test-import-gpx=\(PlaceFixture.gpxName)",
+        "--ui-test-trail-points=seeded",
+    ]
+
+    /// Where a press drops the maker's pin: high on the map, clear of the
+    /// sheet and of the controls along the map's edges.
+    private static let pinSpot = CGVector(dx: 0.5, dy: 0.25)
+
+    /// Opens the hike, searches around it, and opens a found place's card.
+    @MainActor
+    private func openFoundPlaceCard(in app: XCUIApplication) -> XCUIElement {
         openHikeDetail(in: app, titled: PlaceFixture.hikeTitle)
         scrollToTap(element("hike-place-search", in: app), in: app)
         XCTAssertTrue(
@@ -200,16 +267,6 @@ nonisolated final class MapModesUITests: XCTestCase {
         scrollToTap(row, in: app)
         let card = element("places-around-card-title", in: app)
         XCTAssertTrue(card.waitForExistence(timeout: UITestTimeout.navigation), "a found place's row opens its card")
-
-        openMapModes(in: app)
-        closeMapModes(in: app)
-        XCTAssertTrue(card.exists, "the card should still be up under it")
-
-        app.buttons["places-around-card-close"].tap()
-        XCTAssertTrue(waitUntil { !card.exists })
-        XCTAssertFalse(
-            element("map-modes-title", in: app).exists,
-            "closing the card should bring nothing back"
-        )
+        return card
     }
 }

@@ -89,7 +89,7 @@ struct HikeDetailView: View {
     /// list, so this screen is rebuilt on that transition either way.
     var isSheetCompact = false
 
-    /// The active tile source, mirrored from Settings so offline downloads use the
+    /// The active tile source, mirrored from *Map Modes* so offline downloads use the
     /// same provider (and API key) the map is currently drawing.
     private var tileProviderID: String { settings.tileProviderID }
     // Shared with the offline-storage and community helpers in the
