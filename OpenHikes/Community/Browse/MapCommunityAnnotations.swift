@@ -162,7 +162,8 @@ extension MapView.Coordinator {
 
     /// Rebuilds the pins wholesale rather than diffing them.
     ///
-    /// At most ``CommunityBrowser``'s result limit of them, and this runs when
+    /// At most a page of them — ``CommunityQueryPolicy/resultLimit(for:)`` —
+    /// and this runs when
     /// a request lands or a block hides somebody — never at drag or fix
     /// frequency. The guard is what keeps a republish of the same listings
     /// from dropping and re-dropping every marker on the map.

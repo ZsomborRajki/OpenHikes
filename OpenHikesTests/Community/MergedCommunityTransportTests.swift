@@ -49,8 +49,9 @@ struct MergedCommunityTransportTests {
     /// the whole feature was measured against.
     private static let center = CLLocationCoordinate2D(latitude: 47.6300, longitude: 12.9900)
 
-    /// Half of ``CuratedTrailQuery/maximumRadiusMeters``, so nothing here is
-    /// accidentally testing the too-wide-to-ask refusal instead of the merge.
+    /// Half of ``CuratedTrailQuery/maximumOverpassRadiusMeters``, so nothing
+    /// here is accidentally testing a search too wide for Overpass, or too
+    /// wide to ask at all, instead of the merge.
     private static let radiusMeters: Double = 20_000
 
     /// The question every search in this file asks unless a case says

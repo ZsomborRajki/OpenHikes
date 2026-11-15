@@ -504,8 +504,8 @@ struct CuratedTrailQueryTests {
     /// looking at 100 km of map got no trails and nothing saying that zooming
     /// in was the answer.
     ///
-    /// One number now, and this is the one, because Overpass is the source
-    /// that minds being asked. The assertion is worth keeping in this
+    /// One number now, and this is the one, because it is what the
+    /// OpenStreetMap half can be asked. The assertion is worth keeping in this
     /// direction: it is this file's figure that the map's ceiling follows, and
     /// a change here is meant to move both.
     @Test("the map's ceiling is the curated one")
@@ -515,5 +515,17 @@ struct CuratedTrailQueryTests {
         // zoomed-right-in search would return no curated rows even though it
         // is the smallest question the map can ask.
         #expect(CommunityQueryPolicy.minimumRadiusMeters <= CuratedTrailQuery.maximumRadiusMeters)
+    }
+
+    /// Two figures again, and not the gap the note above describes: between
+    /// them the pre-built squares answer, and where they cannot the search
+    /// fails as one — see `CuratedTrailSourceTests+Cells`. What must hold is
+    /// the order. Overpass's ceiling above the app's would be a width the
+    /// policy never offers, and the floor above Overpass's would leave it
+    /// nothing to be asked.
+    @Test("Overpass is asked about less than the app searches, and no less than its smallest search")
+    func overpassCeilingIsInsideTheApps() {
+        #expect(CuratedTrailQuery.maximumOverpassRadiusMeters < CuratedTrailQuery.maximumRadiusMeters)
+        #expect(CommunityQueryPolicy.minimumRadiusMeters <= CuratedTrailQuery.maximumOverpassRadiusMeters)
     }
 }

@@ -140,9 +140,7 @@ struct CommunityQueryPolicyTests {
     func zoomIsOffered() {
         var policy = CommunityQueryPolicy()
         policy.startBrowsing()
-        // Both spans are inside the ceiling, which is 40 km of *radius* — an
-        // 80 km one. The wider of the two used to be 100 km across and is not
-        // a question this policy takes any more; see
+        // Both spans are inside the ceiling, which is a *radius*: see
         // ``CommunityQueryPolicy/maximumRadiusMeters``.
         Self.commit(Self.region(spanMeters: 60_000), to: &policy)
         guard case .offer = policy.action(for: Self.region(spanMeters: 20_000)) else {
@@ -151,9 +149,10 @@ struct CommunityQueryPolicyTests {
         }
     }
 
-    /// The band that used to sit between the two ceilings, asserted from the
-    /// inside. A 50 km radius was offered, spent a CloudKit query, and came
-    /// back with no curated trails and nothing on screen saying why.
+    /// The band that used to sit between two ceilings, asserted from the
+    /// inside. A radius past the curated one was offered, spent a CloudKit
+    /// query, and came back with no curated trails and nothing on screen
+    /// saying why.
     @Test("a radius past the curated ceiling is too far out")
     func theCuratedCeilingIsThePolicysCeiling() {
         var policy = CommunityQueryPolicy()
@@ -250,6 +249,35 @@ struct CommunityQueryPolicyTests {
             Issue.record("a pan past the threshold is a question wherever it happened")
             return
         }
+    }
+
+    // MARK: - How long a page is
+
+    /// Twice the page past the width Overpass is asked about, where the
+    /// OpenStreetMap rows come out of the squares with their lines. The line
+    /// itself belongs to the ordinary page: Overpass may still be what
+    /// answers there, and its page is no longer.
+    @Test("a search wider than Overpass is asked about asks for a longer page")
+    func aWideSearchAsksForALongerPage() {
+        var policy = CommunityQueryPolicy()
+        policy.startBrowsing()
+        let line = CuratedTrailQuery.maximumOverpassRadiusMeters * 2
+        guard case .offer(let valley) = policy.action(for: Self.region()),
+              case .offer(let atTheLine) = policy.action(for: Self.region(spanMeters: line * 0.999)),
+              case .offer(let wide) = policy.action(for: Self.region(spanMeters: line * 1.01)),
+              case .offer(let widest) = policy.action(
+                  for: Self.region(spanMeters: CuratedTrailQuery.maximumRadiusMeters * 2)
+              )
+        else {
+            Issue.record("every one of these is inside the ceiling, and a question")
+            return
+        }
+
+        #expect(CommunityQueryPolicy.resultLimit(for: valley) == CommunityQueryPolicy.resultLimit)
+        #expect(CommunityQueryPolicy.resultLimit(for: atTheLine) == CommunityQueryPolicy.resultLimit)
+        #expect(CommunityQueryPolicy.resultLimit(for: wide) == CommunityQueryPolicy.wideResultLimit)
+        #expect(CommunityQueryPolicy.resultLimit(for: widest) == CommunityQueryPolicy.wideResultLimit)
+        #expect(CommunityQueryPolicy.wideResultLimit > CommunityQueryPolicy.resultLimit)
     }
 
     /// A zoomed-right-in map still asks about a usable area rather than the

@@ -60,9 +60,22 @@
 //  also meant two sentences to keep true about one control.
 //
 //  So this one *is* ``CuratedTrailQuery/maximumRadiusMeters`` rather than
-//  merely being checked against it. What is given up is searching published
-//  hikes between 40 and 150 km, and the argument above is the reason that is
-//  affordable: a result that wide was already twenty arbitrary hikes.
+//  merely being checked against it. It was 40 km while Overpass answered
+//  every search, and is 100 km now that the pre-built squares do: the
+//  ceiling follows whatever the OpenStreetMap half can be asked, and that
+//  file says what a search that wide costs.
+//
+//  ## A wide search asks for a longer page
+//
+//  The list is the rows nearest the middle of the map, and how far out a
+//  page of them reaches depends on how many trails the ground holds. So a
+//  search wider than the old ceiling asks for twice the page —
+//  ``resultLimit(for:)``. It is still nearest first, and still short of the
+//  edges where trails are dense: the owner's choice between that, spreading
+//  the rows over the map, and leaving the page as it was. Measured on
+//  2026-11-14, on maps two hundred kilometres across, the fiftieth row stood
+//  7 km from the middle around Stuttgart, 11 km around Dresden, 24 km around
+//  Kraków and 66 km around Bergen.
 //
 
 import CoreLocation
@@ -105,6 +118,30 @@ struct CommunityQueryPolicy {
     /// reference rather than copied so the two cannot drift back apart, which
     /// is how the band between them appeared in the first place.
     static let maximumRadiusMeters: Double = CuratedTrailQuery.maximumRadiusMeters
+    /// How many rows a search asks for: more than fits on a phone, few enough
+    /// that a list nobody scrolls to the bottom of does not pay for a second
+    /// page — see ``CloudKitCommunityTransport``'s `run`, which deliberately
+    /// drops the cursor.
+    static let resultLimit = 25
+    /// How many rows a wide search asks for. See *A wide search asks for a
+    /// longer page* above.
+    static let wideResultLimit = 50
+
+    /// How many rows a search of `area` asks for: ``wideResultLimit`` where
+    /// it is wider than Overpass is asked about, and ``resultLimit``
+    /// everywhere else.
+    ///
+    /// The line is Overpass's ceiling and not a second figure, because the
+    /// longer page is only affordable past it. There the OpenStreetMap rows
+    /// come out of the squares with their lines, where an Overpass answer
+    /// draws one geometry pass's worth and no more — see
+    /// ``CuratedTrailQuery/geometryBatchLimit``. The page is the whole
+    /// answer's: published hikes take their places in it first, as they do
+    /// in the shorter one.
+    static func resultLimit(for area: CommunitySearchArea) -> Int {
+        CuratedTrailQuery.isWithinOverpassCeiling(area) ? resultLimit : wideResultLimit
+    }
+
     /// How far the centre has to move, as a fraction of the last radius,
     /// before the question counts as a new one.
     ///

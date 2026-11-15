@@ -32,6 +32,7 @@ nonisolated final class StubTrailCellDatabase: TrailCellFetching, Sendable {
         var cells: [String: TrailCellFetch.Cell]
         var failure: (any Error)?
         var cancelsCaller = false
+        var answersCancelledCaller = false
     }
 
     private let state: Mutex<State>
@@ -62,27 +63,33 @@ nonisolated final class StubTrailCellDatabase: TrailCellFetching, Sendable {
     /// Cancelled from in here rather than by the case, so there is no moment
     /// at which the request has failed and the task has not yet been told —
     /// which is the moment that would decide the case by a race.
-    func cancelCallers() {
-        state.withLock { $0.cancelsCaller = true }
+    ///
+    /// - Parameter answering: Whether the request answers all the same, as
+    ///   one that finished before it heard can, rather than failing.
+    func cancelCallers(answering: Bool = false) {
+        state.withLock { state in
+            state.cancelsCaller = true
+            state.answersCancelledCaller = answering
+        }
     }
 
     @concurrent
     func fetch(cellsNamed names: [String]) async throws -> TrailCellFetch {
-        let (failure, manifest, held, cancelsCaller) = state.withLock { state in
+        let asked = state.withLock { state in
             state.requests.append(names)
-            return (state.failure, state.manifest, state.cells, state.cancelsCaller)
+            return state
         }
         await Task.yield()
-        if cancelsCaller {
+        if asked.cancelsCaller {
             withUnsafeCurrentTask { $0?.cancel() }
-            throw CancellationError()
+            if !asked.answersCancelledCaller { throw CancellationError() }
         }
-        if let failure { throw failure }
+        if let failure = asked.failure { throw failure }
         var cells: [String: TrailCellFetch.Cell] = [:]
         for name in names {
-            cells[name] = held[name] ?? .absent
+            cells[name] = asked.cells[name] ?? .absent
         }
-        return TrailCellFetch(manifest: manifest, cells: cells)
+        return TrailCellFetch(manifest: asked.manifest, cells: cells)
     }
 }
 

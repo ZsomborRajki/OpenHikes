@@ -2,7 +2,7 @@
 //  CuratedTrailDecoding+Cells.swift
 //  OpenHikes
 //
-//  Turning a pre-built square into the rows and lines an Overpass answer
+//  Turning pre-built squares into the rows and lines an Overpass answer
 //  becomes.
 //
 //  A ``TrailCellFile`` carries what `out geom` carries — a relation's tags and
@@ -21,48 +21,116 @@
 //  that are not — the second of which is what a zoomed-in map needs, where a
 //  forest road can cross the whole screen without a single vertex on it.
 //
+//  ## Measured first, and drawn only for the page
+//
+//  A search keeps a page of what its squares hold, and a wide one holds a
+//  great deal more than a page: measured on 2026-11-14, a map two hundred
+//  kilometres across over Zürich had 15,306 routes with a way in it. Drawing
+//  a route — copying its ways out and matching their ends into one line — is
+//  the expensive half of reading it, and drawing all of those to keep the
+//  nearest fifty took 2.6 seconds of a Debug build.
+//
+//  So a route in the area is first only *measured*: a ``CellCandidate`` is
+//  the relation, the extent of its points and how far its pin stands from the
+//  point the search is sorted outward from. ``trails(nearestOf:limit:)`` puts
+//  the candidates in that order and draws the nearest, then the next, and
+//  stops when the page is full.
+//
 
+import CoreLocation
 import Foundation
+import OpenHikesData
 
 nonisolated extension CuratedTrailDecoding {
-    /// The day hikes in `cell` that have a way in one of `boxes`, each with
-    /// its line.
+    /// A route of a square that is in a search's area: measured, and not yet
+    /// drawn. See this file's header.
+    struct CellCandidate {
+        let relation: TrailCellFile.Relation
+        /// How many of the square's coordinate units make one degree.
+        let scale: Double
+        /// The extent of the relation's ways, which is the box Overpass would
+        /// have answered with: what a square's reader measures a route by —
+        /// see ``TrailCellFile``.
+        let bounds: Bounds
+        /// How far the route's pin stands from the point the search is sorted
+        /// outward from, in meters: the measure
+        /// ``CuratedTrailSource/listings(near:limit:)`` orders its rows by.
+        let distanceMeters: Double
+    }
+
+    /// The relations in `cell` that have a way in one of `boxes`, each
+    /// measured from `center` and none of them drawn.
     ///
     /// `boxes` are a search's own — see ``CuratedTrailQuery/searchBoxes(for:)``
     /// — so there is one, or two where the search crosses the date line.
-    static func trails(
+    static func candidates(
         in cell: TrailCellFile,
-        touching boxes: [CuratedTrailQuery.BoundingBox]
-    ) -> [CuratedTrail] {
+        touching boxes: [CuratedTrailQuery.BoundingBox],
+        from center: CLLocationCoordinate2D
+    ) -> [CellCandidate] {
         let scale = Double(cell.coordinateScale)
         let areas = boxes.map { CellArea($0, scale: scale) }
         return cell.relations.compactMap { relation in
-            guard areas.contains(where: { $0.holds(relation) }) else { return nil }
-            return offered(Element(relation, scale: scale))
+            // A relation with no point has no extent, and is in no area.
+            guard areas.contains(where: { $0.holds(relation) }),
+                  let bounds = relation.bounds(scale: scale)
+            else { return nil }
+            return CellCandidate(
+                relation: relation,
+                scale: scale,
+                bounds: bounds,
+                distanceMeters: RouteGeometry.distanceMeters(
+                    from: center,
+                    to: CuratedTrailQuery.center(of: bounds.box)
+                )
+            )
         }
+    }
+
+    /// The day hikes among `candidates` that stand nearest, each with its
+    /// line: nearest first, and no more than `limit` of them.
+    static func trails(nearestOf candidates: [CellCandidate], limit: Int) -> [CuratedTrail] {
+        drawn(candidates.sorted { $0.distanceMeters < $1.distanceMeters }, limit: limit)
+    }
+
+    /// The first `limit` of `candidates` that are day hikes with a line to
+    /// draw, in the order they come, each relation once.
+    ///
+    /// A candidate past the one that fills the page is never asked for, which
+    /// is what keeps a wide search from drawing thousands of lines to keep a
+    /// page of them. A sequence rather than an array so that a suite can count
+    /// what was asked for.
+    ///
+    /// A route is filed under one square, but an upload replaces squares one
+    /// at a time, so for its duration a route whose box moved can be in the
+    /// old square and the new — two revisions, of which perhaps only one
+    /// draws. So a relation is passed over only once a copy of it has drawn,
+    /// never for having been measured.
+    static func drawn(_ candidates: some Sequence<CellCandidate>, limit: Int) -> [CuratedTrail] {
+        var page: [CuratedTrail] = []
+        guard limit > 0 else { return page }
+        var onPage: Set<Int64> = []
+        for candidate in candidates where !onPage.contains(candidate.relation.id) {
+            guard let trail = offered(Element(candidate)) else { continue }
+            onPage.insert(trail.relationID)
+            page.append(trail)
+            if page.count == limit { break }
+        }
+        return page
     }
 }
 
 // MARK: - A relation, as Overpass would have answered it
 
 nonisolated extension CuratedTrailDecoding.Element {
-    /// `relation` in the shape an `out geom` answer decodes to.
-    ///
-    /// The box is the extent of the ways' points, which is what the tool that
-    /// wrote the square measured the route by — see ``TrailCellFile``. A
-    /// relation with no point has none, and is not offered.
-    init(_ relation: TrailCellFile.Relation, scale: Double) {
+    /// `candidate`'s relation in the shape an `out geom` answer decodes to,
+    /// with the box it was measured by.
+    init(_ candidate: CuratedTrailDecoding.CellCandidate) {
         type = "relation"
-        id = relation.id
-        tags = relation.tags
-        members = relation.ways.map { CuratedTrailDecoding.Member($0, scale: scale) }
-        let points = members.flatMap(\.geometry)
-        if let south = points.map(\.lat).min(), let north = points.map(\.lat).max(),
-           let west = points.map(\.lon).min(), let east = points.map(\.lon).max() {
-            bounds = CuratedTrailDecoding.Bounds(minlat: south, minlon: west, maxlat: north, maxlon: east)
-        } else {
-            bounds = nil
-        }
+        id = candidate.relation.id
+        tags = candidate.relation.tags
+        members = candidate.relation.ways.map { CuratedTrailDecoding.Member($0, scale: candidate.scale) }
+        bounds = candidate.bounds
     }
 }
 
@@ -76,6 +144,52 @@ nonisolated extension CuratedTrailDecoding.Member {
                 lon: Double(point.longitude) / scale
             )
         }
+    }
+}
+
+nonisolated private extension TrailCellFile.Relation {
+    /// The extent of the ways' points, in degrees, or `nil` for a relation
+    /// with no point.
+    ///
+    /// What the tool that wrote the square measured the route by — see
+    /// ``TrailCellFile``. Found in the square's own whole numbers and divided
+    /// once, which is the number each point becomes when its way is drawn, so
+    /// the box and the line cannot disagree by a rounding.
+    func bounds(scale: Double) -> CuratedTrailDecoding.Bounds? {
+        var extent: CellExtent?
+        for way in ways {
+            for point in way.points {
+                extent = extent?.reaching(point) ?? CellExtent(southWest: point, northEast: point)
+            }
+        }
+        return extent.map { extent in
+            CuratedTrailDecoding.Bounds(
+                minlat: Double(extent.southWest.latitude) / scale,
+                minlon: Double(extent.southWest.longitude) / scale,
+                maxlat: Double(extent.northEast.latitude) / scale,
+                maxlon: Double(extent.northEast.longitude) / scale
+            )
+        }
+    }
+}
+
+/// The corners of the box around some of a square's points, in its own units.
+nonisolated private struct CellExtent {
+    var southWest: TrailCellFile.Point
+    var northEast: TrailCellFile.Point
+
+    /// This box, grown to hold `point`.
+    func reaching(_ point: TrailCellFile.Point) -> Self {
+        Self(
+            southWest: TrailCellFile.Point(
+                latitude: min(southWest.latitude, point.latitude),
+                longitude: min(southWest.longitude, point.longitude)
+            ),
+            northEast: TrailCellFile.Point(
+                latitude: max(northEast.latitude, point.latitude),
+                longitude: max(northEast.longitude, point.longitude)
+            )
+        )
     }
 }
 

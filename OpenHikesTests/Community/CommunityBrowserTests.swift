@@ -85,6 +85,26 @@ struct CommunityBrowserTests {
         #expect(browser.areaPrompt == .settled)
     }
 
+    /// The page is the question's own: see
+    /// ``CommunityQueryPolicy/resultLimit(for:)`` for where the line is and
+    /// why.
+    @Test("a search asks for a page as long as its area is wide")
+    func aWideSearchAsksForALongerPage() async {
+        let transport = StubCommunityTransport()
+        let browser = CommunityBrowser(transport: transport, blockList: .scratch())
+        browser.regionDidSettle(Self.region())
+        browser.startBrowsing()
+        await settle(browser)
+        browser.regionDidSettle(Self.region(spanMeters: 150_000))
+        browser.searchVisibleArea()
+        await settle(browser)
+
+        #expect(
+            transport.recording.nearbyLimits
+                == [CommunityQueryPolicy.resultLimit, CommunityQueryPolicy.wideResultLimit]
+        )
+    }
+
     /// The pill stands for the whole of the *Community* tab rather than only
     /// while an offer is up, so a tap with the map where the list already
     /// describes is a hiker asking for that list again — and the policy's

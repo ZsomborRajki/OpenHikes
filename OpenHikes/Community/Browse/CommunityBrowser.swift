@@ -118,11 +118,9 @@ final class CommunityBrowser {
         category: "Community"
     )
 
-    /// How many rows one query asks for. More than fits on a phone, few enough
-    /// that a list nobody scrolls to the bottom of does not pay for a second
-    /// page — see ``CloudKitCommunityTransport``'s `run`, which deliberately
-    /// drops the cursor.
-    private static let resultLimit = 25
+    /// How many rows a title search asks for. A nearby search asks for as
+    /// many as its area is wide: see ``CommunityQueryPolicy/resultLimit(for:)``.
+    private static let resultLimit = CommunityQueryPolicy.resultLimit
 
     /// What the *Community Hikes* section draws: the map's own answer.
     ///
@@ -745,7 +743,7 @@ final class CommunityBrowser {
     ///
     /// Deliberately narrow. It asks again only when the block took the last
     /// visible row and there were rows to take, so the ordinary block — a few
-    /// rows out of twenty-five — costs nothing. The new request carries the
+    /// rows out of a page — costs nothing. The new request carries the
     /// author in its exclusion set, so it pages past them rather than coming
     /// back with the same hidden page; see ``CommunityPageBudget``.
     ///
@@ -867,7 +865,7 @@ final class CommunityBrowser {
         perform(.nearby, describing: "a nearby search", about: area, from: scope) { transport, publishedFirst in
             try await transport.listings(
                 near: area,
-                limit: Self.resultLimit,
+                limit: CommunityQueryPolicy.resultLimit(for: area),
                 excluding: excluded,
                 scope: scope,
                 publishedFirst: publishedFirst
