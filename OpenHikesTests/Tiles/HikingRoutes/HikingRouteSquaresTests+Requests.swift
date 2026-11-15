@@ -5,7 +5,8 @@
 //  How the hiking-routes layer's requests go out: one at a time however many
 //  tiles ask, with what queued meanwhile sent together, the disk drawn while
 //  one is out, and the network asked again before each, so a request is not
-//  sent on an answer that has since changed.
+//  sent on an answer that has since changed — nor once a request has found
+//  that the squares are not the whole world.
 //
 //  The database holds every request until the case lets it go, so nothing
 //  here waits on a duration — see *Deliberate test seams* in the repository
@@ -29,6 +30,12 @@ nonisolated private final class HeldRequests: TrailCellFetching, Sendable {
     }
 
     private let state = Mutex(State())
+    private let manifest: TrailCellFetch.Manifest
+
+    /// - Parameter manifest: What every answer says the squares cover.
+    init(manifest: TrailCellFetch.Manifest = .complete) {
+        self.manifest = manifest
+    }
 
     /// The names each request asked about, in the order they went out.
     var asked: [[String]] { state.withLock { $0.asked } }
@@ -57,7 +64,7 @@ nonisolated private final class HeldRequests: TrailCellFetching, Sendable {
         }
     }
 
-    /// A whole world with no record of anything asked about: every square
+    /// No record of anything asked about: in a whole world, every square
     /// comes back with no routes, which is all a case about requests needs.
     @concurrent
     func fetch(cellsNamed names: [String]) async -> TrailCellFetch {
@@ -72,7 +79,7 @@ nonisolated private final class HeldRequests: TrailCellFetching, Sendable {
             if isOpen { continuation.resume() }
         }
         state.withLock { $0.out -= 1 }
-        return TrailCellFetch(manifest: .complete, cells: Dictionary(uniqueKeysWithValues: names.map { ($0, .absent) }))
+        return TrailCellFetch(manifest: manifest, cells: Dictionary(uniqueKeysWithValues: names.map { ($0, .absent) }))
     }
 }
 
@@ -170,5 +177,46 @@ extension HikingRouteSquaresTests {
         await Self.bringIn(refused, from: library, for: other)
         await settleDelegateHop(until: "the refused squares are in") { library.holdsAll(squares) }
         #expect(database.asked.count == 3, "the rest went out once the network could be asked again")
+    }
+
+    /// The first of two requests learns that the squares are not the whole
+    /// world, while the rest wait their turn behind it.
+    @Test(
+        "once a request finds the squares are not the whole world, nothing queued behind it is sent",
+        .timeLimit(.minutes(1))
+    )
+    func nothingQueuedIsSentOnceTheSquaresAreNotTheWholeWorld() async {
+        let clock = TestClock()
+        let database = HeldRequests(manifest: .partial)
+        let turns = Mutex(0)
+        let backOff = HeldBackPause()
+        let library = HikingRouteSquares(
+            database: database,
+            directory: nil,
+            clock: clock.read,
+            allowsFetching: {
+                turns.withLock { $0 += 1 }
+                return true
+            },
+            pause: { delay in await backOff.wait(delay) }
+        )
+        let squares = Self.row(of: HikingRouteSquares.squaresPerRequest + 1)
+        #expect(library.request(squares, for: Self.tile) { /* told after the first request */ })
+        await settleDelegateHop(until: "the first request is out") { database.held == 1 }
+
+        database.releaseOne()
+        await settleDelegateHop(until: "the square left behind has its turn") { turns.withLock { $0 } == 2 }
+        // That turn is decided with the squares' state locked, and asking
+        // takes the same lock, so this tile asks once the turn is decided.
+        let other = HikingRouteSquares.Tile(x: 1, y: 0, zoomScale: 1)
+        let told = Mutex(0)
+        #expect(library.request(squares, for: other) { told.withLock { $0 += 1 } })
+
+        clock.advance(by: HikingRouteSquares.unavailableRetry)
+        await settleDelegateHop(until: "the wait for squares is being waited out") { backOff.isWaiting }
+        backOff.release()
+        await settleDelegateHop(until: "the tile is told") { told.withLock { $0 } == 1 }
+        #expect(database.asked.count == 1, "nothing queued went out")
+        #expect(backOff.waited == [HikingRouteSquares.unavailableRetry])
     }
 }

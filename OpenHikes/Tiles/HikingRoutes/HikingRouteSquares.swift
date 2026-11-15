@@ -140,8 +140,13 @@ nonisolated final class HikingRouteSquares: Sendable {
     ///   - directory: Where fetched squares are kept between launches; a
     ///     suite passes one of its own, and must. See *Deliberate test seams*
     ///     in the repository instructions.
+    ///   - clock: Now. It is read with the squares' state locked too, on
+    ///     the terms `allowsFetching` is.
     ///   - allowsFetching: Whether the network may be asked at all, just
-    ///     before it is.
+    ///     before it is: before each request, with the squares' state
+    ///     locked, so the answer and the queue it judges are one moment's.
+    ///     It must answer at once and never call back into the squares,
+    ///     whose lock is not reentrant.
     ///   - pause: Waits out a back-off before the renderers draw again.
     init(
         database: any TrailCellFetching,
