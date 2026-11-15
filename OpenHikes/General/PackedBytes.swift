@@ -167,11 +167,19 @@ nonisolated struct PackedReader {
         return Array(bytes[offset..<offset + count])
     }
 
+    /// An unsigned integer, refused when its groups spell a number past
+    /// `UInt64.max`. A 64-bit number has one bit left for the tenth group,
+    /// and the shift that puts the group in place drops the rest without a
+    /// word: a number no writer wrote would read as a smaller one, which
+    /// every later check passes.
     mutating func readVarint() throws -> UInt64 {
         var value: UInt64 = 0
         for index in 0..<PackedVarint.maximumBytes {
             let byte = try readByte()
-            value |= (UInt64(byte) & PackedVarint.payloadMask) << UInt64(index * PackedVarint.payloadBits)
+            let payload = UInt64(byte) & PackedVarint.payloadMask
+            let shift = UInt64(index * PackedVarint.payloadBits)
+            guard payload <= UInt64.max >> shift else { throw PackedFileError.corrupt }
+            value |= payload << shift
             if byte & PackedVarint.continuation == 0 { return value }
         }
         throw PackedFileError.corrupt
@@ -230,18 +238,59 @@ nonisolated enum PackedDeflate {
     }
 
     /// `packed` unpacked to exactly `count` bytes, which is what the envelope
-    /// said it would be. Anything else is not a body this format wrote.
+    /// said it would be, and to the end of its stream. Anything else is not a
+    /// body this format wrote.
+    ///
+    /// A buffer filled to `count` proves neither: a file that understates its
+    /// body leaves the rest unread and passes its first bytes off as the
+    /// whole, and the one-shot decoder answers what it got out of a stream cut
+    /// short as though that were all of it. So the stream is unpacked into one
+    /// byte more than it was said to hold, and taken only when the decoder
+    /// says it ended there, `count` bytes in.
     static func decompressed(_ packed: [UInt8], count: Int) throws -> [UInt8] {
         guard count > 0, !packed.isEmpty else { throw PackedFileError.corrupt }
-        var body = [UInt8](repeating: 0, count: count)
-        let written = packed.withUnsafeBufferPointer { source -> Int in
-            guard let input = source.baseAddress else { return 0 }
-            return body.withUnsafeMutableBufferPointer { buffer in
-                guard let output = buffer.baseAddress else { return 0 }
-                return compression_decode_buffer(output, buffer.count, input, source.count, nil, COMPRESSION_ZLIB)
-            }
+        var body = [UInt8](repeating: 0, count: count + 1)
+        let written = try packed.withUnsafeBufferPointer { source in
+            try body.withUnsafeMutableBufferPointer { buffer in try unpacked(source, into: buffer) }
         }
         guard written == count else { throw PackedFileError.corrupt }
+        body.removeLast()
         return body
+    }
+
+    /// How many bytes the whole of `source` unpacks to, when its stream ends
+    /// before `buffer` is full.
+    ///
+    /// The decoder can hand a body back over several calls — one that packs
+    /// as tightly as a square of even steps comes 128 KB on the first call
+    /// and 64 KB on each after it, measured on macOS 27 and iOS 18.6 — so it
+    /// is called until it ends, fails, fills the buffer or stops moving. A
+    /// stream cut short fails on the call after its last byte of output; a
+    /// call that moves nothing is taken as the same answer, so that no
+    /// decoder can keep the loop going for ever.
+    private static func unpacked(
+        _ source: UnsafeBufferPointer<UInt8>,
+        into buffer: UnsafeMutableBufferPointer<UInt8>
+    ) throws -> Int {
+        guard let input = source.baseAddress, let output = buffer.baseAddress else { throw PackedFileError.corrupt }
+        let stream = UnsafeMutablePointer<compression_stream>.allocate(capacity: 1)
+        defer { stream.deallocate() }
+        guard compression_stream_init(stream, COMPRESSION_STREAM_DECODE, COMPRESSION_ZLIB) == COMPRESSION_STATUS_OK
+        else { throw PackedFileError.corrupt }
+        defer { compression_stream_destroy(stream) }
+        stream.pointee.src_ptr = input
+        stream.pointee.src_size = source.count
+        stream.pointee.dst_ptr = output
+        stream.pointee.dst_size = buffer.count
+        let finalize = Int32(COMPRESSION_STREAM_FINALIZE.rawValue)
+        var status = COMPRESSION_STATUS_OK
+        var moved = true
+        while status == COMPRESSION_STATUS_OK, moved, stream.pointee.dst_size > 0 {
+            let left = (stream.pointee.src_size, stream.pointee.dst_size)
+            status = compression_stream_process(stream, finalize)
+            moved = left != (stream.pointee.src_size, stream.pointee.dst_size)
+        }
+        guard status == COMPRESSION_STATUS_END else { throw PackedFileError.corrupt }
+        return buffer.count - stream.pointee.dst_size
     }
 }
