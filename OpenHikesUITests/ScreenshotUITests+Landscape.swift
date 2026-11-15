@@ -3,7 +3,7 @@
 //  OpenHikesUITests
 //
 //  Compose the same captures in the side panel: the open Duo's on its side,
-//  and an iPad's either way up. Read the scrolling viewport and the share
+//  and an iPad's. Read the scrolling viewport and the share
 //  boxes rather than accepting a hit-test result, which on the Duo comes from
 //  the folded-away cover display and on an iPad is no for the whole panel.
 //
@@ -12,7 +12,7 @@ import XCTest
 
 extension ScreenshotUITests {
     private static let landscapeContentMargin: CGFloat = 12
-    private static let mapQuietInterval: TimeInterval = 3
+    static let mapQuietInterval: TimeInterval = 3
 
     /// Importing photos leaves the panel scrolled to Find Photos. For the
     /// map-first frames, start the card at its full title rather than leave

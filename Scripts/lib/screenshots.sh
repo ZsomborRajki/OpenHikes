@@ -18,9 +18,10 @@
 # it first, through Scripts/duo-pose.sh — a simulator boots closed, and only
 # Device Hub can open it by hand. Opening needs hinge, an optional tool
 # (Scripts/lib/hinge.sh): on a machine without it an open set is skipped, and
-# said to be, before a device is touched. The open Duo is turned upright unless
-# `--orientation landscape` keeps it the way it opens, which is where the map
-# screen puts its panel beside the map. XCTest captures the inner display a
+# said to be, before a device is touched. The open Duo is shot the way it
+# opens, on its side, which is where the map screen puts its panel beside the
+# map; its inner display upright is not shot, for the reason the iPad's other
+# way up is not (below). XCTest captures the inner display a
 # pixel short each way, and a landscape frame stored on its side, so every
 # exported frame goes through Scripts/lib/fit-screenshot.swift. That turns a
 # frame upright in its pixels and puts the pixel back on one that is that
@@ -29,12 +30,12 @@
 # ## The iPad
 #
 # An app that runs on iPad is not taken without a 13-inch iPad set:
-# 2064 × 2752, or 2752 × 2064 on its side, which is what an iPad Pro 13-inch
-# captures. `--device-type "iPad Pro 13-inch (M5)"` shoots the set on one,
-# upright unless `--orientation landscape` asks for the other way up. Nothing
-# has to be opened, so the test class turns the device itself: the orientation
-# reaches it as OPENHIKES_SCREENSHOT_ORIENTATION, and an iPhone's run sets
-# none. The map screen draws its side panel on an iPad either way up.
+# 2064 × 2752, which is what an iPad Pro 13-inch captures upright.
+# `--device-type "iPad Pro 13-inch (M5)"` shoots the set on one, upright and
+# only upright. App Store Connect takes 2752 × 2064 too, but the App Store
+# draws a device's frames as one gallery, and landscape ones beside portrait
+# ones looked wrong in it. The map screen draws its side panel on an iPad
+# upright too.
 #
 # ## One appearance per script, and one device per appearance
 #
@@ -122,7 +123,7 @@ readonly screenshot_frames=(
     "04:testCapturesFollowingTheTrail"
     "05:testCapturesRecordingAHike"
     "06:testCapturesTheTrailInThreeDimensions"
-    "07:testCapturesWalkHistory"
+    "07:testCapturesChoosingTheMap"
     "08:testCapturesDrawingATrail"
     "09:testCapturesAPlaceAndItsPhotos"
     "10:testCapturesSharingAHike"
@@ -197,15 +198,10 @@ Options:
   --device-type <t>  iPhone 18 Pro Max (default), iPhone Duo or
                      $screenshot_tablet_type
   --pose <p>         For an iPhone Duo: closed (its inner display folded away,
-                     as it boots) or open (unfolded). See Scripts/duo-pose.sh.
-                     open needs hinge, and is skipped on a machine without it.
-  --orientation <o>  With --pose open: portrait (default, the inner display
-                     turned upright, 2007 x 2853) or landscape (the way it
-                     opens, 2853 x 2007). A closed Duo is shot upright: the
-                     cover's home screen does not turn, so its pose cannot be
-                     read back on its side before the app is up.
-                     On an iPad: portrait (default, 2064 x 2752) or landscape
-                     (2752 x 2064).
+                     as it boots, 1398 x 2034) or open (unfolded, the inner
+                     display on its side the way it opens, 2853 x 2007). See
+                     Scripts/duo-pose.sh. open needs hinge, and is skipped on
+                     a machine without it.
   --derived-data <p> Build directory (default: DerivedData/Screenshots-$screenshot_appearance)
   --locale <id>      Locale to pin the simulator to (default: en_IE). This is
                      what decides "2.4 km" against "2,4 km" and "6.6 mi", so
@@ -611,14 +607,6 @@ screenshots_main() {
                 fi
                 shift 2
                 ;;
-            --orientation)
-                orientation="${2:?--orientation needs portrait or landscape}"
-                if [[ "$orientation" != portrait && "$orientation" != landscape ]]; then
-                    echo "Unknown orientation: $orientation (portrait or landscape)" >&2
-                    exit 2
-                fi
-                shift 2
-                ;;
             --derived-data) derived_data="${2:?--derived-data needs a path}"; shift 2 ;;
             --locale) locale_id="${2:?--locale needs an identifier}"; shift 2 ;;
             --no-photos) skip_photos=true; shift ;;
@@ -637,18 +625,9 @@ screenshots_main() {
             exit 2
             ;;
     esac
-    if [[ -n "$orientation" && "$pose" != open && "$device_type" != "$screenshot_tablet_type" ]]; then
-        echo "--orientation needs --pose open or an iPad: a closed Duo and an iPhone are shot upright." >&2
-        exit 2
-    fi
-    # An iPad is turned by the test class, which is told which way here: see
-    # *The iPad* at the top of this file. Unset on an iPhone, whose tests then
-    # leave the device as Scripts/duo-pose.sh, or nothing, put it.
-    unset TEST_RUNNER_OPENHIKES_SCREENSHOT_ORIENTATION
-    if [[ "$device_type" == "$screenshot_tablet_type" ]]; then
-        orientation="${orientation:-portrait}"
-        export TEST_RUNNER_OPENHIKES_SCREENSHOT_ORIENTATION="$orientation"
-    fi
+    # Every set is upright but the open Duo's: see *The iPad* and *The iPhone
+    # Duo* at the top of this file.
+    if [[ "$pose" == open ]]; then orientation=landscape; fi
     # Before any device is touched: an open Duo needs hinge, and a machine
     # without it skips the set rather than failing the run or shooting it closed.
     local without_hinge
@@ -683,8 +662,6 @@ screenshots_main() {
     fi
     local layout="${pose:+$pose${orientation:+_$orientation}}"
     if [[ "$device_type" == 'iPhone Duo' && -z "$pose" ]]; then layout="closed"; fi
-    if [[ "$pose" == open && -z "$orientation" ]]; then layout="open_portrait"; fi
-    if [[ "$device_type" == "$screenshot_tablet_type" && -z "$pose" ]]; then layout="$orientation"; fi
     output_dir="$(screenshot_output_directory "$output_root" "$device_type" "$locale_id" \
         "$layout" "$screenshot_appearance")" || exit $?
     device_pinned=false

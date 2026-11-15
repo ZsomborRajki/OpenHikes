@@ -269,7 +269,7 @@ either: the second run waits silently on the first run's build lock.
   everything in the side panel, so the shared helpers measure the window and
   skip it (`OpenHikesUITests/WindowSupport.swift`).
 - The screenshot set shoots on it with `--device-type "iPhone Duo"` and
-  `--pose`; see `Screenshots/README.md`.
+  `--pose`, closed or open on its side; see `Screenshots/README.md`.
 
 ### The iPad
 
@@ -293,8 +293,8 @@ either: the second run waits silently on the first run's build lock.
   acquire`. No gate runs on an iPad. There `isHittable` answers no for
   everything in the side panel, either way up, and the shared helpers skip it
   as they do on the Duo (`OpenHikesUITests/WindowSupport.swift`).
-- The screenshot set shoots on it with `--device-type "iPad Pro 13-inch (M5)"`
-  and `--orientation`; see `Screenshots/README.md`.
+- The screenshot set shoots on it upright, with `--device-type "iPad Pro
+  13-inch (M5)"`; see `Screenshots/README.md`.
 
 ### UI automation
 

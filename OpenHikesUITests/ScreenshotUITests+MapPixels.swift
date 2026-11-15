@@ -126,6 +126,22 @@ extension ScreenshotUITests {
         return (hasTiles, signature.finalize())
     }
 
+    /// Every pixel of the capture, on the map sample's stride, as one hash:
+    /// what a frame whose map is not most of the picture waits on to stop
+    /// changing.
+    @MainActor
+    func screenshotSignature(on display: ScreenshotDisplay) -> Int? {
+        guard let image = screenshotPixels(on: display) else { return nil }
+        var signature = Hasher()
+        for row in stride(from: 0, to: image.height, by: Self.terrainSampleStride) {
+            for column in stride(from: 0, to: image.width, by: Self.terrainSampleStride) {
+                let offset = (row * image.width + column) * 4
+                for channel in image.bytes[offset..<(offset + 3)] { signature.combine(channel) }
+            }
+        }
+        return signature.finalize()
+    }
+
     /// How deep the flat grey past a tilted map's last ground reaches down
     /// from the top of the open map, in points, or zero where there is none.
     @MainActor

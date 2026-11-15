@@ -87,27 +87,6 @@ nonisolated final class ScreenshotUITests: XCTestCase {
     /// below four fifths is unambiguously it.
     private static let collapsedSheetFraction = 0.8
 
-    /// Turns an iPad the way `Scripts/lib/screenshots.sh` asked, once, ahead
-    /// of the frames' launches, so the app opens that way up in each. An
-    /// iPhone's run asks for nothing and the device is left as it is: an open
-    /// iPhone Duo has already been turned, by `Scripts/duo-pose.sh`.
-    override static func setUp() {
-        super.setUp()
-        MainActor.assumeIsolated {
-            guard let orientation = requestedOrientation else { return }
-            XCUIDevice.shared.orientation = orientation
-        }
-    }
-
-    /// And upright again after them. A simulator keeps the way up it was
-    /// left, and every other class in this bundle assumes a portrait screen.
-    override static func tearDown() {
-        MainActor.assumeIsolated {
-            if requestedOrientation != nil { XCUIDevice.shared.orientation = .portrait }
-        }
-        super.tearDown()
-    }
-
     // MARK: - Frames
 
     /// The hero: the whole trail on the map, the sheet out of the way, and one
@@ -228,44 +207,23 @@ nonisolated final class ScreenshotUITests: XCTestCase {
         capture(as: .nearby, of: app)
     }
 
-    /// A finished walk in the trail's History.
+    /// *Map Modes*, open over the walk: every map it can be drawn on, each
+    /// card a picture of the same valley, under the map they change.
     ///
-    /// The summary of a walk that finished the whole trail.
-    ///
-    /// Two walks are seeded and the newer — the one that covered all of it —
-    /// is the row this opens, so the summary leads with 100%. The second
-    /// exists so the History list behind it is a history rather than a single
-    /// row, which is what the back gesture returns to.
+    /// The free maps as a hiker without Pro sees them, beside the paid ones
+    /// with their locks, so the frame says which maps are bought rather than
+    /// showing them all as included. See ``showRouteUnderMapModes(in:)`` for
+    /// how the walk is kept in sight.
     @MainActor
-    func testCapturesWalkHistory() {
+    func testCapturesChoosingTheMap() {
         let app = launchApp(arguments: [
             "--ui-test-expanded-sheet",
             "--ui-test-import-gpx=\(Self.routeFixture)",
-            "--ui-test-seed-walks=FullLoop,HalfLoop",
             Self.routeHueArgument,
         ])
         openHikeDetail(in: app, titled: Self.routeTitle)
-        app.segmentedControls["walk-segment"].buttons[screenshotText("History")].tap()
-        let row = app.descendants(matching: .any)
-            .matching(identifier: "walk-row")
-            .firstMatch
-        XCTAssertTrue(
-            row.waitForExistence(timeout: UITestTimeout.existence),
-            "the seeded walk should be listed in History"
-        )
-        row.tap()
-        XCTAssertTrue(
-            app.navigationBars[screenshotText("Hike Summary")].waitForExistence(
-                timeout: UITestTimeout.navigation
-            ),
-            "tapping a walk row should push its summary"
-        )
-        XCTAssertTrue(
-            element("walk-completion", in: app)
-                .waitForExistence(timeout: UITestTimeout.existence),
-            "the summary should lead with how much of the trail was covered"
-        )
-        capture(as: .walkHistory, of: app)
+        showRouteUnderMapModes(in: app)
+        capture(as: .mapModes, of: app)
     }
 }
 
@@ -293,7 +251,7 @@ extension ScreenshotUITests {
         case following = "04-following-the-trail"
         case recording = "05-recording-a-hike"
         case terrain = "06-the-trail-in-3d"
-        case walkHistory = "07-walk-summary"
+        case mapModes = "07-choose-your-map"
         case trailMaker = "08-draw-your-own-trail"
         case place = "09-a-place-and-its-photos"
         case share = "10-share-a-hike"
@@ -479,10 +437,9 @@ extension ScreenshotUITests {
     /// Ground rather than a count of steps, because the map opens on the
     /// same ground whatever it is drawn on, and a display with more points
     /// draws it closer. Measured: one step takes the 6.9" phone to 33 km²,
-    /// the closed iPhone Duo to 25 and an iPad held upright to 40. It leaves
-    /// an iPad on its side at 11, with the lake off the bottom of the map,
-    /// and a second takes that to 45. One step further on the phone put the
-    /// whole valley on screen and the lines went thin.
+    /// the closed iPhone Duo to 25 and an iPad held upright to 40. One step
+    /// further on the phone put the whole valley on screen and the lines
+    /// went thin.
     static let nearbyGround = 15.0
     /// The most steps out it takes to get there, on any display.
     static let nearbyZoomOutLimit = 3
@@ -851,7 +808,7 @@ extension ScreenshotUITests {
             settleScreenshotMapTiles(in: app, requireTerrain: true)
         case .route, .following, .trailMaker:
             settleScreenshotMapTiles(in: app)
-        case .terrain, .photos, .walkHistory, .place, .share:
+        case .terrain, .photos, .mapModes, .place, .share:
             break
         }
         attachScreenshotEvidence(named: frame.rawValue, in: app)
