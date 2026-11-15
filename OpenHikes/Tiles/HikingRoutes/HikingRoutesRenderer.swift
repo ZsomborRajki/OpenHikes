@@ -51,23 +51,16 @@ nonisolated final class HikingRoutesRenderer: MKOverlayRenderer, @unchecked Send
     init(overlay: HikingRoutesOverlay) {
         squares = overlay.squares
         super.init(overlay: overlay)
-        // A square that failed is left alone for a while, and nothing asks
-        // for it again on a map nobody moves: the squares say when to.
-        squares.wakes(self) { [weak self] in
-            Task { @MainActor [weak self] in self?.setNeedsDisplay() }
-        }
-    }
-
-    deinit {
-        squares.forget(ObjectIdentifier(self))
     }
 
     override func canDraw(_ mapRect: MKMapRect, zoomScale: MKZoomScale) -> Bool {
         let needed = HikingRoutesDrawing.neededSquares(for: mapRect, zoomScale: zoomScale)
         guard !needed.isEmpty else { return false }
         if squares.holdsAll(needed) { return true }
-        request(needed, for: mapRect, zoomScale: zoomScale)
-        return false
+        // The squares can come in between the two questions. Nothing is
+        // kept for a tile that has them all, so it is drawn now rather than
+        // left for a redraw nobody would ask for.
+        return !request(needed, for: mapRect, zoomScale: zoomScale) && squares.holdsAll(needed)
     }
 
     override func draw(_ mapRect: MKMapRect, zoomScale: MKZoomScale, in context: CGContext) {

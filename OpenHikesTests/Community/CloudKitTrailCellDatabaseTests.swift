@@ -27,10 +27,10 @@ struct CloudKitTrailCellDatabaseTests {
     private static let square = "trails1_550_771"
     private static let neighbor = "trails1_550_772"
 
-    private static func manifest(complete: Int?) -> CKRecord {
+    private static func manifest(complete: Int?, named name: String = TrailCellGrid.manifestRecordName) -> CKRecord {
         let record = CKRecord(
             recordType: CommunitySchema.trailManifestType,
-            recordID: CKRecord.ID(recordName: TrailCellGrid.manifestRecordName)
+            recordID: CKRecord.ID(recordName: name)
         )
         record[CommunitySchema.TrailManifest.complete] = complete
         return record
@@ -94,6 +94,27 @@ struct CloudKitTrailCellDatabaseTests {
 
         #expect(refused.manifest == .unread)
         #expect(unanswered.manifest == .unread)
+    }
+
+    /// The day hikes' manifest is complete in both environments, so a layer
+    /// that read it would take every square with no record of its own for
+    /// ground with no routes, and keep that for thirty days.
+    @Test("the hiking-routes layer's squares are judged by its own manifest, never the day hikes'")
+    func eachSetHasItsOwnManifest() {
+        let routes = RouteSquareGrid.manifestRecordName
+        let onlyTheDayHikes = CloudKitTrailCellDatabase.answer(
+            from: [TrailCellGrid.manifestRecordName: .success(Self.manifest(complete: 1))],
+            names: [],
+            manifestRecordName: routes
+        )
+        let itsOwn = CloudKitTrailCellDatabase.answer(
+            from: [routes: .success(Self.manifest(complete: 1, named: routes))],
+            names: [],
+            manifestRecordName: routes
+        )
+
+        #expect(onlyTheDayHikes.manifest == .unread)
+        #expect(itsOwn.manifest == .complete)
     }
 
     // MARK: - The squares

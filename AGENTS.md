@@ -1626,7 +1626,8 @@ beside them. `RouteSquareGrid` argues the design and has the measurements.
   answer is complete or it is not given* is: until then a missing record means
   nothing, and the layer draws nothing (`HikingRouteSquares`).
 - **A tile waits for every square it overlaps.** `canDraw` answers no and asks
-  for the missing ones, which redraw the tile when they arrive; a line never
+  for the missing ones, which redraw the tile when they arrive, or draws at
+  once when they came in while it was asking; a line never
   stops at the edge of a square that has not come. Nothing on MapKit's
   drawing threads waits on the disk or the network, and the redraw is asked
   for on the main thread.
@@ -1635,7 +1636,10 @@ beside them. `RouteSquareGrid` argues the design and has the measurements.
   while the request for its neighbour is still out. A request is refused
   where `TileNetworkPolicy` refuses a tile somebody is looking at, so Low
   Data Mode stops the layer too. A square that was refused or failed is left
-  for a minute, and then the renderer is told to draw again.
+  for a minute, and then the tiles that asked for it meanwhile are drawn
+  again, and no others. Nothing else would ask on a map nobody moves. The
+  layer's requests take longer to time out than the day hikes' search, which
+  has Overpass to fall back on.
 - **Ways are joined end to end when a square loads, where the same routes
   run** (`DrawnRouteSquare`), and a tile strokes only vertices a pixel apart.
   A square holds OpenStreetMap's ways, which split a route at every junction,
