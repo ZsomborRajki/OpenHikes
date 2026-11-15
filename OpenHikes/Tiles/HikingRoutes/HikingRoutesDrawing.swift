@@ -29,7 +29,8 @@ nonisolated enum HikingRoutesDrawing {
     /// stroked.
     private static let minimumStep: CGFloat = 0.5
     /// How far beside a tile a sign that reaches into it can stand, in tile
-    /// pixels: half the widest sign a five-character number makes.
+    /// pixels: half ``WaymarkSign/maximumWidth``, which holds every sign to
+    /// it — a number of about eight characters.
     static let signReach: CGFloat = 24
 
     /// The map zoom a tile at `zoomScale` is drawn for.

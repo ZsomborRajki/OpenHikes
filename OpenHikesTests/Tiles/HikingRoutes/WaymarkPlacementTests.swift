@@ -74,6 +74,21 @@ struct WaymarkPlacementTests {
         #expect(Set(near) == [.regional, .local])
     }
 
+    /// Each zoom deeper doubles the places tried along a square's lines, and
+    /// they are tried while a drawing thread waits.
+    @Test("deeper than the deepest placement zoom the signs keep that zoom's places")
+    func placementStopsDeepening() {
+        // 0.1° of longitude is 74,565 tile pixels at zoom 20: room for 248
+        // signs there, and for 62 at zoom 18.
+        let drawn = DrawnRouteSquare(Self.square([Self.local], [Self.way(along: [0], from: 12.8, to: 12.9)]))
+        let deepest = DrawnRouteSquare.deepestPlacementZoom
+        let places = { (zoom: Int) in drawn.waymarks(atZoom: zoom).map { [$0.center.x, $0.center.y] } }
+        let placed = places(deepest)
+        #expect(placed.count > 1)
+        #expect(places(deepest + 2) == placed)
+        #expect(places(deepest - 1).count < placed.count, "shallower, there are fewer")
+    }
+
     @Test("one line's signs stand its spacing apart, evenly, from half a step in")
     func evenlyAlongALine() throws {
         // 0.1° of longitude is 1,165 tile pixels at zoom 14: room for three.

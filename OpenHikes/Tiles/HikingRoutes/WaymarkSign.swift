@@ -37,7 +37,8 @@ nonisolated struct WaymarkSign: Hashable, Sendable {
     let network: RouteNetwork
 
     /// The sign a route's tags make, or `nil` for a route with no waymark
-    /// this layer draws, no number and no name.
+    /// this layer draws, no number and no name — or a number too long to
+    /// draw whole.
     init?(tags: [String: String]) {
         network = max(RouteNetwork(tag: tags["network"]), .local)
         if let tag = tags["osmc:symbol"], let symbol = OSMCSymbol(tag: tag) {
@@ -47,15 +48,20 @@ nonisolated struct WaymarkSign: Hashable, Sendable {
         } else {
             return nil
         }
+        // Wider, a sign standing beside a tile could reach into it further
+        // than the tile looks for one, and be cut at its edge. A number is not
+        // cut to fit instead: half a number is a different number, and two
+        // routes would share one sign.
+        guard size.width <= Self.maximumWidth else { return nil }
     }
 
     /// What a route with no waymark is called on its sign: its `ref` without
-    /// the spaces, or — with no `ref` — its name when that is short enough,
-    /// the capitals and digits of a longer one, and the start of a name with
-    /// fewer than two of those. Cut to ``maximumReferenceLength``.
+    /// the spaces, whole, or — with no `ref` — its name when that is short
+    /// enough, the capitals and digits of a longer one, and the start of a
+    /// name with fewer than two of those, cut to ``maximumReferenceLength``.
     static func reference(from tags: [String: String]) -> String? {
         if let ref = tags["ref"]?.filter({ !$0.isWhitespace }), !ref.isEmpty {
-            return String(ref.prefix(maximumReferenceLength))
+            return ref
         }
         guard let name = tags["name"]?.trimmingCharacters(in: .whitespaces), !name.isEmpty else { return nil }
         guard name.count > maximumReferenceLength else { return name }
@@ -66,7 +72,11 @@ nonisolated struct WaymarkSign: Hashable, Sendable {
         return String(initials.prefix(maximumReferenceLength))
     }
 
+    /// How much of a name stands in for a number.
     static let maximumReferenceLength = 5
+    /// The widest sign drawn, in tile pixels: as far to either side as a tile
+    /// looks for one — see ``HikingRoutesDrawing/signReach``.
+    static let maximumWidth = 2 * HikingRoutesDrawing.signReach
 
     /// The sign's height in tile pixels, and its width for one with no text.
     static let side: CGFloat = 16
