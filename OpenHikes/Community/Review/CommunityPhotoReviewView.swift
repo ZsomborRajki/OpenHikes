@@ -90,6 +90,8 @@ struct CommunityPhotoReviewView: View {
             }
             decisionSection
         }
+        // What the side panel stands as tall as — see ``SidePanelFit``.
+        .fitsSidePanel()
         .modifier(
             CommunityReviewChrome(
                 title: "Review Photos",

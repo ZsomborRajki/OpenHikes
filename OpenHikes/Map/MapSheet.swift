@@ -127,20 +127,7 @@ struct MapSheet: View {
         // ``SheetPresentation``.
         NavigationStack(path: presentation.pathBinding) {
             VStack(spacing: 0) {
-                // One container for the two pieces of chrome side by side:
-                // they sample the map behind them once between them, and the
-                // field's capsule and the button's circle blend as the
-                // keyboard pushes them together rather than sliding past each
-                // other as two unrelated panes.
-                GlassStack(spacing: Self.chromeGlassSpacing) {
-                    HStack(spacing: 10) {
-                        searchField
-                        settingsButton
-                    }
-                }
-                    .padding(.horizontal)
-                    .padding(.top, Self.topPadding)
-
+                searchChrome
                 MapSheetHikes(
                     searchText: searchText,
                     isSearchFocused: searchFocused,
@@ -177,6 +164,9 @@ struct MapSheet: View {
             // search field and both lists: a white slab beside the map, and
             // glass again on every screen pushed over it.
             .containerBackground(.clear, for: .navigation)
+            // The root of the stack, for the side panel's height — see
+            // ``SidePanelFit``.
+            .sidePanelScreen(depth: 0)
             .navigationDestination(for: SheetRoute.self, destination: pushedScreen)
             #if os(iOS)
             // The sheet's own screen has no navigation bar: the search field
@@ -259,6 +249,23 @@ struct MapSheet: View {
             searchTask?.cancel()
             searchTask = nil
         }
+    }
+
+    /// The search field and the settings button, across the top of the root.
+    ///
+    /// One container for the two pieces of chrome side by side: they sample
+    /// the map behind them once between them, and the field's capsule and the
+    /// button's circle blend as the keyboard pushes them together rather than
+    /// sliding past each other as two unrelated panes.
+    private var searchChrome: some View {
+        GlassStack(spacing: Self.chromeGlassSpacing) {
+            HStack(spacing: 10) {
+                searchField
+                settingsButton
+            }
+        }
+            .padding(.horizontal)
+            .padding(.top, Self.topPadding)
     }
 
     private var searchField: some View {
@@ -556,11 +563,17 @@ private extension MapSheet {
     /// every destination shares the root's glass rather than each opting in.
     /// The panel's root needs the same, and has it in ``body``.
     func pushedScreen(for route: SheetRoute) -> some View {
-        navigationDestinationView(for: route)
+        // `nil` on the pass a pop makes for the screen it is taking away,
+        // whose route has already left the path.
+        let index = presentation.path.firstIndex(of: route)
+        return navigationDestinationView(for: route)
             .containerBackground(.clear, for: .navigation)
             // How deep the screen is, which decides whose claim on the map's
             // pins and camera pill is in force — see ``ScreenClaims``.
-            .environment(\.sheetDepth, (presentation.path.firstIndex(of: route) ?? 0) + 1)
+            .environment(\.sheetDepth, (index ?? 0) + 1)
+            // And whose height the side panel takes, which a screen being
+            // popped has no say in — see ``SidePanelFit``.
+            .sidePanelScreen(depth: index.map { $0 + 1 })
     }
 }
 

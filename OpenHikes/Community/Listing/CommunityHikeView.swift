@@ -244,6 +244,8 @@ struct CommunityHikeView: View {
         // progressive blur the hike's own detail screen gives it rather than
         // meeting the bar's glass at a hard line.
         .softScrollEdgeEffect(for: .top)
+        // What the side panel stands as tall as — see ``SidePanelFit``.
+        .fitsSidePanel()
         .navigationTitle(listing.title)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)

@@ -50,6 +50,8 @@ struct RouteStyleView: View {
             .padding()
         }
         .softScrollEdgeEffect(for: .top)
+        // What the side panel stands as tall as — see ``SidePanelFit``.
+        .fitsSidePanel()
         .navigationTitle("Route Style")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)

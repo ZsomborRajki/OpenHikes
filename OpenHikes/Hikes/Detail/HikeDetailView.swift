@@ -349,6 +349,8 @@ struct HikeDetailView: View {
             // scroll away behind it instead of meeting a hard line, which is
             // what the bar's own glass is drawn to sit on.
             .softScrollEdgeEffect(for: .top)
+            // What the side panel stands as tall as — see ``SidePanelFit``.
+            .fitsSidePanel()
         }
     }
 

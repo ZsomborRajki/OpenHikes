@@ -68,6 +68,8 @@ struct CommonsPhotoGroupView: View {
             .padding()
         }
         .softScrollEdgeEffect(for: .top)
+        // What the side panel stands as tall as — see ``SidePanelFit``.
+        .fitsSidePanel()
         .accessibilityIdentifier("commons-photo-group-screen")
         .navigationTitle(Text("Photos"))
         #if os(iOS)

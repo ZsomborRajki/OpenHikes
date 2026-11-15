@@ -86,6 +86,8 @@ struct WalkSummaryView: View {
             }
             .padding()
         }
+        // What the side panel stands as tall as — see ``SidePanelFit``.
+        .fitsSidePanel()
         .navigationTitle("Hike Summary")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)

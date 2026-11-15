@@ -69,6 +69,8 @@ struct LibraryTotalsView: View {
                     .padding(.top, 40)
             }
         }
+        // What the side panel stands as tall as — see ``SidePanelFit``.
+        .fitsSidePanel()
         .navigationTitle("Totals")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)

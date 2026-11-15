@@ -107,6 +107,8 @@ struct HikePlaceView: View {
             .padding()
         }
         .softScrollEdgeEffect(for: .top)
+        // What the side panel stands as tall as — see ``SidePanelFit``.
+        .fitsSidePanel()
         .toolbar {
             if card.isEditable {
                 ToolbarItem(placement: .topBarTrailing) {

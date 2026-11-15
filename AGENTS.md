@@ -899,6 +899,14 @@ a change to recording, the map, the sheet or the render path; the PR template,
     rule.
   - `verticalSizeClass` and the window's size are read only in
     `SheetLayoutReader`.
+  - Where the window is of regular height the panel stands as tall as the
+    screen on top needs, in the middle of the leading edge, and never shorter
+    than it is wide; at a compact height it keeps the window's
+    (`SidePanelFit`). A screen pushed into the sheet marks the scroll view it
+    is built around with `fitsSidePanel()`, or the panel keeps the height it
+    had when the screen was pushed. A photo viewer takes the window's height.
+    Each figure a screen reports is one that does not move when the panel
+    does, because a measure that follows the panel is chased by it.
   - A window can change size and keep the panel: an iPad turned, or its
     window resized. Nothing SwiftUI hands the map changes then, so
     `MapView.update` does not run, and what the map measures from its own

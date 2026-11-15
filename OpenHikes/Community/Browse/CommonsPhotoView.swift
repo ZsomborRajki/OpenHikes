@@ -105,6 +105,8 @@ struct CommonsPhotoView: View {
             .padding()
         }
         .softScrollEdgeEffect(for: .top)
+        // What the side panel stands as tall as — see ``SidePanelFit``.
+        .fitsSidePanel()
         .accessibilityIdentifier("commons-photo-screen")
         .task(id: photo.fileURL) {
             if claimsFirstFraming() {
