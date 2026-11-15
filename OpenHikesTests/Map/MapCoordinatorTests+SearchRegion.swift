@@ -12,10 +12,11 @@
 //  What is asserted here is the hand-over rather than MapKit's ranking: that
 //  a settled region reaches ``SearchCompleter``, that it arrives from the same
 //  coordinator callback the community list already learns the map moved from,
-//  and that a settle which did not move the map is not forwarded — assigning
-//  `region` while a query fragment is outstanding makes MapKit answer it
-//  again. Whether the suggestions are *better* for it is a device pass; this
-//  is the plumbing that makes them possible.
+//  and — in ``SearchCompleterRegionTests``, whose stub counts what MapKit is
+//  told — that a settle which did not move the map is not forwarded, because
+//  assigning `region` while a query fragment is outstanding makes MapKit
+//  answer it again. Whether the suggestions are *better* for it is a device
+//  pass; this is the plumbing that makes them possible.
 //
 
 import CoreLocation

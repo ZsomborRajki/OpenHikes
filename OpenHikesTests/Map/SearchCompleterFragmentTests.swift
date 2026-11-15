@@ -9,49 +9,16 @@
 //  work for a search that had ended, and a stale list waiting for the field
 //  to be focused again (#755).
 //
-//  `MKLocalSearchCompleter` is subclassed rather than wrapped: the subclass
-//  records the fragments and regions it is given and never passes them on,
-//  so nothing here reaches Apple, and ``SearchQueryPolicyTests`` keeps the
-//  decisions this sits on top of.
+//  `MKLocalSearchCompleter` is subclassed rather than wrapped: the subclass,
+//  ``RecordingCompleter``, records the fragments and regions it is given and
+//  never passes them on, so nothing here reaches Apple, and
+//  ``SearchQueryPolicyTests`` keeps the decisions this sits on top of.
 //
 
 import CoreLocation
 import MapKit
 @testable import OpenHikes
 import Testing
-
-/// Keeps what it is told instead of asking MapKit. `nonisolated` because
-/// the members it overrides are, and this target defaults to the main actor.
-nonisolated private final class RecordingCompleter: MKLocalSearchCompleter {
-    private(set) var fragmentsAsked: [String] = []
-    private(set) var regionsAssigned = 0
-    private var storedFragment = ""
-    private var storedRegion = MKCoordinateRegion()
-    /// What a delegate callback reads, set by the test that fakes one.
-    var cannedResults: [MKLocalSearchCompletion] = []
-
-    override var queryFragment: String {
-        get { storedFragment }
-        set {
-            storedFragment = newValue
-            if !newValue.isEmpty { fragmentsAsked.append(newValue) }
-        }
-    }
-
-    override var region: MKCoordinateRegion {
-        get { storedRegion }
-        set {
-            storedRegion = newValue
-            regionsAssigned += 1
-        }
-    }
-
-    override var results: [MKLocalSearchCompletion] { cannedResults }
-
-    override func cancel() {
-        // Nothing was ever sent, so there is nothing to stop.
-    }
-}
 
 @MainActor
 @Suite("Search completer fragment")
