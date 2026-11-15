@@ -21,7 +21,9 @@
 //  and the first, and set them side by side itself. A line across the antimeridian
 //  runs off one edge of that copy (see ``DrawnRouteSquare``), so a tile
 //  draws each line and each sign where it is and a world's width to either
-//  side, and needs the squares beyond the edge its reach crosses.
+//  side, and needs the squares beyond the edge its reach crosses. A tile
+//  named a world's width past the edge would be drawn just the same, so
+//  nothing here rests on which copy MapKit names a tile on.
 //
 
 import CoreGraphics
@@ -116,10 +118,7 @@ nonisolated private extension HikingRoutesDrawing {
         var paths: [RouteNetworkSet: CGMutablePath] = [:]
         for square in squares {
             for line in square.lines {
-                // At an edge of the map, a line across the antimeridian can
-                // be near the tile a world's width from where it is.
-                for shift in DrawnRouteSquare.worldCopies
-                where line.bounds.offsetBy(dx: shift, dy: 0).intersects(near) {
+                forEachWorldCopy(of: line.bounds, reaching: near) { shift in
                     let path = paths[line.networks] ?? CGMutablePath()
                     paths[line.networks] = path
                     add(line.points, to: path, skippingCloserThan: step) { vertex in
@@ -171,7 +170,7 @@ nonisolated private extension HikingRoutesDrawing {
                     width: width,
                     height: height
                 )
-                for shift in DrawnRouteSquare.worldCopies where frame.offsetBy(dx: shift, dy: 0).intersects(mapRect) {
+                forEachWorldCopy(of: frame, reaching: mapRect) { shift in
                     context.saveGState()
                     let center = point(MKMapPoint(x: mark.center.x + shift, y: mark.center.y))
                     context.translateBy(x: center.x, y: center.y)
@@ -181,6 +180,22 @@ nonisolated private extension HikingRoutesDrawing {
                 }
             }
         }
+    }
+
+    /// Calls `body` with each shift `rect` is drawn at to reach `tile`: none,
+    /// and a world's width west or east, where a line runs off one edge of
+    /// the world's own copy, on which MapKit names every tile, or something
+    /// at one edge of the map reaches a tile at the other. Away from the
+    /// edges, each shifted copy is ruled out by one comparison, so a tile
+    /// tests an ordinary line or sign once. Tested in full at all three
+    /// shifts, a dense square's tiles took three to four times as long to
+    /// sort out what reaches them as with the one test before; this way,
+    /// half as long again, measured in a release build on a Mac.
+    static func forEachWorldCopy(of rect: MKMapRect, reaching tile: MKMapRect, _ body: (Double) -> Void) {
+        let width = MKMapSize.world.width
+        if rect.intersects(tile) { body(0) }
+        if rect.maxX - width > tile.minX, rect.offsetBy(dx: -width, dy: 0).intersects(tile) { body(-width) }
+        if rect.minX + width < tile.maxX, rect.offsetBy(dx: width, dy: 0).intersects(tile) { body(width) }
     }
 
     /// `points` as a subpath, leaving out each vertex closer than `step` to

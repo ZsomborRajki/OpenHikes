@@ -181,12 +181,6 @@ nonisolated struct DrawnRouteSquare: Sendable {
 // MARK: - Across the antimeridian
 
 nonisolated extension DrawnRouteSquare {
-    /// How far a line or a sign is moved to draw it on each copy of the world
-    /// a tile can meet it on: none, and a world's width either way. MapKit
-    /// names every tile on the world's own copy, and a line across the
-    /// antimeridian runs off that copy's edge.
-    static let worldCopies = [0, -MKMapSize.world.width, MKMapSize.world.width]
-
     /// `point` moved onto the world's own copy, where MapKit names its tiles
     /// and a square's ground is.
     static func onTheWorld(_ point: MKMapPoint) -> MKMapPoint {

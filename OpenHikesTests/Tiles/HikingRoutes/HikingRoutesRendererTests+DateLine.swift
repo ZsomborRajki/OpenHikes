@@ -123,6 +123,37 @@ extension HikingRoutesRendererTests {
         #expect(Self.isClear(middle), "nothing joins the two ends across the map")
     }
 
+    /// MapKit was seen naming the tiles at the seam on the world's own copy,
+    /// on a simulator only. Were it to name one a world's width further east
+    /// or west instead, as a map across the seam could, the tile is drawn
+    /// just the same, so the layer does not rest on which.
+    @Test(
+        "a tile named past the edge of the map is drawn as the same tile on the world's own copy",
+        arguments: [[179.9, -179.9], [-179.9, 179.9]]
+    )
+    func tileNamedPastTheEdge(longitudes: [Double]) async throws {
+        let scale = Self.zoomScale(Self.detailZoom)
+        let world = MKMapSize.world.width
+        let east = Self.tile(at: Self.detailZoom, latitude: Self.taveuni, longitude: 179.99)
+        let west = Self.tile(at: Self.detailZoom, latitude: Self.taveuni, longitude: -179.99)
+        let tiles = [(east, east.offsetBy(dx: -world, dy: 0)), (west, west.offsetBy(dx: world, dy: 0))]
+        let renderer = Self.renderer(
+            holding: Self.file(network: "nwn", latitude: Self.taveuni, longitudes: longitudes, ref: "7"),
+            latitude: Self.taveuni,
+            inSquaresAt: [179.99, -179.99]
+        )
+        await settleDelegateHop(until: "every tile's squares are in memory") {
+            tiles.allSatisfy { renderer.canDraw($0.0, zoomScale: scale) && renderer.canDraw($0.1, zoomScale: scale) }
+        }
+
+        for (own, past) in tiles {
+            let drawn = try #require(Self.draw(own, zoomScale: scale, with: renderer))
+            let drawnPast = try #require(Self.draw(past, zoomScale: scale, with: renderer))
+            #expect(!Self.isClear(drawn), "the way crosses both tiles")
+            #expect(drawn.dataProvider?.data as Data? == drawnPast.dataProvider?.data as Data?)
+        }
+    }
+
     /// A short way centred on the date line has one sign, standing on it.
     @Test("a sign on the date line is drawn whole: half in the map's last tile, half in its first")
     func signOnTheDateLine() async throws {
