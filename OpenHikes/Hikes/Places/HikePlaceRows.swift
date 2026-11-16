@@ -68,7 +68,7 @@ final class HikePlaceRows {
     /// How many hikes' anchors are kept. Each holds on to its route, which is
     /// the hike's own storage while the hike is unchanged and a copy once it
     /// is not, so this is bounded rather than one per hike ever opened.
-    private static let keptHikes = 8
+    static let keptHikes = 8
 
     /// Bumped when anchors measured off the main actor land. Read by every
     /// read, so the screens that drew without them draw again.
