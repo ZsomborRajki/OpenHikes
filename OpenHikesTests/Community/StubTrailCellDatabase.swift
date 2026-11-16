@@ -5,10 +5,10 @@
 //  What a suite's trail squares are fetched from instead of the public
 //  database, and the squares themselves.
 //
-//  Its own file because two suites drive it: `TrailCellLibraryTests`, which
-//  is about what the squares can and cannot answer, and
-//  `CuratedTrailSourceTests+Cells`, which is about Overpass staying quiet
-//  when they do.
+//  Its own file because every set of squares is fetched through
+//  ``TrailCellFetching``, so the suites of all four drive it: the day
+//  hikes', the places', the trail graph's and the hiking-routes layer's.
+//  The squares here are the day hikes'.
 //
 
 import Foundation
