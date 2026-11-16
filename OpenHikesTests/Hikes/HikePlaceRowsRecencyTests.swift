@@ -70,6 +70,13 @@ struct HikePlaceRowsRecencyTests {
         }
     }
 
+    /// Bound while a read sends its request off the main actor, so the
+    /// request's task inherits it as a task-local value and holds it until
+    /// the task ends, which is after its answer has landed or been dropped.
+    nonisolated private final class Witness: Sendable {
+        @TaskLocal static var current: Witness?
+    }
+
     private let tally: Tally
     private let rows: HikePlaceRows
 
@@ -134,21 +141,25 @@ struct HikePlaceRowsRecencyTests {
     func answerAfterEvictionIsDropped() async throws {
         let far = Owner.long()
 
-        read(far)
+        // A dropped answer leaves nothing behind to wait for, and the hop
+        // that lands it is queued only once the measurement has returned,
+        // from the thread that ran it, so no number of round trips after the
+        // measurement is sure to follow it. What is waited for is the
+        // request's task ending, which lets go of the witness it inherited.
+        weak var request: Witness?
+        do {
+            let witness = Witness()
+            request = witness
+            Witness.$current.withValue(witness) { _ = read(far) }
+        }
+        try #require(request != nil, "the request out holds the witness")
         for _ in 0..<HikePlaceRows.keptHikes { read(Owner.short()) }
-        // The measurement finished, so its landing is queued on the main
-        // actor behind it, and the round trips after this run after it.
-        await settleDelegateHop(until: "the long line is measured") { tally.finished(far) == 1 }
-        await settleDelegateHop()
+        await settleDelegateHop(until: "the long line's request has ended") { request == nil }
         #expect(rows.revision == 0, "nothing kept the hike it was about")
 
         read(far)
-        await settleDelegateHop(until: "the long line is measured again and lands") {
-            tally.finished(far) == 2 && rows.revision == 1
-        }
-        await settleDelegateHop()
+        await settleDelegateHop(until: "the long line is measured again and lands") { rows.revision == 1 }
         #expect(tally.times(far) == 2)
-        #expect(rows.revision == 1)
         #expect(try #require(read(far).first).anchor != nil)
     }
 
