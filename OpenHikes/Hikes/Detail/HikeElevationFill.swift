@@ -50,6 +50,18 @@
 //  heights are worked out there too. Only the write is left on the main
 //  actor, because the hike's own context is what writes it.
 //
+//  ## Asked again for a new line
+//
+//  The screen asks once for each line it shows without heights. Its
+//  placeholder keys the request on the line's ``ShownLine/revision`` as well
+//  as on whether there is anything to ask (``HikeElevationFill/Request``).
+//  Keyed on the second alone, two lines without heights were one request:
+//  a different one saved over the first while the screen was up, from this
+//  device or another, was not asked about for as long as the screen stayed
+//  up (#1440). The answer about the first line is still refused by the read
+//  above. The revision rather than the points, because a body is no place
+//  to compare two lines.
+//
 
 import Foundation
 import OpenHikesData
@@ -120,5 +132,49 @@ enum HikeElevationFill {
         let route = await read.route
         guard needsHeights(route), samples.describes(route) else { return nil }
         return (route, samples.interpolating(route))
+    }
+}
+
+// MARK: - When the screen asks
+
+extension HikeElevationFill {
+    /// What a hike's screen asks for heights about, and so when it asks
+    /// again: ``HikeElevationPlaceholder`` keys its request on this — see
+    /// the file header.
+    ///
+    /// The line is held by its ``ShownLine/revision``, which moves for each
+    /// line that lands and is not the one before it, and for nothing else:
+    /// a rename or another hike's save asks nothing again, and each request
+    /// is a billed call.
+    struct Request: Equatable {
+        /// The ``ShownLine/revision`` of the line on screen.
+        let lineRevision: Int
+        /// Whether that line is one the subscription would give heights to.
+        /// False until it has landed.
+        let isFillable: Bool
+        /// Whether the hiker is a subscriber.
+        let isEntitled: Bool
+
+        /// The request for `hike`'s line as `line` has it on screen.
+        init(hike: Hike, line: ShownLine, isEntitled: Bool) {
+            lineRevision = line.revision
+            isFillable = line.current.map { canFill(hike, along: $0.route) } ?? false
+            self.isEntitled = isEntitled
+        }
+
+        /// Whether there is anything to ask.
+        var asks: Bool { isEntitled && isFillable }
+
+        /// Asks `source` for heights for the line on screen, and saves them
+        /// onto `hike` — see ``HikeElevationFill/fill(_:along:from:in:save:)``.
+        @discardableResult func fill(
+            _ hike: Hike,
+            shown line: ShownLine,
+            from source: any CuratedElevationSourcing,
+            in context: ModelContext
+        ) async -> Bool {
+            guard asks, let route = line.current?.route else { return false }
+            return await HikeElevationFill.fill(hike, along: route, from: source, in: context)
+        }
     }
 }
