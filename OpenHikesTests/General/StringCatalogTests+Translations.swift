@@ -2,11 +2,11 @@
 //  StringCatalogTests+Translations.swift
 //  OpenHikesTests
 //
-//  The translations, German, French, Spanish, Italian, Russian and Polish,
-//  read out of the source tree like the rest of this suite. A key with no
-//  translation falls back to English without a word, and a translated value
-//  that drops or retypes a placeholder formats the wrong argument. Neither
-//  shows anywhere else, because the hosted tests run in English.
+//  The translations, German, French, Spanish, Italian, Russian, Polish and
+//  Ukrainian, read out of the source tree like the rest of this suite. A key
+//  with no translation falls back to English without a word, and a translated
+//  value that drops or retypes a placeholder formats the wrong argument.
+//  Neither shows anywhere else, because the hosted tests run in English.
 //
 //  The Info.plist and App Shortcuts catalogs have no sync to keep them
 //  current: the IDE extracts into them, `xcodebuild` does not, and
@@ -23,15 +23,15 @@ import Testing
 
 extension StringCatalogTests {
     /// The languages the app ships besides English, its development language.
-    nonisolated static let translations = ["de", "fr", "es", "it", "ru", "pl"]
+    nonisolated static let translations = ["de", "fr", "es", "it", "ru", "pl", "uk"]
 
     /// The languages whose `one` form is handed more than 1. French reads
-    /// zero as singular. Russian reads every number that ends in 1 as
-    /// singular, 11 aside: 21, 31, 101.
-    nonisolated static let countedSingulars = ["fr", "ru"]
+    /// zero as singular. Russian and Ukrainian read every number that ends in
+    /// 1 as singular, 11 aside: 21, 31, 101.
+    nonisolated static let countedSingulars = ["fr", "ru", "uk"]
 
     /// The languages that count in three forms, where English has two.
-    nonisolated static let threeFormPlurals = ["ru", "pl"]
+    nonisolated static let threeFormPlurals = ["ru", "pl", "uk"]
 
     @Test("every catalogued string is translated", arguments: Self.catalogFolders, Self.translations)
     func everyStringIsTranslated(folder: String, language: String) throws {
@@ -80,8 +80,8 @@ extension StringCatalogTests {
     /// French reads zero as singular, so its `one` form is handed 0 as well
     /// as 1, and a singular that spells out the count as a word, as English
     /// "One photo goes on %2$@" does, would tell a hiker with no photos that
-    /// one goes. Russian would tell a hiker with 21 that one does. Their
-    /// singular keeps the number.
+    /// one goes. Russian and Ukrainian would tell a hiker with 21 that one
+    /// does. Their singular keeps the number.
     @Test(
         "a singular keeps its count where it is handed more than 1",
         arguments: Self.catalogFolders, Self.countedSingulars
@@ -103,10 +103,11 @@ extension StringCatalogTests {
         #expect(offenders.isEmpty, "\(language) singulars in \(folder) that drop their count: \(offenders.sorted())")
     }
 
-    /// Russian counts in three forms: 1 поход, 2 похода, 5 походов. So does
-    /// Polish: 1 wędrówka, 2 wędrówki, 5 wędrówek. A plural with no `few` or
-    /// no `many` falls back to `other` without a word, and reads «5 похода»,
-    /// or „5 wędrówki”.
+    /// Russian counts in three forms: 1 поход, 2 похода, 5 походов. So do
+    /// Polish, 1 wędrówka, 2 wędrówki, 5 wędrówek, and Ukrainian, 1 похід,
+    /// 2 походи, 5 походів. A plural with no `few` or no `many` falls back to
+    /// `other` without a word, and reads «5 похода», „5 wędrówki” or
+    /// «5 походу».
     @Test(
         "a plural has a form for one, for few and for many where the language counts in three",
         arguments: Self.catalogFolders, Self.threeFormPlurals
