@@ -426,13 +426,36 @@ nonisolated extension TrailGraphSquareLibrary {
     /// Whether the segment from `start` to `end` touches `bounds`, edges
     /// included: Overpass's box finds a way by any segment that crosses it,
     /// not only by a node inside. The plane of latitude and longitude, which
-    /// is a region's own few kilometres; a segment across the antimeridian is
-    /// not one a region is crossed by.
+    /// is a region's own few kilometres, with the step read the short way
+    /// round, as the tool files a way by it
+    /// (``TrailGraphSquareGrid/turn(fromLongitude:to:)``): a step from 179.9°
+    /// to −179.9° crosses the regions at both edges of the map, whose squares
+    /// hold it, and none at Greenwich.
     static func crosses(from start: CLLocationCoordinate2D, to end: CLLocationCoordinate2D, _ bounds: Bounds) -> Bool {
+        let deltaY = end.latitude - start.latitude
+        let turn = TrailGraphSquareGrid.turn(fromLongitude: start.longitude, to: end.longitude)
+        guard turn != 0 else {
+            return clips(from: start, deltaX: end.longitude - start.longitude, deltaY: deltaY, bounds)
+        }
+        // Read the short way, the step runs on past ±180° from either end,
+        // and a region stands on the map once: one on its start's side meets
+        // it running on from the start, and one on its end's side running
+        // back from the end.
+        let deltaX = end.longitude + turn - start.longitude
+        return clips(from: start, deltaX: deltaX, deltaY: deltaY, bounds)
+            || clips(from: end, deltaX: -deltaX, deltaY: -deltaY, bounds)
+    }
+
+    /// Whether the segment that runs `deltaX` east and `deltaY` north from
+    /// `start` touches `bounds`.
+    private static func clips(
+        from start: CLLocationCoordinate2D,
+        deltaX: Double,
+        deltaY: Double,
+        _ bounds: Bounds
+    ) -> Bool {
         // Liang–Barsky: clip the segment's parameter to each of the box's
         // four sides in turn, and it crosses when something is left.
-        let deltaX = end.longitude - start.longitude
-        let deltaY = end.latitude - start.latitude
         let sides = [
             (-deltaX, start.longitude - bounds.west),
             (deltaX, bounds.east - start.longitude),

@@ -6,7 +6,9 @@
 //  trail graph: every way whose `highway` is one of `TrailGraphHighway.trails`
 //  and that may be walked, whole, with its nodes' ids and positions and the
 //  name of a hiking route it is part of, filed under every square of
-//  `TrailGraphSquareGrid` its box touches.
+//  `TrailGraphSquareGrid` its box touches. The grid finds those squares,
+//  each step of a way read the short way round the antimeridian, because the
+//  app reads a region's ways by the same rule.
 //
 //  A planet's trails are a billion nodes, more than this tool should hold, so
 //  the ways are read once and spooled: each way's bytes are appended to its
@@ -83,7 +85,11 @@ enum TrailGraphSquareBuild {
                 }
             )
             let record = SpoolRecord.encoded(trail)
-            for square in squares(touching: trail.nodes) {
+            let squares = TrailGraphSquareGrid.squares(
+                touching: trail.nodes,
+                coordinateScale: TrailGraphSquareFile.standardCoordinateScale
+            )
+            for square in squares {
                 try spool.append(record, to: square)
             }
             summary.trails += 1
@@ -130,30 +136,6 @@ private extension TrailGraphSquareBuild {
             }
         }
         return names
-    }
-
-    /// The squares a way is filed under: every square its box touches, or,
-    /// for a box more than half the world wide, which is a way across the
-    /// antimeridian read the long way round, the squares of its own points.
-    static func squares(touching nodes: [TrailGraphSquareFile.Node]) -> [TrailGraphSquare] {
-        let scale = Double(TrailGraphSquareFile.standardCoordinateScale)
-        let latitudes = nodes.map { Double($0.latitude) / scale }
-        let longitudes = nodes.map { Double($0.longitude) / scale }
-        guard let south = latitudes.min(), let north = latitudes.max(),
-              let west = longitudes.min(), let east = longitudes.max()
-        else { return [] }
-        let halfTurn: Double = 180
-        guard east - west > halfTurn else {
-            return TrailGraphSquareGrid.squares(touchingSouth: south, west: west, north: north, east: east)
-        }
-        var seen: Set<TrailGraphSquare> = []
-        return zip(latitudes, longitudes).compactMap { latitude, longitude in
-            let square = TrailGraphSquare(
-                x: TrailGraphSquareGrid.tileX(longitude, zoom: TrailGraphSquareGrid.squareZoom),
-                y: TrailGraphSquareGrid.tileY(latitude, zoom: TrailGraphSquareGrid.squareZoom)
-            )
-            return seen.insert(square).inserted ? square : nil
-        }
     }
 }
 
