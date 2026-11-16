@@ -15,8 +15,8 @@
 //  ## In the language the app speaks
 //
 //  Those two are published in English, German, French, Spanish, Italian,
-//  Russian and Polish, and the app opens the copy in its own language
-//  (``PageLanguage``).
+//  Russian, Polish and Ukrainian, and the app opens the copy in its own
+//  language (``PageLanguage``).
 //  A German screen that says *Datenschutzerklärung* and opens an English page
 //  fails the reader the policy is written for: the GDPR asks for information
 //  its audience can understand, and the transparency guidelines the EDPB
@@ -39,7 +39,10 @@
 //  app opens Russian pages, wherever its reader is. Poland's language act
 //  asks for Polish in dealings with a consumer who lives there, the contract
 //  included (ustawa z dnia 7 października 1999 r. o języku polskim, art. 7
-//  and 8), so the Polish app opens Polish pages.
+//  and 8), so the Polish app opens Polish pages. Ukraine's language act makes
+//  Ukrainian the language in which consumers there are served (Закон України
+//  № 2704-VIII «Про забезпечення функціонування української мови як
+//  державної», ст. 30), so the Ukrainian app opens Ukrainian pages.
 //
 //  Apple's EULA stays one URL, because it is Apple's text and not this app's
 //  to translate.
@@ -58,10 +61,10 @@ enum MapPurchaseLinks {
     ///
     /// English is the site's root, and each translation is a folder named
     /// for its language, page for page: German is `docs/de/`, French
-    /// `docs/fr/`, Spanish `docs/es/`, Italian `docs/it/`, Russian `docs/ru/`
-    /// and Polish `docs/pl/`, so `docs/pl/privacy/index.html` translates
-    /// `docs/privacy/index.html`, and `docs/pl/terms/index.html` translates
-    /// `docs/terms/index.html`. Each
+    /// `docs/fr/`, Spanish `docs/es/`, Italian `docs/it/`, Russian `docs/ru/`,
+    /// Polish `docs/pl/` and Ukrainian `docs/uk/`, so
+    /// `docs/uk/privacy/index.html` translates `docs/privacy/index.html`, and
+    /// `docs/uk/terms/index.html` translates `docs/terms/index.html`. Each
     /// translation carries its original's effective date, so an English change
     /// that bumps the date fails `Scripts/check-legal-pages.sh` until every
     /// translation says the same. That script finds the pages by reading the
@@ -76,6 +79,7 @@ enum MapPurchaseLinks {
         case polish = "pl"
         case russian = "ru"
         case spanish = "es"
+        case ukrainian = "uk"
 
         /// The language the app is running in: the localization the bundle
         /// chose from the hiker's preferred languages, which is the one every
@@ -88,8 +92,8 @@ enum MapPurchaseLinks {
         /// site's root are English. A regional variant reads its language's
         /// pages, so `de-AT` and `de-CH` open the German ones, `fr-CA` and
         /// `fr-CH` the French ones, `es-MX` and `es-419` the Spanish ones,
-        /// `it-CH` the Italian ones, `ru-KZ` and `ru-BY` the Russian ones, and
-        /// `pl-PL` the Polish ones.
+        /// `it-CH` the Italian ones, `ru-KZ` and `ru-BY` the Russian ones,
+        /// `pl-PL` the Polish ones and `uk-UA` the Ukrainian ones.
         init(localization: String?) {
             let code = localization.flatMap { Locale.Language(identifier: $0).languageCode?.identifier }
             self = code.flatMap(Self.init(rawValue:)) ?? .english
@@ -104,6 +108,7 @@ enum MapPurchaseLinks {
             case .polish: URL(string: "https://zsomborrajki.github.io/OpenHikes/pl/privacy/")!
             case .russian: URL(string: "https://zsomborrajki.github.io/OpenHikes/ru/privacy/")!
             case .spanish: URL(string: "https://zsomborrajki.github.io/OpenHikes/es/privacy/")!
+            case .ukrainian: URL(string: "https://zsomborrajki.github.io/OpenHikes/uk/privacy/")!
             }
         }
 
@@ -116,6 +121,7 @@ enum MapPurchaseLinks {
             case .polish: URL(string: "https://zsomborrajki.github.io/OpenHikes/pl/terms/")!
             case .russian: URL(string: "https://zsomborrajki.github.io/OpenHikes/ru/terms/")!
             case .spanish: URL(string: "https://zsomborrajki.github.io/OpenHikes/es/terms/")!
+            case .ukrainian: URL(string: "https://zsomborrajki.github.io/OpenHikes/uk/terms/")!
             }
         }
     }
@@ -137,15 +143,16 @@ enum MapPurchaseLinks {
     ///   the URL that goes in the App Privacy section of App Store Connect,
     ///   and the two are expected to match — the English page for the English
     ///   localization there, the German page for the German one, and so on
-    ///   for French, Spanish, Italian, Russian and Polish.
+    ///   for French, Spanish, Italian, Russian, Polish and Ukrainian.
     ///
     ///   The page is served from this repository: `docs/privacy/index.html`,
     ///   or `docs/de/privacy/index.html` in German, `docs/fr/privacy/index.html`
     ///   in French, `docs/es/privacy/index.html` in Spanish,
     ///   `docs/it/privacy/index.html` in Italian, `docs/ru/privacy/index.html`
-    ///   in Russian and `docs/pl/privacy/index.html` in Polish, published by
-    ///   GitHub Pages from `main`. Edit the policy there rather than pointing
-    ///   this somewhere else, so the text a reviewer opens and the text in the
+    ///   in Russian, `docs/pl/privacy/index.html` in Polish and
+    ///   `docs/uk/privacy/index.html` in Ukrainian, published by GitHub Pages
+    ///   from `main`. Edit the policy there rather than pointing this
+    ///   somewhere else, so the text a reviewer opens and the text in the
     ///   repository cannot drift apart.
     static let privacyPolicy = PageLanguage.app.privacyPolicy
 
@@ -164,8 +171,9 @@ enum MapPurchaseLinks {
     /// `docs/de/terms/index.html` in German, `docs/fr/terms/index.html` in
     /// French, `docs/es/terms/index.html` in Spanish,
     /// `docs/it/terms/index.html` in Italian, `docs/ru/terms/index.html` in
-    /// Russian and `docs/pl/terms/index.html` in Polish, published by GitHub
-    /// Pages from `main` — for the reason
+    /// Russian, `docs/pl/terms/index.html` in Polish and
+    /// `docs/uk/terms/index.html` in Ukrainian, published by GitHub Pages from
+    /// `main` — for the reason
     /// ``privacyPolicy`` is: edit the page there rather than pointing this
     /// somewhere else, so the text a reviewer opens and the text in the
     /// repository cannot drift.

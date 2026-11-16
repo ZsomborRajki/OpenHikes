@@ -54,6 +54,12 @@
             "state" : "translated",
             "value" : "%1$@ · осталось %2$@"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · залишилося %2$@"
+          }
         }
       }
     },
@@ -90,6 +96,12 @@
           }
         },
         "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пройдено %@"
+          }
+        },
+        "uk" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Пройдено %@"
@@ -134,6 +146,12 @@
             "state" : "translated",
             "value" : "Длина %@"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Довжина %@"
+          }
         }
       }
     },
@@ -173,6 +191,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Завершено %@ %%"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Завершено на %@%%"
           }
         }
       }
@@ -214,6 +238,12 @@
             "state" : "translated",
             "value" : "Пройдено %@ %%"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пройдено %@%%"
+          }
         }
       }
     },
@@ -253,6 +283,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "осталось %@"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "залишилося %@"
           }
         }
       }
@@ -299,6 +335,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@%2$@ · осталось %3$@"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@%2$@ · залишилося %3$@"
           }
         }
       }
@@ -472,6 +514,36 @@
               }
             }
           }
+        },
+        "uk" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld точки"
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld точок"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld точка"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld точки"
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -512,6 +584,12 @@
             "state" : "translated",
             "value" : "Подъем"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Підйом"
+          }
         }
       }
     },
@@ -551,6 +629,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Средняя скорость"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Середня швидкість"
           }
         }
       }
@@ -593,6 +677,12 @@
             "state" : "translated",
             "value" : "Отменить"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скасувати"
+          }
         }
       }
     },
@@ -629,6 +719,12 @@
           }
         },
         "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Завершено"
+          }
+        },
+        "uk" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Завершено"
@@ -673,6 +769,12 @@
             "state" : "translated",
             "value" : "Расстояние"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Відстань"
+          }
         }
       }
     },
@@ -710,6 +812,12 @@
           }
         },
         "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Готово"
+          }
+        },
+        "uk" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Готово"
@@ -754,6 +862,12 @@
             "state" : "translated",
             "value" : "Прошло"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Минуло"
+          }
         }
       }
     },
@@ -794,6 +908,12 @@
             "state" : "translated",
             "value" : "Высота"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Висота"
+          }
         }
       }
     },
@@ -830,6 +950,12 @@
           }
         },
         "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Завершено"
+          }
+        },
+        "uk" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Завершено"
@@ -875,6 +1001,12 @@
             "state" : "translated",
             "value" : "Поход"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Похід"
+          }
         }
       }
     },
@@ -915,6 +1047,12 @@
             "state" : "translated",
             "value" : "Запись похода"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запис походу"
+          }
         }
       }
     },
@@ -951,6 +1089,12 @@
           }
         },
         "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пройдено"
+          }
+        },
+        "uk" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Пройдено"
@@ -995,6 +1139,12 @@
             "state" : "translated",
             "value" : "Длина"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Довжина"
+          }
         }
       }
     },
@@ -1035,6 +1185,12 @@
             "state" : "translated",
             "value" : "Вне тропы"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поза стежкою"
+          }
         }
       }
     },
@@ -1071,6 +1227,12 @@
           }
         },
         "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes"
+          }
+        },
+        "uk" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes"
@@ -1115,6 +1277,12 @@
             "state" : "translated",
             "value" : "Не удалось выполнить это действие."
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не вдалося виконати цю дію."
+          }
         }
       }
     },
@@ -1156,6 +1324,12 @@
             "state" : "translated",
             "value" : "Чтобы записать поход, приложению OpenHikes нужна ваша геопозиция."
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Щоб записати похід, програмі OpenHikes потрібна ваша геопозиція."
+          }
         }
       }
     },
@@ -1195,6 +1369,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Пауза"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Призупинити"
           }
         }
       }
@@ -1237,6 +1417,12 @@
             "state" : "translated",
             "value" : "Приостановить поход"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Призупинити похід"
+          }
         }
       }
     },
@@ -1277,6 +1463,12 @@
             "state" : "translated",
             "value" : "На паузе"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Призупинено"
+          }
         }
       }
     },
@@ -1316,6 +1508,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "На паузе · "
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Призупинено · "
           }
         }
       }
@@ -1358,6 +1556,12 @@
             "state" : "translated",
             "value" : "Приостанавливает запись похода с ее панели на экране блокировки."
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Призупиняє запис походу з його панелі на замкненому екрані."
+          }
         }
       }
     },
@@ -1399,6 +1603,12 @@
             "state" : "translated",
             "value" : "Запись"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запис"
+          }
         }
       }
     },
@@ -1438,6 +1648,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Идет запись похода"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Триває запис походу"
           }
         }
       }
@@ -1479,6 +1695,12 @@
             "state" : "translated",
             "value" : "Запись на паузе"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запис призупинено"
+          }
         }
       }
     },
@@ -1519,6 +1741,12 @@
             "state" : "translated",
             "value" : "Осталось"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Залишилося"
+          }
         }
       }
     },
@@ -1558,6 +1786,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Возобновить"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поновити"
           }
         }
       }
@@ -1600,6 +1834,12 @@
             "state" : "translated",
             "value" : "Возобновить поход"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поновити похід"
+          }
         }
       }
     },
@@ -1641,6 +1881,12 @@
             "state" : "translated",
             "value" : "Возобновляет приостановленный поход с его панели на экране блокировки."
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поновлює призупинений похід з його панелі на замкненому екрані."
+          }
         }
       }
     },
@@ -1681,6 +1927,12 @@
             "state" : "translated",
             "value" : "Выберите тропу"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Виберіть стежку"
+          }
         }
       }
     },
@@ -1720,6 +1972,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Выберите тропу в OpenHikes"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Виберіть стежку в OpenHikes"
           }
         }
       }
@@ -1762,6 +2020,12 @@
             "state" : "translated",
             "value" : "Показывает тропу на ваш выбор, выбранную в приложении тропу или поход, который сейчас записывается."
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показує стежку на ваш вибір, вибрану в програмі стежку або похід, який зараз записується."
+          }
         }
       }
     },
@@ -1801,6 +2065,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Показывает выбранную тропу или поход, который сейчас записывается."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показує вибрану стежку або похід, який зараз записується."
           }
         }
       }
@@ -1842,6 +2112,12 @@
             "state" : "translated",
             "value" : "Начать поход"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Почати похід"
+          }
         }
       }
     },
@@ -1881,6 +2157,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Начните или остановите запись похода."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Почніть або зупиніть запис походу."
           }
         }
       }
@@ -1922,6 +2204,12 @@
             "state" : "translated",
             "value" : "Завершить поход"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Завершити похід"
+          }
         }
       }
     },
@@ -1962,6 +2250,12 @@
             "state" : "translated",
             "value" : "Этот поход больше не записывается."
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цей похід уже не записується."
+          }
         }
       }
     },
@@ -2001,6 +2295,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Осталось времени"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Залишилося часу"
           }
         }
       }
@@ -2043,6 +2343,12 @@
             "state" : "translated",
             "value" : "Начать или остановить запись похода"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Почати або зупинити запис походу"
+          }
         }
       }
     },
@@ -2082,6 +2388,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Точки трека"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Точки треку"
           }
         }
       }
@@ -2123,6 +2435,12 @@
             "state" : "translated",
             "value" : "Тропа"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Стежка"
+          }
         }
       }
     },
@@ -2163,6 +2481,12 @@
             "state" : "translated",
             "value" : "Длина тропы"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Довжина стежки"
+          }
         }
       }
     },
@@ -2202,6 +2526,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Чтобы продолжить, включите параметр «Точная геопозиция» в Настройках."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Щоб продовжити, увімкніть у Параметрах опцію «Точна геопозиція»."
           }
         }
       }
@@ -2246,6 +2576,12 @@
           }
         },
         "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пройдено %@"
+          }
+        },
+        "uk" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Пройдено %@"

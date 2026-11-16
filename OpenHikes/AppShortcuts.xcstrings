@@ -68,6 +68,16 @@
               "Мое расстояние за сегодня в ${applicationName}"
             ]
           }
+        },
+        "uk" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Скільки я пройшов сьогодні в ${applicationName}",
+              "Скільки я пройшла сьогодні в ${applicationName}",
+              "Моя відстань за сьогодні в ${applicationName}"
+            ]
+          }
         }
       }
     },
@@ -136,6 +146,16 @@
               "Сколько я уже прошел в ${applicationName}",
               "Сколько я уже прошла в ${applicationName}",
               "Как идет мой поход в ${applicationName}"
+            ]
+          }
+        },
+        "uk" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Скільки я вже пройшов в ${applicationName}",
+              "Скільки я вже пройшла в ${applicationName}",
+              "Як іде мій похід в ${applicationName}"
             ]
           }
         }
@@ -211,6 +231,16 @@
               "Сколько длился мой поход в ${applicationName}",
               "Какой длины был мой поход в ${applicationName}",
               "Подведи итоги похода в ${applicationName}"
+            ]
+          }
+        },
+        "uk" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Скільки тривав мій похід в ${applicationName}",
+              "Якої довжини був мій похід в ${applicationName}",
+              "Підсумуй похід в ${applicationName}"
             ]
           }
         }
@@ -295,6 +325,17 @@
               "Покажи мне ${hike} в ${applicationName}"
             ]
           }
+        },
+        "uk" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Відкрий похід в ${applicationName}",
+              "Покажи похід в ${applicationName}",
+              "Відкрий похід ${hike} в ${applicationName}",
+              "Покажи мені похід ${hike} в ${applicationName}"
+            ]
+          }
         }
       }
     },
@@ -361,6 +402,15 @@
             "values" : [
               "Приостанови мой поход в ${applicationName}",
               "Поставь на паузу запись в ${applicationName}"
+            ]
+          }
+        },
+        "uk" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Призупини мій похід в ${applicationName}",
+              "Призупини запис в ${applicationName}"
             ]
           }
         }
@@ -438,6 +488,16 @@
               "Пройди ${hike} с ${applicationName}"
             ]
           }
+        },
+        "uk" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Запиши похід стежкою в ${applicationName}",
+              "Почни запис стежкою ${hike} в ${applicationName}",
+              "Пройди стежку ${hike} з ${applicationName}"
+            ]
+          }
         }
       }
     },
@@ -504,6 +564,15 @@
             "values" : [
               "Возобнови мой поход в ${applicationName}",
               "Возобнови запись в ${applicationName}"
+            ]
+          }
+        },
+        "uk" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Понови мій похід в ${applicationName}",
+              "Понови запис в ${applicationName}"
             ]
           }
         }
@@ -581,6 +650,16 @@
               "Запиши поход в ${applicationName}"
             ]
           }
+        },
+        "uk" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Почни похід в ${applicationName}",
+              "Почни запис походу в ${applicationName}",
+              "Запиши похід в ${applicationName}"
+            ]
+          }
         }
       }
     },
@@ -656,6 +735,16 @@
               "Сохрани мой поход в ${applicationName}"
             ]
           }
+        },
+        "uk" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Зупини мій похід в ${applicationName}",
+              "Заверши мій похід в ${applicationName}",
+              "Збережи мій похід в ${applicationName}"
+            ]
+          }
         }
       }
     },
@@ -722,6 +811,15 @@
             "values" : [
               "Какой был мой последний поход в ${applicationName}",
               "Покажи мой последний поход в ${applicationName}"
+            ]
+          }
+        },
+        "uk" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Який був мій останній похід в ${applicationName}",
+              "Покажи мій останній похід в ${applicationName}"
             ]
           }
         }
