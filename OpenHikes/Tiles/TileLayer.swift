@@ -39,8 +39,8 @@ nonisolated extension TileLayer {
     ///
     /// Credited to OpenStreetMap alone: the squares are its data, read from a
     /// planet file, and the drawing is the app's. The look it is drawn to is
-    /// Waymarked Trails', which the switch's caption says
-    /// (``HikingRoutesToggle``) rather than the line on the map, where a
+    /// Waymarked Trails', which the caption under its two pictures says
+    /// (``HikingRoutesPicker``) rather than the line on the map, where a
     /// credit names whose data is shown.
     static let hikingRoutes = TileLayer(
         id: "hiking_routes",

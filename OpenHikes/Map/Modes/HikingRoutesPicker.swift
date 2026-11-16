@@ -2,28 +2,42 @@
 //  HikingRoutesPicker.swift
 //  OpenHikes
 //
-//  *Hiking Routes* on *Map Modes*: the switch as two pictures of the same
-//  ground, one clean and one with the marked routes over it, so the choice
-//  shows what it does before it is made. It sits under the map cards
-//  because the layer is drawn over whichever of them is chosen — see
-//  ``TileLayer``.
+//  *Hiking Routes*: the switch as two pictures of the same ground, one clean
+//  and one with the marked routes over it, so the choice shows what it does
+//  before it is made. On *Map Modes* it sits under the map cards, because
+//  the layer is drawn over whichever of them is chosen — see ``TileLayer``.
+//
+//  The trail maker's *On the Map* section draws the same pair, bound to the
+//  same synced setting, so choosing on either is choosing on both, and on
+//  the map behind them — see ``TrailDraftMapSection``. It was a switch
+//  there, which said what the layer is and showed nothing of it.
+//
+//  Not on the hike detail's *On the Map* card, deliberately: every other row
+//  there is that hike's, so a choice among them reads as this hike's, and it
+//  is every map's on every device the setting syncs to. The maker earns one
+//  because the marked routes are what a trail is drawn along.
 //
 //  The pictures are fixed, not drawn from the layer: a live one would need
 //  the layer's squares for wherever the hiker is, and would show nothing
 //  where no route is marked, which is where the choice most needs showing.
 //  Both are the same square of the Bavarian Alps around Oberammergau,
-//  OpenStreetMap's map with the layer over one of them, so the sheet credits
-//  OpenStreetMap for them whatever is chosen. The caption is the switch's,
-//  which names Waymarked Trails, whose look the layer is drawn to.
+//  OpenStreetMap's map with the layer over one of them, so *Map Modes*
+//  credits OpenStreetMap for them whatever is chosen.
 //
-//  The trail maker keeps ``HikingRoutesToggle``, a switch in a form, bound to
-//  the same synced setting.
+//  The caption names both of the layer's sources: OpenStreetMap, whose routes
+//  these are, and Waymarked Trails, whose map style the lines and signs are
+//  drawn to — see ``HikingRoutesStyle``. The line on the map credits only
+//  whose data is drawn, so this is the one place the app says where the look
+//  came from, and it stays while the look does.
 //
 
 import SwiftUI
 
 struct HikingRoutesPicker: View {
     @Binding var showsHikingRoutes: Bool
+    /// Goes before each picture's identifier on a screen that can be up
+    /// with *Map Modes* over it or beside it, as the trail maker can.
+    var identifierPrefix = ""
 
     private static let cardSpacing: CGFloat = 24
     private static let horizontalMargin: CGFloat = 16
@@ -55,13 +69,13 @@ struct HikingRoutesPicker: View {
             title: Text("Clean Map"),
             image: .mapModesCleanMap,
             isSelected: !showsHikingRoutes,
-            identifier: "hiking-routes-off"
+            identifier: identifierPrefix + "hiking-routes-off"
         ) { showsHikingRoutes = false }
         HikingRoutesOption(
             title: Text("Hiking Routes"),
             image: .mapModesHikingRoutes,
             isSelected: showsHikingRoutes,
-            identifier: "hiking-routes-on"
+            identifier: identifierPrefix + "hiking-routes-on"
         ) { showsHikingRoutes = true }
     }
 }

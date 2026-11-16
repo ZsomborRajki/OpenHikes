@@ -283,10 +283,10 @@ nonisolated final class TrailMakerUITests: XCTestCase {
     }
 
     /// *Hiking Routes* in the maker's *On the Map* section, under *Follow
-    /// Paths*, and the same setting as *Map Modes*' pictures: switched off
-    /// here, the clean map is the chosen picture there.
+    /// Paths*: the two pictures *Map Modes* has, choosing the same setting.
+    /// The clean map chosen here is the chosen picture there.
     @MainActor
-    func testHikingRoutesSwitchUnderFollowPathsIsTheMapModesOne() {
+    func testHikingRoutesPicturesUnderFollowPathsAreTheMapModesOnes() {
         let app = launchApp(
             arguments: ["--ui-test-trail-graph=\(UITestFixture.trailGraphName)"]
         )
@@ -294,20 +294,20 @@ nonisolated final class TrailMakerUITests: XCTestCase {
 
         let snap = element("trail-draft-snap", in: app)
         XCTAssertTrue(snap.waitForExistence(timeout: UITestTimeout.navigation))
-        // The switch rather than its row, which carries the identifier too
-        // and has no value to read.
-        let routes = app.switches.matching(identifier: "hiking-routes-toggle").firstMatch
-        XCTAssertTrue(scrollIntoView(routes, in: app))
+        let clean = element("trail-draft-hiking-routes-off", in: app)
+        let routes = element("trail-draft-hiking-routes-on", in: app)
+        XCTAssertTrue(scrollIntoView(clean, in: app))
         XCTAssertGreaterThan(
-            routes.frame.minY,
+            clean.frame.minY,
             snap.frame.minY,
-            "the routes switch should sit under Follow Paths"
+            "the pictures should sit under Follow Paths"
         )
-        XCTAssertEqual(routes.value as? String, "1", "the layer is on until it is switched off")
-        // At the control's end of the row: a tap in the middle of a
-        // `Toggle` row is inert.
-        routes.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
-        XCTAssertTrue(waitUntil { (routes.value as? String) == "0" })
+        XCTAssertTrue(routes.isSelected, "the layer is on until it is switched off")
+        XCTAssertFalse(clean.isSelected)
+        XCTAssertEqual(routes.label, "Hiking Routes")
+        clean.tap()
+        XCTAssertTrue(waitUntilSelected(clean), "the tapped picture should become the chosen one")
+        XCTAssertFalse(routes.isSelected)
 
         popScreen(in: app)
         XCTAssertTrue(waitUntil { element("map-sheet", in: app).exists })
@@ -315,7 +315,7 @@ nonisolated final class TrailMakerUITests: XCTestCase {
         openMapModes(in: app)
         XCTAssertTrue(
             element("hiking-routes-off", in: app).isSelected,
-            "the maker's switch should be the setting Map Modes chooses"
+            "the maker's pictures should choose the setting Map Modes chooses"
         )
     }
 

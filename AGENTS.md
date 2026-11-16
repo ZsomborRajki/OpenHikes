@@ -884,8 +884,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
   in, so the map above it turns over as a card is tapped. It holds the cards,
   the selected map's summary, *Hiking Routes* as two fixed pictures (clean,
   and with the routes) and the credits of every picture on it. The trail
-  maker keeps its *Hiking Routes* switch; Settings keeps only a subscriber's
-  subscription row.
+  maker's *On the Map* section draws the same two pictures; Settings keeps
+  only a subscriber's subscription row.
 - **The primary surface has two shapes: a sheet in a narrow window, a panel
   beside the map in a wide or a short one.**
   - At a compact height a sheet left to adapt is presented full-screen, its
@@ -1676,7 +1676,7 @@ by name. `TrailCellGrid` argues the design and has the measurements.
 
 ### The hiking-routes layer
 
-*Hiking Routes*, chosen on *Map Modes* or switched in the trail maker, draws
+*Hiking Routes*, chosen on *Map Modes* or in the trail maker, draws
 every `route=hiking` relation OpenStreetMap has over whichever map is
 selected, coloured by its network. The app draws it
 (`HikingRoutesRenderer`), from squares built the trail squares' way and kept
@@ -1740,9 +1740,9 @@ beside them. `RouteSquareGrid` argues the design and has the measurements.
   256-pixel tile's, `1 / zoomScale` map points — because MapKit hands a
   phone tiles one to two zooms deeper than its screen, and a size in points
   stood half as large again as the layer this one replaced.
-- **The caption credits Waymarked Trails for the look**, under the maker's
-  switch (`HikingRoutesToggle`) and under *Map Modes*' pictures
-  (`HikingRoutesPicker`), in one string. The figures were read out of the
+- **The caption credits Waymarked Trails for the look**, under the two
+  pictures (`HikingRoutesPicker`) on *Map Modes* and in the trail maker, in
+  one string. The figures were read out of the
   map style that project publishes under the GPL, and the owner settled on
   a credit in the caption, in every language. It stays for as long as the look does. The line on the
   map still credits OpenStreetMap alone, whose data is drawn.

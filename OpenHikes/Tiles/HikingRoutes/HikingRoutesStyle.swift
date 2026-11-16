@@ -13,8 +13,8 @@
 //  the size, and a valley disappeared under its own numbers. The figures are
 //  read out of the style the project publishes (`waymarkedtrails-backend`,
 //  under `wmt_db/data/map-styles`, and `waymarkedtrails-shields`), and the
-//  *Hiking Routes* switch credits it for them (``HikingRoutesToggle``). What
-//  the style does, zoom by zoom:
+//  *Hiking Routes* pictures' caption credits it for them
+//  (``HikingRoutesPicker``). What the style does, zoom by zoom:
 //
 //  | Zooms  | Lines                                         | Signs                      |
 //  |--------|-----------------------------------------------|----------------------------|

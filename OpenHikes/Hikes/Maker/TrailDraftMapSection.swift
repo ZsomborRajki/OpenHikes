@@ -6,10 +6,10 @@
 //  card of the same name, in the maker's list. It holds what changes how the
 //  map behind the sheet draws, rather than what the trail is.
 //
-//  **Hiking Routes** is the setting *Map Modes* offers as two pictures,
-//  bound to the same synced value — see ``HikingRoutesToggle``. It is here
-//  because the marked routes are what a hiker drawing a trail is most likely
-//  to want to draw along.
+//  **Hiking Routes** is *Map Modes*' pair of pictures, the clean map and the
+//  marked routes over it, bound to the same synced value — see
+//  ``HikingRoutesPicker``. It is here because the marked routes are what a
+//  hiker drawing a trail is most likely to want to draw along.
 //
 //  **Color By** is the same control as Route Style's, bound to the same
 //  setting, so *None* picked on an imported hike is *None* here too, and the
@@ -41,7 +41,11 @@ struct TrailDraftMapSection: View {
     var body: some View {
         let showsColoring = maker.draft.travelMode == .hiking && !maker.shading.offered.isEmpty
         Section {
-            HikingRoutesToggle()
+            TrailDraftHikingRoutes()
+                // The pair brings the margins it stands in on *Map Modes*,
+                // at its sides and under its caption, so the row adds only
+                // the one above the pictures.
+                .listRowInsets(EdgeInsets(top: Self.picturesTopInset, leading: 0, bottom: 0, trailing: 0))
             if showsColoring {
                 RouteColoringPicker(
                     unlockElevation: maker.shading.isElevationUnlocked ? nil : { showsPaywall = true }
@@ -59,5 +63,20 @@ struct TrailDraftMapSection: View {
         .onChange(of: maker.shading.isElevationUnlocked) { _, unlocked in
             if unlocked { maker.elevationDidUnlock() }
         }
+    }
+
+    /// Above the pictures, what the pair itself leaves under its caption.
+    private static let picturesTopInset: CGFloat = 12
+}
+
+/// The pair of pictures, with the setting they choose.
+///
+/// Its own `View` so the setting is read here: a choice redraws this row,
+/// and not the section it is in.
+private struct TrailDraftHikingRoutes: View {
+    @AppStorage(SettingsKey.showsHikingRoutes) private var showsHikingRoutes = SettingsDefault.showsHikingRoutes
+
+    var body: some View {
+        HikingRoutesPicker(showsHikingRoutes: $showsHikingRoutes, identifierPrefix: "trail-draft-")
     }
 }
