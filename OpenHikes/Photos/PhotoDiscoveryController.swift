@@ -7,26 +7,30 @@
 //  A reference type observed by one sheet, for the ordinary reason — the
 //  search is a `Task` that outlives a view body, and the selection has to
 //  survive the grid being rebuilt as thumbnails land. Nothing else in the app
-//  observes it, and the model does not own it: ``HikePhotoSection`` keeps it
-//  in `@State`, on the *Details* face of a hike's screen, so it lives as long
-//  as that section rather than as long as the sheet. Dismissing the sheet
-//  disposes of nothing, and opening it again hands the new presentation the
-//  same controller, once the section's button has reset it (below). Only a
-//  new section makes a new one: opening the hike again, flipping its screen
-//  to *History* and back, or a turn or an iPhone Duo opening or closing that
-//  moves the screen between the sheet and the side panel — see *The map
-//  screen* in the repository instructions.
+//  observes it, and the model does not own it: a ``PhotoDiscoverySession``
+//  does, which the hike's ``HikeDetailInteraction`` holds for as long as the
+//  hike's screens are on the sheet's stack — so it lives that long rather
+//  than as long as the sheet, or as the photo section that presents it. A
+//  turn or an iPhone Duo opening or closing moves the screen between the
+//  sheet and the side panel, which builds the section again, and keeps this
+//  — and the sheet up on it — rather than closing them (#1462); see *The map
+//  screen* in the repository instructions. Dismissing the sheet disposes of
+//  nothing, and opening it again hands the new presentation the same
+//  controller, once the section's button has reset it (below). Only opening
+//  the hike again makes a new one.
 //
 //  None of what the last presentation left reaches the next one. Each search
-//  withdraws the previous results before it first suspends, and the sheet
-//  cancels a running import as it goes, because an import left running would
+//  withdraws the previous results before it first suspends, and closing the
+//  sheet cancels a running import, because an import left running would
 //  write into the state the next search is filling, and a stopped import
 //  hands its Add button no count to close a sheet on — see ``search(in:)``
 //  and ``runImport(into:store:)``. The withdrawal comes after a reopened
 //  sheet's first body pass, though, because the search is started by the
 //  `.task` that pass attaches. So the section's button also resets the
 //  controller before it presents the sheet, and that pass is built from
-//  nothing the last presentation left — see ``reset()``.
+//  nothing the last presentation left — see ``reset()``. A sheet a turn
+//  builds again is the same presentation, and goes on with what it had —
+//  see ``searchUnlessAnswered(in:)``.
 //
 //  Three things are worth stating about the order it does its work in.
 //
@@ -209,6 +213,22 @@ final class PhotoDiscoveryController {
     /// the hike has moved on from by the end starts again from the new one.
     func search(in hike: Hike) async {
         unticked = []
+        await runSearch(in: hike)
+    }
+
+    /// Searches for a sheet coming up, unless its presentation has already
+    /// had an answer.
+    ///
+    /// A turn of the phone builds the sheet again in the other host, on the
+    /// same presentation — see ``PhotoDiscoverySession`` — and its `.task`
+    /// comes here again, where a search would put back every photograph the
+    /// hiker had taken out of the grid. So only a presentation with no answer
+    /// yet asks: one ``reset()`` has just emptied, or one whose search went
+    /// with the sheet the turn took away, which a cancelled search leaves
+    /// ``Phase/searching``. That one keeps the review it carried, as a search
+    /// a save starts does.
+    func searchUnlessAnswered(in hike: Hike) async {
+        guard phase == .idle || phase == .searching else { return }
         await runSearch(in: hike)
     }
 
@@ -470,7 +490,7 @@ final class PhotoDiscoveryController {
         return landed
     }
 
-    /// Stops an import whose sheet has gone away.
+    /// Stops an import whose sheet has been closed.
     ///
     /// What already landed stays: each photo is written through
     /// ``HikePhotoImport``, which puts the app's own copy on disk before
@@ -485,22 +505,23 @@ final class PhotoDiscoveryController {
     /// Puts this controller back where a new one starts, for the sheet the
     /// section is about to present.
     ///
-    /// Called by ``HikePhotoSection``'s button, in the tap that presents the
-    /// sheet. The sheet's first body pass reads ``phase`` and ``matches``
-    /// before its `.task` has started a search, and until this the search was
-    /// the only thing that withdrew them, so a reopened sheet was first built
-    /// as the last one was closed: the old grid and its Add button after
-    /// *Done*, the empty state after an import that took everything, or the
-    /// count of an import it was closed part-way through.
+    /// Called by ``PhotoDiscoverySession/start()``, from
+    /// ``HikePhotoSection``'s button, in the tap that presents the sheet. The
+    /// sheet's first body pass reads ``phase`` and ``matches`` before its
+    /// `.task` has started a search, and until this the search was the only
+    /// thing that withdrew them, so a reopened sheet was first built as the
+    /// last one was closed: the old grid and its Add button after *Done*, the
+    /// empty state after an import that took everything, or the count of an
+    /// import it was closed part-way through.
     ///
     /// Nothing the last presentation started may write here after this, or
     /// close the sheet this tap presents. A search started by *Select More
     /// Photos* or *Try Again* runs in that button's own `Task`, which closing
     /// the sheet does not cancel, so it is overtaken here as a newer search
-    /// would overtake it. The import is cancelled when the sheet goes, and
-    /// again here, so that a clean first pass does not depend on the sheet's
-    /// `onDisappear` having come before the tap, and once stopped it hands
-    /// the Add button no count to close a sheet on — see
+    /// would overtake it. The import is cancelled when the sheet is closed,
+    /// and again here, so that a clean first pass does not depend on the
+    /// sheet's `onDismiss` having come before the tap, and once stopped it
+    /// hands the Add button no count to close a sheet on — see
     /// ``runImport(into:store:)``.
     func reset() {
         searchGeneration += 1

@@ -43,18 +43,24 @@ struct PhotoDiscoverySheet: View {
                 #endif
                 .toolbar { toolbarContent }
         }
+        // Unless this presentation has had its answer: a turn of the phone
+        // builds this sheet again in the other host, and a search there would
+        // put back every photograph the hiker had taken out — see
+        // ``PhotoDiscoverySession``.
         .task {
-            await controller.search(in: hike)
+            await controller.searchUnlessAnswered(in: hike)
             await controller.followSaves(of: hike)
         }
         // The search above is cancelled for us — a `.task` is tied to the view
         // that declares it. An import is not: it starts in a button action, in
-        // a `Task` the sheet's disappearance does not reach. So it is stopped
-        // by hand, here, and for more than tidiness — the controller is owned
-        // by the screen behind this sheet rather than by the sheet, so an
-        // import left running would still be writing into the state that a
-        // reopened sheet's search is filling.
-        .onDisappear { controller.cancelImport() }
+        // a `Task` the sheet's disappearance does not reach. It is stopped by
+        // the session when the sheet is closed, and for more than tidiness —
+        // the controller is owned by the hike's screen rather than by the
+        // sheet, so an import left running would still be writing into the
+        // state that a reopened sheet's search is filling. Not here, as this
+        // sheet goes: a turn takes it away too, and puts the same
+        // presentation up again, where the import goes on — see
+        // ``PhotoDiscoverySession/closed()``.
     }
 
     @ViewBuilder private var content: some View {

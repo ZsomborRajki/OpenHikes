@@ -53,7 +53,7 @@ extension PhotoDiscoveryControllerTests {
         let hike = Fixture.hike(in: context, route: PhotoDiscoveryFixture.route)
         await controller.search(in: hike)
         #expect(controller.phase == .results)
-        // What the sheet's `onDisappear` does.
+        // What closing the sheet does.
         controller.cancelImport()
 
         // What the section's button does before it presents the sheet again.
@@ -141,9 +141,9 @@ extension PhotoDiscoveryControllerTests {
         expectStartsOver(controller)
     }
 
-    /// The sheet stops a running import as it goes, and the reset stops it
+    /// Closing the sheet stops a running import, and the reset stops it
     /// again, so that a clean first pass does not depend on the sheet's
-    /// `onDisappear` having run before the next tap.
+    /// `onDismiss` having run before the next tap.
     @Test("an import left running writes nothing after a reset")
     func importLeftRunningWritesNothingAfterAReset() async throws {
         let sandbox = PhotoStoreSandbox()
@@ -202,7 +202,7 @@ extension PhotoDiscoveryControllerTests {
             gate.isHolding
         }
 
-        // What the sheet's `onDisappear` does, then the section's button.
+        // What closing the sheet does, then the section's button.
         controller.cancelImport()
         controller.reset()
         gate.open()
