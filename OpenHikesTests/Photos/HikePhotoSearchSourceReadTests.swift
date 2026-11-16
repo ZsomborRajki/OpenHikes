@@ -42,7 +42,7 @@ struct HikePhotoSearchSourceReadTests {
         walk.hike = hike
 
         let read = HikePhotoSearchPlan.SourceRead(hike)
-        let source = try #require(read.source(fetch: HikePhotoSearchPlan.SourceRead.fetchHike))
+        let source = try #require(try read.source(fetch: HikePhotoSearchPlan.SourceRead.fetchHike))
 
         #expect(source.walks.count == 1)
         #expect(!HikePhotoSearchPlan(source: source).isEmpty)
@@ -60,8 +60,22 @@ struct HikePhotoSearchSourceReadTests {
         context.delete(hike)
         try context.save()
 
-        #expect(read.source(fetch: HikePhotoSearchPlan.SourceRead.fetchHike) == nil)
-        #expect(await PhotoDiscoveryWork.standard.plan(for: read) == nil)
+        #expect(try read.source(fetch: HikePhotoSearchPlan.SourceRead.fetchHike) == nil)
+        #expect(try await PhotoDiscoveryWork.standard.plan(for: read) == nil)
         #expect(await PickedPhotoWork.standard.plan(from: read) == nil)
+    }
+
+    /// A fetch that fails says nothing about the row, which is still there,
+    /// so it is not read as one that has gone (#1442).
+    @Test("a fetch that fails is told from a hike that has gone")
+    func failedFetchIsNotAGoneRow() throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context, route: PhotoDiscoveryFixture.route)
+        try context.save()
+        let read = HikePhotoSearchPlan.SourceRead(hike)
+
+        #expect(throws: CocoaError.self) {
+            try read.source { _, _ in throw CocoaError(.fileReadUnknown) }
+        }
     }
 }

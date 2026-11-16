@@ -80,10 +80,18 @@
 //  unticked stays unticked. What already landed stays where it landed, as
 //  every photo already on a hike stays through an edit.
 //
+//  A read of the hike can fail, and a failure is not a hike that has gone: the
+//  row is still there, and so is the question. A search used to take one for
+//  the other and never ended, and with no plan to compare, the watch never
+//  asked again (#1442). Now it ends in ``Phase/readFailed``, where the sheet
+//  offers to ask again, and the watch asks by itself at the first save after
+//  which the hike reads.
+//
 
 import Foundation
 import Observation
 import OpenHikesData
+import os
 import SwiftData
 import SwiftUI
 
@@ -111,6 +119,12 @@ final class PhotoDiscoveryController {
         /// Writing the chosen photos into the hike. Carries its progress so
         /// the button can count rather than spin.
         case importing(completed: Int, total: Int)
+        /// The hike could not be read, which says nothing about it: unlike a
+        /// hike that has gone, it is still there, and unlike ``unsupported``,
+        /// its route may well have a clock. The question still stands, so the
+        /// sheet offers to ask it again, and a save after which the hike can
+        /// be read asks by itself — see ``searchAgain(in:)``.
+        case readFailed
         case results
         case searching
         /// Neither the route nor any walk along it can place a photograph:
@@ -211,10 +225,19 @@ final class PhotoDiscoveryController {
         fingerprint = nil
         // No plan is a hike the store did not hand back, which this context
         // can still hold. It has gone as a detached one has, so nothing is
-        // written — see ``PhotoDiscoveryWork/plan(for:)``.
-        guard let plan = await work.plan(for: HikePhotoSearchPlan.SourceRead(hike)),
-              isCurrent(generation), hike.isAttached
-        else { return }
+        // written — see ``PhotoDiscoveryWork/plan(for:)``. A read that failed
+        // is not that, and ends where it can be asked again.
+        let read: HikePhotoSearchPlan?
+        do {
+            read = try await work.plan(for: HikePhotoSearchPlan.SourceRead(hike))
+        } catch {
+            HikePhotoStore.logger.error(
+                "Could not read a hike to find its photos: \(error.localizedDescription, privacy: .public)"
+            )
+            if isCurrent(generation), hike.isAttached { phase = .readFailed }
+            return
+        }
+        guard let plan = read, isCurrent(generation), hike.isAttached else { return }
         fingerprint = plan.fingerprint
         guard !plan.isEmpty else {
             phase = .unsupported
@@ -291,11 +314,15 @@ final class PhotoDiscoveryController {
         }
     }
 
-    /// Asks again if the hike no longer holds what the offer was built from.
+    /// Asks again if the hike no longer holds what the offer was built from,
+    /// or can be read again after a search that could not read it.
     ///
     /// Nothing while an import runs, which looks for itself before each photo
     /// and comes back here when it ends, and nothing while a search has no
-    /// plan yet, which looks before it writes.
+    /// plan yet, which looks before it writes. A search that could not read
+    /// the hike has no plan either, but it has ended, so a look that reads the
+    /// hike asks again. One that cannot leaves the sheet saying so, rather than
+    /// putting the spinner back up for a read that fails again.
     ///
     /// The hiker's review carries over: results arrive ticked, but one of
     /// these is a review already under way rather than a new one, and a pin
@@ -303,9 +330,21 @@ final class PhotoDiscoveryController {
     private func searchAgainIfObsolete(in hike: Hike) async {
         guard !isImporting, hike.isAttached else { return }
         let current = await work.fingerprint(of: HikePhotoSearchPlan.SourceRead(hike))
-        guard !Task.isCancelled, !isImporting, hike.isAttached, let fingerprint, current != fingerprint
+        guard !Task.isCancelled, !isImporting, hike.isAttached, current != fingerprint,
+              fingerprint != nil || phase == .readFailed
         else { return }
         unticked = unticked.union(matches.map(\.id)).subtracting(selection)
+        await runSearch(in: hike)
+    }
+
+    /// Asks again after a search that could not read `hike`: the sheet's
+    /// *Try Again*.
+    ///
+    /// The review carries over, as it does when a save asks, because the
+    /// search that failed can be one a save started under a grid the hiker
+    /// had already been through.
+    func searchAgain(in hike: Hike) async {
+        guard phase == .readFailed, hike.isAttached else { return }
         await runSearch(in: hike)
     }
 

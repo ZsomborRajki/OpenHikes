@@ -69,26 +69,27 @@ nonisolated struct PickedPhotoWork: Sendable {
     /// import already cancelled: its caller stops before placing anything,
     /// so a route's worth of reading and indexing would be spent on no one.
     /// `nil` too for a hike the store no longer holds, which has no line to
-    /// place a photograph on.
+    /// place a photograph on, and for one it could not read.
     @concurrent
     func plan(from read: HikePhotoSearchPlan.SourceRead?) async -> HikePhotoSearchPlan? {
         guard let read, !Task.isCancelled else { return nil }
         assertOffMainThread("Reading and indexing a hike's route for picked photos must stay off the main thread")
-        return read.source(fetch: fetchHike).map(buildPlan)
+        return try? read.source(fetch: fetchHike).map(buildPlan)
     }
 
     /// What photographs are placed against from here on: `plan`, while it
     /// still describes the hike `read` names, and otherwise the plan that
     /// hike supports now, both read and built off the main actor.
     ///
-    /// `nil` for a hike the store no longer holds, as ``plan(from:)`` is.
+    /// `nil` for a hike the store no longer holds or could not read, as
+    /// ``plan(from:)`` is.
     @concurrent
     func current(
         _ plan: HikePhotoSearchPlan,
         of read: HikePhotoSearchPlan.SourceRead
     ) async -> HikePhotoSearchPlan? {
         assertOffMainThread("Reading and indexing a hike's route for picked photos must stay off the main thread")
-        guard let source = read.source(fetch: fetchHike) else { return nil }
+        guard let source = try? read.source(fetch: fetchHike) else { return nil }
         return source.fingerprint == plan.fingerprint ? plan : buildPlan(source)
     }
 
