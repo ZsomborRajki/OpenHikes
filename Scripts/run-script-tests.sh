@@ -599,6 +599,46 @@ if expect_status 2 && expect_contains "$output" "More than one" "the error"; the
     pass
 fi
 
+# The CI accessibility job boots its device by name and reads it back with
+# booted_simulator_udid. The image has one device of that name per iOS runtime,
+# and a boot that dies leaves both shut down.
+simulator_lib="$repository_root/Scripts/lib/simulator.sh"
+
+run_script "booted_simulator_udid reads back the booted device, not its namesake" \
+    bash -c 'source "$1"; booted_simulator_udid "$2"' _ "$simulator_lib" "iPhone 17 Pro"
+if expect_status 0 && expect_contains "$output" "$pro_udid" "the UDID"; then
+    if [[ "$output" == "$pro_udid" ]]; then
+        pass
+    else
+        fail "printed more than the booted device's UDID" "$output"
+    fi
+fi
+
+cat > "$work/devices-boot-died.txt" <<'EOF'
+== Devices ==
+-- iOS 27.0 --
+    iPhone 18 Pro (66666666-6666-6666-6666-666666666666) (Shutdown)
+-- iOS 27.2 --
+    iPhone 18 Pro (77777777-7777-7777-7777-777777777777) (Shutdown)
+EOF
+
+STUB_DEVICES="$work/devices-boot-died.txt" \
+    run_script "booted_simulator_udid says a boot did not hold, not that the name is ambiguous" \
+        bash -c 'source "$1"; booted_simulator_udid "$2"' _ "$simulator_lib" "iPhone 18 Pro"
+if expect_status 1 \
+    && expect_contains "$output" "did not stay up" "the error" \
+    && expect_contains "$output" "77777777-7777-7777-7777-777777777777  (Shutdown)" "the device list" \
+    && expect_absent "$output" "More than one" "the error"; then
+    pass
+fi
+
+STUB_DEVICES="$work/devices-duplicate-name.txt" \
+    run_script "booted_simulator_udid refuses to guess between two booted devices of one name" \
+        bash -c 'source "$1"; booted_simulator_udid "$2"' _ "$simulator_lib" "iPhone 17 Pro"
+if expect_status 1 && expect_contains "$output" "More than one booted" "the error"; then
+    pass
+fi
+
 echo "Result bundle handling"
 
 # --dry-run is documented as printing the invocation and exiting, so the path

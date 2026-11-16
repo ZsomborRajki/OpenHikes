@@ -269,7 +269,20 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: xcode-27
-    timeout-minutes: 30
+    # 45 rather than 30, on the job's own numbers. Over the 58 green runs from
+    # 2026-11-04 to 2026-11-16 it took 23.9 minutes median, 28.2 p90 and 29.5
+    # at the longest, and 14 of the 58 finished within three minutes of the
+    # 30-minute limit. The first run over it was `main` at 13a659f2 (run
+    # 43818110049), and it was not a finding: every app test had passed, and
+    # the limit fell while the widget tests were running.
+    #
+    # The time is spread across the steps, and they all slow down together on a
+    # slow machine. Medians over those runs: 9.6 minutes to build, 2.1 to boot,
+    # 2.6 to grant the photo library and 7.8 for the tests. On the run that
+    # timed out, each step was at or past its p90. This is the same drift that
+    # took the thread sanitizer and the accessibility job off 30 minutes, so
+    # the limit is raised on the drift, as theirs were.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -914,10 +927,23 @@ jobs:
 
       # Same reason as the unit-test job: a cold simulator is what turns the
       # first launch into "never finished bootstrapping".
+      #
+      # Booted by name, then read back as a UDID, which every step after this
+      # one uses. The image has two `iPhone 18 Pro`s, one per iOS runtime, and
+      # `simctl boot` picks one of them. On `main` at 13a659f2 (run
+      # 43818110049) the device it picked went down just as `bootstatus -b`
+      # finished. The location grant found no booted device and passed anyway
+      # behind its `|| true`. `run-ui-tests.sh` then refused the name as
+      # ambiguous, so a boot that did not hold surfaced two steps later as a
+      # script error. Read back here, it fails in this step and says why.
       - name: Boot the simulator
+        id: sim
         run: |
           xcrun simctl boot "$IOS_SIMULATOR" || true
           xcrun simctl bootstatus "$IOS_SIMULATOR" -b
+          source Scripts/lib/simulator.sh
+          udid="$(booted_simulator_udid "$IOS_SIMULATOR")"
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
 
       # testRecordingScreenIsReadable is the one test here that needs a fix
       # delivered. The grant is keyed by bundle id, so it can be made before
@@ -926,8 +952,8 @@ jobs:
       # take.
       - name: Grant location up front
         run: |
-          xcrun simctl privacy booted grant location-always tappium.com.OpenHikes \
-            || true
+          xcrun simctl privacy "${{ steps.sim.outputs.udid }}" \
+            grant location-always tappium.com.OpenHikes || true
 
       # The same script a developer runs locally, for the same reason as
       # Scripts/lint.sh above. --suite scopes each run to one accessibility
@@ -938,19 +964,19 @@ jobs:
       # Two classes, run separately so a failure names which half broke: the
       # audits are a sweep of each screen, the label tests are assertions on
       # what individual controls promise.
-      # `--device "$IOS_SIMULATOR"` rather than the script's own default, and
-      # that is the coupling this makes explicit rather than a flag for its own
-      # sake: the step above boots `$IOS_SIMULATOR`, and without this the two
-      # agree only because the script's default happens to spell the same
-      # device. They have not always — while this job ran on `macos-26` the
-      # default named an iOS 27 device that image never had — so the job that
-      # boots one device says which one it means rather than trusting that
-      # coincidence.
+      # `--device` with the UDID the boot step read back, rather than the
+      # script's own default. Without it, the device booted above and the
+      # device tested would agree only because the script's default happens to
+      # name the same one. They have not always: while this job ran on
+      # `macos-26`, the default named an iOS 27 device that image never had.
+      # It is the UDID rather than `$IOS_SIMULATOR` because that name matches
+      # two devices on this image, which the script resolves only while one of
+      # them is booted.
       - name: Run the accessibility audits
         run: |
           mkdir -p TestResults
           Scripts/run-ui-tests.sh \
-            --device "$IOS_SIMULATOR" \
+            --device "${{ steps.sim.outputs.udid }}" \
             --suite AccessibilityUITests \
             --all \
             --retry \
@@ -959,7 +985,7 @@ jobs:
       - name: Run the accessibility label assertions
         run: |
           Scripts/run-ui-tests.sh \
-            --device "$IOS_SIMULATOR" \
+            --device "${{ steps.sim.outputs.udid }}" \
             --suite AccessibilityLabelUITests \
             --all \
             --retry \
