@@ -80,3 +80,34 @@ resolve_simulator_udid() {
 
     printf '%s\n' "$matches" | cut -f1
 }
+
+# Prints the UDID of the one booted iOS simulator with this name, for a caller
+# that has just booted it by name and needs to know the boot held.
+#
+# resolve_simulator_udid gives the wrong answer here. The CI image has two
+# simulators named `iPhone 18 Pro`, one per iOS runtime, and `simctl boot`
+# picks one of them. When that boot dies — `bootstatus -b` can report it
+# finished with the device already down — neither device is booted, so
+# resolve_simulator_udid refuses the name as ambiguous. That reads as a fault in
+# the script, not in the boot. This says what actually happened, and lists the
+# state of every device with that name.
+booted_simulator_udid() {
+    local wanted="$1"
+    local matches booted
+    matches="$(simulator_devices | awk -F'\t' -v name="$wanted" '$3 == name')"
+    booted="$(printf '%s\n' "$matches" | awk -F'\t' '$2 == "Booted" { print $1 }')"
+
+    if [[ -z "$booted" ]]; then
+        echo "No iOS simulator named '$wanted' is booted. If one was just booted, it did not stay up." >&2
+        printf '%s\n' "$matches" | awk -F'\t' 'NF { print "  " $1 "  (" $2 ")" }' >&2
+        return 1
+    fi
+
+    if (( $(printf '%s\n' "$booted" | wc -l) > 1 )); then
+        echo "More than one booted iOS simulator is named '$wanted':" >&2
+        printf '%s\n' "$booted" | sed 's/^/  /' >&2
+        return 1
+    fi
+
+    printf '%s\n' "$booted"
+}
