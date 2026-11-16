@@ -108,7 +108,7 @@ struct HikeWalkPhotoTimelineOrderTests {
         try context.save()
 
         let read = HikePhotoSearchPlan.SourceRead(hike)
-        let source = try #require(read.source(fetch: HikePhotoSearchPlan.SourceRead.fetchHike))
+        let source = try #require(try read.source(fetch: HikePhotoSearchPlan.SourceRead.fetchHike))
 
         #expect(source.fingerprint == hike.photoSearchSource.fingerprint)
     }

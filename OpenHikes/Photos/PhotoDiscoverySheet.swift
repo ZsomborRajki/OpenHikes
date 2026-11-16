@@ -65,6 +65,7 @@ struct PhotoDiscoverySheet: View {
         case .idle, .searching: searchingView
         case let .importing(completed, total):
             importingView(completed: completed, total: total)
+        case .readFailed: readFailedView
         case .results: grid
         case .unsupported: unsupportedView
         }
@@ -152,7 +153,7 @@ struct PhotoDiscoverySheet: View {
         .foregroundStyle(.secondary)
     }
 
-    // MARK: - The other five states
+    // MARK: - The other six states
 
     private var searchingView: some View {
         ProgressView("Looking through your photo library\u{2026}")
@@ -221,6 +222,25 @@ struct PhotoDiscoverySheet: View {
             )
         }
         .accessibilityIdentifier("photo-discovery-unsupported")
+    }
+
+    /// A read of the hike that failed, which says nothing about its route, so
+    /// the screen says only that it could not search, and offers to ask
+    /// again. A save after which the hike can be read asks by itself.
+    private var readFailedView: some View {
+        ContentUnavailableView {
+            Label("Couldn’t Search", systemImage: "exclamationmark.triangle")
+        } description: {
+            Text("This hike couldn’t be read just now.")
+        } actions: {
+            // Glass, as the places searches' retry is: a bare text button is
+            // too small a target.
+            Button("Try Again") {
+                Task { await controller.searchAgain(in: hike) }
+            }
+            .glassButtonStyle()
+            .accessibilityIdentifier("photo-discovery-retry-button")
+        }
     }
 
     /// What a cell says to VoiceOver: when the picture was taken, whether it

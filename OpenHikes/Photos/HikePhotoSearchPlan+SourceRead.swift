@@ -66,12 +66,14 @@ nonisolated extension HikePhotoSearchPlan {
         /// into a context made here and dropped on return.
         ///
         /// `nil` for a saved row the store no longer holds, such as a hike
-        /// deleted on another device that this one has not merged yet, or for
-        /// one it cannot read. Neither has anything to search.
-        func source(fetch: (ModelContext, PersistentIdentifier) throws -> Hike?) -> Source? {
+        /// deleted on another device that this one has not merged yet, which
+        /// has nothing to search. A fetch that fails throws instead, because a
+        /// failure says nothing about the row: Find Photos took one for a row
+        /// that had gone, and gave up on a hike that was still there (#1442).
+        func source(fetch: (ModelContext, PersistentIdentifier) throws -> Hike?) rethrows -> Source? {
             switch self {
             case let .saved(id, container):
-                guard let hike = try? fetch(ModelContext(container), id) else { return nil }
+                guard let hike = try fetch(ModelContext(container), id) else { return nil }
                 return hike.photoSearchSource
             case let .unsaved(source):
                 return source

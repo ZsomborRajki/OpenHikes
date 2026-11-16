@@ -58,25 +58,29 @@ nonisolated struct PhotoDiscoveryWork: Sendable {
     /// The plan the hike `read` names supports, read and built off the main
     /// actor.
     ///
-    /// `nil` for a hike the store no longer holds, or cannot read. Its own
-    /// context can go on holding it after a deletion elsewhere, and an empty
-    /// plan would then say what ``PhotoDiscoveryController/Phase/unsupported``
-    /// says, that the route has no clock. So the controller writes nothing,
-    /// as it does for a hike its context has let go.
+    /// `nil` for a hike the store no longer holds. Its own context can go on
+    /// holding it after a deletion elsewhere, and an empty plan would then
+    /// say what ``PhotoDiscoveryController/Phase/unsupported`` says, that the
+    /// route has no clock. So the controller writes nothing, as it does for a
+    /// hike its context has let go.
+    ///
+    /// A read that fails throws, because the hike is still there: see
+    /// ``PhotoDiscoveryController/Phase/readFailed``.
     @concurrent
-    func plan(for read: HikePhotoSearchPlan.SourceRead) async -> HikePhotoSearchPlan? {
+    func plan(for read: HikePhotoSearchPlan.SourceRead) async throws -> HikePhotoSearchPlan? {
         assertOffMainThread("Reading and indexing a hike's route for a photo search must stay off the main thread")
-        return read.source(fetch: fetchHike).map(buildPlan)
+        return try read.source(fetch: fetchHike).map(buildPlan)
     }
 
     /// What the hike `read` names holds now, read off the main actor, to set
     /// beside the ``HikePhotoSearchPlan/fingerprint`` of a plan built earlier.
     ///
-    /// `nil` for a hike the store no longer holds, which no plan describes.
+    /// `nil` for a hike the store no longer holds, which no plan describes,
+    /// and for one it could not read, which no plan can be shown to.
     @concurrent
     func fingerprint(of read: HikePhotoSearchPlan.SourceRead) async -> HikePhotoSearchPlan.Fingerprint? {
         assertOffMainThread("Reading a hike's route for a photo search must stay off the main thread")
-        return read.source(fetch: fetchHike)?.fingerprint
+        return (try? read.source(fetch: fetchHike))?.fingerprint
     }
 
     /// What `plan` makes of `assets`, matched off the main actor.

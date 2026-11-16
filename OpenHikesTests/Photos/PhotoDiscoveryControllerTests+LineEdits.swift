@@ -71,8 +71,9 @@ extension PhotoDiscoveryControllerTests {
     }()
 
     /// Both stores on disk, as the app opens them. A test keeps the container
-    /// for as long as it keeps a hike in it.
-    private static func containerOnDisk() throws -> ModelContainer {
+    /// for as long as it keeps a hike in it. Shared with the read-failure
+    /// half, whose sheet follows saves as this one's does.
+    static func containerOnDisk() throws -> ModelContainer {
         let directory = storesRoot.appending(path: UUID().uuidString, directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return try ModelContainer.openHikes(
@@ -82,7 +83,7 @@ extension PhotoDiscoveryControllerTests {
     }
 
     /// A search and the watch that follows it, as the sheet's task runs them.
-    private static func sheetTask(_ controller: PhotoDiscoveryController, on hike: Hike) -> Task<Void, Never> {
+    static func sheetTask(_ controller: PhotoDiscoveryController, on hike: Hike) -> Task<Void, Never> {
         Task { @MainActor in
             await controller.search(in: hike)
             await controller.followSaves(of: hike)
@@ -90,7 +91,7 @@ extension PhotoDiscoveryControllerTests {
     }
 
     /// A hike its context has saved, so a search reads it from the store.
-    private static func savedHike(
+    static func savedHike(
         in context: ModelContext,
         route: [RouteCoordinate] = PhotoDiscoveryFixture.route
     ) throws -> Hike {
