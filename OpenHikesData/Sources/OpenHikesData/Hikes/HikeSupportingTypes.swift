@@ -379,7 +379,18 @@ nonisolated public enum RouteGeometry {
     ) -> SegmentProjection {
         let startOffset = localOffset(from: coordinate, to: start)
         let endOffset = localOffset(from: coordinate, to: end)
-        let dx = endOffset.x - startOffset.x
+        var dx = endOffset.x - startOffset.x
+        // Each end is wrapped the short way round the fix on its own, which
+        // keeps the segment whole unless it straddles the meridian opposite
+        // the fix. One that does has its ends wrapped to opposite edges of
+        // the plane, and the difference runs the long way round the world,
+        // through the fix: a trail half a world away read as underfoot
+        // (#1439). A run east or west of more than half a turn of longitude
+        // is that, so it is taken the short way from where the start was
+        // put. Near the fix the two ends are never half a turn apart, so
+        // nothing there changes.
+        let halfTurn = Double.pi * earthRadiusMeters * cos(coordinate.latitude * .pi / 180)
+        if dx > halfTurn { dx -= 2 * halfTurn } else if dx < -halfTurn { dx += 2 * halfTurn }
         let dy = endOffset.y - startOffset.y
         let lengthSquared = dx * dx + dy * dy
         let fraction = lengthSquared > 0

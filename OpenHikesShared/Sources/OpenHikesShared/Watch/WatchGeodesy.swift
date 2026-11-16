@@ -4,22 +4,25 @@
 //
 //  Great-circle distance and tangent-plane projection on plain `Double`s, for
 //  the watch app — which has to match a fix against a trail and accumulate a
-//  walk's distance, and cannot reach the app's `RouteGeometry` to do either.
+//  walk's distance, and cannot reach the phone's `RouteGeometry` to do either.
 //
 //  ## Why this is a second copy rather than a shared one
 //
-//  `RouteGeometry` lives in the app target and is written against
-//  `CLLocationCoordinate2D`. This package deliberately imports no Core
-//  Location — it is read by the widget extension off the main actor and by a
-//  watch app that projects points it was handed as numbers — so the app's
-//  spelling cannot simply be moved here without dragging the framework along
-//  with it.
+//  `RouteGeometry` lives in the `OpenHikesData` package
+//  (`HikeSupportingTypes.swift`), which the app links and the watch does not,
+//  and which depends on this package rather than the other way round. It is
+//  written against `CLLocationCoordinate2D`, and this package deliberately
+//  imports no Core Location — it is read by the widget extension off the main
+//  actor and by a watch app that projects points it was handed as numbers —
+//  so the phone's spelling cannot simply be moved here without dragging the
+//  framework along with it.
 //
-//  Making the app's version delegate to this one *was* the other option, and
-//  it was turned down on where it would be paid: `RouteGeometry.distanceMeters`
-//  is called once per route point while `RouteProfile` is built, which is
-//  every point of a twenty-thousand-point import, and a cross-module call is
-//  not reliably inlined. So this is the same trade `Color+Hex` already makes —
+//  Making `RouteGeometry` delegate to this one *was* the other option, and
+//  the dependency already runs the right way for it. It was turned down on
+//  where it would be paid: `RouteGeometry.distanceMeters` is called once per
+//  route point while `RouteProfile` is built, which is every point of a
+//  twenty-thousand-point import, and a cross-module call is not reliably
+//  inlined. So this is the same trade `Color+Hex` already makes —
 //  see *Claims investigated and found false* in the repository instructions —
 //  and it is paid for the same way: `WatchGeodesyParityTests` in the app
 //  bundle holds the two implementations to identical output on fixtures, so a
@@ -122,7 +125,18 @@ public enum WatchGeodesy {
             toLatitude: endLatitude,
             longitude: endLongitude
         )
-        let dx = end.x - start.x
+        var dx = end.x - start.x
+        // Each end is wrapped the short way round the fix on its own, which
+        // keeps the segment whole unless it straddles the meridian opposite
+        // the fix. One that does has its ends wrapped to opposite edges of
+        // the plane, and the difference runs the long way round the world,
+        // through the fix: a trail half a world away read as underfoot
+        // (#1439). A run east or west of more than half a turn of longitude
+        // is that, so it is taken the short way from where the start was
+        // put. Near the fix the two ends are never half a turn apart, so
+        // nothing there changes.
+        let halfTurn = Double.pi * earthRadiusMeters * cos(latitude * .pi / 180)
+        if dx > halfTurn { dx -= 2 * halfTurn } else if dx < -halfTurn { dx += 2 * halfTurn }
         let dy = end.y - start.y
         let lengthSquared = dx * dx + dy * dy
         let fraction = lengthSquared > 0
