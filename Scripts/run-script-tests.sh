@@ -4763,6 +4763,60 @@ if expect_status 0 \
     pass
 fi
 
+# Trails across the date line, as OpenStreetMap writes them: way 500 steps
+# east from 179.5° to −179.5°, way 501 west from −179.5° to 179.5°, and way
+# 502 runs from 178° to 179.9° before it steps across. Read the short way,
+# each is filed under every square it crosses: ways 500 and 501 under the
+# columns either side of ±180° as well as their nodes' own, though no node of
+# theirs is in them, and way 502 under the four its first step crosses between
+# two nodes too. Filed by its nodes alone, as it was, way 500 was in columns 1
+# and 1022 and nowhere between. No square at Greenwich holds any of them.
+: > "$cells_work/graph-dateline-relations.opl"
+cat > "$cells_work/graph-dateline-ways.opl" <<'GRAPH'
+w500 Thighway=path Nn500x179.5y0.01,n501x-179.5y0.01
+w501 Thighway=path Nn502x-179.5y-0.01,n503x179.5y-0.01
+w502 Thighway=path Nn504x178y-16.8,n505x179.9y-16.8,n506x-179.9y-16.8
+GRAPH
+graph_dateline_squares="$cells_work/graph-dateline"
+STUB_OSMIUM_WAYS="$cells_work/graph-dateline-ways.opl" \
+    STUB_OSMIUM_RELATIONS="$cells_work/graph-dateline-relations.opl" \
+    run_script "trail-cells build-graph files a trail across the date line under every square it crosses, and none at Greenwich" \
+    "$trail_cells" build-graph "$cells_work/extract.osm.pbf" --out "$graph_dateline_squares" --world
+graph_dateline_expected="$(printf 'graph1_z10_%s.cell\n' 1022_511 1023_511 0_511 1_511 1022_512 1023_512 0_512 1_512 \
+    1018_560 1019_560 1020_560 1021_560 1022_560 1023_560 0_560 | LC_ALL=C sort)"
+if expect_status 0 && expect_contains "$output" "Filed 3 trails (7 nodes) in 15 squares" "the summary"; then
+    graph_dateline_files="$(ls "$graph_dateline_squares/cells" | LC_ALL=C sort)"
+    if [[ "$graph_dateline_files" == *graph1_z10_512_* ]]; then
+        fail "a trail across the date line was filed at Greenwich" "$graph_dateline_files"
+    elif [[ "$graph_dateline_files" != "$graph_dateline_expected" ]]; then
+        fail "the squares are not every one the trails cross" "$graph_dateline_files"
+    else
+        pass
+    fi
+fi
+
+# A square the step across the line passes through holds the trail whole, as
+# a square holds any trail that crosses one of its regions.
+run_script "trail-cells build-graph keeps a trail whole in a square its step across the date line reaches" \
+    "$trail_cells" inspect "$graph_dateline_squares/cells/graph1_z10_1023_511.cell" --json
+if expect_status 0; then
+    if [[ "$output" == '{"scale":1000000,"ways":[{"highway":"path","id":500,"nodes":[[500,10000,179500000],[501,10000,-179500000]],"tags":{}}]}' ]]; then
+        pass
+    else
+        fail "the square does not hold the trail across the line" "$output"
+    fi
+fi
+
+run_script "trail-cells build-graph keeps a trail whole in a square an ordinary step of it crosses" \
+    "$trail_cells" inspect "$graph_dateline_squares/cells/graph1_z10_1020_560.cell" --json
+if expect_status 0; then
+    if [[ "$output" == '{"scale":1000000,"ways":[{"highway":"path","id":502,"nodes":[[504,-16800000,178000000],[505,-16800000,179900000],[506,-16800000,-179900000]],"tags":{}}]}' ]]; then
+        pass
+    else
+        fail "the square does not hold the trail that crosses it" "$output"
+    fi
+fi
+
 # The digest is what an upload compares, so the same extract has to give the
 # same squares, or every refresh would send the whole world again.
 run_script "trail-cells build files the same extract into the same squares, and says a region is not the world" \

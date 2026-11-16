@@ -49,6 +49,25 @@
 //  squares, the largest about 9 MB, a third of the records to upload for four
 //  times the bytes every recording downloads.
 //
+//  ## The short way round the antimeridian
+//
+//  OpenStreetMap writes a way across the date line as it is mapped: a node at
+//  179.9° and the next at −179.9°, about 21 km apart where the line crosses
+//  Fiji. Read as plain numbers that step runs 359.8° round the world, through
+//  Greenwich. Each step is read the short way instead, the only way a path is
+//  walked (``turn(fromLongitude:to:)``), on both sides of the seam: the tool
+//  files a way under the box of its steps read that way, which runs on past
+//  ±180° and wraps round to the squares at the map's other edge, and
+//  ``TrailGraphSquareLibrary`` finds a way crossing a region by the same
+//  steps. The rule is written here, in the one file both compile, because
+//  the two have to agree: a region is answered from its square alone, and in
+//  a set that is the whole world a trail its square lacks is a trail that is
+//  not there, with no reason to ask Overpass. A way that keeps off the line
+//  is filed exactly as it was, unless it spans more than half the world:
+//  the build took any such way for one across the line and filed it under
+//  its nodes' squares alone, though the library reads one that never steps
+//  across into every region between them, so it is now filed by its box.
+//
 //  ## Compiled twice
 //
 //  By the app, which reads the squares, and by `Scripts/trail-cells.sh` into
@@ -101,12 +120,44 @@ nonisolated extension TrailGraphSquareGrid {
         return TrailGraphSquare(x: x >> shift, y: y >> shift)
     }
 
-    /// Every square a box touches, each once: what a way is filed under.
+    /// Every square a way touches, each once: what the tool files it under.
     ///
-    /// The box is the plain minimum and maximum of a way's points. One that
-    /// spans more than half the world is a way across the antimeridian read
-    /// the long way round, and is filed by its points' own squares instead —
-    /// see `TrailGraphSquareBuild`.
+    /// The squares of the box of its nodes, each step from one node to the
+    /// next read the short way round (``turn(fromLongitude:to:)``), so the
+    /// box of a way across the antimeridian runs on past ±180° and holds
+    /// every square the way crosses, whether or not a node of it is there.
+    /// A way that never steps across the line is boxed as it is written.
+    static func squares(touching nodes: [TrailGraphSquareFile.Node], coordinateScale: Int32) -> [TrailGraphSquare] {
+        guard let first = nodes.first else { return [] }
+        let scale = Double(coordinateScale)
+        var south = Double(first.latitude) / scale
+        var north = south
+        var written = Double(first.longitude) / scale
+        var west = written
+        var east = written
+        // Whole turns, so a longitude that is not moved is the one written.
+        var turns = 0.0
+        for node in nodes.dropFirst() {
+            let latitude = Double(node.latitude) / scale
+            let longitude = Double(node.longitude) / scale
+            turns += turn(fromLongitude: written, to: longitude)
+            written = longitude
+            south = min(south, latitude)
+            north = max(north, latitude)
+            west = min(west, longitude + turns)
+            east = max(east, longitude + turns)
+        }
+        return squares(touchingSouth: south, west: west, north: north, east: east)
+    }
+
+    /// Every square a box touches, each once.
+    ///
+    /// Its longitudes run west to east and may go on past ±180°, as a way's
+    /// across the antimeridian do: what lies past the line is the squares at
+    /// the map's other edge, so a box from 179.5° to 180.5° is the two
+    /// columns either side of it. The line is the edge of the squares on
+    /// both sides, so a box that reaches it touches both. Empty for a box
+    /// that is not one.
     static func squares(
         touchingSouth south: Double,
         west: Double,
@@ -116,7 +167,7 @@ nonisolated extension TrailGraphSquareGrid {
         guard south.isFinite, west.isFinite, north.isFinite, east.isFinite, south <= north, west <= east else {
             return []
         }
-        let columns = tileX(west, zoom: squareZoom)...tileX(east, zoom: squareZoom)
+        let columns = Self.columns(west: west, east: east)
         // North is the smaller row: the slippy map counts down from the top.
         let rows = tileY(north, zoom: squareZoom)...tileY(south, zoom: squareZoom)
         return rows.flatMap { row in
@@ -141,6 +192,45 @@ nonisolated extension TrailGraphSquareGrid {
         let sine = sin(clamped * .pi / halfTurnDegrees)
         let unit = 0.5 - log((1 + sine) / (1 - sine)) / (4 * .pi)
         return min(max(Int((unit * Double(count)).rounded(.down)), 0), count - 1)
+    }
+
+    /// The columns a box's longitudes reach, each once: its piece on each
+    /// turn of the map it reaches, the map itself or the one past either
+    /// edge, read as the map's own columns. A box that keeps off the line is
+    /// one piece, the columns between its edges.
+    private static func columns(west: Double, east: Double) -> [Int] {
+        guard east - west < fullTurnDegrees else { return Array(0..<tilesPerSide) }
+        let firstTurn = Int(((west - halfTurnDegrees) / fullTurnDegrees).rounded(.up))
+        let lastTurn = Int(((east + halfTurnDegrees) / fullTurnDegrees).rounded(.down))
+        var columns: [Int] = []
+        for turn in firstTurn...lastTurn {
+            let shift = Double(turn) * fullTurnDegrees
+            let piece = tileX(max(west - shift, -halfTurnDegrees), zoom: squareZoom)
+                ... tileX(min(east - shift, halfTurnDegrees), zoom: squareZoom)
+            columns += piece.filter { !columns.contains($0) }
+        }
+        return columns
+    }
+}
+
+// MARK: - The short way round the antimeridian
+
+nonisolated extension TrailGraphSquareGrid {
+    /// The whole turn, in degrees, that `end` is moved by to stand the short
+    /// way round from `start`, the longitude of the node before it on a way:
+    /// 360° for a step written west from 179.9° to −179.9°, which runs 0.2°
+    /// east across the antimeridian to 180.1°, −360° for one written east
+    /// from −179.9° to 179.9°, and none for a step of half a turn or less,
+    /// which is read as it is written.
+    ///
+    /// Both are OpenStreetMap's longitudes, each within ±180°, so a step
+    /// crosses the antimeridian once at most. What the tool files a way by
+    /// and the library reads a region's ways by — see this file's header.
+    static func turn(fromLongitude start: Double, to end: Double) -> Double {
+        let step = end - start
+        if step > halfTurnDegrees { return -fullTurnDegrees }
+        if step < -halfTurnDegrees { return fullTurnDegrees }
+        return 0
     }
 }
 
