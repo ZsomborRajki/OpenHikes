@@ -243,17 +243,17 @@ nonisolated extension PlaceSquareLibrary {
         var id: Int64
     }
 
-    /// The record names of every square `boxes` touch, each once.
+    /// The record names of every square `boxes` touch, each once, where the
+    /// first box to touch it put it.
     static func recordNames(covering boxes: [CuratedTrailQuery.BoundingBox]) -> [String] {
-        var seen: Set<PlaceSquare> = []
-        var names: [String] = []
-        for box in boxes {
-            let bounds = TrailCellBounds(south: box.south, west: box.west, north: box.north, east: box.east)
-            for square in PlaceSquareGrid.squares(covering: bounds) where seen.insert(square).inserted {
-                names.append(PlaceSquareGrid.recordName(for: square))
+        boxes.lazy
+            .flatMap { box in
+                PlaceSquareGrid.squares(
+                    covering: TrailCellBounds(south: box.south, west: box.west, north: box.north, east: box.east)
+                )
             }
-        }
-        return names
+            .uniqued()
+            .map(PlaceSquareGrid.recordName(for:))
     }
 }
 

@@ -5,10 +5,10 @@
 //  What a suite's trail squares are fetched from instead of the public
 //  database, and the squares themselves.
 //
-//  Its own file because two suites drive it: `TrailCellLibraryTests`, which
-//  is about what the squares can and cannot answer, and
-//  `CuratedTrailSourceTests+Cells`, which is about Overpass staying quiet
-//  when they do.
+//  Its own file because every set of squares is fetched through
+//  ``TrailCellFetching``, so the suites of all four drive it: the day
+//  hikes', the places', the trail graph's and the hiking-routes layer's.
+//  The squares here are the day hikes'.
 //
 
 import Foundation
@@ -63,6 +63,10 @@ nonisolated final class StubTrailCellDatabase: TrailCellFetching, Sendable {
     /// Cancelled from in here rather than by the case, so there is no moment
     /// at which the request has failed and the task has not yet been told —
     /// which is the moment that would decide the case by a race.
+    ///
+    /// So a case runs the search in a task of its own and awaits its value.
+    /// Awaited in the case's own task, the search cancels the case, which
+    /// Swift Testing then reports as skipped rather than passed.
     ///
     /// - Parameter answering: Whether the request answers all the same, as
     ///   one that finished before it heard can, rather than failing.
