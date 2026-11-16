@@ -322,32 +322,32 @@ struct HikeElevationPlaceholder: View {
 
     @Environment(OpenHikesModel.self) private var appModel
     @Environment(\.modelContext) private var context
-    @State private var isReading = false
+    /// The request whose answer is out. Only its own end clears it: a new
+    /// line starts the next request while this one is still winding down.
+    @State private var reading: HikeElevationFill.Request?
 
     var body: some View {
         let entitlement = appModel.entitlement
-        // Nothing to fill until the line has landed and turned out to have no
-        // heights.
-        let fillable = line.current.map { HikeElevationFill.canFill(hike, along: $0.route) } ?? false
+        let request = HikeElevationFill.Request(hike: hike, line: line, isEntitled: entitlement.isEntitled)
         Group {
-            if entitlement.state == .notEntitled, fillable {
+            if entitlement.state == .notEntitled, request.isFillable {
                 ElevationProPrompt(tint: hike.tintOpaque, message: Self.message)
             } else {
                 ElevationPlaceholderView(
                     tint: hike.tintOpaque,
-                    message: isReading ? "Reading elevation\u{2026}" : Self.message
+                    message: reading == request ? "Reading elevation\u{2026}" : Self.message
                 )
             }
         }
         // Keyed on the subscription, so a purchase made from the card asks at
-        // once rather than the next time the hike is opened, and on the line
-        // turning out to need heights.
-        .task(id: entitlement.isEntitled && fillable) {
-            guard entitlement.isEntitled, fillable, let route = line.current?.route,
-                  let source = OpenHikesModel.makeTrailElevationSource() else { return }
-            isReading = true
-            defer { isReading = false }
-            await HikeElevationFill.fill(hike, along: route, from: source, in: context)
+        // once rather than the next time the hike is opened, on the line
+        // turning out to need heights, and on the line itself — see
+        // ``HikeElevationFill/Request``.
+        .task(id: request) {
+            guard request.asks, let source = OpenHikesModel.makeTrailElevationSource() else { return }
+            reading = request
+            defer { if reading == request { reading = nil } }
+            await request.fill(hike, shown: line, from: source, in: context)
         }
     }
 
