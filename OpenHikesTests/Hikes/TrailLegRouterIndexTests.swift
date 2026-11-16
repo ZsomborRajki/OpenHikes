@@ -15,6 +15,8 @@
 //    graph has gained a path since or lost one.
 //  - **An unchanged graph is indexed once**, even assembled afresh for each
 //    leg, so moving a stop within the same ground stays cheap.
+//  - **Keeping the graph as the key costs no second copy of its edges**,
+//    because the index holds the graph's own.
 //
 //  Through a stub provider, never the network — see *Deliberate test seams*.
 //
@@ -144,5 +146,40 @@ struct TrailLegRouterIndexTests {
         #expect(whole.snap == .snapped)
         #expect(inner.snap == .snapped)
         #expect(await router.indexBuildCount == 1, "the second leg reuses the first one's index")
+    }
+
+    // MARK: What keeping the graph costs
+
+    /// The router keeps the graph beside its index for as long as the app
+    /// runs, so the index must hold the graph's own edges and not a second
+    /// copy of them — which it still makes when it has to leave an edge out.
+    @Test("the index holds the graph's own edges, and a copy only when it leaves one out")
+    func indexSharesTheGraphsEdges() {
+        let merged = Self.first.merging(Self.second)
+        let dangling = TrailGraph(
+            nodes: merged.nodes,
+            edges: merged.edges + [
+                TrailGraphEdge(
+                    id: TrailGraphEdgeID(wayID: 99, segmentIndex: 0),
+                    fromNodeID: 1,
+                    toNodeID: 999,
+                    lengthMeters: 10,
+                    highway: "path"
+                ),
+            ]
+        )
+
+        let shared = TrailMatcherGraphIndex(graph: merged, network: .walking)
+        let filtered = TrailMatcherGraphIndex(graph: dangling, network: .walking)
+
+        #expect(Self.sharesStorage(shared.edges, merged.edges))
+        #expect(filtered.edges == merged.edges, "the edge with no node at one end is left out")
+        #expect(!Self.sharesStorage(filtered.edges, dangling.edges))
+    }
+
+    private static func sharesStorage(_ lhs: [TrailGraphEdge], _ rhs: [TrailGraphEdge]) -> Bool {
+        lhs.withUnsafeBufferPointer { left in
+            rhs.withUnsafeBufferPointer { right in left.baseAddress == right.baseAddress }
+        }
     }
 }

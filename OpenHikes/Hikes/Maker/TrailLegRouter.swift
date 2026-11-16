@@ -155,6 +155,10 @@ actor OverpassTrailLegRouter: TrailLegRouting {
     /// the arrays compare by identity; a leg across several is a graph the
     /// provider has just merged and sorted, and one pass comparing it is
     /// cheaper than that merge, let alone an index build.
+    ///
+    /// Keeping the graph costs its nodes and no more, for as long as the
+    /// router lives: the index holds the graph's own array of edges rather
+    /// than a copy — see ``TrailMatcherGraphIndex/init(graph:network:)``.
     private struct BuiltIndex {
         let graph: TrailGraph
         var value: TrailMatcherGraphIndex

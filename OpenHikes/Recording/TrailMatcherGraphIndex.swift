@@ -130,7 +130,12 @@ nonisolated struct TrailMatcherGraphIndex {
             let touched = Set(validEdges.flatMap { [$0.fromNodeID, $0.toNodeID] })
             nodes = nodeMap.filter { id, _ in touched.contains(id) }
         }
-        edges = validEdges
+        // Every edge kept — every edge of a graph the decoders made, whose
+        // edges always have both their nodes — is the graph's own array, in
+        // its own order, so it is shared rather than copied: whoever keeps
+        // the graph beside this index, as the hiking router does to know when
+        // to reuse it, then keeps one array of edges and not two.
+        edges = validEdges.count == graph.edges.count ? graph.edges : validEdges
         edgeEndpoints = endpoints
         edgeWeights = validEdges.map { edge in
             network == .walking ? TrailGraphHighway.walkingCost(of: edge.highway) : 1
