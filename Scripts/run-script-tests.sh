@@ -132,7 +132,8 @@ mkdir -p "$stub_bin"
 # that should grow ends with an iOS one. STUB_CLONED_UDID is the same for
 # `simctl clone`. `delete` and `rename` edit the fixture as the real ones edit
 # the machine, `list runtimes` answers from STUB_RUNTIMES and `list
-# devicetypes` from STUB_DEVICE_TYPES.
+# devicetypes` from STUB_DEVICE_TYPES. The iOS Simulator SDK's version is
+# STUB_IOS_SDK_VERSION, and unset there is no such SDK.
 export STUB_REAL_SWIFT="$(xcrun --find swift)"
 export STUB_REAL_MACOS_SDK="$(xcrun --sdk macosx --show-sdk-path)"
 cat > "$stub_bin/xcrun" <<'STUB'
@@ -144,6 +145,11 @@ if [[ "${1:-} ${2:-}" == "--find swift" ]]; then
 fi
 if [[ "${1:-} ${2:-} ${3:-}" == "--sdk macosx --show-sdk-path" ]]; then
     printf '%s\n' "$STUB_REAL_MACOS_SDK"
+    exit 0
+fi
+if [[ "${1:-} ${2:-} ${3:-}" == "--sdk iphonesimulator --show-sdk-version" ]]; then
+    [[ -n "${STUB_IOS_SDK_VERSION:-}" ]] || exit 1
+    printf '%s\n' "$STUB_IOS_SDK_VERSION"
     exit 0
 fi
 if [[ "${1:-}" == "swiftc" ]]; then
@@ -636,6 +642,34 @@ STUB_DEVICES="$work/devices-duplicate-name.txt" \
     run_script "booted_simulator_udid refuses to guess between two booted devices of one name" \
         bash -c 'source "$1"; booted_simulator_udid "$2"' _ "$simulator_lib" "iPhone 17 Pro"
 if expect_status 1 && expect_contains "$output" "More than one booted" "the error"; then
+    pass
+fi
+
+# The CI unit-test job names its device before it builds, with
+# sdk_simulator_udid: the device of that name on the runtime of the Xcode's own
+# SDK, whichever newer runtimes the image adds, with or without a namesake.
+STUB_DEVICES="$work/devices-boot-died.txt" STUB_IOS_SDK_VERSION="27.0" \
+    run_script "sdk_simulator_udid picks the device on the SDK's runtime, not the newest" \
+        bash -c 'source "$1"; sdk_simulator_udid "$2"' _ "$simulator_lib" "iPhone 18 Pro"
+if expect_status 0 && [[ "$output" == "66666666-6666-6666-6666-666666666666" ]]; then
+    pass
+elif [[ "$status" == 0 ]]; then
+    fail "printed something other than the iOS 27.0 device's UDID" "$output"
+fi
+
+STUB_DEVICES="$work/devices-boot-died.txt" STUB_IOS_SDK_VERSION="27.1" \
+    run_script "sdk_simulator_udid refuses a name the SDK's runtime has no device of" \
+        bash -c 'source "$1"; sdk_simulator_udid "$2"' _ "$simulator_lib" "iPhone 18 Pro"
+if expect_status 1 \
+    && expect_contains "$output" "No available iOS 27.1 simulator named 'iPhone 18 Pro'" "the error" \
+    && expect_contains "$output" "-- iOS 27.2 --" "the device list"; then
+    pass
+fi
+
+STUB_DEVICES="$work/devices-boot-died.txt" \
+    run_script "sdk_simulator_udid fails when the Xcode has no iOS Simulator SDK" \
+        bash -c 'source "$1"; sdk_simulator_udid "$2"' _ "$simulator_lib" "iPhone 18 Pro"
+if expect_status 1 && expect_contains "$output" "no iOS Simulator SDK" "the error"; then
     pass
 fi
 

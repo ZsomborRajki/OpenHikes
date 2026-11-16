@@ -17,15 +17,17 @@
 # afterwards is addressed by that UDID.
 
 # `xcrun simctl list devices available`, reduced to `udid<TAB>state<TAB>name`
-# for the iOS runtimes only. Restricted to iOS because watchOS and tvOS devices
-# share the listing and can share a name with an iPhone; `available` because an
-# unavailable device is one xcodebuild cannot use.
+# for the iOS runtimes only, or for the one iOS version given. Restricted to iOS
+# because watchOS and tvOS devices share the listing and can share a name with
+# an iPhone; `available` because an unavailable device is one xcodebuild cannot
+# use.
 simulator_devices() {
+    local version="${1:-}"
     # The name is matched greedily up to the last two parenthesised groups,
     # since a device name may contain parentheses of its own — the runner image
     # ships `Apple Watch Series 11 (46mm)`.
     xcrun simctl list devices available 2>/dev/null \
-        | awk '/^--/ { ios = ($0 ~ /^-- iOS /); next } ios' \
+        | awk -v version="$version" '/^--/ { ios = ($0 ~ /^-- iOS /) && (version == "" || $0 == "-- iOS " version " --"); next } ios' \
         | sed -nE 's/^[[:space:]]+(.+) \(([0-9A-Fa-f-]{36})\) \(([^()]+)\)[[:space:]]*$/\2	\3	\1/p'
 }
 
@@ -110,4 +112,41 @@ booted_simulator_udid() {
     fi
 
     printf '%s\n' "$booted"
+}
+
+# Prints the UDID of the simulator with this name on the iOS runtime of the
+# selected Xcode's own simulator SDK, for a CI job that has to name its device
+# before it builds, and before anything is booted.
+#
+# A name alone cannot say which device that is. The runner image carries iOS
+# runtimes newer than its Xcode, and puts a device of the same name on more
+# than one of them on some machines and not on others. xcodebuild's `name=`
+# with no `OS=` asks for the newest runtime, so on a machine whose newest
+# runtime has no `iPhone 18 Pro` it matched nothing (run 43910913375). And
+# where both runtimes have one, `simctl boot` by name could warm one device
+# while the tests ran on the other. The SDK's runtime is the one the pinned
+# Xcode was built against.
+sdk_simulator_udid() {
+    local wanted="$1"
+    local version matches
+    version="$(xcrun --sdk iphonesimulator --show-sdk-version 2>/dev/null)" || version=""
+    if [[ -z "$version" ]]; then
+        echo "The selected Xcode reports no iOS Simulator SDK version." >&2
+        return 1
+    fi
+
+    matches="$(simulator_devices "$version" | awk -F'\t' -v name="$wanted" '$3 == name { print $1 }')"
+    if [[ -z "$matches" ]]; then
+        echo "No available iOS $version simulator named '$wanted'. The iOS simulators on this machine are:" >&2
+        xcrun simctl list devices available 2>/dev/null | awk '/^--/ { ios = ($0 ~ /^-- iOS /) } ios' >&2
+        return 1
+    fi
+
+    if (( $(printf '%s\n' "$matches" | wc -l) > 1 )); then
+        echo "More than one available iOS $version simulator is named '$wanted':" >&2
+        printf '%s\n' "$matches" | sed 's/^/  /' >&2
+        return 1
+    fi
+
+    printf '%s\n' "$matches"
 }

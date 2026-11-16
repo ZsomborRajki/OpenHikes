@@ -15,13 +15,15 @@ permissions:
   contents: read
 
 # The runner image is `xcode-27` rather than `macos-26`, and that is what
-# makes the three values below match a development machine. `macos-26`
+# makes the two values below match a development machine. `macos-26`
 # tops out at Xcode 26.6, so for as long as this workflow ran there, CI
 # compiled the project with a different Swift than anybody who works on it —
 # see *CI* in `AGENTS.md` for what that cost.
 # `xcode-27` carries Xcode 27.0 build 27A266a, whose Swift is 6.4 (a local
 # Xcode 27 matches it only while its own Swift is 6.4 too), and iOS 27.0
-# runtimes, whose Pro model is `iPhone 18 Pro`.
+# runtimes, whose Pro model is `iPhone 18 Pro`. It carries newer runtimes too,
+# some with an `iPhone 18 Pro` of their own, so the name is not a device:
+# each job that needs one reads its UDID back once.
 #
 # DEVELOPER_DIR names the versioned symlink and not the real directory, which
 # on this image is `/Applications/Xcode_27_Release_Candidate.app` and will be
@@ -35,7 +37,6 @@ permissions:
 env:
   DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
   IOS_SIMULATOR: iPhone 18 Pro
-  IOS_DESTINATION: platform=iOS Simulator,name=iPhone 18 Pro
 
 jobs:
   # Eight jobs below can fail this workflow — `legal-pages`, `quality`,
@@ -288,6 +289,20 @@ jobs:
 
       - uses: ./.github/actions/verify-xcode
 
+      # One device, named once by UDID and addressed by it in every step
+      # below: the `iPhone 18 Pro` on the runtime of the pinned Xcode's own
+      # SDK. The image also carries newer iOS runtimes, with an `iPhone 18 Pro`
+      # on 27.2 on some machines and not on others, so a destination by name
+      # asked for the newest runtime and found no such device on run
+      # 43910913375, and a boot by name could warm a device the tests did not
+      # use.
+      - name: Choose the simulator
+        id: sim
+        run: |
+          source Scripts/lib/simulator.sh
+          udid="$(sdk_simulator_udid "$IOS_SIMULATOR")"
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+
       # Piped through xcbeautify rather than run with -quiet: -quiet hides
       # compiler warnings outright, while the github-actions renderer turns
       # each one into an inline annotation on the pull request. xcbeautify
@@ -301,7 +316,7 @@ jobs:
           xcodebuild build-for-testing \
             -project OpenHikes.xcodeproj \
             -scheme OpenHikes \
-            -destination "$IOS_DESTINATION" \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
             -derivedDataPath DerivedData \
             -skipPackagePluginValidation \
             'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) REQUIRE_ALL_SUITES' \
@@ -322,8 +337,8 @@ jobs:
       # having reported anything.
       - name: Boot the simulator
         run: |
-          xcrun simctl boot "$IOS_SIMULATOR" || true
-          xcrun simctl bootstatus "$IOS_SIMULATOR" -b
+          xcrun simctl boot "${{ steps.sim.outputs.udid }}" || true
+          xcrun simctl bootstatus "${{ steps.sim.outputs.udid }}" -b
 
       # PhotosLibraryReaderTests asks the real PhotoKit for an asset, and on a
       # device that has never answered, PhotoKit raises the permission alert
@@ -331,7 +346,9 @@ jobs:
       # grant is the same one Scripts/sim-pool.sh makes locally; a photos grant
       # made before the app is installed survives the install.
       - name: Grant the photo library up front
-        run: xcrun simctl privacy "$IOS_SIMULATOR" grant photos tappium.com.OpenHikes
+        run: |
+          xcrun simctl privacy "${{ steps.sim.outputs.udid }}" \
+            grant photos tappium.com.OpenHikes
 
       - name: Run tests with strict suite preconditions
         run: |
@@ -340,7 +357,7 @@ jobs:
           xcodebuild test-without-building \
             -project OpenHikes.xcodeproj \
             -scheme OpenHikes \
-            -destination "$IOS_DESTINATION" \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
             -derivedDataPath DerivedData \
             -only-testing:OpenHikesTests \
             -only-testing:OpenWidgetTests \
