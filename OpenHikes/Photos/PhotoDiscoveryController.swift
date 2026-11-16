@@ -495,12 +495,13 @@ final class PhotoDiscoveryController {
     ///
     /// Nothing the last presentation started may write here after this, or
     /// close the sheet this tap presents. A search started by *Select More
-    /// Photos* runs in that button's own `Task`, which closing the sheet does
-    /// not cancel, so it is overtaken here as a newer search would overtake
-    /// it. The import is cancelled when the sheet goes, and again here, so
-    /// that a clean first pass does not depend on the sheet's `onDisappear`
-    /// having come before the tap, and once stopped it hands the Add button
-    /// no count to close a sheet on — see ``runImport(into:store:)``.
+    /// Photos* or *Try Again* runs in that button's own `Task`, which closing
+    /// the sheet does not cancel, so it is overtaken here as a newer search
+    /// would overtake it. The import is cancelled when the sheet goes, and
+    /// again here, so that a clean first pass does not depend on the sheet's
+    /// `onDisappear` having come before the tap, and once stopped it hands
+    /// the Add button no count to close a sheet on — see
+    /// ``runImport(into:store:)``.
     func reset() {
         searchGeneration += 1
         cancelImport()

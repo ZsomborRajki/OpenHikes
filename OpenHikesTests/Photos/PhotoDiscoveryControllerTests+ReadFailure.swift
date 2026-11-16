@@ -115,4 +115,45 @@ extension PhotoDiscoveryControllerTests {
         #expect(controller.matches.map(\.id) == ["a"])
         #expect(controller.selection == ["a"])
     }
+
+    /// What can end a search while its read is still out: the sheet closing,
+    /// which cancels the task that searches, or the sheet opening again, which
+    /// resets the controller.
+    enum SheetEnd: String, CaseIterable, Sendable {
+        case closed = "closed"
+        case reopened = "reopened"
+    }
+
+    /// A read that fails after its sheet has gone belongs to that sheet, and
+    /// an error written then is the first thing the next one would show, over
+    /// a search of its own or on a hike it has not tried to read.
+    @Test("a read that fails after its sheet has gone writes no error", arguments: SheetEnd.allCases)
+    func failedReadAfterTheSheetWentWritesNothing(end: SheetEnd) async throws {
+        let step = HeldStep()
+        defer { step.release() }
+        let work = PhotoDiscoveryWork(
+            fetchHike: { _, _ in
+                step.pass()
+                throw CocoaError(.fileReadUnknown)
+            },
+            buildPlan: PhotoDiscoveryWork.standard.buildPlan,
+            matchAssets: PhotoDiscoveryWork.standard.matchAssets
+        )
+        let library = StubPhotoLibraryFixture(assets: [PhotoDiscoveryFixture.asset("a", atStep: 2)])
+        let controller = PhotoDiscoveryController(reader: library, work: work)
+        let context = try Fixture.modelContext()
+        let hike = try Self.savedHike(in: context)
+
+        let search = Task { @MainActor in await controller.search(in: hike) }
+        await settleDelegateHop(until: "the search to be reading the hike") { step.isHolding }
+        switch end {
+        case .closed: search.cancel()
+        case .reopened: controller.reset()
+        }
+        step.release()
+        await search.value
+
+        #expect(controller.phase == (end == .closed ? .searching : .idle))
+        #expect(library.calls.withLock(\.accessRequests) == 0)
+    }
 }
