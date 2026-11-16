@@ -598,7 +598,7 @@ private extension HikeDetailView {
     /// Always drawn, on every hike: the strip when there are photos, and the
     /// offer to go and find some either way. See ``HikePhotoSection``.
     private var photoSection: some View {
-        HikePhotoSection(hike: hike, line: line, onOpen: onOpenPhoto)
+        HikePhotoSection(hike: hike, line: line, discovery: interaction.photoDiscovery, onOpen: onOpenPhoto)
     }
 
     /// The places marked along this trail, and the pins that draw them.

@@ -726,7 +726,11 @@ final class SheetPresentation {
     private func pathDidChange(keeping kept: Int) {
         let stack = storedPath
         let isOnPath = { (route: SheetRoute) in stack.contains(route) }
-        hikeInteractions.release { id in stack.contains { $0.shows(hikeID: id) } }
+        // A hike's screens going take *Find Photos of This Hike* with them,
+        // sheet and import, which their going does not, since it writes no
+        // flag back — see ``PhotoDiscoverySession/end()``.
+        let leftHikes = hikeInteractions.release { id in stack.contains { $0.shows(hikeID: id) } }
+        for interaction in leftHikes { interaction.photoDiscovery.end() }
         photoSelections.release(keeping: isOnPath)
         communityPhotoSelections.release(keeping: isOnPath)
         walkShares.release(keeping: isOnPath)

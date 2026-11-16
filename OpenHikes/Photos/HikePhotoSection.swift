@@ -43,21 +43,19 @@ struct HikePhotoSection: View {
     /// again by every save to the store, and reading `hike.route` here decoded
     /// the whole line on the main actor each time (#1252).
     let line: ShownLine
+    /// *Find Photos of This Hike*: whether its sheet is up and the search
+    /// behind it. Kept by the hike's ``HikeDetailInteraction`` rather than in
+    /// this section's state, because a turn of the phone builds the section
+    /// again in the other host, and the sheet closed with the old one (#1462)
+    /// — see ``PhotoDiscoverySession``. It is not kept for what a scan found:
+    /// the button below resets it before each presentation, and
+    /// ``PhotoDiscoveryController`` says why nothing of one presentation
+    /// reaches the next.
+    @Bindable var discovery: PhotoDiscoverySession
     var store: HikePhotoStore = .shared
     /// Opens the viewer at a photo.
     var onOpen: (HikePhoto) -> Void
 
-    @State private var isDiscovering = false
-    /// Kept for as long as this section is, not per presentation, so a
-    /// reopened sheet is handed the same controller. It is not kept for what a
-    /// scan found: the button below resets it before each presentation, and
-    /// each presentation searches again. ``PhotoDiscoveryController`` says how
-    /// long it lives and why nothing of one presentation reaches the next. Its
-    /// reader is resolved by ``PhotoLibrarySource``, which is what lets UI
-    /// automation drive this without a photo library or a permission prompt.
-    @State private var discovery = PhotoDiscoveryController(
-        reader: PhotoLibrarySource.reader()
-    )
     /// Whether the caption can promise a scan, kept across the passes that
     /// change only `hike.photos` — see ``PhotoMatchAvailability``.
     @State private var availability = PhotoMatchAvailability()
@@ -96,8 +94,13 @@ struct HikePhotoSection: View {
         // bottom sheet is never taken down, and a view can only have one
         // presentation at a time, so a `.sheet` attached beside it would never
         // appear at all. This view is already inside it.
-        .sheet(isPresented: $isDiscovering) {
-            PhotoDiscoverySheet(hike: hike, controller: discovery)
+        //
+        // The flag is the session's, so the section a turn builds in the
+        // other host presents the sheet again. Told when the sheet has gone,
+        // which a turn does too: the session tells a close from a turn —
+        // see ``PhotoDiscoverySession/closed()``.
+        .sheet(isPresented: $discovery.isPresented, onDismiss: discovery.closed) {
+            PhotoDiscoverySheet(hike: hike, session: discovery)
         }
     }
 
@@ -116,10 +119,9 @@ struct HikePhotoSection: View {
     private var discoverButton: some View {
         Button("Find Photos of This Hike", systemImage: "magnifyingglass") {
             // In the tap, before the sheet's first pass reads the controller:
-            // see ``PhotoDiscoveryController/reset()``. The action runs on the
+            // see ``PhotoDiscoverySession/start()``. The action runs on the
             // tap, not in this body, so the section still reads none of it.
-            discovery.reset()
-            isDiscovering = true
+            discovery.start()
         }
         .sectionActionButtonStyle()
         // Deliberately not prefixed `hike-photo-`: every tile in the gallery

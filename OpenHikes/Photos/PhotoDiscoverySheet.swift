@@ -26,7 +26,14 @@ import SwiftUI
 
 struct PhotoDiscoverySheet: View {
     let hike: Hike
-    let controller: PhotoDiscoveryController
+    /// Handed to the Add button, which closes the sheet through its flag —
+    /// see ``PhotoDiscoverySession/importChosen(into:store:)``. Nothing here
+    /// reads the flag.
+    let session: PhotoDiscoverySession
+
+    /// A `let` of the session's, so reading it subscribes this body to
+    /// nothing.
+    private var controller: PhotoDiscoveryController { session.controller }
 
     private static let badgeSize: CGFloat = 22
 
@@ -43,18 +50,24 @@ struct PhotoDiscoverySheet: View {
                 #endif
                 .toolbar { toolbarContent }
         }
+        // Unless this presentation has had its answer: a turn of the phone
+        // builds this sheet again in the other host, and a search there would
+        // put back every photograph the hiker had taken out — see
+        // ``PhotoDiscoverySession``.
         .task {
-            await controller.search(in: hike)
+            await controller.searchUnlessAnswered(in: hike)
             await controller.followSaves(of: hike)
         }
         // The search above is cancelled for us — a `.task` is tied to the view
         // that declares it. An import is not: it starts in a button action, in
-        // a `Task` the sheet's disappearance does not reach. So it is stopped
-        // by hand, here, and for more than tidiness — the controller is owned
-        // by the screen behind this sheet rather than by the sheet, so an
-        // import left running would still be writing into the state that a
-        // reopened sheet's search is filling.
-        .onDisappear { controller.cancelImport() }
+        // a `Task` the sheet's disappearance does not reach. It is stopped by
+        // the session when the sheet is closed, and for more than tidiness —
+        // the controller is owned by the hike's screen rather than by the
+        // sheet, so an import left running would still be writing into the
+        // state that a reopened sheet's search is filling. Not here, as this
+        // sheet goes: a turn takes it away too, and puts the same
+        // presentation up again, where the import goes on — see
+        // ``PhotoDiscoverySession/closed()``.
     }
 
     @ViewBuilder private var content: some View {
@@ -96,7 +109,7 @@ struct PhotoDiscoverySheet: View {
                 // whole thing the cells were moved out for. A `.toolbar`
                 // closure is evaluated with the body around it, so a toolbar
                 // item is no more insulated than a row is.
-                DiscoveryAddButton(controller: controller, hike: hike)
+                DiscoveryAddButton(session: session, hike: hike)
             }
         }
     }
@@ -449,38 +462,26 @@ private struct DiscoverySelectionBar: View {
 /// a toolbar shows a plain `Label` as its glyph alone and the count is the one
 /// thing on it worth reading. VoiceOver still hears "Add 3".
 ///
-/// It closes the sheet itself rather than being handed a closure that does,
-/// for the reason ``DismissButton`` exists: the sheet's own body must not read
-/// the dismiss action, and `dismiss.callAsFunction` passed down from there
-/// would be exactly that read.
+/// It closes the sheet through the session's flag rather than the
+/// environment's dismiss action, which would belong to this presentation: an
+/// import goes on through a turn of the phone, into the sheet the other host
+/// puts up again, and the dismiss action of the one the turn took away closed
+/// nothing — see ``PhotoDiscoverySession/importChosen(into:store:)``.
 private struct DiscoveryAddButton: View {
-    let controller: PhotoDiscoveryController
+    let session: PhotoDiscoverySession
     let hike: Hike
 
-    @Environment(\.dismiss) private var dismiss
+    private var controller: PhotoDiscoveryController { session.controller }
 
     var body: some View {
         let count = controller.selectedCount
         let title = count > 0 ? String(localized: "Add \(count)") : String(localized: "Add")
         return Button {
-            Task {
-                // Through the controller rather than straight to
-                // `importSelected`, so the work has an owner that outlives
-                // this button and can be cancelled when the sheet goes.
-                let added = await controller.runImport(into: hike)
-                // Something landed and nothing is left to review: the sheet
-                // has finished its job, and leaving it up on its empty state
-                // would read as an import that found nothing rather than as
-                // one that just succeeded. Anything that failed stays in
-                // `matches`, which keeps the sheet open to be retried, and a
-                // line that moved during the import has a search under way
-                // for the rest, so it is the phase that says nothing is left,
-                // not an empty list. No count means the import was stopped:
-                // this sheet went, and `dismiss` would close one opened
-                // since, or a newer import took over, and its own task
-                // decides.
-                if let added, added > 0, controller.phase == .empty { dismiss() }
-            }
+            // Through the session rather than straight to `importSelected`,
+            // so the work has an owner that outlives this button, is
+            // cancelled when the sheet is closed, and closes whichever sheet
+            // is up once it is done.
+            Task { await session.importChosen(into: hike) }
         } label: {
             if count > 0 {
                 Label {

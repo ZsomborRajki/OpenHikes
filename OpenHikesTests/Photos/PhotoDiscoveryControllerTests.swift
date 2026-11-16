@@ -345,7 +345,7 @@ struct PhotoDiscoveryControllerTests {
         await settleDelegateHop(until: "the import to reach its first asset") {
             gate.isHolding
         }
-        // What the sheet's `onDisappear` does.
+        // What closing the sheet does.
         controller.cancelImport()
         gate.open()
         _ = await importing.value

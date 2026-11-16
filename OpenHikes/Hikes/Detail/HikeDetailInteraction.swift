@@ -12,4 +12,8 @@ final class HikeDetailInteraction {
     /// the screens pushed over the detail read the same line — see
     /// ``ShownLine``.
     let line = ShownLine()
+    /// *Find Photos of This Hike*: whether its sheet is up and the search
+    /// behind it, here so a turn of the phone keeps both — see
+    /// ``PhotoDiscoverySession``.
+    let photoDiscovery = PhotoDiscoverySession()
 }
