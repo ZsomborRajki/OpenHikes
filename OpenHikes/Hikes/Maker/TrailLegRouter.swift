@@ -209,8 +209,9 @@ actor OverpassTrailLegRouter: TrailLegRouting {
     /// the next at ours. It is cached only when both questions were settled:
     /// a refusal is never cached, see the file header, and neither is an
     /// Apple failure the leg could be asked about again. What is not cached
-    /// is drawn as a failure too, so the drawing keeps its *Retry* — see
-    /// ``combining(_:with:)``.
+    /// is drawn as a failure too, so the drawing keeps its *Retry*, unless
+    /// Apple drew a way beside a refused graph: that way is drawn, and the
+    /// drawing keeps it as it would any other — see ``combining(_:with:)``.
     func route(_ ends: TrailLegEnds) async -> TrailLegRoute? {
         if let cached = cache[ends] { return cached }
         guard let own = await graphRoute(ends) else { return nil }
