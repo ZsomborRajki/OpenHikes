@@ -48,6 +48,12 @@
             "state" : "translated",
             "value" : "Всего %@"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Загалом %@"
+          }
         }
       }
     },
@@ -93,6 +99,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Подъем %1$@, спуск %2$@"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Підйом %1$@, спуск %2$@"
           }
         }
       }
@@ -266,6 +278,36 @@
               }
             }
           }
+        },
+        "uk" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld походи чекають на ваш iPhone"
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld походів чекають на ваш iPhone"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld похід чекає на ваш iPhone"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld походу чекають на ваш iPhone"
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -354,6 +396,36 @@
               }
             }
           }
+        },
+        "uk" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld відсотки"
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld відсотків"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld відсоток"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld відсотка"
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -393,6 +465,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Поход прерван — см. «Запись»"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Похід перервано — див. «Запис»"
           }
         }
       }
@@ -434,6 +512,12 @@
             "state" : "translated",
             "value" : "Не удалось начать тренировку, а без нее запись прервется, когда погаснет экран."
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не вдалося почати тренування, а без нього запис перерветься, коли згасне екран."
+          }
         }
       }
     },
@@ -473,6 +557,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Запрос ваших троп у iPhone…"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отримання ваших стежок з iPhone…"
           }
         }
       }
@@ -514,6 +604,12 @@
             "state" : "translated",
             "value" : "Средняя скорость"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Середня швидкість"
+          }
         }
       }
     },
@@ -554,6 +650,12 @@
             "state" : "translated",
             "value" : "Ср. скорость"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сер. швидкість"
+          }
         }
       }
     },
@@ -593,6 +695,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Поднесите ближе iPhone с приложением OpenHikes, чтобы передать тропы."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Піднесіть ближче iPhone із програмою OpenHikes, щоб передати стежки."
           }
         }
       }
@@ -635,6 +743,12 @@
             "state" : "translated",
             "value" : "Отменить"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скасувати"
+          }
         }
       }
     },
@@ -674,6 +788,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Подъем"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Підйом"
           }
         }
       }
@@ -715,6 +835,12 @@
             "state" : "translated",
             "value" : "Продолжить"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Продовжити"
+          }
         }
       }
     },
@@ -754,6 +880,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Удалить"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Видалити"
           }
         }
       }
@@ -795,6 +927,12 @@
             "state" : "translated",
             "value" : "Удалить поход"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Видалити похід"
+          }
         }
       }
     },
@@ -834,6 +972,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Удалить этот поход?"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Видалити цей похід?"
           }
         }
       }
@@ -875,6 +1019,12 @@
             "state" : "translated",
             "value" : "Расстояние"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Відстань"
+          }
         }
       }
     },
@@ -912,6 +1062,12 @@
           }
         },
         "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Готово"
+          }
+        },
+        "uk" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Готово"
@@ -956,6 +1112,12 @@
             "state" : "translated",
             "value" : "Загрузка этой тропы с iPhone…"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отримання цієї стежки з iPhone…"
+          }
         }
       }
     },
@@ -995,6 +1157,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Поиск вашего места на тропе…"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пошук вашого місця на стежці…"
           }
         }
       }
@@ -1036,6 +1204,12 @@
             "state" : "translated",
             "value" : "Определение геопозиции…"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Визначення геопозиції…"
+          }
         }
       }
     },
@@ -1076,6 +1250,12 @@
             "state" : "translated",
             "value" : "Финиш"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Фініш"
+          }
         }
       }
     },
@@ -1115,6 +1295,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Следовать за геопозицией"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Стежити за геопозицією"
           }
         }
       }
@@ -1163,6 +1349,12 @@
             "state" : "translated",
             "value" : "Пройдено"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пройдено"
+          }
         }
       }
     },
@@ -1199,6 +1391,12 @@
           }
         },
         "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пульс"
+          }
+        },
+        "uk" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Пульс"
@@ -1244,6 +1442,12 @@
             "state" : "translated",
             "value" : "Поход"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Похід"
+          }
         }
       }
     },
@@ -1283,6 +1487,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Поход прерван"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Похід перервано"
           }
         }
       }
@@ -1324,6 +1534,12 @@
             "state" : "translated",
             "value" : "Поход сохранен"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Похід збережено"
+          }
         }
       }
     },
@@ -1363,6 +1579,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Поход не сохранен"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Похід не збережено"
           }
         }
       }
@@ -1404,6 +1626,12 @@
             "state" : "translated",
             "value" : "Импортируйте файл GPX или запишите поход на iPhone, и он появится здесь."
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Імпортуйте файл GPX або запишіть похід на iPhone, і він зʼявиться тут."
+          }
         }
       }
     },
@@ -1443,6 +1671,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Чтобы передавать тропы, установите OpenHikes на iPhone, объединенный в пару с этими часами."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Щоб передавати стежки, установіть OpenHikes на iPhone, спарений із цим годинником."
           }
         }
       }
@@ -1484,6 +1718,12 @@
             "state" : "translated",
             "value" : "Он нигде не сохранен, поэтому восстановить его нельзя."
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Його ніде не збережено, тож відновити його неможливо."
+          }
         }
       }
     },
@@ -1523,6 +1763,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Последний поход не сохранен"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Останній похід не збережено"
           }
         }
       }
@@ -1564,6 +1810,12 @@
             "state" : "translated",
             "value" : "Последняя тропа: %@"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Остання стежка: %@"
+          }
         }
       }
     },
@@ -1603,6 +1855,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Осталось"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Залишилося"
           }
         }
       }
@@ -1644,6 +1902,12 @@
             "state" : "translated",
             "value" : "Геопозиция выключена, поэтому ваше положение не показано."
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Геопозицію вимкнено, тому ваше місце не показано."
+          }
         }
       }
     },
@@ -1680,6 +1944,12 @@
           }
         },
         "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Карта: %@"
+          }
+        },
+        "uk" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Карта: %@"
@@ -1724,6 +1994,12 @@
             "state" : "translated",
             "value" : "На вашем iPhone нет OpenHikes"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На вашому iPhone немає OpenHikes"
+          }
         }
       }
     },
@@ -1763,6 +2039,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Пока нет троп"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ще немає стежок"
           }
         }
       }
@@ -1804,6 +2086,12 @@
             "state" : "translated",
             "value" : "Запись не идет"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запис не триває"
+          }
         }
       }
     },
@@ -1843,6 +2131,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "От тропы"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Відхилення"
           }
         }
       }
@@ -1885,6 +2179,12 @@
             "state" : "translated",
             "value" : "На тропе"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На стежці"
+          }
         }
       }
     },
@@ -1924,6 +2224,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "На вашем iPhone"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На вашому iPhone"
           }
         }
       }
@@ -1965,6 +2271,12 @@
             "state" : "translated",
             "value" : "Чтобы записать поход, приложению OpenHikes нужен доступ к геопозиции."
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Щоб записати похід, програмі OpenHikes потрібен доступ до геопозиції."
+          }
         }
       }
     },
@@ -2004,6 +2316,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Приложению OpenHikes нужно разрешение начинать тренировку: благодаря ей запись не прерывается."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Програмі OpenHikes потрібен дозвіл починати тренування: завдяки йому запис не переривається."
           }
         }
       }
@@ -2046,6 +2364,12 @@
             "state" : "translated",
             "value" : "Чтобы записать поход, приложению OpenHikes нужна ваша геопозиция."
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Щоб записати похід, програмі OpenHikes потрібна ваша геопозиція."
+          }
         }
       }
     },
@@ -2085,6 +2409,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Пауза"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Призупинити"
           }
         }
       }
@@ -2127,6 +2457,12 @@
             "state" : "translated",
             "value" : "Приостановить поход"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Призупинити похід"
+          }
         }
       }
     },
@@ -2166,6 +2502,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Приостановить запись"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Призупинити запис"
           }
         }
       }
@@ -2207,6 +2549,12 @@
             "state" : "translated",
             "value" : "Приостановить запись на iPhone"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Призупинити запис на iPhone"
+          }
         }
       }
     },
@@ -2246,6 +2594,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "На паузе. Путь, который вы проходите сейчас, в поход не войдет."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Призупинено. Шлях, який ви проходите зараз, не ввійде в похід."
           }
         }
       }
@@ -2288,6 +2642,12 @@
             "state" : "translated",
             "value" : "Приостанавливает запись похода с ее панели на экране блокировки."
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Призупиняє запис походу з його панелі на замкненому екрані."
+          }
         }
       }
     },
@@ -2327,6 +2687,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Прогресс на тропе"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Прогрес на стежці"
           }
         }
       }
@@ -2368,6 +2734,12 @@
             "state" : "translated",
             "value" : "Запись"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запис"
+          }
         }
       }
     },
@@ -2407,6 +2779,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Записать этот поход"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Записати цей похід"
           }
         }
       }
@@ -2448,6 +2826,12 @@
             "state" : "translated",
             "value" : "Идет запись"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Триває запис"
+          }
         }
       }
     },
@@ -2487,6 +2871,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Запись остановилась в %@. Все, что было до этого, сохранено."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запис зупинився о %@. Усе, що було до цього, збережено."
           }
         }
       }
@@ -2528,6 +2918,12 @@
             "state" : "translated",
             "value" : "Запись ведется на этих часах, с iPhone или без него. Поход перейдет на iPhone, когда тот снова окажется рядом."
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запис ведеться на цьому годиннику, з iPhone або без нього. Похід буде передано на iPhone, щойно той знову буде в полі дії."
+          }
         }
       }
     },
@@ -2567,6 +2963,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Возобновить"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поновити"
           }
         }
       }
@@ -2609,6 +3011,12 @@
             "state" : "translated",
             "value" : "Возобновить поход"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поновити похід"
+          }
         }
       }
     },
@@ -2649,6 +3057,12 @@
             "state" : "translated",
             "value" : "Возобновить запись"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поновити запис"
+          }
         }
       }
     },
@@ -2688,6 +3102,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Возобновить запись на iPhone"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поновити запис на iPhone"
           }
         }
       }
@@ -2730,6 +3150,12 @@
             "state" : "translated",
             "value" : "Возобновляет приостановленный поход с его панели на экране блокировки."
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поновлює призупинений похід з його панелі на замкненому екрані."
+          }
         }
       }
     },
@@ -2769,6 +3195,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Сохранить поход"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Зберегти похід"
           }
         }
       }
@@ -2810,6 +3242,12 @@
             "state" : "translated",
             "value" : "Сохранение…"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Збереження…"
+          }
         }
       }
     },
@@ -2849,6 +3287,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Отправлено на ваш iPhone."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Надіслано на ваш iPhone."
           }
         }
       }
@@ -2891,6 +3335,12 @@
             "state" : "translated",
             "value" : "Показывает тропу на ваш выбор, выбранную в приложении тропу или поход, который сейчас записывается."
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показує стежку на ваш вибір, вибрану в програмі стежку або похід, який зараз записується."
+          }
         }
       }
     },
@@ -2927,6 +3377,12 @@
           }
         },
         "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Старт"
+          }
+        },
+        "uk" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Старт"
@@ -2971,6 +3427,12 @@
             "state" : "translated",
             "value" : "Начать поход"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Почати похід"
+          }
         }
       }
     },
@@ -3007,6 +3469,12 @@
           }
         },
         "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запуск…"
+          }
+        },
+        "uk" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Запуск…"
@@ -3051,6 +3519,12 @@
             "state" : "translated",
             "value" : "Остановить"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Зупинити"
+          }
         }
       }
     },
@@ -3090,6 +3564,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Не следовать за геопозицией"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не стежити за геопозицією"
           }
         }
       }
@@ -3131,6 +3611,12 @@
             "state" : "translated",
             "value" : "Остановить запись"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Зупинити запис"
+          }
         }
       }
     },
@@ -3170,6 +3656,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Остановить запись на iPhone"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Зупинити запис на iPhone"
           }
         }
       }
@@ -3211,6 +3703,12 @@
             "state" : "translated",
             "value" : "Запрос не дошел до вашего iPhone."
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запит не дійшов до вашого iPhone."
+          }
         }
       }
     },
@@ -3250,6 +3748,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Этот поход слишком короткий, чтобы его сохранять."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цей похід закороткий, щоб його зберегти."
           }
         }
       }
@@ -3291,6 +3795,12 @@
             "state" : "translated",
             "value" : "Эти часы не могут начать тренировку, поэтому запись прервалась бы."
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цей годинник не може почати тренування, тож запис не зміг би тривати."
+          }
         }
       }
     },
@@ -3331,6 +3841,12 @@
             "state" : "translated",
             "value" : "На часах закончилось место. Освободите его и повторите попытку."
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На годиннику закінчилося місце. Звільніть трохи місця й спробуйте ще раз."
+          }
         }
       }
     },
@@ -3370,6 +3886,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Время в походе"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Час у поході"
           }
         }
       }
@@ -3412,6 +3934,12 @@
             "state" : "translated",
             "value" : "Начать или остановить запись похода"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Почати або зупинити запис походу"
+          }
         }
       }
     },
@@ -3451,6 +3979,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Тропа"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Стежка"
           }
         }
       }
@@ -3492,6 +4026,12 @@
             "state" : "translated",
             "value" : "Показатели тропы"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показники стежки"
+          }
         }
       }
     },
@@ -3531,6 +4071,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Тропы"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Стежки"
           }
         }
       }
@@ -3572,6 +4118,12 @@
             "state" : "translated",
             "value" : "Повторить"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ще раз"
+          }
         }
       }
     },
@@ -3611,6 +4163,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Поворачивать карту по ходу движения"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Повертати карту в напрямку руху"
           }
         }
       }
@@ -3652,6 +4210,12 @@
             "state" : "translated",
             "value" : "Ожидание iPhone"
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Очікування iPhone"
+          }
         }
       }
     },
@@ -3691,6 +4255,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ожидание, пока iPhone снова окажется рядом…"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Очікування, поки iPhone знову буде в полі дії…"
           }
         }
       }
@@ -3732,6 +4302,12 @@
             "state" : "translated",
             "value" : "Ожидание iPhone. Передача начнется сама."
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Очікування iPhone. Передавання почнеться саме."
+          }
         }
       }
     },
@@ -3771,6 +4347,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ваш iPhone не смог ответить на запрос."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ваш iPhone не зміг відповісти на запит."
           }
         }
       }
@@ -3812,6 +4394,12 @@
             "state" : "translated",
             "value" : "Ваш iPhone вне зоны действия."
           }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ваш iPhone поза полем дії."
+          }
         }
       }
     },
@@ -3851,6 +4439,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Запись идет на iPhone"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запис триває на iPhone"
           }
         }
       }
