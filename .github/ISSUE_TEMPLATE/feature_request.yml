@@ -6,8 +6,8 @@ body:
   - type: markdown
     attributes:
       value: >-
-        OpenHikes has a deliberate scope: local-first, iPhone with an Apple
-        Watch companion, and no OpenHikes account. `AGENTS.md` records the
+        OpenHikes has a deliberate scope: local-first, iPhone and iPad with an
+        Apple Watch companion, and no OpenHikes account. `AGENTS.md` records the
         decisions that have already been settled, and the open issues are what
         is already planned — both worth a look before writing.
 
