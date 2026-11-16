@@ -63,7 +63,10 @@
 //  the two have to agree: a region is answered from its square alone, and in
 //  a set that is the whole world a trail its square lacks is a trail that is
 //  not there, with no reason to ask Overpass. A way that keeps off the line
-//  is filed exactly as it was.
+//  is filed exactly as it was, unless it spans more than half the world:
+//  the build took any such way for one across the line and filed it under
+//  its nodes' squares alone, though the library reads one that never steps
+//  across into every region between them, so it is now filed by its box.
 //
 //  ## Compiled twice
 //
