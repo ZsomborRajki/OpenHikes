@@ -388,7 +388,8 @@ nonisolated public enum RouteGeometry {
         // (#1439). A run east or west of more than half a turn of longitude
         // is that, so it is taken the short way from where the start was
         // put. Near the fix the two ends are never half a turn apart, so
-        // nothing there changes.
+        // nothing there changes, except right beside a pole, where the plane
+        // is degenerate with or without this.
         let halfTurn = Double.pi * earthRadiusMeters * cos(coordinate.latitude * .pi / 180)
         if dx > halfTurn { dx -= 2 * halfTurn } else if dx < -halfTurn { dx += 2 * halfTurn }
         let dy = endOffset.y - startOffset.y
