@@ -171,6 +171,31 @@ struct PlaceSquareLibraryTests {
         #expect(Self.offered(answer) == [2, 3, 6])
     }
 
+    /// Two boxes can touch the same square: two parts of one map, or the two
+    /// halves of a search the date line splits, both of which touch the
+    /// square east of it, since 180° is where that square starts.
+    @Test("a square two boxes touch is asked for once, where the first one put it")
+    func aSharedSquareIsAskedForOnce() async throws {
+        let eastOfTheLine = CuratedTrailQuery.BoundingBox(south: 47.6, west: 13.01, north: 47.65, east: 13.05)
+        // On Taveuni, which the date line crosses.
+        let taveuni = CommunitySearchArea(
+            coordinate: CLLocationCoordinate2D(latitude: -16.8, longitude: 179.99),
+            radiusMeters: 3000
+        )
+        let halves = TrailPointQuery.searchBoxes(for: taveuni)
+        let database = StubTrailCellDatabase()
+        let library = Self.makeLibrary(database)
+
+        _ = try await library.places(in: [eastOfTheLine, Self.straddling], showing: Self.everything)
+        _ = try await library.places(in: halves, showing: Self.everything)
+
+        #expect(halves.count == 2)
+        #expect(database.requests == [
+            [Self.eastSquare, Self.valleySquare],
+            ["places1_73_359", "places1_73_0"],
+        ])
+    }
+
     /// Overpass finds a way by its nodes, so a campsite reaching into the
     /// corner of a small map is in its answer though its middle, where the
     /// pin stands, is off the map. Only the middle, and the squares would
@@ -392,9 +417,11 @@ struct PlaceSquareLibraryTests {
         }
         #expect(database.requests.isEmpty)
     }
+}
 
-    // MARK: - What is kept
+// MARK: - What is kept
 
+extension PlaceSquareLibraryTests {
     /// What *Add Place* offers before its search answers, and with no signal
     /// at all: every kind, nearest first, and no request.
     @Test("the places of a kept square are offered nearest first, asking nothing")
