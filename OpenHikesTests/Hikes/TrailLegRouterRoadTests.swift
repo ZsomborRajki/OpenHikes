@@ -207,7 +207,10 @@ struct TrailLegRouterRoadTests {
     }
 
     /// An Apple failure that could clear — no signal, a throttle — must not
-    /// be remembered as *no path here*, or the leg would never ask again.
+    /// be remembered as *no path here*, or the leg would never ask again:
+    /// not by the router, and not by the drawing, which keeps a leg with no
+    /// path for good. So the leg wears Apple's failure, which *Retry* asks
+    /// about again.
     @Test("an Apple failure is not cached")
     func appleFailureIsAskedAgain() async throws {
         let calls = CallCount()
@@ -220,7 +223,9 @@ struct TrailLegRouterRoadTests {
         let route = try #require(await router.route(ends))
         _ = await router.route(ends)
 
-        #expect(route.snap == .unmapped(.noPathBetween))
+        #expect(route.snap == .directionsUnavailable(.unavailable))
+        #expect(route.snap.isRetryable)
+        #expect(route.coordinates.count == 2)
         #expect(await calls.value == 2)
     }
 }

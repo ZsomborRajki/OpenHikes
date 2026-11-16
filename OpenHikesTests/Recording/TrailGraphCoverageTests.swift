@@ -142,6 +142,33 @@ struct TrailGraphCoverageTests {
         #expect(graph?.edges.count == 1)
     }
 
+    /// The same half a graph, for the trail maker, which must not take the
+    /// region it could not fetch for ground with no path on it.
+    @Test("a region that fails is reported beside the rest of the route's graph")
+    func partialFailureIsReportedBesideTheGraph() async throws {
+        let directory = Self.makeDirectory("assembled")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let recorder = GraphRequestRecorder()
+        let transport: OverpassTrailGraphProvider.Transport = { _ in
+            let failed = await recorder.record() > 1
+            return OverpassHTTPResponse(
+                data: failed ? Data() : Data(Self.fixture.utf8),
+                statusCode: failed ? Self.serverErrorCode : Self.okCode,
+                headers: [:]
+            )
+        }
+        let provider = OverpassTrailGraphProvider(directory: directory, transport: transport)
+        let (west, east) = try Self.adjacentRegionCoordinates(for: provider)
+
+        let partial = try await provider.assembledGraph(covering: [west, east])
+        let whole = try await provider.assembledGraph(covering: [west])
+
+        #expect(partial.graph?.edges.count == 1)
+        #expect(partial.failure as? TrailGraphProviderError == .server(statusCode: Self.serverErrorCode))
+        #expect(whole.graph?.edges.count == 1)
+        #expect(whole.failure == nil, "every region it crosses is on disk")
+    }
+
     /// Two coordinates that land either side of a cache-region boundary.
     nonisolated private static func adjacentRegionCoordinates(
         for provider: OverpassTrailGraphProvider

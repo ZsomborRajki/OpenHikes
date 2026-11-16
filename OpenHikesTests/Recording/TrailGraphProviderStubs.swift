@@ -4,7 +4,8 @@
 //
 //  Trail graph providers standing in for Overpass: one that always answers
 //  from a fixed graph, one that fails a scripted number of times first, one
-//  that only ever refuses, and one that counts how often it was asked.
+//  that only ever refuses, one that counts how often it was asked, and one
+//  whose two regions can be withheld, restored and replaced.
 //
 
 import CoreLocation
@@ -228,5 +229,72 @@ actor CountingTrailGraphProvider: TrailGraphProviding {
 
     func fetchCount() -> Int {
         fetches
+    }
+}
+
+/// Two regions either side of a line of longitude, each answered from a graph
+/// of its own: a region can be withheld until a suite restores it, and a
+/// region's graph can be replaced.
+///
+/// What a drawn leg meets in the real provider and the fixed stubs above
+/// cannot show it: a region on disk beside one the network refused, and a
+/// region that arrives, or changes, after a leg has been routed without it.
+actor RegionalTrailGraphProvider: TrailGraphProviding {
+    /// West of it is ``west``, and the rest ``east``.
+    nonisolated static let boundaryLongitude = 12.8
+    nonisolated static let west = TrailGraphRegion(zoom: 12, x: 0, y: 0)
+    nonisolated static let east = TrailGraphRegion(zoom: 12, x: 1, y: 0)
+
+    private var graphs: [TrailGraphRegion: TrailGraph]
+    private var withheld: Set<TrailGraphRegion>
+
+    init(
+        graphs: [TrailGraphRegion: TrailGraph],
+        withholding withheld: Set<TrailGraphRegion> = []
+    ) {
+        self.graphs = graphs
+        self.withheld = withheld
+    }
+
+    nonisolated func region(
+        containing coordinate: CLLocationCoordinate2D
+    ) -> TrailGraphRegion? {
+        coordinate.longitude < Self.boundaryLongitude ? Self.west : Self.east
+    }
+
+    /// A withheld region fails the way a phone with no signal does.
+    func prefetch(around coordinate: CLLocationCoordinate2D) throws {
+        guard let region = region(containing: coordinate), withheld.contains(region) else { return }
+        throw URLError(.notConnectedToInternet)
+    }
+
+    /// Every region the coordinates cross that is not withheld, merged west
+    /// to east, so the same regions make the same graph every time.
+    func cachedGraph(
+        covering coordinates: [CLLocationCoordinate2D]
+    ) -> TrailGraph? {
+        let regions = Set(coordinates.compactMap(region(containing:))).subtracting(withheld)
+        var merged: TrailGraph?
+        for region in regions.sorted(by: { $0.x < $1.x }) {
+            guard let graph = graphs[region] else { continue }
+            merged = merged?.merging(graph) ?? graph
+        }
+        return merged
+    }
+
+    func hasCompleteCachedGraph(
+        covering coordinates: [CLLocationCoordinate2D]
+    ) -> Bool {
+        Set(coordinates.compactMap(region(containing:))).isDisjoint(with: withheld)
+    }
+
+    /// The region arriving, as when the signal comes back.
+    func restore(_ region: TrailGraphRegion) {
+        withheld.remove(region)
+    }
+
+    /// The region refreshed with what OpenStreetMap holds now.
+    func replace(_ graph: TrailGraph, in region: TrailGraphRegion) {
+        graphs[region] = graph
     }
 }

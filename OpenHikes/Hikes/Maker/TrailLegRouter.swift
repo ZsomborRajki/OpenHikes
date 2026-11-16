@@ -10,9 +10,11 @@
 //  disk for a month, coalesces concurrent requests for the same tile and backs
 //  off when Overpass says to; ``TrailMatcherGraphIndex`` already indexes that
 //  graph spatially and runs Dijkstra over it. A recording uses both to work
-//  out where a hiker *went*. This asks the same two objects where a hiker
-//  *could* go, and the disk cache a recording filled is the one a drawing
-//  reads.
+//  out where a hiker *went*. This asks the same two types where a hiker
+//  *could* go, though not the same provider: a drawing routes over the roads
+//  that join trails, which the recording's trails-only graph leaves out, so
+//  the maker has a provider and a disk cache of its own, and the two share
+//  only Overpass's retry deadline. See `OpenHikesModel.makeTrailMaker`.
 //
 //  ## One request per leg, and they are asked one at a time
 //
@@ -45,15 +47,19 @@
 //  and on again costs nothing, and so Phase 3's reorder — which moves rows
 //  around without moving anything on the ground — re-resolves only the legs
 //  whose two ends actually changed. **A refusal is never cached**, because
-//  *Retry* would then have nothing to do. The cache is bounded, oldest first,
-//  because the router outlives every drawing — see ``TrailLegAnswerCache``.
+//  *Retry* would then have nothing to do — and a leg the graph could not join
+//  while a region it crosses could not be fetched is that region's refusal,
+//  not an answer: the path may run through the region that is missing. The
+//  cache is bounded, oldest first, because the router outlives every drawing
+//  — see ``TrailLegAnswerCache``.
 //
-//  One built index is kept beside it, keyed on the set of regions it was
-//  built from. Consecutive legs of one walk are in one area, so the second
-//  leg onwards usually reuses it; a leg that reaches into a new tile pays for
-//  a rebuild, which is the honest price of a bigger graph. Only one, because
-//  a drawn trail is a walk rather than a tour of the country, and an index
-//  over a z12 tile is not a thing to keep several of.
+//  One built index is kept beside it, keyed on the graph it was built over.
+//  Consecutive legs of one walk are in one area, so the second leg onwards
+//  usually reuses it; a leg that reaches into a new tile, or meets a region
+//  that has arrived or been fetched again since, pays for a rebuild, which is
+//  the honest price of a different graph. Only one, because a drawn trail is
+//  a walk rather than a tour of the country, and an index over a z12 tile is
+//  not a thing to keep several of.
 //
 
 import Algorithms
@@ -139,9 +145,18 @@ actor OverpassTrailLegRouter: TrailLegRouting {
     /// How much of an alternative may run along a route already offered.
     static let maximumSharedFraction = 0.7
 
-    /// The graph index that was last built, and the regions it came from.
+    /// The graph index that was last built, and the graph it was built over.
+    ///
+    /// Keyed on the graph rather than on the regions it covers, because the
+    /// same regions answer with a different graph once one that was missing
+    /// arrives, or one that expired is fetched again. Comparing costs next to
+    /// nothing beside what each leg already pays: the provider hands back the
+    /// graph it keeps for a leg in one region, whose storage this shares, so
+    /// the arrays compare by identity; a leg across several is a graph the
+    /// provider has just merged and sorted, and one pass comparing it is
+    /// cheaper than that merge, let alone an index build.
     private struct BuiltIndex {
-        let regions: Set<TrailGraphRegion>
+        let graph: TrailGraph
         var value: TrailMatcherGraphIndex
     }
 
@@ -165,6 +180,12 @@ actor OverpassTrailLegRouter: TrailLegRouting {
     /// ``TrailLegAnswerCache``.
     private var cache = TrailLegAnswerCache()
     private var index: BuiltIndex?
+    /// How many indexes this router has built.
+    ///
+    /// A test seam, as ``OverpassTrailGraphProvider/waiterCount(for:)`` is:
+    /// reusing the index is the whole of what keeping one is for, and it is
+    /// otherwise unobservable. Nothing in the app reads it.
+    private(set) var indexBuildCount = 0
 
     /// - Parameter fallback: Apple Maps walking directions, asked for a leg
     ///   the trail graph could not route. `nil` in a suite about the graph.
@@ -187,7 +208,9 @@ actor OverpassTrailLegRouter: TrailLegRouting {
     /// leg, so one leg of a walk is not quoted at Apple's walking speed and
     /// the next at ours. It is cached only when both questions were settled:
     /// a refusal is never cached, see the file header, and neither is an
-    /// Apple failure the leg could be asked about again.
+    /// Apple failure the leg could be asked about again. What is not cached
+    /// is drawn as a failure too, so the drawing keeps its *Retry* — see
+    /// ``combining(_:with:)``.
     func route(_ ends: TrailLegEnds) async -> TrailLegRoute? {
         if let cached = cache[ends] { return cached }
         guard let own = await graphRoute(ends) else { return nil }
@@ -195,7 +218,7 @@ actor OverpassTrailLegRouter: TrailLegRouting {
             return own.snap.isRetryable ? own : settling(own, for: ends)
         }
         guard let other = await fallback.route(ends) else { return nil }
-        let answer = Self.followsAWay(other) ? Self.atHikingPace(other) : own
+        let answer = Self.combining(own, with: other)
         guard !own.snap.isRetryable, !other.snap.isRetryable else { return answer }
         return settling(answer, for: ends)
     }
@@ -206,14 +229,18 @@ actor OverpassTrailLegRouter: TrailLegRouting {
         guard ends.straightDistanceMeters <= Self.maximumLegMeters else {
             return .straight(along: ends, .unmapped(.tooFarApart))
         }
-        let corridor = Self.corridor(along: ends)
         do {
-            let graph = try await graph(covering: corridor)
+            let assembled = try await graph(covering: Self.corridor(along: ends))
             try Task.checkCancellation()
-            guard let graph, !graph.isEmpty else {
-                return .straight(along: ends, .unmapped(.noPathBetween))
+            let route = if let graph = assembled.graph, !graph.isEmpty {
+                resolve(ends, over: graph)
+            } else {
+                TrailLegRoute.straight(along: ends, .unmapped(.noPathBetween))
             }
-            return resolve(ends, over: graph, covering: corridor)
+            // What the regions that arrived could not join, the one that did
+            // not may: its failure is the answer, so *Retry* can ask again.
+            if route.snap != .snapped, let failure = assembled.failure { throw failure }
+            return route
         } catch {
             // A cancelled leg is not a degraded one. The draft changed under
             // the question — a point went down, or the maker closed — and
@@ -240,21 +267,19 @@ actor OverpassTrailLegRouter: TrailLegRouting {
     }
 
     /// The graph covering one leg's corridor, downloading whatever it crosses
-    /// that is not cached yet.
+    /// that is not cached yet, and the first region it could not fetch.
     ///
-    /// ``TrailGraphProviding/graph(covering:)`` skips a region it could not
-    /// fetch rather than abandoning the rest, and throws only when nothing at
-    /// all could be assembled. For a leg inside one tile — which is nearly all
-    /// of them — that is exactly the reporting this wants. For a leg spanning
-    /// two, a half-answered corridor can come back as
-    /// ``TrailLegGap/noPathBetween`` rather than as a refusal, which
-    /// understates one uncommon case and never overstates any: it says *there
-    /// is no path here*, and the retry that would fix it is another tap on the
-    /// map rather than the *Retry* button.
+    /// The provider skips a region it could not fetch rather than abandoning
+    /// the rest, so a leg spanning two can be handed half a graph. Half a
+    /// graph that joins the ends is a path, and is drawn. Half a graph that
+    /// does not is no answer about the half that is missing, and
+    /// ``graphRoute(_:)`` reports the region's failure instead of
+    /// ``TrailLegGap/noPathBetween`` — which a drawing would keep, with no
+    /// *Retry* to ask again once the region could be fetched.
     private func graph(
         covering corridor: [CLLocationCoordinate2D]
-    ) async throws -> TrailGraph? {
-        try await provider.graph(covering: corridor)
+    ) async throws -> AssembledTrailGraph {
+        try await provider.assembledGraph(covering: corridor)
     }
 
     /// The points a leg's graph has to cover: its two ends, and enough of the
@@ -273,19 +298,18 @@ actor OverpassTrailLegRouter: TrailLegRouting {
             + [ends.endCoordinate]
     }
 
-    /// Routes `ends` over `graph`, reusing the built index when the corridor
-    /// resolves to the same regions as the last one.
-    private func resolve(
-        _ ends: TrailLegEnds,
-        over graph: TrailGraph,
-        covering corridor: [CLLocationCoordinate2D]
-    ) -> TrailLegRoute {
-        let regions = Set(corridor.compactMap(provider.region(containing:)))
-        var built = index?.regions == regions
-            ? (index?.value ?? TrailMatcherGraphIndex(graph: graph, network: .walking))
-            : TrailMatcherGraphIndex(graph: graph, network: .walking)
+    /// Routes `ends` over `graph`, reusing the built index when it was built
+    /// over this same graph — see ``BuiltIndex``.
+    private func resolve(_ ends: TrailLegEnds, over graph: TrailGraph) -> TrailLegRoute {
+        var built: TrailMatcherGraphIndex
+        if let index, index.graph == graph {
+            built = index.value
+        } else {
+            built = TrailMatcherGraphIndex(graph: graph, network: .walking)
+            indexBuildCount += 1
+        }
         let route = Self.route(ends, using: &built)
-        index = BuiltIndex(regions: regions, value: built)
+        index = BuiltIndex(graph: graph, value: built)
         return route
     }
 }
@@ -313,6 +337,19 @@ nonisolated private extension OverpassTrailLegRouter {
     /// including one that stops short of a stop, which says so beside it.
     static func followsAWay(_ route: TrailLegRoute) -> Bool {
         route.snap == .snapped || route.snap == .unmapped(.endpointOffNetwork)
+    }
+
+    /// What a leg the graph could not route is drawn as, once Apple has been
+    /// asked about it too.
+    ///
+    /// Apple's way when it found one. Otherwise whichever of the two answers
+    /// could still change, so a leg nobody could fully check keeps its
+    /// *Retry*: the graph's refusal, or Apple's failure beside the graph's
+    /// settled gap. Only when both are settled is the graph's gap the answer —
+    /// the one ``TrailLegMemo`` keeps for the rest of the drawing.
+    static func combining(_ own: TrailLegRoute, with other: TrailLegRoute) -> TrailLegRoute {
+        if followsAWay(other) { return atHikingPace(other) }
+        return own.snap.isRetryable || !other.snap.isRetryable ? own : other
     }
 
     /// `route` without Apple's travel times, so ``TrailDraft`` times it at

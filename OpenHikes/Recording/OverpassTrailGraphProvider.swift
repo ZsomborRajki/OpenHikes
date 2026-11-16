@@ -69,10 +69,27 @@ nonisolated extension TrailGraphProviding {
     /// region that fails is skipped rather than abandoning the rest: a partial
     /// graph still describes most of the route, and the caller reports the
     /// uncovered distance instead of a wrong total. The first failure is only
-    /// rethrown when nothing at all could be assembled.
+    /// rethrown when nothing at all could be assembled. A caller that must
+    /// tell a region it could not fetch from ground with nothing mapped on it
+    /// asks ``assembledGraph(covering:)`` instead.
     func graph(
         covering coordinates: [CLLocationCoordinate2D]
     ) async throws -> TrailGraph? {
+        let assembled = try await assembledGraph(covering: coordinates)
+        if assembled.graph == nil, let failure = assembled.failure { throw failure }
+        return assembled.graph
+    }
+
+    /// What ``graph(covering:)`` assembles, with the first region that could
+    /// not be fetched kept beside it rather than dropped.
+    ///
+    /// For the trail maker, which answers a leg the graph cannot join with
+    /// *no mapped path here* and keeps that answer: drawn from a graph with a
+    /// region missing, it would be an answer about ground nobody looked at.
+    /// See ``OverpassTrailLegRouter``.
+    func assembledGraph(
+        covering coordinates: [CLLocationCoordinate2D]
+    ) async throws -> AssembledTrailGraph {
         var firstFailure: (any Error)?
         let requested = firstCoordinatePerRegion(
             in: coordinates,
@@ -87,8 +104,7 @@ nonisolated extension TrailGraphProviding {
         }
 
         let graph = try await cachedGraph(covering: coordinates)
-        if graph == nil, let firstFailure { throw firstFailure }
-        return graph
+        return AssembledTrailGraph(graph: graph, failure: firstFailure)
     }
 
     /// The first coordinate in each distinct region `coordinates` fall in, in
@@ -113,6 +129,19 @@ nonisolated extension TrailGraphProviding {
                 .map(\.coordinate)
         )
     }
+}
+
+/// A route's graph as ``TrailGraphProviding/assembledGraph(covering:)``
+/// assembled it, and whether a region it crosses could not be fetched.
+nonisolated struct AssembledTrailGraph: Sendable {
+    /// Every region that could be read, merged, or `nil` when none could.
+    let graph: TrailGraph?
+    /// The first region fetch that failed, or `nil` when every region the
+    /// route crosses was fetched or already cached.
+    ///
+    /// Beside a graph, it means the graph may lack that region, or hold only
+    /// an expired copy of it: what it shows of that ground was not checked.
+    let failure: (any Error)?
 }
 
 nonisolated enum TrailGraphProviderError: LocalizedError, Equatable, Sendable {

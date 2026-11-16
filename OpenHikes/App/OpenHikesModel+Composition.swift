@@ -165,32 +165,6 @@ extension OpenHikesModel {
         )
     }
 
-    /// The trail maker, pointed at the unmirrored store a half-drawn trail
-    /// belongs in — see ``TrailDraftRecord`` for why that is the one it
-    /// belongs in and what the choice costs (nothing: no `CD_` type, no
-    /// Console index, no mirrored-schema entry).
-    ///
-    /// The container's main context, like ``TrailWalkSession``'s: both are
-    /// main-actor SwiftData work driven by a hiker's own gestures rather than
-    /// by a feed, so neither wants a background context of its own.
-    ///
-    /// Unguarded by ``AppLaunchEnvironment/isRunningTests``, unlike
-    /// ``makeWatchLink(container:recorder:defaults:)``. A hosted suite gets
-    /// whatever container the host built, which for a test launch is
-    /// in-memory, so there is nothing here that could reach the developer's
-    /// own disk — and UI
-    /// automation needs the maker to work for the same reason it needs the
-    /// recorder to.
-    ///
-    /// The hiking router is the recorder's own trail-graph provider wrapped in
-    /// ``OverpassTrailLegRouter``, so a drawn leg reads the z12 tiles a
-    /// recording has already downloaded and a recording reads the ones a
-    /// drawing downloaded. `nil` when there is no provider — a launch under
-    /// UI automation with no `--ui-test-trail-graph=` fixture — and the maker
-    /// then draws straight lines and does not offer a switch it could not
-    /// honour in Hiking mode. Other modes use Apple Maps directions, and
-    /// Hiking asks the Walking router — the same instance, so the same cache
-    /// — for a leg the graph cannot join.
     /// The open hike's place pins, and *Places Around Trail*'s half of the
     /// map, which asks through the maker's source and switches — one gate on
     /// Overpass and one set of kinds for every place search.
@@ -220,6 +194,35 @@ extension OpenHikesModel {
         return store
     }
 
+    /// The trail maker, pointed at the unmirrored store a half-drawn trail
+    /// belongs in — see ``TrailDraftRecord`` for why that is the one it
+    /// belongs in and what the choice costs (nothing: no `CD_` type, no
+    /// Console index, no mirrored-schema entry).
+    ///
+    /// The container's main context, like ``TrailWalkSession``'s: both are
+    /// main-actor SwiftData work driven by a hiker's own gestures rather than
+    /// by a feed, so neither wants a background context of its own.
+    ///
+    /// Unguarded by ``AppLaunchEnvironment/isRunningTests``, unlike
+    /// ``makeWatchLink(container:recorder:defaults:)``. A hosted suite gets
+    /// whatever container the host built, which for a test launch is
+    /// in-memory, so there is nothing here that could reach the developer's
+    /// own disk — and UI automation needs the maker to work for the same
+    /// reason it needs the recorder to.
+    ///
+    /// The hiking router is `graph` wrapped in ``OverpassTrailLegRouter``,
+    /// and `graph` is the launch's routing provider rather than the
+    /// recorder's: a drawn leg routes over the roads that join trails, which
+    /// the recorder's trails-only graph leaves out, so the two keep their
+    /// regions apart. What they share is Overpass's retry deadline, so a
+    /// `429` either one earns stops both — see ``makeTrailGraphProviders()``.
+    /// A launch under UI automation has one fixture provider, and the maker
+    /// reads the recorder's. `nil` when there is no provider — a launch under
+    /// UI automation with no `--ui-test-trail-graph=` fixture — and the maker
+    /// then draws straight lines and does not offer a switch it could not
+    /// honour in Hiking mode. Other modes use Apple Maps directions, and
+    /// Hiking asks the Walking router — the same instance, so the same cache
+    /// — for a leg the graph cannot join.
     static func makeTrailMaker(
         container: ModelContainer,
         graph trailGraphProvider: (any TrailGraphProviding)?,
