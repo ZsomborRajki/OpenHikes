@@ -118,6 +118,23 @@ struct WatchGeodesyParityTests {
                 end: CLLocationCoordinate2D(latitude: -17.7100, longitude: -179.9500),
                 fix: CLLocationCoordinate2D(latitude: -17.7040, longitude: 179.9900)
             ),
+            // A fix on the far side of the world from its segment, which
+            // straddles the meridian opposite the fix: the branch where both
+            // implementations take the segment back the short way (#1439).
+            // Nothing on the segment is nearer than its start here, so the
+            // `fraction` is 0; the offset and the direction are the point.
+            Pair(
+                name: "a leg across the antimeridian, seen from Greenwich",
+                start: CLLocationCoordinate2D(latitude: -17.7000, longitude: 179.9500),
+                end: CLLocationCoordinate2D(latitude: -17.7100, longitude: -179.9500),
+                fix: CLLocationCoordinate2D(latitude: -17.7040, longitude: 0.0100)
+            ),
+            Pair(
+                name: "a leg at Greenwich, seen from beyond the antimeridian",
+                start: CLLocationCoordinate2D(latitude: 51.4700, longitude: -0.0100),
+                end: CLLocationCoordinate2D(latitude: 51.4800, longitude: 0.0200),
+                fix: CLLocationCoordinate2D(latitude: 51.4750, longitude: -179.9950)
+            ),
             Pair(
                 name: "a far-northern leg, where the cosine term bites",
                 start: CLLocationCoordinate2D(latitude: 78.2200, longitude: 15.6300),

@@ -171,6 +171,17 @@ struct WatchRouteTrackerTests {
         #expect(abs(onTheLine.trailCoordinate.longitude).isApproximatelyEqual(to: 180, absoluteTolerance: 0.001))
     }
 
+    /// The segment's false copy: wrapped end by end around a fix at
+    /// Greenwich, it ran the long way round the world, through the fix (#1439).
+    @Test("A segment across the antimeridian is not under a fix half a world away")
+    func antimeridianSegmentIsFarFromGreenwich() throws {
+        var tracker = WatchRouteTracker(Fixture.antimeridianPackage)
+        let match = tracker.advance(latitude: Fixture.latitude, longitude: 0)
+        let farAway = try #require(match)
+        #expect(!farAway.isOnTrail)
+        #expect(farAway.offRouteMeters > WatchRouteTracker.matchThresholdMeters)
+    }
+
     @Test("A package with one point has no line, and says so rather than guessing")
     func onePointIsNotALine() {
         var tracker = WatchRouteTracker(
