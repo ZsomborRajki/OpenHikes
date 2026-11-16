@@ -1408,10 +1408,12 @@ in its source header. Do not weaken one without a measurement.
   neither with an index, and both hold the world's squares under a manifest
   that says so (*The trail squares*). Both also hold the same build of the
   hiking-routes layer's squares, from planet-261109, marked as the whole
-  world under `routes1_manifest` (*The hiking-routes layer*), and the same
+  world under `routes1_manifest` (*The hiking-routes layer*), the same
   build of the places' squares, from planet-261109, marked as the whole
-  world under `places1_manifest` (*The place squares*; checked 2026-11-15).
-  Both have a column for every attribute in
+  world under `places1_manifest` (*The place squares*; checked 2026-11-15),
+  and the same build of the trail graph's squares, from planet-261109,
+  marked as the whole world under `graph1_manifest` (*The trail graph
+  squares*; checked 2026-11-16). Both have a column for every attribute in
   `MirroredCloudKitSchema.recordTypes`. The only live columns the contract
   does not name are SwiftData's own `CD_entityName`, the
   to-one reference columns that the contract lists as relationships, and the
@@ -1848,8 +1850,9 @@ measurements.
   trails are a billion nodes: the tool spools them to disk a few gigabytes at
   a time, and the build needs some 60 GB of work files and about forty
   minutes. The squares are 5 GB in 124,279 records, ten times every other set
-  together; check the public database's allowance in the CloudKit Console
-  before an upload.
+  together, and an upload to one environment took three to four hours. The
+  CloudKit Console shows no allowance for the public database to weigh them
+  against.
 
 ## The watch app
 
