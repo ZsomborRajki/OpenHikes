@@ -45,6 +45,7 @@
 //
 
 import CoreLocation
+import DequeModule
 import Foundation
 import OpenHikesData
 import OpenHikesShared
@@ -291,9 +292,13 @@ nonisolated extension CuratedTrailDecoding {
     ///
     /// Endpoint matching across the entire set rather than in member order —
     /// see this file's header for the measurement that decided it. The
-    /// dictionary of unused ends is what keeps this linear: growing a run asks
-    /// "is there an unused way starting or ending exactly here?", which is a
-    /// lookup, where a tolerance-based matcher has to scan.
+    /// dictionary of unused ends finds each next way: growing a run asks "is
+    /// there an unused way starting or ending exactly here?", which is a
+    /// lookup among the ways that end at that one point, where a
+    /// tolerance-based matcher has to scan every way left. And the run takes a
+    /// way at either of its ends for the cost of the points the way adds — see
+    /// ``grow(from:ways:endsByKey:used:)``. So neither the order the ways come
+    /// in nor the length of the line built so far makes a way cost more.
     static func assemble(
         _ ways: [[CLLocationCoordinate2D]]
     ) -> [CLLocationCoordinate2D] {
@@ -342,13 +347,20 @@ nonisolated private extension CuratedTrailDecoding {
     /// started from is as likely to be in the middle of the route as at either
     /// end of it, and growing forwards only would cut every route at whichever
     /// way happened to come first.
+    ///
+    /// The run is a `Deque` for the same reason: member order is not walking
+    /// order, so the seed can be the last way along the walk and every other
+    /// way put before it. An array moved the whole line built so far for each
+    /// of those: 8 ms to assemble 499 ways of 201 points listed backward,
+    /// against 1.6 ms for the same ways listed forward. The deque takes 1.7 ms
+    /// either way, measured in a release build on a Mac.
     static func grow(
         from seed: [CLLocationCoordinate2D],
         ways: [[CLLocationCoordinate2D]],
         endsByKey: [Endpoint: [Int]],
         used: inout [Bool]
     ) -> [CLLocationCoordinate2D] {
-        var run = seed
+        var run = Deque(seed)
         var growing = true
         while growing {
             growing = false
@@ -377,12 +389,12 @@ nonisolated private extension CuratedTrailDecoding {
                     let oriented = Endpoint(previous.first ?? head) == Endpoint(head)
                         ? Array(previous.reversed())
                         : previous
-                    run.insert(contentsOf: oriented.dropLast(), at: 0)
+                    run.prepend(contentsOf: oriented.dropLast())
                     growing = true
                 }
             }
         }
-        return run
+        return Array(run)
     }
 
     /// Claims an unused way touching `endpoint`, or answers empty.
