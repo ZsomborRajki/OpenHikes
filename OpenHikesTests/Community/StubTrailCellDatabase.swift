@@ -64,6 +64,10 @@ nonisolated final class StubTrailCellDatabase: TrailCellFetching, Sendable {
     /// at which the request has failed and the task has not yet been told —
     /// which is the moment that would decide the case by a race.
     ///
+    /// So a case runs the search in a task of its own and awaits its value.
+    /// Awaited in the case's own task, the search cancels the case, which
+    /// Swift Testing then reports as skipped rather than passed.
+    ///
     /// - Parameter answering: Whether the request answers all the same, as
     ///   one that finished before it heard can, rather than failing.
     func cancelCallers(answering: Bool = false) {

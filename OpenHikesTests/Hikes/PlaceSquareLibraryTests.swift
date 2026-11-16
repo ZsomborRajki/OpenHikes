@@ -399,8 +399,12 @@ struct PlaceSquareLibraryTests {
         database.cancelCallers()
         let library = Self.makeLibrary(database)
 
+        // A task of its own, because it is the one the stub cancels: the
+        // case's own would end cancelled, and be reported as skipped.
+        let search = Task { try await library.places(in: [Self.valley], showing: Self.everything) }
+
         await #expect(throws: CancellationError.self) {
-            _ = try await library.places(in: [Self.valley], showing: Self.everything)
+            _ = try await search.value
         }
     }
 
