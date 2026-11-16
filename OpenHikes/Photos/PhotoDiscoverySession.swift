@@ -22,8 +22,16 @@
 //  hiker's choice — see ``PhotoDiscoveryController/searchUnlessAnswered(in:)``
 //  — and an import under way when the phone turned goes on too.
 //
+//  The flag is also how the Add button closes the sheet once everything has
+//  landed, rather than by the dismiss action of the presentation the button
+//  is drawn in. An import goes on through a turn, and the button that started
+//  it went with the sheet the turn took away: that sheet's dismiss closed
+//  nothing, and left the one the other host put up again saying no photos
+//  were found — see ``importChosen(into:store:)``.
+//
 
 import Observation
+import OpenHikesData
 
 @Observable
 final class PhotoDiscoverySession {
@@ -51,6 +59,26 @@ final class PhotoDiscoverySession {
     func start() {
         controller.reset()
         isPresented = true
+    }
+
+    /// The Add button: imports what the hiker chose, and closes the sheet
+    /// once something has landed and nothing is left to review.
+    ///
+    /// Leaving the sheet up on its empty state would read as an import that
+    /// found nothing rather than one that just succeeded. Anything that failed
+    /// stays in ``PhotoDiscoveryController/matches``, which keeps the sheet
+    /// open to be retried, and a line that moved during the import has a
+    /// search under way for the rest, so it is the phase that says nothing is
+    /// left, not an empty list.
+    ///
+    /// Closed through ``isPresented``, which whichever sheet is up is shown
+    /// by — the one a turn put up again in the other host included. An import
+    /// that was stopped hands back no count, so a sheet closed and opened
+    /// again since is left open: see
+    /// ``PhotoDiscoveryController/runImport(into:store:)``.
+    func importChosen(into hike: Hike, store: HikePhotoStore = .shared) async {
+        let added = await controller.runImport(into: hike, store: store)
+        if let added, added > 0, controller.phase == .empty { isPresented = false }
     }
 
     /// The sheet has gone. Closed rather than turned, it takes its import

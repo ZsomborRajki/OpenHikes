@@ -453,8 +453,8 @@ final class PhotoDiscoveryController {
         show(image)
     }
 
-    /// Runs an import as *the* import, so the sheet that started it can stop
-    /// it on the way out.
+    /// Runs an import as *the* import, so closing the sheet that started it
+    /// can stop it.
     ///
     /// Held here rather than in the button's own `Task` for the reason
     /// ``PhotoCaptureController/runLibraryImport(_:)`` holds the other one: a
@@ -474,9 +474,9 @@ final class PhotoDiscoveryController {
     ///   by ``cancelImport()`` or ``reset()``, or overtaken by a newer one.
     ///   A stopped import still finishes the copy it was part-way through,
     ///   and returns after it, by which time its sheet may have been opened
-    ///   again. The Add button closes its sheet on this count, and its
-    ///   dismiss action, read in the presentation that has gone, writes the
-    ///   binding the reopened one is shown by: a count would close that one.
+    ///   again. The Add button closes the sheet on this count, through the
+    ///   flag the reopened one is shown by: a count would close that one —
+    ///   see ``PhotoDiscoverySession/importChosen(into:store:)``.
     @discardableResult func runImport(
         into hike: Hike,
         store: HikePhotoStore = .shared

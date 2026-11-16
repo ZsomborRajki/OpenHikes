@@ -100,7 +100,7 @@ struct HikePhotoSection: View {
         // which a turn does too: the session tells a close from a turn —
         // see ``PhotoDiscoverySession/closed()``.
         .sheet(isPresented: $discovery.isPresented, onDismiss: discovery.closed) {
-            PhotoDiscoverySheet(hike: hike, controller: discovery.controller)
+            PhotoDiscoverySheet(hike: hike, session: discovery)
         }
     }
 
