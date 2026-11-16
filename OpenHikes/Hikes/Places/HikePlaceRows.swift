@@ -50,6 +50,7 @@
 import Foundation
 import Observation
 import OpenHikesData
+import OrderedCollections
 
 @Observable
 final class HikePlaceRows {
@@ -68,15 +69,14 @@ final class HikePlaceRows {
     /// How many hikes' anchors are kept. Each holds on to its route, which is
     /// the hike's own storage while the hike is unchanged and a copy once it
     /// is not, so this is bounded rather than one per hike ever opened.
-    private static let keptHikes = 8
+    static let keptHikes = 8
 
     /// Bumped when anchors measured off the main actor land. Read by every
     /// read, so the screens that drew without them draw again.
     private(set) var revision = 0
 
-    @ObservationIgnored private var measured: [UUID: Measured] = [:]
-    /// The owners in ``measured``, least recently read first.
-    @ObservationIgnored private var recent: [UUID] = []
+    /// Each owner's anchors, least recently read first.
+    @ObservationIgnored private var measured: OrderedDictionary<UUID, Measured> = [:]
     /// What is being measured off the main actor, per owner, so a read while
     /// it is out does not ask again.
     @ObservationIgnored private var inFlight: [UUID: Request] = [:]
@@ -180,19 +180,20 @@ final class HikePlaceRows {
         // this answer is about neither.
         guard var entry = measured[owner], entry.route == route else { return }
         entry.record(anchors, of: places)
+        // Stored where the owner sits: an answer is not a read, so it does
+        // not make the owner any more recent.
         measured[owner] = entry
         revision += 1
     }
 
     private func remember(_ entry: Measured, for owner: UUID) {
+        // Stored where the owner already sits and then moved to the end, so
+        // `removeFirst` drops the least recently read. An owner not kept
+        // before is appended by the subscript, and the move finds it last.
         measured[owner] = entry
-        guard recent.last != owner else { return }
-        recent.removeAll { $0 == owner }
-        recent.append(owner)
-        while recent.count > Self.keptHikes {
-            let evicted = recent.removeFirst()
-            measured[evicted] = nil
-            inFlight[evicted] = nil
+        measured.move(keys: CollectionOfOne(owner), to: measured.count)
+        while measured.count > Self.keptHikes {
+            inFlight[measured.removeFirst().key] = nil
         }
     }
 }
