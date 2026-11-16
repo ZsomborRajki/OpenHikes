@@ -973,12 +973,13 @@ a change to recording, the map, the sheet or the render path; the PR template,
   the `Info.plist` purpose strings, the Background Trail Tracking footer, and
   App Review's notes in App Store Connect. Always access is for the widget and
   the Live Activity; the `location` background mode is for the recorder. Their
-  German, French, Spanish, Italian, Russian and Polish must agree too: the
-  prompts in `OpenHikes/InfoPlist.xcstrings`, the footer in the app's catalog.
+  German, French, Spanish, Italian, Russian, Polish and Ukrainian must agree
+  too: the prompts in `OpenHikes/InfoPlist.xcstrings`, the footer in the app's
+  catalog.
 - **Strings live in String Catalogs, in English, German, French, Spanish,
-  Italian, Russian and Polish.** English is the development language. The
-  app, the widget, the watch, Siri and the permission prompts all follow the
-  device's language.
+  Italian, Russian, Polish and Ukrainian.** English is the development
+  language. The app, the widget, the watch, Siri and the permission prompts
+  all follow the device's language.
   - `xcodebuild` does not merge extracted strings the way the IDE does. After
     changing text, build, then run
     `Scripts/sync-string-catalogs.sh <derived-data>`. CI's `--check` exits 2
@@ -1003,14 +1004,14 @@ a change to recording, the map, the sheet or the render path; the PR template,
     comments, or on the support page when a hiker needs them. A switch is
     named for everything it controls. `StringCatalogTests` holds every English
     value under a length ceiling.
-  - **Every string gets its German, French, Spanish, Italian, Russian and
-    Polish in the same change.** Sync the new key into its catalog, then give
-    it a `de`, an `fr`, an `es`, an `it`, a `ru` and a `pl` localization with
-    `"state" : "translated"`.
+  - **Every string gets its German, French, Spanish, Italian, Russian, Polish
+    and Ukrainian in the same change.** Sync the new key into its catalog,
+    then give it a `de`, an `fr`, an `es`, an `it`, a `ru`, a `pl` and a `uk`
+    localization with `"state" : "translated"`.
     `StringCatalogTests+Translations.swift` fails on a key missing any of them,
     and on a translation that drops or retypes a placeholder (a singular may
-    leave the count out, as the English one does, except in French and
-    Russian). The shared
+    leave the count out, as the English one does, except in French, Russian
+    and Ukrainian). The shared
     App Intent and `RoleButton` wording sits in all four catalogs, so it is
     translated in all four. A new language joins
     `StringCatalogTests.translations`, `knownRegions` in the project,
@@ -1144,6 +1145,46 @@ a change to recording, the map, the sheet or the render path; the PR template,
     *Autor: %@*, *czas: %@*. A duration spoken in words follows no verb
     either, because the verb would have to agree with it: *Do końca: %@*,
     never *Pozostało %@*.
+  - **The Ukrainian says *ви*, in lower case, and keeps one word for each
+    thing:** *похід* (hike), *стежка* (trail), *маршрут* (route), *місце*
+    (place), *запис* (recording), *зупинка* (a stop on a drawn trail), *тайл*
+    (map tile), *фототека* (the photo library), *точка треку* (a track
+    point), *проходження* (a walk along a trail), *маркування* (a waymark),
+    *турист* (a hiker) and *фото* (a photo), which never declines. Record is
+    *записати*, save is *зберегти*, download is *викачати*, as Apple's is,
+    and report is *поскаржитися*. Apple's own names are Apple's Ukrainian
+    ones (*Параметри*, *Здоровʼя*, *Фотографії*, *Карти Apple*, *Дія
+    наживо*, and *геопозиція* for location), declined in a sentence as
+    Apple's are (*у Параметрах*, *до Фотографій*), and an app is a *програма*,
+    as Apple's Ukrainian has it. Buttons and titles are in sentence case, a
+    button is an infinitive (*Зберегти похід*) and an instruction the *ви*
+    imperative (*Увімкніть*), a dialog's question is an infinitive (*Видалити
+    цей похід?*), *Couldn’t* is *Не вдалося* and *Can’t* is *Не можна*. With
+    *ви* the past tense is plural, so it never genders the hiker, and other
+    people are named without a gender where Ukrainian allows it (*інша
+    людина*, *автор*). OpenHikes takes no gender: its sentence is in the
+    present or impersonal, or says *програма OpenHikes*. The apostrophe is ʼ
+    (U+02BC), as Apple's Ukrainian writes it (*памʼять*, *Здоровʼя*), never
+    ’ or '; no letter Ukrainian lacks (ы, э, ъ, ё) appears. Quotes are «…»,
+    and „…“ inside them, a dash is a spaced — with a no-break space before
+    it, nothing goes before : ; ? ! or %, and an ellipsis follows the word
+    with no space. У/в, і/й and з/із/зі alternate as Ukrainian euphony asks
+    (*в OpenHikes*, *у Фотографіях*). The Siri phrases take the *ти*
+    imperative people speak to Siri in (*Почни похід в OpenHikes*), and a
+    phrase in the first person past is listed once for each gender
+    (*пройшов*, *пройшла*).
+  - **A Ukrainian count has three forms, as a Russian one does.** Ukrainian
+    uses `one` for 21 and 101 as well as 1, `few` for 2 to 4 and `many` for
+    5 and up, so every Ukrainian plural carries `one`, `few`, `many` and
+    `other` (`pluralHasEveryForm`), and its singular keeps its number
+    (`singularKeepsTheCount`) and takes no *його* or *її*, which 21 places
+    would make wrong. Only a fraction reaches `other`, which takes the
+    genitive singular (*1,5 походу*). Wherever the Russian or the Polish
+    is a plural, the Ukrainian is one. What the Russian paragraphs say of two
+    counts, of a figure that arrives formatted and of what fills a
+    placeholder holds for Ukrainian as it stands: *Збережено тайлів: 3 з 12*,
+    *Автор: %@*, *час у дорозі: %@*. A date ends in *р.*, so it never stands
+    before a sentence's full stop.
   - **A French singular keeps its number.** French uses the `one` form for 0
     as well as 1, so a singular that spells the count out as a word would say
     *une* photo for none (`singularKeepsTheCount`). Each French plural
@@ -1169,31 +1210,34 @@ a change to recording, the map, the sheet or the render path; the PR template,
     `OpenHikes/AppShortcuts.xcstrings`, one entry per shortcut keyed by its
     first phrase. The IDE extracts into both and `xcodebuild` into neither, so
     an edited purpose string or phrase means editing its catalog's English,
-    German, French, Spanish, Italian, Russian and Polish by hand. The
-    translation tests hold each to its `Info.plist` and to
+    German, French, Spanish, Italian, Russian, Polish and Ukrainian by hand.
+    The translation tests hold each to its `Info.plist` and to
     `OpenHikesShortcuts.swift`. The IDE also extracts the bundle's name and
     the GPX type's into `InfoPlist.xcstrings`: a name gets its translations,
     or `"shouldTranslate" : false` when it stays as it is, as *OpenHikes*
     does.
   - **The privacy policy and the terms are published in German, French,
-    Spanish, Italian, Russian and Polish too.** `docs/de/privacy/`,
-    `docs/de/terms/`, `docs/fr/privacy/`, `docs/fr/terms/`,
-    `docs/es/privacy/`, `docs/es/terms/`, `docs/it/privacy/`,
-    `docs/it/terms/`, `docs/ru/privacy/`, `docs/ru/terms/`,
-    `docs/pl/privacy/` and `docs/pl/terms/` translate the English pages, and
+    Spanish, Italian, Russian, Polish and Ukrainian too.**
+    `docs/de/privacy/`, `docs/de/terms/`, `docs/fr/privacy/`,
+    `docs/fr/terms/`, `docs/es/privacy/`, `docs/es/terms/`,
+    `docs/it/privacy/`, `docs/it/terms/`, `docs/ru/privacy/`,
+    `docs/ru/terms/`, `docs/pl/privacy/`, `docs/pl/terms/`,
+    `docs/uk/privacy/` and `docs/uk/terms/` translate the English pages, and
     the app opens the copy in its own language
     (`MapPurchaseLinks.PageLanguage` argues why). An edit to an English page
-    edits its German, French, Spanish, Italian, Russian and Polish copies in
-    the same change, and all seven move their `<time datetime>` together, which
-    `Scripts/check-legal-pages.sh` holds them to, on every pull request. It
-    reads the pages from the quoted URLs in `MapPurchaseLinks.swift`.
-    `MapPurchaseLinksTests` fails on an app language that has no pages of
-    its own. Each page's language menu links the other six.
+    edits its German, French, Spanish, Italian, Russian, Polish and Ukrainian
+    copies in the same change, and all eight move their `<time datetime>`
+    together, which `Scripts/check-legal-pages.sh` holds them to, on every
+    pull request. It reads the pages from the quoted URLs in
+    `MapPurchaseLinks.swift`. `MapPurchaseLinksTests` fails on an app
+    language that has no pages of its own. Each page's language menu links
+    the other seven.
   - **So is the support page.** `docs/de/support/`, `docs/fr/support/`,
-    `docs/es/support/`, `docs/it/support/`, `docs/ru/support/` and
-    `docs/pl/support/` translate `docs/support/`, for the App Store listing
-    in each language to link. The app links none of them, so no script holds
-    them together: an edit to one edits the others in the same change.
+    `docs/es/support/`, `docs/it/support/`, `docs/ru/support/`,
+    `docs/pl/support/` and `docs/uk/support/` translate `docs/support/`, for
+    the App Store listing in each language to link. The app links none of
+    them, so no script holds them together: an edit to one edits the others
+    in the same change.
   - The hosted tests and the UI suites assert English copy, so they assume a
     simulator whose language is English, as CI's is.
 - **OpenHikes Pro is one monthly subscription.**
@@ -1538,8 +1582,9 @@ is world-readable, because browsing needs no account.
 - **What is sent is stated, and the statements move together.**
   `CommunityShareDisclosureTests` holds the share footer to the payload. The
   privacy manifest, `docs/privacy/` and `docs/terms/`, with their German,
-  French, Spanish, Italian, Russian and Polish copies under `docs/de/`,
-  `docs/fr/`, `docs/es/`, `docs/it/`, `docs/ru/` and `docs/pl/`, change
+  French, Spanish, Italian, Russian, Polish and Ukrainian copies under
+  `docs/de/`, `docs/fr/`, `docs/es/`, `docs/it/`, `docs/ru/`, `docs/pl/` and
+  `docs/uk/`, change
   whenever what is sent changes,
   what a reviewer may do changes, the removal, *Check Whether It's Still
   Live*, reset or *Finish Sending* flows change, what the Commons requests ask
