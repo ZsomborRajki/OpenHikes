@@ -36,7 +36,8 @@ extension HikeRecorder {
                 // has a stale accumulator, and resuming from one should not
                 // start out believing the hiker is still standing where they
                 // stopped an hour ago.
-                isStationary: isCapturingFixes && accumulator.isStationary
+                isStationary: isCapturingFixes && accumulator.isStationary,
+                isAutoPaused: autoPause.isPaused
             )
         )
         energyProfile = profile
@@ -49,7 +50,9 @@ extension HikeRecorder {
     /// CoreLocation when nothing moved, which is the overwhelming majority of
     /// calls.
     func updateEnergyProfile() {
-        guard isCapturingFixes else { return }
+        // An auto-pause keeps its feed, so Low Power Mode arriving during one
+        // is still heard.
+        guard isCapturingFixes || autoPause.isPaused else { return }
         source.apply(resolvedEnergyProfile())
     }
 

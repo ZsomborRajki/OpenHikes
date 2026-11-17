@@ -61,6 +61,7 @@ struct RecordingCard: View {
             RecordingRecoveryNotice(recorder: recorder)
             RecordingConditionsNotice(recorder: recorder)
             RecordingStatsSection(recorder: recorder)
+            RecordingSegmentSection(stats: recorder.stats)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .confirmationDialog(

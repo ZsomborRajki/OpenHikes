@@ -74,6 +74,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.movementRemindersEnabled) private var movementRemindersEnabled =
         SettingsDefault.movementRemindersEnabled
     @AppStorage(SettingsKey.keepScreenAwake) private var keepScreenAwake = SettingsDefault.keepScreenAwake
+    @AppStorage(SettingsKey.autoPauseEnabled) private var autoPauseEnabled = SettingsDefault.autoPauseEnabled
     @AppStorage(SettingsKey.savesHikesToHealth) private var savesHikesToHealth = SettingsDefault.savesHikesToHealth
 
     /// Tile bytes on disk, split into offline coverage and browsing residue;
@@ -106,6 +107,7 @@ struct SettingsView: View {
                     locationManager: locationManager
                 )
                 liveActivitySection
+                autoPauseSection
                 movementReminderSection
                 displaySection
                 offlineStorageSection
@@ -405,6 +407,31 @@ private extension SettingsView {
             Notifies you when you set off while a hike is paused, stop for 15 minutes while \
             recording, leave the trail you’re following, or may finish after dark.
             """)
+        }
+        #endif
+    }
+}
+
+// MARK: - Auto-Pause
+
+/// The switch over a recording pausing itself at a stop.
+private extension SettingsView {
+    /// On by default — see ``SettingsDefault/autoPauseEnabled``. Named as
+    /// Apple names its own, in Settings › Workout. The five minutes is
+    /// ``AutoPausePolicy/minimumStopSeconds``.
+    ///
+    /// The heading is a key of its own for the "Recording" that the recording
+    /// screen's title also reads in English: there it is a state, *Grabando*
+    /// in Spanish, and here it is the thing, *Grabación*.
+    @ViewBuilder var autoPauseSection: some View {
+        #if os(iOS)
+        Section {
+            Toggle("Auto-Pause", isOn: $autoPauseEnabled)
+                .accessibilityIdentifier("auto-pause-toggle")
+        } header: {
+            Text(String(localized: "settings.recording", defaultValue: "Recording"))
+        } footer: {
+            Text("Pauses a recording when you stop somewhere for five minutes, and resumes it when you walk on.")
         }
         #endif
     }

@@ -173,6 +173,8 @@ struct HikeDetailView: View {
     /// actor so navigation does not pay the route-sized work, and sorted into
     /// the strip's and the list's as they land.
     @State private var stats = StatHalves([])
+    /// The segments the line's pauses cut it into, built with ``stats``.
+    @State private var segments: [RouteSegment] = []
     /// The line ``profile`` and ``stats`` were built from, so a restart
     /// of the preparation task can tell a new line from the same one again,
     /// and so the follow loop can hand the line on with each fix.
@@ -338,6 +340,7 @@ struct HikeDetailView: View {
                     surfaceSection
                     difficultySection
                     if hasMetadata { aboutSection }
+                    HikeSegmentList(segments: segments)
                     statList
                     mapSection
                     closingActions(scroller)
@@ -797,6 +800,7 @@ private extension HikeDetailView {
         profile = built
         preparedLine = along
         stats = StatHalves(prepared.stats)
+        segments = prepared.segments
         // Place the tracker at the start of the track, on both graph and map.
         tracker.trackerDistance = 0
         tracker.clearLiveMatch()

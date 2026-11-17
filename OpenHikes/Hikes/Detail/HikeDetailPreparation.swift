@@ -12,6 +12,9 @@ import OpenHikesData
 nonisolated struct HikeDetailPreparedContent: Sendable {
     let profile: RouteProfile
     let stats: [Stat]
+    /// The segments the line's pauses cut it into, or none for a hike in one
+    /// piece — see ``RouteSegments``.
+    let segments: [RouteSegment]
     /// The line both were built from, handed on with them, so that nothing
     /// that follows the hiker along it reads the line from the hike again —
     /// see ``ShownLine``.
@@ -56,8 +59,10 @@ nonisolated enum HikeDetailPreparation {
         // The single route-sized walk behind every number and the elevation
         // chart.
         var statistics = HikeRouteStatistics.Builder(distanceMeters: line.distanceMeters)
+        var segments = RouteSegments.Builder()
         let profile = try RouteProfile.cancellable(route: line.route) { point, segmentMeters in
             statistics.consume(point, segmentMeters: segmentMeters)
+            segments.consume(point, segmentMeters: segmentMeters)
         }
         let walkRevision = TrailWalkRecord.routeRevision(of: line.route)
         guard !Task.isCancelled else { throw CancellationError() }
@@ -67,6 +72,7 @@ nonisolated enum HikeDetailPreparation {
                 distanceMeters: line.distanceMeters,
                 statistics: statistics.finish()
             ),
+            segments: segments.finish(distanceMeters: line.distanceMeters),
             line: line,
             walkRevision: walkRevision
         )

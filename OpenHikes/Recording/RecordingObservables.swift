@@ -51,6 +51,11 @@ final class RecordingStats {
     /// Metres climbed so far, `nil` until the recording has two trusted
     /// altitudes to subtract. Published to the widget alongside distance.
     var elevationGainMeters: Double?
+    /// The segments the walk's pauses have cut it into, the one in progress
+    /// last, and none until a pause has — see ``RecordingSegmentLedger``.
+    /// Changes with every fix once there are any, so it is read only by
+    /// ``RecordingSegmentSection``.
+    var segments: [RouteSegment] = []
 
     /// Takes every figure the accumulator owns in one call.
     ///
@@ -66,6 +71,7 @@ final class RecordingStats {
         movingSeconds = accumulator.movingSeconds
         isStationary = accumulator.isStationary
         elevationGainMeters = accumulator.elevationGainMeters
+        segments = accumulator.segments.shown
     }
 
     /// Forgets the live trail, leaving ``dominantTrailName`` alone.
@@ -88,6 +94,7 @@ final class RecordingStats {
         movingSeconds = 0
         isStationary = false
         elevationGainMeters = nil
+        segments = []
     }
 }
 

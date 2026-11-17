@@ -292,6 +292,26 @@ struct AppLaunchEnvironmentTests {
         #expect(!quiet.showsTips)
     }
 
+    /// A scenario cannot stand still for five minutes, so it asks for a stop
+    /// it can wait out. Nothing else can: a launch that is not UI testing
+    /// keeps the shipping rule whatever its arguments say.
+    @Test("a shorter Auto-Pause stop is for automation, and bounded")
+    func autoPauseStopSeconds() {
+        func seconds(_ argument: String?, isUITesting: Bool = true) -> Int? {
+            AppLaunchEnvironment.autoPauseStopSeconds(
+                askedFor: ["OpenHikes", argument].compactMap(\.self),
+                isUITesting: isUITesting
+            )
+        }
+
+        #expect(seconds("--ui-test-auto-pause-seconds=4") == 4)
+        #expect(seconds(nil) == nil)
+        #expect(seconds("--ui-test-auto-pause-seconds=4", isUITesting: false) == nil)
+        #expect(seconds("--ui-test-auto-pause-seconds=0") == nil)
+        #expect(seconds("--ui-test-auto-pause-seconds=soon") == nil)
+        #expect(seconds("--ui-test-auto-pause-seconds=9000") == 60)
+    }
+
     /// A hue is a place on the wheel, so anything that is not one is refused
     /// outright rather than wrapped: a typo asking for 68 would otherwise
     /// come out as some colour nobody chose.

@@ -198,6 +198,13 @@
 # describe. What the sections read is `CommunityHikeReviewSession`'s, which
 # stays measured, with `CommunityReviewIsolationTests`.
 #
+# `HikeSegmentList` arrived on 2026-11-17 with a hike's segments (#1470): the
+# card of rows a saved hike and the recording screen both draw, entirely body
+# code. What it draws is measured where it is decided: a saved route's
+# segments are `RouteSegments`' in `OpenHikesData`, a recording's are
+# `RecordingSegmentLedger`'s (`RecordingSegmentLedgerTests`), and each row's
+# words are `HikeSegmentFigures`' (`HikeSegmentFiguresTests`).
+#
 # The UI suites still exist and still run locally:
 #
 #   Scripts/run-ui-tests.sh --all
@@ -236,6 +243,7 @@ OpenHikes/Hikes/Detail/HikeActionRow.swift
 OpenHikes/Hikes/Detail/HikeDetailComponents.swift
 OpenHikes/Hikes/Detail/HikeDetailView+Community.swift
 OpenHikes/Hikes/Detail/HikeDetailView.swift
+OpenHikes/Hikes/Detail/HikeSegmentList.swift
 OpenHikes/Hikes/Trail/HikeDifficultySection.swift
 OpenHikes/Hikes/Places/HikePlaceSection.swift
 OpenHikes/Hikes/Library/HikeRow.swift

@@ -657,4 +657,43 @@ nonisolated extension AppLaunchEnvironment {
     /// For the map rather than the list: the bare hikes above all walk one
     /// route, which the map draws as one line however many of them there are.
     static let seedsNearbyTrails = configuration.seedsNearbyTrails
+
+}
+
+// MARK: - A shorter Auto-Pause stop
+
+/// Parsed here rather than in ``AppLaunchEnvironment/Configuration``, for the
+/// room the extension above was made for.
+nonisolated extension AppLaunchEnvironment {
+    private static let autoPauseSecondsPrefix = "--ui-test-auto-pause-seconds="
+    /// A stop a scenario can wait out, and never minutes by a typo.
+    private static let maximumAutoPauseStopSeconds = 60
+
+    /// How many seconds at one place make a stop for this launch's Auto-Pause,
+    /// in place of the five minutes that ship, or `nil` for those.
+    ///
+    /// A scenario cannot stand still for five minutes, and a simulated
+    /// location is stamped as it is delivered, so the stop cannot be scripted
+    /// into the past either. Only how long a stop takes is shortened: where
+    /// it is, what ends it and what the recorder does about it are the
+    /// shipping rule's — see ``AutoPausePolicy``.
+    static let autoPauseStopSeconds = autoPauseStopSeconds(
+        askedFor: ProcessInfo.processInfo.arguments,
+        isUITesting: isUITesting
+    )
+
+    /// The seconds `--ui-test-auto-pause-seconds=` asks for, bounded, and
+    /// only alongside `--ui-testing` in a `DEBUG` build, as every such
+    /// argument is.
+    static func autoPauseStopSeconds(askedFor arguments: [String], isUITesting: Bool) -> Int? {
+        #if DEBUG
+        guard isUITesting,
+              let argument = arguments.first(where: { $0.hasPrefix(autoPauseSecondsPrefix) }),
+              let seconds = Int(argument.dropFirst(autoPauseSecondsPrefix.count)),
+              seconds > 0 else { return nil }
+        return min(seconds, maximumAutoPauseStopSeconds)
+        #else
+        return nil
+        #endif
+    }
 }

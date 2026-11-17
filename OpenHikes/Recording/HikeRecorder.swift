@@ -150,6 +150,13 @@ final class HikeRecorder: NSObject {
     @ObservationIgnored var accumulator = RecordingDistanceAccumulator()
     @ObservationIgnored var elevationFilter = RecordingElevationFilter()
     @ObservationIgnored var latestMotionState: RecordingMotionState = .unknown
+    /// Where this recording has stopped, and whether the pause in force is
+    /// the app's own — see `HikeRecorder+AutoPause.swift`.
+    @ObservationIgnored var autoPause: RecordingAutoPause
+    /// Where every delivered fix and change of motion is written down, in a
+    /// `DEBUG` build that keeps the evidence Auto-Pause's thresholds are to
+    /// be settled by — see ``AutoPauseEvidence``. `nil` everywhere else.
+    @ObservationIgnored let autoPauseEvidence: (@Sendable (AutoPauseEvidence.Record) -> Void)?
     @ObservationIgnored var trailGraphPrefetchStates:
         [TrailGraphRegion: TrailGraphPrefetchState] = [:]
     @ObservationIgnored var trailGraphPrefetchTasks:
@@ -349,6 +356,8 @@ final class HikeRecorder: NSObject {
             ProcessInfo.processInfo.systemUptime
         },
         journalFlushDelay: Duration = .seconds(5),
+        autoPausePolicy: AutoPausePolicy = .standard,
+        autoPauseEvidence: (@Sendable (AutoPauseEvidence.Record) -> Void)? = nil,
         automaticallyRecovers: Bool = !AppLaunchEnvironment.isRunningTests
     ) {
         let resolvedDirectory = journalDirectory
@@ -381,6 +390,8 @@ final class HikeRecorder: NSObject {
         self.clock = clock
         self.uptime = uptime
         self.journalFlushDelay = journalFlushDelay
+        autoPause = RecordingAutoPause(watch: AutoPauseWatch(policy: autoPausePolicy))
+        self.autoPauseEvidence = autoPauseEvidence
         super.init()
         self.source.sourceDelegate = self
         // The controller sees the hiker's switch move; only the recorder can
@@ -417,7 +428,14 @@ extension HikeRecorder {
     }
 
     func pause() {
+        // A pause the app made becomes the hiker's, and is no longer ended
+        // for them.
+        if isAutoPaused {
+            takeOverAutoPause()
+            return
+        }
         guard phase == .waitingForFix || phase == .recording else { return }
+        resetAutoPause()
         phase = .paused
         cancelLiveMatching(clearWindow: false)
         publishSharedRecordingSnapshot(force: true)
@@ -451,6 +469,9 @@ extension HikeRecorder {
 
     func resume() async {
         guard phase == .paused else { return }
+        // Whoever made the pause, the hiker is ending it: the walk from here
+        // is watched for its next stop afresh.
+        resetAutoPause()
         // First, before any wait, as `stop()` and `discard()` tell them: the
         // precision sheet and the journal below take as long as they take,
         // and a permission answer landing in them would find the pause still
@@ -531,6 +552,7 @@ extension HikeRecorder {
             throw failure
         }
         phase = .saving
+        resetAutoPause()
         // Told here, before any wait, as `discard()` tells them: a permission
         // answer landing in the merge, the drain or the finish below would
         // otherwise find the pause still held, and post a Resume reminder that
@@ -545,6 +567,10 @@ extension HikeRecorder {
         publishSharedRecordingSnapshot(force: true)
         await pendingFixMergeTask?.value
         pendingFixMergeTask = nil
+        // The figures a stop's first minutes are taken back out of: the
+        // Health export and the Lock Screen's last panel read them.
+        await autoPause.refresh?.value
+        autoPause.refresh = nil
         if let sessionID {
             await mergePendingWidgetFixes(for: sessionID)
         }
@@ -587,6 +613,7 @@ extension HikeRecorder {
         // record on behind an idle recorder.
         activationID = nil
         startRequested = false
+        resetAutoPause()
         cancelLiveMatching(clearWindow: true)
         cancelTrailGraphPrefetches()
         stopLocationSensors()
@@ -644,100 +671,6 @@ extension HikeRecorder {
     func dismissRecoveryNotice() {
         if recoveryState == .resumed {
             recoveryState = .absent
-        }
-    }
-
-    func selectRouteChoice(_ choice: TrailRouteChoice) {
-        guard phase == .reviewing, let routeReview else { return }
-        routeReview.select(choice)
-        updateReviewPreview()
-    }
-
-    func moveToPreviousReviewSection() {
-        guard phase == .reviewing, let routeReview else { return }
-        routeReview.moveBackward()
-        updateReviewPreview()
-    }
-
-    func moveToNextReviewSection() {
-        guard phase == .reviewing, let routeReview else { return }
-        routeReview.moveForward()
-        updateReviewPreview()
-    }
-
-    func saveReviewedRecording() async throws -> Hike {
-        guard phase == .reviewing else { throw RecordingFailure.save(String(
-            localized: "No reviewed recording is ready to save."
-        )) }
-        return try await savePendingReviewedRecording()
-    }
-
-    func retrySave() async throws -> Hike {
-        guard case .failed = phase, let journal else {
-            throw RecordingFailure.save(String(localized: "No failed recording save is ready to retry."))
-        }
-        if pendingReviewSave != nil { return try await savePendingReviewedRecording() }
-        guard let pendingPreparedSave else {
-            throw RecordingFailure.save(String(localized: "No failed recording save is ready to retry."))
-        }
-
-        phase = .saving
-        do {
-            let hike = try persist(
-                pendingPreparedSave.session,
-                prepared: pendingPreparedSave.prepared,
-                customName: pendingPreparedSave.customName
-            )
-            await finishSavedSession(
-                pendingPreparedSave.session,
-                journal: journal
-            )
-            return hike
-        } catch {
-            fail(error, endLocationUpdates: false)
-            throw error
-        }
-    }
-
-    private func savePendingReviewedRecording() async throws -> Hike {
-        guard let pendingReviewSave,
-              let routeReview,
-              let journal else {
-            throw RecordingFailure.save(String(localized: "No reviewed recording is ready to save."))
-        }
-        phase = .saving
-        do {
-            let points = pendingReviewSave.normalizedPoints
-            let choices = routeReview.legChoices
-            let startedAt = pendingReviewSave.session.metadata.startedAt
-            guard pendingReviewSave.session.metadata.endedAt != nil else {
-                throw RecordingFailure.save(String(localized: "The recording has not been finished yet."))
-            }
-            let prepared = try await RecordingPreparation.prepareResolvedOffMain(
-                points: points,
-                startedAt: startedAt,
-                matchResult: pendingReviewSave.matchResult,
-                choices: choices
-            )
-            pendingPreparedSave = PendingPreparedSave(
-                session: pendingReviewSave.session,
-                prepared: prepared,
-                customName: pendingReviewSave.customName
-            )
-            let hike = try persist(
-                pendingReviewSave.session,
-                prepared: prepared,
-                customName: pendingReviewSave.customName
-            )
-            await finishSavedSession(pendingReviewSave.session, journal: journal)
-            return hike
-        } catch let failure as RecordingFailure {
-            fail(failure, endLocationUpdates: false)
-            throw failure
-        } catch {
-            let failure = RecordingFailure.save(error.localizedDescription)
-            fail(failure, endLocationUpdates: false)
-            throw failure
         }
     }
 }

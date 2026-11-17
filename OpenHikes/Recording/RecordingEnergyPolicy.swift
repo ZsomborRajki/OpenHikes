@@ -117,6 +117,11 @@ nonisolated enum RecordingEnergyPolicy {
         /// ``RecordingDistanceAccumulator/isStationary`` — a sustained absence
         /// of net displacement, not a single slow fix.
         var isStationary = false
+        /// The app has paused the recording at a stop and is watching for the
+        /// walk away (`HikeRecorder+AutoPause.swift`). The feed is kept as a
+        /// standing-still recording has it: the first fixes of that walk are
+        /// the next segment's, so they are wanted as fine as a track's.
+        var isAutoPaused = false
     }
 
     /// `.fair` is deliberately not included. A phone in a jacket pocket in
@@ -137,22 +142,32 @@ nonisolated enum RecordingEnergyPolicy {
         // The larger of the two filters wins rather than the later one: both
         // conditions are reasons to be woken less often, and standing still in
         // Low Power Mode is not a reason to be woken *more* than either alone.
+        let standsStill = conditions.isStationary || conditions.isAutoPaused
         let filter = max(
             conserving ? conservingDistanceFilter : walkingDistanceFilter,
-            conditions.isStationary ? stationaryDistanceFilter : 0
+            standsStill ? stationaryDistanceFilter : 0
         )
 
         var components: [String] = []
         if lowPower { components.append("low-power") }
         if hot { components.append("thermal") }
-        if conditions.isStationary { components.append("stationary") }
+        if conditions.isAutoPaused {
+            components.append("auto-paused")
+        } else if conditions.isStationary {
+            components.append("stationary")
+        }
         let name = components.isEmpty ? "precise" : components.joined(separator: "+")
 
         return RecordingEnergyProfile(
             name: name,
             desiredAccuracy: accuracy,
             distanceFilter: filter,
-            reason: reason(lowPower: lowPower, hot: hot, stationary: conditions.isStationary)
+            // An auto-pause says so before anything else: nothing is being
+            // recorded at any accuracy, and this line is the one place the
+            // recording screen says the app, not the hiker, made the pause.
+            reason: conditions.isAutoPaused
+                ? String(localized: "Auto-paused — recording resumes when you walk on.")
+                : reason(lowPower: lowPower, hot: hot, stationary: conditions.isStationary)
         )
     }
 

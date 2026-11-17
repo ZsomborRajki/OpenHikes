@@ -48,6 +48,9 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
     /// length of the walk, so a six-hour hike holds a couple of dozen entries
     /// here rather than thousands.
     private var recentWindow: Deque<RecentSample> = []
+    /// The segments the walk's pauses have cut it into so far — see
+    /// ``RecordingSegmentLedger``.
+    private(set) var segments = RecordingSegmentLedger()
 
     private struct RecentSample {
         let timestamp: Date
@@ -163,6 +166,14 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
         let distance = accumulate(point)
         movingTime.record(point.routeCoordinate)
         appendRecentSample(at: point.timestamp, distanceMeters: distance)
+        segments.record(
+            point,
+            totals: RecordingSegmentLedger.Totals(
+                distanceMeters: distance,
+                seconds: recordedDuration,
+                elevationGainMeters: elevationGainMeters
+            )
+        )
         return distance
     }
 

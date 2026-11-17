@@ -85,6 +85,20 @@ struct RecordingStatsSection: View {
     }
 }
 
+/// The segments the walk's pauses have cut it into so far, under its
+/// figures: nothing until a pause has, and then each segment, each stop's
+/// length and the segment in progress — see ``HikeSegmentList``.
+///
+/// Its own view because the segment in progress moves per fix, and reading
+/// it from ``RecordingCard``'s body would put the whole card on that clock.
+struct RecordingSegmentSection: View {
+    let stats: RecordingStats
+
+    var body: some View {
+        HikeSegmentList(segments: stats.segments)
+    }
+}
+
 /// The strip's duration, which is a clock: the one figure that changes with
 /// no fix behind it.
 ///

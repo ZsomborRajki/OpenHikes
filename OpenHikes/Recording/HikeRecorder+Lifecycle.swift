@@ -230,15 +230,25 @@ extension HikeRecorder {
         return flags
     }
 
-    func accept(_ location: CLLocation) {
+    /// - Parameter receivedAt: when the fix was delivered, for one handed
+    ///   over later: the walk away from an auto-pause is kept until it is
+    ///   certain, and a fix's age is judged against the moment it arrived.
+    ///   `nil` for a fix arriving now.
+    func accept(_ location: CLLocation, receivedAt: Date? = nil) {
+        let now = receivedAt ?? clock()
         // A paused recording writes nothing, matches nothing and draws
         // nothing — but it may still be watching, and this is the only place
         // a fix from that watch arrives. Handed on before the phase guard
         // rather than inside it, because everything below is about a fix that
         // becomes part of the track and none of it applies to one that is
-        // only evidence the hiker has moved.
+        // only evidence the hiker has moved. A pause the app made watches for
+        // the walk away, and one the hiker made for the resume reminder.
         if phase == .paused {
-            movementReminders?.recordingObserved(location)
+            if autoPause.isPaused {
+                observeWhileAutoPaused(location, receivedAt: now)
+            } else {
+                movementReminders?.recordingObserved(location)
+            }
             return
         }
         guard phase == .waitingForFix || phase == .recording else { return }
@@ -247,32 +257,41 @@ extension HikeRecorder {
         // Only the window knows the recording had not started when it was
         // taken (#749).
         guard fixWindow?.admits(location.timestamp) ?? false else { return }
-        if LocationFixPolicy.accepts(
+        let isCurrent = LocationFixPolicy.accepts(
             location,
             maximumAge: LocationFixPolicy.foregroundMaximumAge,
-            now: clock()
-        ) {
+            now: now
+        )
+        if isCurrent {
             // Keep rejected low-quality fixes visible as "Weak signal" while
             // the stricter recording policy waits for usable geometry.
             stats.horizontalAccuracy = location.horizontalAccuracy
         }
-        guard RecordingFixPolicy.accepts(
+        let isKept = RecordingFixPolicy.accepts(
             location,
             after: lastAcceptedPoint,
             motionState: latestMotionState,
-            now: clock()
-        ) else {
-            return
-        }
+            now: now
+        )
+        let elevation = isKept ? elevationFilter.elevation(for: location) : nil
+        // The watch for a stop reads every fix that says where the hiker is
+        // now, kept or not: a fix too loose or too close to keep is still
+        // evidence of a place being stayed at. One that makes a stop of it is
+        // the stop's, and the recording is paused from where the stop began.
+        if isCurrent, observeForAutoPause(location, kept: isKept, elevation: elevation) { return }
+        guard isKept else { return }
         var point = RecordingPoint(location: location, flags: consumeFlagsForNextPoint())
-        point.elevation = elevationFilter.elevation(for: location)
+        point.elevation = elevation
+        keep(point)
+    }
+
+    /// Adds a fix the policies accepted to the walk: the totals, the trace,
+    /// the live match and the journal.
+    private func keep(_ accepted: RecordingPoint) {
         // Read before the append, so the metres this fix adds can be
         // attributed to the trail they were walked on — see just below.
         let distanceBeforeFix = accumulator.distanceMeters
-        accumulator.append(point)
-        // An immutable copy: the journal append below hands this to a
-        // `@Sendable` closure, which cannot capture the mutable `point`.
-        let accepted = point
+        accumulator.append(accepted)
         let previous = lastAcceptedPoint
         lastAcceptedPoint = accepted
         recentFixes.append(accepted)
@@ -354,7 +373,7 @@ extension HikeRecorder {
         guard let motionSource, motionSource.isAvailable else { return }
         motionSource.start { [weak self] state in
             onMainActor { [weak self] in
-                self?.latestMotionState = state
+                self?.motionDidChange(to: state)
             }
         }
     }
