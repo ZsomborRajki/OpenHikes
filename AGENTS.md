@@ -702,6 +702,16 @@ a change to recording, the map, the sheet or the render path; the PR template,
     `AutoPauseEvidence.replay(_:policy:)` runs a policy over what was
     written. Change one from recorded stops, and give `AutoPauseWatchTests`
     the stream that argued for it.
+  - **The watch's own recordings take the same rule**
+    (`WatchAutoPause` decides; `WatchRecorder+AutoPause.swift` acts), by the
+    phone's switch, which rides on the library's application context
+    (`WatchLibraryDigest.autoPauseEnabled`; a watch told nothing has it on).
+    The watch reads no motion and no height, so there the rule runs on
+    position alone. A watch pause keeps its feed whoever made it, so the
+    only cost is the rule. The cut is `WatchWalkAccumulator.pause(since:)`,
+    journaled as one `.autoPaused` line that a recovery replays to the same
+    boundary, and finds as a pause like any other. A phone recording the
+    app has paused is mirrored to the watch as paused.
 - **A segment is a walked run** (`RouteSegments`). A hike's segments are
   read off the pauses its route already has, so a pause by hand, an
   auto-pause and a GPX file's `<trkseg>` breaks all cut one, and nothing is
@@ -2064,9 +2074,7 @@ this before changing `OpenHikesWatch/`, `OpenHikes/Watch/` or the shared
   `WatchGlance` from the watch's **own** App Group
   (`group.tappium.com.OpenHikes.watch`). `WatchGlanceDisplay` and
   `WatchGlanceReloadPolicy` decide what it shows and when it redraws.
-- **Not on the watch:** community, photographs, weather, offline maps and
-  Auto-Pause for the watch's own recordings. A phone recording the app has
-  paused is mirrored as paused, like any other.
+- **Not on the watch:** community, photographs, weather and offline maps.
   Following a trail without recording updates only while the app is on screen.
 
 ## Settled decisions — do not re-raise
