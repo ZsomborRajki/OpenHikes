@@ -237,6 +237,29 @@ public struct WatchRouteTracker: Sendable, Equatable {
     /// The trail's length, on the trail's own scale.
     public var trailLengthMeters: Double { totalDistanceMeters }
 
+    /// What a fix at a coordinate reads on the trail's scale when it is
+    /// matched to the leg that leaves point `leg`, by the projection
+    /// ``advance(latitude:longitude:courseDegrees:)`` makes. So what the
+    /// phone places on the line — a junction, in
+    /// ``WatchTrailPackage/junctions`` — compares with a fix there directly,
+    /// however far the sent line cuts the corner the coordinate is on.
+    /// `nil` for a leg the line does not have.
+    public func trailDistance(latitude: Double, longitude: Double, onLeg leg: Int) -> Double? {
+        guard leg >= 0, leg + 1 < points.count else { return nil }
+        let start = points[leg]
+        let end = points[leg + 1]
+        let projection = WatchGeodesy.project(
+            latitude: latitude,
+            longitude: longitude,
+            onSegmentFromLatitude: start.latitude,
+            longitude: start.longitude,
+            toLatitude: end.latitude,
+            longitude: end.longitude
+        )
+        let along = lineDistances[leg] + (lineDistances[leg + 1] - lineDistances[leg]) * projection.fraction
+        return min(max(along * scale, 0), totalDistanceMeters)
+    }
+
     /// Whether this tracker has a line to match against at all.
     public var isUsable: Bool { points.count > 1 }
 

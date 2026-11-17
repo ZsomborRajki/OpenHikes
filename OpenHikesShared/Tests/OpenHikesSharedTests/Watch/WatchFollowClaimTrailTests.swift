@@ -97,6 +97,42 @@ struct WatchFollowClaimTrailTests {
         #expect(claim.trailArrived(holding: line.followableHikeID, recording: false) == .start)
     }
 
+    @Test("A trail held from an earlier day is not followed by a walk recorded along none")
+    func heldTrailIsNotFollowedByAnUnrelatedRecording() {
+        let claim = WatchFollowClaim()
+
+        #expect(!claim.follows(held, recordingAlong: nil))
+        #expect(!claim.follows(held, recordingAlong: asked))
+        #expect(!claim.follows(nil, recordingAlong: nil))
+    }
+
+    @Test("A recording along the held trail follows it, with no map open")
+    func recordingAlongTheHeldTrailFollowsIt() {
+        var claim = WatchFollowClaim()
+        _ = claim.screenAppeared(map, asking: held, holding: held, recording: true)
+        _ = claim.screenLeft(map, recording: true)
+
+        #expect(claim.follows(held, recordingAlong: held))
+    }
+
+    @Test("A map open on the held trail follows it, and stops when it leaves")
+    func mapOnTheHeldTrailFollowsItWhileOpen() {
+        var claim = WatchFollowClaim()
+
+        _ = claim.screenAppeared(map, asking: held, holding: held, recording: false)
+        #expect(claim.follows(held, recordingAlong: nil))
+        _ = claim.screenLeft(map, recording: false)
+        #expect(!claim.follows(held, recordingAlong: nil))
+    }
+
+    @Test("A map waiting for another trail does not make the held one followed")
+    func mapWaitingForAnotherTrailFollowsNothingHeld() {
+        var claim = WatchFollowClaim()
+        _ = claim.screenAppeared(map, asking: asked, holding: held, recording: false)
+
+        #expect(!claim.follows(held, recordingAlong: nil))
+    }
+
     // MARK: Fixture
 
     private static let latitude = 47.55

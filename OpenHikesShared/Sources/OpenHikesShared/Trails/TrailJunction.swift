@@ -103,10 +103,4 @@ public struct TrailJunction: Codable, Sendable, Equatable, Hashable {
         case .towardsStart: towardsStart
         }
     }
-
-    /// The same junction on a line measured `factor` times as long — the
-    /// trail's own length over the line's, when the two differ.
-    public func scaled(by factor: Double) -> Self {
-        Self(distanceMeters: distanceMeters * factor, towardsEnd: towardsEnd, towardsStart: towardsStart)
-    }
 }

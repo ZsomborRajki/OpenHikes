@@ -149,6 +149,21 @@ struct JunctionAnnouncerTests {
 
         #expect(cues.map(\.cue.maneuver) == [.keepLeft, .keepLeft, .turnRight])
         #expect(cues.map(\.cue.isImminent) == [false, true, true])
+        // The turn after the fork is said at the fork, not before it, where
+        // the hiker would take it at the fork.
+        #expect(cues.map(\.at) == [850, 970, 1000])
+    }
+
+    @Test("walking back the same way, the next junction still waits for the one being reached")
+    func closeJunctionsInOrderBackwards() {
+        let turn = TrailJunction(distanceMeters: 975, towardsEnd: .turnRight, towardsStart: .turnLeft)
+        var announcer = JunctionAnnouncer(junctions: [turn, Self.fork], direction: .towardsStart)
+
+        let cues = Self.walk(&announcer, from: 1200, to: 950)
+
+        #expect(cues.map(\.cue.maneuver) == [.turnRight, .turnRight, .turnLeft])
+        #expect(cues.map(\.cue.junctionIndex) == [1, 1, 0])
+        #expect(cues.map(\.at) == [1150, 1030, 1000])
     }
 
     @Test("junctions handed in any order are kept by distance")

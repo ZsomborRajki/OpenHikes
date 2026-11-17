@@ -107,9 +107,10 @@ public struct WatchTrailPackage: SharedPayload, Equatable {
     /// exactly one leg of the line here. At most ``pauseBudget`` of them,
     /// whatever the route holds: see ``keptPoints(of:gapMeters:pointBudget:pauseBudget:)``.
     public var pauseIndices: [Int]
-    /// Where the trail meets another and what to do there, on the scale of
-    /// ``totalDistanceMeters`` — the scale ``WatchRouteTracker`` reports a
-    /// position on, so the two compare directly. Worked out by the phone from
+    /// Where the trail meets another and what to do there, as
+    /// ``WatchRouteTracker`` would read a fix matched there — see
+    /// ``WatchRouteTracker/trailDistance(latitude:longitude:onLeg:)`` — so the two
+    /// compare directly. Worked out by the phone from
     /// its trail graph, which the watch has no copy of; empty where there was
     /// no graph to read. See ``TrailJunction``.
     public var junctions: [TrailJunction]
