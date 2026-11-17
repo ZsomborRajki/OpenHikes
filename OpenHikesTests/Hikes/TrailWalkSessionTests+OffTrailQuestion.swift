@@ -166,7 +166,7 @@ extension TrailWalkSessionTests {
         let lastOnTrail = clock.now
         clock.advance(by: 900)
 
-        let handOff = await session.handOffToRecording()
+        let handOff = try #require(await session.handOffToRecording().ended)
 
         let row = try #require(handOff.end.walk)
         #expect(session.walkedHikeID == nil)
@@ -197,11 +197,14 @@ extension TrailWalkSessionTests {
         relaunched.restoreAtLaunch()
         #expect(relaunched.walkedHikeID == walked.id)
         #expect(relaunched.walkedProfile == nil, "precondition: nothing has handed it one")
+        let startedAt = try #require(relaunched.record?.startedAt)
 
-        let seed = try #require(await relaunched.recordingSeed())
+        let handOff = try #require(await relaunched.handOffToRecording().ended)
 
+        let seed = try #require(handOff.seed)
         #expect(seed.points.count > 1)
-        #expect(seed.points.first?.timestamp == relaunched.record?.startedAt)
+        #expect(seed.points.first?.timestamp == startedAt)
+        #expect(handOff.end.walk != nil)
     }
 
     @Test("a walk under the minimum is handed over all the same, and leaves no row")
@@ -213,7 +216,7 @@ extension TrailWalkSessionTests {
         // One step of the trail: 56 m, short of what a History row needs.
         walk(session, hike: walked, profile: profile, from: 0, through: 1)
 
-        let handOff = await session.handOffToRecording()
+        let handOff = try #require(await session.handOffToRecording().ended)
 
         #expect(handOff.end.walk == nil)
         #expect(try walks(of: walked).isEmpty)
@@ -223,7 +226,7 @@ extension TrailWalkSessionTests {
 
     /// Nothing may record beside a walk the store would not end.
     @Test("a walk the store will not end hands nothing over, and is still under way")
-    func aRefusedEndHandsNothingOver() async {
+    func aRefusedEndHandsNothingOver() async throws {
         var refusing = false
         let session = TrailWalkSession(
             context: context,
@@ -239,7 +242,7 @@ extension TrailWalkSessionTests {
         walk(session, hike: walked, profile: profile, from: 0, through: 6)
         refusing = true
 
-        let handOff = await session.handOffToRecording()
+        let handOff = try #require(await session.handOffToRecording().ended)
 
         guard case .refused = handOff.end else {
             Issue.record("a store that refuses the commit must refuse the hand-off")
@@ -251,9 +254,9 @@ extension TrailWalkSessionTests {
 
     @Test("with no walk under way there is nothing to hand over")
     func noWalkHandsNothingOver() async {
-        let handOff = await session().handOffToRecording()
-
-        #expect(handOff.seed == nil)
-        #expect(handOff.end.walk == nil)
+        guard case .noWalk = await session().handOffToRecording() else {
+            Issue.record("with no walk, nothing is ended and nothing carried")
+            return
+        }
     }
 }

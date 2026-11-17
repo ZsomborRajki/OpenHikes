@@ -32,6 +32,11 @@
 //    handed over is in its trail's History too.
 //  - **The trail's heights**, read off the profile between its plotted
 //    samples, where it has any.
+//  - **The covered length, in full.** Every point is marked
+//    ``RecordingPointFlags/carried``, so a recording counts the line as
+//    ground walked, live and at the save, however tightly it bends: the
+//    walk's coverage already established it, and the rule that hands back a
+//    standing hiker's GPS wander has nothing to weigh.
 //
 //  ## What is not known
 //
@@ -78,10 +83,11 @@ nonisolated extension RecordingSeed {
     ///
     /// A walk's active clock runs on while its hiker is off the route, so it
     /// can be far longer than the covered ground took. Shared out over that
-    /// ground it would read as a hiker standing still, which is what the
-    /// recording's distance retracts (``RecordingDistanceAccumulator``). The
-    /// time past this pace was spent somewhere the coverage does not show,
-    /// and goes where a pause's does.
+    /// ground it would read as a hiker standing still, in the recording's
+    /// moving time and its average speed, on ground they walked. The time
+    /// past this pace was spent somewhere the coverage does not show, and
+    /// goes where a pause's does. The distance does not hang on it: carried
+    /// ground counts in full at any pace (``RecordingPointFlags/carried``).
     static let slowestWalkingSpeed =
         MovementThresholds.stationaryNetDisplacement / MovementThresholds.stationaryInterval
 
@@ -324,7 +330,7 @@ nonisolated private extension RecordingSeed {
             timestamp: date,
             horizontalAccuracy: carriedAccuracyMeters,
             elevation: vertex.elevation,
-            flags: opensRun ? [.resumed] : []
+            flags: opensRun ? [.carried, .resumed] : .carried
         )
     }
 }

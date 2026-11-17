@@ -206,6 +206,34 @@ struct RecordingEntryTests {
         #expect(entry.walkEndRefused)
     }
 
+    /// The walk the hiker answered about ended while it was being handed
+    /// over, and another began: nothing records beside that one, and nothing
+    /// is said about an End that nobody refused.
+    @Test("a walk another took the place of starts no recording, opens nothing and says nothing")
+    func overtakenTakeoverStartsNothing() async {
+        let requests = HikeOpenRequests()
+        let sent = FeedReader(requests.links())
+        var starts = 0
+        var answered = false
+        let entry = RecordingEntry(
+            isLive: { false },
+            start: { _ in starts += 1 },
+            walkUnderWay: { "Valley Path" },
+            takeOverWalk: {
+                answered = true
+                return .overtaken
+            },
+            openRequests: requests
+        )
+
+        entry.recordInsteadOfWalk()
+        await settleDelegateHop(until: "the takeover to be answered") { answered }
+
+        #expect(starts == 0)
+        #expect(sent.received.isEmpty)
+        #expect(!entry.walkEndRefused)
+    }
+
     /// Two taps are two requests, for the reason ``HikeOpenRequests`` sends
     /// each one: a recording screen closed and asked for again has to open.
     @Test("each tap is its own request")

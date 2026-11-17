@@ -148,6 +148,34 @@ final class WalkOrRecordTests {
         #expect(!entry.walkEndRefused)
     }
 
+    /// A walk adopted at launch reads its line to be handed over. A read that
+    /// fails ends nothing, and is said as a refused End is: the walk is still
+    /// under way, and nothing records beside it.
+    @Test("a walk whose line cannot be read starts no recording, and says so")
+    func unreadableLineStartsNothing() async {
+        let hikeRecorder = makeRecorder()
+        let walked = trail()
+        let profile = RouteProfile(route: walked.route)
+        let opening = walkSession(asking: hikeRecorder)
+        #expect(opening.start(hike: walked, profile: profile))
+        for point in 0...6 {
+            clock.advance(by: 60)
+            opening.recordForegroundMatch(hike: walked, profile: profile, distance: profile.distances[point])
+        }
+        let session = walkSession(asking: hikeRecorder)
+        session.restoreAtLaunch()
+        await session.lineCheck?.value
+        session.lineLooks.fetch = FailingLineFetch(failing: [1]).fetch
+        let entry = RecordingEntry(recorder: hikeRecorder, walkSession: session, openRequests: HikeOpenRequests())
+
+        entry.recordInsteadOfWalk()
+        await settleDelegateHop(until: "the refusal to be said") { entry.walkEndRefused }
+
+        #expect(!hikeRecorder.isActive)
+        #expect(session.walkUnderWayTitle == walked.displayTitle)
+        #expect(walked.walks?.isEmpty != false)
+    }
+
     /// The walk is in its trail's History and its ground is in the recording,
     /// and the library's totals count a walk for whatever part of its time
     /// no recording's clock covers. So the recording's clock has to cover

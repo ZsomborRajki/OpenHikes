@@ -48,7 +48,13 @@ enum WalkTakeover {
     /// The walk is over, and this is what the recording begins with: `nil`
     /// when the walk had covered nothing to carry.
     case ended(carrying: RecordingSeed?)
-    /// The store refused the end, so the walk is still under way.
+    /// Another walk is under way: the one asked about ended while it was
+    /// being handed over, and the next began in that moment. Nothing records
+    /// beside it, and nothing is said — the question was about a walk that
+    /// is over, and the record button asks about this one.
+    case overtaken
+    /// The walk is still under way: the store refused its end, or its line
+    /// could not be read for what it covered to be carried.
     case refused
 }
 
@@ -113,11 +119,22 @@ final class RecordingEntry {
             },
             takeOverWalk: { [weak walkSession] in
                 guard let walkSession else { return .ended(carrying: nil) }
-                let handOff = await walkSession.handOffToRecording()
-                // Felt as an End is, which is what it was.
-                handOff.end.hapticMoment.play()
-                if case .refused = handOff.end { return .refused }
-                return .ended(carrying: handOff.seed)
+                switch await walkSession.handOffToRecording() {
+                case let .ended(end, seed):
+                    // Felt as an End is, which is what it was.
+                    end.hapticMoment.play()
+                    if case .refused = end { return .refused }
+                    return .ended(carrying: seed)
+                case .lineUnreadable:
+                    // Felt and said as a refused End is: the walk is still
+                    // under way, and the hiker can try again.
+                    HapticMoment.walkFailed.play()
+                    return .refused
+                case .noWalk:
+                    return .ended(carrying: nil)
+                case .overtaken:
+                    return .overtaken
+                }
             },
             openRequests: openRequests
         )
@@ -164,16 +181,20 @@ final class RecordingEntry {
     /// The hiker left the trail they were walking and said to record instead:
     /// ends the walk as End does, where it was last on its trail, and then
     /// records, beginning with what the walk covered — so the hike so far is
-    /// in the recording. A walk the store would not let go of stays under
-    /// way, nothing starts beside it, and ``walkEndRefused`` says so.
+    /// in the recording. A walk that could not be handed over stays under
+    /// way, nothing starts beside it, and ``walkEndRefused`` says so; one
+    /// that another walk replaced meanwhile starts nothing beside that one.
     func recordInsteadOfWalk() {
         Task {
-            guard case let .ended(seed) = await takeOverWalk() else {
+            switch await takeOverWalk() {
+            case let .ended(seed):
+                if !isLive() { await start(seed) }
+                openRequests.openRecording()
+            case .overtaken:
+                break
+            case .refused:
                 walkEndRefused = true
-                return
             }
-            if !isLive() { await start(seed) }
-            openRequests.openRecording()
         }
     }
 }

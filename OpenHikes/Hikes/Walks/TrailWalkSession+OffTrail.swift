@@ -30,6 +30,18 @@
 //  time the History's row spans, which is what keeps the library's totals
 //  from counting that ground twice (`LibraryTotals`).
 //
+//  The points are built off the main actor, from the walk's line, which a
+//  walk adopted at launch has to read first. The walk goes on meanwhile: a
+//  fix can match, the walk can end, and another can begin. So the points and
+//  the row are made from one state of the walk, with nothing between the
+//  last look at it and its end, and the points are built again when a fix
+//  moved it on. A walk that ended meanwhile hands over nothing, and its
+//  recording begins where the hiker stands, as the record button's does; one
+//  that another walk replaced starts no recording, because nothing records
+//  beside a walk. A line that could not be read ends nothing: the walk is
+//  left under way to be tried again, rather than ended with its ground in
+//  the recording and, under the History's minimum, nowhere at all.
+//
 
 import Foundation
 import OpenHikesData
@@ -41,6 +53,35 @@ struct OffTrailQuestion: Equatable {
     /// ``TrailWalkStartNotice`` keeps one: the alert reads nothing of the
     /// hike.
     let trailTitle: String
+}
+
+/// What handing the walk under way to a recording came to — see
+/// ``TrailWalkSession/handOffToRecording()``.
+enum WalkHandOff {
+    /// The walk ended, as the ``TrailWalkEnd`` says, a refusal included, and
+    /// this is what a recording that takes over begins with: `nil` for a walk
+    /// that had covered nothing, and for one the store would not end.
+    case ended(TrailWalkEnd, seed: RecordingSeed?)
+    /// The walk's line could not be read, so nothing was ended: the walk is
+    /// still under way, for the hiker to try again.
+    case lineUnreadable
+    /// There was no walk to hand over: none was under way, or the one asked
+    /// about ended on its own while its line was read, and is in its trail's
+    /// History by that end. A recording begins with nothing.
+    case noWalk
+    /// Another walk took the place of the one asked about while its line was
+    /// read. Nothing may record beside it.
+    case overtaken
+}
+
+/// The line a walk is along, read for what it covered to be carried on.
+nonisolated private enum CarriedLine: Sendable {
+    case along(RouteProfile)
+    /// No line to carry along: the row is gone, or its line is no longer the
+    /// one the walk is along, and its distances are another line's.
+    case nothing
+    /// The fetch failed, which says nothing about the line.
+    case unreadable
 }
 
 extension TrailWalkSession {
@@ -81,55 +122,59 @@ extension TrailWalkSession {
 
 extension TrailWalkSession {
     /// Ends the walk under way for a recording that takes over from it, and
-    /// hands back what that recording begins with — `nil` for a walk that had
-    /// covered nothing, or whose line could not be read.
+    /// hands back what that recording begins with — see ``WalkHandOff``.
     ///
-    /// A refused end hands back nothing to begin with: the walk is still
-    /// under way, and nothing may record beside it.
-    func handOffToRecording() async -> (end: TrailWalkEnd, seed: RecordingSeed?) {
-        guard let handed = record else { return (.discarded, nil) }
-        let seed = await recordingSeed()
-        // The line may have been read across a suspension. A walk that ended
-        // in it is not there to end, and what it had covered is still what
-        // the hiker asked to carry.
-        guard let current = record, current.hikeID == handed.hikeID, current.startedAt == handed.startedAt else {
-            return (.discarded, seed)
-        }
-        let end = finish(reason: .ended, at: min(current.lastActivityAt, clock()))
-        if case .refused = end { return (end, nil) }
-        return (end, seed)
+    /// The walk is looked at again after every suspension, because it goes
+    /// on through them: see *Recording instead* in the file header. The loop
+    /// ends at the first build no fix overtook, which is the first, unless a
+    /// fix landed in the milliseconds the points took.
+    func handOffToRecording() async -> WalkHandOff {
+        guard let asked = record else { return .noWalk }
+        let line = await carriedLine()
+        var walk = asked
+        var seed: RecordingSeed?
+        repeat {
+            guard let current = record else { return .noWalk }
+            guard current.hikeID == asked.hikeID, current.startedAt == asked.startedAt else { return .overtaken }
+            walk = current
+            switch line {
+            case .unreadable: return .lineUnreadable
+            case .nothing: seed = nil
+            case let .along(profile): seed = await Self.seed(carrying: walk, along: profile)
+            }
+        } while record != walk
+        // Nothing between the look above and the end: the points and the
+        // row describe one walk.
+        let end = finish(reason: .ended, at: min(walk.lastActivityAt, clock()))
+        if case .refused = end { return .ended(end, seed: nil) }
+        return .ended(end, seed: seed)
     }
 
-    /// What the walk under way has covered, as the points a recording can
-    /// begin with. Read off the main actor: it walks the line, and for a walk
-    /// with no profile in hand — one adopted at launch that its hike's screen
-    /// has not fed yet — reads it first, in a read of its own.
-    func recordingSeed() async -> RecordingSeed? {
-        guard let record, let walkedHike, walkedHike.isAttached else { return nil }
-        if let walkedProfile {
-            return await Self.seed(carrying: record, along: walkedProfile)
-        }
+    /// The line the walk under way is along: the profile in hand, or — for a
+    /// walk adopted at launch that its hike's screen has not fed yet — the
+    /// line read off the main actor, in a read of its own.
+    private func carriedLine() async -> CarriedLine {
+        guard let record, let walkedHike, walkedHike.isAttached else { return .nothing }
+        if let walkedProfile { return .along(walkedProfile) }
         let read = SelectedLine(fetch: lineLooks.fetch).read(of: walkedHike)
-        return await Self.seed(carrying: record, alongLineOf: read)
+        return await Self.line(of: read, along: record)
     }
 
+    @concurrent
+    nonisolated private static func line(of read: SelectedLine.Read, along walk: TrailWalkRecord) async -> CarriedLine {
+        if await read.failed { return .unreadable }
+        let route = await read.route
+        guard !route.isEmpty, walk.isAlong(route) else { return .nothing }
+        return .along(RouteProfile(route: route))
+    }
+
+    /// What `walk` covered, as the points a recording can begin with. Off the
+    /// main actor, because it walks the line.
     @concurrent
     nonisolated private static func seed(
         carrying walk: TrailWalkRecord,
         along profile: RouteProfile
     ) async -> RecordingSeed? {
         RecordingSeed.carrying(walk, along: profile)
-    }
-
-    /// The same, of the line `read` holds. A line that is no longer the one
-    /// the walk is along carries nothing: its distances are another line's.
-    @concurrent
-    nonisolated private static func seed(
-        carrying walk: TrailWalkRecord,
-        alongLineOf read: SelectedLine.Read
-    ) async -> RecordingSeed? {
-        let route = await read.route
-        guard !route.isEmpty, walk.isAlong(route) else { return nil }
-        return RecordingSeed.carrying(walk, along: RouteProfile(route: route))
     }
 }

@@ -217,6 +217,7 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
             point.timestamp.timeIntervalSince(previous.timestamp)
         )
 
+        if point.flags.contains(.carried) { return handleCarried(point, previous: previous) }
         if let result = handleStationary(point, previous: previous) { return result }
 
         let leg = RouteGeometry.distanceMeters(
@@ -236,6 +237,26 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
         stationaryAnchor = nil
         isStationary = false
         _ = updateMotionStationaryStart(for: point)
+        return distanceMeters
+    }
+
+    /// A leg a walk along the trail had already covered — see
+    /// ``RecordingPointFlags/carried``. Counted in full, and every window
+    /// starts again from its end, so no stretch of carried ground is ever
+    /// weighed for stillness: what follows it is weighed from where it ends.
+    private mutating func handleCarried(
+        _ point: RecordingPoint,
+        previous: RecordingPoint
+    ) -> Double {
+        distanceMeters += RouteGeometry.distanceMeters(
+            from: previous.coordinate,
+            to: point.coordinate
+        )
+        self.previous = point
+        movementWindowStart = point
+        movementWindowDistance = 0
+        stationaryAnchor = nil
+        isStationary = false
         return distanceMeters
     }
 

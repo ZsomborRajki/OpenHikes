@@ -33,6 +33,16 @@ nonisolated struct RecordingPointFlags: OptionSet, Codable, Hashable, Sendable {
     /// anchor is kept from the earlier leg. Never set on a fix as it arrives
     /// from Core Location or the widget.
     static let inferred = Self(rawValue: 1 << 5)
+    /// The stretch of route leading to this point is ground a walk along a
+    /// trail had already covered when a recording took over from it — see
+    /// ``RecordingSeed`` — so its length is known, and counts in full.
+    ///
+    /// The trail's line bends where the trail does, and is clocked at the
+    /// pace the walk's own time gives it, so a tight bend can stay inside the
+    /// small area ``RecordingDistanceAccumulator`` reads as a hiker standing
+    /// still and would retract. A property of the segment, carried on its
+    /// end point as ``inferred`` is. Never set on a fix as it arrives.
+    static let carried = Self(rawValue: 1 << 6)
 }
 
 nonisolated struct RecordingPoint: Equatable, Sendable {
