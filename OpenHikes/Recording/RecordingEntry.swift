@@ -28,6 +28,12 @@
 //  request for the screen then asks for the one already up, which a widget
 //  tap on it does too, and which selects the recording just started.
 //
+//  One more way in asks nothing here, because it is itself the answer to a
+//  question: a hiker who left the trail they were walking and chose to record
+//  instead — see ``OffTrailQuestion``. That one ends the walk too, and hands
+//  what it covered to the recording, so the hike so far is in it: see
+//  ``recordInsteadOfWalk()``.
+//
 //  The live state and the start are closures rather than the recorder itself,
 //  so the map's suite can offer a button without building a recorder, a store
 //  and a journal behind it. Observation tracking follows a read through a
@@ -37,48 +43,65 @@
 import Foundation
 import OpenHikesShared
 
+/// What ending a walk for the recording that takes over from it came to.
+enum WalkTakeover {
+    /// The walk is over, and this is what the recording begins with: `nil`
+    /// when the walk had covered nothing to carry.
+    case ended(carrying: RecordingSeed?)
+    /// The store refused the end, so the walk is still under way.
+    case refused
+}
+
 /// Whether a recording is live, and the request to start or reopen one.
 @MainActor
 @Observable
 final class RecordingEntry {
     private let isLive: @MainActor () -> Bool
-    private let start: @MainActor () async -> Void
+    private let start: @MainActor (RecordingSeed?) async -> Void
     private let walkUnderWay: @MainActor () -> String?
     private let endWalk: @MainActor () -> Bool
+    private let takeOverWalk: @MainActor () async -> WalkTakeover
     private let openRequests: HikeOpenRequests
 
-    /// Whether the store refused the End that ``endWalkAndRecord()`` asked
-    /// for. The map's alert reads and clears it — see ``MapScreenAlerts``.
+    /// Whether the store refused the End that ``endWalkAndRecord()`` or
+    /// ``recordInsteadOfWalk()`` asked for. The map's alert reads and clears
+    /// it — see ``MapScreenAlerts``.
     var walkEndRefused = false
 
     /// - Parameters:
     ///   - isLive: whether a recording is under way. Read inside the map's
     ///     observation, so it has to read observable state.
-    ///   - start: starts one. Only called while `isLive` says there is none,
-    ///     and `walkUnderWay` that nothing is being walked.
+    ///   - start: starts one, beginning with what it is handed — see
+    ///     ``RecordingSeed`` — or with nothing. Only called while `isLive`
+    ///     says there is none, and `walkUnderWay` that nothing is being
+    ///     walked.
     ///   - walkUnderWay: the title of the trail being walked, or `nil`. Read
     ///     inside the map's observation, like `isLive`.
     ///   - endWalk: ends that walk, and says whether it did — a commit the
     ///     store refused leaves it under way.
+    ///   - takeOverWalk: ends that walk for a recording that begins with what
+    ///     it covered, and hands that over.
     ///   - openRequests: where the request for the screen is sent.
     init(
         isLive: @escaping @MainActor () -> Bool,
-        start: @escaping @MainActor () async -> Void,
+        start: @escaping @MainActor (RecordingSeed?) async -> Void,
         walkUnderWay: @escaping @MainActor () -> String? = { nil },
         endWalk: @escaping @MainActor () -> Bool = { true },
+        takeOverWalk: @escaping @MainActor () async -> WalkTakeover = { .ended(carrying: nil) },
         openRequests: HikeOpenRequests
     ) {
         self.isLive = isLive
         self.start = start
         self.walkUnderWay = walkUnderWay
         self.endWalk = endWalk
+        self.takeOverWalk = takeOverWalk
         self.openRequests = openRequests
     }
 
     convenience init(recorder: HikeRecorder, walkSession: TrailWalkSession, openRequests: HikeOpenRequests) {
         self.init(
             isLive: { [weak recorder] in recorder?.isActive == true },
-            start: { [weak recorder] in await recorder?.start() },
+            start: { [weak recorder] seed in await recorder?.start(carrying: seed) },
             walkUnderWay: { [weak walkSession] in walkSession?.walkUnderWayTitle },
             endWalk: { [weak walkSession] in
                 guard let walkSession else { return true }
@@ -87,6 +110,14 @@ final class RecordingEntry {
                 end.hapticMoment.play()
                 if case .refused = end { return false }
                 return true
+            },
+            takeOverWalk: { [weak walkSession] in
+                guard let walkSession else { return .ended(carrying: nil) }
+                let handOff = await walkSession.handOffToRecording()
+                // Felt as an End is, which is what it was.
+                handOff.end.hapticMoment.play()
+                if case .refused = handOff.end { return .refused }
+                return .ended(carrying: handOff.seed)
             },
             openRequests: openRequests
         )
@@ -113,7 +144,7 @@ final class RecordingEntry {
         // started beside a walk anyway would be the overlap this refuses.
         guard walkToEnd == nil else { return }
         Task {
-            if !isLive() { await start() }
+            if !isLive() { await start(nil) }
             openRequests.openRecording()
         }
     }
@@ -128,6 +159,22 @@ final class RecordingEntry {
             return
         }
         requestRecording()
+    }
+
+    /// The hiker left the trail they were walking and said to record instead:
+    /// ends the walk as End does, where it was last on its trail, and then
+    /// records, beginning with what the walk covered — so the hike so far is
+    /// in the recording. A walk the store would not let go of stays under
+    /// way, nothing starts beside it, and ``walkEndRefused`` says so.
+    func recordInsteadOfWalk() {
+        Task {
+            guard case let .ended(seed) = await takeOverWalk() else {
+                walkEndRefused = true
+                return
+            }
+            if !isLive() { await start(seed) }
+            openRequests.openRecording()
+        }
     }
 }
 

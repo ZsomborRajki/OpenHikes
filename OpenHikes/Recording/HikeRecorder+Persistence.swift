@@ -546,6 +546,7 @@ extension HikeRecorder {
         latestMotionState = .unknown
         startRequested = false
         activationID = nil
+        carriedSeed = nil
         pendingResumeFlag = false
         acceptedFixRevision = 0
         liveMatchWindow = []

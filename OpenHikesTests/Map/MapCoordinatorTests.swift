@@ -77,7 +77,7 @@ struct MapCoordinatorTests {
         sheetMetrics = SheetMetrics(clock: clock.read)
         recordingEntry = RecordingEntry(
             isLive: { [recordingState] in recordingState.isLive },
-            start: { [recordingState] in recordingState.isLive = true },
+            start: { [recordingState] _ in recordingState.isLive = true },
             openRequests: openRequests
         )
     }

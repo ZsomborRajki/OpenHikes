@@ -609,6 +609,20 @@ a change to recording, the map, the sheet or the render path; the PR template,
     recovered session is parked without a pause, and nothing records the time
     before a relaunch. The watch measures the same way
     (`WatchWalkAccumulator`).
+  - **Off the trail, the hiker is asked.** On the fix the *Off the trail*
+    banner is first tried on, the app asks on its own screen whether to keep
+    following or to record instead (`OffTrailQuestion`). One rule decides
+    both, once per departure (`OffTrailWatch`), but the question waits on no
+    notification permission (`MovementWarningState`). It stands until it is
+    answered, the hiker is back on the trail, or the walk is paused or over.
+  - **Recording instead takes the walk along.** The walk ends as End ends
+    it, kept in its trail's History, but where it was last on its trail
+    rather than at the tap. The recording begins with what it covered: the
+    trail's own line along the covered stretches, clocked over the walk's
+    own time (`RecordingSeed`). A walk keeps no fixes, so nothing else is
+    carried, and a stretch it did not reach from the one before opens as a
+    pause does. The recording's clock covers the walk's, which is what has
+    `LibraryTotals` count that ground once.
 - **A recording always outranks a followed trail**, on every surface, because
   it is the one that would be *lost*: a follow is re-derived from the trail and
   the next fix, and a recording is not. Three places hold the rule and must
@@ -868,9 +882,10 @@ a change to recording, the map, the sheet or the render path; the PR template,
   permanently in portrait. A `.sheet`, cover, picker, importer or alert attached
   beside it never presents, and an alert can even take the sheet down. Every map
   alert lives in `MapScreenAlerts`, and `MapScreenAlertUITests` checks them,
-  except two attached beside them on the same contents: the trail maker's
+  except three attached beside them on the same contents: the trail maker's
   missed-photo alert, which carries an object rather than a binding, and the
-  refused location button's, which goes with the map controls' (below).
+  refused location button's and a walk's off-trail question, which go with
+  the map controls' (below).
   - **What a map control opens goes through `MapControlModals`.** A place card
     leaves the map live behind it, the pill and the weather badge included,
     and the map sheet is already presenting the card. A sheet asked for from
@@ -878,7 +893,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
     at once and takes the card down. So the card presents *Map Modes*, the
     location alert and the forecast over itself while it is up
     (`presentsMapControlsOverCard()`), and anything new a map control opens
-    joins them there.
+    joins them there. So has the one alert no control opens: a fix raises a
+    walk's off-trail question at any moment, a card's included.
 - **The map is chosen on the map.** *Map Modes* (`MapModesView`) is a sheet
   as tall as its cards, opened from the pill the "my location" button stands
   in, so the map above it turns over as a card is tapped. It holds the cards,

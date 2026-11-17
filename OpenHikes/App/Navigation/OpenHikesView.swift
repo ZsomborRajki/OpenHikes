@@ -776,7 +776,7 @@ extension OpenHikesView {
     func seedRequestedWalks(for hike: Hike?) {
         #if DEBUG
         guard let name = AppLaunchEnvironment.seededWalkFixtureName, let hike else { return }
-        SeededWalkFixture.attach(named: name, to: hike, in: modelContext)
+        SeededWalkFixture.attach(named: name, to: hike, in: modelContext, session: appModel.walkSession)
         #endif
     }
 

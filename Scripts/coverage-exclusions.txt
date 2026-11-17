@@ -252,6 +252,7 @@ OpenHikes/Hikes/Maker/TrailPlacePhotoHeader.swift
 OpenHikes/Hikes/Maker/TrailPlaceSheet.swift
 OpenHikes/Hikes/Maker/TrailStopRow.swift
 OpenHikes/Hikes/Maker/TrailStopSearch.swift
+OpenHikes/Hikes/Walks/OffTrailQuestionAlert.swift
 OpenHikes/Hikes/Walks/WalkControls.swift
 OpenHikes/Hikes/Walks/WalkRow.swift
 OpenHikes/Hikes/Walks/WalkSummaryView.swift

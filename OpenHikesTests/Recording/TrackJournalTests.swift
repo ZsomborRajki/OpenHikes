@@ -73,6 +73,29 @@ struct TrackJournalTests {
         #expect(point.latitude == 47.63, "and the fix it arrived on is still a fix")
     }
 
+    /// A recording that takes over from a hike already under way is started
+    /// with that hike's points — see ``RecordingSeed``. They are on disk with
+    /// the session, so a launch that finds the journal finds them.
+    @Test("a journal started with carried points holds them before any fix, and appends after them")
+    func startCarryingPoints() async throws {
+        let directory = try sandbox()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let journal = TrackJournal(directory: directory, clock: TestClock(start).read)
+        let carried = (0..<4).map(point)
+
+        try await journal.start(sessionID: UUID(), startedAt: start, carrying: carried)
+        try await journal.close()
+
+        let reopened = TrackJournal(directory: directory, clock: TestClock(start).read)
+        #expect(try await reopened.loadSession()?.points.map(\.timestamp) == carried.map(\.timestamp))
+
+        try await reopened.reopenForAppending()
+        try await reopened.append(point(4))
+        try await reopened.flush()
+        let points = try #require(try await reopened.loadSession()).points
+        #expect(points.map(\.timestamp) == (0..<5).map { point($0).timestamp })
+    }
+
     @Test("points and metadata round-trip through the fixed-width file")
     func roundTrip() async throws {
         let directory = try sandbox()

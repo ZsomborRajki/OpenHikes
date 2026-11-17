@@ -228,6 +228,94 @@ nonisolated final class MapScreenAlertUITests: XCTestCase {
         XCTAssertTrue(element("map-sheet", in: app).exists, "and the sheet should have survived the alert")
     }
 
+    /// A hiker who has left the trail they are walking is asked what they
+    /// mean by it, from inside the sheet's contents like every other alert
+    /// here. *Keep Following* is the answer that changes nothing: the walk is
+    /// still under way on its trail, and the sheet is where it was.
+    ///
+    /// The walk and its two minutes off the trail are a launch fixture — see
+    /// `SeededWalkFixture` — because what is being checked is the answer.
+    @MainActor
+    func testKeepingToTheTrailLeavesTheWalkUnderWay() {
+        let app = launchApp(
+            arguments: [
+                "--ui-test-expanded-sheet",
+                "--ui-test-import-gpx=\(UITestFixture.gpxName)",
+                "--ui-test-seed-walks=LeftTrail",
+            ]
+        )
+        let alert = app.alerts["Off the trail"]
+        XCTAssertTrue(
+            alert.waitForExistence(timeout: UITestTimeout.navigation),
+            "a walk that has left its trail should ask what the hiker means by it"
+        )
+        XCTAssertTrue(alert.buttons["Record Instead"].exists, "and offer to record instead")
+        alert.buttons["Keep Following"].tap()
+        XCTAssertTrue(waitUntil { !alert.exists }, "Keep Following should close the question")
+        XCTAssertTrue(element("map-sheet", in: app).exists, "and the sheet should have survived it")
+
+        openHikeDetail(in: app)
+        let phase = element("walk-phase", in: app)
+        XCTAssertTrue(
+            phase.waitForExistence(timeout: UITestTimeout.navigation),
+            "the hike should still be under way on its trail"
+        )
+        expectLabel(phase, contains: "Active")
+        XCTAssertFalse(
+            alert.waitForExistence(timeout: UITestTimeout.brief),
+            "and the same departure should not be asked about again"
+        )
+    }
+
+    /// *Record Instead* ends the walk and opens a recording that already
+    /// holds what the walk covered: its points are counted before the first
+    /// fix of its own could have arrived.
+    ///
+    /// The question is raised under the launch's location prompt, and is put
+    /// up once the prompt is answered: the wait a question raised in a pocket
+    /// has for the app to come to the front.
+    @MainActor
+    func testRecordingInsteadBeginsWithWhatTheWalkCovered() {
+        let app = makeApp(
+            arguments: [
+                "--ui-test-expanded-sheet",
+                "--ui-test-enable-location",
+                "--ui-test-import-gpx=\(UITestFixture.gpxName)",
+                "--ui-test-seed-walks=LeftTrail",
+            ]
+        )
+        app.resetAuthorizationStatus(for: .location)
+        addLocationPermissionMonitor()
+        setSimulatedLocation(UITestFixture.offTrailCoordinate)
+        defer { XCUIDevice.shared.location = nil }
+        launch(app)
+        XCTAssertTrue(element("map-sheet", in: app).waitForExistence(timeout: UITestTimeout.navigation))
+        answerLaunchPrompt(in: app)
+
+        let alert = app.alerts["Off the trail"]
+        XCTAssertTrue(
+            alert.waitForExistence(timeout: UITestTimeout.navigation),
+            "a walk that has left its trail should ask once the app is in front to be asked"
+        )
+        alert.buttons["Record Instead"].tap()
+
+        XCTAssertTrue(
+            app.navigationBars["Record Hike"].waitForExistence(timeout: UITestTimeout.navigation),
+            "recording instead should open the recording"
+        )
+        let points = element("recording-point-count", in: app)
+        XCTAssertTrue(points.waitForExistence(timeout: UITestTimeout.navigation))
+        XCTAssertTrue(
+            waitForPointCount(atLeast: Self.carriedPoints, in: points) { /* nothing to deliver: they were carried */ },
+            "the recording should begin with what the walk covered, not with its own first fix"
+        )
+        XCTAssertFalse(alert.exists, "and the question should be answered")
+    }
+
+    /// More points than a recording could have taken of its own in the
+    /// moment it has had, and far fewer than the fixture's walk hands over.
+    private static let carriedPoints = 5
+
     /// Enough taps to land one inside another's presentation, and few enough
     /// that the test is over in a couple of seconds.
     private static let rapidTaps = 5

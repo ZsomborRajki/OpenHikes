@@ -4,7 +4,9 @@
 //
 //  What the map's record button does with a tap: start a recording only when
 //  none is under way, and then ask for its screen the way a widget tap does —
-//  and, mid-walk, only once the hiker has said to end the walk.
+//  and, mid-walk, only once the hiker has said to end the walk. And what the
+//  hiker's *Record Instead* does, off the trail they were walking: the same,
+//  with what the walk covered handed to the recording.
 //
 
 import Foundation
@@ -27,7 +29,7 @@ struct RecordingEntryTests {
         var requestsAtStart: Int?
         let entry = RecordingEntry(
             isLive: { live },
-            start: {
+            start: { _ in
                 starts += 1
                 await settleDelegateHop()
                 requestsAtStart = sent.received.count
@@ -54,7 +56,7 @@ struct RecordingEntryTests {
         var starts = 0
         let entry = RecordingEntry(
             isLive: { true },
-            start: { starts += 1 },
+            start: { _ in starts += 1 },
             openRequests: requests
         )
 
@@ -73,7 +75,7 @@ struct RecordingEntryTests {
         var starts = 0
         let entry = RecordingEntry(
             isLive: { false },
-            start: { starts += 1 },
+            start: { _ in starts += 1 },
             walkUnderWay: { "Ridge Loop" },
             endWalk: { true },
             openRequests: HikeOpenRequests()
@@ -89,7 +91,7 @@ struct RecordingEntryTests {
     func liveRecordingAsksNothing() {
         let entry = RecordingEntry(
             isLive: { true },
-            start: { /* already live, never called */ },
+            start: { _ in /* already live, never called */ },
             walkUnderWay: { "Ridge Loop" },
             endWalk: { true },
             openRequests: HikeOpenRequests()
@@ -106,7 +108,7 @@ struct RecordingEntryTests {
         var starts = 0
         let entry = RecordingEntry(
             isLive: { false },
-            start: {
+            start: { _ in
                 starts += 1
                 if walking != nil { startsMidWalk += 1 }
             },
@@ -134,7 +136,7 @@ struct RecordingEntryTests {
         var starts = 0
         let entry = RecordingEntry(
             isLive: { false },
-            start: { starts += 1 },
+            start: { _ in starts += 1 },
             walkUnderWay: { "Ridge Loop" },
             endWalk: { false },
             openRequests: HikeOpenRequests()
@@ -149,6 +151,61 @@ struct RecordingEntryTests {
         #expect(entry.walkEndRefused)
     }
 
+    @Test("recording instead of a walk ends it, then starts the recording with what the walk covered")
+    func recordInsteadCarriesTheWalk() async {
+        let requests = HikeOpenRequests()
+        let sent = FeedReader(requests.links())
+        let startedAt = Date(timeIntervalSince1970: 1_750_000_000)
+        let seed = RecordingSeed(
+            startedAt: startedAt,
+            points: [RecordingPoint(latitude: 47.63, longitude: 12.86, timestamp: startedAt, horizontalAccuracy: 10)]
+        )
+        var walking: String? = "Ridge Loop"
+        var started: [RecordingSeed?] = []
+        var startsMidWalk = 0
+        let entry = RecordingEntry(
+            isLive: { false },
+            start: { carried in
+                started.append(carried)
+                if walking != nil { startsMidWalk += 1 }
+            },
+            walkUnderWay: { walking },
+            takeOverWalk: {
+                walking = nil
+                return .ended(carrying: seed)
+            },
+            openRequests: requests
+        )
+
+        entry.recordInsteadOfWalk()
+        await settleDelegateHop(until: "the screen to be asked for") { sent.received.count == 1 }
+
+        #expect(started == [seed], "one start, handed the walk")
+        #expect(startsMidWalk == 0, "the walk ended before the recording began")
+        #expect(sent.received.last == TrailWidgetDeepLink.recordingURL())
+        #expect(!entry.walkEndRefused)
+    }
+
+    /// The same refusal ``refusedEndStartsNothing()`` holds for the record
+    /// button's menu: nothing records beside a walk still under way.
+    @Test("a walk the store would not hand over starts no recording, and says so")
+    func refusedTakeoverStartsNothing() async {
+        var starts = 0
+        let entry = RecordingEntry(
+            isLive: { false },
+            start: { _ in starts += 1 },
+            walkUnderWay: { "Ridge Loop" },
+            takeOverWalk: { .refused },
+            openRequests: HikeOpenRequests()
+        )
+
+        entry.recordInsteadOfWalk()
+        await settleDelegateHop(until: "the refusal to be said") { entry.walkEndRefused }
+
+        #expect(starts == 0)
+        #expect(entry.walkEndRefused)
+    }
+
     /// Two taps are two requests, for the reason ``HikeOpenRequests`` sends
     /// each one: a recording screen closed and asked for again has to open.
     @Test("each tap is its own request")
@@ -157,7 +214,7 @@ struct RecordingEntryTests {
         let sent = FeedReader(requests.links())
         let entry = RecordingEntry(
             isLive: { true },
-            start: { /* already live, never called */ },
+            start: { _ in /* already live, never called */ },
             openRequests: requests
         )
 
