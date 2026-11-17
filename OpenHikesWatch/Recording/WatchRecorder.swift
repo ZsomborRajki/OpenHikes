@@ -212,7 +212,9 @@ final class WatchRecorder: NSObject {
     /// Refuses fixes taken before this recording, or its current leg, began —
     /// see ``RecordingFixWindow``.
     @ObservationIgnored var window = RecordingFixWindow(opensAt: .now)
-    @ObservationIgnored private var trailHikeID: UUID?
+    /// The trail this recording was started along, if any. Kept after it
+    /// ends, so read it with ``phase``.
+    @ObservationIgnored private(set) var trailHikeID: UUID?
     /// The rule a stop is called by and the fixes held during the app's own
     /// pause — see ``WatchAutoPause``.
     @ObservationIgnored var autoPause = WatchAutoPause<CLLocation>()

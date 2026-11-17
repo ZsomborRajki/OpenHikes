@@ -234,4 +234,20 @@ public struct WatchFollowClaim: Equatable, Sendable {
         isAppOnScreen = true
         return isClaimed && !recording && held == claimedHikeID ? .restart : .unchanged
     }
+
+    /// Whether `held` is a trail the hiker is following, and so one whose
+    /// junctions the watch taps for: a recording is walking along it, or a
+    /// trail screen is asking for it.
+    ///
+    /// The receiver's fixes reach the trail held whoever asked for them, and
+    /// the trail held is whichever was opened last, kept across launches. A
+    /// walk recorded along no trail that came near yesterday's would be
+    /// told to turn at forks the hiker never chose to follow.
+    ///
+    /// - Parameter recordingAlong: the trail the running recording was
+    ///   started along, or `nil` for one along none, or for no recording.
+    public func follows(_ held: UUID?, recordingAlong: UUID?) -> Bool {
+        guard let held else { return false }
+        return held == claimedHikeID || held == recordingAlong
+    }
 }

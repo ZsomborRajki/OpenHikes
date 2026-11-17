@@ -40,7 +40,10 @@
 //  Only the nearest junction ahead that still has its second cue to come is
 //  considered. Two junctions twenty metres apart would otherwise have the
 //  second's distance said before the first's turn, and the hiker would hear
-//  them out of the order they meet them.
+//  them out of the order they meet them. And a junction whose second cue has
+//  been said holds the next one back until the hiker reaches it: said
+//  ``imminentMeters`` early, the next one's turn would be heard while the
+//  first fork was still in front of them, and taken there.
 //
 
 import Foundation
@@ -199,7 +202,8 @@ public struct JunctionAnnouncer: Sendable, Equatable {
 
     /// The nearest junction ahead within ``aheadMeters`` that has something
     /// to say walking `direction` and has not yet said its second cue, with
-    /// how far ahead it is.
+    /// how far ahead it is. `nil` while a junction whose second cue has been
+    /// said is still ahead — see this file's header.
     private func nextPending(
         from distance: Double,
         traveling direction: RouteTravelDirection
@@ -215,9 +219,13 @@ public struct JunctionAnnouncer: Sendable, Equatable {
                 : distance - junction.distanceMeters
             guard ahead > -Self.passedMeters else { continue }
             guard ahead <= Self.aheadMeters else { return nil }
-            guard junction.maneuver(traveling: direction) != nil,
-                  spoken[SpokenKey(index: index, direction: direction)] != .imminent
-            else { continue }
+            guard junction.maneuver(traveling: direction) != nil else { continue }
+            if spoken[SpokenKey(index: index, direction: direction)] == .imminent {
+                // Said, but not yet reached: the next junction waits for the
+                // hiker to be at this one, or its turn would be taken here.
+                guard ahead <= 0 else { return nil }
+                continue
+            }
             return (index, ahead)
         }
         return nil

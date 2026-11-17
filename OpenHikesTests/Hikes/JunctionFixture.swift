@@ -46,7 +46,8 @@ enum JunctionFixture {
     /// along it.
     static let route = [at(0, -400), at(0, 0), at(-140, 400)].map(RouteCoordinate.init)
 
-    private static func edge(way: Int64, index: Int, from: Int64, to: Int64) -> TrailGraphEdge {
+    /// One segment of a footpath, for a graph of a suite's own.
+    static func edge(way: Int64, index: Int, from: Int64, to: Int64) -> TrailGraphEdge {
         TrailGraphEdge(
             id: TrailGraphEdgeID(wayID: way, segmentIndex: index),
             fromNodeID: from,

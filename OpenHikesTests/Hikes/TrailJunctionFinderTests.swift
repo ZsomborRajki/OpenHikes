@@ -168,6 +168,23 @@ struct TrailJunctionFinderTests {
         #expect(try #require(TrailJunctionFinder.junctions(along: line, in: bent).first).towardsEnd == .keepLeft)
     }
 
+    @Test("a way that turns after a short edge is read where the line is, not at the long edge's far end")
+    func armReadsPartOfTheWayAlongALongEdge() throws {
+        // The trail leaves the T west for 20 m, then runs north for 200 m in
+        // one edge. Read at that edge's far end the way bears 354°, while the
+        // line 25 m out bears 284°, and the junction would be dropped.
+        let jog = Self.graph(
+            [0: (0, -200), 1: (0, 0), 2: (-20, 0), 3: (200, 0), 4: (-20, 200)],
+            trails: [[0, 1, 2, 4], [1, 3]]
+        )
+        let line = Self.profile([(0, -200), (0, 0), (-20, 0), (-20, 200)])
+
+        let found = TrailJunctionFinder.junctions(along: line, in: jog)
+
+        #expect(found.count == 1)
+        #expect(try #require(found.first).towardsEnd == .turnLeft)
+    }
+
     @Test("a stub that ends a few metres from the junction is no choice")
     func stubIsIgnored() {
         let stub = Self.graph(

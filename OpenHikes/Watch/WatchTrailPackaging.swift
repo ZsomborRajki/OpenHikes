@@ -30,6 +30,7 @@
 //  the widget's snapshot starts from.
 //
 
+import CoreLocation
 import Foundation
 import OpenHikesData
 import OpenHikesShared
@@ -87,8 +88,8 @@ nonisolated enum WatchTrailPackaging {
     /// packaged concurrently and can finish in either order; the watch orders
     /// two copies of one trail by it — see `WatchTrailSelection`.
     ///
-    /// The junctions are read from `graph` along the whole route and put on
-    /// the trail's own scale, the one the watch reports a position on — see
+    /// The junctions are read from `graph` along the whole route and put
+    /// where the watch's tracker will read a fix at each — see
     /// ``WatchTrailPackage/junctions``. A trail graph that has to be
     /// downloaded first holds the package until it arrives: a watch with the
     /// trail and no junctions would tap at no fork for the whole walk.
@@ -117,20 +118,26 @@ nonisolated enum WatchTrailPackaging {
             )
         }
         let climb = Self.climb(of: input.route)
-        let junctions = await Self.junctions(of: input, graph: graph)
-        return WatchTrailPackage(
+        var package = WatchTrailPackage(
             hikeID: input.hikeID,
             title: input.title,
             tintHex: input.tintHex,
             totalDistanceMeters: input.totalDistanceMeters,
             points: points,
             pauseIndices: kept.pauseIndices,
-            junctions: junctions,
             elevationGainMeters: climb.gainMeters,
             elevationLossMeters: climb.lossMeters,
             sentAt: readAt,
             requestID: requestID
         )
+        let junctions = await Self.junctions(
+            of: input,
+            keptIndices: kept.routeIndices,
+            readBy: WatchRouteTracker(package),
+            graph: graph
+        )
+        package.junctions = Array(junctions.prefix(WatchTrailPackage.junctionBudget))
+        return package
     }
 
     /// Which of the route's points cross, and which of them a pause arrives
@@ -151,19 +158,49 @@ nonisolated enum WatchTrailPackaging {
         }
     }
 
-    /// The route's junctions, measured along the route and scaled to
-    /// ``HikeRouteInput/totalDistanceMeters``, which the watch reports
-    /// positions on.
+    /// The route's junctions, found along the whole route and placed on the
+    /// line the watch is sent, where `tracker` reads them as it reads a fix.
+    ///
+    /// Placed leg by leg rather than scaled as a whole. Dropping points takes
+    /// more length out of a winding stretch than a straight one, so after a
+    /// run of switchbacks a junction stands further along the sent line, in
+    /// proportion, than along the route: on a long trail by hundreds of
+    /// metres, which would have the watch tap at the wrong place. Each is
+    /// read as a fix at it would be, matched to the kept leg that spans it
+    /// along the route. That leg, rather than the nearest one, because a
+    /// trail that comes back past its own junction has two.
+    ///
+    /// - Parameter keptIndices: the route index of each point the watch is
+    ///   sent, in order.
     private static func junctions(
         of input: HikeRouteInput,
+        keptIndices: [Int],
+        readBy tracker: WatchRouteTracker,
         graph: (any TrailGraphProviding)?
     ) async -> [TrailJunction] {
-        guard graph != nil else { return [] }
+        guard graph != nil, keptIndices.count > 1 else { return [] }
         let profile = RouteProfile(route: input.route)
-        let length = profile.totalDistanceMeters
-        guard length > 0 else { return [] }
-        let scale = input.totalDistanceMeters > 0 ? input.totalDistanceMeters / length : 1
-        return await TrailJunctionFinder.junctions(along: profile, from: graph).map { $0.scaled(by: scale) }
+        let distances = profile.distances
+        let found = await TrailJunctionFinder.junctions(along: profile, from: graph)
+        var leg = 0
+        return found.compactMap { junction in
+            // Both are in order along the line, so the leg only moves on.
+            while leg < keptIndices.count - 2, distances[keptIndices[leg + 1]] < junction.distanceMeters {
+                leg += 1
+            }
+            guard let coordinate = profile.coordinate(atDistance: junction.distanceMeters),
+                  let along = tracker.trailDistance(
+                      latitude: coordinate.latitude,
+                      longitude: coordinate.longitude,
+                      onLeg: leg
+                  )
+            else { return nil }
+            return TrailJunction(
+                distanceMeters: along,
+                towardsEnd: junction.towardsEnd,
+                towardsStart: junction.towardsStart
+            )
+        }
     }
 
     /// Climb and descent over the *whole* route.

@@ -61,6 +61,22 @@ struct WatchRouteTrackerPauseTests {
         #expect(after.fractionComplete.isApproximatelyEqual(to: 0.75, absoluteTolerance: 0.01))
     }
 
+    @Test("a point the phone places beside a leg reads where a fix there does, the drive left out")
+    func placedPointReadsAsAFix() throws {
+        let placing = WatchRouteTracker(Self.package)
+        var walking = WatchRouteTracker(Self.package)
+        // Eleven metres north of the last leg, as a junction beside a line
+        // that cuts its corner is.
+        let reading = walking.advance(latitude: 0.0001, longitude: 0.0105)
+        let fix = try #require(reading)
+
+        let placed = try #require(placing.trailDistance(latitude: 0.0001, longitude: 0.0105, onLeg: 2))
+
+        #expect(placed.isApproximatelyEqual(to: fix.distanceAlongRouteMeters, absoluteTolerance: 0.01))
+        #expect(placed.isApproximatelyEqual(to: 1.5 * Self.step, absoluteTolerance: 1))
+        #expect(placing.trailDistance(latitude: 0, longitude: 0.0105, onLeg: 3) == nil)
+    }
+
     @Test("a pause is part of what the watch holds, so moving one is a new revision")
     func pausesAreInTheRevision() {
         var unpaused = Self.package

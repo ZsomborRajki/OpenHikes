@@ -293,8 +293,11 @@ final class WatchModel {
               )
         else { return }
         follow.update(position, at: location.timestamp)
-        // The phone's switch, as the library last carried it.
+        // The phone's switch, as the library last carried it, and only for a
+        // trail the hiker is following rather than the last one opened.
+        let recordingAlong = recorder.phase.isActive ? recorder.trailHikeID : nil
         guard library.isJunctionWarningsOn,
+              followClaim.follows(trail?.hikeID, recordingAlong: recordingAlong),
               let cue = junctions?.advance(to: position.distanceAlongRouteMeters, isOnTrail: position.isOnTrail)
         else { return }
         junctionCue.show(cue)

@@ -648,11 +648,15 @@ a change to recording, the map, the sheet or the render path; the PR template,
     `JunctionAnnouncer` in `OpenHikesShared` decides when each is said, for
     the phone and the watch alike.
   - **The watch taps where the phone speaks.** The phone finds the junctions
-    and sends them with the trail (`WatchTrailPackage.junctions`, on the
-    trail's own scale), and the switch rides on the library
+    and sends them with the trail (`WatchTrailPackage.junctions`), each
+    placed on the sent line's own leg where the watch's tracker reads a fix
+    there, because decimation shortens a winding stretch more than a
+    straight one. The switch rides on the library
     (`WatchLibraryDigest.junctionWarningsEnabled`; a watch told nothing has
-    it off). The tap is `.notification` for every turn, because WatchKit's
-    turn haptics are for apps running a navigation session.
+    it off), and the watch taps only on a trail it is following: a recording
+    along it or a map open on it (`WatchFollowClaim.follows`), never the
+    trail merely held. The tap is `.notification` for every turn, because
+    WatchKit's turn haptics are for apps running a navigation session.
 - **A recording always outranks a followed trail**, on every surface, because
   it is the one that would be *lost*: a follow is re-derived from the trail and
   the next fix, and a recording is not. Three places hold the rule and must

@@ -324,23 +324,41 @@ nonisolated enum TrailJunctionFinder {
         /// `armMeters` — through the nodes along it that join nothing else —
         /// or where it first meets another junction or ends. A way that ends
         /// before `minimumMeters` is left out.
+        ///
+        /// Read at `armMeters` itself, part of the way along the edge that
+        /// passes it, as the line's own direction is read
+        /// (``junction(at:along:in:)``). A way that turns after a short edge
+        /// and runs on along a long one would otherwise be read at the long
+        /// one's far end, in a direction the line read 25 metres out does not
+        /// share, and the junction would be dropped as one the line does not
+        /// follow.
         func wayBearings(from node: TrailGraphNode, armMeters: Double, minimumMeters: Double) -> [Double] {
             (neighbors[node.id] ?? []).compactMap { first in
                 var previous = node
                 guard var current = nodes[first] else { return nil }
-                var length = RouteGeometry.distanceMeters(from: previous.coordinate, to: current.coordinate)
-                while length < armMeters,
+                var walked = 0.0
+                var edge = RouteGeometry.distanceMeters(from: previous.coordinate, to: current.coordinate)
+                while walked + edge < armMeters,
                       let onward = neighbors[current.id], onward.count == 2,
                       let nextID = onward.first(where: { $0 != previous.id }),
                       nextID != node.id,
                       let next = nodes[nextID] {
-                    length += RouteGeometry.distanceMeters(from: current.coordinate, to: next.coordinate)
+                    walked += edge
+                    edge = RouteGeometry.distanceMeters(from: current.coordinate, to: next.coordinate)
                     previous = current
                     current = next
                 }
+                let length = walked + edge
                 let isDeadEnd = (neighbors[current.id]?.count ?? 0) <= 1
                 guard length >= minimumMeters || !isDeadEnd else { return nil }
-                return TrailJunctionFinder.bearing(from: node.coordinate, to: current.coordinate)
+                let end = length > armMeters
+                    ? RouteGeometry.interpolate(
+                        from: previous.coordinate,
+                        to: current.coordinate,
+                        fraction: (armMeters - walked) / edge
+                    )
+                    : current.coordinate
+                return TrailJunctionFinder.bearing(from: node.coordinate, to: end)
             }
         }
     }
