@@ -87,6 +87,17 @@ extension WatchRecorder {
         }
     }
 
+    /// Makes the app's pause the hiker's, to resume by hand, as the phone's
+    /// recorder does when Pause is pressed during one. The journal and the
+    /// workout session already hold the pause.
+    ///
+    /// - Returns: whether there was a pause of the app's to take over.
+    func takeOverAutoPause() -> Bool {
+        guard isAutoPaused else { return false }
+        resetAutoPause()
+        return true
+    }
+
     /// Forgets the place being watched and any pause the app made: a pause
     /// or a resume by hand, and every way a recording begins or ends.
     func resetAutoPause() {
