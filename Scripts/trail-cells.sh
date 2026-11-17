@@ -24,7 +24,15 @@
 # description of a square, so what is written here and what the app reads are
 # one source.
 #
+# The planet is downloaded once and never again. A planet file is 90 GB from
+# servers OpenStreetMap's volunteers run, and they asked that a copy be kept
+# current with the changes they publish rather than downloaded anew for each
+# refresh. `update-planet` does that with pyosmium-up-to-date, which pyosmium
+# installs (`brew install pipx && pipx install osmium`; Homebrew has no
+# formula for it).
+#
 # Usage:
+#   Scripts/trail-cells.sh update-planet <planet.osm.pbf> [--size <MB>]
 #   Scripts/trail-cells.sh build <extract.osm.pbf> [--out <dir>] [--world] [--keep-work]
 #   Scripts/trail-cells.sh build-routes <extract.osm.pbf> [--out <dir>] [--world] [--keep-work]
 #   Scripts/trail-cells.sh build-places <extract.osm.pbf> [--out <dir>] [--world] [--keep-work]
@@ -35,6 +43,19 @@
 #   Scripts/trail-cells.sh inspect <file.cell> [--json]
 #   Scripts/trail-cells.sh cell <latitude> <longitude>
 #
+#   update-planet
+#             Bring a planet file up to the present, in place, with the hourly
+#             changes openstreetmap.org publishes since the time in its header:
+#             about a gigabyte for three days of them, against 90 GB for a new
+#             planet. Get the first planet by torrent or from a mirror
+#             (https://wiki.openstreetmap.org/wiki/Planet.osm), and keep it
+#             under one name, such as planet.osm.pbf: after an update a date in
+#             the name is wrong, and the builds read the date from the file.
+#             Each pass writes a new copy beside the planet before it replaces
+#             it, so there has to be room for one. --size caps the changes a
+#             pass holds in memory, in MB (default 4096); passes repeat until
+#             the planet is current. pyosmium refuses a planet more than three
+#             months old, which is a new download.
 #   build     File an extract's routes into <dir> (default .build/trail-cells/squares).
 #             Pass --world for the whole planet and for nothing else: it is what
 #             lets the app answer from the squares at all, and read a square
@@ -263,6 +284,68 @@ build() {
     echo "Wrote $out"
 }
 
+# `update-planet`: pyosmium-up-to-date, again for as long as it says more
+# changes are waiting. Its first pass starts from the time in the planet's
+# header, on the hourly diffs it takes from openstreetmap.org by default, and
+# writes the server and the diff it reached into the header, so every later
+# pass carries on from exactly there. It answers 1 only after it has applied
+# some, so the passes always end. A pass that fails leaves the file as the
+# pass before it wrote it.
+update_planet() {
+    local planet="" size=4096
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --size)
+                [[ $# -ge 2 ]] || usage_error "missing value for --size."
+                [[ "$2" =~ ^[1-9][0-9]*$ ]] || usage_error "--size takes a whole number of megabytes."
+                size="$2"
+                shift 2
+                ;;
+            -*)
+                usage_error "unknown option '$1'."
+                ;;
+            *)
+                [[ -z "$planet" ]] || usage_error "unexpected argument '$1'."
+                planet="$1"
+                shift
+                ;;
+        esac
+    done
+    [[ -n "$planet" ]] || usage_error "update-planet needs the planet file to update."
+    [[ -f "$planet" ]] || die "there is no file at $planet. Download a planet once, by torrent or from \
+a mirror (https://wiki.openstreetmap.org/wiki/Planet.osm), then keep it current with update-planet."
+    command -v pyosmium-up-to-date >/dev/null 2>&1 \
+        || die "pyosmium-up-to-date is not installed. It applies the changes: brew install pipx && pipx install osmium"
+
+    # Room for the new copy and the changes, checked before a diff is
+    # downloaded: a pass that fills the disk downloaded its diffs for nothing.
+    local bytes needed available
+    bytes="$(stat -f %z "$planet" 2>/dev/null || stat -c %s "$planet")"
+    needed=$(( bytes / 1024 + size * 1024 ))
+    available="$(df -Pk "$(dirname "$planet")" | awk 'NR == 2 { print $4 }')"
+    [[ "$available" =~ ^[0-9]+$ ]] || die "could not read the free space beside $planet."
+    (( available >= needed )) || die "there is no room beside $planet for its updated copy: \
+it needs $(( (needed + 1048575) / 1048576 )) GB free, and there are $(( available / 1048576 ))."
+
+    local pass=1 status
+    while true; do
+        echo "Applying OpenStreetMap's changes to $planet, pass $pass …"
+        status=0
+        pyosmium-up-to-date -v --size "$size" "$planet" || status=$?
+        case "$status" in
+            0) break ;;
+            1) pass=$(( pass + 1 )) ;;
+            *) die "pyosmium-up-to-date stopped with status $status. $planet is as the pass before left it." ;;
+        esac
+    done
+
+    local timestamp=""
+    if command -v osmium >/dev/null 2>&1; then
+        timestamp="$(osmium fileinfo -g header.option.osmosis_replication_timestamp "$planet" 2>/dev/null || true)"
+    fi
+    echo "$planet is current${timestamp:+ to $timestamp}."
+}
+
 # `upload` and `whoami`: the tool's own options, with the container and the key
 # filled in from where this machine keeps them.
 with_database() {
@@ -313,6 +396,9 @@ command="$1"
 shift
 
 case "$command" in
+    update-planet)
+        update_planet "$@"
+        ;;
     build)
         build build squares "$@"
         ;;

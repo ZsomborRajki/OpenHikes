@@ -58,9 +58,9 @@
 # request signed slightly wrong is refused by CloudKit without a word about
 # which part. The tool it compiles is run against an extract written out here.
 #
-# `xcrun`, `xcodebuild`, `swiftlint`, `periphery`, `hinge` and `osmium` are
-# replaced with recording stubs on PATH and the scripts are run for real
-# against them.
+# `xcrun`, `xcodebuild`, `swiftlint`, `periphery`, `hinge`, `osmium` and
+# `pyosmium-up-to-date` are replaced with recording stubs on PATH and the
+# scripts are run for real against them.
 # Nothing is built, nothing is booted, no simulator on this machine is touched,
 # and no file in the working tree is rewritten.
 #
@@ -80,8 +80,8 @@ usage() {
 Usage: Scripts/run-script-tests.sh [--verbose]
 
 Runs the repository's shell scripts against stubbed
-xcrun/xcodebuild/swiftlint/periphery/hinge/osmium and asserts what they sent
-where.
+xcrun/xcodebuild/swiftlint/periphery/hinge/osmium/pyosmium-up-to-date and
+asserts what they sent where.
 
 Options:
   --verbose       Print each script's own output as it runs
@@ -435,6 +435,19 @@ case "$command" in
         exit 64
         ;;
 esac
+STUB
+
+# Answers Scripts/trail-cells.sh's update-planet as pyosmium-up-to-date would,
+# and records each call. It changes no file. STUB_PYOSMIUM_STATUSES lists what
+# each pass exits with, in turn, and its last one repeats: 1 is some changes
+# applied and more waiting, 0 is current, and anything else a failure.
+cat > "$stub_bin/pyosmium-up-to-date" <<'STUB'
+#!/usr/bin/env bash
+printf 'pyosmium-up-to-date %s\n' "$*" >> "$STUB_CALL_LOG"
+read -r -a statuses <<< "${STUB_PYOSMIUM_STATUSES:-0}"
+pass="$(grep -c '^pyosmium-up-to-date ' "$STUB_CALL_LOG")"
+(( pass <= ${#statuses[@]} )) || pass=${#statuses[@]}
+exit "${statuses[pass - 1]}"
 STUB
 
 chmod +x "$stub_bin"/*
@@ -4939,6 +4952,77 @@ run_script "trail-cells build rejects an option it does not understand" \
     "$trail_cells" build "$cells_work/extract.osm.pbf" --planet
 if expect_status 2 && expect_contains "$output" "unknown option '--planet'" "the error" \
     && expect_absent "$calls" "osmium" "the recorded calls"; then
+    pass
+fi
+
+# The planet is kept current from OpenStreetMap's published changes, because
+# the volunteers who serve it asked that it not be downloaded again for each
+# refresh. A pass that says more are waiting is followed by another, and any
+# other answer ends the command.
+cells_planet="$cells_work/planet.osm.pbf"
+printf 'planet' > "$cells_planet"
+STUB_PYOSMIUM_STATUSES="1 1 0" \
+    run_script "trail-cells update-planet applies the changes again while more are waiting, then says how current the planet is" \
+    "$trail_cells" update-planet "$cells_planet"
+if expect_status 0 \
+    && expect_contains "$calls" "pyosmium-up-to-date -v --size 4096 $cells_planet" "the recorded calls" \
+    && expect_contains "$output" "$cells_planet is current to 2026-11-12T21:23:05Z." "the output"; then
+    if [[ "$(grep -c '^pyosmium-up-to-date ' <<< "$calls")" != 3 ]]; then
+        fail "the changes were not applied in three passes" "$calls"
+    else
+        pass
+    fi
+fi
+
+STUB_PYOSMIUM_STATUSES="1 3" \
+    run_script "trail-cells update-planet stops at a pass that fails, and hands on the size it was given" \
+    "$trail_cells" update-planet "$cells_planet" --size 1024
+if expect_status 1 \
+    && expect_contains "$calls" "pyosmium-up-to-date -v --size 1024 $cells_planet" "the recorded calls" \
+    && expect_contains "$output" "stopped with status 3" "the error"; then
+    if [[ "$(grep -c '^pyosmium-up-to-date ' <<< "$calls")" != 2 ]]; then
+        fail "a pass ran after the one that failed" "$calls"
+    else
+        pass
+    fi
+fi
+
+# A pass that fills the disk has downloaded its changes for nothing, so the
+# room for the new copy is checked before the first one is asked for.
+cat > "$stub_bin/df" <<'STUB'
+#!/usr/bin/env bash
+printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\n'
+printf '/dev/disk3s5 1000 999 1 100%% /\n'
+STUB
+chmod +x "$stub_bin/df"
+run_script "trail-cells update-planet asks for no changes while there is no room beside the planet for its new copy" \
+    "$trail_cells" update-planet "$cells_planet"
+rm "$stub_bin/df"
+if expect_status 1 && expect_contains "$output" "there is no room beside $cells_planet" "the error" \
+    && expect_absent "$calls" "pyosmium-up-to-date" "the recorded calls"; then
+    pass
+fi
+
+mv "$stub_bin/pyosmium-up-to-date" "$stub_bin/pyosmium-up-to-date.away"
+run_script "trail-cells update-planet says how to get pyosmium when it is not installed" \
+    "$trail_cells" update-planet "$cells_planet"
+mv "$stub_bin/pyosmium-up-to-date.away" "$stub_bin/pyosmium-up-to-date"
+if expect_status 1 && expect_contains "$output" "pipx install osmium" "the error"; then
+    pass
+fi
+
+run_script "trail-cells update-planet says where a first planet comes from when there is none" \
+    "$trail_cells" update-planet "$cells_work/missing-planet.osm.pbf"
+if expect_status 1 && expect_contains "$output" "there is no file" "the error" \
+    && expect_contains "$output" "wiki.openstreetmap.org/wiki/Planet.osm" "the error" \
+    && expect_absent "$calls" "pyosmium-up-to-date" "the recorded calls"; then
+    pass
+fi
+
+run_script "trail-cells update-planet takes its size in whole megabytes" \
+    "$trail_cells" update-planet "$cells_planet" --size 1GB
+if expect_status 2 && expect_contains "$output" "whole number of megabytes" "the error" \
+    && expect_absent "$calls" "pyosmium-up-to-date" "the recorded calls"; then
     pass
 fi
 
