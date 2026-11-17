@@ -653,10 +653,12 @@ a change to recording, the map, the sheet or the render path; the PR template,
     there, because decimation shortens a winding stretch more than a
     straight one. The switch rides on the library
     (`WatchLibraryDigest.junctionWarningsEnabled`; a watch told nothing has
-    it off), and the watch taps only on a trail it is following: a recording
-    along it or a map open on it (`WatchFollowClaim.follows`), never the
-    trail merely held. The tap is `.notification` for every turn, because
-    WatchKit's turn haptics are for apps running a navigation session.
+    it off). With it off, a trail is packaged without the graph, so a watch
+    never waits on a download for forks it will not tap at. The watch taps
+    only on a trail it is following: a recording along it or a map open on
+    it (`WatchFollowClaim.follows`), never the trail merely held. The tap is
+    `.notification` for every turn, because WatchKit's turn haptics are for
+    apps running a navigation session.
 - **A recording always outranks a followed trail**, on every surface, because
   it is the one that would be *lost*: a follow is re-derived from the trail and
   the next fix, and a recording is not. Three places hold the rule and must
@@ -1496,8 +1498,11 @@ in its source header. Do not weaken one without a measurement.
   otherwise fed by significant changes in a pocket, hundreds of meters apart,
   which is too late for a fork. With the switch on and a walk following, a
   feed of its own takes the recorder's `RecordingEnergyPolicy` profile, with
-  background delivery and the location indicator. A pause, the walk ending
-  or the switch going off stops it.
+  background delivery and the location indicator. It starts only once the
+  line's junctions are found, and not for a line with none. A pause, the
+  walk ending or the switch going off stops it, and so does a fix more than
+  a kilometer from the line, until the app next comes to the front: in a
+  pocket on When In Use nothing else ends the walk for hours.
 - **The screen stays awake only on a claim, and only if asked**
   (`General/ScreenWake.swift`). `SettingsKey.keepScreenAwake` is off by default.
   The switch, a live subject and an active scene must all agree.

@@ -116,17 +116,37 @@ struct JunctionAnnouncerTests {
         #expect(announcer.direction == .towardsEnd)
     }
 
-    @Test("a hiker who turns back at the junction hears the other way's advice")
+    @Test("a hiker who turns back past the junction hears the other way's advice")
     func turningBackHearsTheReturn() {
         var announcer = JunctionAnnouncer(junctions: [Self.fork], direction: .towardsEnd)
-        _ = Self.walk(&announcer, from: 800, to: 1100)
+        _ = Self.walk(&announcer, from: 800, to: 1200)
 
-        let cues = Self.walk(&announcer, from: 1100, to: 950)
+        let cues = Self.walk(&announcer, from: 1200, to: 950)
 
-        // Once ten metres back have said which way they are going.
+        // Turned round at 1169, thirty metres back on two fixes in a row.
+        #expect(announcer.direction == .towardsStart)
         #expect(cues.map(\.cue.maneuver) == [.turnRight, .turnRight])
-        #expect(cues.first?.at == 1090)
-        #expect(cues.first?.cue.metersAhead == 90)
+        #expect(cues.first?.at == 1150)
+        #expect(cues.first?.cue.metersAhead == 150)
+        #expect(cues.last?.at == 1030)
+    }
+
+    @Test("one stray fix behind the hiker does not turn them round at a fork")
+    func strayFixKeepsTheDirection() {
+        // A turn behind the hiker, whose way back is a left.
+        let behind = TrailJunction(distanceMeters: 890, towardsEnd: nil, towardsStart: .turnLeft)
+        var announcer = JunctionAnnouncer(junctions: [behind, Self.fork], direction: .towardsEnd)
+        _ = Self.walk(&announcer, from: 800, to: 990)
+
+        // Standing short of the fork: one fix twelve metres back.
+        #expect(announcer.advance(to: 978, isOnTrail: true) == nil)
+        #expect(announcer.direction == .towardsEnd)
+
+        // Just past it: one fix twelve metres back again, then on.
+        _ = Self.walk(&announcer, from: 991, to: 1004)
+        #expect(announcer.advance(to: 992, isOnTrail: true) == nil)
+        #expect(Self.walk(&announcer, from: 1005, to: 1050).isEmpty)
+        #expect(announcer.direction == .towardsEnd)
     }
 
     @Test("a second pass, once the hiker has been well away, is said again")

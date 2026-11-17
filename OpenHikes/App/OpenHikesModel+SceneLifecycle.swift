@@ -60,6 +60,9 @@ extension OpenHikesModel {
         // route edited under the walk on the hiker's other device.
         walkSession.endIfAbandoned()
         walkSession.checkWalkedLine()
+        // After the walk has had its say, so a walk that has just ended takes
+        // the warnings' feed down rather than having it start again.
+        junctionGuide.sceneDidBecomeActive()
         cloudSync.sceneDidBecomeActive()
         entitlement.sceneDidBecomeActive()
     }

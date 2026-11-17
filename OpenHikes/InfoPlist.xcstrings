@@ -283,49 +283,49 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenHikes verwendet deinen Standort, um zu zeigen, wo du auf der Karte bist, und um Wanderungen aufzuzeichnen, die du startest."
+            "value" : "OpenHikes verwendet deinen Standort, um zu zeigen, wo du auf der Karte bist, um Wanderungen aufzuzeichnen, die du startest, und um dir mit eingeschalteten Abzweigungshinweisen an jeder Abzweigung eines Wegs, dem du folgst, zu sagen, wohin es geht."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "OpenHikes uses your location to show where you are on the map and record hikes you choose to start."
+            "value" : "OpenHikes uses your location to show where you are on the map, record hikes you choose to start and, with junction warnings on, say which way to go at each junction of a trail you follow."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenHikes usa tu ubicación para mostrar dónde estás en el mapa y para grabar las excursiones que decidas empezar."
+            "value" : "OpenHikes usa tu ubicación para mostrar dónde estás en el mapa, para grabar las excursiones que decidas empezar y, con los avisos de cruces activados, para decirte hacia dónde ir en cada cruce del sendero que sigues."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenHikes utilise votre position pour indiquer où vous êtes sur la carte et pour enregistrer les randonnées que vous choisissez de démarrer."
+            "value" : "OpenHikes utilise votre position pour indiquer où vous êtes sur la carte, pour enregistrer les randonnées que vous choisissez de démarrer et, avec les alertes d’intersection activées, pour indiquer la direction à prendre à chaque intersection du sentier que vous suivez."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenHikes usa la tua posizione per mostrarti dove ti trovi sulla mappa e per registrare le escursioni che scegli di avviare."
+            "value" : "OpenHikes usa la tua posizione per mostrarti dove ti trovi sulla mappa, per registrare le escursioni che scegli di avviare e, con gli avvisi agli incroci attivati, per indicarti da che parte andare a ogni incrocio del sentiero che segui."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenHikes używa Twojego położenia, aby pokazywać, gdzie jesteś na mapie, i nagrywać wędrówki, które postanowisz rozpocząć."
+            "value" : "OpenHikes używa Twojego położenia, aby pokazywać, gdzie jesteś na mapie, nagrywać wędrówki, które postanowisz rozpocząć, i – gdy wskazówki na skrzyżowaniach są włączone – mówić, którędy iść na każdym skrzyżowaniu szlaku, którym idziesz."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenHikes использует вашу геопозицию, чтобы показывать на карте, где вы находитесь, и записывать походы, которые вы решили начать."
+            "value" : "OpenHikes использует вашу геопозицию, чтобы показывать на карте, где вы находитесь, записывать походы, которые вы решили начать, а при включенных подсказках на перекрестках — подсказывать, куда идти на каждом перекрестке тропы, по которой вы идете."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenHikes використовує вашу геопозицію, щоб показувати на карті, де ви перебуваєте, і записувати походи, які ви вирішите почати."
+            "value" : "OpenHikes використовує вашу геопозицію, щоб показувати на карті, де ви перебуваєте, записувати походи, які ви вирішите почати, а з увімкненими підказками на перехрестях — підказувати, куди йти на кожному перехресті стежки, якою ви йдете."
           }
         }
       }

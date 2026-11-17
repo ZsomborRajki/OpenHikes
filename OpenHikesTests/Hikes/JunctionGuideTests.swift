@@ -39,6 +39,33 @@ private final class HeldJunctionFeed: JunctionLocationFeeding {
     }
 }
 
+/// A graph out of reach until the suite says it is back: a trailhead with
+/// no signal and nothing kept.
+private actor ReturningJunctionGraph: TrailGraphProviding {
+    private let graph: TrailGraph
+    private var isReachable = false
+
+    init(graph: TrailGraph) {
+        self.graph = graph
+    }
+
+    func comeBack() { isReachable = true }
+
+    nonisolated func region(containing _: CLLocationCoordinate2D) -> TrailGraphRegion? {
+        TrailGraphRegion(zoom: 12, x: 1, y: 1)
+    }
+
+    func prefetch(around _: CLLocationCoordinate2D) throws {
+        guard isReachable else { throw URLError(.notConnectedToInternet) }
+    }
+
+    func cachedGraph(covering _: [CLLocationCoordinate2D]) -> TrailGraph? {
+        isReachable ? graph : nil
+    }
+
+    func hasCompleteCachedGraph(covering _: [CLLocationCoordinate2D]) -> Bool { isReachable }
+}
+
 /// What the guide said.
 @MainActor
 private final class HeardJunctionVoice: JunctionSpeaking {
@@ -67,10 +94,13 @@ struct JunctionGuideTests {
         TrailWalkSession(context: context, clock: clock.read)
     }
 
-    private func guide(for walk: TrailWalkSession) -> JunctionGuide {
+    private func guide(
+        for walk: TrailWalkSession,
+        graph: any TrailGraphProviding = StubTrailGraphProvider(graph: JunctionFixture.fork)
+    ) -> JunctionGuide {
         JunctionGuide(
             walk: walk,
-            graph: StubTrailGraphProvider(graph: JunctionFixture.fork),
+            graph: graph,
             defaults: defaults,
             feed: feed,
             voice: voice
@@ -192,6 +222,63 @@ struct JunctionGuideTests {
         #expect(!feed.isRunning)
         #expect(voice.sentences == ["Junction warnings on"])
         #expect(defaults.object(forKey: SettingsKey.junctionWarningsEnabled) as? Bool == false)
+    }
+
+    @Test("a line with no junction worth a word takes no fixes")
+    func noJunctionsNoFixes() async {
+        let session = walk()
+        // The stem and the left arm alone: one trail, no fork.
+        let oneTrail = TrailGraph(
+            nodes: JunctionFixture.fork.nodes.filter { $0.id != 3 },
+            edges: JunctionFixture.fork.edges.filter { $0.toNodeID != 3 }
+        )
+        let guide = guide(for: session, graph: StubTrailGraphProvider(graph: oneTrail))
+        _ = startWalking(session)
+
+        guide.toggle()
+        await settleDelegateHop(until: "the walk's line is read") { guide.isGuiding }
+
+        #expect(guide.junctions.isEmpty)
+        #expect(!feed.isRunning)
+    }
+
+    @Test("a graph out of reach takes no fixes, and is asked for again when the app comes back")
+    func unreachableGraphIsOwed() async {
+        let session = walk()
+        let graph = ReturningJunctionGraph(graph: JunctionFixture.fork)
+        let guide = guide(for: session, graph: graph)
+        _ = startWalking(session)
+
+        guide.toggle()
+        await settleDelegateHop(until: "the junctions are owed") { guide.isOwed }
+        #expect(!feed.isRunning)
+
+        await graph.comeBack()
+        guide.sceneDidBecomeActive()
+        await settleDelegateHop(until: "the walk's junctions are found") { guide.isGuiding }
+
+        #expect(guide.junctions.map(\.towardsEnd) == [.keepLeft])
+        #expect(feed.isRunning)
+    }
+
+    @Test("a fix far from the line parks the feed until the app comes back")
+    func farFromTheLineParks() async {
+        let session = walk()
+        let guide = guide(for: session)
+        _ = startWalking(session)
+        guide.toggle()
+        await settleDelegateHop(until: "the walk's junctions are found") { guide.isGuiding }
+
+        // Driven home, with the walk still following.
+        feed.send(JunctionFixture.at(5000, 0))
+        #expect(!feed.isRunning)
+        #expect(guide.isGuiding)
+
+        guide.sceneDidBecomeActive()
+        #expect(feed.isRunning)
+        // Still far off: parked again by the first fix.
+        feed.send(JunctionFixture.at(5000, 0))
+        #expect(!feed.isRunning)
     }
 
     @Test("a hiker who turned the warnings on has them on the next launch's walks")

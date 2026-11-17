@@ -51,12 +51,14 @@ extension MapView.Coordinator {
     func observeJunctionGuide(_ guide: JunctionGuide) {
         guard !junctionButton.isObserving else { return }
         junctionButton.isObserving = true
+        junctionButton.guide = guide
+        applyJunctionButton(animated: false)
         trackJunctionGuide(guide)
     }
 
+    /// Applied once a change, animated: applied again unanimated as the
+    /// observation was renewed, the button stopped fading and vanished.
     private func trackJunctionGuide(_ guide: JunctionGuide) {
-        junctionButton.guide = guide
-        applyJunctionButton(animated: false)
         reobserving(self, guide) {
             _ = guide.isOffered
             _ = guide.isOn

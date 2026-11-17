@@ -168,6 +168,20 @@ struct TrailJunctionFinderTests {
         #expect(try #require(TrailJunctionFinder.junctions(along: line, in: bent).first).towardsEnd == .keepLeft)
     }
 
+    @Test("a recording ten metres to one side of a narrow fork still takes the arm it walked")
+    func narrowForkReadFromTheNode() throws {
+        // Arms 15° either side of north. The line comes up the stem ten
+        // metres west of the node and joins the left arm 25 m on: read from
+        // where it passed the node, its way on bears 6°, nearer the right arm.
+        let narrow = Self.graph(
+            [0: (0, -200), 1: (0, 0), 2: (-53.59, 200), 3: (53.59, 200)],
+            trails: [[0, 1, 2], [1, 3]]
+        )
+        let line = Self.profile([(-10, -200), (-10, 0), (-6.47, 24.15), (-53.59, 200)])
+
+        #expect(try #require(TrailJunctionFinder.junctions(along: line, in: narrow).first).towardsEnd == .keepLeft)
+    }
+
     @Test("a way that turns after a short edge is read where the line is, not at the long edge's far end")
     func armReadsPartOfTheWayAlongALongEdge() throws {
         // The trail leaves the T west for 20 m, then runs north for 200 m in

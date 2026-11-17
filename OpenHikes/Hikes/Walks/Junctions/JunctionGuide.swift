@@ -22,6 +22,17 @@
 //  pocket — see ``JunctionLocationFeed`` for what that costs and why. Off,
 //  paused or ended, the feed stops and nothing is said.
 //
+//  And only while there is something to say. The feed starts once the
+//  line's junctions are found, and not for a line with none. A line or a
+//  graph that could not be read — offline at a trailhead, with nothing
+//  kept — is owed, and asked for again when the hiker is next in the app.
+//
+//  A hiker more than ``parkOffRouteMeters`` from the line has left it: driven
+//  home, most often, with the walk still following, since in a pocket on
+//  When In Use nothing else matches it and a walk is abandoned only after
+//  hours unmatched. There the feed is parked until the app comes to the
+//  front, where the walk's own feeds say whether it still is one.
+//
 //  ## The switch
 //
 //  Off until a hiker turns it on, from a button on the map's leading edge
@@ -64,6 +75,11 @@ final class JunctionGuide {
     /// The walk being guided, while one is.
     @ObservationIgnored private var guided: Guided?
 
+    /// How far from the line a fix parks the feed — see this file's header.
+    /// Far past any wrong turn a warning could still help with: the
+    /// off-trail question has asked that hiker long before.
+    static let parkOffRouteMeters: Double = 1000
+
     /// What guiding one walk has found out so far.
     private struct Guided {
         let hikeID: UUID
@@ -74,6 +90,11 @@ final class JunctionGuide {
         /// for near: a hiker walks a few metres between fixes.
         var lastDistance: Double?
         var preparation: Task<Void, Never>?
+        /// The line or its graph could not be read: tried again when the app
+        /// next comes to the front.
+        var isOwed = false
+        /// Whether the feed is running for this walk.
+        var isListening = false
     }
 
     /// - Parameters:
@@ -142,6 +163,23 @@ final class JunctionGuide {
     /// for the fixes that reach them — for a suite to wait on.
     var isGuiding: Bool { guided?.announcer != nil }
 
+    /// Whether the walk's junctions could not be found and are asked for
+    /// again at the next ``sceneDidBecomeActive()`` — for a suite to wait on.
+    var isOwed: Bool { guided?.isOwed == true }
+
+    /// The app came to the front. Junctions that could not be found are
+    /// asked for again, and a feed parked far from the line listens again:
+    /// the walk's own feeds have just had their say on whether it is still a
+    /// walk, and if the hiker is still far off, the first fix parks it again.
+    func sceneDidBecomeActive() {
+        guard let current = guided, current.preparation == nil else { return }
+        if current.isOwed {
+            prepare(hikeID: current.hikeID)
+        } else if !current.isListening, current.announcer?.junctions.isEmpty == false {
+            listen()
+        }
+    }
+
     /// The junctions of the walk being guided, once found.
     var junctions: [TrailJunction] { guided?.announcer?.junctions ?? [] }
 
@@ -172,21 +210,52 @@ final class JunctionGuide {
 
     private func start(hikeID: UUID) {
         guided = Guided(hikeID: hikeID)
-        feed.start { [weak self] fix in self?.receive(fix) }
+        prepare(hikeID: hikeID)
+    }
+
+    /// Reads the walk's line and finds its junctions, off the main actor.
+    private func prepare(hikeID: UUID) {
+        guided?.isOwed = false
         guided?.preparation = Task { [weak self, walk, graph] in
-            guard let line = await walk.lineForJunctions() else { return }
-            let found = await TrailJunctionFinder.junctions(along: line, from: graph)
+            var read: (line: RouteProfile, junctions: [TrailJunction])?
+            if let line = await walk.lineForJunctions(),
+               let found = try? await TrailJunctionFinder.junctions(along: line, from: graph) {
+                read = (line, found)
+            }
             guard !Task.isCancelled, let self, guided?.hikeID == hikeID else { return }
-            prepared(line, junctions: found)
+            guided?.preparation = nil
+            guard let read else {
+                // A read that failed is not a line without junctions.
+                guided?.isOwed = true
+                Self.logger.info("A walk's junctions could not be found; asking again in the foreground")
+                return
+            }
+            prepared(read.line, junctions: read.junctions)
         }
     }
 
     /// The walk's line and junctions, found: from here on its fixes are
-    /// matched and its junctions announced.
+    /// matched and its junctions announced, if it has any.
     private func prepared(_ line: RouteProfile, junctions found: [TrailJunction]) {
         guided?.profile = line
         guided?.announcer = JunctionAnnouncer(junctions: found, direction: walk.travelDirection)
         Self.logger.info("Guiding a walk past \(found.count, privacy: .public) junctions")
+        if !found.isEmpty { listen() }
+    }
+
+    private func listen() {
+        guided?.isListening = true
+        feed.start { [weak self] fix in self?.receive(fix) }
+    }
+
+    /// Stops the feed for a hiker far from the line, until the app comes back
+    /// — see this file's header.
+    private func park() {
+        guided?.isListening = false
+        guided?.lastDistance = nil
+        guided?.announcer?.forgetPosition()
+        feed.stop()
+        Self.logger.info("Parked junction warnings: the hiker is far from the line")
     }
 
     private func stop() {
@@ -205,6 +274,10 @@ final class JunctionGuide {
         // carries what to do walking either way.
         guard let match = profile.nearestPoint(to: fix.coordinate, near: current.lastDistance, heading: fix.course)
         else { return }
+        guard match.offRouteMeters <= Self.parkOffRouteMeters else {
+            park()
+            return
+        }
         let onTrail = match.offRouteMeters <= RouteProfile.followMatchThresholdMeters
         if onTrail { current.lastDistance = match.distanceAlongRoute }
         let cue = announcer.advance(to: match.distanceAlongRoute, isOnTrail: onTrail)
