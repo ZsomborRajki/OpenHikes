@@ -173,7 +173,26 @@ analyse() {
         arguments+=(--processes "$directory/processes.txt")
     fi
     arguments+=("${module_filter[@]+"${module_filter[@]}"}")
-    swift "$repository_root/Scripts/lib/render-trace-report.swift" "${arguments[@]}" >/dev/null
+    # Compiled with optimisation rather than run as a script, because the
+    # interpreter runs the code that handles each of a recording's millions
+    # of rows unoptimised: a 229-test recording took 946 s as a script and
+    # 669 s compiled, with the same report. Built afresh each time, since the
+    # seconds that takes are nothing beside the minutes it saves, and a binary
+    # kept between runs could be of an older copy of the source.
+    local build status=0
+    build="$(mktemp -d)"
+    if ! swiftc -O "$repository_root/Scripts/lib/render-trace-report.swift" \
+        -o "$build/render-trace-report" 2> "$build/swiftc.log"; then
+        cat "$build/swiftc.log" >&2
+        rm -rf "$build"
+        echo "The report could not be compiled." >&2
+        return 1
+    fi
+    "$build/render-trace-report" "${arguments[@]}" >/dev/null || status=$?
+    rm -rf "$build"
+    if (( status != 0 )); then
+        return "$status"
+    fi
     echo "Report: $directory/report.md"
     # The table every test shares, so a run says something without opening
     # the file: its heading, then its rows up to the first line that is not

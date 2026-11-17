@@ -40,7 +40,8 @@
 //  the trace. So unexplained is not a verdict; it is where to put
 //  `Self._logChanges()` next.
 //
-//  Usage:
+//  `Scripts/render-trace.sh` compiles this with optimisation and runs the
+//  binary; it says why. Run as a script, it gives the same report, slower:
 //    swift Scripts/lib/render-trace-report.swift \
 //      --trace <recording.trace> --result-bundle <run.xcresult> \
 //      --output <directory> [--baseline <earlier bodies.tsv>] [--module <prefix>]
@@ -101,25 +102,23 @@ func parseOptions() -> Options {
 /// the first on `PATH` — which is how Scripts/run-script-tests.sh hands this
 /// fixture tables instead of a recording.
 ///
-/// Returns what the tool printed, or nothing when `file` is given, in which
-/// case that is where it went.
-@discardableResult
-func xcrun(_ arguments: [String], into file: FileHandle? = nil) -> Data {
+/// Returns what the tool printed. A table goes through ``Export`` instead.
+func xcrun(_ arguments: [String]) -> Data {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
     process.arguments = ["xcrun"] + arguments
     let output = Pipe()
     let errors = Pipe()
-    process.standardOutput = file ?? output
+    process.standardOutput = output
     process.standardError = errors
     do {
         try process.run()
     } catch {
         fail("could not run xcrun \(arguments.joined(separator: " ")): \(error)")
     }
-    // Read before waiting: an export larger than the pipe's buffer would
+    // Read before waiting: an answer larger than the pipe's buffer would
     // otherwise block the child on a write nobody is reading.
-    let data = file == nil ? output.fileHandleForReading.readDataToEndOfFile() : Data()
+    let data = output.fileHandleForReading.readDataToEndOfFile()
     let message = errors.fileHandleForReading.readDataToEndOfFile()
     process.waitUntilExit()
     guard process.terminationStatus == 0 else {
@@ -181,18 +180,20 @@ final class TableReader: NSObject, XMLParserDelegate {
         self.onRow = onRow
     }
 
+    /// Reads `stream` to its end, or to the first thing in it that is not
+    /// the XML expected, which `failure` then describes.
     static func read(
-        _ file: URL,
+        _ stream: InputStream,
         remembering remembered: Set<String>? = nil,
         onRow: (([String: Cell]) -> Void)? = nil
-    ) -> TableReader {
+    ) -> (reader: TableReader, failure: String?) {
         let reader = TableReader(remembered: remembered, onRow: onRow)
-        guard let parser = XMLParser(contentsOf: file) else { fail("could not open \(file.path)") }
+        let parser = XMLParser(stream: stream)
         parser.delegate = reader
         guard parser.parse() else {
-            fail("could not parse \(file.lastPathComponent): \(parser.parserError.map { "\($0)" } ?? "unknown error")")
+            return (reader, parser.parserError.map { "\($0)" } ?? "unknown error")
         }
-        return reader
+        return (reader, nil)
     }
 
     func parser(
@@ -292,32 +293,87 @@ func traceStart(of trace: String) -> Date {
     return date
 }
 
-/// Exports one of the recording's tables into `directory` and reads it back
-/// from there, a row at a time when `onRow` is given.
+/// One of the recording's tables, being exported: started when it is made,
+/// and read a row at a time as `xctrace` writes it.
 ///
-/// Through a file rather than a pipe into memory: an hour's `kdebug` table is
-/// gigabytes of XML, and a parser reading from disk never holds more of it
-/// than the row it is on.
-@discardableResult
-func table(
-    _ schema: String,
-    in trace: String,
-    exportingInto directory: URL,
-    remembering remembered: Set<String>? = nil,
-    onRow: (([String: Cell]) -> Void)? = nil
-) -> TableReader {
-    let file = directory.appendingPathComponent("\(schema).xml")
-    guard FileManager.default.createFile(atPath: file.path, contents: nil),
-          let handle = try? FileHandle(forWritingTo: file) else {
-        fail("could not write \(file.path)")
+/// Through a pipe rather than a file, so that reading overlaps the export
+/// instead of waiting for it to finish. An hour's `kdebug` table is gigabytes
+/// of XML that took `xctrace` five minutes to write and the parser four more
+/// to read, one after the other; now the slower of the two is the wait, and
+/// the parser still never holds more of the table than the row it is on.
+///
+/// Each export is one `xctrace` reading the whole recording on its own, so
+/// all of them are started at once, before any is read: the longest is then
+/// the wait, not the sum. One that is not being read yet stops on its full
+/// pipe until it is.
+final class Export {
+    let schema: String
+    private let process = Process()
+    private let output = Pipe()
+    private let errors = Pipe()
+    /// What the tool said on its standard error, drained as it comes so that
+    /// a tool with much to say never stops on a full pipe.
+    private var message = Data()
+    private let drained = DispatchGroup()
+
+    init(_ schema: String, of trace: String) {
+        self.schema = schema
+        // Through `env` for the reason ``xcrun(_:)`` gives.
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = [
+            "xcrun", "xctrace", "export", "--input", trace,
+            "--xpath", "/trace-toc/run[@number=\"1\"]/data/table[@schema=\"\(schema)\"]",
+        ]
+        process.standardOutput = output
+        process.standardError = errors
+        do {
+            try process.run()
+        } catch {
+            fail("could not export \(schema): \(error)")
+        }
+        drained.enter()
+        DispatchQueue.global().async { [self] in
+            message = errors.fileHandleForReading.readDataToEndOfFile()
+            drained.leave()
+        }
     }
-    xcrun([
-        "xctrace", "export", "--input", trace,
-        "--xpath", "/trace-toc/run[@number=\"1\"]/data/table[@schema=\"\(schema)\"]",
-    ], into: handle)
-    try? handle.close()
-    defer { try? FileManager.default.removeItem(at: file) }
-    return TableReader.read(file, remembering: remembered, onRow: onRow)
+
+    /// Reads the table to its end, a row at a time when `onRow` is given,
+    /// and fails if the export or the reading did, saying what the tool said.
+    @discardableResult
+    func read(
+        remembering remembered: Set<String>? = nil,
+        onRow: (([String: Cell]) -> Void)? = nil
+    ) -> TableReader {
+        let descriptor = output.fileHandleForReading.fileDescriptor
+        guard let stream = InputStream(fileAtPath: "/dev/fd/\(descriptor)") else {
+            fail("could not read the export of \(schema)")
+        }
+        let (reader, failure) = TableReader.read(stream, remembering: remembered, onRow: onRow)
+        // A reader that stopped early leaves the export writing into a pipe
+        // nobody reads, so it is closed before the export is waited for.
+        stream.close()
+        try? output.fileHandleForReading.close()
+        process.waitUntilExit()
+        drained.wait()
+        let said = String(decoding: message, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        // A reader that stopped early is reported as such, whatever became
+        // of the export after its pipe was closed, with anything the tool
+        // said: an export that failed leaves a table cut short or none at
+        // all, which is what stops the reader.
+        if let failure {
+            fail("could not read the export of \(schema): \(failure)" + (said.isEmpty ? "" : "; xctrace said: \(said)"))
+        }
+        guard process.terminationStatus == 0 else {
+            fail("xctrace export of \(schema) failed: \(said.isEmpty ? "it said nothing" : said)")
+        }
+        return reader
+    }
+}
+
+/// Runs each job on a thread of its own and returns when all have.
+func concurrently(_ jobs: () -> Void...) {
+    DispatchQueue.concurrentPerform(iterations: jobs.count) { jobs[$0]() }
 }
 
 // MARK: - Processes
@@ -351,29 +407,38 @@ struct ProcessFilter {
         processAt[time]
     }
 
-    /// - Parameter instants: The raw times of the events to be filtered. Only
-    ///   those are kept from the tracepoints, which a long run has millions of.
-    static func load(
-        trace: String,
-        processes file: String,
-        at instants: Set<String>,
-        exportingInto directory: URL
-    ) -> Self {
+    /// - Parameters:
+    ///   - instants: The raw times of the events to be filtered. Only those
+    ///     are kept from the tracepoints, which a long run has millions of.
+    ///   - tables: The `kdebug` export and the `os-signpost` one, in that
+    ///     order: an instant both name is `kdebug`'s.
+    static func load(processes file: String, at instants: Set<String>, from tables: [Export]) -> Self {
         guard let text = try? String(contentsOfFile: file, encoding: .utf8) else {
             fail("could not read the app's process ids from \(file)")
         }
         let appProcesses = Set(text.split(whereSeparator: \.isNewline).compactMap { Int32($0) })
-        var processAt: [String: Int32] = [:]
-        // Only the thread is remembered between rows, for the same reason:
-        // almost every instant and argument in these tables is unique.
-        for schema in ["kdebug", "os-signpost"] {
-            table(schema, in: trace, exportingInto: directory, remembering: ["thread"]) { row in
-                guard let time = row["time"]?.raw, instants.contains(time), processAt[time] == nil,
+        // One map a table, each written by its own reader, so the two are
+        // read side by side and merged in the order the tables are given.
+        let found = tables.map { _ in Found() }
+        DispatchQueue.concurrentPerform(iterations: tables.count) { index in
+            // Only the thread is remembered between rows, for the same
+            // reason: almost every instant and argument in these tables is
+            // unique.
+            tables[index].read(remembering: ["thread"]) { row in
+                guard let time = row["time"]?.raw, instants.contains(time), found[index].processAt[time] == nil,
                       let pid = processID(in: row["thread"]?.display) else { return }
-                processAt[time] = pid
+                found[index].processAt[time] = pid
             }
         }
+        let processAt = found.reduce(into: [String: Int32]()) { merged, table in
+            merged.merge(table.processAt) { first, _ in first }
+        }
         return Self(processAt: processAt, appProcesses: appProcesses)
+    }
+
+    /// What one table's reader has found so far.
+    private final class Found {
+        var processAt: [String: Int32] = [:]
     }
 
     /// "Main Thread (0x2590) (ControlCenter, pid: 1134)" is process 1134.
@@ -711,14 +776,22 @@ func main() {
     let options = parseOptions()
     try? FileManager.default.createDirectory(atPath: options.output, withIntermediateDirectories: true)
 
+    // Every export starts now — see ``Export``. The process join's two
+    // tables are read only once the SwiftUI tables have said which instants
+    // it needs.
+    let propertyTable = Export("swiftui-link-event", of: options.trace)
+    let bodyTable = Export("swiftui-body-interval", of: options.trace)
+    let joinTables = options.processes.map { _ in
+        [Export("kdebug", of: options.trace), Export("os-signpost", of: options.trace)]
+    }
     let start = traceStart(of: options.trace)
     let origin = start.timeIntervalSince1970
-    let exports = URL(fileURLWithPath: options.output)
-    let properties = table("swiftui-link-event", in: options.trace, exportingInto: exports)
-    let bodies = table("swiftui-body-interval", in: options.trace, exportingInto: exports)
+    var properties: TableReader!
+    var bodies: TableReader!
+    concurrently({ properties = propertyTable.read() }, { bodies = bodyTable.read() })
     let filter = options.processes.map { file in
         let instants = bodies.rows.compactMap { $0["start"]?.raw } + properties.rows.compactMap { $0["time"]?.raw }
-        return ProcessFilter.load(trace: options.trace, processes: file, at: Set(instants), exportingInto: exports)
+        return ProcessFilter.load(processes: file, at: Set(instants), from: joinTables ?? [])
     }
     var excluded = Excluded()
     let updates = propertyUpdates(
