@@ -30,7 +30,7 @@ There is no OpenHikes account and no server holding your hikes: they live on the
 
 ## Requirements
 
-- Xcode 27 or later. The app deploys to iOS 18.4 on iPhone and iPad, and its embedded watch app to watchOS 11.0.
+- Xcode 27 or later. The app deploys to iOS 18.4 on iPhone and iPad, and its embedded watch app to watchOS 11.0. An Apple silicon Mac runs it as an iPad app (*My Mac (Designed for iPad)* in Xcode).
 - An Apple development team that can sign WeatherKit, both App Groups, the iCloud container, push and Time Sensitive Notifications, and HealthKit.
 - Optionally, API keys for Stadia and Thunderforest, each with a paid plan from its vendor. OpenStreetMap and Apple's maps need no key, and a build without keys shows the paid styles locked.
 

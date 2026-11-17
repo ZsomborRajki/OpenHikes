@@ -359,7 +359,12 @@ final class SystemRecordingLocationSource: RecordingLocationSource {
     /// is asked the hiker is off the mountain and the state that would have
     /// explained it is gone. Deliberately not `#if DEBUG` — a debug build is
     /// exactly where this never happens.
+    ///
+    /// Never on a Mac, whose CoreLocation overlay has none of the diagnostics.
+    /// The app links it weakly so that the launch survives, which leaves those
+    /// symbols bound to nothing (*The Mac* in AGENTS.md).
     private static func logDiagnostics(of session: CLBackgroundActivitySession) async {
+        guard !ProcessInfo.processInfo.isiOSAppOnMac else { return }
         do {
             for try await diagnostic in session.diagnostics {
                 guard diagnostic.authorizationDenied
