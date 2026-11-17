@@ -27,7 +27,7 @@ nonisolated enum SettingsKey {
     static let showsHikingRoutes = "settings.showsHikingRoutes"
     /// How the hike list is ordered — see ``HikeListSort``. A preference about
     /// this screen on this device rather than a fact about the library, so it
-    /// sits here with the other settings rather than travelling with the
+    /// sits here with the other settings rather than traveling with the
     /// hikes.
     static let hikeListSort = "settings.hikeListSort"
     /// Whether Background Trail Tracking is on, read by `BackgroundTrailTracker`
@@ -107,6 +107,11 @@ nonisolated enum SettingsKey {
     /// decision rather than captured, so turning it off mid-hike stops the
     /// next pause, and hands a pause the app has already made to the hiker.
     static let autoPauseEnabled = "settings.autoPauseEnabled"
+    /// Whether a walk says which way to go before each junction on its
+    /// trail, and the watch taps — see ``JunctionGuide``. Written by the
+    /// button on the map, and read by the guide when it is built and by the
+    /// watch link whenever the suite changes.
+    static let junctionWarningsEnabled = "settings.junctionWarningsEnabled"
     /// Whether the screens a live hike is watched from may hold the display
     /// awake. Read by ``ScreenWakePolicy`` through the modifier on those
     /// screens rather than captured, so turning it off puts the idle timer
@@ -243,6 +248,11 @@ nonisolated enum SettingsDefault {
     /// dotted leg where they stood. A hiker who wants every minute on the
     /// clock turns it off.
     static let autoPauseEnabled = true
+    /// Off, by the owner's decision. The warnings speak aloud and keep the
+    /// GPS on through a pocketed walk as a recording does, and neither is
+    /// something to start for a hiker who has not asked. The button that
+    /// turns them on is on the map for every walk.
+    static let junctionWarningsEnabled = false
     /// Off. The display is the largest single consumer on the device, and a
     /// walk is measured in hours — so the hiker who has not asked for this
     /// keeps every bit of what the other energy policies buy them. The case

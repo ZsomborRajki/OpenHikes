@@ -109,6 +109,9 @@ extension MapView.Coordinator {
         let wantsFlush = attributionView.isHidden
         photoControlsClearance?.apply(flush: wantsFlush)
         trailDraftClearance?.apply(flush: wantsFlush)
+        // The junction warnings button stands on the line when neither pill
+        // is up, so it takes the same answer.
+        applyJunctionButtonPlacement()
     }
 }
 #endif

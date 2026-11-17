@@ -13,9 +13,10 @@
 //    a watch that wakes up out of range still has a list of trails. Latest
 //    wins, which is what a list of trails is. The Auto-Pause switch rides on
 //    it, because the watch's own recordings follow it — see
-//    ``WatchLibraryDigest/autoPauseEnabled``.
-//  * Answers a ``WatchTrailRequest`` with the trail's geometry, unless the
-//    watch already holds that revision of it.
+//    ``WatchLibraryDigest/autoPauseEnabled`` — and so does the junction
+//    warnings switch, which the watch's taps follow.
+//  * Answers a ``WatchTrailRequest`` with the trail's geometry and its
+//    junctions, unless the watch already holds that revision of it.
 //  * Takes a ``WatchRecordedWalk`` and keeps it, then sends a receipt so the
 //    watch can let go of it — and writes it to Health, through
 //    ``WatchWalkHealthExport``, because the watch threw its own workout away.
@@ -125,9 +126,12 @@ final class WatchSessionCoordinator: NSObject {
     /// The Health writer for a walk that arrives, or `nil` for a launch with
     /// no Health store to write to — the same `nil` the recorder's writer is.
     @ObservationIgnored private let healthExport: WatchWalkHealthExport?
-    /// Where the Auto-Pause switch is read, for the library the watch is
-    /// sent.
+    /// Where the Auto-Pause and junction warnings switches are read, for the
+    /// library the watch is sent.
     @ObservationIgnored private let defaults: UserDefaults
+    /// The trail graph a package's junctions are read from, or `nil` for a
+    /// launch with none, whose packages carry no junctions.
+    @ObservationIgnored private let trailGraph: (any TrailGraphProviding)?
     /// Holds the suite's change notification, so a switch turned on this
     /// phone, or arriving from iCloud, reaches the watch without waiting for
     /// the library to change.
@@ -149,30 +153,43 @@ final class WatchSessionCoordinator: NSObject {
     /// The switch as the watch was last sent it, so that only a change of it
     /// sends the library again: the suite's notification names no key.
     @ObservationIgnored private var publishedAutoPause: Bool? // swiftlint:disable:this discouraged_optional_boolean
+    // swiftlint:disable discouraged_optional_boolean
+    /// The junction warnings switch as the library last sent carried it, for
+    /// the reason ``publishedAutoPause`` is kept.
+    @ObservationIgnored private var publishedJunctionWarnings: Bool?
+    // swiftlint:enable discouraged_optional_boolean
     /// Whether the session can take a transfer, and the packages and receipts
     /// that finished while it could not. See ``WatchSessionActivation``.
     @ObservationIgnored private var activation = WatchSessionActivation()
     #endif
 
-    init(container: ModelContainer, defaults: UserDefaults, healthExport: WatchWalkHealthExport? = nil) {
+    init(
+        container: ModelContainer,
+        defaults: UserDefaults,
+        healthExport: WatchWalkHealthExport? = nil,
+        trailGraph: (any TrailGraphProviding)? = nil
+    ) {
         self.container = container
         self.healthExport = healthExport
         self.defaults = defaults
+        self.trailGraph = trailGraph
         super.init()
         #if canImport(WatchConnectivity)
         preferenceObservation.observe(defaults: defaults) { [weak self] in
-            self?.autoPauseMayHaveChanged()
+            self?.switchesMayHaveChanged()
         }
         #endif
     }
 
     /// The library as the watch is sent it: the newest trails, and the
-    /// Auto-Pause switch as `defaults` holds it.
+    /// Auto-Pause and junction warnings switches as `defaults` holds them.
     static func digest(of catalog: SharedHikeCatalog, defaults: UserDefaults) -> WatchLibraryDigest {
         let autoPause = defaults.object(forKey: SettingsKey.autoPauseEnabled) as? Bool
+        let junctionWarnings = defaults.object(forKey: SettingsKey.junctionWarningsEnabled) as? Bool
         return WatchLibraryDigest(
             hikes: Array(catalog.hikes.prefix(WatchLibraryDigest.hikeBudget)),
-            autoPauseEnabled: autoPause ?? SettingsDefault.autoPauseEnabled
+            autoPauseEnabled: autoPause ?? SettingsDefault.autoPauseEnabled,
+            junctionWarningsEnabled: junctionWarnings ?? SettingsDefault.junctionWarningsEnabled
         )
     }
 
@@ -223,6 +240,7 @@ final class WatchSessionCoordinator: NSObject {
         pendingCatalog = nil
         let digest = Self.digest(of: catalog, defaults: defaults)
         publishedAutoPause = digest.autoPauseEnabled
+        publishedJunctionWarnings = digest.junctionWarningsEnabled
         do {
             try session.updateApplicationContext(WatchLink.message(digest))
         } catch {
@@ -236,12 +254,13 @@ final class WatchSessionCoordinator: NSObject {
     // MARK: Answering the watch
 
     private func sendTrail(_ request: WatchTrailRequest) {
-        Task { [container] in
+        Task { [container, trailGraph] in
             // Nothing to send is nothing to report either. A hike deleted
             // since the watch's list was published leaves the watch drawing
             // its waiting state, and the next digest takes the row off its
             // list.
-            guard let package = await WatchTrailPackaging.answer(to: request, from: container) else { return }
+            guard let package = await WatchTrailPackaging.answer(to: request, from: container, graph: trailGraph)
+            else { return }
             send(package)
         }
     }
@@ -300,13 +319,14 @@ final class WatchSessionCoordinator: NSObject {
         }.value
     }
 
-    /// Sends the library again when the Auto-Pause switch is not what the
-    /// watch was last sent.
-    private func autoPauseMayHaveChanged() {
+    /// Sends the library again when the Auto-Pause or junction warnings
+    /// switch is not what the watch was last sent.
+    private func switchesMayHaveChanged() {
         #if canImport(WatchConnectivity)
         guard let catalog = Self.catalogToResend(
             latestCatalog,
             sentAutoPause: publishedAutoPause,
+            sentJunctionWarnings: publishedJunctionWarnings,
             defaults: defaults
         ) else { return }
         publish(catalog)
@@ -314,17 +334,20 @@ final class WatchSessionCoordinator: NSObject {
     }
 
     /// The library to send the watch again, because the Auto-Pause switch in
-    /// `defaults` is no longer `sentAutoPause`, or `nil`. Nothing before the
-    /// first library has gone, because that one carries the switch, and
+    /// `defaults` is no longer `sentAutoPause`, or the junction warnings
+    /// switch no longer `sentJunctionWarnings`, or `nil`. Nothing before the
+    /// first library has gone, because that one carries both switches, and
     /// nothing when another key of the suite changed.
     static func catalogToResend(
         _ latest: SharedHikeCatalog?,
         sentAutoPause: Bool?, // swiftlint:disable:this discouraged_optional_boolean
+        sentJunctionWarnings: Bool?, // swiftlint:disable:this discouraged_optional_boolean
         defaults: UserDefaults
     ) -> SharedHikeCatalog? {
-        guard let latest, let sentAutoPause,
-              digest(of: latest, defaults: defaults).autoPauseEnabled != sentAutoPause
-        else { return nil }
+        guard let latest, let sentAutoPause else { return nil }
+        let digest = digest(of: latest, defaults: defaults)
+        let junctionsMoved = sentJunctionWarnings.map { digest.junctionWarningsEnabled != $0 } ?? false
+        guard digest.autoPauseEnabled != sentAutoPause || junctionsMoved else { return nil }
         return latest
     }
 

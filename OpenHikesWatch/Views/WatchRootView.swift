@@ -88,6 +88,9 @@ struct WatchRootView: View {
             }
         }
         .tabViewStyle(.verticalPage)
+        // Over every screen, because a junction comes whichever is up. A
+        // view of its own, so the cue's read is not this body's.
+        .overlay(alignment: .top) { JunctionCueBanner() }
     }
 
     /// The stack a launch starts with: empty for every real one.

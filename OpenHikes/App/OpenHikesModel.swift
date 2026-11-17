@@ -36,6 +36,9 @@ final class OpenHikesModel {
     /// than by the detail view because it outlives the screen that starts it
     /// — see ``TrailWalkSession``.
     let walkSession: TrailWalkSession
+    /// What says which way to go before each junction of the walk under
+    /// way, while the hiker has it on — see ``JunctionGuide``.
+    let junctionGuide: JunctionGuide
     let locationManager: LocationManager
     /// Where ``OpenHikeIntent`` leaves a request for the view tree to pick up.
     ///
@@ -237,6 +240,7 @@ final class OpenHikesModel {
         let session = walkSession
             ?? Self.makeWalkSession(container, backgroundTracker, movementReminders, hikeRecorder, weatherManager)
         self.walkSession = session
+        junctionGuide = JunctionGuide.forThisLaunch(walk: session, graph: trailGraphProvider, defaults: defaults)
         // And the recorder says when a draft stops being one, so the hiker
         // standing at the end of a recording is not walking it again.
         hikeRecorder.recordingDidSave = { [weak session] hikeID in

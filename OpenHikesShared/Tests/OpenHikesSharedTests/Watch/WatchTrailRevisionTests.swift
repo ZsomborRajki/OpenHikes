@@ -88,6 +88,7 @@ struct WatchTrailRevisionTests {
 
         enum Edit: CaseIterable, Sendable {
             case movedPoint, addedPoint, droppedElevation, renamed, retinted, relengthened, regained, paused
+            case junctionAdded, junctionMoved, junctionRedirected
         }
 
         static func package(_ edit: Edit? = nil, sentAt: Date = stamp) -> WatchTrailPackage {
@@ -101,6 +102,7 @@ struct WatchTrailRevisionTests {
                     WatchTrailPoint(latitude: 47.6972, longitude: 12.8559, elevationMeters: 618.5),
                     WatchTrailPoint(latitude: 47.6989, longitude: 12.8571, elevationMeters: 624.25),
                 ],
+                junctions: [TrailJunction(distanceMeters: 4100, towardsEnd: .keepLeft, towardsStart: nil)],
                 elevationGainMeters: 512.5,
                 elevationLossMeters: 498.5,
                 sentAt: sentAt
@@ -114,6 +116,10 @@ struct WatchTrailRevisionTests {
             case .relengthened: package.totalDistanceMeters += 120
             case .regained: package.elevationGainMeters = nil
             case .paused: package.pauseIndices = [1]
+            case .junctionAdded:
+                package.junctions.append(TrailJunction(distanceMeters: 900, towardsEnd: .turnLeft, towardsStart: nil))
+            case .junctionMoved: package.junctions[0].distanceMeters += 5
+            case .junctionRedirected: package.junctions[0].towardsStart = .sharpRight
             case nil: break
             }
             return package

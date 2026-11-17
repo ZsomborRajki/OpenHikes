@@ -169,6 +169,11 @@ struct MapView: MapViewRepresentable, Equatable {
     /// bubble and re-renders no view — see `MapCoordinator+WalkTimeLeft.swift`.
     /// `nil` in a suite that is not about walks.
     var walk: TrailWalkSession?
+    /// The junction warnings, whose button stands on the map's leading edge
+    /// while a walk is under way. Observed directly, as ``walk`` is — see
+    /// `MapCoordinator+JunctionButton.swift`. `nil` in a suite that is not
+    /// about them.
+    var junctionGuide: JunctionGuide?
 
     /// How far the landscape side panel reaches in from the leading edge, or
     /// zero in portrait where there is no panel and the sheet is over the map
@@ -306,6 +311,11 @@ struct MapView: MapViewRepresentable, Equatable {
         coordinator.observeTrailPointSearch(trailMaker)
         // And *Places Around Trail*'s pale pins and pill, for the same reason.
         coordinator.observePlacesAround(placePins.around, on: mapView)
+        // And the junction warnings button, for the same reason: a map
+        // rebuilt mid-walk has to offer it on this first pass.
+        #if os(iOS)
+        if let junctionGuide { coordinator.observeJunctionGuide(junctionGuide) }
+        #endif
 
         return mapView
     }
@@ -446,6 +456,9 @@ struct MapView: MapViewRepresentable, Equatable {
         addTrailPointSearchControl(to: mapView, coordinator, alignedTo: guide)
         // And *Places Around Trail*'s, the third — see `TrailPlacesAround.swift`.
         addPlacesAroundSearchControl(to: mapView, coordinator, alignedTo: guide)
+        // And the junction warnings button, standing on whichever of the two
+        // pills above is up — so after both.
+        addJunctionButton(to: mapView, coordinator, alignedTo: guide)
         // Replaces the placeholders above with real positions as soon as the
         // map has a height to measure against, and again whenever that height
         // changes — see `MapLayoutObserver.swift`.
@@ -911,6 +924,7 @@ extension MapView {
             && lhs.searchCompleter === rhs.searchCompleter
             && lhs.libraryLines === rhs.libraryLines
             && lhs.walk === rhs.walk
+            && lhs.junctionGuide === rhs.junctionGuide
             && lhs.sidePanelInset == rhs.sidePanelInset
             && lhs.isCoveredByPanel == rhs.isCoveredByPanel
     }

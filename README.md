@@ -13,6 +13,7 @@ There is no OpenHikes account and no server holding your hikes: they live on the
 - **Drawing a trail**: press and hold to drop stops, or search for them by name. Each leg follows the paths OpenStreetMap has mapped.
 - **Places** along a trail: huts, springs and waterfalls from OpenStreetMap, or places of your own, with your photographs and, where OpenStreetMap links one, the start of the place's Wikipedia article.
 - **Walking a saved trail**, with progress along it, the time left shown on the line ahead, a history of past walks and a shareable photo card.
+- **Junction warnings** while you follow a trail: the phone says which way to go before each fork, and the watch taps. Off until you turn them on from the map.
 - **Statistics**: an interactive elevation profile, the segments between a hike's stops, overall and moving average speed, surface and Swiss Alpine Club difficulty from OpenStreetMap, and yearly and all-time totals.
 - **Maps**: OpenStreetMap, Apple's standard and satellite maps, Stadia Outdoors, Stamen Terrain and Thunderforest Outdoors, with OpenStreetMap's marked hiking routes as a layer you can switch off and every hike in your library drawn faintly on top. Tilting the map raises the terrain in 3D under the satellite map and the tile styles. Tiles you browse are saved as you go, and a route's map can be downloaded where the provider allows it.
 - **Photos** taken on a walk or picked from the library, pinned to where on the trail they were taken.

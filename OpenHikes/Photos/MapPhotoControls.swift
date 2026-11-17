@@ -144,6 +144,8 @@ extension MapView.Coordinator {
         if visible {
             photoControls.setAddPlaceVisible(photoCaptureController?.canAddPlace == true)
         }
+        // The junction warnings button stands on whichever pill is up.
+        applyJunctionButtonPlacement()
         photoControls.fadeMapControl(
             visible: visible,
             restingAlpha: photoControlsSheetAlpha,

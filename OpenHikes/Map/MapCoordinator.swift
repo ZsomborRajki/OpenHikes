@@ -182,6 +182,10 @@ extension MapView {
         /// The opacity the sheet's position alone calls for, as the camera
         /// pill's ``photoControlsSheetAlpha`` is.
         var flattenButtonSheetAlpha: CGFloat = 1
+        /// The junction warnings button, kept for
+        /// `MapCoordinator+JunctionButton.swift`, which owns everything that
+        /// reads it.
+        var junctionButton = JunctionButtonParts()
         #endif
 
         weak var sheetMetrics: SheetMetrics?
@@ -445,9 +449,7 @@ extension MapView {
         /// annotations and never overlays, so this is the whole of how a line
         /// is tappable at all — see `MapCoordinator+RouteTap.swift`.
         var routeTapRecognizer: UITapGestureRecognizer?
-        #endif
 
-        #if canImport(UIKit)
         weak var areaSearchControl: MapAreaSearchView?
         #endif
 

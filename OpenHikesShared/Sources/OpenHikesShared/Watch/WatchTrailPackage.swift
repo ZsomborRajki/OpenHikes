@@ -63,11 +63,16 @@ public struct WatchTrailPoint: Codable, Sendable, Equatable {
 
 /// A trail the phone has sent to the watch.
 public struct WatchTrailPackage: SharedPayload, Equatable {
-    public static let currentSchemaVersion = 3
+    public static let currentSchemaVersion = 4
 
     /// How many points of a route cross to the watch. See this file's header
     /// for why it is not the widget's 180 and not the whole route.
     public static let pointBudget = 800
+
+    /// How many junctions cross. A day's trail through a dense network meets
+    /// a few dozen worth a word; this is room for a long one through a park
+    /// of paths, at some twenty bytes of JSON each.
+    public static let junctionBudget = 300
 
     public let schemaVersion: Int
 
@@ -102,6 +107,12 @@ public struct WatchTrailPackage: SharedPayload, Equatable {
     /// exactly one leg of the line here. At most ``pauseBudget`` of them,
     /// whatever the route holds: see ``keptPoints(of:gapMeters:pointBudget:pauseBudget:)``.
     public var pauseIndices: [Int]
+    /// Where the trail meets another and what to do there, on the scale of
+    /// ``totalDistanceMeters`` — the scale ``WatchRouteTracker`` reports a
+    /// position on, so the two compare directly. Worked out by the phone from
+    /// its trail graph, which the watch has no copy of; empty where there was
+    /// no graph to read. See ``TrailJunction``.
+    public var junctions: [TrailJunction]
     /// The request this answers. A newer request supersedes this answer even
     /// when the phone sends nothing because the watch already has its revision.
     public var requestID: UUID
@@ -117,6 +128,7 @@ public struct WatchTrailPackage: SharedPayload, Equatable {
         totalDistanceMeters: Double,
         points: [WatchTrailPoint],
         pauseIndices: [Int] = [],
+        junctions: [TrailJunction] = [],
         elevationGainMeters: Double? = nil,
         elevationLossMeters: Double? = nil,
         sentAt: Date = .now,
@@ -128,6 +140,7 @@ public struct WatchTrailPackage: SharedPayload, Equatable {
         self.totalDistanceMeters = totalDistanceMeters
         self.points = points
         self.pauseIndices = pauseIndices
+        self.junctions = Array(junctions.prefix(Self.junctionBudget))
         self.elevationGainMeters = elevationGainMeters
         self.elevationLossMeters = elevationLossMeters
         self.sentAt = sentAt
@@ -160,8 +173,8 @@ public struct WatchTrailPackage: SharedPayload, Equatable {
     /// shortest form that reads back to the same bits.
     ///
     /// Everything the watch uses is in it — the line, the heights, the pauses,
-    /// the name it records under, the tint and the length it reports progress
-    /// on — and ``sentAt``, ``requestID`` and ``schemaVersion`` are not,
+    /// the junctions, the name it records under, the tint and the length it
+    /// reports progress on — and ``sentAt``, ``requestID`` and ``schemaVersion`` are not,
     /// since a trail packaged twice is the same trail. See ``WatchTrailRequest/heldRevision``
     /// for the one thing it is for.
     public var revision: String {
@@ -187,6 +200,16 @@ public struct WatchTrailPackage: SharedPayload, Equatable {
         hasher.combine(bytes: [2])
         hasher.combine(Double(pauseIndices.count))
         for index in pauseIndices { hasher.combine(Double(index)) }
+        // The junctions the same way, so a trail graph that learned a new
+        // fork sends the watch the trail again.
+        hasher.combine(bytes: [3])
+        hasher.combine(Double(junctions.count))
+        for junction in junctions {
+            hasher.combine(junction.distanceMeters)
+            for maneuver in [junction.towardsEnd, junction.towardsStart] {
+                hasher.combine(bytes: Array((maneuver?.rawValue ?? "-").utf8) + [0])
+            }
+        }
         return String(hasher.value, radix: 36)
     }
 }
@@ -291,15 +314,22 @@ public struct WatchLibraryDigest: SharedPayload, Equatable {
     /// phone's library would refuse the whole list. Read through
     /// ``isAutoPauseOn``, so no caller handles the third answer itself.
     public var autoPauseEnabled: Bool? // swiftlint:disable:this discouraged_optional_boolean
+    /// The phone's junction warnings switch, which the watch's taps follow,
+    /// or `nil` from a phone that has not said — see
+    /// ``isJunctionWarningsOn``. Here for the reasons ``autoPauseEnabled``
+    /// is.
+    public var junctionWarningsEnabled: Bool? // swiftlint:disable:this discouraged_optional_boolean
 
     public init(
         hikes: [SharedHikeSummary],
         sentAt: Date = .now,
-        autoPauseEnabled: Bool? = nil // swiftlint:disable:this discouraged_optional_boolean
+        autoPauseEnabled: Bool? = nil, // swiftlint:disable:this discouraged_optional_boolean
+        junctionWarningsEnabled: Bool? = nil // swiftlint:disable:this discouraged_optional_boolean
     ) {
         self.hikes = hikes
         self.sentAt = sentAt
         self.autoPauseEnabled = autoPauseEnabled
+        self.junctionWarningsEnabled = junctionWarningsEnabled
         schemaVersion = Self.currentSchemaVersion
     }
 
@@ -309,4 +339,9 @@ public struct WatchLibraryDigest: SharedPayload, Equatable {
     /// switch's own default before there is one, which is on, as the
     /// phone's `SettingsDefault.autoPauseEnabled` is.
     public var isAutoPauseOn: Bool { autoPauseEnabled ?? true }
+
+    /// The switch as the watch reads it: the phone's answer, or off before
+    /// there is one, as the phone's `SettingsDefault.junctionWarningsEnabled`
+    /// is.
+    public var isJunctionWarningsOn: Bool { junctionWarningsEnabled ?? false }
 }
