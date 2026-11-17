@@ -51,6 +51,13 @@ public struct WatchRecordingJournalHeader: Codable, Sendable, Equatable {
 
 /// One line of a recording's journal.
 public enum WatchRecordingJournalEntry: Codable, Sendable, Equatable {
+    /// A pause Auto-Pause made at a stop, from the moment the stop began,
+    /// which is behind the lines before it: every fix after that moment was
+    /// the stop's, and is taken back — see
+    /// ``WatchWalkAccumulator/pause(since:)``. A line of its own rather than
+    /// a cut of the file's tail, because the journal is only ever appended
+    /// to; a replay reaches the boundary the recording showed.
+    case autoPaused(Date)
     /// Always the first line, and only ever the first.
     case began(WatchRecordingJournalHeader)
     /// A fix the accumulator kept.
@@ -136,6 +143,12 @@ public struct WatchRecoveredRecording: Sendable, Equatable {
             next.lastRecordedAt = max(lastRecordedAt, fix.timestamp)
         case .paused(let date):
             next.accumulator.pause()
+            next.wasPaused = true
+            next.lastRecordedAt = max(lastRecordedAt, date)
+        // A recovery offers it as a pause like any other: only the process
+        // that made it would have ended it by itself.
+        case .autoPaused(let date):
+            next.accumulator.pause(since: date)
             next.wasPaused = true
             next.lastRecordedAt = max(lastRecordedAt, date)
         case .resumed(let date):

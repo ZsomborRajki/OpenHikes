@@ -27,6 +27,16 @@ struct WatchLinkTests {
         #expect(try WatchLink.walkReceipt(from: WatchLink.message(receipt)) == receipt)
     }
 
+    @Test("A library that says nothing of Auto-Pause, as a phone a build behind sends, leaves it on")
+    func libraryWithoutTheSwitchLeavesAutoPauseOn() throws {
+        let silent = try WatchLink.libraryDigest(from: WatchLink.message(WatchLibraryDigest(hikes: [])))
+        #expect(silent.autoPauseEnabled == nil)
+        #expect(silent.isAutoPauseOn)
+
+        let off = WatchLibraryDigest(hikes: [], autoPauseEnabled: false)
+        #expect(try !WatchLink.libraryDigest(from: WatchLink.message(off)).isAutoPauseOn)
+    }
+
     @Test("A message names its kind without its body being read")
     func kindIsReadableAlone() throws {
         let message = try WatchLink.message(WatchTrailRequest(hikeID: Fixture.hikeID))

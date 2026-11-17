@@ -188,6 +188,33 @@ public struct WatchWalkAccumulator: Sendable, Equatable {
     /// knows about the others.
     public mutating func pause() { isResuming = true }
 
+    /// Marks the recording paused from `date`, a moment already behind it,
+    /// and takes back every fix kept after it.
+    ///
+    /// For an auto-pause, which is decided minutes into a stop and counted
+    /// from when the stop began (``AutoPauseWatch``): the fixes kept since
+    /// then were the stop's, not the walk's. The totals are this type's own
+    /// arithmetic over the fixes that stay, replayed as the journal is
+    /// replayed, so the distance, the clock and the climb lose the stop's
+    /// first minutes exactly as if the pause had been pressed at `date`.
+    public mutating func pause(since date: Date) {
+        if let cut = fixes.firstIndex(where: { $0.timestamp > date }) {
+            var rebuilt = Self()
+            for fix in fixes[..<cut] {
+                if fix.resumesAfterPause { rebuilt.pause() }
+                rebuilt.accept(
+                    latitude: fix.latitude,
+                    longitude: fix.longitude,
+                    timestamp: fix.timestamp,
+                    horizontalAccuracy: fix.horizontalAccuracy,
+                    elevationMeters: fix.elevationMeters
+                )
+            }
+            self = rebuilt
+        }
+        pause()
+    }
+
     /// What crosses to the phone, or `nil` if there is not a walk here.
     public func recordedWalk(
         sessionID: UUID,
