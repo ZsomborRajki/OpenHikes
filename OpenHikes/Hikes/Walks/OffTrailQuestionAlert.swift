@@ -11,6 +11,10 @@
 //  cancel: the walk goes on, the trail stays selected, and this departure is
 //  not asked about again. *Record Instead* is ``RecordingEntry/recordInsteadOfWalk()``.
 //
+//  A *Record Instead* that could not be done puts the question up again,
+//  saying so, rather than the map's refused-End alert: that one would advise
+//  End, which carries nothing, and would take a place card down to come up.
+//
 //  Only an answer puts the question away. It is raised with the phone in a
 //  pocket as often as in a hand, and has to be there when the app is next
 //  looked at: measured on a `--ui-testing` launch, one raised under the
@@ -58,31 +62,66 @@ private struct OffTrailQuestionAlert: ViewModifier {
     let session: TrailWalkSession
     let entry: RecordingEntry
 
-    /// Up while the question stands. The setter does nothing: each button
-    /// puts the question away itself, and nothing else may — see the file
-    /// header.
-    private var isAsked: Binding<Bool> {
+    /// Which of the two alerts the question goes up in. Swapped by every
+    /// *Record Instead*, so that the question asked again when it could not
+    /// be done comes up in the other one: it is put away and asked again
+    /// within one update, and an alert whose flag goes from up to up again
+    /// presents nothing — measured, by `MapScreenAlertUITests`.
+    @State private var asksInSecond = false
+
+    /// Up while the question stands and `second` is the alert it goes up in.
+    /// The setter does nothing: each button puts the question away itself,
+    /// and nothing else may — see the file header.
+    private func isAsked(inSecond second: Bool) -> Binding<Bool> {
         Binding(
-            get: { session.offTrailQuestion != nil },
+            get: { session.offTrailQuestion != nil && asksInSecond == second },
             set: { _ in /* only an answer puts the question away */ }
         )
     }
 
     func body(content: Content) -> some View {
-        content.alert(
-            "Off the trail",
-            isPresented: modals.binding(isAsked, for: presenter),
-            presenting: session.offTrailQuestion
-        ) { _ in
-            Button("Record Instead") {
-                // Answered now, before the walk has been handed over: the
-                // hand-off reads the walk's line first, and the question
-                // must not be standing while it does.
-                session.withdrawOffTrailQuestion()
-                entry.recordInsteadOfWalk()
+        content
+            .alert(
+                "Off the trail",
+                isPresented: modals.binding(isAsked(inSecond: false), for: presenter),
+                presenting: session.offTrailQuestion
+            ) { _ in
+                answers
+            } message: { question in
+                message(question)
             }
-            Button("Keep Following", role: .cancel) { session.keepFollowing() }
-        } message: { question in
+            .alert(
+                "Off the trail",
+                isPresented: modals.binding(isAsked(inSecond: true), for: presenter),
+                presenting: session.offTrailQuestion
+            ) { _ in
+                answers
+            } message: { question in
+                message(question)
+            }
+    }
+
+    @ViewBuilder private var answers: some View {
+        Button("Record Instead") {
+            // Answered now, before the walk has been handed over: the
+            // hand-off reads the walk's line first, and the question must
+            // not be standing while it does.
+            session.withdrawOffTrailQuestion()
+            asksInSecond.toggle()
+            entry.recordInsteadOfWalk()
+        }
+        Button("Keep Following", role: .cancel) { session.keepFollowing() }
+    }
+
+    private func message(_ question: OffTrailQuestion) -> Text {
+        if question.handOffFailed {
+            Text(
+                """
+                OpenHikes couldn’t start a recording with what you’ve hiked so far, so you’re still following \
+                \(question.trailTitle). Try again, or keep following it.
+                """
+            )
+        } else {
             Text(
                 """
                 You’ve left \(question.trailTitle). Keep following it, or record your own hike instead? A recording \

@@ -8,7 +8,8 @@
 //  time gives it, so a tight bend can stay inside the small area the
 //  recording reads as a hiker standing still. These hold that the rule which
 //  hands back a standing hiker's GPS wander leaves that ground alone, live
-//  and at the save, and still takes back what follows it.
+//  and at the save, and still takes back what follows it; and that the
+//  moving clock, which reads no flag, is given a pace it counts as walking.
 //
 
 import CoreLocation
@@ -22,21 +23,35 @@ import Testing
 struct CarriedDistanceTests {
     private let start = Date(timeIntervalSince1970: 1_750_000_000)
 
-    /// A loop 20 m across the middle, as a trail round a pond or a summit
-    /// cairn is drawn: 90 legs of about 1.4 m.
-    private let loop = RouteProfile(route: (0...90).map { step in
-        let angle = Double(step) / 90 * 2 * .pi
-        return RouteCoordinate(
-            latitude: 47 + 20 * sin(angle) / RouteGeometry.metersPerDegreeLatitude,
-            longitude: 12 + 20 * cos(angle) / (RouteGeometry.metersPerDegreeLatitude * cos(47 * .pi / 180))
-        )
+    /// A loop of `radius` metres, as a trail round a summit or a pond is
+    /// drawn: 90 legs.
+    private static func loop(radius: Double) -> RouteProfile {
+        RouteProfile(route: (0...90).map { step in
+            let angle = Double(step) / 90 * 2 * .pi
+            return RouteCoordinate(
+                latitude: 47 + radius * sin(angle) / RouteGeometry.metersPerDegreeLatitude,
+                longitude: 12 + radius * cos(angle) / (RouteGeometry.metersPerDegreeLatitude * cos(47 * .pi / 180))
+            )
+        })
+    }
+
+    /// Round a summit cairn, 10 m across: half a minute of it at the slowest
+    /// carried pace stays inside the 15 m a recording reads as a hiker
+    /// standing still.
+    private let cairn = Self.loop(radius: 5)
+    /// Round a pond, 40 m across: tight enough that ground clocked at the
+    /// stillness rate itself read as stopped there, and loose enough that the
+    /// slowest carried pace does not.
+    private let pond = Self.loop(radius: 20)
+    /// 600 m due north, a point every 5 m.
+    private let line = RouteProfile(route: (0...120).map { step in
+        RouteCoordinate(latitude: 47 + Double(step) * 5 / RouteGeometry.metersPerDegreeLatitude, longitude: 12)
     })
 
-    /// A walk that covered the whole of ``loop`` in five minutes: slow enough
-    /// that half a minute of it never leaves a 15 m circle.
-    private func loopWalk() -> TrailWalkRecord {
-        var walk = TrailWalkRecord(hikeID: UUID(), routeDistanceMeters: loop.totalDistanceMeters, startedAt: start)
-        for distance in loop.distances { walk.coverage.record(distance: distance) }
+    /// A walk that covered the whole of ``cairn`` in five minutes.
+    private func cairnWalk() -> TrailWalkRecord {
+        var walk = TrailWalkRecord(hikeID: UUID(), routeDistanceMeters: cairn.totalDistanceMeters, startedAt: start)
+        for distance in cairn.distances { walk.coverage.record(distance: distance) }
         walk.lastMatchedAt = start.addingTimeInterval(300)
         return walk
     }
@@ -63,8 +78,8 @@ struct CarriedDistanceTests {
 
     @Test("carried ground round a tight bend counts in full, as the walk covered it")
     func aTightBendIsCountedInFull() throws {
-        let walk = loopWalk()
-        let seed = try #require(RecordingSeed.carrying(walk, along: loop))
+        let walk = cairnWalk()
+        let seed = try #require(RecordingSeed.carrying(walk, along: cairn))
         #expect(seed.points.allSatisfy { $0.flags.contains(.carried) })
 
         let counted = replayed(seed.points)
@@ -75,12 +90,39 @@ struct CarriedDistanceTests {
 
     @Test("the save counts it in full too")
     func theSaveCountsItInFull() throws {
-        let walk = loopWalk()
-        let seed = try #require(RecordingSeed.carrying(walk, along: loop))
+        let walk = cairnWalk()
+        let seed = try #require(RecordingSeed.carrying(walk, along: cairn))
 
         let prepared = try RecordingPreparation.prepare(points: seed.points, startedAt: seed.startedAt)
 
         #expect(prepared.distanceMeters.isApproximatelyEqual(to: walk.coverage.walkedMeters, absoluteTolerance: 0.5))
+    }
+
+    /// The moving clock weighs net displacement and reads no flag, so carried
+    /// ground has to be clocked clear of the rate it calls stopped — here at
+    /// the slowest pace a carried point is given, which a walk this slow for
+    /// its ground is held to.
+    @Test(
+        "carried ground keeps its moving time, round a bend and along a straight line",
+        arguments: [false, true]
+    )
+    func carriedGroundKeepsItsMovingTime(straight: Bool) throws {
+        let profile = straight ? line : pond
+        var walk = TrailWalkRecord(hikeID: UUID(), routeDistanceMeters: profile.totalDistanceMeters, startedAt: start)
+        for distance in profile.distances { walk.coverage.record(distance: distance) }
+        // Four times as long as the ground took at the slowest pace.
+        let walking = profile.totalDistanceMeters / RecordingSeed.slowestWalkingSpeed
+        walk.lastMatchedAt = start.addingTimeInterval(4 * walking)
+        let seed = try #require(RecordingSeed.carrying(walk, along: profile))
+
+        let live = replayed(seed.points)
+        let prepared = try RecordingPreparation.prepare(points: seed.points, startedAt: seed.startedAt)
+        var saved = MovingTimeAccumulator()
+        for coordinate in prepared.route { saved.record(coordinate) }
+
+        #expect(live.movingSeconds >= walking * 0.95)
+        #expect(saved.seconds >= walking * 0.95)
+        #expect(saved.seconds <= walking + 0.001, "and the wait before it is not walking")
     }
 
     /// Only the carried legs are left alone: standing about after them is

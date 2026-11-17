@@ -149,9 +149,11 @@ final class WalkOrRecordTests {
     }
 
     /// A walk adopted at launch reads its line to be handed over. A read that
-    /// fails ends nothing, and is said as a refused End is: the walk is still
-    /// under way, and nothing records beside it.
-    @Test("a walk whose line cannot be read starts no recording, and says so")
+    /// fails ends nothing: the walk is still under way, nothing records
+    /// beside it, and its question is asked again, saying so, for the hiker
+    /// to try again — the map's refused End would advise an End, which
+    /// carries nothing.
+    @Test("a walk whose line cannot be read starts no recording, and asks again")
     func unreadableLineStartsNothing() async {
         let hikeRecorder = makeRecorder()
         let walked = trail()
@@ -168,9 +170,12 @@ final class WalkOrRecordTests {
         session.lineLooks.fetch = FailingLineFetch(failing: [1]).fetch
         let entry = RecordingEntry(recorder: hikeRecorder, walkSession: session, openRequests: HikeOpenRequests())
 
+        session.withdrawOffTrailQuestion()
         entry.recordInsteadOfWalk()
-        await settleDelegateHop(until: "the refusal to be said") { entry.walkEndRefused }
+        await settleDelegateHop(until: "the question to be asked again") { session.offTrailQuestion != nil }
 
+        #expect(session.offTrailQuestion?.handOffFailed == true)
+        #expect(!entry.walkEndRefused)
         #expect(!hikeRecorder.isActive)
         #expect(session.walkUnderWayTitle == walked.displayTitle)
         #expect(walked.walks?.isEmpty != false)

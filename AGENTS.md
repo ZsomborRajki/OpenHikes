@@ -615,6 +615,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
     both, once per departure (`OffTrailWatch`), but the question waits on no
     notification permission (`MovementWarningState`). It stands until it is
     answered, the hiker is back on the trail, or the walk is paused or over.
+    A *Record Instead* that could not be done asks it again, saying so,
+    because nothing else would ask about that departure.
   - **Recording instead takes the walk along.** The walk ends as End ends
     it, kept in its trail's History, but where it was last on its trail
     rather than at the tap. The recording begins with what it covered: the

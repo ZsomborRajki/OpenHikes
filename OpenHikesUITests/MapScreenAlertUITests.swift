@@ -316,6 +316,54 @@ nonisolated final class MapScreenAlertUITests: XCTestCase {
     /// moment it has had, and far fewer than the fixture's walk hands over.
     private static let carriedPoints = 5
 
+    /// A *Record Instead* that cannot be done — here the walk's line cannot
+    /// be read — leaves the walk under way and asks again, saying so: the
+    /// departure has been asked about, so nothing else would. The question
+    /// comes back the moment the one answered has gone, however many times
+    /// it is tried.
+    @MainActor
+    func testRecordingInsteadThatFailsAsksAgain() {
+        let app = launchApp(
+            arguments: [
+                "--ui-test-expanded-sheet",
+                "--ui-test-import-gpx=\(UITestFixture.gpxName)",
+                "--ui-test-seed-walks=LeftTrailUnreadable",
+            ]
+        )
+        let alert = app.alerts["Off the trail"]
+        XCTAssertTrue(alert.waitForExistence(timeout: UITestTimeout.navigation))
+        alert.buttons["Record Instead"].tap()
+
+        let saysSo = alert.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS %@", "couldn’t start a recording")
+        ).firstMatch
+        XCTAssertTrue(
+            saysSo.waitForExistence(timeout: UITestTimeout.navigation),
+            "the question should come back, saying the recording could not start"
+        )
+        // And again, for a hiker who tries again: the line still cannot be
+        // read, and the question asked again is asked once more. The tap
+        // returns once the answered alert has gone, so what is up after it
+        // is the question asked again — which one alert asking itself again
+        // never put up.
+        alert.buttons["Record Instead"].tap()
+        XCTAssertTrue(
+            saysSo.waitForExistence(timeout: UITestTimeout.navigation),
+            "a second try that fails should say so too"
+        )
+        alert.buttons["Keep Following"].tap()
+        XCTAssertTrue(waitUntil { !alert.exists }, "Keep Following should close it")
+        XCTAssertFalse(app.navigationBars["Record Hike"].exists, "and nothing should be recording")
+
+        openHikeDetail(in: app)
+        let phase = element("walk-phase", in: app)
+        XCTAssertTrue(
+            phase.waitForExistence(timeout: UITestTimeout.navigation),
+            "the hike should still be under way on its trail"
+        )
+        expectLabel(phase, contains: "Active")
+    }
+
     /// Enough taps to land one inside another's presentation, and few enough
     /// that the test is over in a couple of seconds.
     private static let rapidTaps = 5

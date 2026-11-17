@@ -18,6 +18,10 @@
 //  the walk is paused or over: it is raised with the phone in a pocket as
 //  often as in a hand, and is what the app shows when it is next looked at.
 //  It is kept by this launch alone; a relaunch asks again with the banner.
+//  And it is asked once more, saying so, when *Record Instead* could not be
+//  done: the departure has already been asked about, so nothing else would
+//  ask, and the hiker who wanted the hike so far in a recording would be
+//  left with End, which carries nothing.
 //
 //  ## Recording instead
 //
@@ -40,7 +44,8 @@
 //  that another walk replaced starts no recording, because nothing records
 //  beside a walk. A line that could not be read ends nothing: the walk is
 //  left under way to be tried again, rather than ended with its ground in
-//  the recording and, under the History's minimum, nowhere at all.
+//  the recording and, under the History's minimum, nowhere at all. Neither
+//  does an end the store refused, and both ask the question again.
 //
 
 import Foundation
@@ -53,6 +58,9 @@ struct OffTrailQuestion: Equatable {
     /// ``TrailWalkStartNotice`` keeps one: the alert reads nothing of the
     /// hike.
     let trailTitle: String
+    /// Whether this is the question asked again because *Record Instead*
+    /// could not be done, which the alert says: the walk is still under way.
+    var handOffFailed = false
 }
 
 /// What handing the walk under way to a recording came to — see
@@ -60,10 +68,12 @@ struct OffTrailQuestion: Equatable {
 enum WalkHandOff {
     /// The walk ended, as the ``TrailWalkEnd`` says, a refusal included, and
     /// this is what a recording that takes over begins with: `nil` for a walk
-    /// that had covered nothing, and for one the store would not end.
+    /// that had covered nothing, and for one the store would not end — which
+    /// is still under way, and asked about again.
     case ended(TrailWalkEnd, seed: RecordingSeed?)
     /// The walk's line could not be read, so nothing was ended: the walk is
-    /// still under way, for the hiker to try again.
+    /// still under way, and the question is asked again for the hiker to try
+    /// again.
     case lineUnreadable
     /// There was no walk to hand over: none was under way, or the one asked
     /// about ended on its own while its line was read, and is in its trail's
@@ -138,7 +148,9 @@ extension TrailWalkSession {
             guard current.hikeID == asked.hikeID, current.startedAt == asked.startedAt else { return .overtaken }
             walk = current
             switch line {
-            case .unreadable: return .lineUnreadable
+            case .unreadable:
+                askAgainAfterFailedHandOff()
+                return .lineUnreadable
             case .nothing: seed = nil
             case let .along(profile): seed = await Self.seed(carrying: walk, along: profile)
             }
@@ -146,8 +158,20 @@ extension TrailWalkSession {
         // Nothing between the look above and the end: the points and the
         // row describe one walk.
         let end = finish(reason: .ended, at: min(walk.lastActivityAt, clock()))
-        if case .refused = end { return .ended(end, seed: nil) }
+        if case .refused = end {
+            askAgainAfterFailedHandOff()
+            return .ended(end, seed: nil)
+        }
         return .ended(end, seed: seed)
+    }
+
+    /// Asks again about the trail the hiker left, saying their *Record
+    /// Instead* could not be done: the walk is still under way, so they can
+    /// try again, and *Keep Following* still changes nothing. See *When it is
+    /// asked* in the file header.
+    private func askAgainAfterFailedHandOff() {
+        guard let record else { return }
+        offTrailQuestion = OffTrailQuestion(hikeID: record.hikeID, trailTitle: walkedHikeTitle, handOffFailed: true)
     }
 
     /// The line the walk under way is along: the profile in hand, or — for a

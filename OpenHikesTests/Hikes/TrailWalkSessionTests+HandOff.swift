@@ -128,7 +128,7 @@ extension TrailWalkSessionTests {
     /// A read that fails says nothing about the line, and a walk ended for it
     /// would have its ground in the recording only — or, under the History's
     /// minimum, nowhere.
-    @Test("a line that cannot be read ends nothing, and the walk can be handed over again")
+    @Test("a line that cannot be read ends nothing, asks again, and the walk can be handed over then")
     func anUnreadableLineEndsNothing() async throws {
         let walked = hike()
         let fetch = FailingLineFetch(failing: [1])
@@ -141,6 +141,12 @@ extension TrailWalkSessionTests {
         #expect(session.walkedHikeID == walked.id)
         #expect(walked.walkInProgress != nil, "still under way on disk too")
         #expect(try walks(of: walked).isEmpty)
+        #expect(
+            session.offTrailQuestion == OffTrailQuestion(
+                hikeID: walked.id, trailTitle: walked.displayTitle, handOffFailed: true
+            ),
+            "asked again, saying so: nothing else would ask about this departure"
+        )
 
         let retried = try #require(await session.handOffToRecording().ended)
         #expect(retried.end.walk != nil)
