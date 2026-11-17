@@ -8,12 +8,12 @@ There is no OpenHikes account and no server holding your hikes: they live on the
 
 ## Features
 
-- **Recording** in the background, with pause and resume, crash recovery and barometric elevation. The track is matched to OpenStreetMap's paths, and any stretch the matcher moved waits for your review before the hike is saved.
+- **Recording** in the background, with crash recovery and barometric elevation. Pause and resume by hand, or let Auto-Pause do it when you stop somewhere. The track is matched to OpenStreetMap's paths, and any stretch the matcher moved waits for your review before the hike is saved.
 - **GPX import and export**: open files from Files, AirDrop or any share sheet, one hike per track, and share any hike back as GPX, with its places as waypoints.
 - **Drawing a trail**: press and hold to drop stops, or search for them by name. Each leg follows the paths OpenStreetMap has mapped.
 - **Places** along a trail: huts, springs and waterfalls from OpenStreetMap, or places of your own, with your photographs and, where OpenStreetMap links one, the start of the place's Wikipedia article.
 - **Walking a saved trail**, with progress along it, the time left shown on the line ahead, a history of past walks and a shareable photo card.
-- **Statistics**: an interactive elevation profile, overall and moving average speed, surface and Swiss Alpine Club difficulty from OpenStreetMap, and yearly and all-time totals.
+- **Statistics**: an interactive elevation profile, the segments between a hike's stops, overall and moving average speed, surface and Swiss Alpine Club difficulty from OpenStreetMap, and yearly and all-time totals.
 - **Maps**: OpenStreetMap, Apple's standard and satellite maps, Stadia Outdoors, Stamen Terrain and Thunderforest Outdoors, with OpenStreetMap's marked hiking routes as a layer you can switch off and every hike in your library drawn faintly on top. Tilting the map raises the terrain in 3D under the satellite map and the tile styles. Tiles you browse are saved as you go, and a route's map can be downloaded where the provider allows it.
 - **Photos** taken on a walk or picked from the library, pinned to where on the trail they were taken.
 - **Weather** from WeatherKit: now, the next twelve hours and the week ahead.
@@ -55,6 +55,8 @@ Scripts/simulate-hike.sh start              # ~1.7 km accelerated preview
 Scripts/simulate-hike.sh --full --speed 4   # the complete 9.3 km route
 Scripts/simulate-hike.sh stop               # stop and clear location playback
 ```
+
+`OpenHikes/SimulatedLocations/ThumseeWalkWithStop.gpx` is a walk with a six-minute stop in it, for watching Auto-Pause: replay it with `--route`, `--full` and `--speed 1.4`.
 
 `--help` lists the options for another simulator, route, speed, interval or point count.
 
