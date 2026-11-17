@@ -100,13 +100,10 @@ final class SystemMovementReminderNotifier: MovementReminderNotifying {
         // reminder is worth is policy, and none of it is decided here.
         content.interruptionLevel = reminder.kind.interruptionLevel
         content.relevanceScore = reminder.kind.relevanceScore
-        // `nil`, not a one-second time interval: the reminder is about what
-        // the hiker is doing right now, and a trigger would let it arrive
-        // after they have already resumed.
         let request = UNNotificationRequest(
             identifier: reminder.notificationIdentifier,
             content: content,
-            trigger: nil
+            trigger: Self.trigger(after: reminder.delay)
         )
         do {
             try await center.add(request)
@@ -128,6 +125,15 @@ final class SystemMovementReminderNotifier: MovementReminderNotifying {
     }
 
     #if canImport(UserNotifications)
+    /// `nil`, not a one-second time interval, for a reminder about what the
+    /// hiker is doing right now: a trigger would let it arrive after they
+    /// have already answered it. A time interval for one posted ahead of its
+    /// moment (``MovementReminder/delay``), which an overdue delay is not.
+    static func trigger(after delay: TimeInterval?) -> UNTimeIntervalNotificationTrigger? {
+        guard let delay, delay > 0 else { return nil }
+        return UNTimeIntervalNotificationTrigger(timeInterval: delay, repeats: false)
+    }
+
     /// Whether an answer already given lets a banner through. One function for
     /// both questions, so the silent one cannot count as allowed what the one
     /// that asks would not.

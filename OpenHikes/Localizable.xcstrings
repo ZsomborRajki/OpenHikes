@@ -20257,6 +20257,52 @@
         }
       }
     },
+    "Finished your hike?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wanderung beendet?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Has terminado la excursión?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Randonnée terminée ?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escursione finita?"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Koniec wędrówki?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поход окончен?"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Похід завершено?"
+          }
+        }
+      }
+    },
     "Finishing after dark" : {
       "localizations" : {
         "de" : {
@@ -32440,48 +32486,48 @@
         }
       }
     },
-    "Notifies you when you set off while a hike is paused, stop for 15 minutes while recording, leave the trail you’re following, or may finish after dark." : {
+    "Notifies you when you set off while a hike is paused, stop for 15 minutes while recording or 30 minutes on Auto-Pause, leave the trail you’re following, or may finish after dark." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Benachrichtigt dich, wenn du bei einer pausierten Wanderung losgehst, beim Aufzeichnen 15 Minuten stehen bleibst, den Weg verlässt, dem du folgst, oder erst nach Einbruch der Dunkelheit ankommen könntest."
+            "value" : "Benachrichtigt dich, wenn du bei einer pausierten Wanderung losgehst, beim Aufzeichnen 15 Minuten oder mit „Automatisch anhalten“ 30 Minuten stehen bleibst, den Weg verlässt, dem du folgst, oder erst nach Einbruch der Dunkelheit ankommen könntest."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Te avisa si te pones en marcha con una excursión en pausa, si te detienes 15 minutos mientras grabas, si te sales del sendero que sigues o si puedes terminar de noche."
+            "value" : "Te avisa si te pones en marcha con una excursión en pausa, si te detienes 15 minutos mientras grabas o 30 en pausa automática, si te sales del sendero que sigues o si puedes terminar de noche."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Vous avertit si vous repartez alors qu’une randonnée est en pause, si vous vous arrêtez 15 minutes pendant un enregistrement, si vous quittez le sentier suivi ou si vous risquez d’arriver après la tombée de la nuit."
+            "value" : "Vous avertit si vous repartez alors qu’une randonnée est en pause, si vous vous arrêtez 15 minutes pendant un enregistrement ou 30 minutes en pause auto, si vous quittez le sentier suivi ou si vous risquez d’arriver après la tombée de la nuit."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ti avvisa quando riparti mentre un’escursione è in pausa, quando ti fermi per 15 minuti durante una registrazione, quando lasci il sentiero che stai seguendo o quando potresti arrivare con il buio."
+            "value" : "Ti avvisa quando riparti mentre un’escursione è in pausa, quando ti fermi per 15 minuti durante una registrazione o per 30 in pausa automatica, quando lasci il sentiero che stai seguendo o quando potresti arrivare con il buio."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Powiadamia, gdy ruszysz w drogę przy wstrzymanej wędrówce, zatrzymasz się na 15 minut podczas nagrywania, zejdziesz ze szlaku, którym idziesz, albo gdy możesz skończyć po zmroku."
+            "value" : "Powiadamia, gdy ruszysz w drogę przy wstrzymanej wędrówce, zatrzymasz się na 15 minut podczas nagrywania lub na 30 minut przy automatycznej przerwie, zejdziesz ze szlaku, którym idziesz, albo gdy możesz skończyć po zmroku."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Уведомляет, когда вы трогаетесь в путь, пока поход на паузе, стоите на месте 15 минут во время записи, сходите с тропы, по которой идете, или можете не успеть закончить до темноты."
+            "value" : "Уведомляет, когда вы трогаетесь в путь, пока поход на паузе, стоите на месте 15 минут во время записи или 30 минут на автопаузе, сходите с тропы, по которой идете, или можете не успеть закончить до темноты."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Сповіщає, коли ви рушаєте в дорогу під час призупиненого походу, стоїте на місці 15 хвилин під час запису, сходите зі стежки, якою йдете, або можете завершити похід уже після настання темряви."
+            "value" : "Сповіщає, коли ви рушаєте в дорогу під час призупиненого походу, стоїте на місці 15 хвилин під час запису або 30 хвилин на автопаузі, сходите зі стежки, якою йдете, або можете завершити похід уже після настання темряви."
           }
         }
       }
@@ -62013,6 +62059,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ваші фото закачано, але запит на перевірку не вдалося надіслати, тому на цій стежці вони поки не зʼявляться. «Завершити надсилання» надсилає лише запит."
+          }
+        }
+      }
+    },
+    "Your recording has been auto-paused for %@ and is still using location. If your hike is over, stop the recording." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Aufzeichnung ist seit %@ automatisch angehalten und nutzt weiter deinen Standort. Wenn deine Wanderung vorbei ist, beende die Aufzeichnung."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu grabación lleva %@ en pausa automática y sigue usando tu ubicación. Si has terminado la excursión, detén la grabación."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre enregistrement est en pause auto depuis %@ et utilise toujours votre position. Si votre randonnée est terminée, arrêtez l’enregistrement."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La registrazione è in pausa automatica da %@ e usa ancora la tua posizione. Se l’escursione è finita, interrompi la registrazione."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nagrywanie jest automatycznie wstrzymane od %@ i nadal używa położenia. Jeśli to koniec wędrówki, zatrzymaj nagrywanie."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запись на автопаузе уже %@ и по-прежнему использует геопозицию. Если поход окончен, остановите запись."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запис на автопаузі вже %@ і досі використовує геопозицію. Якщо похід завершено, зупиніть запис."
           }
         }
       }

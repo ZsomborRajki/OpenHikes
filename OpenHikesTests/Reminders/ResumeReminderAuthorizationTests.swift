@@ -55,13 +55,14 @@ struct ResumeReminderAuthorizationTests {
     func resumingCancelsTheReminder(_ subject: Subject) async {
         let harness = MovementReminderHarness.harness()
         guard await holdEarnedReminder(subject, in: harness) else { return }
+        let withdrawnBefore = harness.notifier.withdrawn.count
 
         resume(subject, in: harness)
         harness.notifier.answerPrompt(allowing: true)
         await harness.controller.settle()
 
         #expect(harness.notifier.posted.isEmpty)
-        #expect(harness.notifier.withdrawn.last == subject.kind)
+        #expect(harness.notifier.withdrawn.dropFirst(withdrawnBefore).contains(subject.kind))
     }
 
     /// `walkDidResumeOrEnd()` is the walk's half of this, which is the case

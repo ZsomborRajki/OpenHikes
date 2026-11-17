@@ -46,6 +46,14 @@ nonisolated enum MovementReminderKind: String, CaseIterable, Sendable {
     /// standing on, at the moment it is worth the most, which is a fork taken
     /// wrong in fog with the phone in a pocket.
     case leftTheTrail = "leftTheTrail"
+    /// Auto-Pause has held the recording paused for half an hour: the hike
+    /// may be over, with the recording and the location it keeps running
+    /// left behind it.
+    ///
+    /// A fact with no button, for the reason the Live Activity offers no
+    /// Stop: stopping can end in a review of the matched line, which no
+    /// banner can show. Tapping it opens the app, where Stop is.
+    case longAutoPause = "longAutoPause"
     /// The recording is running and the hiker has not moved in a while.
     case pauseRecording = "pauseRecording"
     /// The recording is paused and the hiker is plainly walking.
@@ -91,7 +99,7 @@ nonisolated enum MovementReminderKind: String, CaseIterable, Sendable {
         // that only silenced the banner would offer to stop saying the one
         // thing this reminder exists to say. The alert's own link is in the
         // detail sheet, which is where the authority's advice is.
-        case .afterDark, .leftTheTrail, .severeWeather: nil
+        case .afterDark, .leftTheTrail, .longAutoPause, .severeWeather: nil
         case .pauseRecording: .pause
         case .resumeRecording, .resumeWalk: .resume
         }
@@ -129,7 +137,7 @@ nonisolated enum MovementReminderKind: String, CaseIterable, Sendable {
     var interruptionLevel: UNNotificationInterruptionLevel {
         switch self {
         case .afterDark, .leftTheTrail, .severeWeather: .timeSensitive
-        case .pauseRecording, .resumeRecording, .resumeWalk: .active
+        case .longAutoPause, .pauseRecording, .resumeRecording, .resumeWalk: .active
         }
     }
     #endif
@@ -150,6 +158,7 @@ nonisolated enum MovementReminderKind: String, CaseIterable, Sendable {
         case .leftTheTrail: Relevance.offTheRoute
         case .afterDark: Relevance.lightRunningOut
         case .resumeRecording, .resumeWalk: Relevance.walkGoingUnrecorded
+        case .longAutoPause: Relevance.recordingLeftRunning
         case .pauseRecording: Relevance.stopCountedAsMoving
         }
     }
@@ -172,6 +181,10 @@ nonisolated enum MovementReminderKind: String, CaseIterable, Sendable {
         /// A walk that is happening and is not being written down. The
         /// kilometres lost to it cannot be recovered afterwards.
         static let walkGoingUnrecorded = 0.5
+        /// A recording that may have outlived its hike, spending location on
+        /// a walk that is over. Nothing of the walk is being lost, so below
+        /// one going unrecorded; the battery is, so above a spoilt average.
+        static let recordingLeftRunning = 0.4
         /// A moving-time average being spoiled by a lunch stop, which the
         /// hiker can still correct once they are home.
         static let stopCountedAsMoving = 0.3
@@ -201,6 +214,11 @@ nonisolated struct MovementReminder: Equatable, Sendable {
     let kind: MovementReminderKind
     let title: String
     let body: String
+    /// How long after it is posted the banner is to be shown, or `nil` for
+    /// at once. Only ``MovementReminderKind/longAutoPause`` waits: it is
+    /// posted when the pause begins, so a phone that delivers no fix for the
+    /// half hour still says it, and taken back down when the pause ends.
+    var delay: TimeInterval?
 
     var notificationIdentifier: String { kind.notificationIdentifier }
     var categoryIdentifier: String { kind.categoryIdentifier }
@@ -312,6 +330,23 @@ nonisolated enum MovementReminderWording {
             kind: .severeWeather,
             title: String(localized: "Weather warning"),
             body: String(localized: "\(alert.summary) — \(subject). Issued by \(alert.source).")
+        )
+    }
+
+    /// What the app did and what it is still spending, then what to do if
+    /// the hike is over. The duration is the policy's, which the banner is
+    /// timed to: it is written when the pause begins and shown when the half
+    /// hour is up.
+    static func longAutoPause(pausedFor: TimeInterval) -> MovementReminder {
+        MovementReminder(
+            kind: .longAutoPause,
+            title: String(localized: "Finished your hike?"),
+            body: String(
+                localized: """
+                    Your recording has been auto-paused for \(HikeFormat.duration(pausedFor)) and is still \
+                    using location. If your hike is over, stop the recording.
+                    """
+            )
         )
     }
 
