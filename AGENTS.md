@@ -633,6 +633,26 @@ a change to recording, the map, the sheet or the render path; the PR template,
     `LibraryTotals` count that ground once. Every carried point is marked
     `.carried`, so its length counts in full, live and at the save, where a
     tight bend would otherwise read as a hiker standing still.
+  - **Junction warnings say the turn before it is taken** (`JunctionGuide`).
+    The off-trail question is for a hiker already off the trail; this is a
+    voice before each fork — *Keep left at the fork in 150 meters*, then
+    *Keep left at the fork* a few steps before it. Off until the hiker turns
+    it on, from a button on the map's leading edge that is there while a walk
+    is under way (`MapCoordinator+JunctionButton.swift`), by the owner's
+    decision: never in Settings. It runs only while a walk is *following*.
+  - **A junction is a node three trails share**, on the walks' own trail
+    graph, which holds no roads (`TrailJunctionFinder`). It counts only where
+    the line arrives along one of its ways and leaves along another, and
+    nothing is said where the line goes plainly straight on. Each junction
+    carries what to do walking either way (`TrailJunction`), and
+    `JunctionAnnouncer` in `OpenHikesShared` decides when each is said, for
+    the phone and the watch alike.
+  - **The watch taps where the phone speaks.** The phone finds the junctions
+    and sends them with the trail (`WatchTrailPackage.junctions`, on the
+    trail's own scale), and the switch rides on the library
+    (`WatchLibraryDigest.junctionWarningsEnabled`; a watch told nothing has
+    it off). The tap is `.notification` for every turn, because WatchKit's
+    turn haptics are for apps running a navigation session.
 - **A recording always outranks a followed trail**, on every surface, because
   it is the one that would be *lost*: a follow is re-derived from the trail and
   the next fix, and a recording is not. Three places hold the rule and must
@@ -1066,7 +1086,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
 - **Background location is described in three places, and they must agree:**
   the `Info.plist` purpose strings, the Background Trail Tracking footer, and
   App Review's notes in App Store Connect. Always access is for the widget and
-  the Live Activity; the `location` background mode is for the recorder. Their
+  the Live Activity; the `location` background mode is for the recorder and
+  for a walk with junction warnings on, and the `audio` mode is for those
+  warnings alone (`JunctionVoice`). Their
   German, French, Spanish, Italian, Russian, Polish and Ukrainian must agree
   too: the prompts in `OpenHikes/InfoPlist.xcstrings`, the footer in the app's
   catalog.
@@ -1465,6 +1487,13 @@ in its source header. Do not weaken one without a measurement.
   stop needs a device measurement first. Watching a running recording for a
   stop costs one timer, set for the place being watched and set again when
   it rings: a wakeup every few minutes, beside the fixes.
+- **Junction warnings spend what a recording spends, and only when asked**
+  (`Hikes/Walks/Junctions/JunctionLocationFeed.swift`). A followed walk is
+  otherwise fed by significant changes in a pocket, hundreds of meters apart,
+  which is too late for a fork. With the switch on and a walk following, a
+  feed of its own takes the recorder's `RecordingEnergyPolicy` profile, with
+  background delivery and the location indicator. A pause, the walk ending
+  or the switch going off stops it.
 - **The screen stays awake only on a claim, and only if asked**
   (`General/ScreenWake.swift`). `SettingsKey.keepScreenAwake` is off by default.
   The switch, a live subject and an active scene must all agree.

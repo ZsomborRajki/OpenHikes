@@ -349,7 +349,14 @@ extension OpenHikesModel {
                 weatherState: recorder.weatherState
             )
         }
-        return WatchSessionCoordinator(container: container, defaults: defaults, healthExport: healthExport)
+        // The recorder's trail graph, which a walk's junction warnings read
+        // too, so a trail's junctions on the watch are the phone's.
+        return WatchSessionCoordinator(
+            container: container,
+            defaults: defaults,
+            healthExport: healthExport,
+            trailGraph: recorder.trailGraphProvider
+        )
     }
 }
 

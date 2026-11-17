@@ -51,11 +51,14 @@ nonisolated enum WatchTrailPackaging {
     /// than its stamp says. See ``package(from:readAt:requestID:)`` for what
     /// the stamp orders.
     ///
+    /// - Parameter graph: the trail graph the package's junctions are read
+    ///   from, or `nil` to send none.
     /// - Parameter fetch: the store's fetch of one hike, a seam so a suite can
     ///   see which thread it ran on.
     static func answer(
         to request: WatchTrailRequest,
         from container: ModelContainer,
+        graph: (any TrailGraphProviding)? = nil,
         fetch: @Sendable (ModelContext, UUID) throws -> Hike? = SharedHikeCatalogPublisher.fetchHike
     ) async -> WatchTrailPackage? {
         let readAt = Date.now
@@ -64,7 +67,7 @@ nonisolated enum WatchTrailPackaging {
             in: container,
             fetch: fetch
         ).input,
-            let package = await package(from: input, readAt: readAt, requestID: request.id)
+            let package = await package(from: input, readAt: readAt, requestID: request.id, graph: graph)
         else { return nil }
         // The watch already holds exactly this, and asked to find out whether
         // the route had been edited since. It had not, so there is nothing to
@@ -83,11 +86,18 @@ nonisolated enum WatchTrailPackaging {
     /// this finishes, because two requests either side of an edit are
     /// packaged concurrently and can finish in either order; the watch orders
     /// two copies of one trail by it — see `WatchTrailSelection`.
+    ///
+    /// The junctions are read from `graph` along the whole route and put on
+    /// the trail's own scale, the one the watch reports a position on — see
+    /// ``WatchTrailPackage/junctions``. A trail graph that has to be
+    /// downloaded first holds the package until it arrives: a watch with the
+    /// trail and no junctions would tap at no fork for the whole walk.
     @concurrent
     static func package(
         from input: HikeRouteInput,
         readAt: Date = .now,
-        requestID: UUID = UUID()
+        requestID: UUID = UUID(),
+        graph: (any TrailGraphProviding)? = nil
     ) async -> WatchTrailPackage? {
         assertOffMainThread("Packaging a route for the watch must stay off the main thread")
         guard input.route.count > 1 else { return nil }
@@ -107,6 +117,7 @@ nonisolated enum WatchTrailPackaging {
             )
         }
         let climb = Self.climb(of: input.route)
+        let junctions = await Self.junctions(of: input, graph: graph)
         return WatchTrailPackage(
             hikeID: input.hikeID,
             title: input.title,
@@ -114,6 +125,7 @@ nonisolated enum WatchTrailPackaging {
             totalDistanceMeters: input.totalDistanceMeters,
             points: points,
             pauseIndices: kept.pauseIndices,
+            junctions: junctions,
             elevationGainMeters: climb.gainMeters,
             elevationLossMeters: climb.lossMeters,
             sentAt: readAt,
@@ -137,6 +149,21 @@ nonisolated enum WatchTrailPackaging {
         WatchTrailPackage.keptPoints(of: route.trailRuns) { leg in
             RouteGeometry.distanceMeters(from: route[leg].clCoordinate, to: route[leg + 1].clCoordinate)
         }
+    }
+
+    /// The route's junctions, measured along the route and scaled to
+    /// ``HikeRouteInput/totalDistanceMeters``, which the watch reports
+    /// positions on.
+    private static func junctions(
+        of input: HikeRouteInput,
+        graph: (any TrailGraphProviding)?
+    ) async -> [TrailJunction] {
+        guard graph != nil else { return [] }
+        let profile = RouteProfile(route: input.route)
+        let length = profile.totalDistanceMeters
+        guard length > 0 else { return [] }
+        let scale = input.totalDistanceMeters > 0 ? input.totalDistanceMeters / length : 1
+        return await TrailJunctionFinder.junctions(along: profile, from: graph).map { $0.scaled(by: scale) }
     }
 
     /// Climb and descent over the *whole* route.

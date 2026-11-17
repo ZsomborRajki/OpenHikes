@@ -38,6 +38,9 @@ struct WatchPayloadShapeTests {
                 "elevationGainMeters: number",
                 "elevationLossMeters: number",
                 "hikeID: string",
+                "junctions[].distanceMeters: number",
+                "junctions[].towardsEnd: string",
+                "junctions[].towardsStart: string",
                 "pauseIndices[]: number",
                 "points[].elevationMeters: number",
                 "points[].latitude: number",
@@ -85,6 +88,7 @@ struct WatchPayloadShapeTests {
                 "hikes[].durationSeconds: number",
                 "hikes[].id: string",
                 "hikes[].name: string",
+                "junctionWarningsEnabled: bool",
                 "schemaVersion: number",
                 "sentAt: number",
             ]
@@ -249,6 +253,7 @@ struct WatchPayloadShapeTests {
                 WatchTrailPoint(latitude: 47.6972, longitude: 12.8559, elevationMeters: 618.5),
             ],
             pauseIndices: [1],
+            junctions: [TrailJunction(distanceMeters: 1240.5, towardsEnd: .keepLeft, towardsStart: .turnRight)],
             elevationGainMeters: 512.5,
             elevationLossMeters: 498.5,
             sentAt: stamp
@@ -269,7 +274,8 @@ struct WatchPayloadShapeTests {
                 ),
             ],
             sentAt: stamp,
-            autoPauseEnabled: false
+            autoPauseEnabled: false,
+            junctionWarningsEnabled: true
         )
 
         static let recordedWalk = WatchRecordedWalk(

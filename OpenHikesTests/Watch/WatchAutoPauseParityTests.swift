@@ -38,7 +38,12 @@ struct WatchAutoPauseParityTests {
         let catalog = SharedHikeCatalog(hikes: [])
         // swiftlint:disable:next discouraged_optional_boolean
         let resend = { (latest: SharedHikeCatalog?, sent: Bool?) in
-            WatchSessionCoordinator.catalogToResend(latest, sentAutoPause: sent, defaults: defaults)
+            WatchSessionCoordinator.catalogToResend(
+                latest,
+                sentAutoPause: sent,
+                sentJunctionWarnings: SettingsDefault.junctionWarningsEnabled,
+                defaults: defaults
+            )
         }
         #expect(resend(nil, true) == nil, "nothing has gone yet")
         #expect(resend(catalog, nil) == nil, "the first library carries the switch")

@@ -85,7 +85,7 @@ enum WalkHandOff {
 }
 
 /// The line a walk is along, read for what it covered to be carried on.
-nonisolated private enum CarriedLine: Sendable {
+nonisolated enum CarriedLine: Sendable {
     case along(RouteProfile)
     /// No line to carry along: the row is gone, or its line is no longer the
     /// one the walk is along, and its distances are another line's.
@@ -177,7 +177,7 @@ extension TrailWalkSession {
     /// The line the walk under way is along: the profile in hand, or — for a
     /// walk adopted at launch that its hike's screen has not fed yet — the
     /// line read off the main actor, in a read of its own.
-    private func carriedLine() async -> CarriedLine {
+    func carriedLine() async -> CarriedLine {
         guard let record, let walkedHike, walkedHike.isAttached else { return .nothing }
         if let walkedProfile { return .along(walkedProfile) }
         let read = SelectedLine(fetch: lineLooks.fetch).read(of: walkedHike)

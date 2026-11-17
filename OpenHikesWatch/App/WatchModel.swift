@@ -68,10 +68,16 @@ final class WatchModel {
     /// Where the hiker is on ``trail``. A stable object; nothing above a leaf
     /// view reads a property on it.
     let follow = WatchFollowState()
+    /// The junction warning just tapped, for the banner over every screen.
+    /// A stable object, as ``follow`` is.
+    let junctionCue = WatchJunctionCue()
 
     @ObservationIgnored private let store: WatchStore
     /// Rebuilt whenever ``trail`` changes, and `nil` when there is none.
     @ObservationIgnored private var tracker: WatchRouteTracker?
+    /// When to tap for the junctions on ``trail``, rebuilt with ``tracker``
+    /// — see ``WatchJunctionCue``.
+    @ObservationIgnored private var junctions: JunctionAnnouncer?
     /// The trail the hiker last opened, which decides whether an arriving
     /// package is the answer the screen is waiting for or a late one — see
     /// ``WatchTrailSelection``.
@@ -99,7 +105,7 @@ final class WatchModel {
         recorder = WatchRecorder(store: store)
         library = store.loadLibrary()
         trail = store.loadTrail()
-        if let trail { tracker = WatchRouteTracker(trail) }
+        if let trail { track(trail) }
         recorder.onFix = { [weak self] location in self?.advanceFollow(with: location) }
         recorder.onWalkQueued = { [weak self] walk, queued in self?.walkQueued(walk, queued: queued) }
         recorder.onRecordingEnded = { [weak self] whilePaused in self?.recordingEnded(whilePaused: whilePaused) }
@@ -107,8 +113,7 @@ final class WatchModel {
         // carried somewhere else while the recording waited at the stop.
         // The walk away's fixes follow at once, and place the hiker again.
         recorder.onAutoResume = { [weak self] in
-            self?.tracker?.forgetPosition()
-            self?.follow.clear()
+            self?.forgetPosition()
         }
         recorder.setAutoPauseEnabled(library.isAutoPauseOn)
     }
@@ -132,7 +137,7 @@ final class WatchModel {
         trail = fixture.trail
         queuedWalkCount = fixture.queuedWalkCount
         phoneRecording = fixture.phoneRecording
-        if let trail { tracker = WatchRouteTracker(trail) }
+        if let trail { track(trail) }
         if let position = fixture.position { follow.update(position) }
         if let recording = fixture.recording {
             recorder.applySeededRecording(recording.phase, stats: recording.stats)
@@ -266,8 +271,7 @@ final class WatchModel {
             // the outbound leg for the whole way home, and the figures would
             // go on showing the last reading as current until a new fix
             // replaced it.
-            tracker?.forgetPosition()
-            follow.clear()
+            forgetPosition()
             recorder.startFollowingFeed()
         case .stop:
             recorder.stopFollowingFeed()
@@ -289,6 +293,26 @@ final class WatchModel {
               )
         else { return }
         follow.update(position, at: location.timestamp)
+        // The phone's switch, as the library last carried it.
+        guard library.isJunctionWarningsOn,
+              let cue = junctions?.advance(to: position.distanceAlongRouteMeters, isOnTrail: position.isOnTrail)
+        else { return }
+        junctionCue.show(cue)
+    }
+
+    /// Matches fixes against `trail`, and taps for its junctions.
+    private func track(_ trail: WatchTrailPackage) {
+        tracker = WatchRouteTracker(trail)
+        junctions = JunctionAnnouncer(junctions: trail.junctions)
+        junctionCue.clear()
+    }
+
+    /// Lets go of where the hiker was, for a hiker who may have been carried
+    /// somewhere since — see ``WatchRouteTracker/forgetPosition()``.
+    private func forgetPosition() {
+        tracker?.forgetPosition()
+        junctions?.forgetPosition()
+        follow.clear()
     }
 
     // MARK: The phone's recording
@@ -357,8 +381,7 @@ final class WatchModel {
     /// trail, which is where they are.
     func resumeRecording() {
         recorder.resume()
-        tracker?.forgetPosition()
-        follow.clear()
+        forgetPosition()
     }
 
     /// Stops. The walk, if there was one, goes through
@@ -445,6 +468,7 @@ final class WatchModel {
             library = digest
             store.save(digest)
             recorder.setAutoPauseEnabled(digest.isAutoPauseOn)
+            if !digest.isJunctionWarningsOn { junctionCue.clear() }
             // A new list is the phone saying its library changed, and the
             // trail held here may be what changed. Asking costs one small
             // request and nothing comes back unless it did — see
@@ -464,7 +488,7 @@ final class WatchModel {
             }
             selection.took(package)
             trail = package
-            tracker = WatchRouteTracker(package)
+            track(package)
             follow.clear()
             store.save(package)
             // The screen that asked for this trail may have opened with

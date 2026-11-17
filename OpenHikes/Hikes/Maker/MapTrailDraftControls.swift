@@ -259,6 +259,8 @@ extension MapView.Coordinator {
             guard let self else { return false }
             return trailDraftController?.isAvailable != true
         }
+        // The junction warnings button stands on whichever pill is up.
+        applyJunctionButtonPlacement()
         // A tip about one of these buttons goes and comes back with them —
         // see `MapTipCards.swift`.
         syncMapTips(animated: animated)

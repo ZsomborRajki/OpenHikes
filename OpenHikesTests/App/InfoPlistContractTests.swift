@@ -17,6 +17,7 @@
 //  | `NSSupportsLiveActivities` | `Activity.request` throws; nothing appears |
 //  | `UIBackgroundModes` → `location` | a recording stops when the phone is pocketed |
 //  | `UIBackgroundModes` → `remote-notification` | CloudKit pushes stop arriving |
+//  | `UIBackgroundModes` → `audio` | a junction warning is never heard with the phone in a pocket |
 //  | `NSLocationTemporaryUsageDescriptionDictionary` → `RecordHike` | full accuracy is never granted |
 //  | `NSLocationWhenInUseUsageDescription` | the authorization prompt never appears |
 //  | `NSLocationAlwaysAndWhenInUseUsageDescription` | Background Trail Tracking cannot be granted |
@@ -186,17 +187,19 @@ struct InfoPlistContractTests {
         )
     }
 
-    /// Both modes, and an exact set. `location` is what keeps a recording
-    /// running with the phone in a pocket; `remote-notification` is what lets
-    /// CloudKit pushes arrive. A mode added here is a mode App Review asks
-    /// about, so this fails on an addition as well as on a loss.
-    @Test("the background modes are exactly the two the app uses")
+    /// All three modes, and an exact set. `location` is what keeps a
+    /// recording, or a walk with junction warnings on, running with the phone
+    /// in a pocket; `audio` is what lets a warning be spoken there (see
+    /// ``JunctionVoice``); `remote-notification` is what lets CloudKit pushes
+    /// arrive. A mode added here is a mode App Review asks about, so this
+    /// fails on an addition as well as on a loss.
+    @Test("the background modes are exactly the three the app uses")
     func backgroundModesAreDeclared() throws {
         let modes = try #require(
             Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String],
             "UIBackgroundModes is missing from the built bundle"
         )
-        #expect(Set(modes) == ["location", "remote-notification"])
+        #expect(Set(modes) == ["audio", "location", "remote-notification"])
     }
 
     /// Not a permission, but the same shape of silent failure: without it App
