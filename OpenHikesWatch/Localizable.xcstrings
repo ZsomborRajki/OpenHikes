@@ -567,6 +567,52 @@
         }
       }
     },
+    "Auto-paused — recording resumes when you walk on." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatisch angehalten – die Aufzeichnung läuft weiter, sobald du weitergehst."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pausa automática: la grabación se reanuda cuando sigas caminando."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pause auto – l’enregistrement reprend dès que vous repartez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pausa automatica – la registrazione riprende quando riparti."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatyczna przerwa – nagrywanie zostanie wznowione, gdy ruszysz dalej."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Автопауза — запись возобновится, когда вы пойдете дальше."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Автопауза — запис поновиться, коли ви рушите далі."
+          }
+        }
+      }
+    },
     "Average Speed" : {
       "localizations" : {
         "de" : {

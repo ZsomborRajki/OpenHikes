@@ -103,6 +103,10 @@ final class WatchModel {
         recorder.onFix = { [weak self] location in self?.advanceFollow(with: location) }
         recorder.onWalkQueued = { [weak self] walk, queued in self?.walkQueued(walk, queued: queued) }
         recorder.onRecordingEnded = { [weak self] whilePaused in self?.recordingEnded(whilePaused: whilePaused) }
+        // As a Resume does, and for the same reason: the hiker may have been
+        // carried somewhere else while the recording waited at the stop.
+        recorder.onAutoResume = { [weak self] in self?.tracker?.forgetPosition() }
+        recorder.setAutoPauseEnabled(library.isAutoPauseOn)
     }
 
     #if DEBUG
@@ -436,6 +440,7 @@ final class WatchModel {
             guard digest.sentAt >= library.sentAt else { return }
             library = digest
             store.save(digest)
+            recorder.setAutoPauseEnabled(digest.isAutoPauseOn)
             // A new list is the phone saying its library changed, and the
             // trail held here may be what changed. Asking costs one small
             // request and nothing comes back unless it did — see

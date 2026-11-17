@@ -349,7 +349,7 @@ extension OpenHikesModel {
                 weatherState: recorder.weatherState
             )
         }
-        return WatchSessionCoordinator(container: container, healthExport: healthExport)
+        return WatchSessionCoordinator(container: container, defaults: defaults, healthExport: healthExport)
     }
 }
 

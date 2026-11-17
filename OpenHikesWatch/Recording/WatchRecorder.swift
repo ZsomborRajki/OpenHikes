@@ -55,6 +55,15 @@
 //  time the process was gone is a pause and not a leg: nothing observed it,
 //  and a straight line across it would be distance nobody measured.
 //
+//  ## A recording pauses itself at a stop
+//
+//  Auto-Pause, by the phone's rule and the phone's switch (#1470): five
+//  minutes in one place pauses the recording from when the stop began, and
+//  walking on resumes it as the next segment. What it decides is in
+//  ``WatchAutoPause``, under `swift test`; what is here is doing it. A pause
+//  here keeps its feed whoever made it, so the only difference an auto-pause
+//  makes to the watch is that its fixes are shown to the rule.
+//
 
 import CoreLocation
 import Foundation
@@ -66,7 +75,7 @@ import os
 @MainActor
 @Observable
 final class WatchRecorder: NSObject {
-    nonisolated private static let logger = Logger(subsystem: "OpenHikesWatch", category: "Recorder")
+    nonisolated static let logger = Logger(subsystem: "OpenHikesWatch", category: "Recorder")
 
     /// Where a recording is.
     ///
@@ -127,7 +136,9 @@ final class WatchRecorder: NSObject {
         }
     }
 
-    private(set) var phase: Phase = .idle
+    /// Set only by this type, across its files: `WatchRecorder+AutoPause.swift`
+    /// pauses and resumes the recording too.
+    var phase: Phase = .idle
 
     /// Whether the hiker has refused this watch location outright.
     ///
@@ -139,6 +150,10 @@ final class WatchRecorder: NSObject {
     /// still worth looking at, so the screen keeps drawing it and says this
     /// underneath instead.
     private(set) var isLocationRefused = false
+    /// Whether the pause in force is one Auto-Pause made, which ends by
+    /// itself when the hiker walks on. Changes only when a pause begins or
+    /// ends or changes hands, so the recording screen may read it.
+    var isAutoPaused = false
     /// The live figures. A stable object the root never reads — see
     /// ``WatchRecordingStats``.
     let stats = WatchRecordingStats()
@@ -177,6 +192,12 @@ final class WatchRecorder: NSObject {
     /// hiker paused rather than where they are.
     var onRecordingEnded: (@MainActor (_ whilePaused: Bool) -> Void)?
 
+    /// Called when Auto-Pause's own pause ends by itself, before the walk
+    /// away reaches ``onFix``: the hiker may have been carried somewhere
+    /// else in the meantime, which a trail being followed has to hear as it
+    /// hears a Resume.
+    var onAutoResume: (@MainActor () -> Void)?
+
     @ObservationIgnored private let store: WatchStore
     /// The complication's copy of this recording — see ``WatchGlance``.
     @ObservationIgnored private let glances = WatchGlancePublisher()
@@ -184,14 +205,20 @@ final class WatchRecorder: NSObject {
     @ObservationIgnored private let locations = CLLocationManager()
     /// The workout session and builder this recording holds, which are the
     /// only ones whose callbacks speak for it — see ``WatchWorkoutOwnership``.
-    @ObservationIgnored private var workout = WatchWorkoutOwnership<HKWorkoutSession, HKLiveWorkoutBuilder>()
-    @ObservationIgnored private var accumulator = WatchWalkAccumulator()
+    @ObservationIgnored var workout = WatchWorkoutOwnership<HKWorkoutSession, HKLiveWorkoutBuilder>()
+    @ObservationIgnored var accumulator = WatchWalkAccumulator()
     @ObservationIgnored private var sessionID = UUID()
     @ObservationIgnored private var startedAt = Date.now
     /// Refuses fixes taken before this recording, or its current leg, began —
     /// see ``RecordingFixWindow``.
-    @ObservationIgnored private var window = RecordingFixWindow(opensAt: .now)
+    @ObservationIgnored var window = RecordingFixWindow(opensAt: .now)
     @ObservationIgnored private var trailHikeID: UUID?
+    /// The rule a stop is called by and the fixes held during the app's own
+    /// pause — see ``WatchAutoPause``.
+    @ObservationIgnored var autoPause = WatchAutoPause<CLLocation>()
+    /// Rings at ``WatchAutoPause/decisionDate``, so a stop no fix arrives
+    /// during is still called.
+    @ObservationIgnored var autoPauseTimer: Task<Void, Never>?
     @ObservationIgnored private var trailTitle: String?
     @ObservationIgnored private var journal: WatchRecordingJournalWriter
     /// The start that is waiting for the hiker to answer the location prompt.
@@ -233,6 +260,7 @@ final class WatchRecorder: NSObject {
         startedAt = .now
         window = RecordingFixWindow(opensAt: startedAt)
         accumulator = WatchWalkAccumulator()
+        resetAutoPause()
         stats.reset()
 
         guard await requestPermissions() else { return }
@@ -245,6 +273,7 @@ final class WatchRecorder: NSObject {
 
     func pause() {
         guard phase == .recording else { return }
+        resetAutoPause()
         accumulator.pause()
         journaling { try $0.record(.paused(.now), at: .now) }
         workout.session?.pause()
@@ -258,8 +287,11 @@ final class WatchRecorder: NSObject {
         publishGlance()
     }
 
+    /// Resumes at once, whoever paused: an auto-pause the hiker does not
+    /// want to wait out included.
     func resume() {
         guard phase == .paused else { return }
+        resetAutoPause()
         workout.session?.resume()
         let now = Date.now
         window.reopen(at: now)
@@ -281,6 +313,7 @@ final class WatchRecorder: NSObject {
         let wasPaused = phase == .paused
         // Before anything is awaited, so a second Stop finds nothing to stop.
         phase = .saving
+        resetAutoPause()
         locations.stopUpdatingLocation()
         endWorkoutSession()
         // Whatever happens to the walk below, nothing is being recorded now.
@@ -403,7 +436,7 @@ final class WatchRecorder: NSObject {
     }
 
     /// Lets a waiting start go, once there is something to tell it.
-    private func authorizationSettled(as status: CLAuthorizationStatus) {
+    func authorizationSettled(as status: CLAuthorizationStatus) {
         // Ahead of the waiter, and outside its guard: a grant answered with no
         // start waiting on it is exactly the case the caption is for — the
         // hiker following a trail who went to Settings about it.
@@ -504,18 +537,26 @@ final class WatchRecorder: NSObject {
     /// walk's session has not failed. ``stop()`` leaves the running or paused
     /// phase and lets the session go before it first suspends, so nothing
     /// comes between this answer and that.
-    private func stop(afterFailureOf failed: HKWorkoutSession) async {
+    func stop(afterFailureOf failed: HKWorkoutSession) async {
         guard workout.failureEnds(failed, isRecording: phase.isActive) else { return }
         await stop()
     }
 
     // MARK: Fixes
 
-    private func received(_ location: CLLocation) {
+    func received(_ location: CLLocation) {
         // The window before anything else reads the fix: a cached one from
         // before Start would otherwise be the first kept, and the gap from it
         // to the next would be counted as walking.
         guard phase == .recording, window.admits(location.timestamp) else { return }
+        // Every fix that says where the hiker is, kept for the track or not:
+        // one too loose or too close to keep is still evidence of a place
+        // being stayed at. One that makes a stop of it is the stop's.
+        if let stoppedAt = autoPause.observe(AutoPauseWatch.Fix(location)) {
+            beginAutoPause(since: stoppedAt)
+            return
+        }
+        scheduleAutoPauseCheck()
         // The position is offered whatever its height is worth; a height too
         // uncertain to climb on is dropped on its own (#932).
         let elevation = AltitudePolicy.trustedAltitude(
@@ -536,7 +577,7 @@ final class WatchRecorder: NSObject {
         onFix?(location)
     }
 
-    private var snapshot: WatchWalkAccumulatorSnapshot {
+    var snapshot: WatchWalkAccumulatorSnapshot {
         WatchWalkAccumulatorSnapshot(
             distanceMeters: accumulator.distanceMeters,
             activeSeconds: accumulator.activeSeconds,
@@ -553,7 +594,7 @@ final class WatchRecorder: NSObject {
     /// `asOf` is the moment the accumulator's clock was read at: a fix's own
     /// timestamp, since ``WatchWalkAccumulator/activeSeconds`` runs to the
     /// last kept fix and a batch can be delivered late.
-    private func publishGlance(asOf date: Date = .now) {
+    func publishGlance(asOf date: Date = .now) {
         let state: WatchGlance.State = switch phase {
         case .recording: .recording
         case .paused: .paused
@@ -571,7 +612,7 @@ final class WatchRecorder: NSObject {
 
     /// Fixes arriving while nothing is being recorded, so a trail can still be
     /// followed without a recording — which is half of what this app is for.
-    private func receivedWhileIdle(_ location: CLLocation) {
+    func receivedWhileIdle(_ location: CLLocation) {
         guard !phase.isActive else { return }
         onFix?(location)
     }
@@ -761,6 +802,9 @@ extension WatchRecorder {
         trailHikeID = recovered.header.trailHikeID
         trailTitle = recovered.header.title
         accumulator = recovered.accumulator
+        // A pause Auto-Pause made is the hiker's after a relaunch: only the
+        // process that made it would have ended it by itself.
+        resetAutoPause()
         // The outage is a pause: the next fix opens a new leg instead of
         // closing one across ground nobody observed. Written down too, so a
         // second interruption replays the same break.
@@ -799,7 +843,7 @@ extension WatchRecorder {
     /// Writes to the journal, and logs rather than stops on a failure — see
     /// ``WatchRecordingJournalWriter`` for why a recording carries on without
     /// one.
-    private func journaling(_ write: (inout WatchRecordingJournalWriter) throws -> Void) {
+    func journaling(_ write: (inout WatchRecordingJournalWriter) throws -> Void) {
         do {
             try write(&journal)
         } catch {
@@ -826,102 +870,5 @@ extension WatchRecorder {
         let stopped = collection.stopped.sorted().joined(separator: ", ")
         Self.logger.notice("Workout collects \(left, privacy: .public); stopped \(stopped, privacy: .public)")
         return source
-    }
-}
-
-/// `nonisolated` on the extension, which is the spelling the repository
-/// instructions require under `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`.
-nonisolated extension WatchRecorder: CLLocationManagerDelegate {
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations fixes: [CLLocation]) {
-        // Sorted here rather than trusted: Core Location batches, and a batch
-        // out of order meets the accumulator's `interval > 0` guard and loses
-        // the older fix silently.
-        let sorted = fixes.sorted { $0.timestamp < $1.timestamp }
-        onMainActor { [weak self] in
-            guard let self else { return }
-            for location in sorted {
-                if phase == .recording {
-                    received(location)
-                } else {
-                    receivedWhileIdle(location)
-                }
-            }
-        }
-    }
-
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        let status = manager.authorizationStatus
-        onMainActor { [weak self] in self?.authorizationSettled(as: status) }
-    }
-
-    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        // Logged and not surfaced. Core Location reports a transient
-        // `kCLErrorLocationUnknown` under trees and in gullies, on a walk
-        // where it will resolve itself, and a banner for each one would be a
-        // banner most of the way up a mountain.
-        Self.logger.debug("Location failed: \(error.localizedDescription, privacy: .public)")
-    }
-}
-
-nonisolated extension WatchRecorder: HKWorkoutSessionDelegate {
-    func workoutSession(
-        _ workoutSession: HKWorkoutSession,
-        didChangeTo toState: HKWorkoutSessionState,
-        from fromState: HKWorkoutSessionState,
-        date: Date
-    ) {
-        // Read rather than obeyed. The hiker's buttons are the authority on
-        // whether a recording is running — the same rule the app's recorder
-        // keeps — and this is the system telling us what it did with the
-        // session we asked for.
-        Self.logger.debug("Workout session moved to state \(toState.rawValue, privacy: .public)")
-    }
-
-    func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
-        Self.logger.error("Workout session failed: \(error.localizedDescription, privacy: .public)")
-        onMainActor { [weak self] in
-            // Only the session this recording holds: one ended at an earlier
-            // Stop can report its failure after the next walk has started,
-            // and has no say over it (#1231).
-            guard let self, workout.failureEnds(workoutSession, isRecording: phase.isActive) else { return }
-            // The session is what keeps this app running, so losing it is not
-            // a detail — but the walk so far is on the accumulator and stop()
-            // will keep it. Stopping is therefore better than carrying on
-            // into a suspension nobody would be told about. The walk reaches
-            // the phone through ``onWalkQueued``, and the model hears through
-            // ``onRecordingEnded`` that the receiver is down, as for a Stop.
-            Task { await self.stop(afterFailureOf: workoutSession) }
-        }
-    }
-}
-
-nonisolated extension WatchRecorder: HKLiveWorkoutBuilderDelegate {
-    func workoutBuilderDidCollectEvent(_ workoutBuilder: HKLiveWorkoutBuilder) {
-        // Nothing here reads workout events. The walk's own pauses are the
-        // accumulator's, and its distance is measured from the fixes rather
-        // than from what HealthKit made of them.
-    }
-
-    func workoutBuilder(
-        _ workoutBuilder: HKLiveWorkoutBuilder,
-        didCollectDataOf collectedTypes: Set<HKSampleType>
-    ) {
-        // Heart rate is all the data source collects, so it is all that
-        // arrives here. A figure that reads another type has it collected
-        // too — see ``WatchWorkoutCollection``.
-        guard collectedTypes.contains(HKQuantityType(.heartRate)),
-              let statistics = workoutBuilder.statistics(for: HKQuantityType(.heartRate))
-        else { return }
-        let unit = HKUnit.count().unitDivided(by: .minute())
-        let beats = statistics.mostRecentQuantity()?.doubleValue(for: unit)
-        // The sample's own time, so the screen can tell a reading from the
-        // last one before the sensor stopped (#1024).
-        let sampledAt = statistics.mostRecentQuantityDateInterval()?.end
-        onMainActor { [weak self] in
-            // Only the held builder's: one discarded at an earlier Stop would
-            // put that walk's pulse on this one's screen.
-            guard let self, workout.admitsCollection(from: workoutBuilder) else { return }
-            stats.update(heartRateBPM: beats, sampledAt: sampledAt)
-        }
     }
 }
