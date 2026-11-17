@@ -81,6 +81,12 @@ extension HikeRecorder {
         // began, not from this hand-off.
         sessionUptimeBase = uptime() - max(0, clock().timeIntervalSince(seed.startedAt))
         rebuildLiveState(from: seed.points)
+        // The heights carried are the trail's own, and the next fix's would
+        // be the receiver's, whose difference is no climb. So the barometer
+        // measures on from where the carried line ends, as it does from the
+        // last point a recovery or a resume found, with GPS let in slowly.
+        // Nothing has read the barometer since the session made it a line ago.
+        elevationFilter.restart(at: last.elevation)
         // Where the hike started, not where the recording took over.
         nameStartPlace(at: seed.points.first?.coordinate)
         if phase != .recording {

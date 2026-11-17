@@ -33964,6 +33964,52 @@
         }
       }
     },
+    "OpenHikes couldn’t start a recording with what you’ve hiked so far, so you’re still following %@. Try again, or keep following it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes konnte die Aufzeichnung nicht mit dem bisher Gewanderten starten, daher folgst du weiter %@. Versuche es erneut oder folge dem Weg weiter."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes no ha podido empezar a grabar con lo recorrido hasta ahora, así que sigues por %@. Vuelve a intentarlo o sigue el sendero."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes n’a pas pu commencer l’enregistrement avec ce que vous avez parcouru jusqu’ici, vous suivez donc toujours %@. Réessayez ou continuez à suivre ce sentier."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes non ha potuto avviare la registrazione con il tratto percorso finora, quindi stai ancora seguendo %@. Riprova o continua a seguire il sentiero."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nie udało się rozpocząć nagrywania od tego, co dotąd przebyto, więc nadal idziesz szlakiem „%@”. Spróbuj ponownie lub idź nim dalej."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось начать запись с уже пройденного пути, поэтому вы по-прежнему идете по тропе «%@». Попробуйте еще раз или идите по ней дальше."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не вдалося почати запис з уже пройденого, тому ви й далі йдете стежкою «%@». Спробуйте ще раз або йдіть нею далі."
+          }
+        }
+      }
+    },
     "OpenHikes couldn’t store the photo you just took, so it hasn’t been added to this hike. Check that your device has free space and try again." : {
       "localizations" : {
         "de" : {

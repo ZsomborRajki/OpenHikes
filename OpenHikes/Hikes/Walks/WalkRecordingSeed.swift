@@ -79,17 +79,25 @@ nonisolated extension RecordingSeed {
     static let maximumLegSeconds = TrailMatcher.sparseInterval * sparseLegShare
     private static let sparseLegShare = 0.5
 
-    /// The slowest pace the carried points are clocked at.
+    /// The slowest pace the carried points are clocked at: half as fast
+    /// again as the rate below which a recording's moving clock calls a
+    /// hiker stopped (``MovingTimeAccumulator/stillnessRate``).
     ///
     /// A walk's active clock runs on while its hiker is off the route, so it
     /// can be far longer than the covered ground took. Shared out over that
     /// ground it would read as a hiker standing still, in the recording's
     /// moving time and its average speed, on ground they walked. The time
     /// past this pace was spent somewhere the coverage does not show, and
-    /// goes where a pause's does. The distance does not hang on it: carried
-    /// ground counts in full at any pace (``RecordingPointFlags/carried``).
-    static let slowestWalkingSpeed =
-        MovementThresholds.stationaryNetDisplacement / MovementThresholds.stationaryInterval
+    /// goes where a pause's does.
+    ///
+    /// Clear of that rate rather than at it. The moving clock weighs the net
+    /// displacement across half a minute or more, which falls short of the
+    /// distance along any line that bends, and a saved route keeps no mark
+    /// that its ground was carried: clocked at the rate itself, nearly all of
+    /// the carried time read as stopped. The distance does not hang on this:
+    /// carried ground counts in full at any pace (``RecordingPointFlags/carried``).
+    static let slowestWalkingSpeed = MovingTimeAccumulator.stillnessRate * clearOfStillness
+    private static let clearOfStillness = 1.5
 
     /// The least time a break takes, so that the point after it is later than
     /// the one before: the save drops a point stamped like the last.
@@ -267,13 +275,14 @@ nonisolated private extension RecordingSeed {
     ) -> [[Vertex]] {
         // A paused leg has no length on the profile's axis, so the pieces'
         // own lengths, added up from the range's start, are distances on it.
-        var distance = range.lowerBound
+        var reached = range.lowerBound
         return profile.stretches(covering: range).map { line in
-            var previous: CLLocationCoordinate2D?
-            return line.map { coordinate in
-                if let previous { distance += RouteGeometry.distanceMeters(from: previous, to: coordinate) }
-                previous = coordinate
-                return Vertex(coordinate: coordinate, elevation: heights.elevation(at: distance))
+            let distances = line.adjacentPairs().reductions(reached) { traveled, leg in
+                traveled + RouteGeometry.distanceMeters(from: leg.0, to: leg.1)
+            }
+            reached = distances.last ?? reached
+            return zip(line, distances).map { coordinate, distance in
+                Vertex(coordinate: coordinate, elevation: heights.elevation(at: distance))
             }
         }
     }

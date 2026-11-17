@@ -97,6 +97,30 @@ extension HikeRecorderTests {
         #expect(walk.startedAt == seed.startedAt, "its own History dates the hike from its start too")
     }
 
+    /// The carried heights are the trail's own, and a fix's is the receiver's:
+    /// 28 m apart here, which is no climb and no descent. The barometer
+    /// measures on from the carried line's end, as it does from a resume's.
+    @Test("the heights after the carried line carry on from its end, not from the receiver's")
+    func heightsCarryOnFromTheCarriedLine() async throws {
+        let elevation = StubRecordingElevationSource()
+        let hikeRecorder = makeRecorder(elevationSource: elevation)
+        let seed = carriedWalk()
+        let carriedEnd = try #require(seed.points.last?.elevation)
+        await hikeRecorder.start(carrying: seed)
+
+        elevation.deliver(0)
+        source.deliver(fix(latitude: 47.6330, longitude: 12.8610))
+        clock.advance(by: 10)
+        elevation.deliver(2)
+        source.deliver(fix(latitude: 47.6332, longitude: 12.8610))
+
+        let hike = try savedHike(from: await hikeRecorder.stop())
+        let joined = try #require(hike.route[seed.points.count].elevation)
+        let next = try #require(hike.route[seed.points.count + 1].elevation)
+        #expect(abs(joined - carriedEnd) < 1, "the receiver's 600 m is let in slowly, not stepped to")
+        #expect((next - joined).isApproximatelyEqual(to: 2, absoluteTolerance: 1), "and the barometer's climb on top")
+    }
+
     /// The carried points already say where the hiker was up to the last of
     /// them. A fix from before that is the walk's own past, however fresh.
     @Test("a fix taken before the last carried point adds nothing")

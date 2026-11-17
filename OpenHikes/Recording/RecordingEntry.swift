@@ -54,7 +54,8 @@ enum WalkTakeover {
     /// is over, and the record button asks about this one.
     case overtaken
     /// The walk is still under way: the store refused its end, or its line
-    /// could not be read for what it covered to be carried.
+    /// could not be read for what it covered to be carried. The walk asks its
+    /// question again, saying so — see ``OffTrailQuestion/handOffFailed``.
     case refused
 }
 
@@ -69,9 +70,9 @@ final class RecordingEntry {
     private let takeOverWalk: @MainActor () async -> WalkTakeover
     private let openRequests: HikeOpenRequests
 
-    /// Whether the store refused the End that ``endWalkAndRecord()`` or
-    /// ``recordInsteadOfWalk()`` asked for. The map's alert reads and clears
-    /// it — see ``MapScreenAlerts``.
+    /// Whether the store refused the End that ``endWalkAndRecord()`` asked
+    /// for. The map's alert reads and clears it — see ``MapScreenAlerts``.
+    /// ``recordInsteadOfWalk()`` has its question asked again instead.
     var walkEndRefused = false
 
     /// - Parameters:
@@ -126,8 +127,7 @@ final class RecordingEntry {
                     if case .refused = end { return .refused }
                     return .ended(carrying: seed)
                 case .lineUnreadable:
-                    // Felt and said as a refused End is: the walk is still
-                    // under way, and the hiker can try again.
+                    // Felt as a refused End is: the walk is still under way.
                     HapticMoment.walkFailed.play()
                     return .refused
                 case .noWalk:
@@ -182,19 +182,14 @@ final class RecordingEntry {
     /// ends the walk as End does, where it was last on its trail, and then
     /// records, beginning with what the walk covered — so the hike so far is
     /// in the recording. A walk that could not be handed over stays under
-    /// way, nothing starts beside it, and ``walkEndRefused`` says so; one
-    /// that another walk replaced meanwhile starts nothing beside that one.
+    /// way, nothing starts beside it, and its question is asked again, saying
+    /// so; one that another walk replaced meanwhile starts nothing beside
+    /// that one.
     func recordInsteadOfWalk() {
         Task {
-            switch await takeOverWalk() {
-            case let .ended(seed):
-                if !isLive() { await start(seed) }
-                openRequests.openRecording()
-            case .overtaken:
-                break
-            case .refused:
-                walkEndRefused = true
-            }
+            guard case let .ended(seed) = await takeOverWalk() else { return }
+            if !isLive() { await start(seed) }
+            openRequests.openRecording()
         }
     }
 }

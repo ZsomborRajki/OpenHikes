@@ -16,6 +16,8 @@
 //  ``OffTrailQuestion``. Reaching that by walking is two minutes off a trail
 //  per scenario, decided by a reminder controller no test launch has, and
 //  what the scenarios are about is what the two answers do.
+//  `LeftTrailUnreadable` is the same walk with a line no read of it can
+//  fetch, which is what *Record Instead* failing looks like.
 //
 //  Mirrors `SeededPhotoFixture`, and like it is compiled only into `DEBUG`.
 //
@@ -88,6 +90,8 @@ nonisolated enum SeededWalkFixture {
 
     /// The walk still under way — see ``leaveTrail(along:in:session:)``.
     private static let leftTrailName = "LeftTrail"
+    /// The same, with a line that cannot be read.
+    private static let unreadableLineName = "LeftTrailUnreadable"
     /// How much of the route it covered before leaving it, 0...1.
     private static let leftTrailFraction = 0.4
     /// How long ago it set off, and how long ago it was last on the trail,
@@ -112,6 +116,9 @@ nonisolated enum SeededWalkFixture {
     static func attach(named names: String, to hike: Hike, in context: ModelContext, session: TrailWalkSession) {
         for name in names.split(separator: ",") {
             if name == leftTrailName {
+                leaveTrail(along: hike, in: context, session: session)
+            } else if name == unreadableLineName {
+                session.lineLooks.fetch = { _, _ in throw CocoaError(.fileReadUnknown) }
                 leaveTrail(along: hike, in: context, session: session)
             } else {
                 attach(one: String(name), to: hike, in: context)

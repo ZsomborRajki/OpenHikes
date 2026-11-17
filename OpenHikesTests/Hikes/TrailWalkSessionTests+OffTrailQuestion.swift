@@ -250,6 +250,7 @@ extension TrailWalkSessionTests {
         }
         #expect(handOff.seed == nil)
         #expect(session.walkedHikeID == walked.id)
+        #expect(session.offTrailQuestion?.handOffFailed == true, "and the question is asked again, saying so")
     }
 
     @Test("with no walk under way there is nothing to hand over")

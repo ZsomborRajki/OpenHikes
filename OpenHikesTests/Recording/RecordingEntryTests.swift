@@ -187,30 +187,16 @@ struct RecordingEntryTests {
     }
 
     /// The same refusal ``refusedEndStartsNothing()`` holds for the record
-    /// button's menu: nothing records beside a walk still under way.
-    @Test("a walk the store would not hand over starts no recording, and says so")
-    func refusedTakeoverStartsNothing() async {
-        var starts = 0
-        let entry = RecordingEntry(
-            isLive: { false },
-            start: { _ in starts += 1 },
-            walkUnderWay: { "Ridge Loop" },
-            takeOverWalk: { .refused },
-            openRequests: HikeOpenRequests()
-        )
-
-        entry.recordInsteadOfWalk()
-        await settleDelegateHop(until: "the refusal to be said") { entry.walkEndRefused }
-
-        #expect(starts == 0)
-        #expect(entry.walkEndRefused)
-    }
-
-    /// The walk the hiker answered about ended while it was being handed
-    /// over, and another began: nothing records beside that one, and nothing
-    /// is said about an End that nobody refused.
-    @Test("a walk another took the place of starts no recording, opens nothing and says nothing")
-    func overtakenTakeoverStartsNothing() async {
+    /// button's menu: nothing records beside a walk still under way. Nor
+    /// beside one that took the place of the walk the hiker answered about.
+    /// Neither is said here: a walk that could not be handed over asks its
+    /// question again, saying so, and an End that nobody refused is not one
+    /// to report.
+    @Test(
+        "a walk that was not handed over starts no recording, opens nothing and raises no refusal",
+        arguments: [WalkTakeover.refused, .overtaken]
+    )
+    func takeoverThatEndedNothingStartsNothing(_ takeover: WalkTakeover) async {
         let requests = HikeOpenRequests()
         let sent = FeedReader(requests.links())
         var starts = 0
@@ -218,10 +204,10 @@ struct RecordingEntryTests {
         let entry = RecordingEntry(
             isLive: { false },
             start: { _ in starts += 1 },
-            walkUnderWay: { "Valley Path" },
+            walkUnderWay: { "Ridge Loop" },
             takeOverWalk: {
                 answered = true
-                return .overtaken
+                return takeover
             },
             openRequests: requests
         )
