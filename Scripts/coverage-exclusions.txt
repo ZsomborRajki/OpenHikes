@@ -109,9 +109,10 @@
 #
 # `TrailDraftMapSection` arrived on 2026-10-06 as `TrailDraftColoringSection`,
 # the maker's *Color By* section, and took its name on 2026-10-08 when the
-# *Hiking Routes* switch joined it under *On the Map*. Both rows are other
-# views' controls — Route Style's picker and, since 2026-11-16, *Map Modes*'
-# `HikingRoutesPicker` in the switch's place — bound to shared settings. What
+# *Hiking Routes* switch joined it under *On the Map*; that row left again on
+# 2026-11-17, for *Map Modes*. What is left is Route Style's picker, bound to
+# a shared setting, and the hand-off of a purchase to the controller's
+# `elevationDidUnlock`, which `TrailDraftElevationTests` measures. What
 # decides whether the colouring is offered and what the line is coloured with
 # is `TrailDraftShading`, measured by `TrailDraftShadingTests`.
 #

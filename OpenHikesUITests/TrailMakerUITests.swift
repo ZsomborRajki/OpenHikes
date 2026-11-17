@@ -282,43 +282,6 @@ nonisolated final class TrailMakerUITests: XCTestCase {
         )
     }
 
-    /// *Hiking Routes* in the maker's *On the Map* section, under *Follow
-    /// Paths*: the two pictures *Map Modes* has, choosing the same setting.
-    /// The clean map chosen here is the chosen picture there.
-    @MainActor
-    func testHikingRoutesPicturesUnderFollowPathsAreTheMapModesOnes() {
-        let app = launchApp(
-            arguments: ["--ui-test-trail-graph=\(UITestFixture.trailGraphName)"]
-        )
-        openTrailMaker(in: app)
-
-        let snap = element("trail-draft-snap", in: app)
-        XCTAssertTrue(snap.waitForExistence(timeout: UITestTimeout.navigation))
-        let clean = element("trail-draft-hiking-routes-off", in: app)
-        let routes = element("trail-draft-hiking-routes-on", in: app)
-        XCTAssertTrue(scrollIntoView(clean, in: app))
-        XCTAssertGreaterThan(
-            clean.frame.minY,
-            snap.frame.minY,
-            "the pictures should sit under Follow Paths"
-        )
-        XCTAssertTrue(routes.isSelected, "the layer is on until it is switched off")
-        XCTAssertFalse(clean.isSelected)
-        XCTAssertEqual(routes.label, "Hiking Routes")
-        clean.tap()
-        XCTAssertTrue(waitUntilSelected(clean), "the tapped picture should become the chosen one")
-        XCTAssertFalse(routes.isSelected)
-
-        popScreen(in: app)
-        XCTAssertTrue(waitUntil { element("map-sheet", in: app).exists })
-        lowerSheetToMapModesButton(in: app)
-        openMapModes(in: app)
-        XCTAssertTrue(
-            element("hiking-routes-off", in: app).isSelected,
-            "the maker's pictures should choose the setting Map Modes chooses"
-        )
-    }
-
     // MARK: - Helpers
 
     /// Presses the ✕ and answers the question it asks about the drawing.

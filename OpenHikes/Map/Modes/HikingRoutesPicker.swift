@@ -7,15 +7,13 @@
 //  before it is made. On *Map Modes* it sits under the map cards, because
 //  the layer is drawn over whichever of them is chosen — see ``TileLayer``.
 //
-//  The trail maker's *On the Map* section draws the same pair, bound to the
-//  same synced setting, so choosing on either is choosing on both, and on
-//  the map behind them — see ``TrailDraftMapSection``. It was a switch
-//  there, which said what the layer is and showed nothing of it.
-//
-//  Not on the hike detail's *On the Map* card, deliberately: every other row
-//  there is that hike's, so a choice among them reads as this hike's, and it
-//  is every map's on every device the setting syncs to. The maker earns one
-//  because the marked routes are what a trail is drawn along.
+//  *Map Modes* is its only place, deliberately. Not on the hike detail's *On
+//  the Map* card: every other row there is that hike's, so a choice among
+//  them reads as this hike's, and it is every map's on every device the
+//  setting syncs to. And no longer in the trail maker's *On the Map*
+//  section, which drew the same pair, bound to the same setting: *Map
+//  Modes* opens from the pill the location button stands in while the maker
+//  is up, so it was the one choice offered twice.
 //
 //  The pictures are fixed, not drawn from the layer: a live one would need
 //  the layer's squares for wherever the hiker is, and would show nothing
@@ -35,9 +33,6 @@ import SwiftUI
 
 struct HikingRoutesPicker: View {
     @Binding var showsHikingRoutes: Bool
-    /// Goes before each picture's identifier on a screen that can be up
-    /// with *Map Modes* over it or beside it, as the trail maker can.
-    var identifierPrefix = ""
 
     private static let cardSpacing: CGFloat = 24
     private static let horizontalMargin: CGFloat = 16
@@ -69,13 +64,13 @@ struct HikingRoutesPicker: View {
             title: Text("Clean Map"),
             image: .mapModesCleanMap,
             isSelected: !showsHikingRoutes,
-            identifier: identifierPrefix + "hiking-routes-off"
+            identifier: "hiking-routes-off"
         ) { showsHikingRoutes = false }
         HikingRoutesOption(
             title: Text("Hiking Routes"),
             image: .mapModesHikingRoutes,
             isSelected: showsHikingRoutes,
-            identifier: identifierPrefix + "hiking-routes-on"
+            identifier: "hiking-routes-on"
         ) { showsHikingRoutes = true }
     }
 }
