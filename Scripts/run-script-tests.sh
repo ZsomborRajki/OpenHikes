@@ -180,8 +180,13 @@ if [[ -n "${STUB_SCREENSHOT_RESULTS:-}" ]]; then
 fi
 # A recording, read back: `xctrace export` and `xcresulttool` answer from the
 # fixture files in STUB_TRACE_DIR, the table of contents or whichever table
-# the export names.
+# the export names. An export of the table STUB_TRACE_EXPORT_FAIL names fails
+# instead, as `xctrace` does: a line on standard error and a status.
 if [[ -n "${STUB_TRACE_DIR:-}" ]]; then
+    if [[ -n "${STUB_TRACE_EXPORT_FAIL:-}" && "$*" == "xctrace export"*"\"$STUB_TRACE_EXPORT_FAIL\""* ]]; then
+        echo "Export failed: the stand-in table could not be read" >&2
+        exit 3
+    fi
     case "$*" in
         "xctrace export"*"--toc"*) cat "$STUB_TRACE_DIR/toc.xml" ;;
         "xctrace export"*"swiftui-body-interval"*) cat "$STUB_TRACE_DIR/bodies.xml" ;;
@@ -4079,6 +4084,19 @@ report="$(cat "$trace_run/report.md" 2>/dev/null || true)"
 if expect_status 0 \
     && expect_contains "$report" "8 bodies of every view" "the report" \
     && expect_contains "$report" "| MainMenuItemHost.RootView | 1 |" "the per-view table"; then
+    pass
+fi
+
+# Each table reaches the report through a pipe as `xctrace` writes it, so a
+# failed export arrives as a table that ends before it began. The report
+# still names the table and passes on what the tool said.
+STUB_TRACE_DIR="$trace_fixture" STUB_TRACE_EXPORT_FAIL=kdebug \
+    run_script "render-trace names the export that failed and what the tool said" \
+        "$render_trace" --report "$filtered_run"
+if expect_status 1 \
+    && expect_contains "$output" "export of kdebug" "the error" \
+    && expect_contains "$output" "Export failed: the stand-in table could not be read" "the error" \
+    && expect_absent "$output" "Report:" "the output"; then
     pass
 fi
 
