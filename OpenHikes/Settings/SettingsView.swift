@@ -101,15 +101,7 @@ struct SettingsView: View {
                 CloudSyncSection(sync: cloudSync)
                 subscriptionSection
                 photosSection
-                healthSection
-                BackgroundTrackingSection(
-                    tracker: backgroundTracker,
-                    locationManager: locationManager
-                )
-                liveActivitySection
-                autoPauseSection
-                movementReminderSection
-                displaySection
+                fieldSections
                 offlineStorageSection
                 // Below the app's own switches and above the about links,
                 // which is where somebody looks for it: it is not a setting
@@ -290,6 +282,37 @@ struct SettingsView: View {
         .accessibilityLabel(title)
         // "…" is a placeholder a screen reader has no way to interpret.
         .accessibilityValue(bytes.map(Self.byteText) ?? String(localized: "Measuring"))
+    }
+}
+
+// MARK: - Field switches
+
+/// The switches about this device being out on a trail.
+private extension SettingsView {
+    /// Everything between the photos and the storage, left out on a Mac.
+    ///
+    /// An Apple silicon Mac runs this as the iPad app (*The Mac* in
+    /// AGENTS.md), and nobody carries a Mac on a hike. Each of these is about
+    /// the device that is carried: a workout from its recording, the widget
+    /// and Live Activity kept current in a pocket, the Lock Screen, and a
+    /// recording's pauses, reminders and screen. A Mac has no Health, Lock
+    /// Screen or Live Activity, so there they would be switches that do
+    /// nothing. What stays is what a Mac does use: iCloud, the subscription,
+    /// the photos switch (a Mac's camera opens the same picker), map storage,
+    /// blocks and About. A switch left out keeps its stored value or its
+    /// default.
+    @ViewBuilder var fieldSections: some View {
+        if !ProcessInfo.processInfo.isiOSAppOnMac {
+            healthSection
+            BackgroundTrackingSection(
+                tracker: backgroundTracker,
+                locationManager: locationManager
+            )
+            liveActivitySection
+            autoPauseSection
+            movementReminderSection
+            displaySection
+        }
     }
 }
 
