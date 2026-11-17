@@ -32,15 +32,17 @@
 //
 //  - **A clock of its own.** Standing still widens the recorder's distance
 //    filter, and on a bench under open sky no fix may arrive for the whole
-//    lunch. ``tick(at:motion:)`` decides then, when motion says the device is
-//    still, or, with no answer from motion, when the last fixes before the
-//    silence showed the hiker standing: by the recorder's own rule for
-//    widening its filter (``AutoPausePolicy/settledMeters``), not by staying
-//    in the area, which a walk holds for half a minute. Otherwise silence
-//    might be a tunnel, and only the fix that ends it can tell: one back
-//    inside the area makes the whole silence a stop, and one elsewhere is a
-//    lost signal. Motion that says on foot or carried is such a silence
-//    whatever the fixes before it showed.
+//    lunch. ``tick(at:motion:)`` decides then, when the silence was still
+//    from its start: by motion, which said so within
+//    ``AutoPausePolicy/motionLagSeconds`` of the last fix, or by the last
+//    fixes before it, which showed the hiker standing by the recorder's own
+//    rule for widening its filter (``AutoPausePolicy/settledMeters``), not
+//    merely staying in the area, which a walk does for half a minute.
+//    Otherwise silence might be a tunnel, and only the fix that ends it can
+//    tell: one back inside the area makes the whole silence a stop, and one
+//    elsewhere is a lost signal. Motion that says on foot or carried at any
+//    time in the silence makes it such a silence, however still the device
+//    is when the clock runs out.
 //  - **On foot, or not.** Leaving on foot ends the stop. A fix that motion or
 //    its own speed says was carried — a bus, a lift, the drive home with the
 //    recording forgotten — moves the place with it, and the stop holds until
@@ -87,6 +89,11 @@ public struct AutoPausePolicy: Sendable, Equatable {
     /// stationary (`MovementThresholds.stationaryNetDisplacement`). A walk
     /// stays in a stop's area for half a minute, and is plainly further.
     public var settledMeters: Double
+    /// How long after the last fix motion may take to say the device is
+    /// still, for the silence to be still from that fix. Any later, and the
+    /// first minutes of the silence may have been walked: into a tunnel, and
+    /// then a halt inside it.
+    public var motionLagSeconds: TimeInterval
     /// The longest gap between two fixes of one walk away. A fix older than
     /// this was taken at the stop, not on the way out of it.
     public var departureGapSeconds: TimeInterval
@@ -100,6 +107,7 @@ public struct AutoPausePolicy: Sendable, Equatable {
         maximumFixAccuracy: Double,
         settledSeconds: TimeInterval,
         settledMeters: Double,
+        motionLagSeconds: TimeInterval,
         departureGapSeconds: TimeInterval,
         maximumOnFootSpeed: Double
     ) {
@@ -109,6 +117,7 @@ public struct AutoPausePolicy: Sendable, Equatable {
         self.maximumFixAccuracy = maximumFixAccuracy
         self.settledSeconds = settledSeconds
         self.settledMeters = settledMeters
+        self.motionLagSeconds = motionLagSeconds
         self.departureGapSeconds = departureGapSeconds
         self.maximumOnFootSpeed = maximumOnFootSpeed
     }
@@ -120,6 +129,7 @@ public struct AutoPausePolicy: Sendable, Equatable {
         maximumFixAccuracy: 50,
         settledSeconds: 30,
         settledMeters: 15,
+        motionLagSeconds: 60,
         departureGapSeconds: 60,
         maximumOnFootSpeed: 8
     )
@@ -218,6 +228,16 @@ public struct AutoPauseWatch: Sendable, Equatable {
     /// were taken and do not always arrive in that order; an older one is
     /// dropped, as `MovementWatch` drops it.
     private var lastObservedAt: Date?
+    /// The newest fix good enough to say where the hiker was: where a
+    /// silence begins.
+    private var lastPlacedAt: Date?
+    /// When motion began saying the device is still, with nothing since but
+    /// that or no answer, or `nil` while it says otherwise.
+    private var stillSince: Date?
+    /// Whether motion has said on foot or carried since ``lastPlacedAt``: a
+    /// silence walked or ridden for any part of it, which only the fix that
+    /// ends it can decide.
+    private var movedSinceFix = false
 
     public init(policy: AutoPausePolicy = .standard) {
         self.policy = policy
@@ -240,6 +260,9 @@ public struct AutoPauseWatch: Sendable, Equatable {
     public mutating func reset() {
         state = .walking(nil)
         lastObservedAt = nil
+        lastPlacedAt = nil
+        stillSince = nil
+        movedSinceFix = false
     }
 
     /// Shows the watch one fix.
@@ -247,6 +270,11 @@ public struct AutoPauseWatch: Sendable, Equatable {
         guard fix.horizontalAccuracy > 0, fix.latitude.isFinite, fix.longitude.isFinite else { return nil }
         if let lastObservedAt, fix.timestamp <= lastObservedAt { return nil }
         lastObservedAt = fix.timestamp
+        if fix.horizontalAccuracy <= policy.maximumFixAccuracy {
+            lastPlacedAt = fix.timestamp
+            movedSinceFix = false
+        }
+        hear(fix.motion, at: fix.timestamp)
         switch state {
         case .walking(let candidate): return observeWalking(fix, around: candidate)
         case .stopped(let stop): return observeStopped(fix, at: stop)
@@ -257,22 +285,39 @@ public struct AutoPauseWatch: Sendable, Equatable {
     /// say so: the recorder's timer at ``decisionDate``, and each change of
     /// motion.
     public mutating func tick(at now: Date, motion: Motion) -> Event? {
+        // Heard before the stop could be called as well as after: a silence
+        // walked in its first minutes and halted in later is a tunnel, not a
+        // stop, however still the device is when the clock runs out.
+        hear(motion, at: now)
         guard case .walking(let candidate?) = state,
-              now.timeIntervalSince(candidate.anchor.timestamp) >= policy.minimumStopSeconds
+              now.timeIntervalSince(candidate.anchor.timestamp) >= policy.minimumStopSeconds,
+              // A tunnel, a bus, or a shop walked around in with no fix
+              // inside: the fix that ends the silence decides, and taking it
+              // for a stop now would cut a walk out of the track.
+              !movedSinceFix, motion != .onFoot, motion != .carried
         else { return nil }
+        // Still from the start of the silence, by motion, or standing before
+        // it, by the fixes, with nothing heard since to say otherwise.
+        let stillThroughout = stillSince.flatMap { since in
+            lastPlacedAt.map { since.timeIntervalSince($0) <= policy.motionLagSeconds }
+        } ?? false
+        guard stillThroughout || candidate.isSettled else { return nil }
+        return stop(at: candidate.anchor)
+    }
+
+    /// Takes in what motion says at `date`, from a change of motion or a fix.
+    private mutating func hear(_ motion: Motion, at date: Date) {
         switch motion {
         case .stationary:
-            break
-        // Nothing but the fixes before the silence to go by.
-        case .unknown:
-            guard candidate.isSettled else { return nil }
-        // A tunnel, a bus, or a shop walked around in with no fix inside:
-        // the fix that ends the silence decides, and taking it for a stop
-        // now would cut a walk out of the track.
+            stillSince = stillSince ?? date
         case .onFoot, .carried:
-            return nil
+            stillSince = nil
+            if let lastPlacedAt, date > lastPlacedAt { movedSinceFix = true }
+        // A low-confidence answer ends nothing: Core Motion gives one now
+        // and then in the middle of a sit-down.
+        case .unknown:
+            break
         }
-        return stop(at: candidate.anchor)
     }
 
     private mutating func observeWalking(_ fix: Fix, around candidate: Candidate?) -> Event? {
@@ -321,8 +366,11 @@ public struct AutoPauseWatch: Sendable, Equatable {
         // Only a fix that could join the track can start the next segment.
         guard fix.horizontalAccuracy <= policy.maximumFixAccuracy else { return nil }
         var stop = stop
+        // Never a step of a walk away. Carried somewhere else, the stop goes
+        // with the hiker; carried about inside its area, as in a car at the
+        // car park, it stays where it is.
         if isCarried(fix) {
-            stop.place = fix
+            if isOutside(fix, of: stop.place) { stop.place = fix }
             stop.outbound = []
             state = .stopped(stop)
             return nil
@@ -358,8 +406,12 @@ public struct AutoPauseWatch: Sendable, Equatable {
         return abs(height - placeHeight) > policy.stopHeightMeters
     }
 
+    /// Motion says so, or the fix's own speed does while motion does not say
+    /// the device is still: a single fix's speed can be a reflection off a
+    /// wall as well as a bus.
     private func isCarried(_ fix: Fix) -> Bool {
-        fix.motion == .carried || (fix.speed ?? 0) > policy.maximumOnFootSpeed
+        fix.motion == .carried
+            || (fix.motion != .stationary && (fix.speed ?? 0) > policy.maximumOnFootSpeed)
     }
 
     private func distance(from start: Fix, to end: Fix) -> Double {
