@@ -32,25 +32,34 @@ nonisolated enum VectorTileRasterizer {
     /// the apex as a share above it.
     static let peakBaseDrop: CGFloat = 0.4
 
-    /// The layers drawn. Places and points of interest other than peaks wait
-    /// for labels.
+    /// The layers drawn.
     static let layerNames: Set<String> = [
-        "earth", "landcover", "landuse", "water", "buildings", "roads", "boundaries", "pois",
+        "earth", "landcover", "landuse", "water", "buildings", "roads", "boundaries", "pois", "places",
     ]
-    /// The properties read.
-    static let propertyKeys: Set<String> = [
-        "kind", "kind_detail", "sort_rank", "is_tunnel", "is_bridge", "disputed",
-    ]
+
+    /// The properties read, the names in `language` among them.
+    static func propertyKeys(language: String) -> Set<String> {
+        VectorTileLabels.propertyKeys(language: language).union([
+            "kind", "kind_detail", "sort_rank", "is_tunnel", "is_bridge", "disputed",
+        ])
+    }
 
     /// `tile`, the archive tile at `source`, drawn as the tile at `target`
     /// and encoded as a PNG, or `nil` if a picture could not be made.
     /// `target` is `source` or a tile inside it.
+    /// - Parameters:
+    ///   - language: the language whose names the map prefers.
+    ///   - height: a summit's height in meters as the reader reads one.
     static func png(
         of tile: MapboxVectorTile,
         from source: VectorTileAddress,
-        drawing target: VectorTileAddress
+        drawing target: VectorTileAddress,
+        language: String,
+        height: @escaping (Double) -> String
     ) -> Data? {
-        guard let image = image(of: tile, from: source, drawing: target) else { return nil }
+        guard let image = image(of: tile, from: source, drawing: target, language: language, height: height) else {
+            return nil
+        }
         let data = CFDataCreateMutable(nil, 0)
         guard let data,
               let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil)
@@ -63,7 +72,9 @@ nonisolated enum VectorTileRasterizer {
     static func image(
         of tile: MapboxVectorTile,
         from source: VectorTileAddress,
-        drawing target: VectorTileAddress
+        drawing target: VectorTileAddress,
+        language: String,
+        height: @escaping (Double) -> String
     ) -> CGImage? {
         guard target.z >= source.z,
               let space = CGColorSpace(name: CGColorSpace.sRGB),
@@ -80,7 +91,8 @@ nonisolated enum VectorTileRasterizer {
         // The tile's grid runs down the page, and Core Graphics' up it.
         context.translateBy(x: 0, y: CGFloat(pixelSize))
         context.scaleBy(x: 1, y: -1)
-        Painter(context: context, tile: tile, source: source, target: target).paint()
+        Painter(context: context, tile: tile, source: source, target: target, language: language, height: height)
+            .paint()
         return context.makeImage()
     }
 }
@@ -91,6 +103,8 @@ nonisolated private struct Painter {
     let tile: MapboxVectorTile
     let source: VectorTileAddress
     let target: VectorTileAddress
+    let language: String
+    let height: (Double) -> String
     /// Pixels per pixel of a 256-pixel tile, the unit the style's widths are in.
     let unit = CGFloat(VectorTileRasterizer.pixelSize) / VectorTileRasterizer.styleTileSize
 
@@ -106,6 +120,23 @@ nonisolated private struct Painter {
         paintRoads()
         paintBoundaries()
         paintPeaks()
+        paintHuts()
+        paintLabels()
+    }
+
+    /// Names last, over everything they name.
+    private func paintLabels() {
+        let side = CGFloat(VectorTileRasterizer.pixelSize)
+        let bounds = CGRect(x: 0, y: 0, width: side, height: side)
+        let candidates = VectorTileLabels.candidates(
+            in: tile,
+            source: source,
+            target: target,
+            bounds: bounds,
+            language: language,
+            height: height
+        )
+        VectorTileLabels.Layout(candidates, z: z, unit: unit, bounds: bounds, language: language).draw(into: context)
     }
 
     private func paintGround() {
@@ -222,6 +253,27 @@ nonisolated private struct Painter {
                 context.move(to: CGPoint(x: point.x, y: point.y - half))
                 context.addLine(to: CGPoint(x: point.x + half, y: point.y + drop))
                 context.addLine(to: CGPoint(x: point.x - half, y: point.y + drop))
+                context.closePath()
+            }
+        }
+        context.fillPath()
+    }
+
+    /// Huts as a small house, where a hiker would make for one.
+    private func paintHuts() {
+        guard z >= VectorTileLabelStyle.hutZ else { return }
+        let side = VectorTileLabelStyle.hutSize.value(at: z) * unit
+        let half = side * 0.5
+        context.setFillColor(VectorTileStyle.peak)
+        for (feature, geometry) in features(in: "pois", type: .point) {
+            guard VectorTileLabelStyle.Category.poi(kind: feature.string("kind")) == .hut,
+                  Double(z) >= feature.number("min_zoom") ?? 0
+            else { continue }
+            for point in geometry.points(of: feature) {
+                context.fill(CGRect(x: point.x - half, y: point.y - half * 0.25, width: side, height: side * 0.75))
+                context.move(to: CGPoint(x: point.x - half - 1, y: point.y - half * 0.25))
+                context.addLine(to: CGPoint(x: point.x, y: point.y - half - 1))
+                context.addLine(to: CGPoint(x: point.x + half + 1, y: point.y - half * 0.25))
                 context.closePath()
             }
         }

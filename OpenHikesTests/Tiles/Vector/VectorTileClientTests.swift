@@ -38,6 +38,7 @@ struct VectorTileClientTests {
         return VectorTileClient(
             sources: ["osm": source],
             session: URLSession(configuration: StubTileProtocol.sessionConfiguration()),
+            language: "en",
             now: { now.now }
         )
     }

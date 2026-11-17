@@ -44,13 +44,19 @@ nonisolated enum VectorTileFixture {
         return Data(tile.bytes)
     }
 
-    /// Every layer and property the rasterizer reads, as it reads them.
-    static func decoded(_ layers: [Layer]) throws -> MapboxVectorTile {
+    /// Every layer and property the rasterizer reads, as it reads them for a
+    /// reader of `language`.
+    static func decoded(_ layers: [Layer], language: String = "en") throws -> MapboxVectorTile {
         try MapboxVectorTile(
             data: data(layers),
             layerNames: VectorTileRasterizer.layerNames,
-            propertyKeys: VectorTileRasterizer.propertyKeys
+            propertyKeys: VectorTileRasterizer.propertyKeys(language: language)
         )
+    }
+
+    /// A height as a test reads one, the same in every locale.
+    static func height(_ meters: Double) -> String {
+        "\(Int(meters.rounded())) m"
     }
 
     // MARK: Geometry

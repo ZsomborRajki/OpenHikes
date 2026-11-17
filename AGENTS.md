@@ -1133,6 +1133,17 @@ a change to recording, the map, the sheet or the render path; the PR template,
     `VectorTileRasterizer` draws it. The cache then files the picture as any
     tile, under the raster style's id and keys, so saved coverage keeps
     answering. Past zoom 15 a tile is drawn from the zoom-15 tile around it.
+  - **Names are drawn into the tile** (`VectorTileLabels`): places, summits
+    and passes with their heights, huts, lakes and glaciers. Each is in the
+    app's language where the tile carries it, and in the local one where
+    not. Road and path names are not drawn yet.
+    - **A name never crosses its tile's edge**, because the tile beside it
+      could not finish it. It moves inward, or waits for a deeper zoom.
+    - **Every tile ranks names the same way** (`VectorTileLabelStyle.Category`,
+      then the archive's own ranking), so a zoom reads alike wherever it is
+      drawn.
+    - **A drawn name stays in the cached picture.** So a change of language
+      or region shows only as tiles are fetched again.
   - **Fallback.** Wherever the server cannot answer — it is down or failing,
     or it has no tile there — the tile comes from `tile.openstreetmap.org` as
     before. A failing server is passed over for a minute.
