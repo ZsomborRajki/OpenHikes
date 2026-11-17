@@ -337,49 +337,49 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenHikes verwendet die Bewegungssensoren, um die aufgezeichnete Höhe zu verbessern und den gewanderten Weg über GPS-Lücken hinweg zu erschließen."
+            "value" : "OpenHikes verwendet die Bewegungssensoren, um die aufgezeichnete Höhe zu verbessern, den gewanderten Weg über GPS-Lücken hinweg zu erschließen und eine Aufzeichnung anzuhalten, wenn du stehen bleibst."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "OpenHikes uses motion sensors to improve recorded elevation and infer the trail hiked through GPS gaps."
+            "value" : "OpenHikes uses motion sensors to improve recorded elevation, infer the trail hiked through GPS gaps, and pause a recording when you stop."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenHikes usa los sensores de movimiento para mejorar la altitud grabada y deducir el sendero recorrido cuando se pierde la señal GPS."
+            "value" : "OpenHikes usa los sensores de movimiento para mejorar la altitud grabada, deducir el sendero recorrido cuando se pierde la señal GPS y poner en pausa una grabación cuando te detienes."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenHikes utilise les capteurs de mouvement pour améliorer l’altitude enregistrée et reconstituer le sentier parcouru pendant les interruptions du GPS."
+            "value" : "OpenHikes utilise les capteurs de mouvement pour améliorer l’altitude enregistrée, reconstituer le sentier parcouru pendant les interruptions du GPS et mettre un enregistrement en pause lorsque vous vous arrêtez."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenHikes usa i sensori di movimento per migliorare l’altitudine registrata e ricostruire il sentiero percorso quando il segnale GPS si interrompe."
+            "value" : "OpenHikes usa i sensori di movimento per migliorare l’altitudine registrata, ricostruire il sentiero percorso quando il segnale GPS si interrompe e mettere in pausa una registrazione quando ti fermi."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenHikes używa czujników ruchu, aby poprawiać nagraną wysokość i odtwarzać przebyty szlak tam, gdzie zabrakło sygnału GPS."
+            "value" : "OpenHikes używa czujników ruchu, aby poprawiać nagraną wysokość, odtwarzać przebyty szlak tam, gdzie zabrakło sygnału GPS, i wstrzymywać nagrywanie, gdy się zatrzymasz."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenHikes использует датчики движения, чтобы уточнять записанную высоту и восстанавливать пройденную тропу там, где пропадал сигнал GPS."
+            "value" : "OpenHikes использует датчики движения, чтобы уточнять записанную высоту, восстанавливать пройденную тропу там, где пропадал сигнал GPS, и ставить запись на паузу, когда вы останавливаетесь."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OpenHikes використовує датчики руху, щоб уточнювати записану висоту й відновлювати пройдену стежку там, де зникав сигнал GPS."
+            "value" : "OpenHikes використовує датчики руху, щоб уточнювати записану висоту, відновлювати пройдену стежку там, де зникав сигнал GPS, і призупиняти запис, коли ви зупиняєтеся."
           }
         }
       }

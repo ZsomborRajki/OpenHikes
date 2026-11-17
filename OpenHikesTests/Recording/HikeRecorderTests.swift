@@ -324,11 +324,19 @@ final class HikeRecorderTests {
         openJournalHandle: @escaping @Sendable (URL) throws -> any TrackJournalHandle = { url in
             try FileHandle(forWritingTo: url)
         },
+        autoPause: Bool = false,
+        autoPauseEvidence: (@Sendable (AutoPauseEvidence.Record) -> Void)? = nil,
         configureDefaults: (UserDefaults) -> Void = { _ in /* no-op */ }
     ) -> HikeRecorder {
         let defaults = UserDefaults(
             suiteName: "hike-recorder-settings-\(UUID().uuidString)"
         ) ?? UserDefaults.standard
+        // Off unless a test asks for it, though the app's switch starts on:
+        // most of this suite scripts a recorder that stays where it is while
+        // the clock is moved, which is a stop to Auto-Pause, and each of
+        // those tests is about what a recording does when nothing pauses it.
+        // `HikeRecorderTests+AutoPause.swift` is the half with it on.
+        defaults.set(autoPause, forKey: SettingsKey.autoPauseEnabled)
         configureDefaults(defaults)
         let instance = HikeRecorder(
             container: container,
@@ -359,6 +367,7 @@ final class HikeRecorderTests {
             openJournalHandle: openJournalHandle,
             clock: clock.read,
             journalFlushDelay: .zero,
+            autoPauseEvidence: autoPauseEvidence,
             automaticallyRecovers: automaticallyRecovers
         )
         recorder = instance

@@ -193,6 +193,12 @@ nonisolated struct RecordingElevationFilter: Sendable {
     private var relativeAnchor: Double?
     private var elevationAnchor: Double?
 
+    /// Whether the heights this gives are the barometer's, which are steady
+    /// from one fix to the next, or GPS altitudes alone, which wander by more
+    /// than a storey while the receiver lies still. Auto-Pause reads a height
+    /// only when it is the first kind (``AutoPausePolicy/stopHeightMeters``).
+    var isBarometric: Bool { latestRelativeAltitude != nil }
+
     mutating func reset() {
         restart(at: nil)
     }

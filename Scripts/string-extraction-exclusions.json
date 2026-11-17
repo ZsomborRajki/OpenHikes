@@ -289,6 +289,13 @@
     ]
   },
   {
+    "path": "OpenHikes/Recording/AutoPauseEvidenceFile.swift",
+    "reason": "A device-local directory name, written in debug builds only.",
+    "literals": [
+      "\"AutoPauseEvidence\""
+    ]
+  },
+  {
     "path": "OpenHikes/Recording/OverpassTrailGraphProvider.swift",
     "reason": "Overpass query syntax sent over the wire.",
     "literals": [

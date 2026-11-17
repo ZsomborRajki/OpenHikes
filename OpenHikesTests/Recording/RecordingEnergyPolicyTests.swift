@@ -32,6 +32,34 @@ struct RecordingEnergyPolicyTests {
         #expect(profile == .precise)
     }
 
+    /// An auto-pause keeps its feed, so that the first steps away from the
+    /// stop are the next segment's first fixes: as fine as a track's, and as
+    /// seldom as a recording standing still.
+    @Test("An auto-pause is watched at full accuracy and the stationary filter, and says whose pause it is")
+    func autoPauseKeepsAStandingStillFeed() {
+        let profile = RecordingEnergyPolicy.profile(for: .init(isAutoPaused: true))
+        let stationary = RecordingEnergyPolicy.profile(for: .init(isStationary: true))
+
+        #expect(profile.desiredAccuracy == kCLLocationAccuracyBest)
+        #expect(profile.distanceFilter == RecordingEnergyPolicy.stationaryDistanceFilter)
+        #expect(profile.name == "auto-paused")
+        #expect(profile.reason != nil)
+        #expect(profile.reason != stationary.reason, "standing still while recording is another thing to be told")
+    }
+
+    @Test("An auto-pause in Low Power Mode conserves, and still says it is an auto-pause")
+    func autoPauseInLowPowerMode() {
+        let profile = RecordingEnergyPolicy.profile(
+            for: .init(isLowPowerModeEnabled: true, isStationary: true, isAutoPaused: true)
+        )
+        let autoPaused = RecordingEnergyPolicy.profile(for: .init(isAutoPaused: true))
+
+        #expect(profile.desiredAccuracy == RecordingEnergyPolicy.conservingAccuracy)
+        #expect(profile.distanceFilter == RecordingEnergyPolicy.stationaryDistanceFilter)
+        #expect(profile.name == "low-power+auto-paused")
+        #expect(profile.reason == autoPaused.reason)
+    }
+
     @Test("Low Power Mode lowers accuracy and widens the filter")
     func lowPowerModeConserves() {
         let profile = RecordingEnergyPolicy.profile(

@@ -120,7 +120,10 @@ extension HikeIntentCoordinator {
 
     func pauseRecording() async throws(HikeIntentFailure) -> LiveRecordingReport {
         await settleRecorder()
-        guard recorder.phase == .waitingForFix || recorder.phase == .recording else {
+        // A pause the app made is one the hiker can still ask for: it becomes
+        // theirs, and is no longer ended for them (`HikeRecorder+AutoPause.swift`).
+        guard recorder.phase == .waitingForFix || recorder.phase == .recording
+            || recorder.isAutoPaused else {
             throw .noActiveRecording
         }
         recorder.pause()

@@ -19,6 +19,13 @@ nonisolated enum TrackJournalError: Error, Equatable, Sendable {
 nonisolated struct RecordingPauseInterval: Codable, Equatable, Sendable {
     var startedAt: Date
     var endedAt: Date?
+
+    /// Whether `date` falls inside the pause, its two ends left out: the fix
+    /// a pause began on and the one it resumed on are both part of the walk.
+    /// A pause still open has no end yet.
+    func contains(_ date: Date) -> Bool {
+        date > startedAt && endedAt.map { date < $0 } ?? true
+    }
 }
 
 nonisolated struct TrackJournalMetadata: Codable, Equatable, Sendable {
@@ -176,6 +183,11 @@ actor TrackJournal {
         var accepted: [RecordingPoint] = []
         let tolerance = max(0, duplicateInterval)
         var lastAcceptedTimestamp: Date?
+        // A fix taken inside a pause is not part of the track. The widget
+        // samples only while a recording is taking fixes, but an auto-pause
+        // is backdated to when its stop began, and a fix the widget took
+        // since then is one of the stop's.
+        let pauses = metadata?.pausedIntervals ?? []
         for point in points.sorted(by: { $0.timestamp < $1.timestamp }) {
             let duplicatesAccepted = lastAcceptedTimestamp.map { lastTimestamp in
                 point.timestamp.timeIntervalSince(lastTimestamp) <= tolerance
@@ -184,6 +196,7 @@ actor TrackJournal {
                 point.timestamp,
                 within: tolerance
             ), !duplicatesAccepted else { continue }
+            guard !pauses.contains(where: { $0.contains(point.timestamp) }) else { continue }
             accepted.append(point)
             lastAcceptedTimestamp = point.timestamp
         }
@@ -205,6 +218,27 @@ actor TrackJournal {
         metadata.lastUpdatedAt = clock()
         self.metadata = metadata
         try writeMetadata(metadata)
+    }
+
+    /// Pauses the session from `date`, a moment already behind it, and takes
+    /// back every point recorded after `cutoff`.
+    ///
+    /// An auto-pause is decided minutes into a stop and counted from when the
+    /// stop began (``AutoPauseWatch``), so the fixes accepted since are the
+    /// stop's own wander and not the walk. Taking them out here leaves the
+    /// journal exactly as a pause by hand at that moment would have left it:
+    /// a replay after a crash and the preparation at Stop then reach the
+    /// boundaries the live recording showed, with no record of a new kind
+    /// and no new version of this file.
+    ///
+    /// The points go first and the pause is written second. A process that
+    /// ends between the two leaves a recording that was never paused and is
+    /// short the stop's wander, which a relaunch recovers as it would any
+    /// other.
+    func pause(at date: Date, discardingPointsAfter cutoff: Date) throws {
+        try flush()
+        try discardRecords(after: cutoff)
+        try pause(at: date)
     }
 
     func resume(at date: Date) throws {
@@ -419,6 +453,39 @@ private extension TrackJournal {
             throw error
         }
         committedByteCount += UInt64(bytes.count)
+    }
+
+    /// Cuts the file back to its last record at or before `cutoff`.
+    ///
+    /// The records to go are the file's tail, because points are appended as
+    /// they are accepted. A widget fix merged late is the one record that can
+    /// sit behind a newer one, so any record after the cut that is itself not
+    /// after `cutoff` is written back.
+    func discardRecords(after cutoff: Date) throws {
+        guard let fileHandle else { throw TrackJournalError.io(String(localized: "The recording journal is closed.")) }
+        do {
+            let data = try Data(contentsOf: journalURL)
+            let points = Self.decodeRecords(data)
+            guard let firstDiscarded = points.firstIndex(where: { $0.timestamp > cutoff }) else { return }
+            var kept = Data()
+            for index in points.indices[firstDiscarded...] where points[index].timestamp <= cutoff {
+                let offset = Self.headerByteCount + index * Self.recordByteCount
+                kept.append(data[offset..<(offset + Self.recordByteCount)])
+            }
+            let cut = UInt64(Self.headerByteCount + firstDiscarded * Self.recordByteCount)
+            try fileHandle.truncate(atOffset: cut)
+            committedByteCount = cut
+            hasTornTail = false
+            if kept.isEmpty {
+                try fileHandle.synchronize()
+            } else {
+                try appendRecords(kept, to: fileHandle)
+            }
+        } catch let error as TrackJournalError {
+            throw error
+        } catch {
+            throw TrackJournalError.io(error.localizedDescription)
+        }
     }
 
     func writeMetadata(_ metadata: TrackJournalMetadata) throws {

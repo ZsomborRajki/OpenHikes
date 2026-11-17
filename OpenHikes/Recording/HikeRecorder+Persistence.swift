@@ -496,6 +496,7 @@ extension HikeRecorder {
     ) {
         cancelLiveMatching(clearWindow: false)
         cancelTrailGraphPrefetches()
+        resetAutoPause()
         if endLocationUpdates {
             stopLocationSensors()
         }
@@ -544,6 +545,9 @@ extension HikeRecorder {
         accumulator = RecordingDistanceAccumulator()
         elevationFilter.reset()
         latestMotionState = .unknown
+        resetAutoPause()
+        autoPause.refresh?.cancel()
+        autoPause.refresh = nil
         startRequested = false
         activationID = nil
         carriedSeed = nil
@@ -645,6 +649,7 @@ extension HikeRecorder {
         accumulator = RecordingDistanceAccumulator()
         elevationFilter.reset()
         latestMotionState = .unknown
+        resetAutoPause()
         lastAcceptedPoint = nil
         recentFixes.removeAll()
         pendingReviewSave = nil

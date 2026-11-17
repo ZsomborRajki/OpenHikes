@@ -30,6 +30,14 @@
 //  a segment, held to the same grace as the ends of the walk, and the middle
 //  of a long one is `nil`.
 //
+//  A stop is the one pause the walk can still answer for (#1470). The grace
+//  is there because a paused leg can be a drive, and a picture from the
+//  middle of one was taken somewhere the walk never went. A pause whose two
+//  ends are one place went nowhere: the hiker stopped at a hut or a summit,
+//  which is where most of a hike's pictures are taken, and one taken during
+//  the stop was taken at it however long the stop lasted. So within
+//  ``stopSpanMeters`` the nearer end holds with no limit of time.
+//
 //  ``secondsFromFix`` carries what is left of the doubt out to the caller, so
 //  a picture placed by interpolation can say how far it was interpolated
 //  rather than presenting itself as a measurement.
@@ -51,6 +59,15 @@ nonisolated struct HikePhotoTimeline: Sendable {
     /// describing where the picture was taken and starts describing where the
     /// route happens to run.
     static let graceInterval: TimeInterval = 300
+
+    /// How far apart the two ends of a pause may be and still be one place.
+    ///
+    /// Wider than the area Auto-Pause calls a stop
+    /// (``AutoPausePolicy/stopRadiusMeters``), so that the first fix of the
+    /// walk away from one is still inside it, and so that a pause by hand at
+    /// a hut, resumed on its other side, is a stop too. Well short of what
+    /// anything carries a hiker in a pause worth photographing.
+    static let stopSpanMeters = 100.0
 
     /// One timestamped position from the walk.
     ///
@@ -166,9 +183,18 @@ nonisolated struct HikePhotoTimeline: Sendable {
         // line to interpolate along — only the segment that ended before it
         // and the one that resumed after it, each placed at its own end.
         if earlier.segment != later.segment {
-            return sinceEarlier <= untilLater
-                ? endPosition(earlier, offsetTo: date)
-                : endPosition(later, offsetTo: date)
+            let nearer = sinceEarlier <= untilLater ? earlier : later
+            // Unless the pause went nowhere: then it was a stop, and the
+            // picture was taken at it, however long ago the stop began.
+            let span = RouteGeometry.distanceMeters(from: earlier.coordinate, to: later.coordinate)
+            guard span > Self.stopSpanMeters else {
+                return Position(
+                    latitude: nearer.latitude,
+                    longitude: nearer.longitude,
+                    secondsFromFix: min(sinceEarlier, untilLater)
+                )
+            }
+            return endPosition(nearer, offsetTo: date)
         }
         let secondsFromFix = min(sinceEarlier, untilLater)
         // A gap the walk produced no fix across is a stretch whose route is

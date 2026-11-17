@@ -102,6 +102,11 @@ nonisolated enum SettingsKey {
     /// a pause arms anything, which is what keeps a pause exactly as cheap as
     /// it was for a hiker who does not want them.
     static let movementRemindersEnabled = "settings.movementRemindersEnabled"
+    /// Whether a recording pauses itself at a stop and resumes when the hiker
+    /// walks on — see ``AutoPauseWatch``. Read by ``HikeRecorder`` at every
+    /// decision rather than captured, so turning it off mid-hike stops the
+    /// next pause, and hands a pause the app has already made to the hiker.
+    static let autoPauseEnabled = "settings.autoPauseEnabled"
     /// Whether the screens a live hike is watched from may hold the display
     /// awake. Read by ``ScreenWakePolicy`` through the modifier on those
     /// screens rather than captured, so turning it off puts the idle timer
@@ -232,6 +237,12 @@ nonisolated enum SettingsDefault {
     /// because the hiker set off from lunch without tapping Resume, which no
     /// later screen can put right.
     static let movementRemindersEnabled = true
+    /// On, by the owner's decision (#1470). The stop it takes out of a walk
+    /// is one the hiker made, and a pause that began minutes late is counted
+    /// from when the stop did, so what it costs a hiker who never looks is a
+    /// dotted leg where they stood. A hiker who wants every minute on the
+    /// clock turns it off.
+    static let autoPauseEnabled = true
     /// Off. The display is the largest single consumer on the device, and a
     /// walk is measured in hours — so the hiker who has not asked for this
     /// keeps every bit of what the other energy policies buy them. The case
