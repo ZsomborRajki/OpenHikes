@@ -35,6 +35,11 @@ nonisolated extension TrailMatcher {
         /// Whether this whole segment spans ground the recording never
         /// observed — see ``RecordingPointFlags/inferred``.
         let isInferred: Bool
+        /// Whether both ends were carried from a walk the recording took over
+        /// from — see ``RecordingPointFlags/carried`` — so the points matched
+        /// between them are that walk's ground too, and a bend the match adds
+        /// is not read as standing still where the carried line's was not.
+        let isCarried: Bool
     }
 
     /// `coordinates` without any point within ``minimumCoordinateDistanceMeters``
@@ -81,7 +86,8 @@ nonisolated extension TrailMatcher {
             carriesMotionStationary: !inferred
                 && start.flags.contains(.motionStationary)
                 && end.flags.contains(.motionStationary),
-            isInferred: inferred
+            isInferred: inferred,
+            isCarried: start.flags.contains(.carried) && end.flags.contains(.carried)
         )
         return coordinates.indices.map { index in
             interpolatedPoint(at: index, context: ctx)
@@ -117,6 +123,9 @@ nonisolated extension TrailMatcher {
         // leg's stretch already arrived at.
         if context.isInferred, index > 0 {
             flags.formUnion(.inferred)
+        }
+        if context.isCarried, index > 0 {
+            flags.formUnion(.carried)
         }
         if index == 0 {
             flags.formUnion(context.start.flags)

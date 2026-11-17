@@ -622,7 +622,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
     own time (`RecordingSeed`). A walk keeps no fixes, so nothing else is
     carried, and a stretch it did not reach from the one before opens as a
     pause does. The recording's clock covers the walk's, which is what has
-    `LibraryTotals` count that ground once.
+    `LibraryTotals` count that ground once. Every carried point is marked
+    `.carried`, so its length counts in full, live and at the save, where a
+    tight bend would otherwise read as a hiker standing still.
 - **A recording always outranks a followed trail**, on every surface, because
   it is the one that would be *lost*: a follow is re-derived from the trail and
   the next fix, and a recording is not. Three places hold the rule and must
