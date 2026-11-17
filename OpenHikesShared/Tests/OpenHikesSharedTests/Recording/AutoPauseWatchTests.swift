@@ -177,6 +177,50 @@ struct AutoPauseWatchTests {
         #expect(watch.decisionDate == Self.time(700), "the far end is where the next stop may begin")
     }
 
+    /// At a metre a second a fix 8 m loose stays in one stop's area for
+    /// thirty seconds before the next area begins, which is as long as the
+    /// recorder takes to call a hiker standing. Being in the area is not
+    /// standing: the walk covered 30 m of it.
+    @Test("a tunnel entered at a steady walk is not a stop, with or without motion")
+    func tunnelAfterAWalk() {
+        for motion in [AutoPauseWatch.Motion.unknown, .onFoot] {
+            var watch = AutoPauseWatch()
+            #expect(Self.events(&watch, observing: Self.walk(from: 0, at: 0, fixes: 8, motion: motion)).isEmpty)
+
+            #expect(watch.tick(at: Self.time(340), motion: motion) == nil, "motion \(motion)")
+            #expect(watch.tick(at: Self.time(900), motion: motion) == nil, "motion \(motion)")
+            #expect(watch.observe(Self.fix(north: 470, at: 470, motion: motion)) == nil, "motion \(motion)")
+            #expect(!watch.isStopped)
+        }
+    }
+
+    /// The fixes before the silence showed the hiker standing, and then
+    /// motion says they are walking: a shop with no signal inside, or a
+    /// tunnel entered after a look at the map. The fix that ends it decides.
+    @Test("motion on foot or carried overrules the standing seen before a silence")
+    func motionOverrulesStanding() {
+        for motion in [AutoPauseWatch.Motion.onFoot, .carried] {
+            var watch = AutoPauseWatch()
+            let approach = Self.walk(from: 0, at: 0, fixes: 5)
+            let settling = [Self.fix(north: 43, at: 55), Self.fix(north: 41, at: 75)]
+            #expect(Self.events(&watch, observing: approach + settling).isEmpty)
+
+            #expect(watch.tick(at: Self.time(400), motion: motion) == nil, "motion \(motion)")
+            #expect(watch.tick(at: Self.time(400), motion: .unknown) == .stopped(since: Self.time(40)))
+        }
+    }
+
+    @Test("a walk that stood still and walked on before the silence is not a stop")
+    func standingThenWalkingOn() {
+        var watch = AutoPauseWatch()
+        let approach = Self.walk(from: 0, at: 0, fixes: 5)
+        let standing = [Self.fix(north: 41, at: 60), Self.fix(north: 42, at: 80)]
+        let walkingOn = [Self.fix(north: 52, at: 90), Self.fix(north: 62, at: 100)]
+        #expect(Self.events(&watch, observing: approach + standing + walkingOn).isEmpty)
+
+        #expect(watch.tick(at: Self.time(400), motion: .unknown) == nil, "the last fixes showed a walk")
+    }
+
     @Test("silence that ends where it began is a stop, from when it began")
     func silenceEndingWhereItBegan() {
         var watch = AutoPauseWatch()

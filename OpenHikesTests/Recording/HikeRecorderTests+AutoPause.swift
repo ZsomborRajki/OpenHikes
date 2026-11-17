@@ -162,6 +162,33 @@ extension HikeRecorderTests {
         #expect(hikeRecorder.isAutoPaused)
     }
 
+    /// Eight fixes of a steady walk, the last four inside one stop's area
+    /// for thirty seconds, and then a tunnel: four and a half minutes with
+    /// no signal, out 400 m on. Nothing of it is a stop.
+    @Test("a tunnel after a steady walk keeps the walk to it and the walk through it", arguments: [false, true])
+    func aTunnelIsNotAStop(motionSaysOnFoot: Bool) async throws {
+        let motion = StubRecordingMotionSource()
+        let hikeRecorder = makeRecorder(motionSource: motionSaysOnFoot ? motion : nil, autoPause: true)
+        await hikeRecorder.start()
+        if motionSaysOnFoot { motion.deliver(.pedestrian) }
+        walk(from: 0, fixes: 8)
+
+        clock.advance(by: Self.stopLength - 3 * Self.stride)
+        hikeRecorder.checkAutoPause()
+        #expect(hikeRecorder.phase == .recording)
+
+        clock.advance(by: 130)
+        source.deliver(fix(latitude: north(470), speed: 1))
+        walk(from: 480, fixes: 1)
+        await hikeRecorder.journalQueue.drain()
+
+        #expect(hikeRecorder.stats.pointCount == 10, "the fixes walked to the tunnel are kept")
+        #expect(hikeRecorder.stats.distanceMeters > 400)
+        #expect(hikeRecorder.accumulator.recordedDuration == 480)
+        let session = try #require(try await hikeRecorder.journal?.loadSession())
+        #expect(session.metadata.pausedIntervals.isEmpty, "the lost signal is not a pause")
+    }
+
     @Test("with the switch off a stop is recorded as it always was")
     func theSwitchOff() async {
         let hikeRecorder = makeRecorder(autoPause: false)
