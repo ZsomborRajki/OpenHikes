@@ -805,9 +805,12 @@ extension WatchRecorder {
         trailHikeID = recovered.header.trailHikeID
         trailTitle = recovered.header.title
         accumulator = recovered.accumulator
-        // A pause Auto-Pause made is the hiker's after a relaunch: only the
-        // process that made it would have ended it by itself.
         resetAutoPause()
+        // Auto-Pause's own pause stays the app's under the session HealthKit
+        // handed back: the hiker never saw this process end, and was told
+        // the recording resumes when they walk on — see ``WatchAutoPause``.
+        // Continue, the hiker's own answer, resumes; `paused` is false then.
+        let autoPaused = paused && recovered.wasAutoPaused && autoPause.isEnabled
         // The outage is a pause: the next fix opens a new leg instead of
         // closing one across ground nobody observed. Written down too, so a
         // second interruption replays the same break.
@@ -818,7 +821,11 @@ extension WatchRecorder {
         // A recovery that stays paused reopens it again at ``resume()``.
         window = RecordingFixWindow(opensAt: now)
         journaling { journal in
-            if paused {
+            // As the app's, so that a second relaunch takes it up too. It
+            // takes nothing back: no fix is kept after `now`.
+            if autoPaused {
+                try journal.record(.autoPaused(now), at: now)
+            } else if paused {
                 try journal.record(.paused(now), at: now)
             } else {
                 try journal.record(.paused(now), .resumed(now), at: now)
@@ -828,6 +835,10 @@ extension WatchRecorder {
         stats.update(from: snapshot)
         locations.startUpdatingLocation()
         phase = paused ? .paused : .recording
+        if autoPaused {
+            autoPause.resumePause()
+            isAutoPaused = true
+        }
         publishGlance()
     }
 

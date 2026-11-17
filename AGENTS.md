@@ -710,8 +710,11 @@ a change to recording, the map, the sheet or the render path; the PR template,
     position alone. A watch pause keeps its feed whoever made it, so the
     only cost is the rule. The cut is `WatchWalkAccumulator.pause(since:)`,
     journaled as one `.autoPaused` line that a recovery replays to the same
-    boundary, and finds as a pause like any other. A phone recording the
-    app has paused is mirrored to the watch as paused.
+    boundary. Unlike the phone, a relaunch under the workout session
+    HealthKit hands back takes the app's pause up again, because the watch
+    has no reminder for a pause nothing will end; Pause or the switch going
+    off journals it as the hiker's first. A phone recording the app has
+    paused is mirrored to the watch as paused.
 - **A segment is a walked run** (`RouteSegments`). A hike's segments are
   read off the pauses its route already has, so a pause by hand, an
   auto-pause and a GPX file's `<trkseg>` breaks all cut one, and nothing is

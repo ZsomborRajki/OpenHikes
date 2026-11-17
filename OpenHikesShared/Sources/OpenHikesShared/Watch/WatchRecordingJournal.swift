@@ -83,6 +83,9 @@ public struct WatchRecoveredRecording: Sendable, Equatable {
     public var accumulator: WatchWalkAccumulator
     /// Whether the last thing the hiker did was pause.
     public var wasPaused: Bool
+    /// Whether that pause was one Auto-Pause made, which a relaunch under
+    /// the recovered workout session takes up again.
+    public var wasAutoPaused = false
     /// The last moment the journal can vouch for: the latest fix, pause or
     /// resume it holds, or the start when it holds none.
     public var lastRecordedAt: Date
@@ -144,15 +147,16 @@ public struct WatchRecoveredRecording: Sendable, Equatable {
         case .paused(let date):
             next.accumulator.pause()
             next.wasPaused = true
+            next.wasAutoPaused = false
             next.lastRecordedAt = max(lastRecordedAt, date)
-        // A recovery offers it as a pause like any other: only the process
-        // that made it would have ended it by itself.
         case .autoPaused(let date):
             next.accumulator.pause(since: date)
             next.wasPaused = true
+            next.wasAutoPaused = true
             next.lastRecordedAt = max(lastRecordedAt, date)
         case .resumed(let date):
             next.wasPaused = false
+            next.wasAutoPaused = false
             next.lastRecordedAt = max(lastRecordedAt, date)
         }
         return next

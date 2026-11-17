@@ -4,7 +4,8 @@
 //
 //  A pause Auto-Pause makes on the watch, minutes after the stop it is
 //  counted from: the accumulator takes the stop's fixes back, and the
-//  journal line that says so replays to the same walk.
+//  journal line that says so replays to the same walk, and to whose pause
+//  it is.
 //
 
 import Foundation
@@ -72,13 +73,29 @@ struct WatchBackdatedPauseTests {
         let paused = try #require(WatchRecoveredRecording.replaying(try Fixture.data(entries))).recording
         #expect(paused.accumulator == live)
         #expect(paused.accumulator.fixes.last?.timestamp == Fixture.time(step: 3))
-        #expect(paused.wasPaused, "a relaunch finds it as a pause like any other")
+        #expect(paused.wasPaused)
+        #expect(paused.wasAutoPaused, "a relaunch under the recovered session takes it up again")
 
         Fixture.accept(Fixture.fix(step: 9), into: &live)
         entries += [.resumed(Fixture.time(step: 9)), .fix(try #require(live.lastFix))]
         let resumed = try #require(WatchRecoveredRecording.replaying(try Fixture.data(entries))).recording
         #expect(resumed.accumulator == live)
         #expect(!resumed.wasPaused)
+        #expect(!resumed.wasAutoPaused)
+    }
+
+    @Test("a pause the hiker took over from the app is theirs after a relaunch")
+    func takenOverPauseIsTheHikers() throws {
+        var live = Fixture.accumulator(steps: 0...6)
+        let entries: [WatchRecordingJournalEntry] = [.began(Fixture.header)]
+            + live.fixes.map { .fix($0) }
+            + [.autoPaused(Fixture.time(step: 3)), .paused(Fixture.time(step: 9))]
+        live.pause(since: Fixture.time(step: 3))
+
+        let recovered = try #require(WatchRecoveredRecording.replaying(try Fixture.data(entries))).recording
+        #expect(recovered.accumulator == live)
+        #expect(recovered.wasPaused)
+        #expect(!recovered.wasAutoPaused)
     }
 
     private enum Fixture {

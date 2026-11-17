@@ -265,6 +265,25 @@ public struct AutoPauseWatch: Sendable, Equatable {
         movedSinceFix = false
     }
 
+    /// Takes up a stop called before a relaunch, at `place`: the first fix
+    /// after it, because nothing of the stop's own was kept. What follows is
+    /// read as a walk away from there.
+    ///
+    /// - Returns: whether `fix` could stand for the place. A loose one
+    ///   cannot, and leaves the watch as it was, for the next.
+    @discardableResult public mutating func resumeStop(at place: Fix) -> Bool {
+        guard place.horizontalAccuracy > 0,
+              place.horizontalAccuracy <= policy.maximumFixAccuracy,
+              place.latitude.isFinite,
+              place.longitude.isFinite
+        else { return false }
+        reset()
+        lastObservedAt = place.timestamp
+        lastPlacedAt = place.timestamp
+        state = .stopped(Stop(place: place))
+        return true
+    }
+
     /// Shows the watch one fix.
     public mutating func observe(_ fix: Fix) -> Event? {
         guard fix.horizontalAccuracy > 0, fix.latitude.isFinite, fix.longitude.isFinite else { return nil }

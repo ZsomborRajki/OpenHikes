@@ -30,9 +30,24 @@
 //
 //  ## Whose pause it is
 //
-//  Only the app's own pause ends by itself. Resume ends it at once, the
-//  switch going off makes it the hiker's, and a relaunch finds it in the
-//  journal as a pause like any other.
+//  Only the app's own pause ends by itself. Resume ends it at once, and the
+//  switch going off makes it the hiker's. A relaunch under the workout
+//  session HealthKit hands back takes it up again (``resumePause()``): the
+//  hiker never saw the process end, the screen told them the recording
+//  resumes when they walk on, and the watch has no reminder to tell them
+//  otherwise, as the phone's has for the pause a relaunch makes the hiker's
+//  there. Nothing of the stop's own place was kept, so the first fix after
+//  the relaunch stands for it.
+//
+//  ## A walk away the clock got ahead of
+//
+//  A stop with no fix in it is called by the clock, on the fixes before the
+//  silence showing the hiker standing. Should a walk away be delivered in a
+//  late batch, its first fix is older than the moment the stop was called,
+//  and the stop may have been shorter than one. Nothing can be done about
+//  the cut by then, so the departure says so (``Departure/beganBeforeThePause``)
+//  and the recorder logs it: whether a watch in a workout batches its fixes
+//  at all is a device question.
 //
 
 import Foundation
@@ -50,6 +65,10 @@ public struct WatchAutoPause<Location: Sendable>: Sendable {
         public let since: Date
         /// The fixes of the walk away, oldest first, for the track.
         public let walkedAway: [Location]
+        /// Whether the walk away began before the clock called the pause:
+        /// its fixes arrived late, and the stop may have been shorter than
+        /// one.
+        public let beganBeforeThePause: Bool
     }
 
     private struct Held: Sendable {
@@ -71,6 +90,12 @@ public struct WatchAutoPause<Location: Sendable>: Sendable {
     /// Whether the pause in force is one the app made, and will end by
     /// itself.
     public private(set) var isPaused = false
+    /// When the pause in force was called, or `nil` for one taken up after
+    /// a relaunch.
+    private var calledAt: Date?
+    /// Whether the pause in force was taken up after a relaunch and still
+    /// waits for a fix to stand for its place.
+    private var awaitsPlace = false
 
     /// The hiker's switch. Turned off, it forgets the place being watched
     /// and makes a pause the app made the hiker's.
@@ -95,7 +120,7 @@ public struct WatchAutoPause<Location: Sendable>: Sendable {
     ///   then. The fix is the stop's, and joins no track.
     public mutating func observe(_ fix: AutoPauseWatch.Fix) -> Date? {
         guard isEnabled, !isPaused, case .stopped(let since) = watch.observe(fix) else { return nil }
-        return pause(since: since)
+        return pause(since: since, calledAt: fix.timestamp)
     }
 
     /// Asks the rule whether the hiker has stopped with no fix to say so.
@@ -105,7 +130,16 @@ public struct WatchAutoPause<Location: Sendable>: Sendable {
         guard isEnabled, !isPaused, case .stopped(let since) = watch.tick(at: now, motion: .unknown) else {
             return nil
         }
-        return pause(since: since)
+        return pause(since: since, calledAt: now)
+    }
+
+    /// Takes up the app's pause after a relaunch, from wherever the hiker is
+    /// when the next fix good enough to place them arrives.
+    public mutating func resumePause() {
+        guard isEnabled else { return }
+        reset()
+        isPaused = true
+        awaitsPlace = true
     }
 
     /// A fix delivered while the app's own pause is in force.
@@ -116,23 +150,32 @@ public struct WatchAutoPause<Location: Sendable>: Sendable {
         guard isPaused else { return nil }
         held.append(Held(fix: fix, location: location))
         if held.count > Self.maximumHeldFixes { held.removeFirst() }
+        if awaitsPlace {
+            awaitsPlace = !watch.resumeStop(at: fix)
+            return nil
+        }
         guard case .departed(let since) = watch.observe(fix) else { return nil }
         let walkedAway = held.filter { $0.fix.timestamp >= since }.map(\.location)
+        let beganBeforeThePause = calledAt.map { since < $0 } ?? false
         isPaused = false
+        calledAt = nil
         held = []
-        return Departure(since: since, walkedAway: walkedAway)
+        return Departure(since: since, walkedAway: walkedAway, beganBeforeThePause: beganBeforeThePause)
     }
 
     /// Forgets the place being watched and any pause the app made: a pause
     /// or a resume by hand, and every way a recording begins or ends.
     public mutating func reset() {
         isPaused = false
+        calledAt = nil
+        awaitsPlace = false
         held = []
         watch.reset()
     }
 
-    private mutating func pause(since: Date) -> Date {
+    private mutating func pause(since: Date, calledAt: Date) -> Date {
         isPaused = true
+        self.calledAt = calledAt
         held = []
         return since
     }
