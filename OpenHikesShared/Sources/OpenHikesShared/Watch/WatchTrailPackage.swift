@@ -36,7 +36,9 @@
 //  why the budget is 800 rather than the whole route — a recorded walk can
 //  carry tens of thousands of points, and none of them would be drawn. The
 //  ends of the pauses that cross come out of the same 800, never on top of it
-//  (`WatchTrailPackage+Budget.swift`).
+//  (`WatchTrailPackage+Budget.swift`). The junctions are some 90 bytes each,
+//  so a full ``junctionBudget`` adds about 26 KB more, and a day's few dozen
+//  a few kilobytes.
 //
 
 import Foundation
@@ -71,7 +73,7 @@ public struct WatchTrailPackage: SharedPayload, Equatable {
 
     /// How many junctions cross. A day's trail through a dense network meets
     /// a few dozen worth a word; this is room for a long one through a park
-    /// of paths, at some twenty bytes of JSON each.
+    /// of paths — see this file's header for what it weighs.
     public static let junctionBudget = 300
 
     public let schemaVersion: Int

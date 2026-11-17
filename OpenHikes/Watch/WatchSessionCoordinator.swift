@@ -254,7 +254,13 @@ final class WatchSessionCoordinator: NSObject {
     // MARK: Answering the watch
 
     private func sendTrail(_ request: WatchTrailRequest) {
-        Task { [container, trailGraph] in
+        // The graph only while the warnings are on. Finding junctions can
+        // mean downloading it, and a watch that taps at no fork must not wait
+        // on that for its trail. Turning the switch on sends the library,
+        // which has the watch ask for its trail again, junctions and all.
+        let isWarning = defaults.object(forKey: SettingsKey.junctionWarningsEnabled) as? Bool
+            ?? SettingsDefault.junctionWarningsEnabled
+        Task { [container, trailGraph = isWarning ? trailGraph : nil] in
             // Nothing to send is nothing to report either. A hike deleted
             // since the watch's list was published leaves the watch drawing
             // its waiting state, and the next digest takes the row off its

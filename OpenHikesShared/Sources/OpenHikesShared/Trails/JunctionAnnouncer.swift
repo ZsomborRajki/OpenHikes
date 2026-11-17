@@ -22,11 +22,18 @@
 //
 //  Read off the matches themselves: a run of ``directionStepMeters`` along
 //  the line one way says the hiker is going that way. A step shorter than
-//  that is GPS wandering around one spot and says nothing, which is what
-//  keeps a hiker standing at a fork from turning round on paper and hearing
-//  the other direction's advice. Until a step has said, nothing is
-//  announced, unless the caller knew the direction already — the phone's
-//  walk does (`TrailWalkCoverage.direction`).
+//  that is GPS wandering around one spot and says nothing. Until a step has
+//  said, nothing is announced, unless the caller knew the direction already
+//  — the phone's walk does (`TrailWalkCoverage.direction`).
+//
+//  Turning round takes more. A fix is delivered only once it has moved a
+//  distance filter's ten or twenty metres, and may be fifty metres out, so
+//  one fix that far back is what a hiker standing at a fork produces, and
+//  read as a turn it has them told the other direction's way at the fork in
+//  front of them. A reversal is ``reversalMeters`` back from the furthest
+//  point reached, on ``reversalFixes`` fixes in a row. A hiker who really
+//  turns round after a fork is a few seconds later hearing the way back,
+//  which is the cheap side to be wrong on: they have just walked it.
 //
 //  ## Said once
 //
@@ -115,9 +122,16 @@ public struct JunctionAnnouncer: Sendable, Equatable {
     /// that arrives a step late.
     public static let passedMeters: Double = 10
     /// How far along the line the matches must move one way to say the hiker
-    /// is going that way. Wider than a fix's wander while standing still,
-    /// narrower than the gap between a junction's two cues.
+    /// is going that way, while nothing has said yet. Narrower than the gap
+    /// between a junction's two cues.
     public static let directionStepMeters: Double = 10
+    /// How far back from the furthest point reached the matches must come to
+    /// say the hiker has turned round: wider than one fix's error at the
+    /// accuracies the feeds accept, once the distance filter has let it
+    /// through — see this file's header.
+    public static let reversalMeters: Double = 30
+    /// How many fixes in a row must be ``reversalMeters`` back to say so.
+    public static let reversalFixes = 2
     /// How far from a junction a hiker has to be, either way, for its cues to
     /// be said again on the next pass.
     public static let rearmMeters: Double = 250
@@ -126,8 +140,11 @@ public struct JunctionAnnouncer: Sendable, Equatable {
     public let junctions: [TrailJunction]
     /// Which way the hiker is going, once that is known.
     public private(set) var direction: RouteTravelDirection?
-    /// Where the direction was last decided.
+    /// Where the direction was last decided, and once it has been, the
+    /// furthest point reached going that way.
     private var anchorMeters: Double?
+    /// How many fixes in a row have been ``reversalMeters`` back.
+    private var reversalRun = 0
     /// Which cues have been said, by junction and direction.
     private var spoken: [SpokenKey: Stage] = [:]
 
@@ -177,6 +194,7 @@ public struct JunctionAnnouncer: Sendable, Equatable {
     /// while nothing was matched, as a resumed recording's may.
     public mutating func forgetPosition() {
         anchorMeters = nil
+        reversalRun = 0
     }
 
     private mutating func updateDirection(at distance: Double) {
@@ -184,14 +202,28 @@ public struct JunctionAnnouncer: Sendable, Equatable {
             anchorMeters = distance
             return
         }
-        let step = distance - anchor
-        if step >= Self.directionStepMeters {
-            direction = .towardsEnd
-            anchorMeters = distance
-        } else if step <= -Self.directionStepMeters {
-            direction = .towardsStart
-            anchorMeters = distance
+        guard let direction else {
+            let step = distance - anchor
+            if step >= Self.directionStepMeters {
+                direction = .towardsEnd
+                anchorMeters = distance
+            } else if step <= -Self.directionStepMeters {
+                direction = .towardsStart
+                anchorMeters = distance
+            }
+            return
         }
+        let back = direction == .towardsEnd ? anchor - distance : distance - anchor
+        guard back > 0 else {
+            anchorMeters = distance
+            reversalRun = 0
+            return
+        }
+        reversalRun = back >= Self.reversalMeters ? reversalRun + 1 : 0
+        guard reversalRun >= Self.reversalFixes else { return }
+        self.direction = direction == .towardsEnd ? .towardsStart : .towardsEnd
+        anchorMeters = distance
+        reversalRun = 0
     }
 
     private mutating func rearm(around distance: Double) {

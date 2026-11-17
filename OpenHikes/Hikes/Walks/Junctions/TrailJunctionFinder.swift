@@ -91,21 +91,23 @@ nonisolated enum TrailJunctionFinder {
 
     /// The junctions along `profile`, read from the graph already on the
     /// device where it covers the whole line and from a download where it
-    /// does not, or none when there is no graph to be had.
+    /// does not. None for a launch with no graph.
     ///
-    /// Quiet on failure, as ``HikeTrailAnalysis`` is: a walk with no
-    /// junctions found is a walk without warnings, not an error to show.
+    /// Throws when the graph could not be had — offline, say, with nothing
+    /// kept — which is not a line without junctions, and is worth asking
+    /// again. A caller with nothing to show for it stays quiet, as
+    /// ``HikeTrailAnalysis`` does: a walk without warnings is not an error.
     @concurrent
     static func junctions(
         along profile: RouteProfile,
         from provider: (any TrailGraphProviding)?
-    ) async -> [TrailJunction] {
+    ) async throws -> [TrailJunction] {
         guard let provider, profile.coordinates.count > 1 else { return [] }
         let coordinates = profile.coordinates
         let graph = if await provider.hasCompleteCachedGraph(covering: coordinates) {
-            try? await provider.cachedGraph(covering: coordinates)
+            try await provider.cachedGraph(covering: coordinates)
         } else {
-            try? await provider.graph(covering: coordinates)
+            try await provider.graph(covering: coordinates)
         }
         guard let graph else { return [] }
         return junctions(along: profile, in: graph)
@@ -183,12 +185,15 @@ nonisolated enum TrailJunctionFinder {
         guard along >= armMeters, along <= profile.totalDistanceMeters - armMeters,
               !profile.pauseDistances.contains(where: { abs($0 - along) < armMeters }),
               let before = profile.coordinate(atDistance: along - armMeters),
-              let here = profile.coordinate(atDistance: along),
               let after = profile.coordinate(atDistance: along + armMeters),
               let node = network.nodes[pass.nodeID]
         else { return nil }
-        let lineIn = bearing(from: before, to: here)
-        let lineOut = bearing(from: here, to: after)
+        // From the node, where the ways are read from, rather than from the
+        // line's closest point to it. A recording passes a few metres to one
+        // side, and between two arms fifteen degrees apart, read from where
+        // it passed, its way on can point at the other arm.
+        let lineIn = bearing(from: before, to: node.coordinate)
+        let lineOut = bearing(from: node.coordinate, to: after)
         let ways = network.wayBearings(from: node, armMeters: armMeters, minimumMeters: minimumArmMeters)
         guard let arrival = closest(ways, to: lineIn + 180),
               let exit = closest(ways, to: lineOut),

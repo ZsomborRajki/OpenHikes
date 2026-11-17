@@ -181,7 +181,9 @@ nonisolated enum WatchTrailPackaging {
         guard graph != nil, keptIndices.count > 1 else { return [] }
         let profile = RouteProfile(route: input.route)
         let distances = profile.distances
-        let found = await TrailJunctionFinder.junctions(along: profile, from: graph)
+        // None, if the graph could not be had: the trail is worth sending
+        // without them, and the next request asks again.
+        let found = (try? await TrailJunctionFinder.junctions(along: profile, from: graph)) ?? []
         var leg = 0
         return found.compactMap { junction in
             // Both are in order along the line, so the leg only moves on.
