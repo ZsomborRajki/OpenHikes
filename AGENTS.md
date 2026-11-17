@@ -671,6 +671,12 @@ a change to recording, the map, the sheet or the render path; the PR template,
     Motion answers only what a position cannot: that a silence is a hiker
     sitting still, and that a fix leaving the stop was carried, which keeps
     the pause until the hiker walks again.
+  - **A silence is a stop only on evidence of standing.** A tunnel is
+    silence too, and a walk stays inside a stop's area for half a minute.
+    With no motion answer, the fixes before the silence have to show the
+    hiker standing by the recorder's own rule (`AutoPausePolicy.settledMeters`,
+    held to `MovementThresholds` by `AutoPausePolicyParityTests`). A silence
+    motion says was walked or ridden waits for the fix that ends it.
   - **Backdated both ways.** The pause is counted from when the stop began.
     The journal is cut back to that fix
     (`TrackJournal.pause(at:discardingPointsAfter:)`) and the live figures
