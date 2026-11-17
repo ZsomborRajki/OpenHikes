@@ -35,6 +35,7 @@
 //
 
 import CoreLocation
+import DequeModule
 import Foundation
 import OpenHikesShared
 
@@ -55,8 +56,9 @@ struct RecordingAutoPause {
     var watch: AutoPauseWatch
     /// Whether the pause in force is one the app made.
     var isPaused = false
-    /// The newest fixes of the pause in force, oldest first.
-    var heldFixes: [HeldFix] = []
+    /// The newest fixes of the pause in force, oldest first. Let go of from
+    /// the front once there are more than ``maximumHeldFixes``, so a `Deque`.
+    var heldFixes: Deque<HeldFix> = []
     /// Rings at ``AutoPauseWatch/decisionDate``, so a stop no fix arrives
     /// during is still called.
     var timer: Task<Void, Never>?
@@ -213,9 +215,9 @@ extension HikeRecorder {
         let fix = AutoPauseWatch.Fix(location, elevation: nil, motion: latestMotionState)
         autoPauseEvidence?(.fix(fix, kept: false))
         autoPause.heldFixes.append(RecordingAutoPause.HeldFix(location: location, receivedAt: now))
-        autoPause.heldFixes.removeFirst(
-            max(0, autoPause.heldFixes.count - RecordingAutoPause.maximumHeldFixes)
-        )
+        if autoPause.heldFixes.count > RecordingAutoPause.maximumHeldFixes {
+            autoPause.heldFixes.removeFirst()
+        }
         guard case .departed(let since) = autoPause.watch.observe(fix) else { return }
         endAutoPause(since: since)
     }
