@@ -81,6 +81,17 @@ nonisolated enum MovementReminderPolicy {
     /// might genuinely rather have out of their moving average.
     static let stillFor: TimeInterval = 15 * 60
 
+    /// How long an auto-pause lasts before the hiker is asked whether the
+    /// hike is over.
+    ///
+    /// Twice ``stillFor``, because an auto-pause has already taken the stop
+    /// out of every figure: the one question left is a recording forgotten
+    /// after the walk, still spending location at a recording's accuracy,
+    /// and a lunch is not that. Half an hour is past a summit and a coffee,
+    /// and short of the hours a drive home with the recording forgotten
+    /// would otherwise spend.
+    static let autoPausedFor: TimeInterval = 30 * 60
+
     /// How far off the line counts as having left the trail, for the purpose
     /// of *telling* the hiker.
     ///

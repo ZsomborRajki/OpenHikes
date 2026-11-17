@@ -389,12 +389,14 @@ private extension SettingsView {
     /// On by default — see ``SettingsDefault/movementRemindersEnabled``.
     ///
     /// One switch for every reminder ``MovementReminderController`` decides:
-    /// resume and pause for a recording, resume for a walk, and the two a
-    /// followed trail adds — off the trail, and finishing after dark. It was
-    /// named for the first two alone and the other two arrived behind it, so
-    /// it is named for all of them now, and the footer lists each in a clause.
-    /// The fifteen minutes is ``MovementReminderPolicy/stillFor``. Severe
-    /// weather is not behind this switch, and the footer does not claim it.
+    /// resume and pause for a recording, a long auto-pause, resume for a
+    /// walk, and the two a followed trail adds — off the trail, and finishing
+    /// after dark. It was named for the first two alone and the others
+    /// arrived behind it, so it is named for all of them now, and the footer
+    /// lists each in a clause. The fifteen minutes is
+    /// ``MovementReminderPolicy/stillFor`` and the thirty
+    /// ``MovementReminderPolicy/autoPausedFor``. Severe weather is not behind
+    /// this switch, and the footer does not claim it.
     @ViewBuilder var movementReminderSection: some View {
         #if os(iOS)
         Section {
@@ -405,7 +407,8 @@ private extension SettingsView {
         } footer: {
             Text("""
             Notifies you when you set off while a hike is paused, stop for 15 minutes while \
-            recording, leave the trail you’re following, or may finish after dark.
+            recording or 30 minutes on Auto-Pause, leave the trail you’re following, or may finish \
+            after dark.
             """)
         }
         #endif

@@ -191,6 +191,9 @@ extension HikeRecorder {
         enqueueJournalOperation { journal in
             try await journal.pause(at: stoppedAt, discardingPointsAfter: stoppedAt)
         }
+        // A recording forgotten after the hike is paused here too, and its
+        // feed runs on: the hiker hears of it if the pause lasts.
+        movementReminders?.recordingDidAutoPause(since: stoppedAt)
         // The distance, the clock and the trace still hold the stop's first
         // minutes. Rebuilt from the journal once the cut above has landed,
         // and again if the walk away gets there first.
@@ -235,6 +238,7 @@ extension HikeRecorder {
         let walkedAway = autoPause.heldFixes.filter { $0.location.timestamp >= resumedAt }
         autoPause.isPaused = false
         autoPause.heldFixes = []
+        movementReminders?.recordingAutoPauseDidEnd()
         enqueueJournalOperation { journal in
             try await journal.resume(at: resumedAt)
         }

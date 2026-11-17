@@ -690,6 +690,13 @@ a change to recording, the map, the sheet or the render path; the PR template,
   - **Only the app's own pause ends by itself.** Resume during one resumes
     at once. Pause, the switch going off, or a relaunch makes it the
     hiker's, with a pause's parking and its reminder.
+  - **A long auto-pause asks whether the hike is over.** A recording
+    forgotten after the walk is auto-paused with its feed running, and a
+    phone left at home delivers no fix to decide anything by. So
+    `MovementReminderController` posts the `longAutoPause` banner when the
+    pause begins, for the system to show `MovementReminderPolicy.autoPausedFor`
+    after the stop began, and whatever ends the pause withdraws it. It has
+    no button, for the reason the Live Activity has no Stop.
   - **The thresholds are a first guess.** A `DEBUG` build writes down every
     fix and change of motion (`AutoPauseEvidenceFile`), and
     `AutoPauseEvidence.replay(_:policy:)` runs a policy over what was

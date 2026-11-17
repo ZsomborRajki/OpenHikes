@@ -120,6 +120,35 @@ extension HikeRecorderTests {
         #expect(hikeRecorder.energyProfile.reason != nil, "the recording screen says the app made the pause")
     }
 
+    /// A recording forgotten after the hike is auto-paused too, and its feed
+    /// runs on: the hiker hears of it half an hour into the stop, and not at
+    /// all if they walk on first.
+    @Test("an auto-pause asks for the long-pause banner, and walking away takes it down")
+    func theLongPauseBanner() async throws {
+        let harness = MovementReminderHarness.harness(clock: clock)
+        let began = clock.now
+        let hikeRecorder = await autoPausedRecorder(movementReminders: harness.controller)
+        await harness.controller.settle()
+
+        let banner = try #require(harness.notifier.posted.last { $0.kind == .longAutoPause })
+        let delay = try #require(banner.delay)
+        let shownAt = began
+            .addingTimeInterval(Self.stoppedAfter)
+            .addingTimeInterval(MovementReminderPolicy.autoPausedFor)
+        #expect(
+            delay.isApproximatelyEqual(to: shownAt.timeIntervalSince(clock.now), absoluteTolerance: 0.001),
+            "half an hour from when the stop began"
+        )
+        let withdrawnBefore = harness.notifier.withdrawn.count
+
+        walk(from: Self.stopMeters + 20, fixes: 4)
+        await settleAutoPause(hikeRecorder)
+        await harness.controller.settle()
+
+        #expect(hikeRecorder.phase == .recording)
+        #expect(harness.notifier.withdrawn.dropFirst(withdrawnBefore).contains(.longAutoPause))
+    }
+
     @Test("the widget and the Lock Screen are told the recording is paused")
     func theSurfacesAreToldItIsPaused() async throws {
         let store = StubRecordingSharedStateStore()

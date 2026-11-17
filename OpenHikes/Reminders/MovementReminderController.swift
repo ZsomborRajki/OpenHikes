@@ -125,6 +125,10 @@ final class MovementReminderController {
 
     private var pausedRecording: PausedRecording?
     private var pausedWalk: PausedWalk?
+    /// The pause Auto-Pause made, while its banner waits to be shown. Its
+    /// identity is what keeps a permission answer that arrives after the
+    /// pause has ended from posting for it.
+    private var autoPausedRecording: UUID?
     /// Eligibility and delivery are separate: permission can be refused, or
     /// arrive after the condition has changed. See ``MovementWarningState``.
     private var warnings = MovementWarningState()
@@ -218,6 +222,7 @@ extension MovementReminderController {
     ) -> Bool {
         warnings.resetRecording()
         withdraw(.pauseRecording)
+        forgetAutoPause()
         guard isEnabled, let coordinate, CLLocationCoordinate2DIsValid(coordinate) else {
             pausedRecording = nil
             return false
@@ -268,6 +273,7 @@ extension MovementReminderController {
     func recordingDidResume() {
         pausedRecording = nil
         withdraw(.resumeRecording)
+        forgetAutoPause()
     }
 
     /// The recording is over, has failed, or was discarded.
@@ -276,6 +282,49 @@ extension MovementReminderController {
         warnings.resetRecording()
         withdraw(.resumeRecording)
         withdraw(.pauseRecording)
+        forgetAutoPause()
+    }
+
+    /// Posts the banner a long auto-pause is owed, to be shown
+    /// ``MovementReminderPolicy/autoPausedFor`` after the stop began.
+    ///
+    /// Posted now and shown later, where every other reminder here is
+    /// decided by a fix: a phone left on a table at home after the hike
+    /// delivers none, and that is the recording this is for. Whatever ends
+    /// the pause takes it back down, shown or not.
+    ///
+    /// - Parameter stoppedAt: when the stop began, which the pause is counted
+    ///   from.
+    func recordingDidAutoPause(since stoppedAt: Date) {
+        forgetAutoPause()
+        guard isEnabled else { return }
+        let pause = UUID()
+        autoPausedRecording = pause
+        enqueue { [weak self] in
+            guard let self, mayPostLongAutoPause(pause), await notifier.authorize(),
+                  mayPostLongAutoPause(pause) else { return }
+            var reminder = MovementReminderWording.longAutoPause(pausedFor: MovementReminderPolicy.autoPausedFor)
+            reminder.delay = stoppedAt
+                .addingTimeInterval(MovementReminderPolicy.autoPausedFor)
+                .timeIntervalSince(clock())
+            await notifier.post(reminder)
+        }
+    }
+
+    /// The hiker walked on from a pause Auto-Pause made.
+    func recordingAutoPauseDidEnd() {
+        forgetAutoPause()
+    }
+
+    private func mayPostLongAutoPause(_ pause: UUID) -> Bool {
+        isEnabled && autoPausedRecording == pause
+    }
+
+    /// Anything that ends a pause Auto-Pause made has answered its banner: a
+    /// walk on, a pause or a resume by hand, or the recording's end.
+    private func forgetAutoPause() {
+        autoPausedRecording = nil
+        withdraw(.longAutoPause)
     }
 
     /// Whether a fix is evidence about *this* pause at all.
@@ -482,6 +531,7 @@ extension MovementReminderController {
         let wasWatching = pausedRecording != nil
         pausedRecording = nil
         pausedWalk = nil
+        autoPausedRecording = nil
         warnings.resetRecording()
         warnings.cancelWalkWarnings()
         for kind in MovementReminderKind.allCases { withdraw(kind) }
