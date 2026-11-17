@@ -39,6 +39,9 @@ nonisolated struct RecordingSegmentLedger: Sendable, Equatable {
     private var base = Totals()
     private var latest = Totals()
     private var previousTimestamp: Date?
+    /// When the newest finished segment's last fix was taken, which its stop
+    /// is counted from.
+    private var finishedEnd: Date?
 
     /// Every segment so far, the one in progress last, or none until a pause
     /// has cut the walk: one segment is the walk itself, which the figures
@@ -54,11 +57,15 @@ nonisolated struct RecordingSegmentLedger: Sendable, Equatable {
         if point.flags.contains(.resumed), let previousTimestamp {
             let ended = segment(upTo: totals)
             // A lone fix, with a pause on both sides, walked nothing: it is
-            // no segment, as it is none on a saved route.
+            // no segment, as it is none on a saved route, and the stop before
+            // it runs on through it to this resume.
             if ended.distanceMeters > 0 || (ended.seconds ?? 0) > 0 {
                 var closed = ended
                 closed.stopSeconds = max(0, point.timestamp.timeIntervalSince(previousTimestamp))
                 finished.append(closed)
+                finishedEnd = previousTimestamp
+            } else if let finishedEnd, !finished.isEmpty {
+                finished[finished.count - 1].stopSeconds = max(0, point.timestamp.timeIntervalSince(finishedEnd))
             }
             base = totals
         }
