@@ -93,6 +93,24 @@ struct RecordingSegmentLedgerTests {
         #expect(accumulator.segments.shown.isEmpty, "one walked run is the walk itself")
     }
 
+    /// A resume that took one fix before the next pause: the stop runs from
+    /// the end of the segment before it to the start of the one after, and
+    /// the saved hike's segments say the same of the same points.
+    @Test("a lone fix between two pauses is inside one stop, as on the saved hike")
+    func loneFixBetweenPauses() throws {
+        let points = walk([500, 510, 520, 520, 530, 540], resumingAt: [2, 3])
+        let accumulator = accumulator(points)
+
+        let live = accumulator.segments.shown
+        let saved = RouteSegments.segments(
+            of: points.map(\.routeCoordinate),
+            distanceMeters: accumulator.distanceMeters
+        )
+        try #require(live.count == 2)
+        #expect(live[0].stopSeconds == 2 * Self.lunch)
+        #expect(live.map(\.stopSeconds) == saved.map(\.stopSeconds))
+    }
+
     @Test("a walk with no heights has segments with no climb")
     func noHeights() throws {
         var points = walk([0, 0, 0, 0], resumingAt: [2])
