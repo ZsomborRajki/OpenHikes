@@ -317,10 +317,14 @@ either: the second run waits silently on the first run's build lock.
   - `@_weakLinked import` cannot do this instead. The compiler wants it on
     every import of the module or none.
   - After adding a framework or a newer API, run the app on the Mac once.
-- **What a Mac lacks.** No GPS (it locates by Wi-Fi), no camera picker, no
-  Health, watch, Live Activity, motion or barometer. Each is asked about at
-  run time, as on an iPad, so the app goes without it. The Health and Lock
-  Screen switches in Settings still show.
+- **What a Mac lacks.** No GPS (it locates by Wi-Fi), no Health, watch, Live
+  Activity, motion or barometer. Each is asked about at run time, as on an
+  iPad, so the app goes without it. Its camera does open the camera picker.
+- **Settings shows a Mac only what a Mac uses** (`SettingsView.fieldSections`):
+  iCloud, the subscription, the photos switch, map storage, blocks and About.
+  Health, background tracking, the Live Activity, Auto-Pause, the reminders
+  and the screen switch are about a device carried on a trail, and are left
+  out there, keeping their stored values or defaults.
 - **Running it outside Xcode.** Build with `-destination 'platform=macOS,
   arch=arm64,variant=Designed for iPad'`, then put the `Debug-iphoneos` app
   inside a wrapper, `X.app/Wrapper/OpenHikes.app` with an
