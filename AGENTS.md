@@ -74,7 +74,7 @@ floor="$(OPENHIKES_SIM_POOL_PREFIX='OpenHikes Floor' \
 swift test --package-path OpenHikesShared -Xswiftc -warnings-as-errors
 swift test --package-path OpenHikesData -Xswiftc -warnings-as-errors
 
-# The shell scripts, against stubbed xcrun, xcodebuild, swiftlint, periphery and osmium
+# The shell scripts, against stubbed xcrun, xcodebuild, swiftlint, periphery, osmium and pyosmium
 Scripts/run-script-tests.sh
 
 # The privacy policy and terms pages the app links, read out of docs/
@@ -500,6 +500,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
   - `hinge` opens an iPhone Duo simulator; see *The iPhone Duo*.
   - `osmium` reads an OpenStreetMap extract for `Scripts/trail-cells.sh build`;
     see *The trail squares*.
+  - `pyosmium-up-to-date` keeps the planet current for
+    `Scripts/trail-cells.sh update-planet`. Homebrew has no formula for it:
+    `brew install pipx && pipx install osmium`.
 - **Hooks and formatting.** `Scripts/install-git-hooks.sh` installs an opt-in
   pre-push lint hook. There is no formatter.
 
@@ -1898,10 +1901,16 @@ by name. `TrailCellGrid` argues the design and has the measurements.
   the app's, and `Scripts/run-script-tests.sh` builds the tool, which is what
   holds them to that.
 - **Building and uploading** is `Scripts/trail-cells.sh`:
-  1. `build <planet.osm.pbf> --world`. Only a build of the whole planet takes
+  1. `update-planet <planet.osm.pbf>`. The planet is downloaded once, by
+     torrent or from a mirror, and from then on kept current with the hourly
+     changes openstreetmap.org publishes, because the volunteers who serve it
+     asked that it not be downloaded again for each refresh. Only a planet
+     more than three months old, which pyosmium will not update, is replaced
+     by a new download.
+  2. `build <planet.osm.pbf> --world`. Only a build of the whole planet takes
      `--world`, which is what marks the squares complete.
-  2. `upload <dir> --environment development`, then search in a Debug build.
-  3. `upload <dir> --environment production`.
+  3. `upload <dir> --environment development`, then search in a Debug build.
+  4. `upload <dir> --environment production`.
 
   An upload sends the squares whose digest changed, deletes the ones the build
   no longer has, and writes the manifest last. It refuses a regional build
