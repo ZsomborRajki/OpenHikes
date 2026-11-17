@@ -201,6 +201,8 @@ nonisolated extension PlaceSquareFile.Box {
         )
     }
 
+    // periphery:ignore - the tool behind `Scripts/trail-cells.sh`, which
+    // compiles this file, boxes a way or a relation with it.
     /// The box around both.
     func union(_ other: Self) -> Self {
         Self(

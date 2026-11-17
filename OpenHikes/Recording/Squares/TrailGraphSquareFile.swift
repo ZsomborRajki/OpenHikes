@@ -71,6 +71,8 @@ nonisolated struct TrailGraphSquareFile: Equatable, Sendable {
         case surface = 5
         case tracktype = 6
 
+        // periphery:ignore - the tool behind `Scripts/trail-cells.sh`, which
+        // compiles this file, reads a way's tags by it.
         /// The way's own key, or `nil` for the one that is not a tag of it.
         var key: String? {
             switch self {
