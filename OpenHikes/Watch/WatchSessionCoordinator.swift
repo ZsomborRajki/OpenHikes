@@ -11,7 +11,9 @@
 //
 //  * Publishes the hiker's library as the session's *application context*, so
 //    a watch that wakes up out of range still has a list of trails. Latest
-//    wins, which is what a list of trails is.
+//    wins, which is what a list of trails is. The Auto-Pause switch rides on
+//    it, because the watch's own recordings follow it — see
+//    ``WatchLibraryDigest/autoPauseEnabled``.
 //  * Answers a ``WatchTrailRequest`` with the trail's geometry, unless the
 //    watch already holds that revision of it.
 //  * Takes a ``WatchRecordedWalk`` and keeps it, then sends a receipt so the
@@ -123,6 +125,13 @@ final class WatchSessionCoordinator: NSObject {
     /// The Health writer for a walk that arrives, or `nil` for a launch with
     /// no Health store to write to — the same `nil` the recorder's writer is.
     @ObservationIgnored private let healthExport: WatchWalkHealthExport?
+    /// Where the Auto-Pause switch is read, for the library the watch is
+    /// sent.
+    @ObservationIgnored private let defaults: UserDefaults
+    /// Holds the suite's change notification, so a switch turned on this
+    /// phone, or arriving from iCloud, reaches the watch without waiting for
+    /// the library to change.
+    @ObservationIgnored private let preferenceObservation = PreferenceObservation()
 
     #if canImport(WatchConnectivity)
     @ObservationIgnored private var session: WCSession?
@@ -134,15 +143,37 @@ final class WatchSessionCoordinator: NSObject {
     /// watch's list would miss the launch that produced it, and there is no
     /// second sweep behind it.
     @ObservationIgnored private var pendingCatalog: SharedHikeCatalog?
+    /// The library last handed to ``publish(_:)``, sent again with the
+    /// switch when only the switch has changed.
+    @ObservationIgnored private var latestCatalog: SharedHikeCatalog?
+    /// The switch as the watch was last sent it, so that only a change of it
+    /// sends the library again: the suite's notification names no key.
+    @ObservationIgnored private var publishedAutoPause: Bool? // swiftlint:disable:this discouraged_optional_boolean
     /// Whether the session can take a transfer, and the packages and receipts
     /// that finished while it could not. See ``WatchSessionActivation``.
     @ObservationIgnored private var activation = WatchSessionActivation()
     #endif
 
-    init(container: ModelContainer, healthExport: WatchWalkHealthExport? = nil) {
+    init(container: ModelContainer, defaults: UserDefaults, healthExport: WatchWalkHealthExport? = nil) {
         self.container = container
         self.healthExport = healthExport
+        self.defaults = defaults
         super.init()
+        #if canImport(WatchConnectivity)
+        preferenceObservation.observe(defaults: defaults) { [weak self] in
+            self?.autoPauseMayHaveChanged()
+        }
+        #endif
+    }
+
+    /// The library as the watch is sent it: the newest trails, and the
+    /// Auto-Pause switch as `defaults` holds it.
+    static func digest(of catalog: SharedHikeCatalog, defaults: UserDefaults) -> WatchLibraryDigest {
+        let autoPause = defaults.object(forKey: SettingsKey.autoPauseEnabled) as? Bool
+        return WatchLibraryDigest(
+            hikes: Array(catalog.hikes.prefix(WatchLibraryDigest.hikeBudget)),
+            autoPauseEnabled: autoPause ?? SettingsDefault.autoPauseEnabled
+        )
     }
 
     /// Hands over the seam a watch's buttons reach the recorder through.
@@ -184,14 +215,14 @@ final class WatchSessionCoordinator: NSObject {
     /// sweep puts it right.
     func publish(_ catalog: SharedHikeCatalog) {
         #if canImport(WatchConnectivity)
+        latestCatalog = catalog
         guard let session, session.activationState == .activated else {
             pendingCatalog = catalog
             return
         }
         pendingCatalog = nil
-        let digest = WatchLibraryDigest(
-            hikes: Array(catalog.hikes.prefix(WatchLibraryDigest.hikeBudget))
-        )
+        let digest = Self.digest(of: catalog, defaults: defaults)
+        publishedAutoPause = digest.autoPauseEnabled
         do {
             try session.updateApplicationContext(WatchLink.message(digest))
         } catch {
@@ -267,6 +298,18 @@ final class WatchSessionCoordinator: NSObject {
         await Task.detached(priority: .utility) { [weak self] in
             await SharedHikeCatalogPublisher.publishCatalog(from: coordinator, watch: self)
         }.value
+    }
+
+    /// Sends the library again when the Auto-Pause switch is not what the
+    /// watch was last sent. Nothing before the first library: that one
+    /// carries the switch.
+    private func autoPauseMayHaveChanged() {
+        #if canImport(WatchConnectivity)
+        guard let latestCatalog, let publishedAutoPause,
+              Self.digest(of: latestCatalog, defaults: defaults).autoPauseEnabled != publishedAutoPause
+        else { return }
+        publish(latestCatalog)
+        #endif
     }
 
     /// Publishes the library that arrived before the session was activated.

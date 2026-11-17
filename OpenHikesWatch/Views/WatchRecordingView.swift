@@ -37,7 +37,9 @@
 //
 //  ## What this body may read
 //
-//  `model.recorder.phase`, which changes when the hiker presses something.
+//  `model.recorder.phase`, which changes when the hiker presses something,
+//  and `isAutoPaused`, which changes only with it or with the Auto-Pause
+//  switch.
 //  The distance, the clock, the climb and the heart rate are all in
 //  ``RecordingFigures`` — it and the ``HeartRateFigure`` inside it are the
 //  only views that read ``WatchRecordingStats`` — so a fix arriving redraws a
@@ -170,10 +172,19 @@ struct WatchRecordingView: View {
             .accessibilityLabel("Stop recording")
         }
         if model.recorder.phase == .paused {
-            Text("Paused. The ground you cover now isn’t part of the hike.")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+            // In the phone's words for it. The line under a pause by hand
+            // would be wrong here: the walk away from the stop is the next
+            // segment's, not left out.
+            Group {
+                if model.recorder.isAutoPaused {
+                    Text("Auto-paused — recording resumes when you walk on.")
+                } else {
+                    Text("Paused. The ground you cover now isn’t part of the hike.")
+                }
+            }
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
         }
     }
 
