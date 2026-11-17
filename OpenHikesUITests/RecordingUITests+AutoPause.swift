@@ -68,27 +68,29 @@ extension RecordingUITests {
         Thread.sleep(forTimeInterval: Self.stopWalkPace)
         setSimulatedLocation(Self.stopWalk(step: Self.walkInFixes))
         expectLabel(phase, contains: "Recording")
+
+        // A segment of one fix is a place, not a walk, and the list leaves
+        // it out as the saved hike does (``RouteSegments``), so the second
+        // segment is there once the walk away has a fix after its first.
+        // Waited on by the rows rather than by a count of points: the pause
+        // gave back the fixes kept inside the stop, however many a slow
+        // machine let in.
         let segments = app.descendants(matching: .any).matching(identifier: "hike-segment")
+        var step = Self.walkInFixes
         XCTAssertTrue(
-            waitUntil { segments.count == 2 },
+            walkOn(from: &step) { segments.count == 2 },
             "the walk on should be the second segment; found \(segments.count)"
         )
         XCTAssertEqual(segments.element(boundBy: 0).label, "Segment 1")
         let second = segments.element(boundBy: 1)
         XCTAssertEqual(second.label, "Segment 2")
 
-        // A segment of one fix is a place, not a walk, so the walk goes on
-        // until the second segment says it has grown. Waited on by what the
-        // row says rather than by a count of points: the pause gave back the
-        // fixes kept inside the stop, however many a slow machine let in.
-        let atTheDoor = second.value as? String
-        var hasGrown = false
-        for step in (Self.walkInFixes + 1)...(Self.walkInFixes + Self.walkOutFixes) where !hasGrown {
-            Thread.sleep(forTimeInterval: Self.stopWalkPace)
-            setSimulatedLocation(Self.stopWalk(step: step))
-            hasGrown = waitUntil(timeout: Self.stopWalkPace) { (second.value as? String) != atTheDoor }
-        }
-        XCTAssertTrue(hasGrown, "the second segment never grew past \(atTheDoor ?? "nothing")")
+        // And it is the segment in progress: the next fix moves its figures.
+        let shown = second.value as? String
+        XCTAssertTrue(
+            walkOn(from: &step) { (second.value as? String) != shown },
+            "the second segment never grew past \(shown ?? "nothing")"
+        )
 
         stopRecording(named: Self.stoppedHikeName, in: app)
         XCTAssertTrue(
@@ -112,7 +114,9 @@ extension RecordingUITests {
     private static let stopWalkPace: TimeInterval = 6
     private static let stopWalkStepDegrees = 0.00036
     private static let walkInFixes = 3
-    private static let walkOutFixes = 3
+    /// One to make the second segment, one to grow it, and two to spare for
+    /// a fix a loaded machine delivers late.
+    private static let walkOutFixes = 4
     /// A dozen metres, north and east of where the walk stopped: more than
     /// the ten the recording's distance filter holds back, and a third of
     /// the way to the edge of the stop's area.
@@ -121,6 +125,19 @@ extension RecordingUITests {
     private static let stoppedHikeName = "Shop Run"
     /// Saving writes the route and its widget payload.
     private static let stoppedSaveTimeout: TimeInterval = 20
+
+    /// Walks on from `step`, a fix at a time and at the walk's pace, until
+    /// `condition` holds or the walk out has no fix left.
+    @MainActor
+    private func walkOn(from step: inout Int, until condition: () -> Bool) -> Bool {
+        while step < Self.walkInFixes + Self.walkOutFixes {
+            step += 1
+            Thread.sleep(forTimeInterval: Self.stopWalkPace)
+            setSimulatedLocation(Self.stopWalk(step: step))
+            if waitUntil(timeout: Self.stopWalkPace, condition) { return true }
+        }
+        return false
+    }
 
     /// The `step`th fix of the scenario's walk north from the trailhead.
     private static func stopWalk(step: Int) -> CLLocationCoordinate2D {

@@ -36,10 +36,12 @@ extension OpenHikesUITests {
             "a segment is spoken with its own time; it said \"\(spoken)\""
         )
         XCTAssertEqual(segments.element(boundBy: 1).label, "Segment 2")
+        // Read by its spoken value, as the segment above is: the drawn "20m"
+        // is shorthand the row hands VoiceOver in words.
         let stop = app.descendants(matching: .any)
-            .matching(NSPredicate(format: "label == %@ AND value BEGINSWITH %@", "Paused", "20m"))
+            .matching(NSPredicate(format: "label == %@ AND value BEGINSWITH %@", "Paused", "20 minutes"))
             .firstMatch
-        XCTAssertTrue(stop.exists, "the stop between the two is drawn by its length")
+        XCTAssertTrue(stop.exists, "the stop between the two is spoken by its length")
     }
 
     /// A hike in one piece has no card at all: one segment is the hike, which
