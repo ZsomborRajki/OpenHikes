@@ -46,16 +46,17 @@
 #   update-planet
 #             Bring a planet file up to the present, in place, with the hourly
 #             changes openstreetmap.org publishes since the time in its header:
-#             about a gigabyte for three days of them, against 90 GB for a new
+#             about half a gigabyte of them a day, against 90 GB for a new
 #             planet. Get the first planet by torrent or from a mirror
 #             (https://wiki.openstreetmap.org/wiki/Planet.osm), and keep it
 #             under one name, such as planet.osm.pbf: after an update a date in
 #             the name is wrong, and the builds read the date from the file.
 #             Each pass writes a new copy beside the planet before it replaces
 #             it, so there has to be room for one. --size caps the changes a
-#             pass holds in memory, in MB (default 4096); passes repeat until
-#             the planet is current. pyosmium refuses a planet more than three
-#             months old, which is a new download.
+#             pass holds in memory, in MB (default 4096, about a week of
+#             them); passes repeat until the planet is current. pyosmium
+#             refuses a planet more than three months old, which is a new
+#             download.
 #   build     File an extract's routes into <dir> (default .build/trail-cells/squares).
 #             Pass --world for the whole planet and for nothing else: it is what
 #             lets the app answer from the squares at all, and read a square
