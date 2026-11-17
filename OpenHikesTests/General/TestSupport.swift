@@ -317,6 +317,9 @@ nonisolated final class TileSandbox: Sendable {
     ///   - mutationKeyLimit: how many per-key deletion versions the cache
     ///     holds before compacting them into its epoch. Lower it to reach
     ///     compaction without sixteen thousand deletions.
+    ///   - vectorSources: the providers whose tiles the cache draws from a
+    ///     vector archive. Empty by default, as every suite but the vector
+    ///     tile ones wants: an `osm` key then fetches its raster tile alone.
     ///   - power: the power state the fetch policy sees. Fixed rather than
     ///     read from the process, so a suite that publishes Low Power Mode
     ///     cannot change what a tile suite running beside it decides.
@@ -326,6 +329,7 @@ nonisolated final class TileSandbox: Sendable {
         reachable: Bool = true,
         sessionConfiguration: URLSessionConfiguration? = nil,
         mutationKeyLimit: Int = TileCache.mutationKeyVersionLimit,
+        vectorSources: [String: VectorTileSource] = [:],
         power: PowerState = PowerState(),
         durableByteLimitScale: Double = 1
     ) {
@@ -336,6 +340,7 @@ nonisolated final class TileSandbox: Sendable {
             sessionConfiguration: sessionConfiguration,
             monitorsNetwork: false,
             mutationKeyLimit: mutationKeyLimit,
+            vectorSources: vectorSources,
             durableByteLimitScale: durableByteLimitScale
         ) { power }
         store = AutoSaveTileStore(tileCache: cache)

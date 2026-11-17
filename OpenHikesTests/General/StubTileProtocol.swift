@@ -110,6 +110,12 @@ nonisolated final class StubTileProtocol: URLProtocol, @unchecked Sendable {
         state.withLock { $0.responder = { _ in response } }
     }
 
+    /// Answers each request by its URL, for a test whose tiles come from two
+    /// servers: a vector tile server and the raster template behind it.
+    static func respond(_ responder: @escaping @Sendable (URL) -> Response) {
+        state.withLock { $0.responder = responder }
+    }
+
     /// Holds every response open for `duration`, so concurrent requests
     /// genuinely overlap rather than completing one after another.
     static func setDelay(_ duration: Duration?) {
@@ -238,6 +244,7 @@ struct StubbedTileCache {
     init(
         reachable: Bool = true,
         mutationKeyLimit: Int = TileCache.mutationKeyVersionLimit,
+        vectorSources: [String: VectorTileSource] = [:],
         power: PowerState = PowerState()
     ) {
         StubTileProtocol.reset()
@@ -245,6 +252,7 @@ struct StubbedTileCache {
             reachable: reachable,
             sessionConfiguration: StubTileProtocol.sessionConfiguration(),
             mutationKeyLimit: mutationKeyLimit,
+            vectorSources: vectorSources,
             power: power
         )
     }
