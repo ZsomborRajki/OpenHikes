@@ -1126,6 +1126,23 @@ a change to recording, the map, the sheet or the render path; the PR template,
   (`TileCacheKey`).
 - **Never turn a render miss into synchronous disk or network work**, and never
   measure storage in a body. Delete durable tiles through `TileOwnership`.
+- **OpenStreetMap is drawn from our own vector tiles, with the OSMF's raster
+  tiles behind them** (#1481).
+  - **Drawing.** The style's `vectorSource` names a PMTiles archive on
+    `tiles.openhikes.app`. `VectorTileClient` fetches each tile and
+    `VectorTileRasterizer` draws it. The cache then files the picture as any
+    tile, under the raster style's id and keys, so saved coverage keeps
+    answering. Past zoom 15 a tile is drawn from the zoom-15 tile around it.
+  - **Fallback.** Wherever the server cannot answer — it is down or failing,
+    or it has no tile there — the tile comes from `tile.openstreetmap.org` as
+    before. A failing server is passed over for a minute.
+  - **No suite reaches the tile server.** `TileCache.shared` has no vector
+    source under `isRunningTests`, UI tests included.
+  - **A new build gets a new archive name**, carrying its date, and the app
+    changes with it. The server's cache holds a tile for a day, so a build
+    overwritten in place would mix two builds on screen.
+  - **The server is not in this repository.** It is a Worker and an R2
+    bucket.
 
 ### Accessibility
 

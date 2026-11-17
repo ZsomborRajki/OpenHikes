@@ -29,4 +29,25 @@ nonisolated enum TileCacheKey {
     ) -> String {
         "\(providerID)/\(path(z: z, x: x, y: y))"
     }
+
+    /// What a ``namespaced(providerID:z:x:y:)`` key names.
+    struct Named: Equatable {
+        let providerID: String
+        let z: Int
+        let x: Int
+        let y: Int
+    }
+
+    /// The provider and tile `key` names, or `nil` for a key of any other
+    /// shape. Anything after an `@` in the last part is ignored, as the keys
+    /// the suites write still carry the scale a key once had.
+    static func named(_ key: String) -> Named? {
+        let parts = key.split(separator: "/", omittingEmptySubsequences: false)
+        guard parts.count == 4,
+              let z = Int(parts[1]),
+              let x = Int(parts[2]),
+              let y = Int(parts[3].prefix { $0 != "@" })
+        else { return nil }
+        return Named(providerID: String(parts[0]), z: z, x: x, y: y)
+    }
 }

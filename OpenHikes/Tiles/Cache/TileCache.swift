@@ -51,7 +51,11 @@ nonisolated final class TileCache: @unchecked Sendable {
         storageRoot: AppLaunchEnvironment.simulatesOffline
             ? AppLaunchEnvironment.isolatedTileRoot()
             : nil,
-        monitorsNetwork: !AppLaunchEnvironment.simulatesOffline
+        monitorsNetwork: !AppLaunchEnvironment.simulatesOffline,
+        // No suite reaches the tile server, UI tests included, as none reaches
+        // the hiking-routes squares: a suite draws the raster tiles it always
+        // has. See *Tiles* in `AGENTS.md`.
+        vectorSources: AppLaunchEnvironment.isRunningTests ? [:] : TileProvider.vectorSources
     )
 
     static let logger = Logger(subsystem: "OpenHikes", category: "TileRequests")
@@ -186,6 +190,9 @@ nonisolated final class TileCache: @unchecked Sendable {
     /// Application Support, so it survives OS storage-pressure cache eviction.
     let durableDirectory: URL
     private let session: URLSession
+    /// Draws the tiles of the providers that have a ``VectorTileSource``, or
+    /// `nil` when none does. Shares ``session``.
+    private let vectorTiles: VectorTileClient?
 
     /// Live network conditions, updated by `NWPathMonitor`. Tile loads short-
     /// circuit on these, so an offline app doesn't fire (and log) a doomed
@@ -323,6 +330,9 @@ nonisolated final class TileCache: @unchecked Sendable {
     ///     directly because that snapshot is process-wide: a suite that
     ///     published a Low Power Mode reading would otherwise change what
     ///     every other suite running beside it decided about the network.
+    ///   - vectorSources: the providers whose tiles are drawn from a vector
+    ///     archive, by provider id. Empty — the default, and every suite's
+    ///     unless it asks — fetches every tile from its raster template.
     ///   - durableByteLimitScale: shrinks every provider's durable ceiling by
     ///     this factor. `1` — the app — enforces the real figure the terms
     ///     set; a test passes something tiny so it can reach the ceiling with
@@ -334,6 +344,7 @@ nonisolated final class TileCache: @unchecked Sendable {
         sessionConfiguration: URLSessionConfiguration? = nil,
         monitorsNetwork: Bool = true,
         mutationKeyLimit: Int = TileCache.mutationKeyVersionLimit,
+        vectorSources: [String: VectorTileSource] = [:],
         durableByteLimitScale: Double = 1,
         readPower: @escaping @Sendable () -> PowerState = { .current }
     ) {
@@ -352,6 +363,7 @@ nonisolated final class TileCache: @unchecked Sendable {
 
         let config = Self.tileSessionConfiguration(from: sessionConfiguration)
         session = URLSession(configuration: config)
+        vectorTiles = vectorSources.isEmpty ? nil : VectorTileClient(sources: vectorSources, session: session)
 
         memory.totalCostLimit = Self.memoryByteLimit
         // A secondary backstop, kept for the pathological case of very small
@@ -806,6 +818,11 @@ nonisolated extension TileCache {
         #if DEBUG
         Self.logger.debug("Requesting tile \(key, privacy: .public) from \(url.redactedForLogging, privacy: .public)")
         #endif
+        // A provider drawn from vector tiles asks the tile server first, and
+        // comes down to its raster template below whenever that brings nothing.
+        if let drawn = await vectorTiles?.pngData(forKey: key), let image = TileImage(data: drawn) {
+            return FetchedTile(data: drawn, image: image)
+        }
         // The one request an offline-first app is judged on. Everything else
         // in this file is about *not* reaching here; this is the only place
         // that does.

@@ -25,6 +25,9 @@ nonisolated struct TileProvider: Identifiable, Hashable, Sendable {
     /// One-line description shown under the cards on *Map Modes*.
     let summary: String
     /// URL template with `{z}/{x}/{y}` and an optional `{key}` placeholder.
+    ///
+    /// For a provider with a ``vectorSource`` this is the fallback: what a
+    /// tile is fetched from when the tile server cannot draw it.
     let urlTemplate: String
     /// Highest real zoom level the source serves. Deeper zooms are overzoomed.
     let maximumZ: Int
@@ -68,6 +71,10 @@ nonisolated struct TileProvider: Identifiable, Hashable, Sendable {
     /// offline controls are offered at all, and which configuration the map
     /// is given in place of an overlay.
     let systemStyle: SystemMapStyle?
+    /// The archive on the OpenHikes tile server this provider's tiles are
+    /// drawn from, or `nil` for one whose tiles come from ``urlTemplate``
+    /// alone. See `VectorTileClient` for when the template still answers.
+    let vectorSource: VectorTileSource?
 
     /// Whether this entry draws MapKit's own base map instead of raster tiles.
     var usesSystemBaseMap: Bool { systemStyle != nil }
@@ -143,7 +150,11 @@ nonisolated extension TileProvider {
     private static let osmMaximumZ = 19
     private static let thunderforestMaximumZ = 22
 
-    /// The current default: OpenStreetMap's standard raster tiles.
+    /// The current default: OpenStreetMap's data, drawn on the device from the
+    /// OpenHikes tile server's vector tiles (#1481), with the OSMF's standard
+    /// raster tiles as the fallback wherever that server cannot answer. The
+    /// id and the cache keys are the raster style's, so saved coverage keeps
+    /// answering and the choice persisted in settings stays this entry.
     static let openStreetMap = TileProvider(
         id: "osm",
         name: String(localized: "OpenStreetMap", comment: "The name of a map style on Map Modes"),
@@ -155,7 +166,8 @@ nonisolated extension TileProvider {
         durableQuota: nil,
         requiresPaidAccess: false,
         apiKeyPlistKey: nil,
-        systemStyle: nil
+        systemStyle: nil,
+        vectorSource: .openHikesPlanet
     )
 
     /// MapKit's own base map: no raster tiles, and therefore no tile pipeline.
@@ -184,7 +196,8 @@ nonisolated extension TileProvider {
         durableQuota: nil,
         requiresPaidAccess: false,
         apiKeyPlistKey: nil,
-        systemStyle: .standard
+        systemStyle: .standard,
+        vectorSource: nil
     )
 
     /// Apple's satellite imagery, with its road, place and peak labels drawn
@@ -215,7 +228,8 @@ nonisolated extension TileProvider {
         durableQuota: nil,
         requiresPaidAccess: false,
         apiKeyPlistKey: nil,
-        systemStyle: .hybrid
+        systemStyle: .hybrid,
+        vectorSource: nil
     )
 
     private static let stadiaMaximumZ = 20
@@ -236,7 +250,8 @@ nonisolated extension TileProvider {
         durableQuota: .stadia,
         requiresPaidAccess: true,
         apiKeyPlistKey: "StadiaAPIKey",
-        systemStyle: nil
+        systemStyle: nil,
+        vectorSource: nil
     )
 
     /// Stamen Design's terrain style, served by Stadia: hillshading in natural
@@ -259,7 +274,8 @@ nonisolated extension TileProvider {
         durableQuota: .stadia,
         requiresPaidAccess: true,
         apiKeyPlistKey: "StadiaAPIKey",
-        systemStyle: nil
+        systemStyle: nil,
+        vectorSource: nil
     )
 
     /// A hiking-focused source with deep native zoom, so close-in views stay sharp.
@@ -286,7 +302,8 @@ nonisolated extension TileProvider {
         durableQuota: nil,
         requiresPaidAccess: true,
         apiKeyPlistKey: "ThunderforestAPIKey",
-        systemStyle: nil
+        systemStyle: nil,
+        vectorSource: nil
     )
 
     /// All selectable providers, in display order.
@@ -304,6 +321,12 @@ nonisolated extension TileProvider {
     /// behaviour, not a rename, so until it happens do not read this as the
     /// single definition its name suggests.
     static let rasterSources: [TileProvider] = all.filter { !$0.usesSystemBaseMap }
+
+    /// The vector source of every provider that has one, by provider id: what
+    /// ``TileCache/shared`` draws from before it fetches a raster tile.
+    static let vectorSources: [String: VectorTileSource] = Dictionary(
+        uniqueKeysWithValues: all.compactMap { provider in provider.vectorSource.map { (provider.id, $0) } }
+    )
 
     static let `default` = openStreetMap
 
