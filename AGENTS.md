@@ -296,6 +296,41 @@ either: the second run waits silently on the first run's build lock.
 - The screenshot set shoots on it upright, with `--device-type "iPad Pro
   13-inch (M5)"`; see `Screenshots/README.md`.
 
+### The Mac
+
+- **An Apple silicon Mac runs the iPad app as it is.** There is no Mac target
+  and no Catalyst build: Xcode's *My Mac (Designed for iPad)* destination runs
+  the device build in a window that resizes as an iPad's does (*The iPad*).
+  Xcode offers that destination only to a target whose `SDKROOT` is
+  `iphoneos`, so neither the app nor `OpenHikesTests` may go back to the
+  multiplatform template's `auto`.
+- **A symbol the Mac's libraries lack stops the launch.** The app binds
+  against macOS's copies of the iOS libraries, and dyld refuses a binary that
+  names a missing symbol strongly, before any code runs ("Symbol not found" in
+  the crash report). The iOS SDK compiles such a reference without a word.
+  - CoreLocation's overlay on the Mac has `CLBackgroundActivitySession` but
+    not its `Diagnostic` or `diagnostics`. The app target links the overlay
+    weakly (`OTHER_LDFLAGS = -weak-lswiftCoreLocation`, held by
+    `MacLaunchContractTests`), and the recorder reads the diagnostics only
+    where `isiOSAppOnMac` is false: a missing weak symbol binds to nothing,
+    and calling it crashes.
+  - `@_weakLinked import` cannot do this instead. The compiler wants it on
+    every import of the module or none.
+  - After adding a framework or a newer API, run the app on the Mac once.
+- **What a Mac lacks.** No GPS (it locates by Wi-Fi), no camera picker, no
+  Health, watch, Live Activity, motion or barometer. Each is asked about at
+  run time, as on an iPad, so the app goes without it. The Health and Lock
+  Screen switches in Settings still show.
+- **Running it outside Xcode.** Build with `-destination 'platform=macOS,
+  arch=arm64,variant=Designed for iPad'`, then put the `Debug-iphoneos` app
+  inside a wrapper, `X.app/Wrapper/OpenHikes.app` with an
+  `X.app/WrappedBundle` symlink to it, and `open` the wrapper; the bare app
+  is refused as "an incorrect executable format". Signing needs the Mac
+  registered to the team, which Xcode's automatic signing does.
+- **No gate runs on a Mac**, and whether the App Store offers the app there
+  is App Store Connect's switch (*iPhone and iPad Apps on Apple Silicon Macs*,
+  under Pricing and Availability), not the build's.
+
 ### UI automation
 
 `Scripts/run-ui-tests.sh` runs one test (`--test`), one class
@@ -526,7 +561,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
   shipping targets are `OpenHikes`, `OpenWidgetExtension` (the widget, the Live
   Activity views and the Control Center toggle), `OpenHikesWatch` (watchOS 11)
   and `OpenHikesWatchWidgets`. Every iOS target builds for
-  `TARGETED_DEVICE_FAMILY = "1,2"`; see *The iPad*.
+  `TARGETED_DEVICE_FAMILY = "1,2"`; see *The iPad*. An Apple silicon Mac runs
+  the iPad app; see *The Mac*.
   - The app embeds the watch app, so building `OpenHikes` builds the watch
     too. Breaking the watch cannot leave CI green.
   - An embedded extension's device family stays a subset of its host's, so
