@@ -344,6 +344,12 @@ a change to recording, the map, the sheet or the render path; the PR template,
   location is delivered once, so a fix that gets rejected has to be set again.
   Wait on the `recording-point-count` element. For longer playback, use
   `Scripts/simulate-hike.sh`.
+- **A spoofed stop has to pace.** A simulator delivers no fix for a position
+  inside the recording's distance filter, and it has no motion sensors, so
+  standing still is silence that Auto-Pause cannot call a stop. A scenario
+  paces between two spots inside the stop's area, and asks for a stop it can
+  wait out with `--ui-test-auto-pause-seconds`
+  (`RecordingUITests+AutoPause.swift`).
 - **The accessibility suites.** `AccessibilityUITests` audits each screen
   without `.contrast`, `.textClipped` and `.dynamicType` (each exclusion is
   argued beside it) and filters out MapKit's own `MK` issues.
@@ -654,6 +660,45 @@ a change to recording, the map, the sheet or the render path; the PR template,
   `MovementReminderController` is handed to both the recorder and the walk
   session, so it can see both. The thresholds live only in
   `MovementReminderPolicy`.
+- **A recording pauses itself at a stop, and resumes as the next segment**
+  (`AutoPauseWatch` in `OpenHikesShared` decides; `HikeRecorder+AutoPause.swift`
+  acts). The switch is *Auto-Pause*, on unless the hiker turns it off.
+  - **A stop is a place, not stillness.** In a shop a hiker keeps walking,
+    so the rule is every position inside one small area, with no height
+    gained, for `AutoPausePolicy`'s minutes. The watch is shown every fix
+    the recorder is delivered, kept for the track or not.
+  - **Position decides, motion confirms.** Motion & Fitness can be refused.
+    Motion answers only what a position cannot: that a silence is a hiker
+    sitting still, and that a fix leaving the stop was carried, which keeps
+    the pause until the hiker walks again.
+  - **Backdated both ways.** The pause is counted from when the stop began.
+    The journal is cut back to that fix
+    (`TrackJournal.pause(at:discardingPointsAfter:)`) and the live figures
+    are rebuilt from it, so it reads as a pause by hand at that moment
+    would: the same `RouteBoundary`, no record of a new kind and no new
+    journal version. The resume is the first fix of the walk away.
+  - **An auto-pause is a pause.** It leaves the clock *Avg Speed* divides
+    by, and every surface reads it as *Paused*, with Resume.
+  - **Only the app's own pause ends by itself.** Resume during one resumes
+    at once. Pause, the switch going off, or a relaunch makes it the
+    hiker's, with a pause's parking and its reminder.
+  - **The thresholds are a first guess.** A `DEBUG` build writes down every
+    fix and change of motion (`AutoPauseEvidenceFile`), and
+    `AutoPauseEvidence.replay(_:policy:)` runs a policy over what was
+    written. Change one from recorded stops, and give `AutoPauseWatchTests`
+    the stream that argued for it.
+- **A segment is a walked run** (`RouteSegments`). A hike's segments are
+  read off the pauses its route already has, so a pause by hand, an
+  auto-pause and a GPX file's `<trkseg>` breaks all cut one, and nothing is
+  stored for it.
+  - A recording has no route until Stop, so `RecordingSegmentLedger` keeps
+    the same figures inside the distance accumulator, where a journal replay
+    reaches them too. Both draw `HikeSegmentList`.
+  - A segment's time is the active clock's, and the segments add up to the
+    distance shown above them.
+  - A photograph taken during a pause whose two ends are one place was
+    taken at that stop, however long it lasted
+    (`HikePhotoTimeline.stopSpanMeters`). Any other pause keeps its grace.
 
 ### First-run tips
 
@@ -1383,6 +1428,14 @@ in its source header. Do not weaken one without a measurement.
   before the first fix, GPS stops. Otherwise the app uses the cheapest delivery
   that still notices a departure: significant-change monitoring with Always
   access, or a 100-meter feed with When In Use.
+- **An auto-pause keeps its feed** (`HikeRecorder+AutoPause.swift`). A pause
+  by hand parks the sensors. The app's own pause is watched as a recording
+  standing still is: full accuracy and the 25-meter filter, because the
+  first fixes of the walk away are the next segment's. It spends what an
+  unpaused stop spent before Auto-Pause existed. Spending less on a long
+  stop needs a device measurement first. Watching a running recording for a
+  stop costs one timer, set for the place being watched and set again when
+  it rings: a wakeup every few minutes, beside the fixes.
 - **The screen stays awake only on a claim, and only if asked**
   (`General/ScreenWake.swift`). `SettingsKey.keepScreenAwake` is off by default.
   The switch, a live subject and an active scene must all agree.
@@ -1995,7 +2048,9 @@ this before changing `OpenHikesWatch/`, `OpenHikes/Watch/` or the shared
   `WatchGlance` from the watch's **own** App Group
   (`group.tappium.com.OpenHikes.watch`). `WatchGlanceDisplay` and
   `WatchGlanceReloadPolicy` decide what it shows and when it redraws.
-- **Not on the watch:** community, photographs, weather and offline maps.
+- **Not on the watch:** community, photographs, weather, offline maps and
+  Auto-Pause for the watch's own recordings. A phone recording the app has
+  paused is mirrored as paused, like any other.
   Following a trail without recording updates only while the app is on screen.
 
 ## Settled decisions — do not re-raise
