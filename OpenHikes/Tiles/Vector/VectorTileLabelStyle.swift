@@ -1,0 +1,132 @@
+//
+//  VectorTileLabelStyle.swift
+//  OpenHikes
+//
+//  What each kind of name looks like on the map, and which name wins when
+//  two would overlap: the order of ``VectorTileLabelStyle/Category`` is the
+//  order of importance. Sizes are in the pixels of a 256-pixel tile, as the
+//  rest of ``VectorTileStyle`` is.
+//
+
+import CoreGraphics
+import CoreText
+
+nonisolated enum VectorTileLabelStyle {
+    /// What a name names. Ordered by ``importance``.
+    enum Category: Comparable, Sendable {
+        case city
+        case country
+        case glacier
+        case hamlet
+        case hut
+        case neighborhood
+        case peak
+        case region
+        case saddle
+        case town
+        case village
+        case water
+
+        /// Most important first: the name that stays where two would overlap.
+        private static let importance: [Self] = [
+            .country, .region, .city, .town, .village, .peak, .hut, .water, .glacier, .saddle, .hamlet, .neighborhood,
+        ]
+
+        static func < (lhs: Self, rhs: Self) -> Bool {
+            (importance.firstIndex(of: lhs) ?? importance.count) < (importance.firstIndex(of: rhs) ?? importance.count)
+        }
+
+        /// The category of a feature in the `places` layer, or `nil` for one
+        /// not named on the map.
+        static func place(kind: String?, detail: String?) -> Self? {
+            switch (kind, detail) {
+            case ("country", _): .country
+            case ("region", _): .region
+            case (_, "city"): .city
+            case (_, "town"): .town
+            case (_, "village"): .village
+            // swiftlint:disable:next american_spelling_in_copy
+            case ("neighbourhood", _), (_, "neighbourhood"), (_, "suburb"), (_, "quarter"): .neighborhood
+            case ("locality", _): .hamlet
+            default: nil
+            }
+        }
+
+        /// The category of a point in the `pois` layer, or `nil` for one not
+        /// named on the map. The map names what a hiker finds their way by,
+        /// and leaves the benches and cafés to the places screens.
+        static func poi(kind: String?) -> Self? {
+            switch kind {
+            case "peak", "volcano": .peak
+            case "alpine_hut", "wilderness_hut": .hut
+            case "water": .water
+            case "glacier": .glacier
+            case "saddle": .saddle
+            default: nil
+            }
+        }
+
+        /// Whether the name stands under a symbol drawn at its point, rather
+        /// than over the point itself.
+        var hasMarker: Bool { self == .peak || self == .hut }
+    }
+
+    enum Face {
+        case bold
+        case italic
+        case regular
+    }
+
+    struct Look {
+        let size: ZoomCurve
+        let color: CGColor
+        let face: Face
+    }
+
+    static func look(of category: Category) -> Look {
+        switch category {
+        case .country: Look(size: ZoomCurve([(3, 8), (6, 10), (8, 12)]), color: countryPurple, face: .bold)
+        case .region: Look(size: ZoomCurve([(5, 8), (8, 9)]), color: countryPurple, face: .italic)
+        case .city: Look(size: ZoomCurve([(4, 8), (8, 10), (12, 13), (15, 16)]), color: placeInk, face: .bold)
+        case .town: Look(size: ZoomCurve([(7, 8), (10, 10), (13, 12), (15, 14)]), color: placeInk, face: .regular)
+        case .village: Look(size: ZoomCurve([(10, 8), (13, 10), (15, 12)]), color: placeInk, face: .regular)
+        case .hamlet: Look(size: ZoomCurve([(12, 7), (14, 9), (16, 10)]), color: placeInk, face: .regular)
+        case .neighborhood: Look(size: ZoomCurve([(12, 7), (15, 9)]), color: neighborhoodInk, face: .regular)
+        case .peak, .saddle: Look(size: ZoomCurve([(12, 7), (15, 8), (16, 9)]), color: terrainInk, face: .regular)
+        case .hut: Look(size: ZoomCurve([(13, 7), (15, 8), (16, 9)]), color: terrainInk, face: .bold)
+        case .water, .glacier: Look(size: ZoomCurve([(8, 7), (12, 8), (15, 10)]), color: waterInk, face: .italic)
+        }
+    }
+
+    /// The white edge drawn around every letter, so a name stays readable
+    /// over a road or a forest.
+    static let halo = VectorTileStyle.color("#FFFFFF", alpha: haloAlpha)
+    static let haloWidth: CGFloat = 1.5
+    /// The room kept between two names, and between a name and a tile's edge.
+    static let spacing: CGFloat = 2
+    /// The gap between a symbol and the name under it.
+    static let markerGap: CGFloat = 1
+    /// A height or a second line, as a share of the name's size.
+    static let detailScale: CGFloat = 0.85
+    /// A hut's symbol, drawn from zoom 14.
+    static let hutZ = 14
+    static let hutSize = ZoomCurve([(14, 4), (16, 5), (20, 6)])
+
+    static func font(size: CGFloat, face: Face, language: String) -> CTFont {
+        let base: CTFont = switch face {
+        case .bold: CTFontCreateUIFontForLanguage(.emphasizedSystem, size, language as CFString)
+            ?? CTFontCreateWithName("Helvetica-Bold" as CFString, size, nil)
+        case .regular, .italic: CTFontCreateUIFontForLanguage(.system, size, language as CFString)
+            ?? CTFontCreateWithName("Helvetica" as CFString, size, nil)
+        }
+        guard face == .italic else { return base }
+        return CTFontCreateCopyWithSymbolicTraits(base, size, nil, .traitItalic, .traitItalic) ?? base
+    }
+
+    private static let haloAlpha: CGFloat = 0.9
+    private static let countryPurple = VectorTileStyle.color("#9D6C9D")
+    private static let placeInk = VectorTileStyle.color("#222222")
+    private static let neighborhoodInk = VectorTileStyle.color("#666666")
+    private static let terrainInk = VectorTileStyle.color("#6B4A2E")
+    private static let waterInk = VectorTileStyle.color("#4D80B3")
+}

@@ -23,6 +23,7 @@
 //
 
 import Foundation
+import OpenHikesData
 import os
 import Synchronization
 
@@ -41,6 +42,7 @@ nonisolated final class VectorTileClient: Sendable {
 
     private let sources: [String: VectorTileSource]
     private let session: URLSession
+    private let language: String
     private let now: @Sendable () -> ContinuousClock.Instant
     private let state = Mutex(State())
 
@@ -66,14 +68,17 @@ nonisolated final class VectorTileClient: Sendable {
     ///     provider id.
     ///   - session: the cache's own, so the tile server is told who is asking
     ///     as every tile server is.
+    ///   - language: the language whose names the map prefers.
     ///   - now: the clock ``failurePause`` is measured on, injected for tests.
     init(
         sources: [String: VectorTileSource],
         session: URLSession,
+        language: String = VectorTileLabels.appLanguage,
         now: @escaping @Sendable () -> ContinuousClock.Instant = { .now }
     ) {
         self.sources = sources
         self.session = session
+        self.language = language
         self.now = now
     }
 
@@ -96,9 +101,15 @@ nonisolated final class VectorTileClient: Sendable {
             let tile = try MapboxVectorTile(
                 data: bytes,
                 layerNames: VectorTileRasterizer.layerNames,
-                propertyKeys: VectorTileRasterizer.propertyKeys
+                propertyKeys: VectorTileRasterizer.propertyKeys(language: language)
             )
-            return VectorTileRasterizer.png(of: tile, from: dataTile, drawing: target)
+            return VectorTileRasterizer.png(
+                of: tile,
+                from: dataTile,
+                drawing: target,
+                language: language,
+                height: { HikeFormat.elevation(Measurement(value: $0, unit: .meters)) }
+            )
         } catch {
             #if DEBUG
             let reason = String(describing: error)

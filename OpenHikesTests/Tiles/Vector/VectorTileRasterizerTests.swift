@@ -141,7 +141,13 @@ struct VectorTileRasterizerTests {
     @Test("the PNG handed to the cache is the size it was drawn at")
     func pngKeepsItsSize() throws {
         let decoded = try VectorTileFixture.decoded([land])
-        let png = try #require(VectorTileRasterizer.png(of: decoded, from: tile, drawing: tile))
+        let png = try #require(VectorTileRasterizer.png(
+            of: decoded,
+            from: tile,
+            drawing: tile,
+            language: "en",
+            height: VectorTileFixture.height
+        ))
         let source = try #require(CGImageSourceCreateWithData(png as CFData, nil))
         let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
 
@@ -161,7 +167,13 @@ struct VectorTileRasterizerTests {
         at target: VectorTileAddress
     ) throws -> CGImage {
         let decoded = try VectorTileFixture.decoded(layers)
-        return try #require(VectorTileRasterizer.image(of: decoded, from: source, drawing: target))
+        return try #require(VectorTileRasterizer.image(
+            of: decoded,
+            from: source,
+            drawing: target,
+            language: "en",
+            height: VectorTileFixture.height
+        ))
     }
 
     /// Whether the pixel at `x`, `y` (from the top left) is `hex`, give or take
