@@ -33,24 +33,31 @@ nonisolated public struct RouteSegment: Sendable, Equatable {
     /// How long the hiker was stopped after this segment, before the next one
     /// began. `nil` after the last segment, and where either end has no time.
     public var stopSeconds: TimeInterval?
+    /// The share of ``distanceMeters`` between the segment's first and last
+    /// stamped point, the only stretch ``seconds`` is a clock for, as
+    /// `HikeRouteStatistics` cuts a whole hike's: ten kilometres with a clock
+    /// on the last two would otherwise read as a runner's speed.
+    public var timedDistanceFraction: Double
 
     public init(
         distanceMeters: Double,
         seconds: TimeInterval? = nil,
         elevationGainMeters: Double? = nil,
-        stopSeconds: TimeInterval? = nil
+        stopSeconds: TimeInterval? = nil,
+        timedDistanceFraction: Double = 1
     ) {
         self.distanceMeters = distanceMeters
         self.seconds = seconds
         self.elevationGainMeters = elevationGainMeters
         self.stopSeconds = stopSeconds
+        self.timedDistanceFraction = timedDistanceFraction
     }
 
-    /// Distance over ``seconds``, or `nil` where there is no time to divide
-    /// by.
+    /// The timed stretch of the segment over ``seconds``, or `nil` where there
+    /// is no time to divide by.
     public var averageSpeedMetersPerSecond: Double? {
         guard let seconds, seconds > 0 else { return nil }
-        return distanceMeters / seconds
+        return distanceMeters * timedDistanceFraction / seconds
     }
 }
 
@@ -63,13 +70,21 @@ nonisolated public enum RouteSegments {
     /// Cuts a route into its segments as it is walked, a point at a time, so
     /// the hike detail's one pass over a route can feed it — as it feeds
     /// ``HikeRouteStatistics/Builder``.
-    public struct Builder {
-        private struct Run {
+    ///
+    /// A value, so a recording can read what it has so far without ending it
+    /// (`RecordingSegmentLedger`).
+    public struct Builder: Sendable, Equatable {
+        private struct Run: Sendable, Equatable {
             var meters = 0.0
             var pointCount = 1
             var firstTimestamp: Date?
             var lastTimestamp: Date?
             var elevation = ElevationAccumulator()
+            /// Metres between the first and the last stamped point so far.
+            var timedMeters = 0.0
+            /// Metres since the last stamped point, held until a later stamp
+            /// claims them, as `HikeRouteStatistics` holds them.
+            var pendingMeters = 0.0
         }
 
         private var segments: [RouteSegment] = []
@@ -94,6 +109,11 @@ nonisolated public enum RouteSegments {
             }
             open.meters += segmentMeters
             open.pointCount += 1
+            if open.firstTimestamp != nil { open.pendingMeters += segmentMeters }
+            if point.timestamp != nil {
+                open.timedMeters += open.pendingMeters
+                open.pendingMeters = 0
+            }
             open.firstTimestamp = open.firstTimestamp ?? point.timestamp
             open.lastTimestamp = point.timestamp ?? open.lastTimestamp
             open.elevation.record(point.elevation)
@@ -136,7 +156,8 @@ nonisolated public enum RouteSegments {
                 RouteSegment(
                     distanceMeters: closed.meters,
                     seconds: seconds,
-                    elevationGainMeters: closed.elevation.hasChange ? closed.elevation.gainMeters : nil
+                    elevationGainMeters: closed.elevation.hasChange ? closed.elevation.gainMeters : nil,
+                    timedDistanceFraction: closed.meters > 0 ? min(closed.timedMeters / closed.meters, 1) : 1
                 )
             )
             previousEnd = closed.lastTimestamp

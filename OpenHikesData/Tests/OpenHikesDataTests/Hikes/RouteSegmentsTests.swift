@@ -79,6 +79,21 @@ struct RouteSegmentsTests {
         #expect(RouteSegment(distanceMeters: 100, seconds: 0).averageSpeedMetersPerSecond == nil)
     }
 
+    /// Ten steps with a clock on the last two only, as a GPX file whose
+    /// receiver found its time late.
+    @Test("a segment stamped on part of its length is as fast as that part")
+    func partlyStamped() throws {
+        let partly = (0...10).map { step in
+            Self.point(Double(step), at: step >= 8 ? Double(step) * 60 : nil)
+        }
+        let route = partly + [Self.point(10, at: 1800, resumed: true), Self.point(14, at: 2040)]
+
+        let first = try #require(Self.segments(route).first)
+        let speed = try #require(first.averageSpeedMetersPerSecond)
+        #expect(first.seconds == 120)
+        #expect(speed.isApproximatelyEqual(to: 2 * Self.step / 120, absoluteTolerance: 0.0001))
+    }
+
     @Test("a route with no pause has no segments to show")
     func onePiece() {
         #expect(Self.segments([Self.point(0, at: 0), Self.point(5, at: 600), Self.point(9, at: 1200)]).isEmpty)
