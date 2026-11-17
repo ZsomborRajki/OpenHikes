@@ -38,6 +38,8 @@ public enum AutoPauseEvidence {
         }
     }
 
+    // periphery:ignore - exercised by `OpenHikesShared/Tests`, a SwiftPM
+    // target the Xcode scheme this scan builds does not contain.
     /// What the watch said, and when the recorder would have heard it.
     public struct Decision: Sendable, Equatable {
         public let at: Date
@@ -68,6 +70,8 @@ public enum AutoPauseEvidence {
         }
     }
 
+    // periphery:ignore - exercised by `OpenHikesShared/Tests`, a SwiftPM
+    // target the Xcode scheme this scan builds does not contain.
     /// The record a line holds, or `nil` for one that is not a record: a
     /// blank line, a heading, a line cut short by the process ending.
     public static func record(from line: String) -> Record? {
@@ -98,6 +102,8 @@ public enum AutoPauseEvidence {
         }
     }
 
+    // periphery:ignore - exercised by `OpenHikesShared/Tests`, a SwiftPM
+    // target the Xcode scheme this scan builds does not contain.
     /// Shows a watch every record in order, as the recorder shows it them
     /// live: each fix, a look at each change of motion, and the timer the
     /// recorder sets by ``AutoPauseWatch/decisionDate``.

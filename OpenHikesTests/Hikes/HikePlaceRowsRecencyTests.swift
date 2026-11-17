@@ -74,6 +74,8 @@ struct HikePlaceRowsRecencyTests {
     /// request's task inherits it as a task-local value and holds it until
     /// the task ends, which is after its answer has landed or been dropped.
     nonisolated private final class Witness: Sendable {
+        // periphery:ignore - only `$current` is read: binding it is what
+        // hands the request's task the witness.
         @TaskLocal static var current: Witness?
     }
 
