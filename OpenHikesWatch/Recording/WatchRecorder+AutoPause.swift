@@ -11,6 +11,7 @@ import CoreLocation
 import Foundation
 import HealthKit
 import OpenHikesShared
+import os
 
 extension WatchRecorder {
     /// Follows the phone's Auto-Pause switch, as the library last said it.
@@ -22,7 +23,7 @@ extension WatchRecorder {
         guard !isEnabled else { return }
         autoPauseTimer?.cancel()
         autoPauseTimer = nil
-        if isAutoPaused { isAutoPaused = false }
+        handOverAutoPause()
     }
 
     /// Pauses the recording from `stoppedAt`, a moment already behind it.
@@ -48,6 +49,12 @@ extension WatchRecorder {
     /// the stop's or the walk away's.
     func receivedWhileAutoPaused(_ location: CLLocation) {
         guard let departure = autoPause.hold(AutoPauseWatch.Fix(location), as: location) else { return }
+        if departure.beganBeforeThePause {
+            // The stop was called on the clock, and the walk away arrived
+            // after it: the cut took walking with it. Logged for a device
+            // run to find — see ``WatchAutoPause``.
+            Self.logger.notice("Auto-pause walk-away began before the pause was called")
+        }
         workout.session?.resume()
         // From the first fix of the walk away, which the window would
         // otherwise refuse as taken before the resume.
@@ -88,14 +95,24 @@ extension WatchRecorder {
     }
 
     /// Makes the app's pause the hiker's, to resume by hand, as the phone's
-    /// recorder does when Pause is pressed during one. The journal and the
-    /// workout session already hold the pause.
+    /// recorder does when Pause is pressed during one.
     ///
     /// - Returns: whether there was a pause of the app's to take over.
     func takeOverAutoPause() -> Bool {
         guard isAutoPaused else { return false }
+        handOverAutoPause()
         resetAutoPause()
         return true
+    }
+
+    /// Writes down that the pause in force, the app's until now, is the
+    /// hiker's, so that a relaunch leaves it to them rather than taking it
+    /// up again. The workout session already holds it, and the accumulator
+    /// already stands paused.
+    private func handOverAutoPause() {
+        guard isAutoPaused else { return }
+        isAutoPaused = false
+        journaling { try $0.record(.paused(.now), at: .now) }
     }
 
     /// Forgets the place being watched and any pause the app made: a pause

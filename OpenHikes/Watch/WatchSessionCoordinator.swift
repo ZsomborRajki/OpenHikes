@@ -301,15 +301,31 @@ final class WatchSessionCoordinator: NSObject {
     }
 
     /// Sends the library again when the Auto-Pause switch is not what the
-    /// watch was last sent. Nothing before the first library: that one
-    /// carries the switch.
+    /// watch was last sent.
     private func autoPauseMayHaveChanged() {
         #if canImport(WatchConnectivity)
-        guard let latestCatalog, let publishedAutoPause,
-              Self.digest(of: latestCatalog, defaults: defaults).autoPauseEnabled != publishedAutoPause
-        else { return }
-        publish(latestCatalog)
+        guard let catalog = Self.catalogToResend(
+            latestCatalog,
+            sentAutoPause: publishedAutoPause,
+            defaults: defaults
+        ) else { return }
+        publish(catalog)
         #endif
+    }
+
+    /// The library to send the watch again, because the Auto-Pause switch in
+    /// `defaults` is no longer `sentAutoPause`, or `nil`. Nothing before the
+    /// first library has gone, because that one carries the switch, and
+    /// nothing when another key of the suite changed.
+    static func catalogToResend(
+        _ latest: SharedHikeCatalog?,
+        sentAutoPause: Bool?, // swiftlint:disable:this discouraged_optional_boolean
+        defaults: UserDefaults
+    ) -> SharedHikeCatalog? {
+        guard let latest, let sentAutoPause,
+              digest(of: latest, defaults: defaults).autoPauseEnabled != sentAutoPause
+        else { return nil }
+        return latest
     }
 
     /// Publishes the library that arrived before the session was activated.

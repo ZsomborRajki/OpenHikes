@@ -32,6 +32,23 @@ struct WatchAutoPauseParityTests {
         #expect(WatchSessionCoordinator.digest(of: catalog, defaults: defaults).autoPauseEnabled == false)
     }
 
+    @Test("the library goes again only when the switch is not what the watch was sent")
+    func switchChangeSendsTheLibraryAgain() throws {
+        let defaults = try #require(UserDefaults(suiteName: "WatchAutoPauseParityTests-\(UUID().uuidString)"))
+        let catalog = SharedHikeCatalog(hikes: [])
+        // swiftlint:disable:next discouraged_optional_boolean
+        let resend = { (latest: SharedHikeCatalog?, sent: Bool?) in
+            WatchSessionCoordinator.catalogToResend(latest, sentAutoPause: sent, defaults: defaults)
+        }
+        #expect(resend(nil, true) == nil, "nothing has gone yet")
+        #expect(resend(catalog, nil) == nil, "the first library carries the switch")
+        #expect(resend(catalog, true) == nil, "a switch never set is on, as it was sent")
+
+        defaults.set(false, forKey: SettingsKey.autoPauseEnabled)
+        #expect(resend(catalog, true) == catalog)
+        #expect(resend(catalog, false) == nil, "another key of the suite changed")
+    }
+
     @Test("a stop holds as many fixes on the watch as on the phone")
     func heldFixesAgree() {
         #expect(WatchAutoPause<Int>.maximumHeldFixes == RecordingAutoPause.maximumHeldFixes)

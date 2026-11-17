@@ -105,7 +105,11 @@ final class WatchModel {
         recorder.onRecordingEnded = { [weak self] whilePaused in self?.recordingEnded(whilePaused: whilePaused) }
         // As a Resume does, and for the same reason: the hiker may have been
         // carried somewhere else while the recording waited at the stop.
-        recorder.onAutoResume = { [weak self] in self?.tracker?.forgetPosition() }
+        // The walk away's fixes follow at once, and place the hiker again.
+        recorder.onAutoResume = { [weak self] in
+            self?.tracker?.forgetPosition()
+            self?.follow.clear()
+        }
         recorder.setAutoPauseEnabled(library.isAutoPauseOn)
     }
 
