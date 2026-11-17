@@ -311,12 +311,18 @@ either: the second run waits silently on the first run's build lock.
   - CoreLocation's overlay on the Mac has `CLBackgroundActivitySession` but
     not its `Diagnostic` or `diagnostics`. The app target links the overlay
     weakly (`OTHER_LDFLAGS = -weak-lswiftCoreLocation`, held by
-    `MacLaunchContractTests`), and the recorder reads the diagnostics only
-    where `isiOSAppOnMac` is false: a missing weak symbol binds to nothing,
-    and calling it crashes.
+    `MacLaunchContractTests`), and the recorder starts the task that reads
+    the diagnostics only where `isiOSAppOnMac` is false: a missing weak
+    symbol binds to nothing, and calling it crashes.
+  - **Ask in the caller, never in the function that uses the symbol.** A
+    function can look up the metadata of the types it uses as it is
+    entered, before its first line runs, and the drain's async entry does,
+    in Debug and Release alike. A guard at its top came too late.
   - `@_weakLinked import` cannot do this instead. The compiler wants it on
     every import of the module or none.
-  - After adding a framework or a newer API, run the app on the Mac once.
+  - After adding a framework or a newer API, run the app on the Mac once,
+    through the code that uses it. `MacLaunchContractTests` holds the
+    launch, not what a missing symbol does when it is reached.
 - **What a Mac lacks.** No GPS (it locates by Wi-Fi), no Health, watch, Live
   Activity, motion or barometer. Each is asked about at run time, as on an
   iPad, so the app goes without it. Its camera does open the camera picker.

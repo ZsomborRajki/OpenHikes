@@ -348,6 +348,9 @@ final class SystemRecordingLocationSource: RecordingLocationSource {
         guard backgroundSession == nil else { return }
         let session = CLBackgroundActivitySession()
         backgroundSession = session
+        // Asked here, never inside the drain: a Mac's overlay has none of the
+        // diagnostics, and entering the drain already looks up their types.
+        guard !ProcessInfo.processInfo.isiOSAppOnMac else { return }
         sessionDiagnostics = Task { await Self.logDiagnostics(of: session) }
     }
 
@@ -360,11 +363,13 @@ final class SystemRecordingLocationSource: RecordingLocationSource {
     /// explained it is gone. Deliberately not `#if DEBUG` — a debug build is
     /// exactly where this never happens.
     ///
-    /// Never on a Mac, whose CoreLocation overlay has none of the diagnostics.
-    /// The app links it weakly so that the launch survives, which leaves those
-    /// symbols bound to nothing (*The Mac* in AGENTS.md).
+    /// Never entered on a Mac, whose CoreLocation overlay has none of the
+    /// diagnostics. The app links it weakly so that the launch survives, which
+    /// leaves those symbols bound to nothing. The caller asks, because a guard
+    /// in here would come too late: this function looks up the metadata of
+    /// `Diagnostic` and its iterator as it is entered, before its first line
+    /// runs (*The Mac* in AGENTS.md).
     private static func logDiagnostics(of session: CLBackgroundActivitySession) async {
-        guard !ProcessInfo.processInfo.isiOSAppOnMac else { return }
         do {
             for try await diagnostic in session.diagnostics {
                 guard diagnostic.authorizationDenied
