@@ -24205,6 +24205,52 @@
         }
       }
     },
+    "Keep Following" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weiter folgen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seguir el sendero"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continuer à suivre"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continua a seguire"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Idź dalej szlakiem"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Идти дальше по тропе"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Іти стежкою далі"
+          }
+        }
+      }
+    },
     "Keep for Later" : {
       "localizations" : {
         "de" : {
@@ -40917,6 +40963,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Запис походу"
+          }
+        }
+      }
+    },
+    "Record Instead" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stattdessen aufzeichnen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grabar en su lugar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrer plutôt"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registra invece"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zamiast tego nagrywaj"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Начать запись"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Натомість почати запис"
           }
         }
       }
@@ -60626,6 +60718,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ви вже поширили цю стежку"
+          }
+        }
+      }
+    },
+    "You’ve left %@. Keep following it, or record your own hike instead? A recording starts with what you’ve hiked so far." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du hast %@ verlassen. Weiter folgen oder stattdessen eine eigene Wanderung aufzeichnen? Die Aufzeichnung beginnt mit dem, was du bisher gewandert bist."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Te has salido de %@. ¿Seguir el sendero o grabar tu propia excursión en su lugar? La grabación empieza con lo recorrido hasta ahora."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vous avez quitté %@. Continuer à suivre ce sentier ou enregistrer plutôt votre propre randonnée ? L’enregistrement commence par ce que vous avez parcouru jusqu’ici."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hai lasciato %@. Vuoi continuare a seguire il sentiero o registrare invece la tua escursione? La registrazione parte dal tratto percorso finora."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jesteś poza szlakiem „%@”. Iść nim dalej czy zamiast tego nagrać własną wędrówkę? Nagranie zacznie się od tego, co dotąd przebyto."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вы сошли с тропы «%@». Идти по ней дальше или начать запись собственного похода? Запись начнется с уже пройденного пути."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ви зійшли зі стежки «%@». Іти нею далі чи натомість почати запис власного походу? Запис почнеться з уже пройденого."
           }
         }
       }

@@ -66,6 +66,12 @@ final class TrailWalkSession {
     /// so — see ``WalkStartedPill``. Cleared by its *x* and by the walk
     /// ending; a walk adopted at launch was already announced and sets none.
     private(set) var startNotice: TrailWalkStartNotice?
+    /// What a hiker who has left the walked trail is being asked, or `nil`
+    /// while nothing is — see ``OffTrailQuestion``. Asked and withdrawn in
+    /// `TrailWalkSession+OffTrail.swift`, which is another file and so cannot
+    /// have this `private(set)`; put away here by a pause and by the walk
+    /// ending.
+    var offTrailQuestion: OffTrailQuestion?
 
     // MARK: Fine — changes per matched fix
 
@@ -176,6 +182,7 @@ final class TrailWalkSession {
         self.activeRecordingHikeID = activeRecordingHikeID
         self.daylight = daylight
         tracker?.walkSession = self
+        listenForOffTrailQuestion()
     }
 
     // MARK: Questions
@@ -443,11 +450,6 @@ final class TrailWalkSession {
         updateReminder(for: walk)
     }
 
-    /// The pill's *x*. The walk goes on; only the news of it is put away.
-    func dismissStartNotice() {
-        startNotice = nil
-    }
-
     // MARK: Pause and resume
 
     /// The hiker tapped Pause.
@@ -632,6 +634,7 @@ final class TrailWalkSession {
         walkedHikeID = nil
         walkedHikeTitle = ""
         startNotice = nil
+        offTrailQuestion = nil
         phase = nil
         coveredFraction = 0
         metersLeft = 0
@@ -779,6 +782,11 @@ extension TrailWalkSession {
         // Lock Screen should say the walk is on from the tap.
         publishState()
         return true
+    }
+
+    /// The pill's *x*. The walk goes on; only the news of it is put away.
+    func dismissStartNotice() {
+        startNotice = nil
     }
 }
 
@@ -1048,6 +1056,9 @@ private extension TrailWalkSession {
             reminders?.walkDidResumeOrEnd()
             return
         }
+        // A paused walk's hiker is somewhere else on purpose, and is not
+        // asked about a trail they have stopped following.
+        withdrawOffTrailQuestion()
         reminders?.walkDidPause(
             trailTitle: walkedHikeTitle,
             atDistance: walk.lastFollowedDistanceMeters

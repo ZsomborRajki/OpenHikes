@@ -683,6 +683,15 @@ extension XCTestCase {
         return false
     }
 
+    /// Taps where nothing in the app answers, which is what hands the system
+    /// prompt a launch has just raised to its interruption monitor — see
+    /// ``startRecording(in:endingWalk:)`` for why there.
+    @MainActor
+    func answerLaunchPrompt(in app: XCUIApplication) {
+        let statusBar = CGVector(dx: Self.inertStatusBarX, dy: Self.inertStatusBarY)
+        app.coordinate(withNormalizedOffset: statusBar).tap()
+    }
+
     /// Starts a recording from the map's record button and waits for the
     /// recording screen. The app is tapped first because a launch that has
     /// just asked for location leaves the interruption monitor waiting for one
@@ -694,8 +703,7 @@ extension XCTestCase {
     /// while a walk is under way: a hiker walks or records, never both.
     @MainActor
     func startRecording(in app: XCUIApplication, endingWalk: Bool = false) {
-        let statusBar = CGVector(dx: Self.inertStatusBarX, dy: Self.inertStatusBarY)
-        app.coordinate(withNormalizedOffset: statusBar).tap()
+        answerLaunchPrompt(in: app)
         let recordButton = element("record-hike-button", in: app)
         XCTAssertTrue(
             recordButton.waitForExistence(timeout: UITestTimeout.navigation)

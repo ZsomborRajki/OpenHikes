@@ -16,6 +16,12 @@
 //  Taking a proposal commits its watch before the notifier suspends again.
 //  Overlapping attempts find no proposal left, so they cannot post twice.
 //
+//  Leaving the trail is also asked about in the app, and that needs nobody's
+//  permission. So a second watch counts the same departures for it, shown
+//  every fix the first is and committed as it observes: the question is asked
+//  on the fix the banner is first tried on, once per departure, whatever
+//  becomes of the banner.
+//
 
 import Foundation
 
@@ -34,6 +40,9 @@ struct MovementWarningState {
     }
 
     private var offTrail = OffTrailWatch()
+    /// The departures ``offTrail`` counts, as the app's own question counts
+    /// them — see this file's header.
+    private var offTrailQuestion = OffTrailWatch()
     private var dusk = DuskWatch()
     private var stillness = StillnessWatch()
     private var pendingWarnings: [MovementReminderKind: PendingWarning] = [:]
@@ -62,6 +71,14 @@ struct MovementWarningState {
             watch: .stillness(reported)
         )
         return true
+    }
+
+    /// Whether this fix is the one a departure becomes worth asking the hiker
+    /// about on: once per departure, on the fix
+    /// ``observeOffTrail(offRouteMeters:trailTitle:at:)`` first proposes its
+    /// banner on. Shown every fix that one is.
+    mutating func observeDeparture(offRouteMeters: Double?, at date: Date) -> Bool {
+        offTrailQuestion.observed(offRouteMeters: offRouteMeters, at: date)
     }
 
     mutating func observeOffTrail(offRouteMeters: Double?, trailTitle: String, at date: Date) -> Bool {
@@ -137,6 +154,7 @@ struct MovementWarningState {
 
     mutating func stopFollowing() {
         offTrail.reset()
+        offTrailQuestion.reset()
         dusk.reset()
         cancelWalkWarnings()
     }

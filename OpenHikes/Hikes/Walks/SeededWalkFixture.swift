@@ -11,6 +11,12 @@
 //  the real store, so what a test reads afterwards is the shipping query, the
 //  shipping cascade and the shipping formatting; only the walk is invented.
 //
+//  One name is a walk that has not finished: `LeftTrail` is under way, with
+//  its hiker off the trail and being asked about it — see
+//  ``OffTrailQuestion``. Reaching that by walking is two minutes off a trail
+//  per scenario, decided by a reminder controller no test launch has, and
+//  what the scenarios are about is what the two answers do.
+//
 //  Mirrors `SeededPhotoFixture`, and like it is compiled only into `DEBUG`.
 //
 
@@ -80,6 +86,17 @@ nonisolated enum SeededWalkFixture {
 
     private static let all = [halfLoop, fullLoop]
 
+    /// The walk still under way — see ``leaveTrail(along:in:session:)``.
+    private static let leftTrailName = "LeftTrail"
+    /// How much of the route it covered before leaving it, 0...1.
+    private static let leftTrailFraction = 0.4
+    /// How long ago it set off, and how long ago it was last on the trail,
+    /// in seconds: fifty-five minutes and three. A walker's pace over that
+    /// much of the fixture's nine kilometres, and a departure old enough to
+    /// have been asked about.
+    private static let leftTrailStartedSecondsAgo: TimeInterval = 3300
+    private static let leftTrailSecondsAgo: TimeInterval = 180
+
     /// Attaches every walk `names` asks for, as a comma-separated list.
     ///
     /// A list rather than one name because a history with a single row in it
@@ -88,11 +105,53 @@ nonisolated enum SeededWalkFixture {
     /// halfway. Unknown names are skipped rather than refused — the launch
     /// argument is a developer's, and a typo should cost a missing row rather
     /// than a crash on a screen that has nothing to do with walks.
+    ///
+    /// - Parameter session: where the one walk that is still under way is
+    ///   put — see ``leaveTrail(along:in:session:)``.
     @MainActor
-    static func attach(named names: String, to hike: Hike, in context: ModelContext) {
+    static func attach(named names: String, to hike: Hike, in context: ModelContext, session: TrailWalkSession) {
         for name in names.split(separator: ",") {
-            attach(one: String(name), to: hike, in: context)
+            if name == leftTrailName {
+                leaveTrail(along: hike, in: context, session: session)
+            } else {
+                attach(one: String(name), to: hike, in: context)
+            }
         }
+    }
+
+    /// Leaves a walk under way along the first part of `hike`, off the trail
+    /// for a few minutes, and has the session ask about it.
+    ///
+    /// Written to the sidecar and adopted by the session's own launch
+    /// restore, which a UI-testing launch otherwise skips, so the walk the
+    /// scenario answers about is one the shipping path made. Only the fixes
+    /// that would have covered it, and the two minutes off the trail that
+    /// would have raised the question, are invented.
+    @MainActor
+    private static func leaveTrail(along hike: Hike, in context: ModelContext, session: TrailWalkSession) {
+        guard hike.isAttached else { return }
+        let route = hike.route
+        let routeDistance = RouteProfile(route: route).totalDistanceMeters
+        let covered = routeDistance * leftTrailFraction
+        guard covered > 0 else { return }
+        let now = Date.now
+        var walk = TrailWalkRecord(
+            hikeID: hike.id,
+            routeDistanceMeters: routeDistance,
+            startedAt: now.addingTimeInterval(-leftTrailStartedSecondsAgo),
+            routeRevision: TrailWalkRecord.routeRevision(of: route)
+        )
+        // A match every so often along the way, inside what a walk bridges.
+        for distance in stride(from: 0, to: covered, by: TrailWalkPolicy.minimumCoverageMeters) {
+            walk.coverage.record(distance: distance)
+        }
+        walk.coverage.record(distance: covered)
+        walk.lastFollowedDistanceMeters = covered
+        walk.lastMatchedAt = now.addingTimeInterval(-leftTrailSecondsAgo)
+        hike.walkInProgress = walk
+        try? context.save()
+        session.restoreAtLaunch(now: now)
+        session.askAboutLeavingTrail()
     }
 
     /// A wall-clock morning `daysAgo` days back.

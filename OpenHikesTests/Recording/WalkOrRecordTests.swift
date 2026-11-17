@@ -16,11 +16,16 @@
 //  reminder controller asks whether a recording is under way: a recording
 //  waiting on its permission prompt is the second without the first.
 //
+//  And one place the two do meet, on purpose: a hiker who left the trail they
+//  were walking and said to record instead. The walk still ends before the
+//  recording begins, and what it covered goes with it.
+//
 
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
 import OpenHikesShared
+import RealModule
 import SwiftData
 import Testing
 
@@ -109,6 +114,79 @@ final class WalkOrRecordTests {
         #expect(started.id != draft.id, "a recording of this phone's own, not the other's draft")
         #expect(sent.received.last == TrailWidgetDeepLink.recordingURL())
         #expect(!entry.walkEndRefused)
+    }
+
+    @Test("recording instead of a walk ends it into the trail's History and begins the recording with it")
+    func recordInsteadCarriesTheWalkIntoTheRecording() async throws {
+        let hikeRecorder = makeRecorder()
+        let session = walkSession(asking: hikeRecorder)
+        let requests = HikeOpenRequests()
+        let sent = FeedReader(requests.links())
+        let entry = RecordingEntry(recorder: hikeRecorder, walkSession: session, openRequests: requests)
+        let walked = trail()
+        let profile = RouteProfile(route: walked.route)
+        #expect(session.start(hike: walked, profile: profile))
+        let startedAt = clock.now
+        for point in 0...6 {
+            clock.advance(by: 60)
+            session.recordForegroundMatch(hike: walked, profile: profile, distance: profile.distances[point])
+        }
+        // Off the trail for a while before saying so.
+        clock.advance(by: 180)
+
+        entry.recordInsteadOfWalk()
+        await settleDelegateHop(until: "the recording's screen to be asked for") { sent.received.count == 1 }
+
+        #expect(session.walkUnderWayTitle == nil, "the walk is over")
+        #expect(walked.walks?.count == 1, "and kept, as an End keeps it")
+        #expect(hikeRecorder.isActive)
+        let draft = try #require(hikeRecorder.currentHike)
+        #expect(draft.id != walked.id, "a hike of its own, not the trail")
+        #expect(hikeRecorder.sessionStartedAt == startedAt, "that began when the walk did")
+        #expect(hikeRecorder.stats.pointCount > 1)
+        #expect(hikeRecorder.stats.distanceMeters.isApproximatelyEqual(to: profile.distances[6], absoluteTolerance: 2))
+        #expect(!entry.walkEndRefused)
+    }
+
+    /// The walk is in its trail's History and its ground is in the recording,
+    /// and the library's totals count a walk for whatever part of its time
+    /// no recording's clock covers. So the recording's clock has to cover
+    /// the walk's to the instant — here with the recording stopped before a
+    /// fix of its own, which leaves the carried points as the whole of it.
+    @Test("the ground handed to a recording is counted once in the library, not once more as the walk")
+    func aHandedOverWalkIsCountedOnce() async throws {
+        let hikeRecorder = makeRecorder()
+        let session = walkSession(asking: hikeRecorder)
+        let requests = HikeOpenRequests()
+        let sent = FeedReader(requests.links())
+        let entry = RecordingEntry(recorder: hikeRecorder, walkSession: session, openRequests: requests)
+        let walked = trail()
+        let profile = RouteProfile(route: walked.route)
+        #expect(session.start(hike: walked, profile: profile))
+        for point in 0...6 {
+            // Not a whole number of seconds, so the sums have ulps to lose.
+            clock.advance(by: 61.3)
+            session.recordForegroundMatch(hike: walked, profile: profile, distance: profile.distances[point])
+        }
+        // And a long lunch, which the carried points wait out before they
+        // set off: more to add up, and more to lose in the adding.
+        #expect(session.pause())
+        clock.advance(by: 3 * 3600 + 0.7)
+        #expect(session.resume())
+        clock.advance(by: 180)
+        entry.recordInsteadOfWalk()
+        await settleDelegateHop(until: "the recording's screen to be asked for") { sent.received.count == 1 }
+        #expect(walked.walks?.count == 1, "precondition: the walk was kept")
+
+        let saved = try await hikeRecorder.stop()
+        guard case let .saved(recording) = saved else {
+            Issue.record("the recording unexpectedly required review")
+            return
+        }
+
+        let library = try await LibraryTotalsSweep.outings(from: container)
+        #expect(library.outings.map(\.hikeID) == [recording.id])
+        #expect(library.outings.allSatisfy { !$0.isWalk })
     }
 
     /// A recorder that has been asked to start and is waiting on its

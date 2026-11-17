@@ -40,13 +40,13 @@
 //  loses the box and not the reason for it. That includes the hikes list's own
 //  refused *Delete*: the list is inside the sheet, and so is rebuilt with it.
 //
-//  Two more are attached beside these rather than through them, for the same
-//  reason and on the same contents. The trail maker's missed photographs —
-//  see ``TrailDraftPhotoCopy``, whose state lives on the app model's maker —
+//  Three more are attached beside these rather than through them, for the
+//  same reason and on the same contents. The trail maker's missed photographs
+//  — see ``TrailDraftPhotoCopy``, whose state lives on the app model's maker —
 //  because it carries an object rather than a binding. And the map's refused
-//  "my location" button, because a place card can be up over these contents
-//  when it is tapped, and the card has to present it then: see
-//  ``MapControlModals``.
+//  "my location" button and a walk's off-trail question, because a place card
+//  can be up over these contents when either is raised, and the card has to
+//  present it then: see ``MapControlModals``.
 //
 
 import SwiftUI

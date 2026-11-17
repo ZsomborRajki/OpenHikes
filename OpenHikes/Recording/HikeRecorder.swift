@@ -169,6 +169,11 @@ final class HikeRecorder: NSObject {
     /// the activation checks as well. Either way, an activation waking from a
     /// suspension can tell whether it is still the one being waited for.
     @ObservationIgnored var activationID: UUID?
+    /// What the Start now being waited on begins with, for a recording that
+    /// takes over from a hike already under way — see ``RecordingSeed``.
+    /// Taken by the activation that makes the session, and let go of by
+    /// ``resetSession()``.
+    @ObservationIgnored var carriedSeed: RecordingSeed?
     @ObservationIgnored var pendingResumeFlag = false
     /// Refuses live fixes taken before this recording, or its current leg,
     /// began — see ``RecordingFixWindow``. `nil` until a session is under way.

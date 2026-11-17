@@ -140,6 +140,23 @@ final class MovementReminderController {
     /// controller no recorder is using.
     var watchingDidEnd: @MainActor () -> Void = { /* no recorder to tell */ }
 
+    /// Told when the walk under way has been off its trail long enough to
+    /// ask the hiker about it in the app, and when that is over: they are
+    /// back on it, or have turned reminders off.
+    ///
+    /// The app's half of ``MovementReminderKind/leftTheTrail``. It is asked
+    /// on the fix the banner is first tried on, once per departure, as the
+    /// banner is said once — see ``OffTrailWatch`` — so the two are one
+    /// event. It waits on no permission, because a question on the app's own
+    /// screen needs none: a hiker who refused notifications is still asked
+    /// when they next look. See ``MovementWarningState``.
+    ///
+    /// Assigned by the walk session this controller is handed to, for the
+    /// reason ``hasActiveRecording`` is assigned rather than injected. Until
+    /// it is set nobody is asked, which is right for a controller no walk
+    /// session is using.
+    var offTrailQuestionDidChange: @MainActor (_ isAsked: Bool) -> Void = { _ in /* no walk to ask about */ }
+
     /// Chains the notification-centre calls so a post and the withdrawal that
     /// follows it cannot land in the other order — the same reasoning, and the
     /// same shape, as `HikeLiveActivityController.pendingWork`.
@@ -380,6 +397,7 @@ extension MovementReminderController {
         // arguing with itself in a pocket.
         guard !hasActiveRecording() else { return }
         let wasOffTrail = warnings.isOffTrail
+        let asksInApp = warnings.observeDeparture(offRouteMeters: offRouteMeters, at: date)
         let shouldRemind = warnings.observeOffTrail(
             offRouteMeters: offRouteMeters,
             trailTitle: trailTitle,
@@ -387,8 +405,15 @@ extension MovementReminderController {
         )
         // Rejoining takes the banner back down. A standing "Off the trail" is
         // a claim about *now*, and a hiker who has walked back onto the route
-        // should not find it on the Lock Screen when they next look.
-        if wasOffTrail, !warnings.isOffTrail { withdraw(.leftTheTrail) }
+        // should not find it on the Lock Screen when they next look — nor a
+        // question about leaving it waiting in the app.
+        if wasOffTrail, !warnings.isOffTrail {
+            withdraw(.leftTheTrail)
+            offTrailQuestionDidChange(false)
+        }
+        // Ahead of the banner and whatever becomes of it: the app asks on its
+        // own screen, which no permission stands in front of.
+        if asksInApp { offTrailQuestionDidChange(true) }
         guard shouldRemind else { return }
         postWarning(.leftTheTrail)
     }
@@ -460,6 +485,9 @@ extension MovementReminderController {
         warnings.resetRecording()
         warnings.cancelWalkWarnings()
         for kind in MovementReminderKind.allCases { withdraw(kind) }
+        // The question the app asks about leaving the trail is a reminder
+        // like the banner beside it, and goes with it.
+        offTrailQuestionDidChange(false)
         if wasWatching { watchingDidEnd() }
     }
 

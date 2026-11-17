@@ -94,10 +94,15 @@ actor TrackJournal {
         try? fileHandle?.close()
     }
 
+    /// - Parameter points: what the recording begins with, for one that takes
+    ///   over from a hike already under way — see ``RecordingSeed``. Written
+    ///   here rather than appended afterwards, so that no journal is ever on
+    ///   disk for such a recording without them.
     func start(
         sessionID: UUID,
         startedAt: Date,
-        title: String? = nil
+        title: String? = nil,
+        carrying points: [RecordingPoint] = []
     ) throws {
         assertOffMainThread("Track journal creation must stay off the main thread")
         try closeHandle()
@@ -126,9 +131,10 @@ actor TrackJournal {
                 title: title
             )
             metadata = newMetadata
-            pending = []
+            pending = points
             lastFlushAt = clock()
             try writeMetadata(newMetadata)
+            try flush()
         } catch let error as TrackJournalError {
             throw error
         } catch {

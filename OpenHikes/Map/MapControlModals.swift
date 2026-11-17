@@ -25,6 +25,11 @@
 //  itself. The counter lives here rather than on any one of them so that a
 //  fourth thing a map control opens has one place to join.
 //
+//  One thing has joined that no control opens: the question a walk asks once
+//  its hiker has left the trail (``OffTrailQuestion``). A fix raises it, at
+//  any moment, a card's included, so it is put up by whichever of the two is
+//  in front, for the reason the alert above is.
+//
 
 import SwiftUI
 
@@ -78,7 +83,7 @@ final class MapControlModals {
         }
     }
 
-    /// Drives one of the three from `presenter`: up while it is raised and
+    /// Drives one of them from `presenter`: up while it is raised and
     /// `presenter` is the one to put it up. Closing it, from either, lowers
     /// the one flag.
     ///
@@ -112,7 +117,8 @@ extension View {
 }
 
 private extension View {
-    /// The three, attached to `presenter`.
+    /// The three, attached to `presenter`, and the walk's off-trail question
+    /// with them.
     func presentingMapControls(
         _ modals: MapControlModals,
         from presenter: MapControlModals.Presenter,
@@ -126,6 +132,7 @@ private extension View {
                 locationManager: model.locationManager
             )
             .locationAccessAlert(modals, from: presenter)
+            .offTrailQuestionAlert(modals, from: presenter, model: model)
     }
 }
 

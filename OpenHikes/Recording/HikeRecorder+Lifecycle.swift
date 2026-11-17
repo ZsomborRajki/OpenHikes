@@ -163,11 +163,15 @@ extension HikeRecorder {
             return
         }
         let id = UUID()
-        let startedAt = clock()
+        // A recording that takes over from a hike already under way began
+        // when that hike did — see ``RecordingSeed``.
+        let seed = carriedSeed
+        let startedAt = seed?.startedAt ?? clock()
         do {
             try await journal.start(
                 sessionID: id,
-                startedAt: startedAt
+                startedAt: startedAt,
+                carrying: seed?.points ?? []
             )
         } catch {
             guard isActivationWanted(activation) else { return }
@@ -187,6 +191,7 @@ extension HikeRecorder {
             return
         }
         initializeSessionState(id: id, startedAt: startedAt)
+        adoptCarriedSeed(seed)
     }
 
     /// Whether the activation that began as `activation` is still the one a

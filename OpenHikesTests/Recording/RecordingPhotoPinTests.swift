@@ -194,7 +194,7 @@ struct RecordingPhotoPinTests {
                     recorder: recorder,
                     entry: RecordingEntry(
                         isLive: { false },
-                        start: { /* nothing here taps Start */ },
+                        start: { _ in /* nothing here taps Start */ },
                         openRequests: HikeOpenRequests()
                     ),
                     mapController: MapController(),
