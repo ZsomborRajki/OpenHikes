@@ -147,19 +147,37 @@ extension HikeRecorderTests {
         #expect(hikeRecorder.isAutoPaused)
     }
 
-    @Test("a hiker motion calls still is paused with no fix to say so")
+    @Test("a hiker motion calls still from the last fix is paused with no fix to say so")
     func stillnessPausesWithoutAFix() async {
         let motion = StubRecordingMotionSource()
         let hikeRecorder = makeRecorder(motionSource: motion, autoPause: true)
         await hikeRecorder.start()
         walk(from: 0, fixes: Self.stopFixCount)
 
-        clock.advance(by: Self.stopLength)
-        motion.deliver(.pedestrian)
-        #expect(hikeRecorder.phase == .recording, "walking into silence is a lost signal, not a stop")
+        clock.advance(by: Self.stride)
         motion.deliver(.stationary)
+        clock.advance(by: Self.stopLength)
+        hikeRecorder.checkAutoPause()
 
         #expect(hikeRecorder.isAutoPaused)
+    }
+
+    /// The tunnel walked on foot, and a halt inside it once the stop's
+    /// minutes have run out.
+    @Test("a silence motion heard walked is not paused when motion later calls it still")
+    func aWalkedSilenceIsNotPaused() async {
+        let motion = StubRecordingMotionSource()
+        let hikeRecorder = makeRecorder(motionSource: motion, autoPause: true)
+        await hikeRecorder.start()
+        walk(from: 0, fixes: Self.stopFixCount)
+
+        clock.advance(by: Self.stride)
+        motion.deliver(.pedestrian)
+        clock.advance(by: Self.stopLength)
+        motion.deliver(.stationary)
+
+        #expect(hikeRecorder.phase == .recording, "walking into silence is a lost signal, not a stop")
+        #expect(hikeRecorder.stats.pointCount == Self.stopFixCount)
     }
 
     /// Eight fixes of a steady walk, the last four inside one stop's area

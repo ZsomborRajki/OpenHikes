@@ -23,7 +23,7 @@ struct AutoPauseWatchTests {
 
     /// A fix `north` metres up the path from the trailhead, `seconds` into
     /// the walk.
-    private static func fix(
+    static func fix(
         north: Double,
         at seconds: TimeInterval,
         accuracy: Double = 8,
@@ -42,13 +42,13 @@ struct AutoPauseWatchTests {
         )
     }
 
-    private static func time(_ seconds: TimeInterval) -> Date {
+    static func time(_ seconds: TimeInterval) -> Date {
         start.addingTimeInterval(seconds)
     }
 
     /// Shows the watch each fix, and gives back what it said, with nothing
     /// for the fixes it said nothing about.
-    private static func events(
+    static func events(
         _ watch: inout AutoPauseWatch,
         observing fixes: [AutoPauseWatch.Fix]
     ) -> [AutoPauseWatch.Event] {
@@ -57,7 +57,7 @@ struct AutoPauseWatchTests {
 
     /// A walk up the path at a metre a second, a fix every ten metres, from
     /// `north` metres at `seconds`.
-    private static func walk(
+    static func walk(
         from north: Double,
         at seconds: TimeInterval,
         fixes count: Int,
@@ -66,6 +66,17 @@ struct AutoPauseWatchTests {
         (0..<count).map { step in
             fix(north: north + Double(step) * 10, at: seconds + Double(step) * 10, speed: 1, motion: motion)
         }
+    }
+
+    /// Motion saying the device is still from ten seconds after the last fix
+    /// of a walk that ended 40 s in, as on a bench, and asked again at
+    /// `seconds`.
+    static func sitDown(
+        _ watch: inout AutoPauseWatch,
+        untilSecond seconds: TimeInterval
+    ) -> AutoPauseWatch.Event? {
+        _ = watch.tick(at: time(50), motion: .stationary)
+        return watch.tick(at: time(seconds), motion: .stationary)
     }
 
     // MARK: - The issue's table
@@ -110,17 +121,17 @@ struct AutoPauseWatchTests {
     @Test("a bench reached with no fix after it is paused once motion says the device is still")
     func benchWithMotion() {
         var watch = AutoPauseWatch()
-        #expect(Self.events(&watch, observing: Self.walk(from: 0, at: 0, fixes: 5)).isEmpty)
+        #expect(Self.events(&watch, observing: Self.walk(from: 0, at: 0, fixes: 5, motion: .onFoot)).isEmpty)
 
-        #expect(watch.tick(at: Self.time(400), motion: .onFoot) == nil)
-        #expect(watch.tick(at: Self.time(400), motion: .stationary) == .stopped(since: Self.time(40)))
+        #expect(watch.tick(at: Self.time(70), motion: .stationary) == nil, "too soon to be a stop")
+        #expect(watch.tick(at: Self.time(340), motion: .stationary) == .stopped(since: Self.time(40)))
     }
 
     @Test("the first steps away from a stop resume it, from the first of them")
     func walkingAwayResumes() {
         var watch = AutoPauseWatch()
         _ = Self.events(&watch, observing: Self.walk(from: 0, at: 0, fixes: 5))
-        #expect(watch.tick(at: Self.time(2400), motion: .stationary) != nil)
+        #expect(Self.sitDown(&watch, untilSecond: 2400) != nil)
 
         let firstSteps = Self.fix(north: 62, at: 2460, speed: 1)
         let clear = Self.fix(north: 87, at: 2485, speed: 1)
@@ -177,50 +188,6 @@ struct AutoPauseWatchTests {
         #expect(watch.decisionDate == Self.time(700), "the far end is where the next stop may begin")
     }
 
-    /// At a metre a second a fix 8 m loose stays in one stop's area for
-    /// thirty seconds before the next area begins, which is as long as the
-    /// recorder takes to call a hiker standing. Being in the area is not
-    /// standing: the walk covered 30 m of it.
-    @Test("a tunnel entered at a steady walk is not a stop, with or without motion")
-    func tunnelAfterAWalk() {
-        for motion in [AutoPauseWatch.Motion.unknown, .onFoot] {
-            var watch = AutoPauseWatch()
-            #expect(Self.events(&watch, observing: Self.walk(from: 0, at: 0, fixes: 8, motion: motion)).isEmpty)
-
-            #expect(watch.tick(at: Self.time(340), motion: motion) == nil, "motion \(motion)")
-            #expect(watch.tick(at: Self.time(900), motion: motion) == nil, "motion \(motion)")
-            #expect(watch.observe(Self.fix(north: 470, at: 470, motion: motion)) == nil, "motion \(motion)")
-            #expect(!watch.isStopped)
-        }
-    }
-
-    /// The fixes before the silence showed the hiker standing, and then
-    /// motion says they are walking: a shop with no signal inside, or a
-    /// tunnel entered after a look at the map. The fix that ends it decides.
-    @Test("motion on foot or carried overrules the standing seen before a silence")
-    func motionOverrulesStanding() {
-        for motion in [AutoPauseWatch.Motion.onFoot, .carried] {
-            var watch = AutoPauseWatch()
-            let approach = Self.walk(from: 0, at: 0, fixes: 5)
-            let settling = [Self.fix(north: 43, at: 55), Self.fix(north: 41, at: 75)]
-            #expect(Self.events(&watch, observing: approach + settling).isEmpty)
-
-            #expect(watch.tick(at: Self.time(400), motion: motion) == nil, "motion \(motion)")
-            #expect(watch.tick(at: Self.time(400), motion: .unknown) == .stopped(since: Self.time(40)))
-        }
-    }
-
-    @Test("a walk that stood still and walked on before the silence is not a stop")
-    func standingThenWalkingOn() {
-        var watch = AutoPauseWatch()
-        let approach = Self.walk(from: 0, at: 0, fixes: 5)
-        let standing = [Self.fix(north: 41, at: 60), Self.fix(north: 42, at: 80)]
-        let walkingOn = [Self.fix(north: 52, at: 90), Self.fix(north: 62, at: 100)]
-        #expect(Self.events(&watch, observing: approach + standing + walkingOn).isEmpty)
-
-        #expect(watch.tick(at: Self.time(400), motion: .unknown) == nil, "the last fixes showed a walk")
-    }
-
     @Test("silence that ends where it began is a stop, from when it began")
     func silenceEndingWhereItBegan() {
         var watch = AutoPauseWatch()
@@ -234,7 +201,7 @@ struct AutoPauseWatchTests {
     func driveAfterAStop() {
         var watch = AutoPauseWatch()
         _ = Self.events(&watch, observing: Self.walk(from: 0, at: 0, fixes: 5))
-        #expect(watch.tick(at: Self.time(900), motion: .stationary) != nil)
+        #expect(Self.sitDown(&watch, untilSecond: 900) != nil)
 
         let drive = (1...20).map { step in
             Self.fix(north: 40 + Double(step) * 150, at: 900 + Double(step) * 10, speed: 15, motion: .carried)
@@ -261,6 +228,30 @@ struct AutoPauseWatchTests {
 
     /// Fixes keep arriving, because the receiver wanders under trees, and no
     /// motion answer is ever given.
+    /// A reflection off the hut's wall, reported 45 m off and at a speed no
+    /// one walks, while the phone lies on the table.
+    @Test("a fast fix while motion says the device is still does not move the stop")
+    func speedSpikeWhileStill() {
+        var watch = AutoPauseWatch()
+        _ = Self.events(&watch, observing: Self.walk(from: 0, at: 0, fixes: 5))
+        #expect(Self.sitDown(&watch, untilSecond: 600) != nil)
+
+        #expect(watch.observe(Self.fix(north: 85, at: 700, accuracy: 20, speed: 9, motion: .stationary)) == nil)
+        #expect(watch.observe(Self.fix(north: 42, at: 730, accuracy: 10, motion: .stationary)) == nil)
+        #expect(watch.isStopped)
+    }
+
+    @Test("a fix carried about inside the stop's area leaves the stop where it is")
+    func carriedInsideTheArea() {
+        var watch = AutoPauseWatch()
+        _ = Self.events(&watch, observing: Self.walk(from: 0, at: 0, fixes: 5))
+        #expect(Self.sitDown(&watch, untilSecond: 600) != nil)
+
+        #expect(watch.observe(Self.fix(north: 50, at: 700, speed: 3, motion: .carried)) == nil)
+        let walkingOff = Self.fix(north: 85, at: 760, speed: 1, motion: .onFoot)
+        #expect(watch.observe(walkingOff) == .departed(since: Self.time(760)))
+    }
+
     @Test("with motion refused, positions alone find the stop and the walk away")
     func positionAlone() {
         var watch = AutoPauseWatch()
@@ -313,7 +304,7 @@ struct AutoPauseWatchTests {
     func oldFixIsNotAFirstStep() {
         var watch = AutoPauseWatch()
         _ = Self.events(&watch, observing: Self.walk(from: 0, at: 0, fixes: 5))
-        #expect(watch.tick(at: Self.time(600), motion: .stationary) != nil)
+        #expect(Self.sitDown(&watch, untilSecond: 600) != nil)
 
         #expect(watch.observe(Self.fix(north: 65, at: 700)) == nil)
         #expect(watch.observe(Self.fix(north: 90, at: 1600)) == .departed(since: Self.time(1600)))
@@ -323,7 +314,7 @@ struct AutoPauseWatchTests {
     func steppingBackRestartsTheWalkAway() {
         var watch = AutoPauseWatch()
         _ = Self.events(&watch, observing: Self.walk(from: 0, at: 0, fixes: 5))
-        #expect(watch.tick(at: Self.time(600), motion: .stationary) != nil)
+        #expect(Self.sitDown(&watch, untilSecond: 600) != nil)
 
         #expect(watch.observe(Self.fix(north: 62, at: 700)) == nil)
         #expect(watch.observe(Self.fix(north: 52, at: 720)) == nil)
@@ -334,7 +325,7 @@ struct AutoPauseWatchTests {
     func reset() {
         var watch = AutoPauseWatch()
         _ = Self.events(&watch, observing: Self.walk(from: 0, at: 0, fixes: 5))
-        #expect(watch.tick(at: Self.time(600), motion: .stationary) != nil)
+        #expect(Self.sitDown(&watch, untilSecond: 600) != nil)
 
         watch.reset()
 

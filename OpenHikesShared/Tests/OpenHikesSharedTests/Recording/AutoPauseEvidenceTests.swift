@@ -83,17 +83,21 @@ struct AutoPauseEvidenceTests {
         ])
     }
 
-    @Test("a replay looks again at each change of motion")
+    @Test("a replay hears each change of motion")
     func replayLooksAtMotion() {
-        let records: [AutoPauseEvidence.Record] = [
+        let satDown: [AutoPauseEvidence.Record] = [
             .fix(Self.fix(north: 0, at: 0), kept: true),
-            .motion(.onFoot, at: Self.start.addingTimeInterval(5)),
+            .motion(.stationary, at: Self.start.addingTimeInterval(20)),
+        ]
+        let walkedOn: [AutoPauseEvidence.Record] = [
+            .motion(.onFoot, at: Self.start.addingTimeInterval(100)),
             .motion(.stationary, at: Self.start.addingTimeInterval(400)),
         ]
 
-        #expect(AutoPauseEvidence.replay(records) == [
-            AutoPauseEvidence.Decision(at: Self.start.addingTimeInterval(400), event: .stopped(since: Self.start)),
+        #expect(AutoPauseEvidence.replay(satDown + [.motion(.unknown, at: Self.start.addingTimeInterval(400))]) == [
+            AutoPauseEvidence.Decision(at: Self.start.addingTimeInterval(300), event: .stopped(since: Self.start)),
         ])
+        #expect(AutoPauseEvidence.replay(satDown + walkedOn).isEmpty, "a silence walked in is the next fix's to decide")
     }
 
     @Test("a replay under another policy gives that policy's answer")
