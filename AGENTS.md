@@ -699,9 +699,10 @@ a change to recording, the map, the sheet or the render path; the PR template,
   read off the pauses its route already has, so a pause by hand, an
   auto-pause and a GPX file's `<trkseg>` breaks all cut one, and nothing is
   stored for it.
-  - A recording has no route until Stop, so `RecordingSegmentLedger` keeps
-    the same figures inside the distance accumulator, where a journal replay
-    reaches them too. Both draw `HikeSegmentList`.
+  - A recording has no route until Stop, so `RecordingSegmentLedger` feeds
+    the kept points to the same `RouteSegments.Builder` and reads it as the
+    saved hike is read. It lives inside the distance accumulator, where a
+    journal replay reaches it too. Both draw `HikeSegmentList`.
   - A segment's time is the active clock's, and the segments add up to the
     distance shown above them.
   - A photograph taken during a pause whose two ends are one place was

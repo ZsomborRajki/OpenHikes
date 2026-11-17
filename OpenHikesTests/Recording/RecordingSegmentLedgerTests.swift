@@ -111,6 +111,60 @@ struct RecordingSegmentLedgerTests {
         #expect(live.map(\.stopSeconds) == saved.map(\.stopSeconds))
     }
 
+    /// A fix `meters` up the path, `seconds` in.
+    private func fix(
+        _ meters: Double,
+        at seconds: TimeInterval,
+        elevation: Double? = nil,
+        resumed: Bool = false
+    ) -> RecordingPoint {
+        RecordingPoint(
+            latitude: 47.63 + meters / 111_195,
+            longitude: 12.86,
+            timestamp: start.addingTimeInterval(seconds),
+            horizontalAccuracy: 5,
+            elevation: elevation,
+            flags: resumed ? .resumed : []
+        )
+    }
+
+    /// Each walk a way the two used to disagree: a photo stop the recording
+    /// took its wander back from, a segment with no heights, a lone fix at
+    /// the end, and more pieces than a walk has stops.
+    @Test("the segments shown while recording are the ones the saved hike shows")
+    func liveIsSaved() {
+        let approach = stride(from: 0.0, through: 500, by: 100).map { fix($0, at: $0, elevation: 500 + $0 / 10) }
+        let photoStop = (1...12).map { step in
+            fix(500 + Double(step % 3) * 4, at: 500 + Double(step) * 10, elevation: 550)
+        }
+        let onward = stride(from: 600.0, through: 1100, by: 100).map { meters in
+            fix(meters, at: meters + 1800, elevation: 560 + meters / 10, resumed: meters == 600)
+        }
+        let walks: [String: [RecordingPoint]] = [
+            "a photo stop": approach + photoStop + onward,
+            "no heights after the stop": approach + onward.map { point in
+                var unmeasured = point
+                unmeasured.elevation = nil
+                return unmeasured
+            },
+            "a lone fix at the end": approach + onward + [fix(1200, at: 4000, resumed: true)],
+            "thirty-one pieces": (0..<62).map { index in
+                fix(Double(index) * 50, at: Double(index) * 600, resumed: index > 0 && index.isMultiple(of: 2))
+            },
+        ]
+
+        for (name, points) in walks {
+            let accumulator = accumulator(points)
+            let saved = RouteSegments.segments(
+                of: points.map(\.routeCoordinate),
+                distanceMeters: accumulator.distanceMeters
+            )
+            #expect(accumulator.segments.shown == saved, "\(name)")
+        }
+        #expect(accumulator(walks["a photo stop"] ?? []).segments.shown.count == 2)
+        #expect(accumulator(walks["thirty-one pieces"] ?? []).segments.shown.isEmpty)
+    }
+
     @Test("a walk with no heights has segments with no climb")
     func noHeights() throws {
         var points = walk([0, 0, 0, 0], resumingAt: [2])

@@ -166,14 +166,7 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
         let distance = accumulate(point)
         movingTime.record(point.routeCoordinate)
         appendRecentSample(at: point.timestamp, distanceMeters: distance)
-        segments.record(
-            point,
-            totals: RecordingSegmentLedger.Totals(
-                distanceMeters: distance,
-                seconds: recordedDuration,
-                elevationGainMeters: elevationGainMeters
-            )
-        )
+        segments.record(point, distanceMeters: distance)
         return distance
     }
 
