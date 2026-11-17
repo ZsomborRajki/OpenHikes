@@ -27,7 +27,11 @@ struct HikeSegmentList: View {
                 ForEach(segments.indexed(), id: \.index) { index, segment in
                     HikeSegmentRow(number: index + 1, figures: HikeSegmentFigures(segment))
                     if let stop = segment.stopSeconds {
-                        StatRow(label: "Paused", value: HikeFormat.duration(stop))
+                        StatRow(
+                            label: "Paused",
+                            value: HikeFormat.duration(stop),
+                            spokenValue: HikeFormat.spokenDuration(stop)
+                        )
                     }
                 }
             }

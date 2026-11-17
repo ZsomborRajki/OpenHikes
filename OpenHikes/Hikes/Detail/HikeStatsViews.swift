@@ -253,6 +253,9 @@ struct StatRow: View {
     let value: String
     /// See ``Stat/spokenLabel``.
     var spokenLabel: StatCaption?
+    /// The value in words, where the drawn one is shorthand VoiceOver would
+    /// misread, as "20m" for a duration.
+    var spokenValue: String?
 
     var body: some View {
         layout {
@@ -276,7 +279,7 @@ struct StatRow: View {
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel((spokenLabel ?? label).text)
-        .accessibilityValue(value)
+        .accessibilityValue(spokenValue ?? value)
     }
 
     private var layout: AnyLayout {
@@ -290,13 +293,24 @@ struct StatRow: View {
 extension StatRow: Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.label == rhs.label && lhs.value == rhs.value && lhs.spokenLabel == rhs.spokenLabel
+            && lhs.spokenValue == rhs.spokenValue
     }
 }
 
 extension StatRow {
     /// A label written here, as a key.
-    init(label: LocalizedStringKey, value: String, spokenLabel: LocalizedStringKey? = nil) {
-        self.init(label: .key(label), value: value, spokenLabel: spokenLabel.map(StatCaption.key))
+    init(
+        label: LocalizedStringKey,
+        value: String,
+        spokenLabel: LocalizedStringKey? = nil,
+        spokenValue: String? = nil
+    ) {
+        self.init(
+            label: .key(label),
+            value: value,
+            spokenLabel: spokenLabel.map(StatCaption.key),
+            spokenValue: spokenValue
+        )
     }
 
     /// A label some other type has already put into words, such as a place
