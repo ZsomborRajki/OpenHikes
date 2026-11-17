@@ -274,9 +274,10 @@ either: the second run waits silently on the first run's build lock.
 ### The iPad
 
 - **It runs the iPhone's screens, laid out by the window.** Nothing in the app
-  asks which device it is on. A full-screen iPad either way up is wide enough
-  for the map screen's side panel, and a window narrowed beside another app
-  gets the sheet a phone gets (*The map screen*).
+  asks which device it is on, except whether it is a Mac (*The Mac*). A
+  full-screen iPad either way up is wide enough for the map screen's side
+  panel, and a window narrowed beside another app gets the sheet a phone gets
+  (*The map screen*).
 - **One window.** `UIApplicationSceneManifest~ipad` turns multiple scenes off,
   because each window builds its own `OpenHikesView`, whose launch work — the
   tile, photo and sidecar sweeps and the library-line reads — would run again
@@ -323,6 +324,15 @@ either: the second run waits silently on the first run's build lock.
   - After adding a framework or a newer API, run the app on the Mac once,
     through the code that uses it. `MacLaunchContractTests` holds the
     launch, not what a missing symbol does when it is reached.
+  - Only macOS 27 has been checked. An older macOS's libraries may lack
+    symbols this one has, so run the app on one before App Store Connect
+    offers it to Macs (below).
+- **No hardened runtime.** The app target leaves `ENABLE_HARDENED_RUNTIME`
+  off, which the multiplatform template had turned on. A Mac's location
+  daemon will not even show the location prompt to an app signed with it and
+  without macOS's location entitlement, so the hiker could never allow
+  location there. iOS ignores the flag, and a simulator build is signed
+  without it whatever the setting says, so no hosted test can hold this.
 - **What a Mac lacks.** No GPS (it locates by Wi-Fi), no Health, watch, Live
   Activity, motion or barometer. Each is asked about at run time, as on an
   iPad, so the app goes without it. Its camera does open the camera picker.
@@ -330,7 +340,8 @@ either: the second run waits silently on the first run's build lock.
   iCloud, the subscription, the photos switch, map storage, blocks and About.
   Health, background tracking, the Live Activity, Auto-Pause, the reminders
   and the screen switch are about a device carried on a trail, and are left
-  out there, keeping their stored values or defaults.
+  out there, keeping their stored values or defaults, which a recording on a
+  Mac still follows.
 - **Running it outside Xcode.** Build with `-destination 'platform=macOS,
   arch=arm64,variant=Designed for iPad'`, then put the `Debug-iphoneos` app
   inside a wrapper, `X.app/Wrapper/OpenHikes.app` with an
