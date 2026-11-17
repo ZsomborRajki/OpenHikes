@@ -77,6 +77,14 @@ struct WatchAutoPauseTests {
         #expect(Fixture.departure(&pause, holding: Fixture.walkAway) == nil)
     }
 
+    @Test("a pause by hand during the app's pause makes it the hiker's")
+    func pauseByHandTakesThePauseOver() throws {
+        var pause = try Fixture.paused()
+        pause.reset()
+        #expect(!pause.isPaused)
+        #expect(Fixture.departure(&pause, holding: Fixture.walkAway) == nil)
+    }
+
     @Test("a pause or resume by hand forgets the place, and a stop starts over")
     func resetForgetsThePlace() {
         var pause = Pause()

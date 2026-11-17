@@ -272,7 +272,10 @@ final class WatchRecorder: NSObject {
     }
 
     func pause() {
-        guard phase == .recording else { return }
+        // Before the phase is read: a stop called between the screen drawing
+        // Pause and the tap landing finds the phase already paused, and the
+        // tap makes that pause the hiker's.
+        guard !takeOverAutoPause(), phase == .recording else { return }
         resetAutoPause()
         accumulator.pause()
         journaling { try $0.record(.paused(.now), at: .now) }
