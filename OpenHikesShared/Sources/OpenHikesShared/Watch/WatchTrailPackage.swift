@@ -276,12 +276,37 @@ public struct WatchLibraryDigest: SharedPayload, Equatable {
     public let schemaVersion: Int
     public var hikes: [SharedHikeSummary]
     public var sentAt: Date
+    /// The phone's Auto-Pause switch, which the watch's own recordings
+    /// follow, or `nil` from a phone that has not said — see
+    /// ``isAutoPauseOn``.
+    ///
+    /// On the library because the application context is one dictionary
+    /// that the next one replaces whole, and the switch is one current
+    /// answer, as the list is. An optional key added beside the others, so a
+    /// watch a build behind ignores it and a phone a build behind sends none,
+    /// and the format's version stays.
+    ///
+    /// Optional for the reason `HikePhoto.isPlaceOnly` is: the synthesized
+    /// decode has no defaults, and a plain `Bool` absent from an older
+    /// phone's library would refuse the whole list. Read through
+    /// ``isAutoPauseOn``, so no caller handles the third answer itself.
+    public var autoPauseEnabled: Bool? // swiftlint:disable:this discouraged_optional_boolean
 
-    public init(hikes: [SharedHikeSummary], sentAt: Date = .now) {
+    public init(
+        hikes: [SharedHikeSummary],
+        sentAt: Date = .now,
+        autoPauseEnabled: Bool? = nil // swiftlint:disable:this discouraged_optional_boolean
+    ) {
         self.hikes = hikes
         self.sentAt = sentAt
+        self.autoPauseEnabled = autoPauseEnabled
         schemaVersion = Self.currentSchemaVersion
     }
 
     public static let empty = Self(hikes: [], sentAt: .distantPast)
+
+    /// The switch as the watch reads it: the phone's answer, or the
+    /// switch's own default before there is one, which is on, as the
+    /// phone's `SettingsDefault.autoPauseEnabled` is.
+    public var isAutoPauseOn: Bool { autoPauseEnabled ?? true }
 }

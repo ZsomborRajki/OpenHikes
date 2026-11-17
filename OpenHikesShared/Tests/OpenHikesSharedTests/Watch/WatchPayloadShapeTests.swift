@@ -79,6 +79,7 @@ struct WatchPayloadShapeTests {
             named: "WatchLibraryDigest",
             versionedBy: "WatchLibraryDigest.currentSchemaVersion",
             matches: [
+                "autoPauseEnabled: bool",
                 "hikes[].date: number",
                 "hikes[].distanceMeters: number",
                 "hikes[].durationSeconds: number",
@@ -267,7 +268,8 @@ struct WatchPayloadShapeTests {
                     durationSeconds: 9450.5
                 ),
             ],
-            sentAt: stamp
+            sentAt: stamp,
+            autoPauseEnabled: false
         )
 
         static let recordedWalk = WatchRecordedWalk(
