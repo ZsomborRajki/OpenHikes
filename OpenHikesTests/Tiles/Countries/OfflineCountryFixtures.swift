@@ -140,7 +140,8 @@ nonisolated final class StubCountryServer: OfflineCountryServing {
         answer.withLock { $0 = manifest }
     }
 
-    func manifest() throws -> OfflineCountryManifest {
+    @concurrent
+    func manifest() async throws -> OfflineCountryManifest {
         guard let manifest = answer.withLock({ $0 }) else { throw Unreachable() }
         return manifest
     }

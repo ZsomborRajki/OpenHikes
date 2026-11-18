@@ -78,6 +78,9 @@ final class OfflineCountries {
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private let freeSpace: () -> Int64?
     @ObservationIgnored private var hasStarted = false
+    /// Counts the openings of the archives, so an opening that finishes after
+    /// a later one is dropped rather than put back over it.
+    @ObservationIgnored private var archiveGeneration = 0
 
     static let logger = Logger(subsystem: "OpenHikes", category: "OfflineCountries")
     /// Room left over on the volume after a download, so an area never takes
@@ -183,7 +186,7 @@ final class OfflineCountries {
             let manifest = try await server.manifest()
             offered = manifest.readableCountries
             listPhase = .loaded
-            try? store.cache(manifest)
+            await Self.cache(manifest, in: store)
         } catch {
             Self.logger.error("Country list: \(String(describing: error), privacy: .public)")
             listPhase = .failed
@@ -254,10 +257,13 @@ final class OfflineCountries {
     }
 
     /// Deletes a downloaded area, and the tiles drawn from it go with the
-    /// cache as any tile does.
+    /// cache as any tile does. A download still under way for it, of its
+    /// zoom 15 or of an update, goes too: landing later, it would put back
+    /// an area with none of its other files left.
     func delete(_ id: String) {
         let before = installed
         guard let record = installed.removeValue(forKey: id), commitIndex(restoring: before) else { return }
+        cancel(id)
         reopenArchives()
         store.remove(record.files, keeping: Array(installed.values))
     }
@@ -331,11 +337,18 @@ final class OfflineCountries {
         reconcile()
     }
 
+    /// Opens the archives of what is installed now, off the main actor, and
+    /// hands them to the map. Two changes in a row open twice at once, and
+    /// only the later opening is handed over, whichever finishes first.
     private func reopenArchives() {
         guard let archives else { return }
+        archiveGeneration += 1
+        let generation = archiveGeneration
         let records = Array(installed.values)
         Task {
-            archives.replace(with: await Self.open(records, in: store))
+            let opened = await Self.open(records, in: store)
+            guard generation == archiveGeneration else { return }
+            archives.replace(with: opened)
             archivesDidChange()
         }
     }
@@ -380,9 +393,18 @@ extension OfflineCountries {
         }
         let records = store.installed()
         installed = Dictionary(records.map { ($0.country.id, $0) }, uniquingKeysWith: { first, _ in first })
-        if let cached = store.cachedManifest() { offered = cached.readableCountries }
-        archives.replace(with: await Self.open(records, in: store))
-        if !records.isEmpty { archivesDidChange() }
+        // Megabytes of outlines, so read off the main actor; and a list
+        // fetched while it was read is newer.
+        if let cached = await Self.cachedManifest(in: store), listPhase != .loaded {
+            offered = cached.readableCountries
+        }
+        archiveGeneration += 1
+        let generation = archiveGeneration
+        let opened = await Self.open(records, in: store)
+        if generation == archiveGeneration {
+            archives.replace(with: opened)
+            if !records.isEmpty { archivesDidChange() }
+        }
         await resumePending()
         // After the recovery, which may have installed what landed while the
         // app was away: swept against the records from before it, that would
@@ -398,6 +420,17 @@ extension OfflineCountries {
         pending: [OfflineCountryStore.Pending]
     ) async {
         store.sweep(keeping: records, pending: pending)
+    }
+
+    /// The manifest last fetched, which carries every area's outline.
+    @concurrent
+    private static func cachedManifest(in store: OfflineCountryStore) async -> OfflineCountryManifest? {
+        store.cachedManifest()
+    }
+
+    @concurrent
+    private static func cache(_ manifest: OfflineCountryManifest, in store: OfflineCountryStore) async {
+        try? store.cache(manifest)
     }
 
     @concurrent

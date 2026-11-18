@@ -145,6 +145,29 @@ struct OfflineCountriesDetailTests {
         }
     }
 
+    /// The zoom 15 landing after the delete would put back a record naming
+    /// the zoom-14 files just deleted: listed as downloaded, drawing nothing.
+    /// With the download gone, whatever the session still delivers for it
+    /// finds nothing to land in.
+    @Test("deleting an area while its zoom 15 comes down stops that too")
+    func deletingMidway() async throws {
+        try await OfflineCountryFixture.withDirectory { directory in
+            let harness = await OfflineCountryHarness.make(in: directory, offering: [slovenia])
+            harness.countries.setIncludesDetail(false)
+            harness.countries.download(slovenia)
+            try harness.land(allFiles.filter { !$0.key.isDetail })
+            await settleDelegateHop(until: "the area is down") { harness.countries.isInstalled("SI") }
+            harness.countries.setIncludesDetail(true)
+            #expect(harness.countries.downloads["SI"] != nil)
+
+            harness.countries.delete("SI")
+
+            #expect(harness.downloader.cancelled == ["SI"])
+            #expect(harness.countries.downloads["SI"] == nil)
+            #expect(harness.store.installed().isEmpty)
+        }
+    }
+
     @Test("Extra Detail is kept for the next launch")
     func kept() async throws {
         let suite = "offline-countries-detail-\(UUID().uuidString)"
