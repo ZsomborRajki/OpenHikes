@@ -129,4 +129,74 @@ nonisolated enum VectorTileLabelStyle {
     private static let neighborhoodInk = VectorTileStyle.color("#666666")
     private static let terrainInk = VectorTileStyle.color("#6B4A2E")
     private static let waterInk = VectorTileStyle.color("#4D80B3")
+    private static let roadInk = VectorTileStyle.color("#333333")
+    private static let liftInk = VectorTileStyle.color("#555555")
+}
+
+// MARK: - Names along lines
+
+nonisolated extension VectorTileLabelStyle {
+    /// What a line's name names. Ordered by ``importance``.
+    enum LineCategory: Comparable, Sendable {
+        case aerialway
+        case majorRoad
+        case minorRoad
+        case path
+        case river
+        case stream
+
+        /// Most important first: the name that keeps its room where two
+        /// would overlap. Every point name comes before any of these.
+        private static let importance: [Self] = [.majorRoad, .river, .minorRoad, .path, .aerialway, .stream]
+
+        static func < (lhs: Self, rhs: Self) -> Bool {
+            (importance.firstIndex(of: lhs) ?? importance.count) < (importance.firstIndex(of: rhs) ?? importance.count)
+        }
+
+        /// The category of a line in `layerName`, or `nil` for one whose
+        /// name is not drawn: a railway, a ferry, a ditch. A pedestrian
+        /// street is a street, though the archive files it with the paths.
+        static func line(in layerName: String, kind: String?, detail: String?) -> Self? {
+            switch (layerName, kind) {
+            case ("roads", "highway"), ("roads", "major_road"): .majorRoad
+            case ("roads", "minor_road"): .minorRoad
+            case ("roads", "path"): detail == "pedestrian" ? .minorRoad : .path
+            case ("roads", "aerialway"): .aerialway
+            case ("water", "river"), ("water", "canal"): .river
+            case ("water", "stream"): .stream
+            default: nil
+            }
+        }
+    }
+
+    struct LineLook {
+        let size: ZoomCurve
+        let color: CGColor
+        let face: Face
+        /// The first zoom the line carries its name at.
+        let minimumZ: Int
+    }
+
+    static func look(of category: LineCategory) -> LineLook {
+        switch category {
+        case .majorRoad:
+            LineLook(size: ZoomCurve([(13, 8), (15, 9), (16, 10)]), color: roadInk, face: .regular, minimumZ: 13)
+        case .minorRoad:
+            LineLook(size: ZoomCurve([(15, 7), (16, 8), (20, 9)]), color: roadInk, face: .regular, minimumZ: 15)
+        case .path:
+            LineLook(size: ZoomCurve([(15, 7), (16, 8)]), color: terrainInk, face: .regular, minimumZ: 15)
+        case .aerialway:
+            LineLook(size: ZoomCurve([(14, 7), (16, 8)]), color: liftInk, face: .regular, minimumZ: 14)
+        case .river:
+            LineLook(size: ZoomCurve([(12, 8), (15, 9), (16, 10)]), color: waterInk, face: .italic, minimumZ: 12)
+        case .stream:
+            LineLook(size: ZoomCurve([(15, 7), (16, 8)]), color: waterInk, face: .italic, minimumZ: 15)
+        }
+    }
+
+    /// How far apart the same name is repeated along a long line.
+    static let lineNameRepeat: CGFloat = 100
+    /// The sharpest turn from one letter to the next that a name follows,
+    /// in radians: about thirty degrees. A tighter bend scatters the letters.
+    static let lineNameBend: CGFloat = 0.5
 }
