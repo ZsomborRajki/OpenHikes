@@ -77,6 +77,54 @@ struct MapControlModalsTests {
         #expect(!modals.isPresenter(.mapSheet), "one card is up")
     }
 
+    @Test("over a card, Offline Maps closes the card and opens once it has gone")
+    func offlineMapsOverACard() {
+        let modals = MapControlModals()
+        var opened = 0
+        modals.mapModes.onOpenOfflineMaps { opened += 1 }
+        modals.cardDidAppear()
+        modals.mapModes.present()
+
+        modals.mapModes.dismissOpeningOfflineMaps()
+        modals.mapModesDidDismiss()
+        #expect(modals.isClosingCard)
+        #expect(opened == 0, "a push under the card lands behind it")
+
+        modals.cardDidDisappear()
+        #expect(opened == 1)
+        #expect(!modals.isClosingCard)
+    }
+
+    @Test("Map Modes closed any other way over a card leaves the card up")
+    func closingMapModesOverACard() {
+        let modals = MapControlModals()
+        var opened = 0
+        modals.mapModes.onOpenOfflineMaps { opened += 1 }
+        modals.cardDidAppear()
+        modals.mapModes.present()
+
+        modals.mapModes.dismiss()
+        modals.mapModesDidDismiss()
+        #expect(!modals.isClosingCard)
+
+        modals.cardDidDisappear()
+        #expect(opened == 0)
+    }
+
+    @Test("with no card up, Offline Maps opens as Map Modes goes")
+    func offlineMapsWithNoCard() {
+        let modals = MapControlModals()
+        var opened = 0
+        modals.mapModes.onOpenOfflineMaps { opened += 1 }
+        modals.mapModes.present()
+
+        modals.mapModes.dismissOpeningOfflineMaps()
+        modals.mapModesDidDismiss()
+
+        #expect(opened == 1)
+        #expect(!modals.isClosingCard)
+    }
+
     @Test("closing one, from either presenter, lowers its flag and no other")
     func aBindingWritesItsFlag() {
         let modals = MapControlModals()

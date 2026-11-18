@@ -30,6 +30,10 @@
 //  any moment, a card's included, so it is put up by whichever of the two is
 //  in front, for the reason the alert above is.
 //
+//  And one thing *Map Modes* opens goes the other way: *Offline Maps* is
+//  pushed onto the map sheet, and a push under a card lands behind it. So
+//  over a card, the card closes first, and the list opens once it has gone.
+//
 
 import SwiftUI
 
@@ -63,6 +67,9 @@ final class MapControlModals {
 
     /// How many place cards are up over the map sheet: one or none.
     private(set) var cardsInFront = 0
+    /// Whether the card is to close, for *Offline Maps* to open on the map
+    /// sheet under it.
+    private(set) var isClosingCard = false
 
     func cardDidAppear() {
         cardsInFront += 1
@@ -72,6 +79,19 @@ final class MapControlModals {
     /// next card uncounted, and the map sheet presenting from under it.
     func cardDidDisappear() {
         cardsInFront = max(0, cardsInFront - 1)
+        guard isClosingCard, cardsInFront == 0 else { return }
+        isClosingCard = false
+        mapModes.didDismiss()
+    }
+
+    /// *Map Modes* has gone, from whichever presenter put it up. Its row's
+    /// *Offline Maps* waits for a card in front to go too.
+    func mapModesDidDismiss() {
+        guard cardsInFront > 0, mapModes.opensOfflineMapsOnDismiss else {
+            mapModes.didDismiss()
+            return
+        }
+        isClosingCard = true
     }
 
     /// Whether `presenter` is the one to put up what a map control opens:
@@ -149,6 +169,7 @@ private struct MapControlsOverCard: ViewModifier {
                 .onAppear(perform: modals.cardDidAppear)
                 .onDisappear(perform: modals.cardDidDisappear)
                 .presentingMapControls(modals, from: .card, model: appModel)
+                .dismiss(when: modals.isClosingCard)
         } else {
             content
         }

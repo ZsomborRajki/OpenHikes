@@ -47,7 +47,7 @@ final class MapModesPresentation {
     /// sheet's path hands over.
     @ObservationIgnored private var openOfflineMaps: (() -> Void)?
     /// Set by the row, read once the sheet is gone.
-    @ObservationIgnored private var opensOfflineMapsOnDismiss = false
+    @ObservationIgnored private(set) var opensOfflineMapsOnDismiss = false
 
     func onOpenOfflineMaps(_ open: @escaping () -> Void) {
         openOfflineMaps = open
@@ -61,7 +61,8 @@ final class MapModesPresentation {
         isPresented = false
     }
 
-    /// The sheet's `onDismiss`.
+    /// The sheet's `onDismiss`, or with a place card up, the card's going —
+    /// see ``MapControlModals/mapModesDidDismiss()``.
     func didDismiss() {
         guard opensOfflineMapsOnDismiss else { return }
         opensOfflineMapsOnDismiss = false

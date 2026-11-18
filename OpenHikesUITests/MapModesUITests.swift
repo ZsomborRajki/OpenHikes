@@ -201,6 +201,24 @@ nonisolated final class MapModesUITests: XCTestCase {
         )
     }
 
+    /// *Offline Maps* is pushed onto the map sheet, under the card *Map
+    /// Modes* came up over, so the card goes first and the list opens in
+    /// front of the map rather than behind the card.
+    @MainActor
+    func testOfflineMapsFromMapModesOverAPlaceCardClosesTheCard() {
+        let app = launchApp(arguments: PlaceFixture.aroundArguments)
+        let card = openFoundPlaceCard(in: app)
+
+        openMapModes(in: app)
+        scrollToTap(element("map-modes-offline-maps", in: app), in: app)
+
+        XCTAssertTrue(waitUntil { !card.exists }, "the card should close for the list")
+        XCTAssertTrue(
+            app.navigationBars["Offline Maps"].waitForExistence(timeout: UITestTimeout.navigation),
+            "Offline Maps should open once the card has gone"
+        )
+    }
+
     /// The trail maker's place card is the other card that leaves the map
     /// live, and presents *Map Modes* over itself the same way.
     @MainActor
