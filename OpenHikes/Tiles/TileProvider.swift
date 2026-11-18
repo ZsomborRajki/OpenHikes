@@ -161,7 +161,7 @@ nonisolated extension TileProvider {
         summary: String(localized: "Standard street map. Tiles you view are auto-saved for offline use."),
         urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
         maximumZ: osmMaximumZ,
-        attribution: TileAttribution([.openStreetMap]),
+        attribution: TileAttribution([.openStreetMap, .esaWorldCover]),
         supportsBulkDownload: false,
         durableQuota: nil,
         requiresPaidAccess: false,

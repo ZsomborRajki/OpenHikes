@@ -209,16 +209,16 @@ nonisolated private struct Painter {
     }
 
     /// Tunnels under the ground, bridges over it, and within each the more
-    /// important road over the less, by the archive's own `sort_rank`. Every
-    /// casing of a level is drawn before any fill of it, so a junction reads
-    /// as one road surface rather than two outlined strips.
+    /// important road over the less, in ``VectorTileStyle/road(kind:detail:)``'s
+    /// order. Every casing of a level is drawn before any fill of it, so a
+    /// junction reads as one road surface rather than two outlined strips.
     private func paintRoads() {
         let styled = features(in: "roads", type: .line).compactMap { pair -> StyledLine? in
             let (feature, geometry) = pair
             guard let kind = feature.string("kind"),
-                  let line = VectorTileStyle.road(kind: kind, detail: feature.string("kind_detail"))
+                  let road = VectorTileStyle.road(kind: kind, detail: feature.string("kind_detail"))
             else { return nil }
-            return StyledLine(feature: feature, geometry: geometry, line: line)
+            return StyledLine(feature: feature, geometry: geometry, road: road)
         }
         let levels = [
             styled.filter { $0.feature.flag("is_tunnel") },
@@ -226,16 +226,16 @@ nonisolated private struct Painter {
             styled.filter { $0.feature.flag("is_bridge") },
         ]
         for (index, level) in levels.enumerated() {
-            let ordered = level.sorted { rank($0.feature) < rank($1.feature) }
+            let ordered = level.sorted { $0.road.order < $1.road.order }
             let isTunnel = index == 0
             // A bridge's casing ends square where the bridge does, rather than
             // ringing a short bridge with a round cap.
             let casingCap: CGLineCap = index == levels.count - 1 ? .butt : .round
             for road in ordered where !isTunnel {
-                strokeCasing(road.geometry.path(of: road.feature), road.line, cap: casingCap)
+                strokeCasing(road.geometry.path(of: road.feature), road.road.line, cap: casingCap)
             }
             for road in ordered {
-                var line = road.line
+                var line = road.road.line
                 if isTunnel { line.alpha *= VectorTileRasterizer.tunnelAlpha }
                 stroke(road.geometry.path(of: road.feature), line)
             }
@@ -344,7 +344,7 @@ nonisolated private struct Painter {
 nonisolated private struct StyledLine {
     let feature: MapboxVectorTile.Feature
     let geometry: VectorTileGeometry
-    let line: VectorTileStyle.Line
+    let road: VectorTileStyle.Road
 }
 
 /// A layer's grid placed on the picture: pixel = grid × scale − offset.

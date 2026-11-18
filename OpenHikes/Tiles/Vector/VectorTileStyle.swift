@@ -109,35 +109,56 @@ nonisolated enum VectorTileStyle {
     /// narrower than its casing would be.
     static let casingWidth = ZoomCurve([(12, 0.5), (14, 0.75), (16, 1), (20, 2)])
 
+    /// A road's look, and its place among the roads of its level: a road
+    /// with a higher ``order`` is drawn over one with a lower.
+    struct Road: Sendable {
+        let line: Line
+        let order: Int
+    }
+
     /// The style of a feature in the `roads` layer, or `nil` for one not drawn:
     /// its `kind` and `kind_detail` first, then its `kind` alone.
-    static func road(kind: String, detail: String?) -> Line? {
+    static func road(kind: String, detail: String?) -> Road? {
         roads["\(kind)/\(detail ?? "")"] ?? roads["\(kind)/*"]
     }
 
-    /// Keyed `kind/kind_detail`, with `kind/*` for every detail not listed.
-    private static let roads: [String: Line] = [
-        "highway/*": motorway,
-        "major_road/trunk": trunk,
-        "major_road/trunk_link": trunk,
-        "major_road/primary": primary,
-        "major_road/primary_link": primary,
-        "major_road/secondary": secondary,
-        "major_road/secondary_link": secondary,
-        "major_road/*": tertiary,
-        "minor_road/service": service,
-        "minor_road/*": minorRoad,
-        "path/track": track,
-        "path/steps": steps,
-        "path/cycleway": cycleway,
-        "path/bridleway": bridleway,
-        "path/pedestrian": pedestrian,
-        "path/*": footpath,
-        "rail/subway": subway,
-        "rail/*": railway,
-        "ferry/*": ferry,
-        "aerialway/*": aerialway,
-    ]
+    /// Keyed `kind/kind_detail`, with `kind/*` for every detail not listed,
+    /// and listed in the order they are drawn: OpenStreetMap Carto's
+    /// `z_order`, so the more important road's surface runs through a
+    /// junction. The archive cannot say this: it gives every road the same
+    /// `sort_rank`.
+    ///
+    /// Links come under every street, as Carto has them, and railways and
+    /// aerial ways over the roads they cross. The archive files a highway
+    /// it has no kind for as `other`, with the highway as its detail: of
+    /// those only the living street, a street people walk down, is drawn.
+    private static let roads: [String: Road] = Dictionary(
+        uniqueKeysWithValues: [
+            ("ferry/*", ferry),
+            ("path/steps", steps),
+            ("path/*", footpath),
+            ("path/cycleway", cycleway),
+            ("path/bridleway", bridleway),
+            ("path/track", track),
+            ("minor_road/service", service),
+            ("major_road/tertiary_link", tertiary),
+            ("major_road/secondary_link", secondary),
+            ("major_road/primary_link", primary),
+            ("major_road/trunk_link", trunk),
+            ("highway/motorway_link", motorway),
+            ("path/pedestrian", pedestrian),
+            ("other/living_street", livingStreet),
+            ("minor_road/*", minorRoad),
+            ("major_road/*", tertiary),
+            ("major_road/secondary", secondary),
+            ("major_road/primary", primary),
+            ("major_road/trunk", trunk),
+            ("highway/*", motorway),
+            ("rail/subway", subway),
+            ("rail/*", railway),
+            ("aerialway/*", aerialway),
+        ].enumerated().map { order, entry in (entry.0, Road(line: entry.1, order: order)) }
+    )
 
     /// The style of a feature in the `boundaries` layer, or `nil` for one
     /// not drawn. A disputed line is dotted whatever its level.
@@ -207,6 +228,12 @@ nonisolated private extension VectorTileStyle {
     )
     static let minorRoad = Line(
         color: color("#FFFFFF"),
+        width: ZoomCurve([(12, 0.5), (13, 1), (14, 2), (16, 6), (20, 24)]),
+        casing: color("#BBBBBB")
+    )
+    /// A minor road in Carto's paler gray.
+    static let livingStreet = Line(
+        color: color("#EDEDED"),
         width: ZoomCurve([(12, 0.5), (13, 1), (14, 2), (16, 6), (20, 24)]),
         casing: color("#BBBBBB")
     )

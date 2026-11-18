@@ -64,7 +64,7 @@ struct MapAttributionViewTests {
     @Test(
         "the compact line names every required party",
         arguments: [
-            (TileProvider.openStreetMap, "© OpenStreetMap"),
+            (TileProvider.openStreetMap, "© OpenStreetMap, ESA WorldCover"),
             (TileProvider.stadiaOutdoors, "© Stadia Maps, OpenMapTiles, OpenStreetMap"),
             (TileProvider.stamenTerrain, "© Stadia Maps, Stamen Design, OpenMapTiles, OpenStreetMap"),
             (TileProvider.thunderforestOutdoors, "© Thunderforest, OpenStreetMap"),
@@ -113,7 +113,7 @@ struct MapAttributionViewTests {
     @Test("a single credit opens its licence directly")
     func singleCreditOpensDirectly() {
         let (view, opened) = makeView()
-        view.update(with: TileProvider.openStreetMap.attribution)
+        view.update(with: TileLayer.hikingRoutes.attribution)
 
         let target = button(in: view)
         #expect(target?.menu == nil)

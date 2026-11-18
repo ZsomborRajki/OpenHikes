@@ -109,6 +109,31 @@ struct VectorTileClientTests {
         #expect(StubTileProtocol.requestCount == 2)
     }
 
+    /// A server that says how long to stay away is taken at its word, as the
+    /// raster servers are: the minute is a floor, not the wait.
+    @Test("a server asking for longer with Retry-After is passed over until then")
+    func retryAfterLengthensThePause() async {
+        let client = makeClient()
+        defer { StubTileProtocol.reset() }
+        StubTileProtocol.alwaysRespond(with: .init(
+            statusCode: RetryAfterHeader.tooManyRequests,
+            data: Data("slow down".utf8),
+            headers: [RetryAfterHeader.name: "600"]
+        ))
+
+        #expect(await client.pngData(forKey: "osm/14/8800/5700") == nil)
+        clock.advance(by: VectorTileClient.failurePause + .seconds(1))
+        StubTileProtocol.alwaysRespond(with: .init(data: landTile))
+
+        #expect(await client.pngData(forKey: "osm/14/8801/5700") == nil)
+        #expect(StubTileProtocol.requestCount == 1, "the server asked for ten minutes, not one")
+
+        clock.advance(by: .seconds(600) - VectorTileClient.failurePause)
+
+        #expect(await client.pngData(forKey: "osm/14/8802/5700") != nil)
+        #expect(StubTileProtocol.requestCount == 2)
+    }
+
     /// A tile the archive does not have, or cannot be read, is that tile's
     /// problem. The fallback draws it, and the server is still asked for the
     /// next one.
@@ -135,8 +160,22 @@ struct VectorTileClientTests {
         #expect(VectorTileClient.outcome(status: 200, data: Data()) == .missing)
         #expect(VectorTileClient.outcome(status: 204, data: Data()) == .missing)
         #expect(VectorTileClient.outcome(status: 404, data: body) == .missing)
-        #expect(VectorTileClient.outcome(status: 429, data: body) == .unavailable)
-        #expect(VectorTileClient.outcome(status: 502, data: body) == .unavailable)
+        #expect(VectorTileClient.outcome(status: 429, data: body) == .unavailable(pause: VectorTileClient.failurePause))
+        #expect(VectorTileClient.outcome(status: 502, data: body) == .unavailable(pause: VectorTileClient.failurePause))
+    }
+
+    @Test("advice longer than the pause lengthens it, and shorter advice leaves it")
+    func outcomeKeepsTheLongerPause() {
+        let body = Data([1])
+        let longer = VectorTileClient.failurePause * 10
+        let shorter = VectorTileClient.failurePause / 10
+
+        #expect(VectorTileClient.outcome(status: 429, data: body, retryAfter: longer) == .unavailable(pause: longer))
+        #expect(
+            VectorTileClient.outcome(status: 503, data: body, retryAfter: shorter)
+                == .unavailable(pause: VectorTileClient.failurePause)
+        )
+        #expect(VectorTileClient.outcome(status: 404, data: body, retryAfter: longer) == .missing)
     }
 }
 

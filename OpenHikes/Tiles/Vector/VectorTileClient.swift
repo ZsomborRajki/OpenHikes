@@ -11,8 +11,9 @@
 //  hiker sees the old map where the new one cannot be drawn. That covers
 //  three cases:
 //  - the server is down or failing: a transport error, a timeout, a 5xx or
-//    a 429. The server is then passed over for ``failurePause``, so a
-//    screenful of tiles does not each wait on it before falling back.
+//    a 429. The server is then passed over for ``failurePause``, or for as
+//    long as its `Retry-After` asks where ``RetryAfterHeader`` honors one,
+//    so a screenful of tiles does not each wait on it before falling back.
 //  - the archive has no tile there.
 //  - the tile could not be read or drawn.
 //
@@ -30,7 +31,7 @@ import Synchronization
 nonisolated final class VectorTileClient: Sendable {
     static let logger = Logger(subsystem: "OpenHikes", category: "VectorTiles")
 
-    /// How long the server is passed over after it fails.
+    /// How long the server is passed over after it fails, at the least.
     static let failurePause: Duration = .seconds(60)
     /// How long one request may take before it counts as the server failing:
     /// well under the session's own minute, because every tile waiting on
@@ -59,8 +60,8 @@ nonisolated final class VectorTileClient: Sendable {
         /// The archive has no tile there, or refused this one: the fallback
         /// draws it, and the server is still asked for the next.
         case missing
-        /// The server is down or failing, and is passed over for a while.
-        case unavailable
+        /// The server is down or failing, and is passed over for `pause`.
+        case unavailable(pause: Duration)
     }
 
     /// - Parameters:
@@ -171,8 +172,10 @@ nonisolated final class VectorTileClient: Sendable {
                 while state.keptOrder.count > Self.keptArchiveTiles {
                     state.kept[state.keptOrder.removeFirst()] = nil
                 }
-            case .unavailable:
-                state.pausedUntil = instant + Self.failurePause
+            case let .unavailable(pause):
+                // Two requests can fail together, and the one that comes back
+                // last must not cut short the longer wait the first was told.
+                state.pausedUntil = max(state.pausedUntil ?? instant, instant + pause)
             case .missing:
                 break
             }
@@ -184,8 +187,12 @@ nonisolated final class VectorTileClient: Sendable {
         do {
             let request = URLRequest(url: url, timeoutInterval: Self.requestTimeout)
             let (data, response) = try await session.data(for: request)
-            guard let http = response as? HTTPURLResponse else { return .unavailable }
-            let fetched = Self.outcome(status: http.statusCode, data: data)
+            guard let http = response as? HTTPURLResponse else { return .unavailable(pause: Self.failurePause) }
+            let fetched = Self.outcome(
+                status: http.statusCode,
+                data: data,
+                retryAfter: RetryAfterHeader.delay(from: http)
+            )
             #if DEBUG
             if fetched != .tile(data) {
                 Self.logger.error("Vector tile \(url, privacy: .public): HTTP \(http.statusCode, privacy: .public)")
@@ -197,15 +204,18 @@ nonisolated final class VectorTileClient: Sendable {
             let reason = error.localizedDescription
             Self.logger.error("Vector tile \(url, privacy: .public) failed: \(reason, privacy: .public)")
             #endif
-            return .unavailable
+            return .unavailable(pause: Self.failurePause)
         }
     }
 
     /// A response read as the server's health and the tile's: a tile, a tile
-    /// that is not there, or a server to pass over.
-    static func outcome(status: Int, data: Data) -> Fetch {
+    /// that is not there, or a server to pass over, for ``failurePause`` or
+    /// the longer `retryAfter` it asked for.
+    static func outcome(status: Int, data: Data, retryAfter: Duration? = nil) -> Fetch {
         if status == httpOK, !data.isEmpty { return .tile(data) }
-        if status == httpTooManyRequests || httpServerErrors.contains(status) { return .unavailable }
+        if status == httpTooManyRequests || httpServerErrors.contains(status) {
+            return .unavailable(pause: max(failurePause, retryAfter ?? .zero))
+        }
         return .missing
     }
 

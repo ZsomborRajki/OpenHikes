@@ -45,12 +45,14 @@ struct PreviewAttributionTests {
 
     /// Four raster maps and the routes' pictures credit OpenStreetMap
     /// between them, and both Apple entries credit Apple; named once each,
-    /// the line is the six parties.
+    /// with the landcover OpenStreetMap's own map draws, the line is the
+    /// seven parties.
     @Test("over OpenStreetMap, each party is named once")
     func eachPartyOnce() {
         let footer = Self.footer(selected: .openStreetMap)
         #expect(footer.credits.map(\.title) == [
-            "OpenStreetMap contributors", "Apple", "Stadia Maps", "OpenMapTiles", "Stamen Design", "Thunderforest",
+            "OpenStreetMap contributors", "ESA WorldCover", "Apple", "Stadia Maps", "OpenMapTiles", "Stamen Design",
+            "Thunderforest",
         ])
     }
 

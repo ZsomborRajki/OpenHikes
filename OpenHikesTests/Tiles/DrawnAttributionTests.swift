@@ -35,7 +35,7 @@ struct DrawnAttributionTests {
             base: TileProvider.openStreetMap.attribution,
             layer: layer
         ))
-        #expect(drawn.credits.map(\.title) == ["OpenStreetMap"])
+        #expect(drawn.credits.map(\.title) == ["OpenStreetMap", "ESA WorldCover"])
     }
 
     /// Thunderforest's terms require "Data ©" beside its own "Maps ©", so
