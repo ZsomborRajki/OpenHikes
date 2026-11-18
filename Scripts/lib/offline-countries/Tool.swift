@@ -264,12 +264,13 @@ extension Tool {
         print("offline-countries: \(merged.countries.count) countries in the merged manifest")
     }
 
-    /// `files <manifest.json>`: each file's path and size, a line each.
+    /// `files <manifest.json>`: each file's path, size and SHA-256, a line
+    /// each.
     static func files(_ options: Options) throws {
         guard let path = options.words.first else { fail("files needs a manifest") }
         let manifest = try JSONDecoder().decode(OfflineCountryManifest.self, from: Data(contentsOf: URL(fileURLWithPath: path)))
         for file in manifest.countries.flatMap(\.files) {
-            print("\(file.path)\t\(file.byteCount)")
+            print("\(file.path)\t\(file.byteCount)\t\(file.sha256)")
         }
     }
 
