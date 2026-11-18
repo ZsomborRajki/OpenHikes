@@ -956,10 +956,11 @@ a change to recording, the map, the sheet or the render path; the PR template,
     layer's (`RouteSquareGridTests`; see *The hiking-routes layer*), the
     places' (`PlaceSquareGridTests`; see *The place squares*) and the trail
     graph's (`TrailGraphSquareGridTests`; see *The trail graph squares*)
-  - the background session the countries download in
+  - the background session the areas download in
     (`BackgroundCountryDownloader.sessionIdentifier`), which the system wakes
     the app for, and `countries/manifest.json` with the names of the files it
-    lists, which every installed build reads (*The offline countries*)
+    lists and the area codes they start with, which every installed build
+    reads (*The offline countries*)
 
 ## Conventions
 
@@ -1226,73 +1227,101 @@ a change to recording, the map, the sheet or the render path; the PR template,
 
 ### The offline countries
 
-A whole country can be downloaded for the OpenHikes map (#1482), from
-*Offline Maps*: a row at the foot of *Map Modes*, which pushes the list into
-the map sheet with every country outlined on the map behind it; a row in
+Any country can be downloaded for the OpenHikes map (#1482), or, for the
+few too big for one download, any of their states or provinces. It is all
+from *Offline Maps*: a row at the foot of *Map Modes*, which pushes the list
+into the map sheet with every area outlined on the map behind it; a row in
 Settings' storage section; and the hike screen's *Offline* tile on that map,
-which offers the countries the trail crosses. `OfflineCountries` is the one
+which offers the areas the trail crosses. `OfflineCountries` is the one
 owner, on the main actor.
 
-- **One file a country, cut on the server and read in place.**
-  `Scripts/offline-countries.sh build` cuts each country in
-  `Scripts/lib/offline-countries.json` out of the planet the map draws, its
-  basemap and its extras, along Natural Earth's 1:50m outline grown by 3 km,
-  to zoom 15. It reads the bucket with signed ranges, so nothing downloads
-  the planet, and reads each cut back through the app's reader before
-  listing it. `upload` puts the files under `countries/` as
-  `<ISO>-<build>.pmtiles` and `<ISO>-extras-<build>.pmtiles`, each with its
-  SHA-256 beside it, never over a file of the same name, and reuses one
-  already there only for the same bytes, because the manifest it writes last
-  (`countries/manifest.json`, `OfflineCountryManifest`) promises them. The
-  app keeps the file as it arrived and reads tiles out of it
-  (`PMTilesArchive`); nothing is unpacked into the tile cache.
+- **An area is a country, or a region of one too big for one download.**
+  Every country Natural Earth's 1:50m outlines name is cut whole, except
+  those `Scripts/lib/offline-countries.json` splits, which are cut by their
+  1:10m states and provinces and listed under the country, all of them
+  (`OfflineCountryListing`). The United States, Canada and Russia are split,
+  because only they passed 5 GB at zoom 14 when the planet was measured; a
+  split country is never itself downloadable. A country is keyed by its ISO
+  3166-1 code and a region by its ISO 3166-2 one, and a region carries its
+  name in the app's eight languages, from Natural Earth.
+- **The codes decide where an area belongs, where Natural Earth draws
+  otherwise.** Natural Earth draws borders as they are held, so it puts
+  Crimea and Sevastopol in Russia, while their codes, UA-43 and UA-40, are
+  Ukraine's: a region goes into the country its code names
+  (`Scripts/lib/offline-countries/Areas.swift`). Natural Earth's areas with
+  no ISO code join the country `attach` names, or are left out.
+- **Zoom 14 always, zoom 15 with *Extra Detail*.** An area is four files:
+  the basemap and the extras to zoom 14, which every download takes, and
+  both at zoom 15, which the switch at the foot of the list adds
+  (`SettingsKey.offlineCountriesDetail`, off by default). Zoom 15 is half an
+  area's bytes, and it is where the buildings and most of the points are: a
+  water tap, a toilet, a bench, an information board. Without it the map
+  draws closer in from the zoom-14 tile around it, with every path, road
+  and summit. Turning the switch on brings zoom 15 to every area already
+  down; turning it off deletes it from them and keeps the areas.
+- **Cut on the server, read in place.** `Scripts/offline-countries.sh build`
+  cuts each area out of the planet the map draws, along its outline grown by
+  3 km, from the bucket with signed ranges or, much faster for the whole
+  world, from local copies (`--planet`, `--extras`). It reads each cut back
+  through the app's reader before listing it. `upload` puts the files under
+  `countries/` as `<area>-<build>.pmtiles`, `-extras-`, `-detail-` and
+  `-detail-extras-`, each with its SHA-256 beside it, never over a file of
+  the same name, and reuses one already there only for the same bytes,
+  because the manifest it writes last (`countries/manifest.json`,
+  `OfflineCountryManifest`) promises them. The app keeps each file as it
+  arrived and reads tiles out of it (`PMTilesArchive`); nothing is unpacked
+  into the tile cache.
 - **The tool compiles the app's format files as they stand**
   (`PMTilesFile.swift`, `PMTilesArchive.swift`, `OfflineCountryManifest.swift`
   and `PackedBytes.swift`), which import nothing of the app's, and
-  `Scripts/run-script-tests.sh` builds it and runs its `selftest`.
+  `Scripts/run-script-tests.sh` builds it and runs its `selftest`, which
+  holds the area rules above too.
 - **The Worker serves `countries/` straight out of R2**, with ranges, and no
   other object of the bucket.
-- **A country is drawn before the network is asked.** `TileCache` asks the
-  downloaded countries (`OfflineCountryArchives`) for an OpenHikes tile ahead
-  of the network policy, so a country draws with no signal, and ahead of the
-  tile server, so it costs the server nothing once it is down. The tile is
-  drawn as the server's bytes would have been (`OfflineCountryDrawing`),
-  past the country's deepest zoom from the tile around it, and filed in the
-  cache as any tile is. A copy the cache drew before the country holding it
-  was installed, or updated, is not current there
+- **An area is drawn before the network is asked.** `TileCache` asks the
+  downloaded areas (`OfflineCountryArchives`) for an OpenHikes tile ahead of
+  the network policy, so an area draws with no signal, and ahead of the tile
+  server, so it costs the server nothing once it is down. The tile is drawn
+  as the server's bytes would have been (`OfflineCountryDrawing`), and filed
+  in the cache as any tile is. A copy the cache drew before the area holding
+  it was installed, or updated, is not current there
   (`OfflineCountryArchives.redraws(_:drawnAt:)`), so it is drawn again from
-  the build there is now. A tile no country holds goes to the server as
+  the build there is now. A tile no area holds goes to the server as
   before.
 - **A download is `.speculative`.** It runs in a background `URLSession` that
   refuses cellular, expensive and constrained paths, so it waits for Wi-Fi by
   itself. Low Power Mode or heat refuse it outright (`TileNetworkPolicy`),
-  and so does a volume without room for the country and
+  and so does a volume without room for the files and
   `OfflineCountries.spareBytes` besides. A file that stopped resumes from the
-  session's resume data.
+  session's resume data, and trying again asks only for the files no
+  transfer is still out for.
 - **Checked before it is used.** Each file is staged and moved into place
   only once its size and SHA-256 match the manifest's
   (`OfflineCountryStore.isWhole`). An update downloads the new build beside
-  the old one, and deletes the old one only once the new one is in.
-- **Owned by an index, not a row.** A country belongs to the device, and the
+  the old one, and deletes the old one only once the index on disk names
+  the new one.
+- **Owned by an index, not a row.** An area belongs to the device, and the
   tile cache reads the list from MapKit's drawing threads, where a main-actor
   model cannot be read. So `OfflineCountryStore` keeps a JSON index beside the
-  archives under Application Support, out of the backup, and the launch sweep
-  deletes every archive the index does not name and every staged file no
-  pending download is for. A record whose file has gone reads as not
-  downloaded.
+  archives under Application Support, out of the backup, and the launch sweep,
+  run after the downloads that landed while the app was away are installed,
+  deletes every archive the index does not hold and every staged file no
+  pending download is for. A file is never deleted while the index on disk
+  names it, and a record whose files have gone reads as not downloaded.
 - **A name off the network never reaches a path.** The manifest's file names
-  are held to the shape the server's route serves
-  (`OfflineCountryManifest.File.hasSafeName`), and a country listing one that
-  is not is left off whole, as is one cut from a planet schema the
-  rasterizer does not draw.
+  are held to the shape the server's route serves, each starting with its
+  own area's code (`OfflineCountryManifest.File.hasSafeName`), and an area
+  listing one that is not is left off whole, as is one cut from a planet
+  schema the rasterizer does not draw.
 - **Free.** Nothing on the download path checks an entitlement.
 - **No suite reaches the server or the session.**
   `OfflineCountries.forThisLaunch()` has neither under `isRunningTests`, and
-  `TileCache.shared` has no countries there.
+  `TileCache.shared` has no areas there.
 - **Deployment state, checked 2026-11-18.** The bucket holds Slovenia, cut
-  from planet build `20261117`, and a manifest listing it. The Worker
-  deployed to `tiles.openhikes.app` has no `countries/` route yet, so the
-  list fails to load until it does.
+  from planet build `20261117` as one file to zoom 15 before the files were
+  split by zoom, and a manifest listing it in that form. The Worker deployed
+  to `tiles.openhikes.app` has no `countries/` route yet, so the list fails
+  to load until it does.
 
 ### Accessibility
 
