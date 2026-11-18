@@ -112,6 +112,11 @@ STAMP="$(osmium fileinfo --get header.option.osmosis_replication_timestamp "$PLA
 }
 NAME="extras-${BASH_REMATCH[1]}${BASH_REMATCH[2]}${BASH_REMATCH[3]}"
 mkdir -p "$WORK"
+# Planetiler's scratch files go in a directory this build makes for itself,
+# and only that one is removed, however the build ends: a work directory
+# passed in can hold a `tmp` of its own, or be another build's.
+SCRATCH="$(mktemp -d "$WORK/tmp.XXXXXX")"
+trap 'rm -rf "$SCRATCH"' EXIT
 
 osmium tags-filter "$PLANET" \
   --expressions="$REPO_ROOT/Scripts/lib/vector-extras.filter" \
@@ -122,8 +127,7 @@ planetiler generate-custom \
   --osm_path="$WORK/extras.osm.pbf" \
   --output="$WORK/$NAME.pmtiles" \
   --maxzoom=15 --render_maxzoom=15 \
-  --tmpdir="$WORK/tmp" --download_dir="$WORK/sources" \
+  --tmpdir="$SCRATCH" --download_dir="$WORK/sources" \
   --force
 
-rm -rf "$WORK/tmp"
 echo "vector-extras: built $WORK/$NAME.pmtiles"

@@ -60,11 +60,13 @@
 # Scripts/vector-extras.sh's upload is here for a mistake of the same kind: the
 # condition that keeps a second upload under one name from replacing the first
 # changes nothing about an upload made alone, so losing it would go unseen
-# until two met. Its cases replace `curl` with a recording stub as well.
+# until two met. Its cases replace `curl` with a recording stub as well, and
+# `planetiler` for its build, which must remove only the scratch directory it
+# made.
 #
-# `xcrun`, `xcodebuild`, `swiftlint`, `periphery`, `hinge`, `osmium` and
-# `pyosmium-up-to-date` are replaced with recording stubs on PATH and the
-# scripts are run for real against them.
+# `xcrun`, `xcodebuild`, `swiftlint`, `periphery`, `hinge`, `osmium`,
+# `pyosmium-up-to-date` and `planetiler` are replaced with recording stubs on
+# PATH and the scripts are run for real against them.
 # Nothing is built, nothing is booted, no simulator on this machine is touched,
 # and no file in the working tree is rewritten.
 #
@@ -412,6 +414,7 @@ output="" kind="" format=""
 for (( index = 0; index < ${#arguments[@]}; index++ )); do
     case "${arguments[index]}" in
         -o) output="${arguments[index + 1]:-}" ;;
+        --output=*) output="${arguments[index]#--output=}" ;;
         -t) kind="${arguments[index + 1]:-}" ;;
         -f) format="${arguments[index + 1]:-}" ;;
     esac
@@ -5273,6 +5276,42 @@ if expect_status 1 \
     && expect_contains "$output" "extras-20261117.pmtiles reached stub-bucket from another upload first" "the error" \
     && expect_absent "$output" "uploaded" "the output"; then
     pass
+fi
+
+# The build hands Planetiler a scratch directory and removes it after, and
+# what a work directory passed in already holds is not its to remove: a `tmp`
+# of the caller's own, or another build's scratch files. The stub writes a file
+# into the scratch directory it is given, and the archive it is asked for.
+cat > "$stub_bin/planetiler" <<'STUB'
+#!/usr/bin/env bash
+printf 'planetiler %s\n' "$*" >> "$STUB_CALL_LOG"
+for argument in "$@"; do
+    case "$argument" in
+        --output=*) : > "${argument#--output=}" ;;
+        --tmpdir=*) mkdir -p "${argument#--tmpdir=}" && : > "${argument#--tmpdir=}/scratch" ;;
+    esac
+done
+STUB
+chmod +x "$stub_bin/planetiler"
+extras_build="$extras_work/build"
+mkdir -p "$extras_build/tmp"
+printf 'keep' > "$extras_build/tmp/keep"
+printf 'planet' > "$extras_work/planet.osm.pbf"
+
+STUB_OSMIUM_TIMESTAMP="2026-11-17T21:00:00Z" \
+    run_script "vector-extras build removes only the scratch directory it made" \
+    "$vector_extras" build "$extras_work/planet.osm.pbf" "$extras_build"
+leftover_scratch="$(find "$extras_build" -maxdepth 1 -name 'tmp.*')"
+if expect_status 0 \
+    && expect_contains "$output" "built $extras_build/extras-20261117.pmtiles" "the output" \
+    && expect_contains "$calls" "--tmpdir=$extras_build/tmp." "the recorded calls"; then
+    if [[ ! -f "$extras_build/tmp/keep" ]]; then
+        fail "the work directory's own tmp was removed"
+    elif [[ -n "$leftover_scratch" ]]; then
+        fail "the build left its scratch directory behind" "$leftover_scratch"
+    else
+        pass
+    fi
 fi
 
 echo
