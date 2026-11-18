@@ -91,6 +91,11 @@ final class BackgroundCountryDownloader: OfflineCountryDownloading {
     var onEvent: ((OfflineCountryDownloadEvent) -> Void)?
     private let callbacks: SessionCallbacks
     private let session: URLSession
+    /// The tasks this launch started, by file, so a cancel reaches them at
+    /// once. The session lists its tasks only asynchronously, and a listing
+    /// that answered after the same area was asked for again would cancel
+    /// the new download too, whose cancellation the model does not hear.
+    private var started: [OfflineCountryDownloadKey: URLSessionDownloadTask] = [:]
 
     private init() {
         let configuration = URLSessionConfiguration.background(withIdentifier: Self.sessionIdentifier)
@@ -114,13 +119,25 @@ final class BackgroundCountryDownloader: OfflineCountryDownloading {
         let task = resumeData.map { session.downloadTask(withResumeData: $0) } ?? session.downloadTask(with: url)
         task.taskDescription = key.taskDescription
         callbacks.stage(key, at: staged)
+        started = started.filter { $0.value.state != .completed }
+        started[key] = task
         task.resume()
     }
 
     func cancel(country: String) {
-        session.getAllTasks { tasks in
-            for task in tasks where task.taskDescription.flatMap(OfflineCountryDownloadKey.init)?.country == country {
-                task.cancel()
+        for (key, task) in started where key.country == country {
+            task.cancel()
+            started[key] = nil
+        }
+        // What an earlier launch started is the session's alone to list,
+        // and whatever this one starts meanwhile is left to run.
+        session.getAllTasks { [self] tasks in
+            onMainActor { [self] in
+                let current = Set(started.values.map(\.taskIdentifier))
+                for task in tasks where !current.contains(task.taskIdentifier)
+                    && task.taskDescription.flatMap(OfflineCountryDownloadKey.init)?.country == country {
+                    task.cancel()
+                }
             }
         }
     }
