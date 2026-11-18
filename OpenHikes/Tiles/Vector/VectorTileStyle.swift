@@ -35,6 +35,10 @@ nonisolated enum VectorTileStyle {
     static let deepestLandcoverZ = 7
     static let cliffZ = 13
     static let peakZ = 12
+    /// The zooms past 16 that OpenStreetMap Carto changes a size at.
+    static let z17 = 17
+    static let z18 = 18
+    static let z19 = 19
 
     static let landcoverFills = fills([
         (["forest"], "#ADD19E"),
@@ -101,6 +105,17 @@ nonisolated enum VectorTileStyle {
         /// keeps its shape as the line widens with zoom. Empty for solid.
         var dash: [CGFloat] = []
         var alpha: CGFloat = 1
+        /// Drawn down the middle of the line, straight after it: a railway's
+        /// white dashes.
+        var center: Center?
+    }
+
+    /// A narrower line drawn down the middle of another.
+    struct Center: Sendable {
+        let color: CGColor
+        let width: ZoomCurve
+        /// As ``Line/dash``: multiples of the center's own width.
+        var dash: [CGFloat] = []
     }
 
     /// Each side of a road's casing, which separates a road from the ground
@@ -154,6 +169,8 @@ nonisolated enum VectorTileStyle {
             ("major_road/trunk", trunk),
             ("highway/*", motorway),
             ("rail/subway", subway),
+            ("rail/disused", disusedRailway),
+            ("rail/tram", tram),
             ("rail/*", railway),
             ("aerialway/*", aerialway),
         ].enumerated().map { order, entry in (entry.0, Road(line: entry.1, order: order)) }
@@ -268,7 +285,20 @@ nonisolated private extension VectorTileStyle {
         dash: [2, 3]
     )
     static let subway = Line(color: color("#999999"), width: ZoomCurve([(12, 0.5), (16, 1)]), alpha: 0.5)
-    static let railway = Line(color: color("#707070"), width: ZoomCurve([(10, 0.5), (13, 1), (16, 2), (20, 4)]))
+    /// Carto's railway: a gray line with white dashes down it from zoom 12,
+    /// a thin gray one before.
+    static let railway = Line(
+        color: color("#707070"),
+        width: ZoomCurve([(10, 0.5), (11, 1), (12, 2), (13, 3), (z17, 3), (z18, 4)]),
+        center: Center(
+            color: color("#FFFFFF"),
+            width: ZoomCurve([(12, 0.75), (13, 1), (z17, 1), (z18, 2)]),
+            dash: [8, 8]
+        )
+    )
+    static let tram = Line(color: color("#6E6E6E"), width: ZoomCurve([(12, 0.75), (14, 1), (z17, 2)]))
+    /// Carto draws an unused line light and broken, and only up close.
+    static let disusedRailway = Line(color: color("#AAAAAA"), width: ZoomCurve([(15, 2)]), dash: [1, 2])
     static let ferry = Line(color: color("#6666FF"), width: ZoomCurve([(8, 0.5), (12, 1), (16, 2)]), dash: [6, 4])
     static let aerialway = Line(color: color("#808080"), width: ZoomCurve([(12, 0.5), (15, 1), (20, 2)]))
 

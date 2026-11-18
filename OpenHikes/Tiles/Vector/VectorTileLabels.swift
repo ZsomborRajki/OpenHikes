@@ -189,7 +189,8 @@ nonisolated enum VectorTileLabels {
         /// `candidates` set at `z` and placed inside `bounds`, with `unit`
         /// pixels for each pixel of the style's 256-pixel tile.
         init(_ candidates: [Candidate], z: Int, unit: CGFloat, bounds: CGRect, language: String) {
-            blocks = candidates.map { TextBlock($0, z: z, unit: unit, language: language) }
+            var fonts = LabelFonts(language: language)
+            blocks = candidates.map { TextBlock($0, z: z, unit: unit, fonts: &fonts) }
             let markerClearance = (VectorTileStyle.peakSize.value(at: z) / 2 + VectorTileLabelStyle.markerGap) * unit
             placements = VectorTileLabels.place(
                 candidates,
@@ -224,15 +225,14 @@ nonisolated private struct TextBlock {
         )
     }
 
-    init(_ candidate: VectorTileLabels.Candidate, z: Int, unit: CGFloat, language: String) {
+    init(_ candidate: VectorTileLabels.Candidate, z: Int, unit: CGFloat, fonts: inout LabelFonts) {
         let look = VectorTileLabelStyle.look(of: candidate.category)
         let points = look.size.value(at: z) * unit
-        let ink = { (text: String, size: CGFloat) in
-            InkedText(text, size: size, color: look.color, face: look.face, language: language, unit: unit)
-        }
-        var set = [ink(candidate.name, points)]
+        let font = fonts.font(size: points, face: look.face)
+        var set = [InkedText(candidate.name, font: font, color: look.color, unit: unit)]
         if let detail = candidate.detail {
-            set.append(ink(detail, points * VectorTileLabelStyle.detailScale))
+            let detailFont = fonts.font(size: points * VectorTileLabelStyle.detailScale, face: look.face)
+            set.append(InkedText(detail, font: detailFont, color: look.color, unit: unit))
         }
         lines = set
     }
@@ -259,15 +259,8 @@ nonisolated struct InkedText {
     let ascent: CGFloat
     let descent: CGFloat
 
-    init(
-        _ text: String,
-        size: CGFloat,
-        color: CGColor,
-        face: VectorTileLabelStyle.Face,
-        language: String,
-        unit: CGFloat
-    ) {
-        let font = VectorTileLabelStyle.font(size: size, face: face, language: language)
+    init(_ text: String, font: CTFont, color: CGColor, unit: CGFloat) {
+        let size = CTFontGetSize(font)
         let key = { (name: CFString) in NSAttributedString.Key(name as String) }
         ink = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [
             key(kCTFontAttributeName): font,
@@ -296,5 +289,30 @@ nonisolated struct InkedText {
     func drawInk(at baseline: CGPoint, context: CGContext) {
         context.textPosition = baseline
         CTLineDraw(ink, context)
+    }
+}
+
+/// The fonts one tile's names are set in, each made once. Making the system
+/// font at a size is most of what setting a name costs, and a name along a
+/// line is set a letter at a time.
+nonisolated struct LabelFonts {
+    let language: String
+    private var made: [Key: CTFont] = [:]
+
+    init(language: String) {
+        self.language = language
+    }
+
+    mutating func font(size: CGFloat, face: VectorTileLabelStyle.Face) -> CTFont {
+        let key = Key(size: size, face: face)
+        if let font = made[key] { return font }
+        let font = VectorTileLabelStyle.font(size: size, face: face, language: language)
+        made[key] = font
+        return font
+    }
+
+    private struct Key: Hashable {
+        let size: CGFloat
+        let face: VectorTileLabelStyle.Face
     }
 }

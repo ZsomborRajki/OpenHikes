@@ -37,12 +37,23 @@ nonisolated enum VectorTileLineLabels {
         let points: [CGPoint]
         /// Measured once, because placing and ordering both read it.
         let length: CGFloat
+        /// The box around the line: a line whose box misses a tile cannot
+        /// carry a name on it.
+        let box: CGRect
 
         init(category: VectorTileLabelStyle.LineCategory, name: String, points: [CGPoint]) {
             self.category = category
             self.name = name
             self.points = points
             length = VectorTileLineLabels.length(of: points)
+            let xs = points.map(\.x)
+            let ys = points.map(\.y)
+            box = CGRect(
+                x: xs.min() ?? 0,
+                y: ys.min() ?? 0,
+                width: (xs.max() ?? 0) - (xs.min() ?? 0),
+                height: (ys.max() ?? 0) - (ys.min() ?? 0)
+            )
         }
     }
 
@@ -303,14 +314,18 @@ nonisolated extension VectorTileLineLabels {
             )
             var placed: [SetName] = []
             var texts: [String: SetText] = [:]
-            for line in lines {
+            var fonts = LabelFonts(language: language)
+            // A tile deeper than the archive holds the whole archive tile's
+            // lines, most of them nowhere near it.
+            for line in lines where line.box.intersects(bounds) {
                 let look = VectorTileLabelStyle.look(of: line.category)
                 let size = look.size.value(at: z) * unit
                 // A name about as long as its line will not fit it, so it is
                 // never set letter by letter: most of a city's ways are that.
                 guard line.length > CGFloat(line.name.count) * size * Self.narrowestLetter else { continue }
                 let key = "\(line.category)/\(line.name)"
-                let text = texts[key] ?? SetText(line.name, size: size, look: look, language: language, unit: unit)
+                let text = texts[key]
+                    ?? SetText(line.name, font: fonts.font(size: size, face: look.face), look: look, unit: unit)
                 texts[key] = text
                 let marks = VectorTileLineLabels.marks(
                     length: line.length,
@@ -390,16 +405,9 @@ nonisolated private struct SetText {
     var advances: [CGFloat] { characters.map(\.width) }
     var width: CGFloat { advances.reduce(0, +) }
 
-    init(_ text: String, size: CGFloat, look: VectorTileLabelStyle.LineLook, language: String, unit: CGFloat) {
+    init(_ text: String, font: CTFont, look: VectorTileLabelStyle.LineLook, unit: CGFloat) {
         characters = VectorTileLineLabels.visualOrder(of: text).map { character in
-            InkedText(
-                character,
-                size: size,
-                color: look.color,
-                face: look.face,
-                language: language,
-                unit: unit
-            )
+            InkedText(character, font: font, color: look.color, unit: unit)
         }
         let rise = characters.map(\.ascent).max() ?? 0
         let fall = characters.map(\.descent).max() ?? 0

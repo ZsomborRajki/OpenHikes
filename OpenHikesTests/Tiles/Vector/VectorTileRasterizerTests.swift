@@ -73,6 +73,29 @@ struct VectorTileRasterizerTests {
         #expect(pixel(image, x: left, y: middle, is: "#F2EFE9"))
     }
 
+    /// Every area in the archive has the same `sort_rank`, and a city's
+    /// residential area comes after the parks inside it as often as before:
+    /// drawn in the tile's order, it covered them.
+    @Test("a smaller area is drawn over the larger one it lies in, in either order", arguments: [false, true])
+    func smallerAreaOverLarger(parkFirst: Bool) throws {
+        let residential = VectorTileFixture.Feature(
+            type: .polygon,
+            properties: ["kind": .string("residential"), "sort_rank": .int(189)],
+            geometry: whole
+        )
+        let park = VectorTileFixture.Feature(
+            type: .polygon,
+            properties: ["kind": .string("park"), "sort_rank": .int(189)],
+            geometry: leftHalf
+        )
+        let listed = parkFirst ? [park, residential] : [residential, park]
+
+        let image = try draw([land, .init(name: "landuse", features: listed)], at: tile)
+
+        #expect(pixel(image, x: left, y: middle, is: "#C8FACC"), "the park")
+        #expect(pixel(image, x: right, y: middle, is: "#E0DFDF"), "the residential area around it")
+    }
+
     /// The archive stops at zoom 15, and the map goes deeper. A deeper tile is
     /// the part of the archive tile it lies in, so a lake on the left half of
     /// the archive tile fills the left child and none of the right.
