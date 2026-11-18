@@ -1154,8 +1154,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
     from the planet (`osmium` with `Scripts/lib/vector-extras.filter`, then
     Planetiler with `Scripts/lib/vector-extras.yml`) into
     `extras-<planet date>.pmtiles`, named as the archive's layers are so a
-    tile of each merges into one, and they are uploaded beside the basemap
-    under a new name each time. The app asks for their tile beside the
+    tile of each merges into one, and `Scripts/vector-extras.sh upload` puts
+    them beside the basemap under a new name each time, signing with R2 keys
+    kept outside the repository. The app asks for their tile beside the
     basemap's from zoom 14. They add to the map and are never its reason to
     fall back: a tile they lack or fail to give leaves the basemap drawn.
   - **Names are drawn into the tile.**

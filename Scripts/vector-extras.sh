@@ -13,25 +13,81 @@
 # Scripts/lib/vector-extras.filter, then builds the archive with Planetiler
 # from Scripts/lib/vector-extras.yml. Bring the planet up to date first with
 # `Scripts/trail-cells.sh update-planet`. The archive is named for the date
-# the planet is current to, `extras-YYYYMMDD.pmtiles`. Upload it under that
-# name to the R2 bucket `openhikes-tiles`, beside the basemap and never over
-# an earlier one, then point `VectorTileSource.openHikesPlanet` at it.
+# the planet is current to, `extras-YYYYMMDD.pmtiles`.
+#
+# `upload` puts it under that name in the R2 bucket `openhikes-tiles`, beside
+# the basemap, and refuses a name already there: the tile server's cache keeps
+# a tile for a day, so a file replaced in place would mix two builds. Then
+# point `VectorTileSource.openHikesPlanet` at it. It signs with R2's S3 keys,
+# read from OPENHIKES_R2_ENV (default ~/.config/openhikes/r2-openhikes-tiles.env:
+# R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET), and sends
+# the file in one request, which R2 takes up to 5 GiB.
 #
 # It is a development tool and is in no gate. It needs osmium and Planetiler
 # (`brew install osmium-tool planetiler`). On an M4 Max the planet took seven
-# minutes to filter, and the filtered 2.4 GB a few minutes to build.
+# minutes to filter, and the filtered 2.4 GB a minute and a quarter to build
+# into 1.8 GB.
 #
 # Usage:
-#   Scripts/vector-extras.sh <planet.osm.pbf> [<work-dir>]
+#   Scripts/vector-extras.sh build <planet.osm.pbf> [<work-dir>]
+#   Scripts/vector-extras.sh upload <extras-YYYYMMDD.pmtiles>
 #
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-if [[ $# -lt 1 || $# -gt 2 ]]; then
-  echo "usage: Scripts/vector-extras.sh <planet.osm.pbf> [<work-dir>]" >&2
+usage() {
+  echo "usage: Scripts/vector-extras.sh build <planet.osm.pbf> [<work-dir>]" >&2
+  echo "       Scripts/vector-extras.sh upload <extras-YYYYMMDD.pmtiles>" >&2
   exit 2
-fi
+}
+
+upload() {
+  local archive="$1"
+  local env_file="${OPENHIKES_R2_ENV:-$HOME/.config/openhikes/r2-openhikes-tiles.env}"
+  [[ -f "$archive" ]] || { echo "vector-extras: no archive at $archive" >&2; exit 1; }
+  [[ -f "$env_file" ]] || { echo "vector-extras: no R2 keys at $env_file" >&2; exit 1; }
+  # shellcheck disable=SC1090
+  set -a; . "$env_file"; set +a
+  local key
+  key="$(basename "$archive")"
+  local size
+  size="$(stat -f %z "$archive")"
+  if (( size > 5 * 1024 * 1024 * 1024 )); then
+    echo "vector-extras: $key is over the 5 GiB R2 takes in one request" >&2
+    exit 1
+  fi
+  local url="https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com/$R2_BUCKET/$key"
+  local signing=(--aws-sigv4 "aws:amz:auto:s3" --user "$R2_ACCESS_KEY_ID:$R2_SECRET_ACCESS_KEY"
+    -H "x-amz-content-sha256: UNSIGNED-PAYLOAD")
+  local existing
+  existing="$(curl -s -o /dev/null -w "%{http_code}" -I "${signing[@]}" "$url")"
+  case "$existing" in
+    404) ;;
+    200) echo "vector-extras: $key is already in $R2_BUCKET; build under a new date" >&2; exit 1 ;;
+    *) echo "vector-extras: R2 answered $existing when asked for $key" >&2; exit 1 ;;
+  esac
+  local status
+  status="$(curl -s -o /dev/null -w "%{http_code}" "${signing[@]}" \
+    -H "Content-Type: application/octet-stream" -T "$archive" "$url")"
+  [[ "$status" == 200 ]] || { echo "vector-extras: R2 answered $status to the upload" >&2; exit 1; }
+  echo "vector-extras: uploaded $key ($size bytes) to $R2_BUCKET"
+}
+
+[[ $# -ge 1 ]] || usage
+COMMAND="$1"
+shift
+case "$COMMAND" in
+  upload)
+    [[ $# -eq 1 ]] || usage
+    upload "$1"
+    exit 0
+    ;;
+  build)
+    [[ $# -ge 1 && $# -le 2 ]] || usage
+    ;;
+  *) usage ;;
+esac
 PLANET="$1"
 WORK="${2:-$HOME/Library/Caches/OpenHikes/vector-extras}"
 [[ -f "$PLANET" ]] || { echo "vector-extras: no planet at $PLANET" >&2; exit 1; }
