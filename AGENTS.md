@@ -1240,11 +1240,12 @@ owner, on the main actor.
   to zoom 15. It reads the bucket with signed ranges, so nothing downloads
   the planet, and reads each cut back through the app's reader before
   listing it. `upload` puts the files under `countries/` as
-  `<ISO>-<build>.pmtiles` and `<ISO>-extras-<build>.pmtiles`, never over a
-  file of the same name, and writes `countries/manifest.json`
-  (`OfflineCountryManifest`) last. The app keeps the file as it arrived and
-  reads tiles out of it (`PMTilesArchive`); nothing is unpacked into the tile
-  cache.
+  `<ISO>-<build>.pmtiles` and `<ISO>-extras-<build>.pmtiles`, each with its
+  SHA-256 beside it, never over a file of the same name, and reuses one
+  already there only for the same bytes, because the manifest it writes last
+  (`countries/manifest.json`, `OfflineCountryManifest`) promises them. The
+  app keeps the file as it arrived and reads tiles out of it
+  (`PMTilesArchive`); nothing is unpacked into the tile cache.
 - **The tool compiles the app's format files as they stand**
   (`PMTilesFile.swift`, `PMTilesArchive.swift`, `OfflineCountryManifest.swift`
   and `PackedBytes.swift`), which import nothing of the app's, and

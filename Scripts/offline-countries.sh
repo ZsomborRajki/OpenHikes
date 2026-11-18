@@ -30,10 +30,11 @@
 #             VectorTileSource.openHikesPlanet names; --extras reads the extras
 #             from a local copy rather than from the bucket. Zoom 15 and a
 #             3 km margin by default.
-#   upload    Put <dir>'s files in the bucket under countries/, skipping any
-#             already there at the same size and refusing one there at another,
-#             then merge its manifest into the server's and write that last, so
-#             the app never lists a file that is not there yet.
+#   upload    Put <dir>'s files in the bucket under countries/, each with its
+#             SHA-256 beside it, skipping any already there with the same bytes
+#             and refusing one there with others, then merge its manifest into
+#             the server's and write that last, so the app never lists a file
+#             that is not there yet.
 #   inspect   Print an archive's header.
 #   selftest  Cut a made-up archive and read it back.
 #
@@ -161,21 +162,35 @@ upload() {
     load_keys
     prepare_tool
     local base="https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com/$R2_BUCKET"
-    local path bytes name local_size head status remote_size
-    while IFS=$'\t' read -r path bytes; do
+    local path bytes sha256 name local_size head status remote_size remote_sha256
+    while IFS=$'\t' read -r path bytes sha256; do
         name="$(basename "$path")"
         [[ -f "$dir/$name" ]] || die "the manifest lists $name, which is not in $dir"
         local_size="$(stat -f %z "$dir/$name")"
         [[ "$local_size" == "$bytes" ]] || die "$name is $local_size bytes, and the manifest says $bytes"
+        [[ "$(shasum -a 256 "$dir/$name" | cut -d ' ' -f 1)" == "$sha256" ]] \
+            || die "$name is not the file the manifest describes"
         (( local_size <= 5 * 1024 * 1024 * 1024 )) || die "$name is over the 5 GiB R2 takes in one request"
-        head="$(r2_curl -I "$base/$path")"
+        head="$(r2_curl -I "$base/$path" | tr -d '\r')"
         status="$(printf '%s\n' "$head" | head -n 1 | awk '{print $2}')"
         case "$status" in
             404) ;;
             200)
-                remote_size="$(printf '%s\n' "$head" | tr -d '\r' | awk 'tolower($1) == "content-length:" {print $2}')"
+                # The manifest is about to promise the app these bytes, and an
+                # app throws away a download whose SHA-256 is not the one
+                # promised, so a name already taken is reused only for the same
+                # bytes. An upload from here names its digest beside the
+                # object; one put there without it is read back to be sure.
+                remote_size="$(printf '%s\n' "$head" | awk 'tolower($1) == "content-length:" {print $2}')"
                 [[ "$remote_size" == "$local_size" ]] \
                     || die "$path is in the bucket at $remote_size bytes; a build goes under a new date"
+                remote_sha256="$(printf '%s\n' "$head" | awk 'tolower($1) == "x-amz-meta-sha256:" {print $2}')"
+                if [[ -z "$remote_sha256" ]]; then
+                    remote_sha256="$(r2_curl -f "$base/$path" | shasum -a 256 | cut -d ' ' -f 1)" \
+                        || die "could not read $path back from the bucket"
+                fi
+                [[ "$remote_sha256" == "$sha256" ]] \
+                    || die "$path is in the bucket with other bytes; a build goes under a new date"
                 echo "offline-countries: $path is already there"
                 continue
                 ;;
@@ -186,7 +201,8 @@ upload() {
             continue
         fi
         status="$(r2_curl -o /dev/null -w "%{http_code}" -H "If-None-Match: *" \
-            -H "Content-Type: application/octet-stream" -T "$dir/$name" "$base/$path")"
+            -H "Content-Type: application/octet-stream" -H "x-amz-meta-sha256: $sha256" \
+            -T "$dir/$name" "$base/$path")"
         [[ "$status" == 200 ]] || die "R2 answered $status to the upload of $path"
         echo "offline-countries: uploaded $path ($local_size bytes)"
     done < <("$tool" files "$dir/manifest.json")
