@@ -6,31 +6,46 @@
 //  filled where the country is downloaded and drawn bolder where its row is
 //  chosen. See ``OfflineCountryOutlines``.
 //
-//  Drawn under every line, so a hike stays readable over a country, and
-//  rebuilt wholesale when the list changes: a dozen polygons of a hundred
-//  points each, a few times a visit.
+//  Drawn under every line, so a hike stays readable over a country. The list
+//  is every country and region, some four hundred areas and two and a half
+//  thousand rings, an area of islands — Nunavut, Indonesia — hundreds on its
+//  own. So an area is one overlay and one renderer, not one a ring; the
+//  overlays are rebuilt only when the areas listed change; and choosing a
+//  row draws again only the areas whose look it changed.
 //
 
 import MapKit
 
-/// One ring of a country's outline, knowing whose it is.
-nonisolated final class OfflineCountryPolygon: MKPolygon {
+/// A country's outline, every ring of it, knowing whose it is.
+nonisolated final class OfflineCountryPolygon: MKMultiPolygon {
     private(set) var countryID = ""
 
-    static func make(countryID: String, ring: [[Double]]) -> OfflineCountryPolygon {
-        var coordinates = ring.compactMap { pair -> CLLocationCoordinate2D? in
-            guard pair.count >= 2 else { return nil }
-            return CLLocationCoordinate2D(latitude: pair[1], longitude: pair[0])
+    static func make(countryID: String, outline: [[[Double]]]) -> OfflineCountryPolygon {
+        let rings = outline.map { ring in
+            var coordinates = ring.compactMap { pair -> CLLocationCoordinate2D? in
+                guard pair.count >= 2 else { return nil }
+                return CLLocationCoordinate2D(latitude: pair[1], longitude: pair[0])
+            }
+            return MKPolygon(coordinates: &coordinates, count: coordinates.count)
         }
-        let polygon = OfflineCountryPolygon(coordinates: &coordinates, count: coordinates.count)
+        let polygon = OfflineCountryPolygon(rings)
         polygon.countryID = countryID
         return polygon
     }
 }
 
 struct CountryOutlineMapState {
+    /// How an area's outline is drawn.
+    struct Look: Equatable {
+        var isInstalled: Bool
+        var isSelected: Bool
+    }
+
     var polygons: [OfflineCountryPolygon] = []
-    var renderers: [ObjectIdentifier: MKPolygonRenderer] = [:]
+    var renderers: [ObjectIdentifier: MKMultiPolygonRenderer] = [:]
+    /// How each area was last drawn, so a change draws again only those whose
+    /// look it changed.
+    var looks: [String: Look] = [:]
     var isObserving = false
     weak var outlines: OfflineCountryOutlines?
 }
@@ -57,13 +72,12 @@ extension MapView.Coordinator {
 
     private func applyCountryOutlines(_ outlines: OfflineCountryOutlines, on mapView: MKMapView) {
         let shown = outlines.isActive ? outlines.countries : []
-        let drawnIDs = countryOutlineMap.polygons.map(\.countryID)
-        let wantedIDs = shown.flatMap { country in country.outline.map { _ in country.id } }
-        if drawnIDs != wantedIDs {
+        if countryOutlineMap.polygons.map(\.countryID) != shown.map(\.id) {
             mapView.removeOverlays(countryOutlineMap.polygons)
             countryOutlineMap.renderers = [:]
-            countryOutlineMap.polygons = shown.flatMap { country in
-                country.outline.map { OfflineCountryPolygon.make(countryID: country.id, ring: $0) }
+            countryOutlineMap.looks = [:]
+            countryOutlineMap.polygons = shown.map { country in
+                OfflineCountryPolygon.make(countryID: country.id, outline: country.outline)
             }
             // Over the map's own tiles and hiking routes, and under every
             // line, which all share their level.
@@ -73,10 +87,12 @@ extension MapView.Coordinator {
             }
         }
         for polygon in countryOutlineMap.polygons {
-            if let renderer = countryOutlineMap.renderers[ObjectIdentifier(polygon)] {
-                styleCountryOutline(renderer, for: polygon.countryID, outlines: outlines)
-                renderer.setNeedsDisplay()
-            }
+            let look = Self.countryOutlineLook(of: polygon.countryID, outlines: outlines)
+            guard countryOutlineMap.looks[polygon.countryID] != look,
+                  let renderer = countryOutlineMap.renderers[ObjectIdentifier(polygon)]
+            else { continue }
+            style(renderer, as: look, for: polygon.countryID)
+            renderer.setNeedsDisplay()
         }
     }
 
@@ -89,25 +105,35 @@ extension MapView.Coordinator {
     /// The renderer for one of the outlines, or `nil` for any other overlay.
     func countryOutlineRenderer(for overlay: MKOverlay) -> MKOverlayRenderer? {
         guard let polygon = overlay as? OfflineCountryPolygon else { return nil }
-        let renderer = MKPolygonRenderer(polygon: polygon)
+        let renderer = MKMultiPolygonRenderer(multiPolygon: polygon)
         if let outlines = countryOutlineMap.outlines {
-            styleCountryOutline(renderer, for: polygon.countryID, outlines: outlines)
+            let look = Self.countryOutlineLook(of: polygon.countryID, outlines: outlines)
+            style(renderer, as: look, for: polygon.countryID)
         }
         countryOutlineMap.renderers[ObjectIdentifier(polygon)] = renderer
         return renderer
     }
 
-    private func styleCountryOutline(_ renderer: MKPolygonRenderer, for id: String, outlines: OfflineCountryOutlines) {
-        let isInstalled = outlines.installedIDs.contains(id)
-        let isSelected = outlines.selectedID == id
+    private static func countryOutlineLook(
+        of id: String,
+        outlines: OfflineCountryOutlines
+    ) -> CountryOutlineMapState.Look {
+        CountryOutlineMapState.Look(
+            isInstalled: outlines.installedIDs.contains(id),
+            isSelected: outlines.selectedID == id
+        )
+    }
+
+    private func style(_ renderer: MKMultiPolygonRenderer, as look: CountryOutlineMapState.Look, for id: String) {
+        countryOutlineMap.looks[id] = look
         #if os(iOS)
         let tint = UIColor(named: "AccentColor") ?? .systemGreen
-        renderer.strokeColor = isSelected || isInstalled ? tint : .secondaryLabel
+        renderer.strokeColor = look.isSelected || look.isInstalled ? tint : .secondaryLabel
         renderer.fillColor = tint.withAlphaComponent(
-            isInstalled ? Self.installedFill : (isSelected ? Self.selectedFill : 0)
+            look.isInstalled ? Self.installedFill : (look.isSelected ? Self.selectedFill : 0)
         )
         #endif
-        renderer.lineWidth = isSelected ? Self.selectedOutlineWidth : Self.outlineWidth
+        renderer.lineWidth = look.isSelected ? Self.selectedOutlineWidth : Self.outlineWidth
     }
 
     /// A tap on the map while *Offline Maps* is up: the country under it.
