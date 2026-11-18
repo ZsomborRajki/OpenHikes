@@ -68,6 +68,22 @@ struct VectorTilePointsTests {
         #expect(points.map(\.lines) == [["Stephansplatz"], []])
     }
 
+    /// The extras carry an unnamed car park's `access`, and Carto fades one
+    /// that is private or for customers.
+    @Test("a point whose access the table counts as restricted takes its restricted look")
+    func restrictedAccess() throws {
+        let opacity = { (access: String?) throws -> CGFloat? in
+            var properties: [String: VectorTileFixture.Value] = ["kind": .string("fuel")]
+            properties["access"] = access.map { .string($0) }
+            return try candidates([poi(properties)]).first?.look.icons.first?.opacity
+        }
+
+        #expect(try opacity("customers") == 0.5)
+        #expect(try opacity("private") == 0.5)
+        #expect(try opacity("yes") == 1)
+        #expect(try opacity(nil) == 1)
+    }
+
     // MARK: Placing
 
     @Test("an icon stands on its point, and a second icon on the same spot is left out")
@@ -205,8 +221,9 @@ struct VectorTilePointsTests {
     // MARK: Helpers
 
     /// Five kinds, as `Scripts/carto-points.sh` writes them: fuel with a
-    /// name under it, a summit with its height, a low-priority bench, and a
-    /// station and a subway entrance in the order of Carto's stations layer.
+    /// name under it, faded where its access is private or for customers, a
+    /// summit with its height, a low-priority bench, and a station and a
+    /// subway entrance in the order of Carto's stations layer.
     private static func style() throws -> VectorTilePointStyle {
         let name = """
         {"field": "name", "size": 10, "fill": "#0066FF", "halo": "#FFFFFF99", "haloRadius": 1, "dy": 11,
@@ -214,7 +231,9 @@ struct VectorTilePointsTests {
         """
         let fuel = """
         {"kind": "fuel", "feature": "amenity_fuel", "lowPriority": false, "bands": [{"from": 15, "to": 19,
-        "icons": [{"asset": "pump", "fill": "#FF0000", "width": 14, "height": 14}], "text": \(name)}]}
+        "icons": [{"asset": "pump", "fill": "#FF0000", "width": 14, "height": 14}], "text": \(name)}],
+        "restricted": [{"from": 15, "to": 19, "icons": [{"asset": "pump", "fill": "#FF0000", "width": 14,
+        "height": 14, "opacity": 0.5}], "text": \(name)}]}
         """
         let peak = """
         {"kind": "peak", "feature": "natural_peak", "lowPriority": false, "elevation": true, "bands": [
@@ -236,7 +255,8 @@ struct VectorTilePointsTests {
         "height": 10}]}]}
         """
         let entries = [fuel, peak, bench, station, entrance].joined(separator: ",")
-        let json = #"{"source": "openstreetmap-carto test", "entries": ["# + entries + "]}"
+        let json = #"{"source": "openstreetmap-carto test", "restrictedAccess": ["private", "customers"], "#
+            + #""entries": ["# + entries + "]}"
         return try VectorTilePointStyle(json: Data(json.utf8))
     }
 

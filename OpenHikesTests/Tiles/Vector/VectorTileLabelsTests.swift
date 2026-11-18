@@ -288,6 +288,42 @@ struct VectorTileLabelsTests {
         #expect(try darkPixels(unnamed) == 0)
     }
 
+    /// CoreText reads a stroke of no width as a fill in its default black,
+    /// and Carto sets a private car park's name with no halo.
+    @Test("a name with no halo is drawn in its ink alone, with nothing black under it")
+    func noHaloDrawsNoOutline() {
+        let canvas = 64
+        var fonts = LabelFonts(language: "en")
+        let font = fonts.font(size: 20, face: .regular)
+        let cyan = VectorTileStyle.color("#00FFFF")
+        let name = InkedText("Wg", font: font, color: cyan, unit: 1, haloWidth: 0)
+        var bytes = [UInt8](repeating: 0, count: canvas * canvas * 4)
+
+        bytes.withUnsafeMutableBytes { buffer in
+            guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+                  let context = CGContext(
+                      data: buffer.baseAddress,
+                      width: canvas,
+                      height: canvas,
+                      bitsPerComponent: 8,
+                      bytesPerRow: canvas * 4,
+                      space: space,
+                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                  )
+            else { return }
+            context.setFillColor(VectorTileStyle.color("#FFFFFF"))
+            context.fill(CGRect(x: 0, y: 0, width: canvas, height: canvas))
+            let baseline = CGPoint(x: 8, y: 24)
+            name.drawHalo(at: baseline, context: context)
+            name.drawInk(at: baseline, context: context)
+        }
+
+        let red = stride(from: 0, to: bytes.count, by: 4).map { bytes[$0] }
+        let green = stride(from: 1, to: bytes.count, by: 4).map { bytes[$0] }
+        #expect(red.contains { $0 < 100 })
+        #expect(green.allSatisfy { $0 >= 255 - 3 })
+    }
+
     /// Pixels near the middle darker than any fill the style uses: the ink of
     /// a name.
     private func darkPixels(_ layers: [VectorTileFixture.Layer]) throws -> Int {
