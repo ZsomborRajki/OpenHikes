@@ -4,7 +4,8 @@
 //
 //  Which screen a navigation path is showing, as far as an import finishing
 //  under it is concerned — see ``ImportSelectionGate``. Split from the gate
-//  for length, and into two switches so neither is a list of every route.
+//  for length, and into three switches so each stays inside the complexity
+//  limit.
 //
 
 import Foundation
@@ -14,12 +15,8 @@ extension ImportSelectionGate {
     func destination(for path: [SheetRoute]) -> Destination {
         guard let route = path.last else { return .root }
         if let hikeID = Self.hikeScreen(route) { return .hike(hikeID) }
+        if let screen = Self.bareScreen(route) { return screen }
         switch route {
-        // *Places Nearby* is the recording's screen one push further in, and
-        // an import landing under it must not take the map from the walk.
-        case .recording, .placesNearby: return .recording
-        case .trailDraft: return .trailDraft
-        case .totals: return .totals
         case .communityHike(let listing): return .communityHike(listing.id)
         // A shared hike's gallery is that preview's screen one push further
         // in, on the same terms the photo viewer is the hike's.
@@ -33,7 +30,26 @@ extension ImportSelectionGate {
         case .commonsPhoto(let photo), .commonsGallery(_, let photo):
             return .commonsPhoto(photo.credit.license.sourceURL)
         case .commonsPhotos(let photos): return .commonsPhotos(photos.map(\.credit.license.sourceURL))
-        case .hike, .newPlace, .photo, .place, .placesAround, .routeStyle, .walk: return .root
+        // Answered by the two above.
+        case .hike, .newPlace, .offlineCountries, .photo, .place, .placesAround, .placesNearby, .recording,
+            .routeStyle, .totals, .trailDraft, .walk:
+            return .root
+        }
+    }
+
+    /// The screen `route` is when it carries nothing to tell two of it apart,
+    /// or `nil` for any other.
+    private static func bareScreen(_ route: SheetRoute) -> Destination? {
+        switch route {
+        // *Places Nearby* is the recording's screen one push further in, and
+        // an import landing under it must not take the map from the walk.
+        case .recording, .placesNearby: .recording
+        case .trailDraft: .trailDraft
+        case .totals: .totals
+        case .offlineCountries: .offlineCountries
+        case .commonsGallery, .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto, .hike, .newPlace,
+            .pendingPhotos, .pendingSubmission, .photo, .place, .placesAround, .routeStyle, .walk:
+            nil
         }
     }
 
@@ -50,7 +66,7 @@ extension ImportSelectionGate {
         case .routeStyle(let hike): hike.id
         case .walk(let walk): walk.hikeID
         case .commonsGallery, .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto, .pendingPhotos,
-            .pendingSubmission, .placesNearby, .recording, .totals, .trailDraft:
+            .offlineCountries, .pendingSubmission, .placesNearby, .recording, .totals, .trailDraft:
             nil
         }
     }

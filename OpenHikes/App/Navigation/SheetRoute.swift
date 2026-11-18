@@ -51,6 +51,7 @@ enum SheetRoute: Hashable {
     /// ``TrailPlace`` because nothing is on the hike until the hiker says
     /// *Add* — see ``HikePlaceAdder``.
     case newPlace(Hike, HikePlaceSpot)
+    case offlineCountries
     /// A submission waiting for review. Carries the queue entry for the reason
     /// ``communityHike(_:)`` carries a listing — there is no `Hike` and no
     /// listing either, and the value is `Sendable` with no store behind it.
@@ -133,7 +134,7 @@ enum SheetRoute: Hashable {
         // hike that is not in the library at all, which is exactly the state a
         // deletion puts one back into.
         case .commonsGallery, .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto, .pendingPhotos,
-            .pendingSubmission, .recording, .totals, .trailDraft:
+            .pendingSubmission, .recording, .offlineCountries, .totals, .trailDraft:
             false
         }
     }
@@ -179,7 +180,7 @@ enum SheetRoute: Hashable {
         switch self {
         case .commonsGallery, .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto: true
         case .hike, .newPlace, .pendingPhotos, .pendingSubmission, .photo, .place, .placesAround, .placesNearby,
-            .recording, .routeStyle, .totals, .trailDraft, .walk:
+            .recording, .routeStyle, .offlineCountries, .totals, .trailDraft, .walk:
             false
         }
     }
@@ -190,8 +191,9 @@ enum SheetRoute: Hashable {
     var prefersFullHeight: Bool {
         switch self {
         case .commonsGallery, .communityPhoto, .photo: true
-        case .commonsPhoto, .commonsPhotos, .communityHike, .hike, .newPlace, .pendingPhotos, .pendingSubmission,
-            .place, .placesAround, .placesNearby, .recording, .routeStyle, .totals, .trailDraft, .walk:
+        case .commonsPhoto, .commonsPhotos, .communityHike, .hike, .newPlace, .offlineCountries, .pendingPhotos,
+            .pendingSubmission, .place, .placesAround, .placesNearby, .recording, .routeStyle, .totals, .trailDraft,
+            .walk:
             false
         }
     }
@@ -209,8 +211,8 @@ enum SheetRoute: Hashable {
         switch self {
         case .photo: true
         case .commonsGallery, .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto, .hike, .newPlace,
-            .pendingPhotos, .pendingSubmission, .place, .placesAround, .placesNearby, .recording, .routeStyle, .totals,
-            .trailDraft, .walk:
+            .offlineCountries, .pendingPhotos, .pendingSubmission, .place, .placesAround, .placesNearby, .recording,
+            .routeStyle, .totals, .trailDraft, .walk:
             false
         }
     }
@@ -229,7 +231,8 @@ enum SheetRoute: Hashable {
         case let (.photo(left, leftPhoto), .photo(right, rightPhoto)): left == right && leftPhoto == rightPhoto
         // The three that carry nothing are equal to themselves and to nothing
         // else, which is one rule rather than three.
-        case (.recording, .recording), (.trailDraft, .trailDraft), (.totals, .totals): true
+        case (.recording, .recording), (.trailDraft, .trailDraft), (.totals, .totals),
+            (.offlineCountries, .offlineCountries): true
         case let (.walk(left), .walk(right)): left.persistentModelID == right.persistentModelID
         case let (.communityHike(left), .communityHike(right)): left.id == right.id
         // The listing and the page, and deliberately not the photographs: the
@@ -300,18 +303,15 @@ enum SheetRoute: Hashable {
             hasher.combine(1)
             hasher.combine(hike)
             hasher.combine(photoID)
-        case .recording:
-            hasher.combine(2)
+        // The four that carry nothing, which hash by their case alone.
+        case .offlineCountries, .recording, .totals, .trailDraft:
+            hashBare(into: &hasher)
         case let .walk(walk):
             hasher.combine(3)
             hasher.combine(walk.persistentModelID)
         case .commonsGallery, .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto, .pendingSubmission,
             .pendingPhotos:
             hashCommunity(into: &hasher)
-        case .trailDraft:
-            hasher.combine(8)
-        case .totals:
-            hasher.combine(11)
         case let .routeStyle(hike):
             hasher.combine(12)
             hasher.combine(hike)
@@ -329,6 +329,21 @@ enum SheetRoute: Hashable {
         case let .placesNearby(hike):
             hasher.combine(14)
             hasher.combine(hike)
+        }
+    }
+
+    /// The routes that carry nothing — split from ``hash(into:)`` for the
+    /// reason ``hashCommunity(into:)`` is.
+    private func hashBare(into hasher: inout Hasher) {
+        switch self {
+        case .recording: hasher.combine(2)
+        case .trailDraft: hasher.combine(8)
+        case .totals: hasher.combine(11)
+        // 21 to 23 are numbers the linter would have named.
+        case .offlineCountries: hasher.combine(24)
+        case .commonsGallery, .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto, .hike, .newPlace,
+            .pendingPhotos, .pendingSubmission, .photo, .place, .placesAround, .placesNearby, .routeStyle, .walk:
+            break
         }
     }
 
@@ -367,8 +382,8 @@ enum SheetRoute: Hashable {
             // 17 to 19 are numbers the linter would have named.
             hasher.combine(20)
             hasher.combine(opening.credit.license.sourceURL)
-        case .hike, .newPlace, .photo, .place, .placesAround, .placesNearby, .recording, .routeStyle, .totals,
-            .trailDraft, .walk:
+        case .hike, .newPlace, .offlineCountries, .photo, .place, .placesAround, .placesNearby, .recording,
+            .routeStyle, .totals, .trailDraft, .walk:
             break
         }
     }

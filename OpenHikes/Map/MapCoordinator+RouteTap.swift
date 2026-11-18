@@ -228,6 +228,11 @@ extension MapView.Coordinator: UIGestureRecognizerDelegate {
         // their claim: the maker asks the same question
         // `routeTapTarget(at:in:)` asks first.
         if handleTrailDraftTap(at: point, in: mapView) { return }
+        // While *Offline Maps* is up, a tap inside a country chooses it.
+        if handleCountryOutlineTap(at: point, in: mapView) {
+            HapticMoment.targetHit.play()
+            return
+        }
         let target = routeTapTarget(at: point, in: mapView)
         // Only a hit. A tap that landed on open map is not a failed gesture —
         // it is panning, or nothing at all — and answering it would make the

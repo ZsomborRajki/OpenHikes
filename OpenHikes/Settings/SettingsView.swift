@@ -206,6 +206,7 @@ struct SettingsView: View {
                 systemImage: "internaldrive",
                 bytes: usage?.claimed
             )
+            OfflineCountriesSettingsRow()
             usageRow(
                 "Map cache",
                 systemImage: "clock.arrow.circlepath",

@@ -362,7 +362,7 @@ struct MapSheet: View {
         case let .pendingPhotos(pending):
             pendingPhotosDestination(pending)
         case .commonsGallery, .commonsPhoto, .commonsPhotos, .hike, .newPlace, .photo, .place, .placesAround,
-            .placesNearby, .recording, .routeStyle, .totals, .trailDraft, .walk:
+            .offlineCountries, .placesNearby, .recording, .routeStyle, .totals, .trailDraft, .walk:
             EmptyView()
         }
     }
@@ -534,7 +534,7 @@ struct MapSheet: View {
             placesDestination(for: route)
         case .trailDraft: trailDraftDestination
         case .recording: recordingDestination
-        case .totals: LibraryTotalsView(onOpenHike: openRecord)
+        case .totals, .offlineCountries: overviewDestination(for: route)
         case let .routeStyle(hike): RouteStyleView(hike: hike)
         case let .photo(hike, photoID):
             HikePhotoViewer(

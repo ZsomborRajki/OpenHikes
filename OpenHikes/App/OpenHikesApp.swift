@@ -127,6 +127,12 @@ struct OpenHikesApp: App {
         .onChange(of: scenePhase) { _, phase in
             model.scenePhaseChanged(to: phase)
         }
+        // A launch the system made only to finish a country's download: the
+        // session hands over what it has, and the next launch installs it.
+        // See `OfflineCountryDownloader.swift`.
+        .backgroundTask(.urlSession(BackgroundCountryDownloader.sessionIdentifier)) {
+            await BackgroundCountryDownloader.shared.handleBackgroundEvents()
+        }
     }
 }
 

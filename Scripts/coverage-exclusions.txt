@@ -205,6 +205,20 @@
 # `RecordingSegmentLedger`'s (`RecordingSegmentLedgerTests`), and each row's
 # words are `HikeSegmentFigures`' (`HikeSegmentFiguresTests`).
 #
+# Seven arrived on 2026-11-18 with the downloaded countries (#1482):
+# *Offline Maps* pushed into the map sheet (`OfflineCountriesScreen`, with
+# `MapSheet+OfflineCountries` its destination beside the totals'), the list
+# it and Settings share (`OfflineCountriesList`, `OfflineCountryRow`), the
+# row that opens it on *Map Modes* (`MapModesOfflineMapsRow`), Settings' row
+# (`OfflineCountriesSettingsRow`) and the hike screen's *Offline* tile on the
+# OpenHikes map (`HikeOfflineCountryTile`), all body code. What they decide
+# stays measured: the sections, the countries a line crosses and every
+# download's course are `OfflineCountries`' (`OfflineCountriesDownloadTests`,
+# `OfflineCountriesLaunchTests`), the outlines and the framing of a country
+# are `OfflineCountryOutlines`' (`OfflineCountryOutlinesTests`,
+# `MapCoordinatorTests+CountryOutlines`), and the push is
+# `SheetPresentation.showOfflineCountries()`'s (`SheetOfflineCountriesTests`).
+#
 # The UI suites still exist and still run locally:
 #
 #   Scripts/run-ui-tests.sh --all
@@ -307,3 +321,10 @@ OpenHikes/Recording/RecordingPlaceSheet.swift
 OpenHikes/Map/MapSheet+Places.swift
 OpenHikes/Community/Publishing/CommunityFinishSendingSection.swift
 OpenHikes/Tips/CommunityTabTipView.swift
+OpenHikes/Tiles/Countries/OfflineCountriesScreen.swift
+OpenHikes/Tiles/Countries/OfflineCountriesList.swift
+OpenHikes/Tiles/Countries/OfflineCountryRow.swift
+OpenHikes/Map/MapSheet+OfflineCountries.swift
+OpenHikes/Map/Modes/MapModesOfflineMapsRow.swift
+OpenHikes/Settings/OfflineCountriesSettingsRow.swift
+OpenHikes/Hikes/Detail/HikeOfflineCountryTile.swift
