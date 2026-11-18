@@ -281,6 +281,13 @@
     ]
   },
   {
+    "path": "OpenHikes/Map/MapCoordinator+CountryOutlines.swift",
+    "reason": "The AccentColor asset name.",
+    "literals": [
+      "\"AccentColor\""
+    ]
+  },
+  {
     "path": "OpenHikes/Photos/HikePhotoStore.swift",
     "reason": "Device-local photo and thumbnail directory names.",
     "literals": [
@@ -338,6 +345,21 @@
       "\" (\\(data.count)b) from \\(url.redactedForLogging)\"",
       "\"Tile \\(key) failed: undecodable\"",
       "\" (\\(data.count)b HTTP \\(http.statusCode) \\(contentType))\""
+    ]
+  },
+  {
+    "path": "OpenHikes/Tiles/Countries/OfflineCountryDownloader.swift",
+    "reason": "The fallback stem of the background URL session's identifier, which the system names the session by.",
+    "literals": [
+      "\"OpenHikes\""
+    ]
+  },
+  {
+    "path": "OpenHikes/Tiles/Countries/OfflineCountryStore.swift",
+    "reason": "Device-local directory names for downloaded countries and their staged downloads.",
+    "literals": [
+      "\"OfflineCountries\"",
+      "\"Staging\""
     ]
   },
   {
