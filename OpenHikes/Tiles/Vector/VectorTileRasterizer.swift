@@ -356,10 +356,14 @@ nonisolated private struct Painter {
         context.restoreGState()
     }
 
+    /// No casing for a road not drawn at this zoom: the casing starts at
+    /// zoom 12, a service road or a pedestrian street at 13, and a casing
+    /// with no road inside it would draw as a gray line of its own.
     private func strokeCasing(_ path: CGPath, _ line: VectorTileStyle.Line, cap: CGLineCap) {
         let edge = VectorTileStyle.casingWidth.value(at: z)
-        guard let casing = line.casing, edge > 0 else { return }
-        let width = ZoomCurve([(z, line.width.value(at: z) + 2 * edge)])
+        let fill = line.width.value(at: z)
+        guard let casing = line.casing, edge > 0, fill > 0 else { return }
+        let width = ZoomCurve([(z, fill + 2 * edge)])
         stroke(path, VectorTileStyle.Line(color: casing, width: width), cap: cap)
     }
 
