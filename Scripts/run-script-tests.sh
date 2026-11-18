@@ -5339,16 +5339,25 @@ fi
 # The upload publishes each file's SHA-256 in the manifest, and the app throws
 # away a download that does not match it, so a name already in the bucket is
 # reused only for the same bytes. `curl` is a stub again, answering a HEAD
-# with the headers in STUB_CURL_HEADERS (a 404 when empty), a GET of an
-# archive with STUB_CURL_BODY, the manifest's GET with a 404, and a PUT with a
-# 200, as `-w "%{http_code}"` prints them.
+# with the headers in STUB_CURL_HEADERS (a 404 when empty), and every HEAD
+# after the first with STUB_CURL_HEADERS_THEN where that is set, a GET of an
+# archive with STUB_CURL_BODY, the manifest's GET with a 404, and the PUTs in
+# turn with the codes in STUB_CURL_PUTS (the last one again once they run
+# out; 200 when it is empty), as `-w "%{http_code}"` prints them.
 cat > "$stub_bin/curl" <<'STUB'
 #!/usr/bin/env bash
 printf 'curl %s\n' "$*" >> "$STUB_CALL_LOG"
 if [[ " $* " == *" -I "* ]]; then
-    printf '%b' "${STUB_CURL_HEADERS:-HTTP/1.1 404 Not Found\r\n\r\n}"
+    if [[ -n "${STUB_CURL_HEADERS_THEN:-}" ]] && (( $(grep -c -- ' -I ' "$STUB_CALL_LOG") > 1 )); then
+        printf '%b' "$STUB_CURL_HEADERS_THEN"
+    else
+        printf '%b' "${STUB_CURL_HEADERS:-HTTP/1.1 404 Not Found\r\n\r\n}"
+    fi
 elif [[ " $* " == *" -T "* ]]; then
-    printf '200'
+    read -r -a answers <<< "${STUB_CURL_PUTS:-200}"
+    put="$(grep -c -- ' -T ' "$STUB_CALL_LOG")"
+    (( put <= ${#answers[@]} )) || put="${#answers[@]}"
+    printf '%s' "${answers[put - 1]}"
 elif [[ " $* " == *"manifest.json"* ]]; then
     printf '404'
 elif [[ " $* " == *".pmtiles"* ]]; then
@@ -5421,6 +5430,41 @@ OPENHIKES_R2_ENV="$countries_work/r2.env" \
     "$offline_countries" upload "$countries_work/out"
 if expect_status 1 \
     && expect_contains "$output" "countries/SI-20261117.pmtiles is in the bucket with other bytes" "the error" \
+    && expect_absent "$calls" "manifest.json" "the requests"; then
+    pass
+fi
+
+# Across a world of uploads R2 answers a 500 now and then, which cut the first
+# run short; the upload asks again, and gives up only on a server that keeps
+# failing.
+OPENHIKES_R2_ENV="$countries_work/r2.env" OPENHIKES_R2_RETRY_SECONDS=0 STUB_CURL_PUTS="500 200" \
+    run_script "offline-countries upload asks R2 again after a server error" \
+    "$offline_countries" upload "$countries_work/out"
+if expect_status 0 \
+    && expect_contains "$output" "uploaded countries/SI-20261117.pmtiles" "the output" \
+    && expect_contains "$output" "wrote countries/manifest.json" "the output"; then
+    if [[ "$(grep -c -- "-T $countries_work/out/SI-20261117.pmtiles" <<< "$calls")" != 2 ]]; then
+        fail "the archive was not sent twice" "$calls"
+    else
+        pass
+    fi
+fi
+
+OPENHIKES_R2_ENV="$countries_work/r2.env" OPENHIKES_R2_RETRY_SECONDS=0 STUB_CURL_PUTS="500 412 200" \
+    STUB_CURL_HEADERS_THEN="HTTP/1.1 200 OK\r\nContent-Length: 7\r\nx-amz-meta-sha256: $country_sha256\r\n\r\n" \
+    run_script "offline-countries upload takes a retry's 412 as its own attempt landing when the digest is this file's" \
+    "$offline_countries" upload "$countries_work/out"
+if expect_status 0 \
+    && expect_contains "$output" "uploaded countries/SI-20261117.pmtiles" "the output" \
+    && expect_contains "$output" "wrote countries/manifest.json" "the output"; then
+    pass
+fi
+
+OPENHIKES_R2_ENV="$countries_work/r2.env" OPENHIKES_R2_RETRY_SECONDS=0 STUB_CURL_PUTS="500" \
+    run_script "offline-countries upload gives up on a server that keeps failing" \
+    "$offline_countries" upload "$countries_work/out"
+if expect_status 1 \
+    && expect_contains "$output" "R2 answered 500 to the upload of countries/SI-20261117.pmtiles" "the error" \
     && expect_absent "$calls" "manifest.json" "the requests"; then
     pass
 fi

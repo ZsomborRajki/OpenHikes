@@ -168,6 +168,22 @@ r2_curl() {
         -H "x-amz-content-sha256: UNSIGNED-PAYLOAD" "$@"
 }
 
+# A PUT to the bucket, asked again when R2 answers a server error or the
+# connection fails: across a world of uploads, a 500 now and then is R2's.
+# Prints the last status. A retry after an attempt that did land meets
+# If-None-Match and answers 412, which the caller settles by the digest.
+r2_put() {
+    local attempt status
+    for attempt in 1 2 3 4; do
+        status="$(r2_curl -o /dev/null -w "%{http_code}" "$@")"
+        case "$status" in
+            5??|000) sleep $(( attempt * ${OPENHIKES_R2_RETRY_SECONDS:-2} )) ;;
+            *) break ;;
+        esac
+    done
+    printf '%s\n' "$status"
+}
+
 upload() {
     [[ $# -ge 1 ]] || usage
     local dir="$1" dry_run=false
@@ -215,9 +231,17 @@ upload() {
             echo "offline-countries: would upload $path ($local_size bytes)"
             continue
         fi
-        status="$(r2_curl -o /dev/null -w "%{http_code}" -H "If-None-Match: *" \
+        status="$(r2_put -H "If-None-Match: *" \
             -H "Content-Type: application/octet-stream" -H "x-amz-meta-sha256: $sha256" \
             -T "$dir/$name" "$base/$path")"
+        if [[ "$status" == 412 ]]; then
+            # Taken since the HEAD above: by an attempt of ours that landed
+            # after all, if the digest beside it is this file's.
+            remote_sha256="$(r2_curl -I "$base/$path" | tr -d '\r' \
+                | awk 'tolower($1) == "x-amz-meta-sha256:" {print $2}')"
+            [[ "$remote_sha256" == "$sha256" ]] || die "$path reached the bucket from another upload first"
+            status=200
+        fi
         [[ "$status" == 200 ]] || die "R2 answered $status to the upload of $path"
         echo "offline-countries: uploaded $path ($local_size bytes)"
     done < <("$tool" files "$dir/manifest.json")
@@ -234,8 +258,7 @@ upload() {
         echo "offline-countries: would write the merged manifest ($merged)"
         return
     fi
-    status="$(r2_curl -o /dev/null -w "%{http_code}" -H "Content-Type: application/json" \
-        -T "$merged" "$base/countries/manifest.json")"
+    status="$(r2_put -H "Content-Type: application/json" -T "$merged" "$base/countries/manifest.json")"
     [[ "$status" == 200 ]] || die "R2 answered $status to the manifest"
     echo "offline-countries: wrote countries/manifest.json"
 }
