@@ -55,7 +55,7 @@ private struct MapModesSheetModifier: ViewModifier {
     func body(content: Content) -> some View {
         content.sheet(
             isPresented: modals.binding(modals.mapModes.isPresentedBinding, for: presenter),
-            onDismiss: modals.mapModes.didDismiss
+            onDismiss: modals.mapModesDidDismiss
         ) {
             MapModesView(
                 entitlement: entitlement,
