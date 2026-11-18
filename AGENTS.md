@@ -817,11 +817,12 @@ a change to recording, the map, the sheet or the render path; the PR template,
 
 ### First-run tips
 
-- **TipKit, in two ordered queues** (`AppTips`). The main screen's are
-  *Record a Hike*, *Make a Trail*, the *Community* tab and *Search this
-  area*; the recording screen's are *Add Place* and *Places Nearby*. A screen
-  never shows two at once, and a tip goes for good once it is closed or its
-  control is used.
+- **TipKit, in two ordered queues and one tip of its own** (`AppTips`). The
+  main screen's are *Record a Hike*, *Make a Trail*, the *Community* tab and
+  *Search this area*; the recording screen's are *Add Place* and *Places
+  Nearby*. *Offline Maps*, over its row on *Map Modes*, is the only tip that
+  sheet shows, so it waits in no queue. A screen never shows two at once, and
+  a tip goes for good once it is closed or its control is used.
 - **The two about making a hike are for a new hiker** (`CreationTipsAudience`).
   They are retired the first time the list holds a hike, so an existing hiker
   never sees them and the queue moves on to the *Community* tab's. A
@@ -835,8 +836,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
   present nothing else (see *Present modals from inside the sheet's
   contents*). And a `.popoverTip` on a toolbar button never presented at all,
   measured on iOS 27. The map's tips are cards beside their controls
-  (`MapTipCards.swift`), the *Community* tab's sits under the picker, and the
-  recording screen's sit under its bar.
+  (`MapTipCards.swift`), the *Community* tab's sits under the picker, the
+  recording screen's sit under its bar, and *Map Modes*' sits over its row.
 - **A card on the map speaks for itself.** MapKit builds the map's
   accessibility from its UIKit elements and walks straight past TipKit's
   SwiftUI, so `MapTipCardView` is one element carrying the title, the message
@@ -936,7 +937,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
 - **Files outside SwiftData need an owner and a sweep.** Photo and tile
   deletion is fire-and-forget, so at launch `TileCache.trimCache(claimedBy:)`
   and `HikePhotoStore.reclaimOrphans(claimedBy:)` sweep from a *complete* claim
-  set. A failed fetch sweeps nothing.
+  set. A failed fetch sweeps nothing. A downloaded country's owner is an index
+  of its own (*The offline countries*).
 - **Persisted identifiers are stable:**
   - provider IDs
   - `SettingsKey` strings
@@ -954,6 +956,10 @@ a change to recording, the map, the sheet or the render path; the PR template,
     layer's (`RouteSquareGridTests`; see *The hiking-routes layer*), the
     places' (`PlaceSquareGridTests`; see *The place squares*) and the trail
     graph's (`TrailGraphSquareGridTests`; see *The trail graph squares*)
+  - the background session the countries download in
+    (`BackgroundCountryDownloader.sessionIdentifier`), which the system wakes
+    the app for, and `countries/manifest.json` with the names of the files it
+    lists, which every installed build reads (*The offline countries*)
 
 ## Conventions
 
@@ -1217,6 +1223,71 @@ a change to recording, the map, the sheet or the render path; the PR template,
     overwritten in place would mix two builds on screen.
   - **The server is not in this repository.** It is a Worker and an R2
     bucket.
+
+### The offline countries
+
+A whole country can be downloaded for the OpenHikes map (#1482), from
+*Offline Maps*: a row at the foot of *Map Modes*, which pushes the list into
+the map sheet with every country outlined on the map behind it; a row in
+Settings' storage section; and the hike screen's *Offline* tile on that map,
+which offers the countries the trail crosses. `OfflineCountries` is the one
+owner, on the main actor.
+
+- **One file a country, cut on the server and read in place.**
+  `Scripts/offline-countries.sh build` cuts each country in
+  `Scripts/lib/offline-countries.json` out of the planet the map draws, its
+  basemap and its extras, along Natural Earth's 1:50m outline grown by 3 km,
+  to zoom 15. It reads the bucket with signed ranges, so nothing downloads
+  the planet, and reads each cut back through the app's reader before
+  listing it. `upload` puts the files under `countries/` as
+  `<ISO>-<build>.pmtiles` and `<ISO>-extras-<build>.pmtiles`, never over a
+  file of the same name, and writes `countries/manifest.json`
+  (`OfflineCountryManifest`) last. The app keeps the file as it arrived and
+  reads tiles out of it (`PMTilesArchive`); nothing is unpacked into the tile
+  cache.
+- **The tool compiles the app's format files as they stand**
+  (`PMTilesFile.swift`, `PMTilesArchive.swift`, `OfflineCountryManifest.swift`
+  and `PackedBytes.swift`), which import nothing of the app's, and
+  `Scripts/run-script-tests.sh` builds it and runs its `selftest`.
+- **The Worker serves `countries/` straight out of R2**, with ranges, and no
+  other object of the bucket.
+- **A country is drawn before the network is asked.** `TileCache` asks the
+  downloaded countries (`OfflineCountryArchives`) for an OpenHikes tile ahead
+  of the network policy, so a country draws with no signal, and ahead of the
+  tile server, so it costs the server nothing once it is down. The tile is
+  drawn as the server's bytes would have been (`OfflineCountryDrawing`),
+  past the country's deepest zoom from the tile around it, and filed in the
+  cache as any tile is. A tile no country holds goes to the server as before.
+- **A download is `.speculative`.** It runs in a background `URLSession` that
+  refuses cellular, expensive and constrained paths, so it waits for Wi-Fi by
+  itself. Low Power Mode or heat refuse it outright (`TileNetworkPolicy`),
+  and so does a volume without room for the country and
+  `OfflineCountries.spareBytes` besides. A file that stopped resumes from the
+  session's resume data.
+- **Checked before it is used.** Each file is staged and moved into place
+  only once its size and SHA-256 match the manifest's
+  (`OfflineCountryStore.isWhole`). An update downloads the new build beside
+  the old one, and deletes the old one only once the new one is in.
+- **Owned by an index, not a row.** A country belongs to the device, and the
+  tile cache reads the list from MapKit's drawing threads, where a main-actor
+  model cannot be read. So `OfflineCountryStore` keeps a JSON index beside the
+  archives under Application Support, out of the backup, and the launch sweep
+  deletes every archive the index does not name and every staged file no
+  pending download is for. A record whose file has gone reads as not
+  downloaded.
+- **A name off the network never reaches a path.** The manifest's file names
+  are held to the shape the server's route serves
+  (`OfflineCountryManifest.File.hasSafeName`), and a country listing one that
+  is not is left off whole, as is one cut from a planet schema the
+  rasterizer does not draw.
+- **Free.** Nothing on the download path checks an entitlement.
+- **No suite reaches the server or the session.**
+  `OfflineCountries.forThisLaunch()` has neither under `isRunningTests`, and
+  `TileCache.shared` has no countries there.
+- **Deployment state, checked 2026-11-18.** The bucket holds Slovenia, cut
+  from planet build `20261117`, and a manifest listing it. The Worker
+  deployed to `tiles.openhikes.app` has no `countries/` route yet, so the
+  list fails to load until it does.
 
 ### Accessibility
 
