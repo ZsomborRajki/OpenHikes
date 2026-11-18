@@ -129,7 +129,8 @@ private extension View {
                 modals,
                 from: presenter,
                 entitlement: model.entitlement,
-                locationManager: model.locationManager
+                locationManager: model.locationManager,
+                offlineCountries: model.offlineCountries
             )
             .locationAccessAlert(modals, from: presenter)
             .offTrailQuestionAlert(modals, from: presenter, model: model)

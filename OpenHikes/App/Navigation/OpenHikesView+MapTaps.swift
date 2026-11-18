@@ -32,7 +32,7 @@ extension OpenHikesView {
     /// outlives the view anyway, and the selection's own projection — whose
     /// storage does too, for the reason ``MapSheetHikes``'s `==` gives for the
     /// closures it excludes.
-    func claimMapTaps() {
+    func claimMapTaps(mapModes: MapModesPresentation) {
         appModel.community.onOpenListing { [sheet, selection = $selectedHike, context = modelContext] listing in
             sheet.open(
                 listing,
@@ -63,6 +63,11 @@ extension OpenHikesView {
         drawnRouteTap.onOpen { [sheet, selection = $selectedHike] in
             guard let hike = selection.wrappedValue else { return }
             sheet.showDrawnRoute(hike)
+        }
+        // And *Offline Maps*, which *Map Modes* opens over the map once it
+        // has gone — see ``MapModesPresentation``.
+        mapModes.onOpenOfflineMaps { [sheet] in
+            sheet.showOfflineCountries()
         }
     }
 }

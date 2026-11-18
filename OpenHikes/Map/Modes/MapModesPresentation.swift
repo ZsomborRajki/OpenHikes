@@ -42,4 +42,29 @@ final class MapModesPresentation {
     func dismiss() {
         isPresented = false
     }
+
+    /// What the *Offline Maps* row opens, which the screen holding the map
+    /// sheet's path hands over.
+    @ObservationIgnored private var openOfflineMaps: (() -> Void)?
+    /// Set by the row, read once the sheet is gone.
+    @ObservationIgnored private var opensOfflineMapsOnDismiss = false
+
+    func onOpenOfflineMaps(_ open: @escaping () -> Void) {
+        openOfflineMaps = open
+    }
+
+    /// Closes *Map Modes* and, once it is down, opens *Offline Maps*: a push
+    /// onto the map sheet under a sheet still going is a push that lands
+    /// behind it.
+    func dismissOpeningOfflineMaps() {
+        opensOfflineMapsOnDismiss = true
+        isPresented = false
+    }
+
+    /// The sheet's `onDismiss`.
+    func didDismiss() {
+        guard opensOfflineMapsOnDismiss else { return }
+        opensOfflineMapsOnDismiss = false
+        openOfflineMaps?()
+    }
 }

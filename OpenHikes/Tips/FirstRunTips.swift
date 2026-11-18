@@ -101,3 +101,14 @@ nonisolated struct PlacesNearbyTip: Tip {
     }
     var image: Image? { Image(systemName: RecordingPlaceSymbols.placesNearby) }
 }
+
+/// On *Map Modes*, over its *Offline Maps* row: the one way to the countries
+/// there is to download, which nothing else on the map points at.
+nonisolated struct OfflineMapsTip: Tip {
+    static let tipID = "map-modes-offline-maps"
+
+    var id: String { Self.tipID }
+    var title: Text { Text("Use the Map with No Signal") }
+    var message: Text? { Text("Download a whole country before your trip.") }
+    var image: Image? { Image(systemName: MapModesOfflineMapsRow.symbolName) }
+}

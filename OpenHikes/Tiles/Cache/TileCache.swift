@@ -55,7 +55,10 @@ nonisolated final class TileCache: @unchecked Sendable {
         // No suite reaches the tile server, UI tests included, as none reaches
         // the hiking-routes squares: a suite draws the raster tiles it always
         // has. See *Tiles* in `AGENTS.md`.
-        vectorSources: AppLaunchEnvironment.isRunningTests ? [:] : TileProvider.vectorSources
+        vectorSources: AppLaunchEnvironment.isRunningTests ? [:] : TileProvider.vectorSources,
+        // The downloaded countries, which the countries' model opens into
+        // this. A suite's cache has none, as it has no vector source.
+        countryArchives: AppLaunchEnvironment.isRunningTests ? nil : .shared
     )
 
     static let logger = Logger(subsystem: "OpenHikes", category: "TileRequests")
@@ -169,6 +172,10 @@ nonisolated final class TileCache: @unchecked Sendable {
     /// Draws the tiles of the providers that have a ``VectorTileSource``, or
     /// `nil` when none does. Shares ``session``.
     private let vectorTiles: VectorTileClient?
+    /// Draws the same providers' tiles out of the downloaded countries, or
+    /// `nil` when none is drawn from vector tiles or no countries were
+    /// given. See `TileCache+Countries.swift`.
+    let countryTiles: OfflineCountryDrawing?
 
     /// Live network conditions, updated by `NWPathMonitor`. Tile loads short-
     /// circuit on these, so an offline app doesn't fire (and log) a doomed
@@ -309,6 +316,9 @@ nonisolated final class TileCache: @unchecked Sendable {
     ///   - vectorSources: the providers whose tiles are drawn from a vector
     ///     archive, by provider id. Empty — the default, and every suite's
     ///     unless it asks — fetches every tile from its raster template.
+    ///   - countryArchives: the downloaded countries those providers' tiles
+    ///     are drawn from before any server is asked. `nil` — the default —
+    ///     draws nothing from them.
     ///   - durableByteLimitScale: shrinks every provider's durable ceiling by
     ///     this factor. `1` — the app — enforces the real figure the terms
     ///     set; a test passes something tiny so it can reach the ceiling with
@@ -321,6 +331,7 @@ nonisolated final class TileCache: @unchecked Sendable {
         monitorsNetwork: Bool = true,
         mutationKeyLimit: Int = TileCache.mutationKeyVersionLimit,
         vectorSources: [String: VectorTileSource] = [:],
+        countryArchives: OfflineCountryArchives? = nil,
         durableByteLimitScale: Double = 1,
         readPower: @escaping @Sendable () -> PowerState = { .current }
     ) {
@@ -339,7 +350,7 @@ nonisolated final class TileCache: @unchecked Sendable {
 
         let config = Self.tileSessionConfiguration(from: sessionConfiguration)
         session = URLSession(configuration: config)
-        vectorTiles = vectorSources.isEmpty ? nil : VectorTileClient(sources: vectorSources, session: session)
+        (vectorTiles, countryTiles) = Self.vectorDrawing(vectorSources, session, countryArchives)
 
         memory.totalCostLimit = Self.memoryByteLimit
         // A secondary backstop, kept for the pathological case of very small
@@ -368,7 +379,7 @@ nonisolated final class TileCache: @unchecked Sendable {
 /// At file scope rather than nested inside ``TileCache`` only so the
 /// conditional conformance below can name it. Top-level `private` is the same
 /// visibility a nested `private` gave it: nothing outside this file sees it.
-private struct FetchedTile {
+struct FetchedTile {
     let data: Data
     let image: TileImage
     /// A tile drawn without the vector extras the server failed to give:
@@ -539,6 +550,9 @@ nonisolated extension TileCache {
         answeringWithStaleCoverage: Bool,
         token: MutationToken
     ) async -> TileLoadResult {
+        // A downloaded country holds the tile: drawn with no connection, which
+        // is the point of having downloaded it. See `TileCache+Countries.swift`.
+        if let drawn = countryTile(forKey: key, wasDurable: stored.wasDurable, token: token) { return drawn }
         // Offline, metered, or asked to conserve: the tile isn't cached and
         // opening a connection for it is either doomed or unwanted. Return
         // without requesting so we don't spam failing loads for every visible
@@ -720,7 +734,7 @@ nonisolated extension TileCache {
     /// tile twice. The `.atomic` write below is what makes the replacement a
     /// single step, so a hiker who backgrounds the app mid-refresh still has
     /// a whole tile afterwards rather than half of one.
-    private func storeFetchedTile(
+    func storeFetchedTile(
         _ fetched: FetchedTile,
         forKey key: String,
         in tier: StorageTier,

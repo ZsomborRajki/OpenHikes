@@ -137,6 +137,10 @@ final class OpenHikesModel {
     /// declaration rather than in `init`, which is at its length limit. See
     /// ``makeWikidataLookup()``.
     let wikidataLookup: WikidataPlaceLookup? = OpenHikesModel.makeWikidataLookup()
+    /// The countries downloaded for the OpenHikes map, and those to download
+    /// (#1482). A suite's has no server and lists nothing — see
+    /// ``OfflineCountries/forThisLaunch()``.
+    let offlineCountries = OfflineCountries.forThisLaunch()
 
     /// Where the app asks OpenStreetMap what is on a trail — the maker's
     /// *Search this area*, a saved hike's *Places Around Trail* and the
@@ -300,6 +304,11 @@ final class OpenHikesModel {
         if !AppLaunchEnvironment.isRunningTests {
             Task { await Self.removeRetiredDeviceReports() }
         }
+        // Here rather than in the root view's launch task for the walk's
+        // reason below: a launch the system makes only to finish a country's
+        // download shows no view, and the next one installs what landed.
+        // A suite's model has nothing to start.
+        Task { [offlineCountries] in await offlineCountries.start() }
         // Behind the same guard, and for the same reason: adopting a walk
         // writes the sidecar and pins the tracker, underneath suites that own
         // their own. Here rather than in the root view's launch task because
