@@ -24,11 +24,26 @@ import Foundation
 nonisolated struct OfflineCountryStore: Sendable {
     static let directoryName = "OfflineCountries"
 
-    /// A downloaded country: the manifest's entry it was downloaded from,
-    /// outline and all, so it is listed and drawn with no network.
+    /// A downloaded area: the manifest's entry it was downloaded from,
+    /// outline and all, so it is listed and drawn with no network, and
+    /// whether its zoom 15 came down with it.
     struct Record: Codable, Equatable, Sendable {
         var country: OfflineCountryManifest.Country
         var installedAt: Date
+        var hasDetail = false
+
+        /// The files on the device.
+        var files: [OfflineCountryManifest.File] { country.files(withDetail: hasDetail) }
+        var byteCount: Int64 { files.reduce(0) { $0 + $1.byteCount } }
+    }
+
+    /// A download started and not finished: the area, and which of its
+    /// files it asked for.
+    struct Pending: Codable, Equatable, Sendable {
+        var country: OfflineCountryManifest.Country
+        var roles: [OfflineCountryManifest.Role]
+
+        var files: [OfflineCountryManifest.File] { country.files.filter { roles.contains($0.role) } }
     }
 
     let directory: URL
@@ -58,11 +73,11 @@ nonisolated struct OfflineCountryStore: Sendable {
 
     // MARK: - What is kept
 
-    /// The countries downloaded, leaving out any whose file has gone.
+    /// The areas downloaded, leaving out any whose files have gone.
     func installed() -> [Record] {
         let records = read([Record].self, from: indexURL) ?? []
         return records.filter { record in
-            record.country.files.allSatisfy { FileManager.default.fileExists(atPath: fileURL(for: $0).path) }
+            record.files.allSatisfy { FileManager.default.fileExists(atPath: fileURL(for: $0).path) }
         }
     }
 
@@ -70,13 +85,13 @@ nonisolated struct OfflineCountryStore: Sendable {
         try write(records, to: indexURL)
     }
 
-    /// The countries a download was started for and has not finished.
-    func pending() -> [OfflineCountryManifest.Country] {
-        read([OfflineCountryManifest.Country].self, from: pendingURL) ?? []
+    /// The downloads started and not finished.
+    func pending() -> [Pending] {
+        read([Pending].self, from: pendingURL) ?? []
     }
 
-    func write(pending countries: [OfflineCountryManifest.Country]) throws {
-        try write(countries, to: pendingURL)
+    func write(pending downloads: [Pending]) throws {
+        try write(downloads, to: pendingURL)
     }
 
     /// The manifest last fetched, so the list is there with no signal.
@@ -98,31 +113,30 @@ nonisolated struct OfflineCountryStore: Sendable {
 
     // MARK: - Changes
 
-    /// Moves a country's staged files into place. Call only once every one
-    /// has been checked with ``isWhole(_:at:)``.
-    func install(_ country: OfflineCountryManifest.Country, at date: Date) throws -> Record {
-        for file in country.files {
+    /// Moves staged files into place. Call only once every one has been
+    /// checked with ``isWhole(_:at:)``.
+    func install(_ files: [OfflineCountryManifest.File]) throws {
+        for file in files {
             let destination = fileURL(for: file)
             if FileManager.default.fileExists(atPath: destination.path) {
                 try FileManager.default.removeItem(at: destination)
             }
             try FileManager.default.moveItem(at: stagedURL(for: file), to: destination)
         }
-        return Record(country: country, installedAt: date)
     }
 
-    /// Deletes `record`'s files, except any that `keeping` also names.
-    func remove(_ record: Record, keeping: [Record] = []) {
-        let kept = Set(keeping.flatMap(\.country.files).map(\.fileName))
-        for file in record.country.files where !kept.contains(file.fileName) {
+    /// Deletes `files`, except any that a record in `keeping` still holds.
+    func remove(_ files: [OfflineCountryManifest.File], keeping: [Record] = []) {
+        let kept = Set(keeping.flatMap(\.files).map(\.fileName))
+        for file in files where !kept.contains(file.fileName) {
             try? FileManager.default.removeItem(at: fileURL(for: file))
         }
     }
 
-    /// Deletes every archive the index does not name, and every staged file
+    /// Deletes every archive the index does not hold, and every staged file
     /// no pending download is for.
-    func sweep(keeping records: [Record], pending: [OfflineCountryManifest.Country]) {
-        let kept = Set(records.flatMap(\.country.files).map(\.fileName))
+    func sweep(keeping records: [Record], pending: [Pending]) {
+        let kept = Set(records.flatMap(\.files).map(\.fileName))
         let staged = Set(pending.flatMap(\.files).map(\.fileName))
         for (folder, keep) in [(directory, kept), (stagingDirectory, staged)] {
             let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []

@@ -79,6 +79,45 @@ extension Tool {
         }
         guard try archive.tile(z: maximumZoom, x: 0, y: 0) == nil else { fail("the cut kept a tile it should not") }
         guard archive.header.isClustered else { fail("the cut is not clustered") }
+        try checkAreas()
         print("offline-countries: selftest passed (\(wanted.count) tiles cut, \(tiles.count) in the world)")
+    }
+
+    /// What is cut: a split country as its regions, a region filed under it
+    /// whose code names another country in that country, an area with no
+    /// code joined to the country the plan names and otherwise left out.
+    static func checkAreas() throws {
+        func square(_ west: Double, _ south: Double) -> [String: Any] {
+            ["type": "Polygon", "coordinates": [[[west, south], [west + 1, south], [west + 1, south + 1], [west, south]]]]
+        }
+        func feature(_ properties: [String: Any], _ geometry: [String: Any]) -> [String: Any] {
+            ["properties": properties, "geometry": geometry]
+        }
+        let countries = [
+            feature(["ISO_A2_EH": "UA", "NAME": "Ukraine"], square(30, 48)),
+            feature(["ISO_A2_EH": "RU", "NAME": "Russia"], square(40, 55)),
+            feature(["ISO_A2_EH": "SO", "NAME": "Somalia"], square(45, 3)),
+            feature(["ISO_A2_EH": "-99", "NAME": "Somaliland"], square(45, 9)),
+            feature(["ISO_A2_EH": "-99", "NAME": "Siachen Glacier"], square(77, 35)),
+        ]
+        let regions = [
+            feature(["iso_a2": "RU", "iso_3166_2": "RU-MOW", "name_en": "Moscow", "name_de": "Moskau"], square(37, 55)),
+            feature(["iso_a2": "RU", "iso_3166_2": "UA-43", "name_en": "Crimea"], square(34, 45)),
+            feature(["iso_a2": "RU", "iso_3166_2": "RU-X01~"], square(50, 70)),
+            feature(["iso_a2": "FR", "iso_3166_2": "FR-75"], square(2, 48)),
+        ]
+        let areas = try Areas.all(
+            plan: AreaPlan(split: ["RU"], attach: ["Somaliland": "SO"]),
+            countries: countries,
+            regions: regions
+        )
+        let byID = Dictionary(uniqueKeysWithValues: areas.map { ($0.id, $0) })
+        guard areas.map(\.id) == ["RU-MOW", "SO", "UA"] else { fail("the areas are \(areas.map(\.id))") }
+        guard byID["UA"]?.rings.count == 2 else { fail("Crimea is not in Ukraine") }
+        guard byID["SO"]?.rings.count == 2 else { fail("Somaliland is not in Somalia") }
+        guard let moscow = byID["RU-MOW"], moscow.group == "RU", moscow.names["de"] == "Moskau" else {
+            fail("Moscow is not a region of Russia named in German")
+        }
+        guard byID["UA"]?.group == nil, byID["UA"]?.names.isEmpty == true else { fail("Ukraine is not a whole country") }
     }
 }

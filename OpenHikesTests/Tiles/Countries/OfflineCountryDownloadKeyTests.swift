@@ -13,9 +13,7 @@ import Testing
 
 @Suite("Offline country download key")
 struct OfflineCountryDownloadKeyTests {
-    @Test("a task's label reads back as the file it was for", arguments: [
-        OfflineCountryManifest.Role.basemap, .extras,
-    ])
+    @Test("a task's label reads back as the file it was for", arguments: OfflineCountryManifest.Role.allCases)
     func roundTrip(role: OfflineCountryManifest.Role) {
         let key = OfflineCountryDownloadKey(country: "AT", build: "20261117", role: role)
         #expect(OfflineCountryDownloadKey(taskDescription: key.taskDescription) == key)
@@ -34,5 +32,9 @@ struct OfflineCountryDownloadKeyTests {
         let extras = OfflineCountryDownloadKey(country: "AT", build: "20261117", role: .extras)
         #expect(basemap.fileName == "AT-20261117.pmtiles")
         #expect(extras.fileName == "AT-extras-20261117.pmtiles")
+        let detail = OfflineCountryDownloadKey(country: "US-CO", build: "20261117", role: .detail)
+        let detailExtras = OfflineCountryDownloadKey(country: "US-CO", build: "20261117", role: .detailExtras)
+        #expect(detail.fileName == "US-CO-detail-20261117.pmtiles")
+        #expect(detailExtras.fileName == "US-CO-detail-extras-20261117.pmtiles")
     }
 }

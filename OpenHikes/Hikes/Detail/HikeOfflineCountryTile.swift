@@ -49,8 +49,8 @@ struct HikeOfflineCountryTile: View {
                 }
             } else if let countries {
                 ForEach(missing) { country in
-                    let name = OfflineCountries.name(of: country.id)
-                    Button("Download \(name) · \(OfflineCountryRow.bytes(country.byteCount))") {
+                    let name = OfflineCountries.fullName(of: country)
+                    Button("Download \(name) · \(OfflineCountryRow.bytes(countries.byteCount(of: country)))") {
                         countries.download(country)
                     }
                 }

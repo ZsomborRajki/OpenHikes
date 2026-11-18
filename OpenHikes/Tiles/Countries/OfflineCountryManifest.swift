@@ -2,17 +2,21 @@
 //  OfflineCountryManifest.swift
 //  OpenHikes
 //
-//  What the tile server offers to download: one entry a country, each a
-//  basemap archive and an extras archive cut out of the planet build the
-//  OpenHikes map draws, with the outline they were cut along. It lives at
-//  `countries/manifest.json` on `tiles.openhikes.app`, beside the files, and
-//  `Scripts/offline-countries.sh` writes it.
+//  What the tile server offers to download: one entry an area, which is a
+//  country, or a state or province of one of the few countries too big for
+//  one download (`group` names the country). Each area is four archives cut
+//  out of the planet build the OpenHikes map draws, with the outline they
+//  were cut along: the basemap and its extras to zoom 14, which every
+//  download takes, and the two at zoom 15, which *Extra Detail* adds. It
+//  lives at `countries/manifest.json` on `tiles.openhikes.app`, beside the
+//  files, and `Scripts/offline-countries.sh` writes it.
 //
 //  The tool compiles this file as it stands, so it imports Foundation and
 //  nothing of the app's and says `nonisolated` on every declaration.
 //
 //  A country's name is not here: the app names it in the hiker's language
-//  from its ISO code (`Locale.localizedString(forRegionCode:)`).
+//  from its ISO code (`Locale.localizedString(forRegionCode:)`). A region's
+//  is, in each of the app's languages, from Natural Earth.
 //
 
 import Foundation
@@ -30,21 +34,29 @@ nonisolated struct OfflineCountryManifest: Codable, Equatable, Sendable {
     /// The countries, by ISO code.
     var countries: [Country]
 
-    /// The countries this app can draw: of its schema, with a basemap, and
-    /// with names the device can keep them under.
+    /// The areas this app can draw: of its schema, with a basemap, and with
+    /// names the device can keep them under, each of them the area's own.
     var readableCountries: [Country] {
         guard version == Self.currentVersion else { return [] }
         return countries.filter { country in
             country.schema == Self.readableSchema
-                && country.hasCountryCode
+                && country.hasAreaCode
                 && country.files.contains { $0.role == .basemap }
-                && country.files.allSatisfy(\.hasSafeName)
+                && country.files.allSatisfy { $0.hasSafeName && $0.fileName.hasPrefix(country.id + "-") }
         }
     }
 
+    /// An area to download: a whole country, or a region of one.
     struct Country: Codable, Equatable, Hashable, Sendable, Identifiable {
-        /// ISO 3166-1 alpha-2, upper case.
+        /// ISO 3166-1 alpha-2 for a country (`SI`), ISO 3166-2 for a region
+        /// (`US-CO`), upper case.
         var id: String
+        /// The country a region is part of, by its ISO 3166-1 code, which the
+        /// list files it under; `nil` for a country downloaded whole.
+        var group: String?
+        /// A region's name by language code, `en` among them. A country's is
+        /// empty: the device names it.
+        var names: [String: String]
         /// The planet build the files were cut from, as `yyyymmdd`. A newer
         /// build of a country already downloaded is an update.
         var build: String
@@ -56,8 +68,15 @@ nonisolated struct OfflineCountryManifest: Codable, Equatable, Sendable {
         var outline: [[[Double]]]
         var files: [File]
 
-        /// What downloading it costs, in bytes.
-        var byteCount: Int64 { files.reduce(0) { $0 + $1.byteCount } }
+        /// The files a download takes, with *Extra Detail* or without.
+        func files(withDetail: Bool) -> [File] {
+            files.filter { withDetail || !$0.role.isDetail }
+        }
+
+        /// What downloading it costs, in bytes, with *Extra Detail* or without.
+        func byteCount(withDetail: Bool) -> Int64 {
+            files(withDetail: withDetail).reduce(0) { $0 + $1.byteCount }
+        }
     }
 
     struct File: Codable, Equatable, Hashable, Sendable {
@@ -82,11 +101,18 @@ nonisolated struct OfflineCountryManifest: Codable, Equatable, Sendable {
         }
     }
 
-    enum Role: String, Codable, Sendable {
-        /// The Protomaps basemap's tiles.
+    enum Role: String, Codable, Sendable, CaseIterable {
+        /// The Protomaps basemap's tiles, to zoom 14.
         case basemap = "basemap"
         /// The extras drawn into them (``VectorTileSource/Extras``).
         case extras = "extras"
+        /// The basemap's zoom 15, where its buildings and most of its points
+        /// are: what *Extra Detail* adds.
+        case detail = "detail"
+        /// The extras' zoom 15.
+        case detailExtras = "detail-extras"
+
+        var isDetail: Bool { self == .detail || self == .detailExtras }
     }
 
     struct Bounds: Codable, Equatable, Hashable, Sendable {
@@ -107,24 +133,48 @@ nonisolated extension OfflineCountryManifest.File {
     /// The last part of the path: what the file is kept under on the device.
     var fileName: String { path.split(separator: "/").last.map(String.init) ?? "" }
 
-    /// Whether the name is one the tile server's route serves — a country
-    /// code, `-extras` or not, a build's eight digits — so that no name off
-    /// the network can reach outside the directory it is kept in.
+    /// Whether the name is one the tile server's route serves — an area's
+    /// code, then `-detail`, `-extras`, both or neither, then a build's eight
+    /// digits — so that no name off the network can reach outside the
+    /// directory it is kept in.
     var hasSafeName: Bool {
         guard fileName.hasSuffix(Self.fileExtension) else { return false }
-        var parts = fileName.dropLast(Self.fileExtension.count).split(separator: "-", omittingEmptySubsequences: false)
-        guard parts.count == 2 || (parts.count == 3 && parts[1] == "extras") else { return false }
+        let stem = String(fileName.dropLast(Self.fileExtension.count))
+        var parts = stem.split(separator: "-", omittingEmptySubsequences: false).map(String.init)
+        guard parts.count >= 2 else { return false }
         let build = parts.removeLast()
-        let code = parts[0]
-        return code.count == 2 && code.allSatisfy { $0.isASCII && $0.isUppercase }
-            && build.count == 8 && build.allSatisfy { $0.isASCII && $0.isNumber }
+        guard build.count == 8, build.allSatisfy({ $0.isASCII && $0.isNumber }) else { return false }
+        if parts.last == "extras" { parts.removeLast() }
+        if parts.last == "detail" { parts.removeLast() }
+        return OfflineCountryManifest.isAreaCode(parts.joined(separator: "-"))
+    }
+}
+
+nonisolated extension OfflineCountryManifest {
+    /// Two capitals, as an ISO 3166-1 alpha-2 code is, then for a region a
+    /// hyphen and one to three capitals or digits, as ISO 3166-2's are.
+    static func isAreaCode(_ code: String) -> Bool {
+        let parts = code.split(separator: "-", omittingEmptySubsequences: false)
+        guard let country = parts.first, country.count == 2, country.allSatisfy(isCapital),
+              parts.count <= 2
+        else { return false }
+        guard parts.count == 2 else { return true }
+        let region = parts[1]
+        return (1...3).contains(region.count) && region.allSatisfy { isCapital($0) || ($0.isASCII && $0.isNumber) }
+    }
+
+    private static func isCapital(_ character: Character) -> Bool {
+        character.isASCII && character.isUppercase
     }
 }
 
 nonisolated extension OfflineCountryManifest.Country {
-    /// Whether the id is two capitals, as an ISO 3166-1 alpha-2 code is.
-    var hasCountryCode: Bool {
-        id.count == 2 && id.allSatisfy { $0.isASCII && $0.isUppercase }
+    /// Whether the id is a country's code with no group, or a region's
+    /// under the group its code starts with.
+    var hasAreaCode: Bool {
+        guard OfflineCountryManifest.isAreaCode(id) else { return false }
+        guard let group else { return !id.contains("-") }
+        return id.hasPrefix(group + "-") && OfflineCountryManifest.isAreaCode(group) && !group.contains("-")
     }
 
     /// Whether the point is inside the outline: an even-odd test against each
