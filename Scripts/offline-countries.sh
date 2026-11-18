@@ -3,12 +3,15 @@
 # offline-countries.sh — cut the countries the app downloads out of the planet
 # the OpenHikes map draws, and put them beside it on the tile server.
 #
-# A country is two PMTiles archives: the Protomaps basemap's tiles and the
-# extras' (Scripts/vector-extras.sh), cut along the country's Natural Earth
-# outline grown by a margin, to the zoom the map is drawn from. They are read
-# out of the archives already in the R2 bucket `openhikes-tiles` with signed
-# HTTP ranges, so nothing downloads the planet, and each is read back through
-# the app's own reader and held to the source before it is listed.
+# An area is every country Natural Earth outlines, except the few too big for
+# one download (Scripts/lib/offline-countries.json), which are cut by state or
+# province instead (Scripts/lib/offline-countries/Areas.swift). Each is four
+# PMTiles archives, cut along its outline grown by a margin: the Protomaps
+# basemap's tiles and the extras' (Scripts/vector-extras.sh) to zoom 14, which
+# every download takes, and both at zoom 15, which the app's Extra Detail adds.
+# They are read out of the archives in the R2 bucket `openhikes-tiles` with
+# signed HTTP ranges, or out of local copies of them, and each is read back
+# through the app's own reader and held to the source before it is listed.
 # `countries/manifest.json` lists them, with each file's size and SHA-256 and
 # the outline the map draws; the app reads it from tiles.openhikes.app.
 # *The offline countries* in AGENTS.md is the procedure, and
@@ -18,18 +21,19 @@
 # Scripts/run-script-tests.sh builds the tool and runs `selftest`.
 #
 # Usage:
-#   Scripts/offline-countries.sh build [--only AT,CH] [--out <dir>] [--extras <file>]
-#                                      [--max-zoom <z>] [--margin-km <km>]
+#   Scripts/offline-countries.sh build [--only AT,US] [--out <dir>] [--planet <file>]
+#                                      [--extras <file>] [--margin-km <km>]
 #   Scripts/offline-countries.sh upload <dir> [--dry-run]
 #   Scripts/offline-countries.sh inspect <file.pmtiles>...
 #   Scripts/offline-countries.sh selftest
 #
-#   build     Cut the countries in Scripts/lib/offline-countries.json, or only
-#             those --only names, into <dir> (default .build/offline-countries/out)
-#             with its manifest.json. The planet build is the one
-#             VectorTileSource.openHikesPlanet names; --extras reads the extras
-#             from a local copy rather than from the bucket. Zoom 15 and a
-#             3 km margin by default.
+#   build     Cut every area, or only those --only names (a region's code, or a
+#             split country's for all its regions), into <dir> (default
+#             .build/offline-countries/out) with its manifest.json. The planet
+#             build is the one VectorTileSource.openHikesPlanet names; --planet
+#             and --extras read local copies rather than the bucket, which is
+#             what makes cutting the whole world take hours rather than a day.
+#             A 3 km margin by default.
 #   upload    Put <dir>'s files in the bucket under countries/, each with its
 #             SHA-256 beside it, skipping any already there with the same bytes
 #             and refusing one there with others, then merge its manifest into
@@ -52,9 +56,13 @@ build_dir="${OPENHIKES_OFFLINE_COUNTRIES_BUILD:-$repository_root/.build/offline-
 tool="$build_dir/offline-countries"
 cache="$HOME/Library/Caches/OpenHikes/offline-countries"
 
-# Natural Earth's 1:50m countries, public domain, pinned to a release.
-outlines_url="https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_50m_admin_0_countries.geojson"
+# Natural Earth's 1:50m countries and 1:10m states and provinces, public
+# domain, pinned to a release.
+natural_earth="https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson"
+outlines_url="$natural_earth/ne_50m_admin_0_countries.geojson"
 outlines_sha256="3e458fc036ad0a66411f2c1e6cac49c5d7bfb81cb1123bc513b22511a2b7fdeb"
+regions_url="$natural_earth/ne_10m_admin_1_states_provinces.geojson"
+regions_sha256="22d0e3ad85eb3e27f17cabf8ba2d50e554fbc27a87796ff891d958185da62fb5"
 
 die() {
     echo "offline-countries: $1" >&2
@@ -108,40 +116,45 @@ planet_build() {
     printf '%s\n' "$build"
 }
 
-outlines() {
-    local file="$cache/ne_50m_admin_0_countries-5.1.2.geojson"
+# A Natural Earth file, downloaded once and held to its pinned SHA-256.
+natural_earth_file() {
+    local url="$1" sha256="$2" file
+    file="$cache/$(basename "$url" .geojson)-5.1.2.geojson"
     if [[ ! -f "$file" ]]; then
         mkdir -p "$cache"
-        curl -sSfL -o "$file.part" "$outlines_url" || die "could not download the outlines"
+        curl -sSfL -o "$file.part" "$url" || die "could not download $url"
         mv "$file.part" "$file"
     fi
-    [[ "$(shasum -a 256 "$file" | cut -d ' ' -f 1)" == "$outlines_sha256" ]] \
+    [[ "$(shasum -a 256 "$file" | cut -d ' ' -f 1)" == "$sha256" ]] \
         || die "$file is not the pinned Natural Earth release; delete it and build again"
     printf '%s\n' "$file"
 }
 
 build() {
-    local out="$repository_root/.build/offline-countries/out" extras="" only="" max_zoom=15 margin=3
+    local out="$repository_root/.build/offline-countries/out" planet_file="" extras="" only="" margin=3
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --out) out="$2"; shift 2 ;;
+            --planet) planet_file="$2"; shift 2 ;;
             --extras) extras="$2"; shift 2 ;;
             --only) only="$2"; shift 2 ;;
-            --max-zoom) max_zoom="$2"; shift 2 ;;
             --margin-km) margin="$2"; shift 2 ;;
             *) usage ;;
         esac
     done
     local planet
     planet="$(planet_build)"
+    [[ -n "$planet_file" ]] || planet_file="r2:planet-$planet.pmtiles"
     [[ -n "$extras" ]] || extras="r2:extras-$planet.pmtiles"
-    local outline_file
-    outline_file="$(outlines)"
+    local outline_file region_file
+    outline_file="$(natural_earth_file "$outlines_url" "$outlines_sha256")"
+    region_file="$(natural_earth_file "$regions_url" "$regions_sha256")"
     load_keys
     prepare_tool
-    local arguments=(build --planet "r2:planet-$planet.pmtiles" --extras "$extras" --build "$planet"
-        --outlines "$outline_file" --countries "$repository_root/Scripts/lib/offline-countries.json"
-        --out "$out" --max-zoom "$max_zoom" --margin-km "$margin"
+    local arguments=(build --planet "$planet_file" --extras "$extras" --build "$planet"
+        --outlines "$outline_file" --regions "$region_file"
+        --countries "$repository_root/Scripts/lib/offline-countries.json"
+        --out "$out" --margin-km "$margin"
         --server "https://tiles.openhikes.app/planet-$planet")
     [[ -z "$only" ]] || arguments+=(--only "$only")
     "$tool" "${arguments[@]}"

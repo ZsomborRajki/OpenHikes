@@ -2,7 +2,7 @@
 //  OfflineCountryRow.swift
 //  OpenHikes
 //
-//  One country in *Offline Maps*: its name, what it costs or how far its
+//  One area in *Offline Maps*: its name, what it costs or how far its
 //  download has come, and the one thing to do with it next. The only view
 //  that reads a download's progress, so a tick re-runs this row and nothing
 //  above it (*Render isolation, in practice*).
@@ -13,6 +13,9 @@ import SwiftUI
 struct OfflineCountryRow: View {
     let country: OfflineCountryManifest.Country
     let countries: OfflineCountries
+    /// Whether a region is named with its country, as it is anywhere but
+    /// under that country.
+    var namesCountry = true
     let isSelected: Bool
     /// Shows the country on the map, where there is one behind the list.
     let onSelect: () -> Void
@@ -22,7 +25,7 @@ struct OfflineCountryRow: View {
         HStack(spacing: 12) {
             Button(action: onSelect) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(OfflineCountries.name(of: country.id))
+                    Text(namesCountry ? OfflineCountries.fullName(of: country) : OfflineCountries.name(of: country))
                         .foregroundStyle(.primary)
                     status(download)
                         .font(.footnote)
@@ -60,22 +63,22 @@ struct OfflineCountryRow: View {
             switch download.phase {
             case .waitingForWiFi: Text("Waiting for Wi-Fi")
             case .downloading:
-                Text("\(Self.bytes(download.writtenBytes)) of \(Self.bytes(download.country.byteCount))")
+                Text("\(Self.bytes(download.writtenBytes)) of \(Self.bytes(download.byteCount))")
             case .checking: Text("Checking…")
             case let .failed(failure): Text(Self.message(for: failure))
             }
-        } else if countries.update(for: country.id) != nil {
-            Text("Update available · \(Self.bytes(country.byteCount))")
-        } else if countries.isInstalled(country.id) {
-            Text("Downloaded · \(Self.bytes(country.byteCount))")
+        } else if let update = countries.update(for: country.id) {
+            Text("Update available · \(Self.bytes(countries.byteCount(of: update)))")
+        } else if let record = countries.installed[country.id] {
+            Text("Downloaded · \(Self.bytes(record.byteCount))")
         } else {
-            Text(Self.bytes(country.byteCount))
+            Text(Self.bytes(countries.byteCount(of: country)))
         }
     }
 
     @ViewBuilder
     private func action(_ download: OfflineCountryDownload?) -> some View {
-        let name = OfflineCountries.name(of: country.id)
+        let name = OfflineCountries.name(of: country)
         if let download, !download.hasFailed {
             if download.phase == .checking {
                 ProgressView()

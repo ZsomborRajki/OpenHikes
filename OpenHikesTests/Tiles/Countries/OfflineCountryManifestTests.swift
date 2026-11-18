@@ -60,6 +60,14 @@ struct OfflineCountryManifestTests {
             ("countries/SI-20261117.pmtiles.json", false),
             ("countries/SI-roads-20261117.pmtiles", false),
             ("countries/SVN-20261117.pmtiles", false),
+            ("countries/SI-detail-20261117.pmtiles", true),
+            ("countries/SI-detail-extras-20261117.pmtiles", true),
+            ("countries/SI-extras-detail-20261117.pmtiles", false),
+            ("countries/US-CO-20261117.pmtiles", true),
+            ("countries/RU-MOW-detail-extras-20261117.pmtiles", true),
+            ("countries/US-COLO-20261117.pmtiles", false),
+            ("countries/US-co-20261117.pmtiles", false),
+            ("countries/US-CO-X1-20261117.pmtiles", false),
             ("countries/..", false),
             ("", false),
         ]
@@ -74,6 +82,45 @@ struct OfflineCountryManifestTests {
             maximumZoom: 15
         )
         #expect(file.hasSafeName == isSafe)
+    }
+
+    /// A region is listed under its country, so its code must start with
+    /// that country's, and a country must not claim to be one.
+    @Test("a region is offered under the country its code names, and nowhere else")
+    func regions() {
+        let colorado = OfflineCountryFixture.country(
+            bytes: Data("CO".utf8),
+            id: "US-CO",
+            group: "US",
+            names: ["en": "Colorado", "de": "Colorado"]
+        )
+        let misfiled = OfflineCountryFixture.country(bytes: Data("CO".utf8), id: "US-CO", group: "CA")
+        let ungrouped = OfflineCountryFixture.country(bytes: Data("CO".utf8), id: "US-CO")
+        let groupedCountry = OfflineCountryFixture.country(bytes: Data("SI".utf8), group: "SI")
+        let manifest = OfflineCountryFixture.manifest([colorado, misfiled, ungrouped, groupedCountry])
+
+        #expect(manifest.readableCountries == [colorado])
+    }
+
+    @Test("a file named for another area is left off with its area")
+    func fileOfAnotherArea() {
+        var country = slovenia
+        country.files[1].path = "countries/AT-extras-20261117.pmtiles"
+        #expect(OfflineCountryFixture.manifest([country]).readableCountries.isEmpty)
+    }
+
+    @Test("an area's download takes zoom 15 only with Extra Detail")
+    func detailFiles() {
+        let country = OfflineCountryFixture.country(
+            bytes: Data(count: 10),
+            extras: Data(count: 1),
+            detail: Data(count: 20),
+            detailExtras: Data(count: 2)
+        )
+        #expect(country.files(withDetail: false).map(\.role) == [.basemap, .extras])
+        #expect(country.files(withDetail: true).map(\.role) == [.basemap, .extras, .detail, .detailExtras])
+        #expect(country.byteCount(withDetail: false) == 11)
+        #expect(country.byteCount(withDetail: true) == 33)
     }
 
     @Test("a country listing a file under an unsafe name is left off whole")
@@ -105,7 +152,7 @@ struct OfflineCountryManifestTests {
     func decodesTheToolsKeys() throws {
         let json = Data(
             """
-            {"version": 1, "countries": [{"id": "SI", "build": "20261117", "schema": 4,
+            {"version": 1, "countries": [{"id": "SI", "names": {}, "build": "20261117", "schema": 4,
             "bounds": {"west": 13.3, "south": 45.4, "east": 16.6, "north": 46.9},
             "outline": [[[13.3, 45.4], [16.6, 45.4], [16.6, 46.9], [13.3, 45.4]]],
             "files": [{"role": "basemap", "path": "countries/SI-20261117.pmtiles", "bytes": 460284649,
@@ -114,7 +161,7 @@ struct OfflineCountryManifestTests {
         )
         let manifest = try JSONDecoder().decode(OfflineCountryManifest.self, from: json)
         let country = try #require(manifest.readableCountries.first)
-        #expect(country.byteCount == 460_284_649)
+        #expect(country.byteCount(withDetail: true) == 460_284_649)
         #expect(country.files.first?.fileName == "SI-20261117.pmtiles")
     }
 }

@@ -23,7 +23,7 @@ import Foundation
 import os
 import Synchronization
 
-/// One file of one country's download, as a task carries it.
+/// One file of one area's download, as a task carries it.
 nonisolated struct OfflineCountryDownloadKey: Hashable, Sendable {
     let country: String
     let build: String
@@ -46,8 +46,13 @@ nonisolated struct OfflineCountryDownloadKey: Hashable, Sendable {
 
     /// The file's name, as the manifest's path ends.
     var fileName: String {
-        let stem = role == .basemap ? "\(country)-\(build)" : "\(country)-extras-\(build)"
-        return stem + OfflineCountryManifest.File.fileExtension
+        let infix = switch role {
+        case .basemap: ""
+        case .extras: "extras-"
+        case .detail: "detail-"
+        case .detailExtras: "detail-extras-"
+        }
+        return "\(country)-\(infix)\(build)" + OfflineCountryManifest.File.fileExtension
     }
 }
 

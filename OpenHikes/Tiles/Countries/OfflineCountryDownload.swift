@@ -2,9 +2,10 @@
 //  OfflineCountryDownload.swift
 //  OpenHikes
 //
-//  One country's download in progress: how far it has come, which of its
-//  files are whole in the staging directory, and what the session handed back
-//  to resume the rest from. An object of its own, observed by its row alone,
+//  One area's download in progress: the files it is for — the whole area,
+//  or only the zoom 15 *Extra Detail* adds to one already down — how far it
+//  has come, which are whole in the staging directory, and what the session
+//  handed back to resume the rest from. An object of its own, observed by its row alone,
 //  so a progress tick re-runs that row and nothing above it (*Render
 //  isolation, in practice* in AGENTS.md). ``OfflineCountries`` owns every one
 //  and is the only caller of what changes it.
@@ -26,6 +27,8 @@ final class OfflineCountryDownload {
     }
 
     let country: OfflineCountryManifest.Country
+    /// What it brings down.
+    let files: [OfflineCountryManifest.File]
     private(set) var phase: Phase
     private(set) var writtenBytes: Int64 = 0
 
@@ -34,39 +37,56 @@ final class OfflineCountryDownload {
     @ObservationIgnored private(set) var staged: [OfflineCountryManifest.Role: URL] = [:]
     /// What the session kept of a file that stopped part of the way.
     @ObservationIgnored private(set) var resumeData: [OfflineCountryManifest.Role: Data] = [:]
+    /// The files a transfer is still out for, which trying again after
+    /// another file failed leaves to it rather than asking for twice.
+    @ObservationIgnored private(set) var inFlight: Set<OfflineCountryManifest.Role> = []
 
-    init(country: OfflineCountryManifest.Country, phase: Phase) {
+    init(country: OfflineCountryManifest.Country, files: [OfflineCountryManifest.File], phase: Phase) {
         self.country = country
+        self.files = files
         self.phase = phase
     }
 
     nonisolated deinit { /* intentionally empty */ }
 
-    /// How much of the country has come down, from 0 to 1.
+    /// What it costs, in bytes.
+    var byteCount: Int64 { files.reduce(0) { $0 + $1.byteCount } }
+
+    /// How much of it has come down, from 0 to 1.
     var fraction: Double {
-        country.byteCount > 0 ? min(Double(writtenBytes) / Double(country.byteCount), 1) : 0
+        byteCount > 0 ? min(Double(writtenBytes) / Double(byteCount), 1) : 0
     }
+
+    /// Whether it brings zoom 15.
+    var hasDetail: Bool { files.contains(where: \.role.isDetail) }
 
     var hasFailed: Bool {
         if case .failed = phase { return true }
         return false
     }
 
-    /// Whether every one of the country's files is down.
-    var isStaged: Bool { staged.count == country.files.count }
+    /// Whether every one of its files is down.
+    var isStaged: Bool { files.allSatisfy { staged[$0.role] != nil } }
 
     func set(_ phase: Phase) {
         self.phase = phase
     }
 
-    /// Takes over what an earlier try at the same build got down, so trying
-    /// again asks only for the rest.
+    /// Takes over what an earlier try at the same build got down of the
+    /// same files, so trying again asks only for the rest.
     func resume(from previous: OfflineCountryDownload) {
         guard previous.country == country else { return }
-        resumeData = previous.resumeData
-        staged = previous.staged
-        written = previous.written
+        let roles = Set(files.map(\.role))
+        resumeData = previous.resumeData.filter { roles.contains($0.key) }
+        staged = previous.staged.filter { roles.contains($0.key) }
+        written = previous.written.filter { roles.contains($0.key) }
+        inFlight = previous.inFlight.intersection(roles)
         sumWritten()
+    }
+
+    /// A transfer is out for the file in `role`.
+    func began(_ role: OfflineCountryManifest.Role) {
+        inFlight.insert(role)
     }
 
     /// `bytes` of the file in `role` have come down so far.
@@ -78,6 +98,7 @@ final class OfflineCountryDownload {
 
     /// `file` is whole, at `url`.
     func landed(_ file: OfflineCountryManifest.File, at url: URL) {
+        inFlight.remove(file.role)
         staged[file.role] = url
         written[file.role] = file.byteCount
         sumWritten()
@@ -86,6 +107,7 @@ final class OfflineCountryDownload {
     /// The file in `role` stopped, with what to resume it from where the
     /// session kept any.
     func stopped(_ role: OfflineCountryManifest.Role, resumeData data: Data?) {
+        inFlight.remove(role)
         if let data { resumeData[role] = data }
         phase = .failed(.connection)
     }

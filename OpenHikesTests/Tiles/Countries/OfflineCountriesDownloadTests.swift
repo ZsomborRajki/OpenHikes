@@ -65,7 +65,7 @@ struct OfflineCountriesDownloadTests {
             setup.countries.download(country)
             #expect(setup.countries.downloads["SI"]?.phase == .downloading)
             #expect(Set(setup.downloader.requests.map(\.key.role)) == [.basemap, .extras])
-            #expect(setup.store.pending() == [country])
+            #expect(setup.store.pending().map(\.country) == [country])
 
             setup.downloader.progress(.basemap, 10)
             #expect(setup.countries.downloads["SI"]?.writtenBytes == 10)
@@ -146,7 +146,7 @@ struct OfflineCountriesDownloadTests {
             let setup = await setUp(
                 in: directory,
                 offering: [country],
-                freeBytes: country.byteCount + OfflineCountries.spareBytes - 1
+                freeBytes: country.byteCount(withDetail: false) + OfflineCountries.spareBytes - 1
             )
 
             setup.countries.download(country)

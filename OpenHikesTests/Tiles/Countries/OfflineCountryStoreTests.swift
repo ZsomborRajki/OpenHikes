@@ -25,7 +25,8 @@ struct OfflineCountryStoreTests {
             try bytes.write(to: store.stagedURL(for: file))
 
             #expect(await OfflineCountryStore.isWhole(file, at: store.stagedURL(for: file)))
-            let record = try store.install(country, at: Date(timeIntervalSince1970: 0))
+            try store.install(country.files)
+            let record = OfflineCountryStore.Record(country: country, installedAt: Date(timeIntervalSince1970: 0))
             try store.write(installed: [record])
 
             #expect(store.installed() == [record])
@@ -79,7 +80,10 @@ struct OfflineCountryStoreTests {
                 try Data("x".utf8).write(to: url)
             }
 
-            store.sweep(keeping: [OfflineCountryStore.Record(country: kept, installedAt: .now)], pending: [pending])
+            store.sweep(
+                keeping: [OfflineCountryStore.Record(country: kept, installedAt: .now)],
+                pending: [OfflineCountryStore.Pending(country: pending, roles: [.basemap])]
+            )
 
             #expect(FileManager.default.fileExists(atPath: store.fileURL(for: keptFile).path))
             #expect(FileManager.default.fileExists(atPath: store.stagedURL(for: pendingFile).path))
@@ -106,10 +110,7 @@ struct OfflineCountryStoreTests {
                 try Data("x".utf8).write(to: store.fileURL(for: file))
             }
 
-            store.remove(
-                OfflineCountryStore.Record(country: oldWithExtras, installedAt: .now),
-                keeping: [OfflineCountryStore.Record(country: new, installedAt: .now)]
-            )
+            store.remove(oldWithExtras.files, keeping: [OfflineCountryStore.Record(country: new, installedAt: .now)])
 
             let oldBasemap = try #require(old.files.first)
             #expect(!FileManager.default.fileExists(atPath: store.fileURL(for: oldBasemap).path))

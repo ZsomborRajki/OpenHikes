@@ -79,7 +79,7 @@ struct OfflineCountriesLaunchTests {
             try store.prepare()
             let country = OfflineCountryFixture.country(bytes: basemap)
             let file = try #require(country.files.first)
-            try store.write(pending: [country])
+            try store.write(pending: [OfflineCountryStore.Pending(country: country, roles: [.basemap])])
             try basemap.write(to: store.stagedURL(for: file))
             let archives = OfflineCountryArchives()
             let countries = countries(store, server: StubCountryServer(nil), archives: archives)
@@ -98,7 +98,7 @@ struct OfflineCountriesLaunchTests {
             let store = OfflineCountryStore(directory: directory)
             try store.prepare()
             let country = OfflineCountryFixture.country(bytes: basemap)
-            try store.write(pending: [country])
+            try store.write(pending: [OfflineCountryStore.Pending(country: country, roles: [.basemap])])
             let downloader = StubCountryDownloader()
             let basemapKey = OfflineCountryDownloadKey(country: "SI", build: country.build, role: .basemap)
             downloader.stillRunning = [basemapKey: 40]
@@ -119,7 +119,7 @@ struct OfflineCountriesLaunchTests {
             let store = OfflineCountryStore(directory: directory)
             try store.prepare()
             let country = OfflineCountryFixture.country(bytes: basemap)
-            try store.write(pending: [country])
+            try store.write(pending: [OfflineCountryStore.Pending(country: country, roles: [.basemap])])
             let countries = countries(store, server: StubCountryServer(nil))
 
             await countries.start()
@@ -212,7 +212,7 @@ struct OfflineCountriesLaunchTests {
                 of: countries.listed,
                 near: CLLocationCoordinate2D(latitude: 46.05, longitude: 14.5)
             )
-            #expect(fromLjubljana == OfflineCountrySections(held: [slovenia], nearby: [austria], rest: [spain]))
+            #expect(fromLjubljana == OfflineCountrySections(held: [slovenia], nearby: [austria], rest: [.area(spain)]))
             let nowhere = countries.sections(of: countries.listed, near: nil)
             #expect(nowhere.nearby.isEmpty)
             #expect(nowhere.rest.map(\.id).sorted() == ["AT", "ES"])
