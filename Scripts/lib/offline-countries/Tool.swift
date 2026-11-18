@@ -258,12 +258,31 @@ extension Tool {
             guard written.map(Array.init) == original else { fail("\(url.lastPathComponent) differs at \(tile)") }
             if let server, checked < serverCheckedTiles {
                 let tileURL = server.appending(path: "\(tile.z)/\(tile.x)/\(tile.y).mvt")
-                let (served, _) = try await URLSession.shared.data(from: tileURL)
-                guard Array(served) == original else { fail("\(tileURL) differs from \(url.lastPathComponent)") }
+                switch await served(tileURL) {
+                case let .some(served) where served == original: break
+                case .some: fail("\(tileURL) differs from \(url.lastPathComponent)")
+                case .none: fail("\(tileURL) did not answer, asked \(serverAttempts) times")
+                }
             }
             checked += 1
         }
         print("  read back \(checked) tiles\(server == nil ? "" : ", \(min(checked, serverCheckedTiles)) of them against the server")")
+    }
+
+    static let serverAttempts = 3
+
+    /// The tile server's bytes for `url`, from its first answer that is a
+    /// 200: an error, or a 5xx a busy Worker gives now and then, is the
+    /// network's and is asked again, where different bytes are the cut's.
+    static func served(_ url: URL) async -> [UInt8]? {
+        for attempt in 1...serverAttempts {
+            if let (data, response) = try? await URLSession.shared.data(from: url),
+               (response as? HTTPURLResponse)?.statusCode == 200 {
+                return Array(data)
+            }
+            try? await Task.sleep(for: .seconds(attempt))
+        }
+        return nil
     }
 
     static func write(_ manifest: OfflineCountryManifest, to url: URL) throws {
