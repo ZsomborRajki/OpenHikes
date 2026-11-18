@@ -98,7 +98,9 @@ nonisolated final class TileCache: @unchecked Sendable {
         ///
         /// A tile is admitted this way when the map draws it ahead of its
         /// refresh, and when a load that answers once has run out of ways to
-        /// refresh it. Either way it then answers reads for
+        /// refresh it. So is a tile drawn without the vector extras the
+        /// server failed to give, which is on no disk, so that it is drawn
+        /// again within the interval. Either way it then answers reads for
         /// ``TileCache/staleCoverageRecheckInterval`` rather than being turned
         /// away by the TTL like everything else here. Both halves are load
         /// bearing: `draw` paints only what this tier holds, so coverage kept
@@ -369,6 +371,9 @@ nonisolated final class TileCache: @unchecked Sendable {
 private struct FetchedTile {
     let data: Data
     let image: TileImage
+    /// A tile drawn without the vector extras the server failed to give:
+    /// drawn, and filed in neither tier. See ``VectorTileClient/Drawing``.
+    var isProvisional = false
 }
 
 #if canImport(UIKit)
@@ -558,13 +563,14 @@ nonisolated extension TileCache {
             )
         }
 
-        // A 429 or an overloaded 503 named its own deadline, and stale coverage
-        // is the one thing that can reach the network with nothing holding it
-        // back. The full load answers with the saved copy as `.loaded`, so the
-        // renderer records a success, clears its failure log, and never feeds
-        // that deadline into the backoff built to honour it. The memory entry
-        // then expires on ``staleCoverageRecheckInterval`` and the tile is
-        // asked for again — five minutes into a fifteen-minute `Retry-After`,
+        // A 429 or an overloaded 503 named its own deadline for the URL it
+        // answered, and stale coverage is the one thing that can reach the
+        // network with nothing holding it back. The full load answers with
+        // the saved copy as `.loaded`, so the renderer records a success,
+        // clears its failure log, and never feeds that deadline into the
+        // backoff built to honour it. The memory entry then expires on
+        // ``staleCoverageRecheckInterval`` and the tile is asked for again —
+        // five minutes into a fifteen-minute `Retry-After`,
         // which on OSM's community-funded servers is the request pattern that
         // header exists to stop. Honoured here instead, for every caller, and
         // the saved bytes are drawn for as long as it stands. With no coverage
@@ -572,8 +578,11 @@ nonisolated extension TileCache {
         // would have produced, so the renderer records it and reads the
         // deadline as its floor as usual. The map's refresh is `.failed` here
         // either way, since its copy is drawn already, and its own backoff
-        // reads the same floor.
-        if retryDeadline(forKey: key) != nil {
+        // reads the same floor. A provider drawn from vector tiles asks the
+        // OpenHikes tile server first, whatever the raster template said, so
+        // a tile is drawn as soon as that server can draw it, and the
+        // deadline is honoured on the way to the template, in `fetchTile`.
+        if !isDrawnFromVectorTiles(key), retryDeadline(for: url) != nil {
             return withheldFetch(
                 forKey: key,
                 reason: "retry-after",
@@ -592,6 +601,13 @@ nonisolated extension TileCache {
                 return .loaded(stale)
             }
             return .failed
+        }
+        // Drawn without the vector extras the server failed to give: shown,
+        // and written to neither tier, so the tile is drawn again once its
+        // memory entry lapses rather than filed for a week without them. A
+        // saved copy it would have replaced stays on disk as it was.
+        if fetched.isProvisional {
+            return publishProvisionalTile(fetched.image, forKey: key, token: token) ? .loaded(fetched.image) : .failed
         }
         // Back into the tier it came from. A tile that was durable is offline
         // coverage some hike is counting on; writing its replacement to the
@@ -644,7 +660,8 @@ nonisolated extension TileCache {
         guard decision.isAllowed else {
             return false
         }
-        guard let fetched = await fetchTileOnce(forKey: key, url: url) else { return false }
+        // A drawing provisional on the vector extras is no coverage to save.
+        guard let fetched = await fetchTileOnce(forKey: key, url: url), !fetched.isProvisional else { return false }
         return storeFetchedTileDurably(
             fetched,
             forKey: key,
@@ -676,35 +693,6 @@ nonisolated extension TileCache {
             return task
         }
         return await fetch.value
-    }
-
-    private func mutationToken(forKey key: String) -> MutationToken {
-        let name = diskName(for: key)
-        return mutationVersions.withLock { versions in
-            Self.mutationToken(forName: name, in: versions)
-        }
-    }
-
-    /// The one place a tile's row in ``MutationVersions`` is located, so the
-    /// site that takes a token and the three that re-check one cannot drift
-    /// apart on how a key becomes a row.
-    ///
-    /// By disk name, because that is what the paths that *delete* have:
-    /// ``trimCache(claimedBy:limit:)`` and
-    /// ``reclaimDurableBytes(forProviderID:protecting:byteCount:)`` enumerate
-    /// files, and ``diskName(for:)`` is one-way. Nothing is lost by meeting
-    /// them there — see ``MutationVersions/names``.
-    ///
-    /// Call with ``mutationVersions`` held.
-    ///
-    /// Internal for the same reason ``MutationToken`` is: the memory tier
-    /// publishes under this ordering from its own file, and `private` in an
-    /// extension is file-scoped.
-    static func mutationToken(
-        forName name: String,
-        in versions: MutationVersions
-    ) -> MutationToken {
-        MutationToken(global: versions.global, name: versions.names[name, default: 0])
     }
 
     /// Files freshly-fetched bytes in `tier` and publishes them to memory,
@@ -785,6 +773,12 @@ nonisolated extension TileCache {
 
     private static let httpSuccessRange = 100 * 2..<100 * 3
 
+    /// Whether a load of `key` asks the OpenHikes tile server for a vector
+    /// tile before the provider's raster template.
+    func isDrawnFromVectorTiles(_ key: String) -> Bool {
+        vectorTiles?.draws(key) ?? false
+    }
+
     /// One tile off the network, validated and decoded, with nothing written
     /// anywhere — the caller decides which tier it belongs in. Go through
     /// ``fetchTileOnce(forKey:url:)`` rather than calling this directly.
@@ -795,10 +789,24 @@ nonisolated extension TileCache {
         switch await vectorTiles?.drawing(forKey: key) {
         case let .png(drawn):
             if let image = TileImage(data: drawn) { return FetchedTile(data: drawn, image: image) }
+        case let .provisional(drawn):
+            if let image = TileImage(data: drawn) { return FetchedTile(data: drawn, image: image, isProvisional: true) }
         case .offline:
             return nil
         case .fallBack, nil:
             break
+        }
+        // A deadline a raster server named stands for its URL, whichever
+        // style is asking: the comparison style asks the very URL the vector
+        // style falls back to. A tile the tile server could not draw waits
+        // for it here, asking nobody, and a provider drawn from raster tiles
+        // alone, which `requestTile` has already held back, is held back
+        // here on a download too.
+        if retryDeadline(for: url) != nil {
+            #if DEBUG
+            Self.logger.debug("Withheld tile \(key, privacy: .public): retry-after")
+            #endif
+            return nil
         }
         #if DEBUG
         Self.logger.debug("Requesting tile \(key, privacy: .public) from \(url.redactedForLogging, privacy: .public)")
@@ -819,7 +827,7 @@ nonisolated extension TileCache {
                 // with its own answer to "when should I come back". Filed
                 // here, applied by the renderer's existing backoff — nothing
                 // in this file waits on it.
-                recordRetryAdvice(from: http, forKey: key)
+                recordRetryAdvice(from: http, for: url)
                 #if DEBUG
                 let tileErrMsg = "Tile \(key) failed: HTTP \(http.statusCode)"
                     + " (\(data.count)b) from \(url.redactedForLogging)"

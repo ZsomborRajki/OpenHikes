@@ -142,6 +142,18 @@ nonisolated extension TileCache {
         }
     }
 
+    /// Admits a tile drawn without the vector extras the server failed to
+    /// give to the memory tier on stale coverage's terms, and to no disk: it
+    /// answers for ``staleCoverageRecheckInterval``, and the next draw after
+    /// that has it drawn again, with the extras if they can be had by then.
+    func publishProvisionalTile(
+        _ image: TileImage,
+        forKey key: String,
+        token: MutationToken
+    ) -> Bool {
+        publishStaleCoverage(image, forKey: key, token: token)
+    }
+
     func publishDiskTile(
         _ tile: (image: TileImage, storedAt: Date),
         forKey key: String,

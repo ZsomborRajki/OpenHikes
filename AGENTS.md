@@ -1161,9 +1161,13 @@ a change to recording, the map, the sheet or the render path; the PR template,
     named as the archive's layers are so a tile of each merges into one, and
     `Scripts/vector-extras.sh upload` puts them beside the basemap under a new
     name each time, signing with R2 keys kept outside the repository. The app
-    asks for their tile beside the basemap's from zoom 14. They add to the map
-    and are never its reason to fall back: a tile they lack, fail to give or
-    cannot read, or one the device loses on the way, leaves the basemap drawn.
+    asks for their tile beside the basemap's from zoom 14, unless the
+    basemap's is already falling back. They add to the map and are never its
+    reason to fall back: a tile they lack, fail to give or cannot read, or one
+    the device loses on the way, leaves the basemap drawn. Drawn without
+    extras it failed to get, a tile is provisional
+    (`VectorTileClient.Drawing.provisional`): held in memory alone, as stale
+    coverage is, and drawn again after that, never filed for a week.
   - **Names are drawn into the tile.**
     - **Place names** (`VectorTileLabels`): places, lakes and glaciers.
       Summits, passes and huts are points, named under their icons with their
@@ -1191,9 +1195,12 @@ a change to recording, the map, the sheet or the render path; the PR template,
     or it has no tile there — the tile comes from `tile.openstreetmap.org` as
     before. A failing archive is passed over for a minute, or for as long as
     its `Retry-After` asks, within `RetryAfterHeader`'s ceiling, and only that
-    archive: the extras failing leave the basemap asked. An archive's answer
-    that it has nothing at a tile is kept as its tiles are, so the deeper
-    tiles inside it ask once, and bytes that could not be read are not kept.
+    archive: the extras failing leave the basemap asked. A raster server's
+    `Retry-After` holds back the URL it refused, whichever style asks it
+    (`TileRetryAdvice`), and never the tile server asked ahead of it. An
+    archive's answer that it has nothing at a tile is kept as its tiles are,
+    so the deeper tiles inside it ask once, and bytes that could not be read
+    are not kept.
     A failure of the device's own connection falls back to nothing: the load
     fails and is tried again, rather than filing a raster tile among the
     drawn ones for a week. A connection lost mid-request is asked again at

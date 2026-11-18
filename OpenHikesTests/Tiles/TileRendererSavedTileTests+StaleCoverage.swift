@@ -113,8 +113,8 @@ extension TileRendererSavedTileTests {
             httpVersion: "HTTP/1.1",
             headerFields: [RetryAfterHeader.name: "900"]
         ))
-        stub.cache.recordRetryAdvice(from: rateLimit, forKey: key)
-        let serverDeadline = try #require(stub.cache.retryDeadline(forKey: key))
+        stub.cache.recordRetryAdvice(from: rateLimit, for: tileURL)
+        let serverDeadline = try #require(stub.cache.retryDeadline(for: tileURL))
 
         renderer.loadTileForTesting(at: path)
         await settleRefresh(of: path, on: renderer)
@@ -154,7 +154,8 @@ extension TileRendererSavedTileTests {
         let retryAt = try #require(renderer.refreshRetryTime(at: path))
         let recheckAt = askedAt.advanced(by: .seconds(TileCache.staleCoverageRecheckInterval))
         #expect(retryAt >= recheckAt, "no sooner than a failed refresh was ever asked again")
-        if let serverDeadline = stub.cache.retryDeadline(forKey: key) {
+        let tileURL = try #require(URL(string: "https://tiles.example.invalid/14/8600/5800.png"))
+        if let serverDeadline = stub.cache.retryDeadline(for: tileURL) {
             #expect(retryAt >= serverDeadline, "no sooner than a server that named a deadline asked")
         }
         #expect(renderer.skipCounts.failed == 0, "and the tile itself is not skipped")

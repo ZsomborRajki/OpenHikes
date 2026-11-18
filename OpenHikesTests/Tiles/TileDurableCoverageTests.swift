@@ -249,7 +249,7 @@ struct TileDurableCoverageTests {
 
         #expect(await stub.cache.loadTile(forKey: key, url: Self.url(0)) != nil)
         #expect(StubTileProtocol.requestCount == 1, "precondition: the refresh was attempted once")
-        #expect(stub.cache.retryDeadline(forKey: key) != nil, "precondition: the server named a deadline")
+        #expect(stub.cache.retryDeadline(for: Self.url(0)) != nil, "precondition: the server named a deadline")
 
         // What a redraw past the recheck window does. The memory entry is gone
         // by then, so this is the load that used to go back to the server.
