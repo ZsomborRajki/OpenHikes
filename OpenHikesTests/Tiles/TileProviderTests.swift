@@ -20,7 +20,23 @@ struct TileProviderTests {
     @Test("OpenStreetMap is never bulk-downloadable")
     func osmForbidsBulkDownload() {
         #expect(TileProvider.openStreetMap.supportsBulkDownload == false)
+        #expect(TileProvider.openStreetMapRaster.supportsBulkDownload == false)
         #expect(TileProvider.default.id == TileProvider.openStreetMap.id)
+    }
+
+    /// The comparison card is the OSMF's own map, its raster tiles alone,
+    /// under an id of its own, so a drawn tile and a raster one never share
+    /// a key or a cached file.
+    @Test("the openstreetmap.org card draws the OSMF's raster tiles under its own id")
+    func rasterComparisonCard() {
+        let raster = TileProvider.openStreetMapRaster
+        #expect(raster.vectorSource == nil)
+        #expect(TileProvider.vectorSources.keys.sorted() == [TileProvider.openStreetMap.id])
+        #expect(raster.urlTemplate == TileProvider.openStreetMap.urlTemplate)
+        #expect(raster.attribution.credits == [.openStreetMap])
+        #expect(TileCache.providerID(forDiskName: "osm_raster_14_1_2_2x") == raster.id)
+        #expect(TileCache.providerID(forDiskName: "osm_14_1_2_2x") == TileProvider.openStreetMap.id)
+        #expect(TileProvider.all.firstIndex(of: raster) == 3, "after the free maps, before the paid ones")
     }
 
     /// Every entry has to carry its attribution — it's displayed wherever the

@@ -43,7 +43,7 @@ struct PreviewAttributionTests {
         #expect(leading.map(\.compactTitle) == drawn.credits.map(\.compactTitle))
     }
 
-    /// Four raster maps and the routes' pictures credit OpenStreetMap
+    /// Five raster maps and the routes' pictures credit OpenStreetMap
     /// between them, and both Apple entries credit Apple; named once each,
     /// with the landcover OpenStreetMap's own map draws, the line is the
     /// seven parties.
