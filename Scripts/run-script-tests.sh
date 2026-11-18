@@ -5314,6 +5314,28 @@ if expect_status 0 \
     fi
 fi
 
+# Scripts/offline-countries.sh cuts the countries the app downloads out of the
+# planet the OpenHikes map draws. Its tool compiles the app's PMTiles reader and
+# country manifest as they stand, and `selftest` cuts a made-up world with them
+# and reads the cut back, so the tool and the app cannot come to read a country
+# differently. The tool is compiled into the work directory, so nothing is
+# written into the checkout, and nothing here reaches the bucket.
+offline_countries="$repository_root/Scripts/offline-countries.sh"
+export OPENHIKES_OFFLINE_COUNTRIES_BUILD="$work/offline-countries"
+run_script "offline-countries selftest cuts an archive with the app's reader and reads it back" \
+    "$offline_countries" selftest
+if expect_status 0 \
+    && expect_contains "$output" "offline-countries: selftest passed" "the output"; then
+    pass
+fi
+
+run_script "offline-countries prints its usage for a command it does not know" \
+    "$offline_countries" upload-everything
+if expect_status 2 \
+    && expect_contains "$output" "Scripts/offline-countries.sh selftest" "the usage"; then
+    pass
+fi
+
 echo
 if (( failures > 0 )); then
     echo "$failures case(s) failed." >&2
