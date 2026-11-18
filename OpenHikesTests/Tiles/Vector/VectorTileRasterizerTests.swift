@@ -201,6 +201,24 @@ struct VectorTileRasterizerTests {
         #expect(pixel(image, x: middle, y: middle, is: "#FCD6A4"))
     }
 
+    /// The casing is drawn from zoom 12, a service road and a pedestrian
+    /// street from 13. A casing with no road inside it would be a gray line
+    /// of its own, two pixels wide, where the road is not drawn at all.
+    @Test(
+        "a road not yet drawn at its zoom has no casing either",
+        arguments: [("minor_road", "service", "#BBBBBB"), ("path", "pedestrian", "#999999")]
+    )
+    func noCasingBeforeTheRoad(kind: String, detail: String, casing: String) throws {
+        let layers = [land, roads([street(kind: kind, detail: detail, across: true)])]
+
+        let wide = try draw(layers, at: VectorTileAddress(z: 12, x: 2200, y: 1425))
+        let near = try draw(layers, at: VectorTileAddress(z: 13, x: 4400, y: 2850))
+
+        #expect(pixel(wide, x: middle, y: middle, is: "#F2EFE9"))
+        #expect(!row(wide, y: middle, has: casing))
+        #expect(!pixel(near, x: middle, y: middle, is: "#F2EFE9"), "where the road is drawn")
+    }
+
     /// Hallstatt's Kirchenstiege is tagged `access=no`, its wall collapsing.
     /// Carto draws closed steps gray rather than salmon, and a closed path
     /// not at all before zoom 15. The rows are read whole, so a gap in the
