@@ -919,11 +919,18 @@ func rules(of feature: String, shop: String?, test key: String) -> Bool {
     }
 }
 
-/// The features whose names Carto writes with the height under them.
+/// The features whose names Carto writes with the height under them, or
+/// alone where there is no name (`project.mml`'s amenity-points query).
 let featuresWithElevation: Set<String> = [
     "natural_peak", "natural_volcano", "natural_saddle", "tourism_alpine_hut", "tourism_wilderness_hut",
-    "amenity_shelter", "tourism_information",
+    "amenity_shelter",
 ]
+
+/// Whether Carto writes the height of `feature` with `detail`: of the
+/// information points, only a guidepost's.
+func writesElevation(feature: String, detail: String?) -> Bool {
+    feature == "tourism_information" ? detail == "guidepost" : featuresWithElevation.contains(feature)
+}
 
 /// The kinds the map names by other means: the water layer's and the
 /// glaciers' names.
@@ -1002,7 +1009,7 @@ func add(
                 named: named,
                 feature: feature,
                 lowPriority: lowPriority,
-                elevation: featuresWithElevation.contains(feature) ? true : nil,
+                elevation: writesElevation(feature: feature, detail: detail.value) ? true : nil,
                 bands: result
             ))
         }

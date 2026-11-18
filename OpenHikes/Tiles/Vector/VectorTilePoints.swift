@@ -35,8 +35,9 @@ nonisolated enum VectorTilePoints {
     struct Candidate {
         /// Where the point is, in the picture's pixels.
         let anchor: CGPoint
-        /// The name's lines as written: the name, and a height under it
-        /// where Carto writes one. Empty for a point drawn without its name.
+        /// The label's lines as written: the name, and a height under it
+        /// where Carto writes one, which stands alone under a point with no
+        /// name, as in Carto. Empty for a point drawn without either.
         let lines: [String]
         let look: VectorTilePointStyle.Look
         let rank: Rank
@@ -86,8 +87,8 @@ nonisolated enum VectorTilePoints {
             guard let look = style.look(kind: kind, detail: detail, named: name != nil, z: target.z) else { continue }
             let elevation = feature.number("elevation")
             var lines: [String] = []
-            if look.text != nil, let name {
-                lines = [name]
+            if look.text != nil {
+                if let name { lines.append(name) }
                 if look.showsElevation, let elevation { lines.append(height(elevation)) }
             }
             guard !look.icons.isEmpty || !lines.isEmpty else { continue }
