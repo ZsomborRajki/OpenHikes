@@ -17,8 +17,12 @@
 #
 # `upload` puts it under that name in the R2 bucket `openhikes-tiles`, beside
 # the basemap, and refuses a name already there: the tile server's cache keeps
-# a tile for a day, so a file replaced in place would mix two builds. Then
-# point `VectorTileSource.openHikesPlanet` at it. It signs with R2's S3 keys,
+# a tile for a day, so a file replaced in place would mix two builds. It asks
+# first, so a name already taken costs no upload, and then sends the file on
+# condition that nothing is there (`If-None-Match: *`), which R2 checks as the
+# write commits: of two uploads to one name that both found it free, the
+# second is refused rather than written over the first. Then point
+# `VectorTileSource.openHikesPlanet` at it. It signs with R2's S3 keys,
 # read from OPENHIKES_R2_ENV (default ~/.config/openhikes/r2-openhikes-tiles.env:
 # R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET), and sends
 # the file in one request, which R2 takes up to 5 GiB.
@@ -68,9 +72,13 @@ upload() {
     *) echo "vector-extras: R2 answered $existing when asked for $key" >&2; exit 1 ;;
   esac
   local status
-  status="$(curl -s -o /dev/null -w "%{http_code}" "${signing[@]}" \
+  status="$(curl -s -o /dev/null -w "%{http_code}" "${signing[@]}" -H "If-None-Match: *" \
     -H "Content-Type: application/octet-stream" -T "$archive" "$url")"
-  [[ "$status" == 200 ]] || { echo "vector-extras: R2 answered $status to the upload" >&2; exit 1; }
+  case "$status" in
+    200) ;;
+    412) echo "vector-extras: $key reached $R2_BUCKET from another upload first; build under a new date" >&2; exit 1 ;;
+    *) echo "vector-extras: R2 answered $status to the upload" >&2; exit 1 ;;
+  esac
   echo "vector-extras: uploaded $key ($size bytes) to $R2_BUCKET"
 }
 
