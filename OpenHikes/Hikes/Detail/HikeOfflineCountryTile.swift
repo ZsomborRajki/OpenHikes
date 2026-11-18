@@ -8,7 +8,8 @@
 //  The tile shows the download's progress while one is coming down, *Saved*
 //  once the whole trail is inside countries on the device, and *Partly
 //  Saved* once those it crosses are but some of it is in none there is to
-//  download (``OfflineRouteCoverage``).
+//  download (``OfflineRouteCoverage``). A download that stopped says why,
+//  and offers to try again from where it stopped.
 //
 //  Reads the countries from the app's model in the environment, so the hike
 //  screen takes no new input; a preview, with no model, draws the tile
@@ -44,6 +45,9 @@ struct HikeOfflineCountryTile: View {
         .accessibilityIdentifier("offline-country-button")
         .confirmationDialog("Offline Maps", isPresented: $isAsking, titleVisibility: .visible) {
             if let download, let countries {
+                if download.hasFailed {
+                    Button("Try Again") { countries.download(download.country) }
+                }
                 Button("Cancel Download", role: .destructive) {
                     countries.cancel(download.country.id)
                 }
@@ -56,13 +60,22 @@ struct HikeOfflineCountryTile: View {
                 }
             }
         } message: {
-            Text("The OpenHikes map draws a downloaded country with no signal. Downloads use Wi-Fi.")
+            if let failure = Self.failure(of: download) {
+                Text(OfflineCountryRow.message(for: failure))
+            } else {
+                Text("The OpenHikes map draws a downloaded country with no signal. Downloads use Wi-Fi.")
+            }
         }
         .task(id: TaskKey(revision: line.revision, listed: countries?.listed.map(\.id) ?? [])) {
             guard let countries else { return }
             if countries.listPhase == .idle, countries.listed.isEmpty { await countries.refreshList() }
             coverage = countries.coverage(alongRoute: line.current?.route ?? [])
         }
+    }
+
+    private static func failure(of download: OfflineCountryDownload?) -> OfflineCountries.Failure? {
+        guard case let .failed(failure)? = download?.phase else { return nil }
+        return failure
     }
 
     private struct TaskKey: Equatable {
@@ -88,6 +101,13 @@ struct HikeOfflineCountryTile: View {
                     .accessibilityHidden(true)
                 Text("Saved").font(.caption2.weight(.medium))
             }
+        } else if download?.hasFailed == true {
+            ActionTile(tint: .red) {
+                Image(systemName: "exclamationmark.circle")
+                    .font(.title3)
+                    .accessibilityHidden(true)
+                Text("Offline").font(.caption2.weight(.medium))
+            }
         } else if saving == .part, !canDownload {
             ActionTile(tint: .orange) {
                 Image(systemName: "circle.lefthalf.filled")
@@ -108,6 +128,9 @@ struct HikeOfflineCountryTile: View {
     private func accessibilityValue(download: OfflineCountryDownload?, saving: OfflineRouteSaving) -> String {
         if let download, !download.hasFailed {
             return download.fraction.formatted(.percent.precision(.fractionLength(0)))
+        }
+        if saving != .whole, let failure = Self.failure(of: download) {
+            return OfflineCountryRow.message(for: failure)
         }
         return switch saving {
         case .whole: String(localized: "Saved")
