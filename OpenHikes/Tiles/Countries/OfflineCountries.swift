@@ -165,7 +165,8 @@ final class OfflineCountries {
                 id: record.country.id,
                 bounds: record.country.bounds,
                 basemap: archive,
-                extras: extras
+                extras: extras,
+                record: record
             )
         }
     }

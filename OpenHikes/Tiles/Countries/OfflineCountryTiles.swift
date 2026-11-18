@@ -13,6 +13,13 @@
 //  server — the same rasterizer, language and heights — so a tile drawn from
 //  a country is the tile the server's bytes would have drawn.
 //
+//  The cache files a drawn tile under the provider's key, which says nothing
+//  of the build it was drawn from, so a tile drawn before a country's build
+//  was installed would otherwise answer for a week in place of the new one.
+//  ``OfflineCountryArchives/redraws(_:drawnAt:)`` is what has the cache draw
+//  it again; it reads outlines and dates, never a file, so the map's draw
+//  pass may ask it.
+//
 
 import Foundation
 import OpenHikesData
@@ -29,6 +36,9 @@ nonisolated final class OfflineCountryArchives: Sendable {
         let bounds: OfflineCountryManifest.Bounds
         let basemap: PMTilesArchive
         let extras: PMTilesArchive?
+        /// What it was installed from: the outline, the build and when.
+        /// `nil` draws from it all the same, and redraws nothing.
+        var record: OfflineCountryStore.Record?
     }
 
     /// What a country holds for a tile: the archive tile it is drawn from,
@@ -41,11 +51,51 @@ nonisolated final class OfflineCountryArchives: Sendable {
 
     private static let logger = Logger(subsystem: "OpenHikes", category: "OfflineCountries")
     private let countries = Mutex<[Country]>([])
+    /// When each country's build took the place of another one here, this
+    /// launch. Later than its install by as long as opening it took, and a
+    /// tile drawn in between came out of the build it replaced.
+    private let replacedAt = Mutex<[String: Date]>([:])
 
     var isEmpty: Bool { countries.withLock { $0.isEmpty } }
 
     func replace(with countries: [Country]) {
-        self.countries.withLock { $0 = countries }
+        let now = Date()
+        self.countries.withLock { held in
+            let builds = Dictionary(
+                held.compactMap { country in country.record.map { (country.id, $0.country.build) } },
+                uniquingKeysWith: { first, _ in first }
+            )
+            replacedAt.withLock { stamps in
+                for country in countries {
+                    guard let build = country.record?.country.build,
+                          let previous = builds[country.id],
+                          previous != build
+                    else { continue }
+                    stamps[country.id] = now
+                }
+            }
+            held = countries
+        }
+    }
+
+    /// Whether a tile drawn at `storedAt` is to be drawn again: a country
+    /// whose outline holds the middle of `target` was installed after it, so
+    /// the tile came from an older build or from the server. The middle,
+    /// because a country is cut along its outline grown by a margin, so a
+    /// tile whose middle the outline holds is one the country has.
+    func redraws(_ target: VectorTileAddress, drawnAt storedAt: Date) -> Bool {
+        let held = countries.withLock { $0 }
+        let stamps = replacedAt.withLock { $0 }
+        let newer = held.compactMap { country -> OfflineCountryStore.Record? in
+            guard let record = country.record else { return nil }
+            let since = max(record.installedAt, stamps[country.id] ?? record.installedAt)
+            return since > storedAt ? record : nil
+        }
+        guard !newer.isEmpty else { return false }
+        let size = Double(1 << target.z)
+        let longitude = (Double(target.x) + 0.5) / size * 360 - 180
+        let latitude = Self.latitude(ofRow: (Double(target.y) + 0.5) / size)
+        return newer.contains { $0.country.contains(longitude: longitude, latitude: latitude) }
     }
 
     /// The bytes the first country that holds `target` has for it, from the
@@ -108,6 +158,17 @@ nonisolated final class OfflineCountryDrawing: Sendable {
         self.sources = sources
         self.archives = archives
         self.language = language
+    }
+
+    /// Whether the cache's copy of the tile `key` names, drawn at `storedAt`,
+    /// is to be drawn again out of a country installed since. See
+    /// ``OfflineCountryArchives/redraws(_:drawnAt:)``.
+    func redraws(_ key: String, drawnAt storedAt: Date) -> Bool {
+        guard !archives.isEmpty,
+              let named = TileCacheKey.named(key),
+              sources[named.providerID] != nil
+        else { return false }
+        return archives.redraws(VectorTileAddress(z: named.z, x: named.x, y: named.y), drawnAt: storedAt)
     }
 
     /// The tile `key` names, drawn out of a downloaded country as PNG bytes,
