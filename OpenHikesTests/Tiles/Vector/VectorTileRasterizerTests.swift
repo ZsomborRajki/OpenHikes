@@ -100,7 +100,6 @@ struct VectorTileRasterizerTests {
 
     @Test("a road is drawn over the ground in its color")
     func roadOverGround() throws {
-        let streetZoom = VectorTileAddress(z: 16, x: 35_200, y: 22_800)
         let layers = [
             land,
             .init(name: "roads", features: [
@@ -116,6 +115,31 @@ struct VectorTileRasterizerTests {
 
         #expect(pixel(image, x: middle, y: middle, is: "#FFFFFF"))
         #expect(pixel(image, x: middle, y: left, is: "#F2EFE9"))
+    }
+
+    /// The archive has no kind for a living street: it files one as `other`,
+    /// with the highway as its detail, the tags of Hallstatt's Seestraße.
+    @Test("a living street is drawn as the street it is")
+    func livingStreetIsDrawn() throws {
+        let livingStreet = street(kind: "other", detail: "living_street", across: true)
+
+        let image = try draw([land, roads([livingStreet])], at: streetZoom)
+
+        #expect(pixel(image, x: middle, y: middle, is: "#EDEDED"))
+    }
+
+    /// Every road in the archive has the same `sort_rank`, so the order is
+    /// the road's own: the primary road's surface runs through the junction
+    /// whichever of the two the tile lists first.
+    @Test("the more important road is drawn over the junction, in either order", arguments: [false, true])
+    func junctionTakesTheMoreImportantRoad(primaryFirst: Bool) throws {
+        let primary = street(kind: "major_road", detail: "primary", across: true)
+        let residential = street(kind: "minor_road", detail: "residential", across: false)
+        let listed = primaryFirst ? [primary, residential] : [residential, primary]
+
+        let image = try draw([land, roads(listed)], at: streetZoom)
+
+        #expect(pixel(image, x: middle, y: middle, is: "#FCD6A4"))
     }
 
     @Test("summits are marked from zoom 12, and not before")
@@ -156,6 +180,24 @@ struct VectorTileRasterizerTests {
     }
 
     // MARK: Helpers
+
+    /// Deep enough that every road is drawn wide.
+    private let streetZoom = VectorTileAddress(z: 16, x: 35_200, y: 22_800)
+
+    private func roads(_ features: [VectorTileFixture.Feature]) -> VectorTileFixture.Layer {
+        .init(name: "roads", features: features)
+    }
+
+    /// A road through the middle of the tile, across it or down it, ranked
+    /// as the archive ranks every road.
+    private func street(kind: String, detail: String, across: Bool) -> VectorTileFixture.Feature {
+        let ends = [-grid / 4, grid + grid / 4].map { across ? ($0, grid / 2) : (grid / 2, $0) }
+        return .init(
+            type: .line,
+            properties: ["kind": .string(kind), "kind_detail": .string(detail), "sort_rank": .int(400)],
+            geometry: VectorTileFixture.line(ends)
+        )
+    }
 
     private func draw(_ layers: [VectorTileFixture.Layer], at target: VectorTileAddress) throws -> CGImage {
         try draw(layers, from: target, at: target)

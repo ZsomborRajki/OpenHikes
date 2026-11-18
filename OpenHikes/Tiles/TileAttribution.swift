@@ -219,6 +219,15 @@ nonisolated extension TileAttribution.Credit {
         compactTitle: "OpenStreetMap"
     )
 
+    /// The landcover the OpenStreetMap style draws at its widest zooms is
+    /// Daylight's, derived from ESA WorldCover, which is CC BY 4.0: a credit
+    /// to the dataset, linked to the licence (Protomaps' `LICENSE_DATA.md`).
+    static let esaWorldCover = Self(
+        title: "ESA WorldCover",
+        prefix: "©",
+        url: URL(string: "https://creativecommons.org/licenses/by/4.0/")!
+    )
+
     // swiftlint:enable force_unwrapping
 
     static let apple = Self(title: "Apple", prefix: "Map data ©", url: nil)

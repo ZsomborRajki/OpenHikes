@@ -1133,6 +1133,10 @@ a change to recording, the map, the sheet or the render path; the PR template,
     `VectorTileRasterizer` draws it. The cache then files the picture as any
     tile, under the raster style's id and keys, so saved coverage keeps
     answering. Past zoom 15 a tile is drawn from the zoom-15 tile around it.
+  - **Roads stack in OpenStreetMap Carto's order** (`VectorTileStyle.road`),
+    because the archive gives every road the same `sort_rank`.
+  - **The archive's landcover is ESA WorldCover's**, under CC BY 4.0, so the
+    style credits it beside OpenStreetMap.
   - **Names are drawn into the tile.**
     - **Point names** (`VectorTileLabels`): places, summits and passes with
       their heights, huts, lakes and glaciers.
@@ -1152,7 +1156,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
       or region shows only as tiles are fetched again.
   - **Fallback.** Wherever the server cannot answer — it is down or failing,
     or it has no tile there — the tile comes from `tile.openstreetmap.org` as
-    before. A failing server is passed over for a minute.
+    before. A failing server is passed over for a minute, or for as long as
+    its `Retry-After` asks, within `RetryAfterHeader`'s ceiling.
   - **No suite reaches the tile server.** `TileCache.shared` has no vector
     source under `isRunningTests`, UI tests included.
   - **A new build gets a new archive name**, carrying its date, and the app
