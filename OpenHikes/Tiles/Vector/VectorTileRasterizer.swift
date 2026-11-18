@@ -126,6 +126,7 @@ nonisolated private struct Painter {
         context.fill(CGRect(x: 0, y: 0, width: side, height: side))
         paintGround()
         paintWater()
+        paintPiers()
         paintBarriers()
         paintBuildings()
         paintRoads()
@@ -242,6 +243,20 @@ nonisolated private struct Painter {
                 geometry.path(of: feature),
                 VectorTileStyle.Line(color: VectorTileStyle.cliff, width: VectorTileStyle.cliffWidth)
             )
+        }
+    }
+
+    /// Piers over the water they stand in, as Carto draws them after the
+    /// water and before the buildings and roads.
+    private func paintPiers() {
+        guard z >= VectorTileStyle.pierZ else { return }
+        for (feature, geometry) in features(in: "landuse", type: .polygon)
+        where feature.string("kind") == VectorTileStyle.pierKind {
+            fill(geometry.path(of: feature), VectorTileStyle.land)
+        }
+        for (feature, geometry) in features(in: "roads", type: .line)
+        where VectorTileStyle.isPier(kind: feature.string("kind"), detail: feature.string("kind_detail")) {
+            stroke(geometry.path(of: feature), VectorTileStyle.pier, cap: .square)
         }
     }
 

@@ -374,3 +374,32 @@ struct VectorTileRasterizerTests {
         return pixels
     }
 }
+
+// MARK: Piers
+
+extension VectorTileRasterizerTests {
+    /// Hallstatt Markt's ferry landing, tile 15/17626/11449, has both: an
+    /// area of `landuse` kind `pier`, and a line in `roads` filed as a path
+    /// with the detail `pier`, each standing in the lake. Carto draws them in
+    /// the land's color over the water from zoom 12, the line solid; the
+    /// area had no fill, and the line was drawn as a dashed footpath.
+    @Test("a pier is drawn over the water it stands in, as an area and as a line")
+    func pierOverWater() throws {
+        let lake = VectorTileFixture.Layer(name: "water", features: [
+            .init(type: .polygon, properties: ["kind": .string("lake")], geometry: whole),
+        ])
+        let deck = VectorTileFixture.Layer(name: "landuse", features: [
+            .init(type: .polygon, properties: ["kind": .string("pier")], geometry: leftHalf),
+        ])
+        let layers = [land, lake, deck, roads([street(kind: "path", detail: "pier", across: true)])]
+
+        let close = try draw(layers, at: streetZoom)
+        let wide = try draw(layers, at: VectorTileAddress(z: 11, x: 1100, y: 712))
+
+        #expect(pixel(close, x: left, y: left, is: "#F2EFE9"), "the deck")
+        #expect(pixel(close, x: right, y: left, is: "#AAD3DF"), "the lake beside it")
+        #expect(pixel(close, x: right, y: middle, is: "#F2EFE9"), "the walkway out over the lake")
+        #expect(!row(close, y: middle, has: "#FA8072"), "which is no footpath")
+        #expect(pixel(wide, x: left, y: left, is: "#AAD3DF"), "and neither is drawn before zoom 12")
+    }
+}

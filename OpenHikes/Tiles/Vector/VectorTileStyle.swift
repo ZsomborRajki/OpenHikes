@@ -90,6 +90,20 @@ nonisolated enum VectorTileStyle {
 
     static let cliffWidth = ZoomCurve([(13, 0.5), (16, 1), (20, 2)])
 
+    /// A pier, as Carto's `water-features.mss` draws one from zoom 12: an
+    /// area filled and a line stroked square-ended in the land's color, over
+    /// the water it stands in. The archive files the area under `landuse`
+    /// and the line under `roads` as a path, from zoom 13.
+    static let pierZ = 12
+    static let pierKind = "pier"
+    static let pier = Line(color: land, width: ZoomCurve([(12, 0.5), (13, 1), (14, 1), (15, 2), (16, 2), (z17, 4)]))
+
+    /// Whether a feature of the `roads` layer is a pier, which is drawn with
+    /// the water rather than as a road.
+    static func isPier(kind: String?, detail: String?) -> Bool {
+        kind == "path" && detail == pierKind
+    }
+
     // MARK: Lines
 
     struct Line: Sendable {
@@ -130,8 +144,9 @@ nonisolated enum VectorTileStyle {
         var closed: Line?
     }
 
-    /// The style of a feature in the `roads` layer, or `nil` for one not drawn:
-    /// its `kind` and `kind_detail` first, then its `kind` alone. A path,
+    /// The style of a feature in the `roads` layer, or `nil` for one not drawn
+    /// as a road: its `kind` and `kind_detail` first, then its `kind` alone.
+    /// A pier is drawn with the water (``isPier(kind:detail:)``). A path,
     /// track or flight of steps whose `access` closes it is drawn as Carto
     /// draws one: paler, and not before ``closedPathZ``.
     ///
@@ -141,7 +156,9 @@ nonisolated enum VectorTileStyle {
     /// zoom 15, where Carto starts drawing closed paths, and leaves out a
     /// way with `access=no` or `private` before it.
     static func road(kind: String, detail: String?, access: String? = nil) -> Road? {
-        guard let road = roads["\(kind)/\(detail ?? "")"] ?? roads["\(kind)/*"] else { return nil }
+        guard !isPier(kind: kind, detail: detail),
+              let road = roads["\(kind)/\(detail ?? "")"] ?? roads["\(kind)/*"]
+        else { return nil }
         guard let access, closingAccess.contains(access), let closed = road.closed else { return road }
         return Road(line: closed, order: road.order)
     }
