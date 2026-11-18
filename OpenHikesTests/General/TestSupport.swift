@@ -325,13 +325,16 @@ nonisolated final class TileSandbox: Sendable {
     ///     cannot change what a tile suite running beside it decides.
     ///   - durableByteLimitScale: shrinks the licensed per-provider durable
     ///     ceilings so a quota test can reach one with a handful of tiles.
+    ///   - countryArchives: the downloaded countries the vector providers'
+    ///     tiles are drawn from before any server. None by default.
     init(
         reachable: Bool = true,
         sessionConfiguration: URLSessionConfiguration? = nil,
         mutationKeyLimit: Int = TileCache.mutationKeyVersionLimit,
         vectorSources: [String: VectorTileSource] = [:],
         power: PowerState = PowerState(),
-        durableByteLimitScale: Double = 1
+        durableByteLimitScale: Double = 1,
+        countryArchives: OfflineCountryArchives? = nil
     ) {
         root = FileManager.default.temporaryDirectory
             .appendingPathComponent("tilesandbox-\(UUID().uuidString)", isDirectory: true)
@@ -341,6 +344,7 @@ nonisolated final class TileSandbox: Sendable {
             monitorsNetwork: false,
             mutationKeyLimit: mutationKeyLimit,
             vectorSources: vectorSources,
+            countryArchives: countryArchives,
             durableByteLimitScale: durableByteLimitScale
         ) { power }
         store = AutoSaveTileStore(tileCache: cache)
