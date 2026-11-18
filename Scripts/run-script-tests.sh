@@ -5336,6 +5336,95 @@ if expect_status 2 \
     pass
 fi
 
+# The upload publishes each file's SHA-256 in the manifest, and the app throws
+# away a download that does not match it, so a name already in the bucket is
+# reused only for the same bytes. `curl` is a stub again, answering a HEAD
+# with the headers in STUB_CURL_HEADERS (a 404 when empty), a GET of an
+# archive with STUB_CURL_BODY, the manifest's GET with a 404, and a PUT with a
+# 200, as `-w "%{http_code}"` prints them.
+cat > "$stub_bin/curl" <<'STUB'
+#!/usr/bin/env bash
+printf 'curl %s\n' "$*" >> "$STUB_CALL_LOG"
+if [[ " $* " == *" -I "* ]]; then
+    printf '%b' "${STUB_CURL_HEADERS:-HTTP/1.1 404 Not Found\r\n\r\n}"
+elif [[ " $* " == *" -T "* ]]; then
+    printf '200'
+elif [[ " $* " == *"manifest.json"* ]]; then
+    printf '404'
+elif [[ " $* " == *".pmtiles"* ]]; then
+    printf '%s' "$STUB_CURL_BODY"
+else
+    echo "stub curl: no answer for '$*'" >&2
+    exit 64
+fi
+STUB
+chmod +x "$stub_bin/curl"
+countries_work="$work/offline-countries-upload"
+mkdir -p "$countries_work/out"
+printf 'archive' > "$countries_work/out/SI-20261117.pmtiles"
+country_sha256="$(shasum -a 256 "$countries_work/out/SI-20261117.pmtiles" | cut -d ' ' -f 1)"
+cat > "$countries_work/out/manifest.json" <<EOF
+{"version": 1, "countries": [{"id": "SI", "build": "20261117", "schema": 4, "names": {},
+  "bounds": {"west": 13.3, "south": 45.4, "east": 16.6, "north": 46.9},
+  "outline": [[[13.3, 45.4], [16.6, 45.4], [16.6, 46.9], [13.3, 46.9], [13.3, 45.4]]],
+  "files": [{"role": "basemap", "path": "countries/SI-20261117.pmtiles", "bytes": 7,
+    "sha256": "$country_sha256", "minimumZoom": 0, "maximumZoom": 15}]}]}
+EOF
+cp "$extras_work/r2.env" "$countries_work/r2.env"
+
+OPENHIKES_R2_ENV="$countries_work/r2.env" \
+    run_script "offline-countries upload names a new archive's SHA-256 beside it" \
+    "$offline_countries" upload "$countries_work/out"
+if expect_status 0 \
+    && expect_contains "$calls" "-H x-amz-meta-sha256: $country_sha256 -T $countries_work/out/SI-20261117.pmtiles" \
+        "the upload" \
+    && expect_contains "$output" "wrote countries/manifest.json" "the output"; then
+    pass
+fi
+
+OPENHIKES_R2_ENV="$countries_work/r2.env" \
+    STUB_CURL_HEADERS="HTTP/1.1 200 OK\r\nContent-Length: 7\r\nx-amz-meta-sha256: $country_sha256\r\n\r\n" \
+    run_script "offline-countries upload reuses an archive the bucket names the same SHA-256 for" \
+    "$offline_countries" upload "$countries_work/out"
+if expect_status 0 \
+    && expect_contains "$output" "countries/SI-20261117.pmtiles is already there" "the output" \
+    && expect_absent "$calls" "-T $countries_work/out/SI-20261117.pmtiles" "the requests" \
+    && expect_absent "$calls" "-f https://" "the requests" \
+    && expect_contains "$output" "wrote countries/manifest.json" "the output"; then
+    pass
+fi
+
+OPENHIKES_R2_ENV="$countries_work/r2.env" \
+    STUB_CURL_HEADERS="HTTP/1.1 200 OK\r\nContent-Length: 7\r\n\r\n" STUB_CURL_BODY="archive" \
+    run_script "offline-countries upload reads back an archive put there without its SHA-256, and reuses the same bytes" \
+    "$offline_countries" upload "$countries_work/out"
+if expect_status 0 \
+    && expect_contains "$calls" "-f https://stub-account.r2.cloudflarestorage.com/stub-bucket/countries/SI-20261117.pmtiles" \
+        "the requests" \
+    && expect_contains "$output" "countries/SI-20261117.pmtiles is already there" "the output"; then
+    pass
+fi
+
+OPENHIKES_R2_ENV="$countries_work/r2.env" \
+    STUB_CURL_HEADERS="HTTP/1.1 200 OK\r\nContent-Length: 7\r\n\r\n" STUB_CURL_BODY="ARCHIVE" \
+    run_script "offline-countries upload refuses an archive the bucket holds with other bytes of the same size" \
+    "$offline_countries" upload "$countries_work/out"
+if expect_status 1 \
+    && expect_contains "$output" "countries/SI-20261117.pmtiles is in the bucket with other bytes" "the error" \
+    && expect_absent "$calls" "manifest.json" "the requests"; then
+    pass
+fi
+
+OPENHIKES_R2_ENV="$countries_work/r2.env" \
+    STUB_CURL_HEADERS="HTTP/1.1 200 OK\r\nContent-Length: 7\r\nx-amz-meta-sha256: 0000\r\n\r\n" \
+    run_script "offline-countries upload refuses an archive the bucket names another SHA-256 for" \
+    "$offline_countries" upload "$countries_work/out"
+if expect_status 1 \
+    && expect_contains "$output" "countries/SI-20261117.pmtiles is in the bucket with other bytes" "the error" \
+    && expect_absent "$calls" "manifest.json" "the requests"; then
+    pass
+fi
+
 echo
 if (( failures > 0 )); then
     echo "$failures case(s) failed." >&2
