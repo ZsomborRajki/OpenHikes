@@ -41,6 +41,7 @@ struct OfflineCountriesDetailTests {
     func withoutDetail() async throws {
         try await OfflineCountryFixture.withDirectory { directory in
             let harness = await OfflineCountryHarness.make(in: directory, offering: [slovenia])
+            harness.countries.setIncludesDetail(false)
 
             harness.countries.download(slovenia)
             #expect(Set(harness.downloader.requests.map(\.key.role)) == [.basemap, .extras])
@@ -55,11 +56,11 @@ struct OfflineCountriesDetailTests {
         }
     }
 
-    @Test("with Extra Detail, an area takes zoom 15 too, and the map draws closest in from it")
+    @Test("Extra Detail is on unless the hiker turns it off, and then an area takes zoom 15 too")
     func withDetail() async throws {
         try await OfflineCountryFixture.withDirectory { directory in
             let harness = await OfflineCountryHarness.make(in: directory, offering: [slovenia])
-            harness.countries.setIncludesDetail(true)
+            #expect(harness.countries.includesDetail)
 
             harness.countries.download(slovenia)
             #expect(Set(harness.downloader.requests.map(\.key.role)) == Set(OfflineCountryManifest.Role.allCases))
@@ -83,6 +84,7 @@ struct OfflineCountriesDetailTests {
     func turningOn() async throws {
         try await OfflineCountryFixture.withDirectory { directory in
             let harness = await OfflineCountryHarness.make(in: directory, offering: [slovenia])
+            harness.countries.setIncludesDetail(false)
             harness.countries.download(slovenia)
             try harness.land(allFiles.filter { !$0.key.isDetail })
             await settleDelegateHop(until: "the area is down") { harness.countries.isInstalled("SI") }
@@ -105,7 +107,6 @@ struct OfflineCountriesDetailTests {
     func turningOff() async throws {
         try await OfflineCountryFixture.withDirectory { directory in
             let harness = await OfflineCountryHarness.make(in: directory, offering: [slovenia])
-            harness.countries.setIncludesDetail(true)
             harness.countries.download(slovenia)
             try harness.land(allFiles)
             await settleDelegateHop(until: "the map draws zoom 15") {
@@ -129,6 +130,7 @@ struct OfflineCountriesDetailTests {
     func turningOffMidway() async throws {
         try await OfflineCountryFixture.withDirectory { directory in
             let harness = await OfflineCountryHarness.make(in: directory, offering: [slovenia])
+            harness.countries.setIncludesDetail(false)
             harness.countries.download(slovenia)
             try harness.land(allFiles.filter { !$0.key.isDetail })
             await settleDelegateHop(until: "the area is down") { harness.countries.isInstalled("SI") }
@@ -150,11 +152,11 @@ struct OfflineCountriesDetailTests {
         defer { defaults.removePersistentDomain(forName: suite) }
         try await OfflineCountryFixture.withDirectory { directory in
             let first = await OfflineCountryHarness.make(in: directory, offering: [slovenia], defaults: defaults)
-            #expect(!first.countries.includesDetail)
-            first.countries.setIncludesDetail(true)
+            #expect(first.countries.includesDetail)
+            first.countries.setIncludesDetail(false)
 
             let next = await OfflineCountryHarness.make(in: directory, offering: [slovenia], defaults: defaults)
-            #expect(next.countries.includesDetail)
+            #expect(!next.countries.includesDetail)
         }
     }
 }

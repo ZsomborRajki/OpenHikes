@@ -1253,7 +1253,7 @@ owner, on the main actor.
 - **Zoom 14 always, zoom 15 with *Extra Detail*.** An area is four files:
   the basemap and the extras to zoom 14, which every download takes, and
   both at zoom 15, which the switch at the foot of the list adds
-  (`SettingsKey.offlineCountriesDetail`, off by default). Zoom 15 is half an
+  (`SettingsKey.offlineCountriesDetail`, on by default). Zoom 15 is half an
   area's bytes, and it is where the buildings and most of the points are: a
   water tap, a toilet, a bench, an information board. Without it the map
   draws closer in from the zoom-14 tile around it, with every path, road

@@ -263,11 +263,12 @@ nonisolated enum SettingsDefault {
     /// it exists for is narrow and real enough to be worth a switch, and
     /// narrow enough not to be worth assuming: see ``ScreenWakePolicy``.
     static let keepScreenAwake = false
-    /// Off. A country without its zoom 15 takes half the space and still has
-    /// every path, road and summit; what it lacks closest in is buildings
-    /// and the small points, a bench or a tap, which the hiker who wants them
-    /// turns on.
-    static let offlineCountriesDetail = false
+    /// On, by the owner's decision. Zoom 15 is where a hiker's small points
+    /// are, a water tap, a toilet, an information board, as well as the
+    /// buildings, and a map without them is less than the one on screen
+    /// with a signal. The hiker short of space turns it off and keeps every
+    /// path, road and summit for half the bytes.
+    static let offlineCountriesDetail = true
     /// On. The marked routes are what a hiking map is read for, and the app
     /// draws them itself from squares it keeps once they have been seen, so
     /// the layer costs a new area a few hundred kilobytes and nobody's server
