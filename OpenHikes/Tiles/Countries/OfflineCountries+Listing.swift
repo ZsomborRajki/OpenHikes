@@ -67,8 +67,12 @@ extension OfflineCountries {
         return String(localized: "\(area), \(name(ofCountry: group, language: language))")
     }
 
+    /// Each named once rather than at every comparison: a name is a
+    /// `Locale` lookup, and the list sorts hundreds of areas.
     nonisolated static func sortedByName(_ countries: [Country]) -> [Country] {
-        countries.sorted { name(of: $0).localizedStandardCompare(name(of: $1)) == .orderedAscending }
+        countries.map { (name: name(of: $0), country: $0) }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+            .map(\.country)
     }
 
     // MARK: - Sections
@@ -123,18 +127,62 @@ extension OfflineCountries {
 
     /// The areas nearest `coordinate`: the one it is in first, then those
     /// within `kilometers` of it.
+    ///
+    /// Measured to the outline, not the bounds. A box holds much that is not
+    /// the area: France's runs from the Antilles to Réunion, and an area
+    /// across the antimeridian — Alaska, Chukotka, Fiji, New Zealand — has a
+    /// box round the whole globe, which would put it next to every hiker at
+    /// its latitudes.
     func nearby(_ coordinate: CLLocationCoordinate2D, within kilometers: Double = 250) -> [Country] {
-        let point = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
-        let distances = listed.map { country -> (Country, Double) in
-            if country.contains(longitude: coordinate.longitude, latitude: coordinate.latitude) { return (country, 0) }
-            let bounds = country.bounds
-            let nearest = CLLocation(
-                latitude: min(max(coordinate.latitude, bounds.south), bounds.north),
-                longitude: min(max(coordinate.longitude, bounds.west), bounds.east)
-            )
-            return (country, point.distance(from: nearest) / 1000)
+        let distances = listed.compactMap { country -> (Country, Double)? in
+            let distance = country.kilometers(from: coordinate)
+            return distance <= kilometers ? (country, distance) : nil
         }
-        return distances.filter { $0.1 <= kilometers }.sorted { $0.1 < $1.1 }.map(\.0)
+        return distances.sorted { $0.1 < $1.1 }.map(\.0)
+    }
+}
+
+nonisolated extension OfflineCountryManifest.Country {
+    /// How far `coordinate` is from the outline, in kilometres: none inside
+    /// it. On a flat map round `coordinate`, near enough for the few hundred
+    /// kilometres *Nearby* reaches.
+    func kilometers(from coordinate: CLLocationCoordinate2D) -> Double {
+        if contains(longitude: coordinate.longitude, latitude: coordinate.latitude) { return 0 }
+        let shrink = cos(coordinate.latitude * .pi / 180)
+        var nearest = Double.infinity
+        for ring in outline {
+            let vertices = ring.filter { $0.count >= 2 }
+            guard var previous = vertices.last else { continue }
+            // Each edge's longitudes taken from its first end's, so an edge is
+            // never split round the globe from the point.
+            var from = Self.wrapped(previous[0] - coordinate.longitude)
+            for vertex in vertices {
+                let to = from + vertex[0] - previous[0]
+                nearest = min(nearest, Self.distanceFromOrigin(
+                    (from * shrink, previous[1] - coordinate.latitude),
+                    (to * shrink, vertex[1] - coordinate.latitude)
+                ))
+                previous = vertex
+                from = Self.wrapped(vertex[0] - coordinate.longitude)
+            }
+        }
+        return nearest * Self.kilometersPerDegree
+    }
+
+    private static let kilometersPerDegree = 111.32
+
+    /// A difference of longitudes, brought between -180 and 180.
+    private static func wrapped(_ longitude: Double) -> Double {
+        let turned = (longitude + 180).truncatingRemainder(dividingBy: 360)
+        return (turned < 0 ? turned + 360 : turned) - 180
+    }
+
+    /// How far the segment from `start` to `end` passes from the origin.
+    private static func distanceFromOrigin(_ start: (Double, Double), _ end: (Double, Double)) -> Double {
+        let (dx, dy) = (end.0 - start.0, end.1 - start.1)
+        let length = dx * dx + dy * dy
+        let along = length > 0 ? min(max(-(start.0 * dx + start.1 * dy) / length, 0), 1) : 0
+        return hypot(start.0 + along * dx, start.1 + along * dy)
     }
 }
 
