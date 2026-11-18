@@ -2,10 +2,10 @@
 //  Outlines.swift
 //  offline-countries
 //
-//  Which tiles a country is: its Natural Earth outline (public domain, the
-//  1:50m admin-0 shapes, keyed by `ISO_A2_EH`, which unlike `ISO_A2` names
-//  France and Norway), the tiles whose middles fall inside it at the deepest
-//  zoom, grown by a margin, and every tile above those.
+//  Which tiles an area is: its Natural Earth outline (public domain: the
+//  1:50m admin-0 shapes for a country, the 1:10m admin-1 ones for a state or
+//  province — see `Areas.swift`), the tiles whose middles fall inside it at
+//  the deepest zoom, grown by a margin, and every tile above those.
 //
 //  The margin is there because a 1:50m border is a kilometre or two out in
 //  the mountains, and a trail along a ridge is exactly where it runs: a
@@ -14,56 +14,17 @@
 
 import Foundation
 
-/// One country as `Scripts/lib/offline-countries.json` lists it.
-struct CountryChoice: Decodable {
-    let id: String
-    /// West, south, east, north: only the polygons that reach into this box
-    /// are kept, which is how France is mainland France and Corsica rather
-    /// than French Guiana too.
-    let clip: [Double]?
-}
-
 typealias Ring = [(lon: Double, lat: Double)]
 
 enum Outlines {
     enum Failure: Error, CustomStringConvertible {
         case unreadable(String)
-        case missing(String)
 
         var description: String {
             switch self {
             case let .unreadable(why): "the outlines are unreadable: \(why)"
-            case let .missing(id): "the outlines have no country \(id)"
             }
         }
-    }
-
-    /// The outer ring of every polygon of `choice` in the GeoJSON.
-    static func rings(of choice: CountryChoice, in features: [[String: Any]]) throws -> [Ring] {
-        var rings: [Ring] = []
-        for feature in features {
-            guard let properties = feature["properties"] as? [String: Any],
-                  properties["ISO_A2_EH"] as? String == choice.id,
-                  let geometry = feature["geometry"] as? [String: Any],
-                  let type = geometry["type"] as? String
-            else { continue }
-            let polygons: [Any]
-            switch type {
-            case "Polygon": polygons = [geometry["coordinates"] as Any]
-            case "MultiPolygon": polygons = geometry["coordinates"] as? [Any] ?? []
-            default: continue
-            }
-            for polygon in polygons {
-                guard let outer = (polygon as? [Any])?.first as? [[Double]] else {
-                    throw Failure.unreadable("a polygon of \(choice.id)")
-                }
-                let ring = outer.compactMap { $0.count >= 2 ? (lon: $0[0], lat: $0[1]) : nil }
-                if let clip = choice.clip, clip.count == 4, !reaches(ring, into: clip) { continue }
-                rings.append(ring)
-            }
-        }
-        guard !rings.isEmpty else { throw Failure.missing(choice.id) }
-        return rings
     }
 
     static func features(at url: URL) throws -> [[String: Any]] {
@@ -72,10 +33,6 @@ enum Outlines {
             throw Failure.unreadable("no features")
         }
         return features
-    }
-
-    private static func reaches(_ ring: Ring, into box: [Double]) -> Bool {
-        ring.contains { box[0]...box[2] ~= $0.lon && box[1]...box[3] ~= $0.lat }
     }
 
     /// `ring` with every vertex that moves it less than `tolerance` degrees

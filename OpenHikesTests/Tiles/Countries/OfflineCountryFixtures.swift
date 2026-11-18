@@ -32,21 +32,32 @@ nonisolated enum OfflineCountryFixture {
         ]
     }
 
-    /// A country whose one basemap file is `bytes`, named and summed as the
-    /// manifest would name and sum it.
+    /// An area whose basemap is `bytes`, and its other files the others
+    /// given, named and summed as the manifest would name and sum them. A
+    /// region when `group` names its country.
     static func country(
         bytes: Data,
         id: String = "SI",
         build: String = "20261117",
         extras: Data? = nil,
+        detail: Data? = nil,
+        detailExtras: Data? = nil,
+        group: String? = nil,
+        names: [String: String] = [:],
         schema: Int = OfflineCountryManifest.readableSchema
     ) -> OfflineCountryManifest.Country {
         var files = [file(.basemap, name: "\(id)-\(build).pmtiles", bytes: bytes)]
-        if let extras {
-            files.append(file(.extras, name: "\(id)-extras-\(build).pmtiles", bytes: extras))
+        for (role, infix, data) in [
+            (OfflineCountryManifest.Role.extras, "extras-", extras),
+            (.detail, "detail-", detail),
+            (.detailExtras, "detail-extras-", detailExtras),
+        ] {
+            if let data { files.append(file(role, name: "\(id)-\(infix)\(build).pmtiles", bytes: data)) }
         }
         return OfflineCountryManifest.Country(
             id: id,
+            group: group,
+            names: names,
             build: build,
             schema: schema,
             bounds: bounds,
@@ -69,8 +80,8 @@ nonisolated enum OfflineCountryFixture {
             path: "countries/\(name)",
             byteCount: Int64(bytes.count),
             sha256: SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined(),
-            minimumZoom: 0,
-            maximumZoom: 15
+            minimumZoom: role.isDetail ? 15 : 0,
+            maximumZoom: role.isDetail ? 15 : 14
         )
     }
 
@@ -80,7 +91,7 @@ nonisolated enum OfflineCountryFixture {
 
     /// An archive holding `tiles`, each its own bytes, laid out as the tool
     /// lays one out: leaf directories once the root would pass its 16 KiB.
-    static func archive(_ tiles: [VectorTileAddress: Data], maximumZoom: Int) -> Data {
+    static func archive(_ tiles: [VectorTileAddress: Data], maximumZoom: Int, minimumZoom: Int = 0) -> Data {
         let sorted = tiles.map { (id: PMTilesTileID.id(z: $0.key.z, x: $0.key.x, y: $0.key.y), bytes: $0.value) }
             .sorted { $0.id < $1.id }
         var data = Data()
@@ -91,6 +102,7 @@ nonisolated enum OfflineCountryFixture {
             data.append(tile.bytes)
         }
         var header = PMTilesHeader()
+        header.minimumZoom = UInt8(minimumZoom)
         header.maximumZoom = UInt8(maximumZoom)
         header.tileType = 1
         let prefix = PMTilesLayout.prefix(
@@ -187,5 +199,55 @@ final class StubCountryDownloader: OfflineCountryDownloading {
     func fail(_ role: OfflineCountryManifest.Role, resumeData: Data?) {
         guard let request = requests.last(where: { $0.key.role == role }) else { return }
         onEvent?(.failed(request.key, resumeData: resumeData, cancelled: false))
+    }
+}
+
+/// A model over a store of the suite's own, a stand-in server offering
+/// `offered`, and a stand-in session, started and with its list loaded.
+@MainActor
+struct OfflineCountryHarness {
+    let countries: OfflineCountries
+    let downloader: StubCountryDownloader
+    let archives: OfflineCountryArchives
+    let server: StubCountryServer
+    let store: OfflineCountryStore
+
+    static func make(
+        in directory: URL,
+        offering offered: [OfflineCountryManifest.Country],
+        defaults: UserDefaults? = nil
+    ) async -> Self {
+        let madeStore = OfflineCountryStore(directory: directory)
+        let madeServer = StubCountryServer(OfflineCountryFixture.manifest(offered))
+        let madeDownloader = StubCountryDownloader()
+        let madeArchives = OfflineCountryArchives()
+        let model = OfflineCountries(
+            store: madeStore,
+            server: madeServer,
+            downloader: madeDownloader,
+            archives: madeArchives,
+            defaults: defaults,
+            freeSpace: { 1 << 40 }
+        )
+        await model.start()
+        await model.refreshList()
+        return Self(
+            countries: model,
+            downloader: madeDownloader,
+            archives: madeArchives,
+            server: madeServer,
+            store: madeStore
+        )
+    }
+
+    /// Lands every file the last requests asked for, with the bytes given.
+    func land(_ bytes: [OfflineCountryManifest.Role: Data]) throws {
+        for (role, data) in bytes.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
+            try downloader.land(role, as: data)
+        }
+    }
+
+    func fileExists(_ file: OfflineCountryManifest.File) -> Bool {
+        FileManager.default.fileExists(atPath: store.fileURL(for: file).path)
     }
 }

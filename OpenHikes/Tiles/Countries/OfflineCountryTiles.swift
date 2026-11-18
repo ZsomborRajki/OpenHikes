@@ -34,11 +34,15 @@ nonisolated final class OfflineCountryArchives: Sendable {
     struct Country: Sendable {
         let id: String
         let bounds: OfflineCountryManifest.Bounds
+        /// To zoom 14, and the extras drawn into it.
         let basemap: PMTilesArchive
         let extras: PMTilesArchive?
         /// What it was installed from: the outline, the build and when.
         /// `nil` draws from it all the same, and redraws nothing.
         var record: OfflineCountryStore.Record?
+        /// Zoom 15 and its extras, where *Extra Detail* brought them.
+        var detail: PMTilesArchive?
+        var detailExtras: PMTilesArchive?
     }
 
     /// What a country holds for a tile: the archive tile it is drawn from,
@@ -98,35 +102,55 @@ nonisolated final class OfflineCountryArchives: Sendable {
         return newer.contains { $0.country.contains(longitude: longitude, latitude: latitude) }
     }
 
-    /// The bytes the first country that holds `target` has for it, from the
+    /// The bytes the first area that holds `target` has for it, from the
     /// tile at the deepest zoom both it and `deepest` reach, or `nil` where
-    /// no country holds it.
+    /// no area holds it. Zoom 15 and closer come from the area's zoom-15
+    /// files where it has them, and from its zoom-14 tile around them where
+    /// it does not.
     ///
-    /// The extras come from the same country, from `extrasFrom` down, so a
+    /// The extras come from the same files, from `extrasFrom` down, so a
     /// tile drawn offline is drawn from one build. A file that cannot be read
-    /// is passed over, as a country that does not hold the tile is.
+    /// is passed over, as an area that does not hold the tile is.
     func tile(for target: VectorTileAddress, deepest: Int, extrasFrom extrasZoom: Int?) -> Found? {
         let held = countries.withLock { $0 }
         for country in held {
-            let zoom = min(target.z, deepest, Int(country.basemap.header.maximumZoom))
-            let shift = target.z - zoom
-            let dataTile = VectorTileAddress(z: zoom, x: target.x >> shift, y: target.y >> shift)
-            guard Self.box(of: dataTile, meets: country.bounds) else { continue }
-            do {
-                let basemap = try country.basemap.tile(z: dataTile.z, x: dataTile.x, y: dataTile.y)
-                guard let basemap else { continue }
-                var extras: Data?
-                if let extrasZoom, zoom >= extrasZoom {
-                    extras = try? country.extras?.tile(z: dataTile.z, x: dataTile.x, y: dataTile.y)
+            guard Self.box(of: target, meets: country.bounds) else { continue }
+            let layers = [(country.detail, country.detailExtras), (country.basemap, country.extras)]
+            for case let (basemap?, extras) in layers where target.z >= Int(basemap.header.minimumZoom) {
+                if let found = Self.tile(
+                    for: target, deepest: deepest, extrasFrom: extrasZoom, in: basemap, extras, of: country
+                ) {
+                    return found
                 }
-                return Found(dataTile: dataTile, basemap: basemap, extras: extras)
-            } catch {
-                Self.logger.error(
-                    "Country \(country.id, privacy: .public) unreadable: \(String(describing: error), privacy: .public)"
-                )
             }
         }
         return nil
+    }
+
+    private static func tile(
+        for target: VectorTileAddress,
+        deepest: Int,
+        extrasFrom extrasZoom: Int?,
+        in basemap: PMTilesArchive,
+        _ extras: PMTilesArchive?,
+        of country: Country
+    ) -> Found? {
+        let zoom = min(target.z, deepest, Int(basemap.header.maximumZoom))
+        guard zoom >= Int(basemap.header.minimumZoom) else { return nil }
+        let shift = target.z - zoom
+        let dataTile = VectorTileAddress(z: zoom, x: target.x >> shift, y: target.y >> shift)
+        do {
+            guard let bytes = try basemap.tile(z: dataTile.z, x: dataTile.x, y: dataTile.y) else { return nil }
+            var added: Data?
+            if let extrasZoom, zoom >= extrasZoom {
+                added = try? extras?.tile(z: dataTile.z, x: dataTile.x, y: dataTile.y)
+            }
+            return Found(dataTile: dataTile, basemap: bytes, extras: added)
+        } catch {
+            let reason = String(describing: error)
+            logger.error("Country \(country.id, privacy: .public) unreadable: \(reason, privacy: .public)")
+            return nil
+        }
     }
 
     /// Whether the tile's ground meets `bounds` at all.

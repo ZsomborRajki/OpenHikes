@@ -79,39 +79,50 @@ extension Tool {
     /// half a kilometre, which the map draws at country zooms.
     static let outlineTolerance = 0.005
 
+    /// The deepest zoom of the files every download takes. The planet's own
+    /// deepest, a zoom further, is the *Extra Detail* files'.
+    static let baseZoom = 14
+    static let detailZoom = 15
+
     static func build(_ options: Options) async throws {
         let planet = try await Extractor(source: openSource(options.required("planet")))
         let extras = try await Extractor(source: openSource(options.required("extras")))
+        guard Int(planet.header.maximumZoom) == detailZoom else {
+            fail("the planet goes to zoom \(planet.header.maximumZoom), and the detail files are zoom \(detailZoom)")
+        }
         let build = options.required("build")
         let output = URL(fileURLWithPath: options.required("out"), isDirectory: true)
-        let maximumZoom = Int(options.optional("max-zoom") ?? "15") ?? 15
         let margin = Double(options.optional("margin-km") ?? "3") ?? 3
         let server = options.optional("server").flatMap(URL.init(string:))
-        let features = try Outlines.features(at: URL(fileURLWithPath: options.required("outlines")))
-        var choices = try JSONDecoder().decode(
-            [CountryChoice].self,
+        let plan = try JSONDecoder().decode(
+            AreaPlan.self,
             from: Data(contentsOf: URL(fileURLWithPath: options.required("countries")))
         )
+        var choices = try Areas.all(
+            plan: plan,
+            countries: Outlines.features(at: URL(fileURLWithPath: options.required("outlines"))),
+            regions: Outlines.features(at: URL(fileURLWithPath: options.required("regions")))
+        )
         if let only = options.optional("only") {
+            // An area by its code, or every region of a split country by its.
             let wanted = Set(only.split(separator: ",").map(String.init))
-            choices = choices.filter { wanted.contains($0.id) }
+            choices = choices.filter { wanted.contains($0.id) || $0.group.map(wanted.contains) == true }
         }
-        guard !choices.isEmpty else { fail("no countries to build") }
+        guard !choices.isEmpty else { fail("no areas to build") }
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
         let manifestURL = output.appending(path: "manifest.json")
         var manifest = (try? JSONDecoder().decode(OfflineCountryManifest.self, from: Data(contentsOf: manifestURL)))
             ?? OfflineCountryManifest(version: OfflineCountryManifest.currentVersion, countries: [])
         let metadata = try await planet.metadata()
         let extrasMetadata = try await extras.metadata()
-        for choice in choices {
+        for (index, choice) in choices.enumerated() {
+            print("[\(index + 1)/\(choices.count)] \(choice.id)")
             let country = try await cut(
                 choice,
                 Cut(
                     planet: planet, extras: extras, build: build, output: output,
-                    maximumZoom: maximumZoom, margin: margin, server: server,
-                    metadata: metadata, extrasMetadata: extrasMetadata
-                ),
-                features: features
+                    margin: margin, server: server, metadata: metadata, extrasMetadata: extrasMetadata
+                )
             )
             manifest.countries.removeAll { $0.id == country.id && $0.build == country.build }
             manifest.countries.append(country)
@@ -125,41 +136,45 @@ extension Tool {
         let extras: Extractor
         let build: String
         let output: URL
-        let maximumZoom: Int
         let margin: Double
         let server: URL?
         let metadata: [UInt8]
         let extrasMetadata: [UInt8]
     }
 
-    static func cut(
-        _ choice: CountryChoice,
-        _ cut: Cut,
-        features: [[String: Any]]
-    ) async throws -> OfflineCountryManifest.Country {
-        let rings = try Outlines.rings(of: choice, in: features)
-        let coverage = TileCoverage(rings: rings, marginKilometers: cut.margin, maximumZoom: cut.maximumZoom)
+    /// The four files of an area: which archive each is cut from, between
+    /// which zooms, and what goes between the area's code and the build in
+    /// its name.
+    static func parts(of cut: Cut) -> [(OfflineCountryManifest.Role, Extractor, ClosedRange<Int>, [UInt8], String)] {
+        let extrasZoom = Int(cut.extras.header.minimumZoom)
+        return [
+            (.basemap, cut.planet, 0...baseZoom, cut.metadata, ""),
+            (.extras, cut.extras, extrasZoom...baseZoom, cut.extrasMetadata, "extras-"),
+            (.detail, cut.planet, detailZoom...detailZoom, cut.metadata, "detail-"),
+            (.detailExtras, cut.extras, detailZoom...detailZoom, cut.extrasMetadata, "detail-extras-"),
+        ]
+    }
+
+    static func cut(_ choice: AreaChoice, _ cut: Cut) async throws -> OfflineCountryManifest.Country {
+        let rings = choice.rings
+        let coverage = TileCoverage(rings: rings, marginKilometers: cut.margin, maximumZoom: detailZoom)
         let tiles = coverage.tiles()
-        print("\(choice.id): \(tiles.count) tiles, \(coverage.count(atZoom: cut.maximumZoom)) at zoom \(cut.maximumZoom)")
+        print("\(choice.id): \(tiles.count) tiles, \(coverage.count(atZoom: detailZoom)) at zoom \(detailZoom)")
         let bounds = coverage.bounds
         var files: [OfflineCountryManifest.File] = []
-        let extrasZoom = Int(cut.extras.header.minimumZoom)
-        for (role, source, minimumZoom, metadata) in [
-            (OfflineCountryManifest.Role.basemap, cut.planet, 0, cut.metadata),
-            (.extras, cut.extras, extrasZoom, cut.extrasMetadata),
-        ] {
-            let name = role == .basemap ? "\(choice.id)-\(cut.build).pmtiles" : "\(choice.id)-extras-\(cut.build).pmtiles"
+        for (role, source, zooms, metadata, infix) in parts(of: cut) {
+            let name = "\(choice.id)-\(infix)\(cut.build).pmtiles"
             let url = cut.output.appending(path: name)
-            let chosen = tiles.filter { $0.z >= minimumZoom }
+            let chosen = tiles.filter { zooms.contains($0.z) }
             let ids = chosen.map { PMTilesTileID.id(z: $0.z, x: $0.x, y: $0.y) }.sorted()
             let located = try await source.locate(ids)
             var header = PMTilesHeader()
-            header.minimumZoom = UInt8(minimumZoom)
-            header.maximumZoom = UInt8(cut.maximumZoom)
+            header.minimumZoom = UInt8(zooms.lowerBound)
+            header.maximumZoom = UInt8(zooms.upperBound)
             header.bounds = [bounds.west, bounds.south, bounds.east, bounds.north].map { Int32(($0 * 1e7).rounded()) }
             header.center = [(bounds.west + bounds.east) / 2, (bounds.south + bounds.north) / 2]
                 .map { Int32(($0 * 1e7).rounded()) }
-            header.centerZoom = UInt8(min(7, cut.maximumZoom))
+            header.centerZoom = UInt8(min(7, zooms.upperBound))
             let written = try await source.write(
                 located,
                 to: url,
@@ -167,20 +182,23 @@ extension Tool {
                 metadata: labeled(metadata, country: choice.id, build: cut.build)
             )
             print("  \(name): \(written.addressed) tiles, \(written.contents) distinct, \(written.bytes) bytes")
-            try await check(url, against: source, located: located, sample: chosen, server: role == .basemap ? cut.server : nil)
+            let checksServer = role == .basemap || role == .detail
+            try await check(url, against: source, located: located, sample: chosen, server: checksServer ? cut.server : nil)
             files.append(
                 OfflineCountryManifest.File(
                     role: role,
                     path: "countries/\(name)",
                     byteCount: Int64(written.bytes),
                     sha256: try sha256(of: url),
-                    minimumZoom: minimumZoom,
-                    maximumZoom: cut.maximumZoom
+                    minimumZoom: zooms.lowerBound,
+                    maximumZoom: zooms.upperBound
                 )
             )
         }
         return OfflineCountryManifest.Country(
             id: choice.id,
+            group: choice.group,
+            names: choice.names,
             build: cut.build,
             schema: OfflineCountryManifest.readableSchema,
             bounds: OfflineCountryManifest.Bounds(

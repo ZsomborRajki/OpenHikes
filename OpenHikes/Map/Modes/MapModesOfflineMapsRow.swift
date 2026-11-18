@@ -2,8 +2,8 @@
 //  MapModesOfflineMapsRow.swift
 //  OpenHikes
 //
-//  *Offline Maps* on *Map Modes*: the way to the countries the OpenHikes map
-//  can be downloaded for (#1482), beside the maps they are for, saying which
+//  *Offline Maps* on *Map Modes*: the way to the countries, states and
+//  provinces the OpenHikes map can be downloaded for (#1482), beside the maps they are for, saying which
 //  are down already. A tap closes *Map Modes* and opens the list over the
 //  map — see ``MapModesPresentation/dismissOpeningOfflineMaps()``.
 //
@@ -65,7 +65,7 @@ struct MapModesOfflineMapsRow: View {
 
     /// The countries downloaded and what they take, or what the row is for.
     private var summary: String {
-        let names = countries.installed.keys.map(OfflineCountries.name(of:)).sorted()
+        let names = countries.installed.values.map { OfflineCountries.name(of: $0.country) }.sorted()
         guard !names.isEmpty else {
             return String(localized: "Download a country to use the OpenHikes map with no signal.")
         }

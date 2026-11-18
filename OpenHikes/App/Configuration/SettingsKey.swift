@@ -119,6 +119,10 @@ nonisolated enum SettingsKey {
     /// three answers that have to agree, the others being a live subject and
     /// a foreground app.
     static let keepScreenAwake = "settings.keepScreenAwake"
+    /// Whether a downloaded country brings zoom 15 too, with its buildings
+    /// and most of its points, for about twice the space — *Extra Detail*
+    /// under *Offline Maps*. Read and written by ``OfflineCountries``.
+    static let offlineCountriesDetail = "settings.offlineCountriesDetail"
     /// Whether a finished recording is also written to Health as a hiking
     /// workout.
     ///
@@ -259,6 +263,11 @@ nonisolated enum SettingsDefault {
     /// it exists for is narrow and real enough to be worth a switch, and
     /// narrow enough not to be worth assuming: see ``ScreenWakePolicy``.
     static let keepScreenAwake = false
+    /// Off. A country without its zoom 15 takes half the space and still has
+    /// every path, road and summit; what it lacks closest in is buildings
+    /// and the small points, a bench or a tap, which the hiker who wants them
+    /// turns on.
+    static let offlineCountriesDetail = false
     /// On. The marked routes are what a hiking map is read for, and the app
     /// draws them itself from squares it keeps once they have been seen, so
     /// the layer costs a new area a few hundred kilobytes and nobody's server
