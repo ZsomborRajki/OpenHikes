@@ -108,6 +108,29 @@ struct VectorTileLabelsTests {
         #expect(try candidates(layers, at: deeper).map(\.name) == ["Kogel"])
     }
 
+    /// Carto names a suburb from zoom 12, larger than a village, and the
+    /// neighbourhoods inside it from zoom 15.
+    @Test("a suburb is named before the neighbourhoods in it")
+    func suburbBeforeNeighborhood() throws {
+        let layers: [VectorTileFixture.Layer] = [
+            .init(name: "places", features: [
+                point(
+                    ["kind": .string("neighbourhood"), "kind_detail": .string("suburb"), "name": .string("Zugló")],
+                    at: (grid / 8, grid / 8)
+                ),
+                point(
+                    ["kind": .string("neighbourhood"), "kind_detail": .string("neighbourhood"), "name": .string("Rét")],
+                    at: (grid / 4, grid / 4)
+                ),
+            ]),
+        ]
+        // The quarter of the tile both stand in, a zoom deeper.
+        let deeper = VectorTileAddress(z: tile.z + 1, x: tile.x * 2, y: tile.y * 2)
+
+        #expect(try candidates(layers).map(\.name) == ["Zugló"])
+        #expect(try candidates(layers, at: deeper).map(\.name) == ["Zugló", "Rét"])
+    }
+
     /// The archive offers a city from zoom 2 and the style sets one from
     /// zoom 4: a name with no size of its own would be set at Core Text's.
     @Test("a name waits for the first zoom its style sets it at")

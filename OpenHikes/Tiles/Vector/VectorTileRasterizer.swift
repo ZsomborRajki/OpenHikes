@@ -40,7 +40,7 @@ nonisolated enum VectorTileRasterizer {
     /// The properties read, the names in `language` among them.
     static func propertyKeys(language: String) -> Set<String> {
         VectorTileLabels.propertyKeys(language: language).union([
-            "kind", "kind_detail", "sort_rank", "is_tunnel", "is_bridge", "disputed",
+            "kind", "kind_detail", "is_tunnel", "is_bridge", "disputed",
         ])
     }
 
@@ -162,7 +162,7 @@ nonisolated private struct Painter {
                 fill(geometry.path(of: feature), color)
             }
         }
-        let landuse = features(in: "landuse", type: .polygon).sorted { rank($0.0) < rank($1.0) }
+        let landuse = largestFirst(features(in: "landuse", type: .polygon))
         for (feature, geometry) in landuse {
             guard let kind = feature.string("kind"), let color = VectorTileStyle.landuseFills[kind] else { continue }
             fill(geometry.path(of: feature), color)
@@ -237,7 +237,16 @@ nonisolated private struct Painter {
             for road in ordered {
                 var line = road.road.line
                 if isTunnel { line.alpha *= VectorTileRasterizer.tunnelAlpha }
-                stroke(road.geometry.path(of: road.feature), line)
+                let path = road.geometry.path(of: road.feature)
+                stroke(path, line)
+                if let center = line.center {
+                    stroke(path, VectorTileStyle.Line(
+                        color: center.color,
+                        width: center.width,
+                        dash: center.dash,
+                        alpha: line.alpha
+                    ))
+                }
             }
         }
     }
@@ -338,8 +347,23 @@ nonisolated private struct Painter {
         return layer.features.filter { $0.type == type }.map { ($0, geometry) }
     }
 
-    private func rank(_ feature: MapboxVectorTile.Feature) -> Double {
-        feature.number("sort_rank") ?? 0
+    /// The largest area first, so a smaller one lying in it is drawn over it:
+    /// a park over the residential area around it, a playground over the
+    /// park. OpenStreetMap Carto orders its areas by size; the archive cannot,
+    /// because it gives every area the same `sort_rank`. An area is measured
+    /// as the archive tile holds it, cut at its edge, which keeps the order
+    /// of one area lying inside another.
+    private func largestFirst(
+        _ features: [(MapboxVectorTile.Feature, VectorTileGeometry)]
+    ) -> [(MapboxVectorTile.Feature, VectorTileGeometry)] {
+        let measured = features.enumerated().map { index, pair in
+            (pair: pair, area: pair.1.area(of: pair.0), index: index)
+        }
+        // Equal areas keep the tile's order, so every tile cut from one
+        // archive tile settles a tie the same way.
+        return measured
+            .sorted { lhs, rhs in lhs.area == rhs.area ? lhs.index < rhs.index : lhs.area > rhs.area }
+            .map(\.pair)
     }
 }
 
@@ -393,6 +417,29 @@ nonisolated struct VectorTileGeometry {
             }
         }
         return lines
+    }
+
+    /// A polygon feature's area in the picture's square pixels: its outer
+    /// rings' less its holes', which the spec winds the other way round.
+    func area(of feature: MapboxVectorTile.Feature) -> CGFloat {
+        var twice: CGFloat = 0
+        var ringStart: CGPoint?
+        var previous: CGPoint?
+        walk(feature.geometry) { command, point in
+            switch command {
+            case .moveTo:
+                ringStart = point
+                previous = point
+            case .lineTo:
+                if let last = previous { twice += last.x * point.y - point.x * last.y }
+                previous = point
+            case .closePath:
+                if let last = previous, let start = ringStart { twice += last.x * start.y - start.x * last.y }
+                ringStart = nil
+                previous = nil
+            }
+        }
+        return abs(twice) / 2
     }
 
     /// A point feature's points.

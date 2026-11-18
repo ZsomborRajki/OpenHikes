@@ -23,13 +23,15 @@ nonisolated enum VectorTileLabelStyle {
         case peak
         case region
         case saddle
+        case suburb
         case town
         case village
         case water
 
         /// Most important first: the name that stays where two would overlap.
         private static let importance: [Self] = [
-            .country, .region, .city, .town, .village, .peak, .hut, .water, .glacier, .saddle, .hamlet, .neighborhood,
+            .country, .region, .city, .town, .village, .peak, .hut, .water, .glacier, .saddle, .suburb, .hamlet,
+            .neighborhood,
         ]
 
         static func < (lhs: Self, rhs: Self) -> Bool {
@@ -45,8 +47,9 @@ nonisolated enum VectorTileLabelStyle {
             case (_, "city"): .city
             case (_, "town"): .town
             case (_, "village"): .village
+            case (_, "suburb"), (_, "quarter"): .suburb
             // swiftlint:disable:next american_spelling_in_copy
-            case ("neighbourhood", _), (_, "neighbourhood"), (_, "suburb"), (_, "quarter"): .neighborhood
+            case ("neighbourhood", _), (_, "neighbourhood"): .neighborhood
             case ("locality", _): .hamlet
             default: nil
             }
@@ -95,17 +98,32 @@ nonisolated enum VectorTileLabelStyle {
         let face: Face
     }
 
+    /// From zoom 12 the small places, summits and huts take OpenStreetMap
+    /// Carto's sizes (`placenames.mss`, `amenity-points.mss`), each held
+    /// between the zooms Carto changes it at.
     static func look(of category: Category) -> Look {
         switch category {
         case .country: Look(size: ZoomCurve([(3, 8), (6, 10), (8, 12)]), color: countryPurple, face: .bold)
         case .region: Look(size: ZoomCurve([(5, 8), (8, 9)]), color: countryPurple, face: .italic)
         case .city: Look(size: ZoomCurve([(4, 8), (8, 10), (12, 13), (15, 16)]), color: placeInk, face: .bold)
         case .town: Look(size: ZoomCurve([(7, 8), (10, 10), (13, 12), (15, 14)]), color: placeInk, face: .regular)
-        case .village: Look(size: ZoomCurve([(10, 8), (13, 10), (15, 12)]), color: placeInk, face: .regular)
-        case .hamlet: Look(size: ZoomCurve([(12, 7), (14, 9), (16, 10)]), color: placeInk, face: .regular)
-        case .neighborhood: Look(size: ZoomCurve([(12, 7), (15, 9)]), color: neighborhoodInk, face: .regular)
-        case .peak, .saddle: Look(size: ZoomCurve([(12, 7), (15, 8), (16, 9)]), color: terrainInk, face: .regular)
-        case .hut: Look(size: ZoomCurve([(14, 7), (15, 8), (16, 9)]), color: terrainInk, face: .bold)
+        case .village:
+            Look(
+                size: ZoomCurve([(10, 8), (12, 10), (13, 11), (14, 13), (15, 14), (16, 15)]),
+                color: placeInk,
+                face: .regular
+            )
+        case .hamlet:
+            Look(size: ZoomCurve([(12, 8), (14, 10), (15, 11), (16, 12)]), color: placeInk, face: .regular)
+        case .suburb:
+            Look(
+                size: ZoomCurve([(12, 11), (13, 12), (14, 14), (15, 14), (16, 15)]),
+                color: neighborhoodInk,
+                face: .regular
+            )
+        case .neighborhood: Look(size: ZoomCurve([(15, 10), (16, 12)]), color: neighborhoodInk, face: .regular)
+        case .peak, .saddle: Look(size: ZoomCurve([(12, 8), (13, 10)]), color: terrainInk, face: .regular)
+        case .hut: Look(size: ZoomCurve([(14, 10)]), color: terrainInk, face: .bold)
         case .water, .glacier: Look(size: ZoomCurve([(8, 7), (12, 8), (15, 10)]), color: waterInk, face: .italic)
         }
     }
@@ -141,7 +159,7 @@ nonisolated enum VectorTileLabelStyle {
     private static let neighborhoodInk = VectorTileStyle.color("#666666")
     private static let terrainInk = VectorTileStyle.color("#6B4A2E")
     private static let waterInk = VectorTileStyle.color("#4D80B3")
-    private static let roadInk = VectorTileStyle.color("#333333")
+    private static let roadInk = VectorTileStyle.color("#000000")
     private static let liftInk = VectorTileStyle.color("#555555")
 }
 
@@ -191,14 +209,16 @@ nonisolated extension VectorTileLabelStyle {
         let minimumZ: Int
     }
 
+    /// Roads and paths take OpenStreetMap Carto's sizes and ink
+    /// (`roads.mss`), each held between the zooms Carto changes it at.
     static func look(of category: LineCategory) -> LineLook {
         switch category {
         case .majorRoad:
-            LineLook(size: ZoomCurve([(13, 8), (15, 9), (16, 10)]), color: roadInk, face: .regular, minimumZ: 13)
+            LineLook(size: majorRoadSize, color: roadInk, face: .regular, minimumZ: 13)
         case .minorRoad:
-            LineLook(size: ZoomCurve([(15, 7), (16, 8), (20, 9)]), color: roadInk, face: .regular, minimumZ: 15)
+            LineLook(size: minorRoadSize, color: roadInk, face: .regular, minimumZ: 15)
         case .path:
-            LineLook(size: ZoomCurve([(15, 7), (16, 8)]), color: terrainInk, face: .regular, minimumZ: 15)
+            LineLook(size: pathSize, color: placeInk, face: .regular, minimumZ: 15)
         case .aerialway:
             LineLook(size: ZoomCurve([(14, 7), (16, 8)]), color: liftInk, face: .regular, minimumZ: 14)
         case .river:
@@ -208,9 +228,18 @@ nonisolated extension VectorTileLabelStyle {
         }
     }
 
+    private static let (z17, z18, z19) = (VectorTileStyle.z17, VectorTileStyle.z18, VectorTileStyle.z19)
+    private static let majorRoadSize = ZoomCurve([
+        (13, 8), (14, 9), (15, 10), (16, 10), (z17, 11), (z18, 11), (z19, 12),
+    ])
+    private static let minorRoadSize = ZoomCurve([(15, 8), (16, 9), (z17, 11), (z18, 11), (z19, 12)])
+    private static let pathSize = ZoomCurve([(15, 8), (16, 9), (z17, 11)])
+
     /// The least distance between two of the same name along a long line,
-    /// on one tile or either side of the edge between two.
-    static let lineNameRepeat: CGFloat = 100
+    /// on one tile or either side of the edge between two. A line's marks
+    /// stand one and a half of this apart: every 300 pixels, Carto's
+    /// `text-spacing` for a street.
+    static let lineNameRepeat: CGFloat = 200
     /// The sharpest turn from one letter to the next that a name follows,
     /// in radians: about thirty degrees. A tighter bend scatters the letters.
     static let lineNameBend: CGFloat = 0.5

@@ -168,18 +168,22 @@ struct VectorTileLineLabelsTests {
 
     // MARK: Placing
 
+    /// A street's name repeats every 300 of a 256-pixel tile's pixels, as
+    /// Carto's does, so one straight street names itself about once a tile:
+    /// four tiles' width holds more than one.
     @Test("a long street carries its name, more than once")
     func longStreetRepeats() {
+        let wide = CGRect(x: 0, y: 0, width: side * 4, height: side)
         let street = VectorTileLineLabels.NamedLine(
             category: .minorRoad,
             name: "Utca",
-            points: [CGPoint(x: -500, y: 256), CGPoint(x: 712, y: 256)]
+            points: [CGPoint(x: 0, y: 256), CGPoint(x: wide.maxX, y: 256)]
         )
         let layout = VectorTileLineLabels.Layout(
             [street],
             z: tile.z,
             unit: 2,
-            bounds: bounds,
+            bounds: wide,
             occupied: [],
             language: "hu"
         )
