@@ -200,6 +200,7 @@ struct OfflineCountriesLaunchTests {
             let slovenia = OfflineCountryFixture.country(bytes: basemap, id: "SI")
             var spain = OfflineCountryFixture.country(bytes: basemap, id: "ES")
             spain.bounds = OfflineCountryManifest.Bounds(west: -9.3, south: 36.0, east: 3.3, north: 43.8)
+            spain.outline = OfflineCountryFixture.outline(of: spain.bounds)
             let file = try #require(slovenia.files.first)
             try basemap.write(to: store.fileURL(for: file))
             try store.write(installed: [OfflineCountryStore.Record(country: slovenia, installedAt: .now)])
