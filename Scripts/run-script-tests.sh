@@ -57,6 +57,10 @@
 # coordinate rounded another way is a square the app reads differently, and a
 # request signed slightly wrong is refused by CloudKit without a word about
 # which part. The tool it compiles is run against an extract written out here.
+# Scripts/vector-extras.sh's upload is here for a mistake of the same kind: the
+# condition that keeps a second upload under one name from replacing the first
+# changes nothing about an upload made alone, so losing it would go unseen
+# until two met. Its cases replace `curl` with a recording stub as well.
 #
 # `xcrun`, `xcodebuild`, `swiftlint`, `periphery`, `hinge`, `osmium` and
 # `pyosmium-up-to-date` are replaced with recording stubs on PATH and the
@@ -5216,6 +5220,58 @@ fi
 
 run_script "trail-cells rejects a command it does not have" "$trail_cells" deploy
 if expect_status 2 && expect_contains "$output" "unknown command 'deploy'" "the error"; then
+    pass
+fi
+
+# Scripts/vector-extras.sh uploads the extras under a name the tile server's
+# cache keeps for a day. It asks R2 whether the name is free, then sends the
+# file on condition that it still is, and only that condition stops a second
+# upload that also found the name free from replacing the first: without it,
+# an upload made alone goes exactly as it does with it. `curl` is a stub from
+# here on, recording each request and answering a HEAD with STUB_CURL_HEAD and
+# a PUT with STUB_CURL_PUT as `-w "%{http_code}"` would print them. The keys are
+# a fixture's, so nothing here could sign for the real bucket.
+cat > "$stub_bin/curl" <<'STUB'
+#!/usr/bin/env bash
+printf 'curl %s\n' "$*" >> "$STUB_CALL_LOG"
+if [[ " $* " == *" -I "* ]]; then
+    printf '%s' "${STUB_CURL_HEAD:-404}"
+elif [[ " $* " == *" -T "* ]]; then
+    printf '%s' "${STUB_CURL_PUT:-200}"
+else
+    echo "stub curl: no answer for '$*'" >&2
+    exit 64
+fi
+STUB
+chmod +x "$stub_bin/curl"
+vector_extras="$repository_root/Scripts/vector-extras.sh"
+extras_work="$work/vector-extras"
+mkdir -p "$extras_work"
+extras_archive="$extras_work/extras-20261117.pmtiles"
+printf 'archive' > "$extras_archive"
+cat > "$extras_work/r2.env" <<'EOF'
+R2_ACCOUNT_ID=stub-account
+R2_ACCESS_KEY_ID=stub-key
+R2_SECRET_ACCESS_KEY=stub-secret
+R2_BUCKET=stub-bucket
+EOF
+
+OPENHIKES_R2_ENV="$extras_work/r2.env" \
+    run_script "vector-extras upload sends the archive on condition that its name is still free" \
+    "$vector_extras" upload "$extras_archive"
+if expect_status 0 \
+    && expect_contains "$calls" "-H If-None-Match: * -H Content-Type: application/octet-stream -T $extras_archive" \
+        "the upload" \
+    && expect_contains "$output" "uploaded extras-20261117.pmtiles (7 bytes) to stub-bucket" "the output"; then
+    pass
+fi
+
+OPENHIKES_R2_ENV="$extras_work/r2.env" STUB_CURL_PUT=412 \
+    run_script "vector-extras upload refuses a name another upload took after it was found free" \
+    "$vector_extras" upload "$extras_archive"
+if expect_status 1 \
+    && expect_contains "$output" "extras-20261117.pmtiles reached stub-bucket from another upload first" "the error" \
+    && expect_absent "$output" "uploaded" "the output"; then
     pass
 fi
 
