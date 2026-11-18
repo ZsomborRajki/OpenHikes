@@ -15,8 +15,16 @@ import Testing
 
 #if os(iOS)
 extension MapCoordinatorTests {
+    /// A second ring of Austria's, inside its bounds.
+    private static let austrianIsland = OfflineCountryManifest.Bounds(
+        west: 9.6, south: 48.0, east: 9.8, north: 48.2 // swiftlint:disable:this no_magic_numbers
+    )
+
+    /// Austria with an island of its own, as an area of many rings is: one
+    /// overlay the area, not one a ring.
     private static func outlinedCountries() -> [OfflineCountryManifest.Country] {
-        let austria = OfflineCountryFixture.northernCountry(bytes: Data("AT".utf8))
+        var austria = OfflineCountryFixture.northernCountry(bytes: Data("AT".utf8))
+        austria.outline += OfflineCountryFixture.outline(of: austrianIsland)
         return [austria, OfflineCountryFixture.country(bytes: Data("SI".utf8), id: "SI")]
     }
 
@@ -60,8 +68,8 @@ extension MapCoordinatorTests {
         await settleDelegateHop(until: "both countries are outlined") { polygons(on: map).count == 2 }
         let austria = try #require(polygons(on: map).first { $0.countryID == "AT" })
         let slovenia = try #require(polygons(on: map).first { $0.countryID == "SI" })
-        let austriaRenderer = try #require(coordinator.mapView(map, rendererFor: austria) as? MKPolygonRenderer)
-        let sloveniaRenderer = try #require(coordinator.mapView(map, rendererFor: slovenia) as? MKPolygonRenderer)
+        let austriaRenderer = try #require(coordinator.mapView(map, rendererFor: austria) as? MKMultiPolygonRenderer)
+        let sloveniaRenderer = try #require(coordinator.mapView(map, rendererFor: slovenia) as? MKMultiPolygonRenderer)
 
         #expect(austriaRenderer.fillColor?.cgColor.alpha == 0)
         #expect((sloveniaRenderer.fillColor?.cgColor.alpha ?? 0) > 0)
