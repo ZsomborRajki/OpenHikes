@@ -201,6 +201,29 @@ struct VectorTileRasterizerTests {
         #expect(pixel(image, x: middle, y: middle, is: "#FCD6A4"))
     }
 
+    /// Hallstatt's Kirchenstiege is tagged `access=no`, its wall collapsing.
+    /// Carto draws closed steps gray rather than salmon, and a closed path
+    /// not at all before zoom 15. The rows are read whole, so a gap in the
+    /// steps' dashes cannot stand where the test looks.
+    @Test("closed steps are drawn in Carto's gray, and not before zoom 15")
+    func closedStepsAreGray() throws {
+        let closed = [land, roads([street(kind: "path", detail: "steps", across: true, access: "no")])]
+        let open = [land, roads([street(kind: "path", detail: "steps", across: true, access: "yes")])]
+
+        let closedNear = try draw(closed, at: streetZoom)
+        let openNear = try draw(open, at: streetZoom)
+        let closedWide = try draw(closed, at: tile)
+        let openWide = try draw(open, at: tile)
+
+        #expect(row(closedNear, y: middle, has: "#BBBBBB"))
+        #expect(!row(closedNear, y: middle, has: "#FA8072"))
+        #expect(row(openNear, y: middle, has: "#FA8072"))
+        #expect(!row(openNear, y: middle, has: "#BBBBBB"))
+        #expect(!row(closedWide, y: middle, has: "#BBBBBB"), "a closed path waits for zoom 15")
+        #expect(!row(closedWide, y: middle, has: "#FA8072"), "and is never drawn as an open one")
+        #expect(row(openWide, y: middle, has: "#FA8072"), "where an open one is drawn")
+    }
+
     /// The vector extras bring fences, walls and hedges, which Carto draws
     /// from zoom 16, a hedge in the woods' green.
     @Test("a hedge from the extras is drawn in Carto's green, and not before zoom 16")
@@ -247,13 +270,18 @@ struct VectorTileRasterizerTests {
 
     /// A road through the middle of the tile, across it or down it, ranked
     /// as the archive ranks every road.
-    private func street(kind: String, detail: String, across: Bool) -> VectorTileFixture.Feature {
+    private func street(
+        kind: String,
+        detail: String,
+        across: Bool,
+        access: String? = nil
+    ) -> VectorTileFixture.Feature {
         let ends = [-grid / 4, grid + grid / 4].map { across ? ($0, grid / 2) : (grid / 2, $0) }
-        return .init(
-            type: .line,
-            properties: ["kind": .string(kind), "kind_detail": .string(detail), "sort_rank": .int(400)],
-            geometry: VectorTileFixture.line(ends)
-        )
+        var properties: [String: VectorTileFixture.Value] = [
+            "kind": .string(kind), "kind_detail": .string(detail), "sort_rank": .int(400),
+        ]
+        if let access { properties["access"] = .string(access) }
+        return .init(type: .line, properties: properties, geometry: VectorTileFixture.line(ends))
     }
 
     private func draw(_ layers: [VectorTileFixture.Layer], at target: VectorTileAddress) throws -> CGImage {
@@ -278,10 +306,21 @@ struct VectorTileRasterizerTests {
     /// Whether the pixel at `x`, `y` (from the top left) is `hex`, give or take
     /// the rounding a color picks up between color spaces.
     private func pixel(_ image: CGImage, x: Int, y: Int, is hex: String) -> Bool {
-        let expected = components(of: hex)
-        let actual = components(of: image, x: x, y: y)
+        matches(components(of: image, x: x, y: y), hex)
+    }
+
+    /// Whether any pixel along row `y` is `hex`, as ``pixel(_:x:y:is:)`` judges one.
+    private func row(_ image: CGImage, y: Int, has hex: String) -> Bool {
+        let pixels = rgba(of: image)
+        return (0..<image.width).contains { x in
+            let index = (y * image.width + x) * 4
+            return matches([Int(pixels[index]), Int(pixels[index + 1]), Int(pixels[index + 2])], hex)
+        }
+    }
+
+    private func matches(_ actual: [Int], _ hex: String) -> Bool {
         let tolerance = 3
-        return zip(expected, actual).allSatisfy { abs($0 - $1) <= tolerance }
+        return zip(components(of: hex), actual).allSatisfy { abs($0 - $1) <= tolerance }
     }
 
     private func components(of hex: String) -> [Int] {
@@ -290,6 +329,13 @@ struct VectorTileRasterizerTests {
     }
 
     private func components(of image: CGImage, x: Int, y: Int) -> [Int] {
+        let pixels = rgba(of: image)
+        let index = (y * image.width + x) * 4
+        return [Int(pixels[index]), Int(pixels[index + 1]), Int(pixels[index + 2])]
+    }
+
+    /// `image`'s pixels in sRGB, four bytes each, row by row from the top.
+    private func rgba(of image: CGImage) -> [UInt8] {
         let width = image.width
         let height = image.height
         var pixels = [UInt8](repeating: 0, count: width * height * 4)
@@ -307,7 +353,6 @@ struct VectorTileRasterizerTests {
             else { return }
             context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
         }
-        let index = (y * width + x) * 4
-        return [Int(pixels[index]), Int(pixels[index + 1]), Int(pixels[index + 2])]
+        return pixels
     }
 }
