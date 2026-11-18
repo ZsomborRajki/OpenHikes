@@ -19,6 +19,12 @@
 //  already escalated to five minutes, and nothing here can make the client
 //  more eager than it was.
 //
+//  A deadline is kept for the URL that was refused, not for the tile key:
+//  it is that server's answer about that request. Two styles can ask one
+//  URL — OpenStreetMap's raster template is both the comparison style and
+//  the fallback of the style drawn from vector tiles — and the OpenHikes tile
+//  server asked ahead of that fallback is not the server that refused.
+//
 
 import Algorithms
 import Foundation
@@ -122,7 +128,7 @@ nonisolated enum RetryAfterHeader {
     }
 }
 
-/// The deadlines servers have asked for, by tile key.
+/// The deadlines servers have asked for, by the URL they refused.
 ///
 /// Bounded for the same reason ``TileFailureLog`` is: a provider having a bad
 /// afternoon can refuse every tile a user pans across, and a table that only
@@ -179,26 +185,38 @@ nonisolated struct TileRetryAdvice: Sendable {
 
 nonisolated extension TileCache {
 
-    /// Files whatever `response` asked for, so the renderer's backoff can
+    /// Files whatever `response` to a request for `url` asked for, so the
+    /// request is not made again before then and the renderer's backoff can
     /// honour it when the load it belongs to comes back a failure.
     ///
     /// Recorded against the cache rather than returned up the call chain
     /// because a fetch is shared: the map and a bulk download can be waiting
     /// on one request, and both should hear what the server said.
-    func recordRetryAdvice(from response: HTTPURLResponse, forKey key: String) {
+    func recordRetryAdvice(from response: HTTPURLResponse, for url: URL) {
         guard let delay = RetryAfterHeader.delay(from: response) else { return }
         let now = ContinuousClock.now
-        retryAdvice.withLock { $0.record(key, notBefore: now.advanced(by: delay), at: now) }
+        retryAdvice.withLock { $0.record(url.absoluteString, notBefore: now.advanced(by: delay), at: now) }
     }
 
-    /// When a server last said `key` may be asked for again, if that moment
+    /// When a server last said `url` may be asked for again, if that moment
     /// has not passed.
     ///
     /// Left in place rather than consumed by the read: two renderers can be
     /// drawing the same provider, and a deadline that the first one to fail
     /// took away from the second would be honoured by neither. It expires on
     /// its own.
-    func retryDeadline(forKey key: String) -> ContinuousClock.Instant? {
-        retryAdvice.withLock { $0.deadline(for: key, at: .now) }
+    func retryDeadline(for url: URL) -> ContinuousClock.Instant? {
+        retryAdvice.withLock { $0.deadline(for: url.absoluteString, at: .now) }
+    }
+
+    /// The deadline a renderer's backoff for `key` takes as its floor: the
+    /// one standing for `url`, the request a load of `key` makes, unless the
+    /// provider is drawn from vector tiles. A load of one of those asks the
+    /// OpenHikes tile server first, which keeps its own pause, and waits out
+    /// a deadline of its raster template only on the way to it, so the
+    /// renderer backs off on its own delays and the tile is drawn again as
+    /// soon as the tile server can draw it.
+    func retryDeadline(forKey key: String, url: URL) -> ContinuousClock.Instant? {
+        isDrawnFromVectorTiles(key) ? nil : retryDeadline(for: url)
     }
 }

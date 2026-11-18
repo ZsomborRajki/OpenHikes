@@ -17,6 +17,7 @@
 //
 
 import Foundation
+import Synchronization
 
 nonisolated extension TileCache {
 
@@ -116,5 +117,38 @@ nonisolated extension TileCache {
             guard names.count > keyLimit else { return }
             invalidateAll()
         }
+    }
+
+    /// The token a fetch of `key` takes before it awaits the network, and
+    /// re-checks before it files what came back.
+    ///
+    /// Internal rather than private only because the loads that take it live
+    /// in `TileCache.swift`.
+    func mutationToken(forKey key: String) -> MutationToken {
+        let name = diskName(for: key)
+        return mutationVersions.withLock { versions in
+            Self.mutationToken(forName: name, in: versions)
+        }
+    }
+
+    /// The one place a tile's row in ``MutationVersions`` is located, so the
+    /// site that takes a token and the three that re-check one cannot drift
+    /// apart on how a key becomes a row.
+    ///
+    /// By disk name, because that is what the paths that *delete* have:
+    /// ``trimCache(claimedBy:limit:)`` and
+    /// ``reclaimDurableBytes(forProviderID:protecting:byteCount:)`` enumerate
+    /// files, and ``diskName(for:)`` is one-way. Nothing is lost by meeting
+    /// them there — see ``MutationVersions/names``.
+    ///
+    /// Call with ``mutationVersions`` held.
+    ///
+    /// Internal for the same reason ``MutationToken`` is: the memory tier
+    /// publishes under this ordering from its own file.
+    static func mutationToken(
+        forName name: String,
+        in versions: MutationVersions
+    ) -> MutationToken {
+        MutationToken(global: versions.global, name: versions.names[name, default: 0])
     }
 }

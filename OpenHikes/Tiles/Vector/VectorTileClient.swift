@@ -37,10 +37,14 @@
 //  on rather than made again.
 //
 //  Where the source has extras (``VectorTileSource/Extras``), their tile is
-//  asked for beside the basemap's and drawn into it. The extras add to the
-//  map and are never its reason to fall back: a tile they do not have adds
-//  nothing, and one the server fails to give, or the device loses on the
-//  way, leaves the basemap's as it is.
+//  asked for beside the basemap's and drawn into it, unless the basemap's is
+//  already known to fall back. The extras add to the map and are never its
+//  reason to fall back: a tile they do not have adds nothing, and one the
+//  server fails to give, or the device loses on the way, leaves the
+//  basemap's as it is. That drawing is provisional
+//  (``Drawing/provisional(_:)``): shown, never filed, and drawn again once
+//  the extras can be asked for again, so an outage of a minute does not
+//  leave a week of tiles without their gates and car parks.
 //
 
 import Foundation
@@ -82,6 +86,9 @@ nonisolated final class VectorTileClient: Sendable {
     enum Drawing: Sendable, Equatable {
         /// The tile, drawn, as PNG bytes.
         case png(Data)
+        /// The tile drawn without the extras the server failed to give, or
+        /// gave unreadable: drawn, and not to be kept as the tile.
+        case provisional(Data)
         /// Not drawn: the provider's raster template is asked instead.
         case fallBack
         /// The device reached no server, so the raster template is not asked
@@ -111,6 +118,15 @@ nonisolated final class VectorTileClient: Sendable {
         case kept(Fetch)
         case fetching(Task<Fetch, Never>)
         case paused
+
+        /// Whether this can still come to a tile: it is neither an archive
+        /// passed over nor one that has answered it has nothing there.
+        var mayBeATile: Bool {
+            switch self {
+            case .kept(.missing), .paused: false
+            case .kept, .fetching: true
+            }
+        }
     }
 
     /// An archive tile's bytes, by the address they were served from.
@@ -138,6 +154,11 @@ nonisolated final class VectorTileClient: Sendable {
         self.now = now
     }
 
+    /// Whether `key` names a tile of a provider this client draws.
+    func draws(_ key: String) -> Bool {
+        TileCacheKey.named(key).map { sources[$0.providerID] != nil } ?? false
+    }
+
     /// The tile `key` names, drawn, or what to do instead: ``Drawing/fallBack``
     /// when the provider has no vector source or the tile could not be drawn.
     ///
@@ -148,22 +169,22 @@ nonisolated final class VectorTileClient: Sendable {
         guard let named = TileCacheKey.named(key), let source = sources[named.providerID] else { return .fallBack }
         let target = VectorTileAddress(z: named.z, x: named.x, y: named.y)
         let dataTile = source.dataTile(for: target)
-        // Both asked for before either is waited on.
+        // Both asked for before either is waited on, unless the basemap
+        // already says it will fall back, which nothing the extras hold changes.
         let basemapURL = source.url(of: dataTile)
         let basemap = lookUp(basemapURL, in: source.archiveURL)
         var extras: (url: URL, lookup: Lookup)?
-        if let archive = source.extras?.archiveURL, let url = source.extrasURL(of: dataTile) {
+        if basemap.mayBeATile, let archive = source.extras?.archiveURL, let url = source.extrasURL(of: dataTile) {
             extras = (url, lookUp(url, in: archive))
         }
         switch await Self.result(of: basemap) {
         case let .tile(bytes):
             // Whatever became of the extras, the basemap is drawn.
-            var added: Served?
-            if let extras, case let .tile(extrasBytes) = await Self.result(of: extras.lookup) {
-                added = Served(url: extras.url, bytes: extrasBytes)
-            }
-            let drawn = draw(Served(url: basemapURL, bytes: bytes), extras: added, from: dataTile, as: target, key: key)
-            return drawn.map(Drawing.png) ?? .fallBack
+            guard var tile = decode(Served(url: basemapURL, bytes: bytes)) else { return .fallBack }
+            let added = await extrasTile(extras)
+            if let extrasTile = added.tile { tile = tile.merging(extrasTile) }
+            guard let png = draw(tile, from: dataTile, as: target, key: key, url: basemapURL) else { return .fallBack }
+            return added.isComplete ? .png(png) : .provisional(png)
         case .offline:
             return .offline
         case nil:
@@ -185,20 +206,35 @@ nonisolated final class VectorTileClient: Sendable {
         }
     }
 
-    /// `basemap`, with the extras' tile drawn into it, drawn as `target`, or
-    /// `nil`. Extras that cannot be read are left out rather than costing
-    /// the tile.
+    /// The extras' tile to draw into the basemap's, read, and whether the
+    /// drawing has all of them: not where the server failed to give them,
+    /// the device lost them, the archive is passed over or their bytes could
+    /// not be read, each of which the next request may put right. A tile
+    /// they have nothing at, or a tile too wide for them, is complete.
+    private func extrasTile(
+        _ extras: (url: URL, lookup: Lookup)?
+    ) async -> (tile: MapboxVectorTile?, isComplete: Bool) {
+        guard let extras else { return (nil, true) }
+        switch await Self.result(of: extras.lookup) {
+        case let .tile(bytes):
+            let tile = decode(Served(url: extras.url, bytes: bytes))
+            return (tile, tile != nil)
+        case .missing:
+            return (nil, true)
+        case .refused, .unavailable, .offline, nil:
+            return (nil, false)
+        }
+    }
+
+    /// `tile`, the archive tile at `url` with any extras merged into it,
+    /// drawn as `target`, or `nil`.
     private func draw(
-        _ basemap: Served,
-        extras: Served?,
+        _ tile: MapboxVectorTile,
         from dataTile: VectorTileAddress,
         as target: VectorTileAddress,
-        key: String
+        key: String,
+        url: URL
     ) -> Data? {
-        guard var tile = decode(basemap) else { return nil }
-        if let extras, let added = decode(extras) {
-            tile = tile.merging(added)
-        }
         let png = VectorTileRasterizer.png(
             of: tile,
             from: dataTile,
@@ -207,7 +243,6 @@ nonisolated final class VectorTileClient: Sendable {
             height: { HikeFormat.elevation(Measurement(value: $0, unit: .meters)) }
         )
         #if DEBUG
-        let url = basemap.url
         let size = png?.count ?? 0
         Self.logger.debug("Drew tile \(key, privacy: .public) from \(url, privacy: .public) (\(size) bytes)")
         #endif
@@ -377,3 +412,15 @@ nonisolated final class VectorTileClient: Sendable {
     private static let httpTooManyRequests = 429
     private static let httpServerErrors = 500..<600
 }
+
+#if DEBUG
+extension VectorTileClient {
+    /// Test seam: whether a request for `url` is out, or its answer is kept.
+    /// A lookup leaves one or the other behind as it starts, where a count of
+    /// requests would race the request it starts, so this is what a test
+    /// that proves an archive tile was not asked for reads.
+    func isAskingOrHolding(_ url: URL) -> Bool {
+        state.withLock { $0.inFlight[url] != nil || $0.kept[url] != nil }
+    }
+}
+#endif

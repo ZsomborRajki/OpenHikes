@@ -225,14 +225,11 @@ struct VectorTileClientTests {
     }
 
     /// The extras add to the map and are never its reason to fall back: where
-    /// they have nothing, their request fails or the device loses it, the
-    /// basemap is drawn alone.
-    @Test("extras the server does not have, or fails to give, leave the basemap drawn", arguments: [
+    /// they have nothing there, the basemap is drawn alone, and that is the
+    /// tile.
+    @Test("extras with nothing there leave the basemap drawn, and whole", arguments: [
         StubTileProtocol.Response(statusCode: 204),
         StubTileProtocol.Response.status(404),
-        StubTileProtocol.Response.undecodable(),
-        StubTileProtocol.Response.status(503),
-        StubTileProtocol.Response(failure: URLError(.notConnectedToInternet)),
     ])
     func missingExtrasLeaveTheBasemap(response: StubTileProtocol.Response) async {
         let client = makeClient(source: sourceWithExtras)
@@ -241,6 +238,28 @@ struct VectorTileClientTests {
         StubTileProtocol.respond { url in url.path.hasPrefix("/extras") ? response : land }
 
         #expect(await client.drawing(forKey: "osm/15/17600/11400").png != nil)
+        #expect(!client.isPaused(source.archiveURL))
+    }
+
+    /// Where the server fails to give them, or the device loses them on the
+    /// way, the basemap is drawn too, and the drawing is provisional: the
+    /// next request for them may bring them.
+    @Test("extras the server fails to give leave the basemap drawn, provisionally", arguments: [
+        StubTileProtocol.Response.undecodable(),
+        StubTileProtocol.Response.status(503),
+        StubTileProtocol.Response.status(403),
+        StubTileProtocol.Response(failure: URLError(.notConnectedToInternet)),
+    ])
+    func failedExtrasLeaveAProvisionalBasemap(response: StubTileProtocol.Response) async {
+        let client = makeClient(source: sourceWithExtras)
+        defer { StubTileProtocol.reset() }
+        let land = StubTileProtocol.Response(data: landTile)
+        StubTileProtocol.respond { url in url.path.hasPrefix("/extras") ? response : land }
+
+        let drawing = await client.drawing(forKey: "osm/15/17600/11400")
+
+        #expect(drawing.provisional != nil)
+        #expect(drawing.png == nil, "which is not the tile")
         #expect(!client.isPaused(source.archiveURL))
     }
 
@@ -301,11 +320,11 @@ extension VectorTileClientTests {
         let land = StubTileProtocol.Response(data: landTile)
         StubTileProtocol.respond { url in url.path.hasPrefix("/extras") ? .status(503) : land }
 
-        #expect(await client.drawing(forKey: "osm/15/17600/11400").png != nil)
+        #expect(await client.drawing(forKey: "osm/15/17600/11400").provisional != nil)
         #expect(client.isPaused(extrasArchive))
         #expect(!client.isPaused(source.archiveURL))
-        #expect(await client.drawing(forKey: "osm/13/4400/2850").png != nil)
-        #expect(await client.drawing(forKey: "osm/15/17601/11400").png != nil)
+        #expect(await client.drawing(forKey: "osm/13/4400/2850").png != nil, "too wide for the extras, so whole")
+        #expect(await client.drawing(forKey: "osm/15/17601/11400").provisional != nil)
 
         let paths = StubTileProtocol.requests.compactMap { $0.url?.path }
         #expect(Set(paths.prefix(2)) == ["/planet/15/17600/11400.mvt", "/extras/15/17600/11400.mvt"])
@@ -335,6 +354,50 @@ extension VectorTileClientTests {
             }
         }
         #expect(StubTileProtocol.requestCount == 2)
+    }
+
+    /// A basemap that will fall back draws nothing the extras could add to,
+    /// so they are not asked while its archive is passed over. The extras
+    /// answer that they have nothing there, which is kept, so a lookup made
+    /// for them would stay behind to be seen.
+    @Test("a basemap passed over asks nothing of the extras")
+    func pausedBasemapSkipsTheExtras() async throws {
+        let withExtras = sourceWithExtras
+        let client = makeClient(source: withExtras)
+        defer { StubTileProtocol.reset() }
+        StubTileProtocol.respond { url in url.path.hasPrefix("/extras") ? .init(statusCode: 204) : .status(503) }
+        let extras = try #require(withExtras.extrasURL(of: VectorTileAddress(z: 15, x: 17_601, y: 11_400)))
+
+        #expect(await client.drawing(forKey: "osm/15/17600/11400") == .fallBack)
+        #expect(client.isPaused(withExtras.archiveURL), "precondition: the basemap is passed over")
+        #expect(await client.drawing(forKey: "osm/15/17601/11400") == .fallBack)
+
+        #expect(!client.isAskingOrHolding(extras))
+    }
+
+    /// Nor for a tile the basemap has said it has nothing at. The extras are
+    /// passed over while that answer is learnt, so they are not held for it.
+    @Test("a basemap with nothing there asks nothing of the extras")
+    func missingBasemapSkipsTheExtras() async throws {
+        let withExtras = sourceWithExtras
+        let extrasArchive = try #require(withExtras.extras?.archiveURL)
+        let client = makeClient(source: withExtras)
+        defer { StubTileProtocol.reset() }
+        let land = StubTileProtocol.Response(data: landTile)
+        StubTileProtocol.respond { url in
+            if url.path.hasPrefix("/extras") { return .status(503) }
+            return url.path.hasPrefix("/planet/15/17600/") ? .init(statusCode: 204) : land
+        }
+        let extras = try #require(withExtras.extrasURL(of: VectorTileAddress(z: 15, x: 17_600, y: 11_400)))
+
+        #expect(await client.drawing(forKey: "osm/15/17601/11400").provisional != nil)
+        #expect(client.isPaused(extrasArchive), "precondition: the extras are passed over")
+        #expect(await client.drawing(forKey: "osm/17/70400/45600") == .fallBack)
+        clock.advance(by: VectorTileClient.failurePause + .seconds(1))
+        #expect(!client.isPaused(extrasArchive), "precondition: and then asked again")
+        #expect(await client.drawing(forKey: "osm/17/70403/45603") == .fallBack)
+
+        #expect(!client.isAskingOrHolding(extras))
     }
 
     @Test("a basemap the archive does not have is kept, and its tiles fall back without asking again")
@@ -374,7 +437,7 @@ extension VectorTileClientTests {
         StubTileProtocol.respond { url in url.path.hasPrefix(archive) ? answers.next() : land }
 
         let first = await client.drawing(forKey: "osm/17/70400/45600")
-        #expect((first.png != nil) == (archive == "/extras"), "unreadable extras leave the basemap drawn")
+        #expect((first.provisional != nil) == (archive == "/extras"), "unreadable extras leave the basemap drawn")
         #expect(await client.drawing(forKey: "osm/17/70403/45603").png != nil)
         #expect(StubTileProtocol.requests.filter { $0.url?.path.hasPrefix(archive) == true }.count == 2)
         #expect(StubTileProtocol.requestCount == 3)
@@ -399,6 +462,12 @@ nonisolated private extension VectorTileClient.Drawing {
     /// The drawn tile, if this is one.
     var png: Data? {
         guard case let .png(data) = self else { return nil }
+        return data
+    }
+
+    /// The tile drawn without its extras, if this is one.
+    var provisional: Data? {
+        guard case let .provisional(data) = self else { return nil }
         return data
     }
 }

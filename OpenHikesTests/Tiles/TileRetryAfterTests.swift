@@ -230,7 +230,7 @@ struct TileRetryAfterTests {
 
         #expect(await sandbox.cache.loadTile(forKey: key, url: url()) == nil)
 
-        let deadline = try #require(sandbox.cache.retryDeadline(forKey: key))
+        let deadline = try #require(sandbox.cache.retryDeadline(for: url()))
         let waitSeconds = ContinuousClock.now.duration(to: deadline).components.seconds
         #expect(waitSeconds > 110 && waitSeconds <= 120)
     }
@@ -245,12 +245,12 @@ struct TileRetryAfterTests {
         StubTileProtocol.alwaysRespond(with: .status(500))
 
         #expect(await sandbox.cache.loadTile(forKey: key, url: url()) == nil)
-        #expect(sandbox.cache.retryDeadline(forKey: key) == nil)
+        #expect(sandbox.cache.retryDeadline(for: url()) == nil)
     }
 
     /// The renderer's failure log is keyed by tile path and the cache files
-    /// advice under the provider-namespaced key. This is the translation
-    /// between them, and it is the step that would silently find nothing.
+    /// advice under the URL it refused. This is the translation between
+    /// them, and it is the step that would silently find nothing.
     @Test("the overlay finds the advice its renderer will ask for")
     func overlayTranslatesThePathToTheAdvisedKey() async {
         StubTileProtocol.reset()
