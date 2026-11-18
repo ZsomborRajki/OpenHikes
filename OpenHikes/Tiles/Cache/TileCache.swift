@@ -170,11 +170,11 @@ nonisolated final class TileCache: @unchecked Sendable {
     let durableDirectory: URL
     private let session: URLSession
     /// Draws the tiles of the providers that have a ``VectorTileSource``, or
-    /// `nil` when none does. Shares ``session``.
-    private let vectorTiles: VectorTileClient?
+    /// `nil` when none does. Shares ``session``. See
+    /// `TileCache+VectorDrawing.swift`.
+    let vectorTiles: VectorTileClient?
     /// Draws the same providers' tiles out of the downloaded countries, or
-    /// `nil` when none is drawn from vector tiles or no countries were
-    /// given. See `TileCache+Countries.swift`.
+    /// `nil` when none is drawn from vector tiles or no countries were given.
     let countryTiles: OfflineCountryDrawing?
 
     /// Live network conditions, updated by `NWPathMonitor`. Tile loads short-
@@ -551,7 +551,7 @@ nonisolated extension TileCache {
         token: MutationToken
     ) async -> TileLoadResult {
         // A downloaded country holds the tile: drawn with no connection, which
-        // is the point of having downloaded it. See `TileCache+Countries.swift`.
+        // is the point of having downloaded it. See `TileCache+VectorDrawing.swift`.
         if let drawn = countryTile(forKey: key, wasDurable: stored.wasDurable, token: token) { return drawn }
         // Offline, metered, or asked to conserve: the tile isn't cached and
         // opening a connection for it is either doomed or unwanted. Return
@@ -786,12 +786,6 @@ nonisolated extension TileCache {
     }
 
     private static let httpSuccessRange = 100 * 2..<100 * 3
-
-    /// Whether a load of `key` asks the OpenHikes tile server for a vector
-    /// tile before the provider's raster template.
-    func isDrawnFromVectorTiles(_ key: String) -> Bool {
-        vectorTiles?.draws(key) ?? false
-    }
 
     /// One tile off the network, validated and decoded, with nothing written
     /// anywhere — the caller decides which tier it belongs in. Go through
