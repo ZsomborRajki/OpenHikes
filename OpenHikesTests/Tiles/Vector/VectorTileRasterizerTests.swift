@@ -201,47 +201,6 @@ struct VectorTileRasterizerTests {
         #expect(pixel(image, x: middle, y: middle, is: "#FCD6A4"))
     }
 
-    @Test("summits are marked from zoom 12, and not before")
-    func peaksFromZoomTwelve() throws {
-        let layers = [
-            land,
-            .init(name: "pois", features: [
-                .init(
-                    type: .point,
-                    properties: ["kind": .string("peak")],
-                    geometry: VectorTileFixture.points([(grid / 2, grid / 2)])
-                ),
-            ]),
-        ]
-
-        let close = try draw(layers, at: VectorTileAddress(z: VectorTileStyle.peakZ, x: 2200, y: 1425))
-        let wide = try draw(layers, at: VectorTileAddress(z: VectorTileStyle.peakZ - 1, x: 1100, y: 712))
-
-        #expect(pixel(close, x: middle, y: middle, is: "#8A5A3B"))
-        #expect(pixel(wide, x: middle, y: middle, is: "#F2EFE9"))
-    }
-
-    /// Filling one hut's walls used to empty the path holding the roofs
-    /// before it, so only the last hut in a tile kept its roof.
-    @Test("every hut in a tile keeps its roof")
-    func everyHutHasARoof() throws {
-        let huts = [(grid / 4, grid / 2), (grid * 3 / 4, grid / 2)].map { position in
-            VectorTileFixture.Feature(
-                type: .point,
-                properties: ["kind": .string("alpine_hut")],
-                geometry: VectorTileFixture.points([position])
-            )
-        }
-        let target = VectorTileAddress(z: VectorTileLabelStyle.hutZ, x: 8800, y: 5700)
-
-        let image = try draw([land, .init(name: "pois", features: huts)], at: target)
-
-        // Three pixels above each point: inside the roof, above the walls.
-        let roofRow = middle - 3
-        #expect(pixel(image, x: VectorTileRasterizer.pixelSize / 4, y: roofRow, is: "#8A5A3B"), "the first hut")
-        #expect(pixel(image, x: VectorTileRasterizer.pixelSize * 3 / 4, y: roofRow, is: "#8A5A3B"), "the last hut")
-    }
-
     @Test("the PNG handed to the cache is the size it was drawn at")
     func pngKeepsItsSize() throws {
         let decoded = try VectorTileFixture.decoded([land])

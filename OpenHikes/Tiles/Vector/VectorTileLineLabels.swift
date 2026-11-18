@@ -12,7 +12,7 @@
 //  ``VectorTileLabelStyle/lineNameBend`` from one letter to the next, and is
 //  moved along the line, or left out, where it would bend more, cross the
 //  tile's edge or touch another name. A long line repeats its name, never
-//  nearer itself than ``VectorTileLabelStyle/lineNameRepeat``, at marks
+//  nearer itself than its look's repeat distance, at marks
 //  measured from the line's middle, and a tile names only the marks inside
 //  it, so the tiles cut from one archive tile agree on where the repeats go.
 //  Point names claim their room first, so a street name never covers a
@@ -61,6 +61,15 @@ nonisolated enum VectorTileLineLabels {
     struct Letter: Equatable {
         let center: CGPoint
         let angle: CGFloat
+
+        /// The letter `distance` below where it stood, as the name reads.
+        func moved(by distance: CGFloat) -> Self {
+            guard distance != 0 else { return self }
+            return Self(
+                center: CGPoint(x: center.x - sin(angle) * distance, y: center.y + cos(angle) * distance),
+                angle: angle
+            )
+        }
     }
 
     // MARK: Choosing
@@ -286,6 +295,9 @@ nonisolated extension VectorTileLineLabels {
     /// The line names placed on one tile, set and ready to draw.
     struct Layout {
         private let names: [SetName]
+        /// The room taken once these names are placed: what was taken before
+        /// them, and their letters'.
+        let taken: [CGRect]
 
         /// How many names were placed, repeats included.
         var count: Int { names.count }
@@ -296,7 +308,8 @@ nonisolated extension VectorTileLineLabels {
 
         /// `lines`, in order, each at as many of its marks inside `bounds` as
         /// fit: inside `bounds`, clear of `occupied` and of each other, and no
-        /// nearer the same name than ``VectorTileLabelStyle/lineNameRepeat``.
+        /// nearer the same name than its look's
+        /// ``VectorTileLabelStyle/LineLook/repeatDistance``.
         init(
             _ lines: [NamedLine],
             z: Int,
@@ -306,12 +319,7 @@ nonisolated extension VectorTileLineLabels {
             language: String
         ) {
             let spacing = VectorTileLabelStyle.spacing * unit
-            var room = Room(
-                inner: bounds.insetBy(dx: spacing, dy: spacing),
-                spacing: spacing,
-                repeatDistance: VectorTileLabelStyle.lineNameRepeat * unit,
-                taken: occupied.map { $0.insetBy(dx: -spacing, dy: -spacing) }
-            )
+            var room = Room(inner: bounds.insetBy(dx: spacing, dy: spacing), spacing: spacing, taken: occupied)
             var placed: [SetName] = []
             var texts: [String: SetText] = [:]
             var fonts = LabelFonts(language: language)
@@ -327,10 +335,11 @@ nonisolated extension VectorTileLineLabels {
                 let text = texts[key]
                     ?? SetText(line.name, font: fonts.font(size: size, face: look.face), look: look, unit: unit)
                 texts[key] = text
+                let repeatDistance = look.repeatDistance * unit
                 let marks = VectorTileLineLabels.marks(
                     length: line.length,
                     width: text.width,
-                    spacing: room.repeatDistance,
+                    spacing: repeatDistance,
                     step: max(text.width / 4, spacing)
                 )
                 guard !marks.isEmpty else { continue }
@@ -346,7 +355,9 @@ nonisolated extension VectorTileLineLabels {
                             centeredAt: spot,
                             maximumBend: VectorTileLabelStyle.lineNameBend
                         )
-                        if room.claim(name: line.name, letters: letters, boxes: text.boxes(for: letters)) {
+                        .map { $0.moved(by: look.offset * unit) }
+                        let boxes = text.boxes(for: letters)
+                        if room.claim(name: line.name, letters: letters, boxes: boxes, apart: repeatDistance) {
                             placed.append(SetName(text: text, letters: letters))
                             break
                         }
@@ -354,6 +365,7 @@ nonisolated extension VectorTileLineLabels {
                 }
             }
             names = placed
+            taken = room.taken
         }
 
         /// Draws every name's halo, then every name's letters, so no halo
@@ -372,21 +384,27 @@ nonisolated extension VectorTileLineLabels {
 nonisolated private struct Room {
     let inner: CGRect
     let spacing: CGFloat
-    let repeatDistance: CGFloat
     var taken: [CGRect]
     var placedAt: [String: [CGPoint]] = [:]
 
     /// Takes the room `boxes` need for `name`, if they fit inside the tile,
-    /// touch nothing placed, and stand far enough from the same name.
-    mutating func claim(name: String, letters: [VectorTileLineLabels.Letter], boxes: [CGRect]) -> Bool {
+    /// touch nothing placed, and stand at least `apart` from the same name.
+    mutating func claim(
+        name: String,
+        letters: [VectorTileLineLabels.Letter],
+        boxes: [CGRect],
+        apart repeatDistance: CGFloat
+    ) -> Bool {
         guard let middle = letters.dropFirst(letters.count / 2).first?.center else { return false }
         let nearSame = placedAt[name, default: []].contains { spot in
             hypot(spot.x - middle.x, spot.y - middle.y) < repeatDistance
         }
         let fits = boxes.allSatisfy { inner.contains($0) }
-        let clear = !boxes.contains { box in taken.contains { $0.intersects(box) } }
+        let clear = !boxes.contains { box in
+            taken.contains { $0.insetBy(dx: -spacing, dy: -spacing).intersects(box) }
+        }
         guard !nearSame, fits, clear else { return false }
-        taken += boxes.map { $0.insetBy(dx: -spacing, dy: -spacing) }
+        taken += boxes
         placedAt[name, default: []].append(middle)
         return true
     }

@@ -18,11 +18,8 @@ nonisolated enum VectorTileLabelStyle {
         case country
         case glacier
         case hamlet
-        case hut
         case neighborhood
-        case peak
         case region
-        case saddle
         case suburb
         case town
         case village
@@ -30,8 +27,7 @@ nonisolated enum VectorTileLabelStyle {
 
         /// Most important first: the name that stays where two would overlap.
         private static let importance: [Self] = [
-            .country, .region, .city, .town, .village, .peak, .hut, .water, .glacier, .saddle, .suburb, .hamlet,
-            .neighborhood,
+            .country, .region, .city, .town, .village, .water, .glacier, .suburb, .hamlet, .neighborhood,
         ]
 
         static func < (lhs: Self, rhs: Self) -> Bool {
@@ -55,16 +51,13 @@ nonisolated enum VectorTileLabelStyle {
             }
         }
 
-        /// The category of a point in the `pois` layer, or `nil` for one not
-        /// named on the map. The map names what a hiker finds their way by,
-        /// and leaves the benches and cafés to the places screens.
+        /// The category of a point in the `pois` layer named here rather than
+        /// with an icon (``VectorTilePoints``), or `nil`: a pond's or a
+        /// glacier's name, which Carto writes over the water or the ice.
         static func poi(kind: String?) -> Self? {
             switch kind {
-            case "peak", "volcano": .peak
-            case "alpine_hut", "wilderness_hut": .hut
             case "water": .water
             case "glacier": .glacier
-            case "saddle": .saddle
             default: nil
             }
         }
@@ -81,9 +74,6 @@ nonisolated enum VectorTileLabelStyle {
             }
         }
 
-        /// Whether the name stands under a symbol drawn at its point, rather
-        /// than over the point itself.
-        var hasMarker: Bool { self == .peak || self == .hut }
     }
 
     enum Face {
@@ -98,7 +88,7 @@ nonisolated enum VectorTileLabelStyle {
         let face: Face
     }
 
-    /// From zoom 12 the small places, summits and huts take OpenStreetMap
+    /// From zoom 12 the small places take OpenStreetMap
     /// Carto's sizes (`placenames.mss`, `amenity-points.mss`), each held
     /// between the zooms Carto changes it at.
     static func look(of category: Category) -> Look {
@@ -122,8 +112,6 @@ nonisolated enum VectorTileLabelStyle {
                 face: .regular
             )
         case .neighborhood: Look(size: ZoomCurve([(15, 10), (16, 12)]), color: neighborhoodInk, face: .regular)
-        case .peak, .saddle: Look(size: ZoomCurve([(12, 8), (13, 10)]), color: terrainInk, face: .regular)
-        case .hut: Look(size: ZoomCurve([(14, 10)]), color: terrainInk, face: .bold)
         case .water, .glacier: Look(size: ZoomCurve([(8, 7), (12, 8), (15, 10)]), color: waterInk, face: .italic)
         }
     }
@@ -134,13 +122,6 @@ nonisolated enum VectorTileLabelStyle {
     static let haloWidth: CGFloat = 1.5
     /// The room kept between two names, and between a name and a tile's edge.
     static let spacing: CGFloat = 2
-    /// The gap between a symbol and the name under it.
-    static let markerGap: CGFloat = 1
-    /// A height or a second line, as a share of the name's size.
-    static let detailScale: CGFloat = 0.85
-    /// A hut's symbol, drawn from zoom 14, the zoom its name starts at.
-    static let hutZ = 14
-    static let hutSize = ZoomCurve([(14, 4), (16, 5), (20, 6)])
 
     static func font(size: CGFloat, face: Face, language: String) -> CTFont {
         let base: CTFont = switch face {
@@ -157,7 +138,6 @@ nonisolated enum VectorTileLabelStyle {
     private static let countryPurple = VectorTileStyle.color("#9D6C9D")
     private static let placeInk = VectorTileStyle.color("#222222")
     private static let neighborhoodInk = VectorTileStyle.color("#666666")
-    private static let terrainInk = VectorTileStyle.color("#6B4A2E")
     private static let waterInk = VectorTileStyle.color("#4D80B3")
     private static let roadInk = VectorTileStyle.color("#000000")
     private static let liftInk = VectorTileStyle.color("#555555")
@@ -169,6 +149,9 @@ nonisolated extension VectorTileLabelStyle {
     /// What a line's name names. Ordered by ``importance``.
     enum LineCategory: Comparable, Sendable {
         case aerialway
+        case canal
+        /// A ditch or a drain.
+        case ditch
         case majorRoad
         case minorRoad
         case path
@@ -176,15 +159,27 @@ nonisolated extension VectorTileLabelStyle {
         case stream
 
         /// Most important first: the name that keeps its room where two
-        /// would overlap. Every point name comes before any of these.
-        private static let importance: [Self] = [.majorRoad, .river, .minorRoad, .path, .aerialway, .stream]
+        /// would overlap.
+        private static let importance: [Self] = [
+            .majorRoad, .minorRoad, .path, .aerialway, .river, .canal, .stream, .ditch,
+        ]
+
+        /// Whether the line is water, whose names Carto places after every
+        /// point's name, where streets' come before.
+
+        var isWater: Bool {
+            switch self {
+            case .river, .canal, .stream, .ditch: true
+            case .majorRoad, .minorRoad, .path, .aerialway: false
+            }
+        }
 
         static func < (lhs: Self, rhs: Self) -> Bool {
             (importance.firstIndex(of: lhs) ?? importance.count) < (importance.firstIndex(of: rhs) ?? importance.count)
         }
 
         /// The category of a line in `layerName`, or `nil` for one whose
-        /// name is not drawn: a railway, a ferry, a ditch. A pedestrian
+        /// name is not drawn: a railway, a ferry. A pedestrian
         /// street is a street, though the archive files it with the paths.
         static func line(in layerName: String, kind: String?, detail: String?) -> Self? {
             switch (layerName, kind) {
@@ -194,8 +189,10 @@ nonisolated extension VectorTileLabelStyle {
             case ("roads", "aerialway"): .aerialway
             // The archive's kind for a highway it has no other kind for.
             case ("roads", "other"): detail == "living_street" ? .minorRoad : nil
-            case ("water", "river"), ("water", "canal"): .river
+            case ("water", "river"): .river
+            case ("water", "canal"): .canal
             case ("water", "stream"): .stream
+            case ("water", "ditch"), ("water", "drain"): .ditch
             default: nil
             }
         }
@@ -207,10 +204,17 @@ nonisolated extension VectorTileLabelStyle {
         let face: Face
         /// The first zoom the line carries its name at.
         let minimumZ: Int
+        /// How far the name stands beside the line rather than on it, below
+        /// it as the name reads: a stream's, which would hide the stream.
+        var offset: CGFloat = 0
+        /// The least distance between two of the same name along a line; its
+        /// marks stand one and a half of this apart.
+        var repeatDistance: CGFloat = lineNameRepeat
     }
 
-    /// Roads and paths take OpenStreetMap Carto's sizes and ink
-    /// (`roads.mss`), each held between the zooms Carto changes it at.
+    /// Roads, paths and water take OpenStreetMap Carto's sizes and ink
+    /// (`roads.mss`, `water.mss`), each held between the zooms Carto changes
+    /// it at.
     static func look(of category: LineCategory) -> LineLook {
         switch category {
         case .majorRoad:
@@ -221,12 +225,30 @@ nonisolated extension VectorTileLabelStyle {
             LineLook(size: pathSize, color: placeInk, face: .regular, minimumZ: 15)
         case .aerialway:
             LineLook(size: ZoomCurve([(14, 7), (16, 8)]), color: liftInk, face: .regular, minimumZ: 14)
-        case .river:
-            LineLook(size: ZoomCurve([(12, 8), (15, 9), (16, 10)]), color: waterInk, face: .italic, minimumZ: 12)
-        case .stream:
-            LineLook(size: ZoomCurve([(15, 7), (16, 8)]), color: waterInk, face: .italic, minimumZ: 15)
+        case .river, .canal:
+            LineLook(
+                size: ZoomCurve([(13, 10), (14, 12)]),
+                color: waterInk,
+                face: category == .river ? .italic : .regular,
+                minimumZ: 13,
+                repeatDistance: waterNameRepeat
+            )
+        case .stream, .ditch:
+            LineLook(
+                size: ZoomCurve([(15, 10)]),
+                color: waterInk,
+                face: category == .stream ? .italic : .regular,
+                minimumZ: 15,
+                offset: smallWaterOffset,
+                repeatDistance: waterNameRepeat
+            )
         }
     }
+
+    /// A waterway's name every 500 pixels, Carto's `text-spacing` for one.
+    static let waterNameRepeat: CGFloat = 1000 / 3
+    /// Carto's `text-dy` for a stream's, a ditch's or a drain's name.
+    private static let smallWaterOffset: CGFloat = 8
 
     private static let (z17, z18, z19) = (VectorTileStyle.z17, VectorTileStyle.z18, VectorTileStyle.z19)
     private static let majorRoadSize = ZoomCurve([

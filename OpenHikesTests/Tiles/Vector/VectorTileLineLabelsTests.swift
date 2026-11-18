@@ -213,6 +213,35 @@ struct VectorTileLineLabelsTests {
         #expect(layout.count == 0)
     }
 
+    /// Carto sets a stream's name beside the stream, where on it the letters
+    /// would hide the water they name.
+    @Test("a stream's name stands beside it, and a street's on it")
+    func streamNameBesideTheLine() throws {
+        let middle = { (category: VectorTileLabelStyle.LineCategory) -> CGFloat? in
+            let line = VectorTileLineLabels.NamedLine(
+                category: category,
+                name: "Rákos-patak",
+                points: [CGPoint(x: 0, y: 256), CGPoint(x: side, y: 256)]
+            )
+            let layout = VectorTileLineLabels.Layout(
+                [line],
+                z: tile.z,
+                unit: 2,
+                bounds: bounds,
+                occupied: [],
+                language: "hu"
+            )
+            let boxes = layout.taken
+            return boxes.isEmpty ? nil : boxes.map(\.midY).reduce(0, +) / CGFloat(boxes.count)
+        }
+
+        let stream = try #require(middle(.stream))
+        let street = try #require(middle(.minorRoad))
+
+        #expect(abs(street - 256) < 1)
+        #expect(stream - 256 > 10)
+    }
+
     @Test("a street's name stays off the room a point's name took")
     func pointNamesComeFirst() {
         let line = VectorTileLineLabels.NamedLine(

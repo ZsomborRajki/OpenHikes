@@ -41,8 +41,7 @@ struct VectorTileLabelsTests {
             source: tile,
             target: target ?? tile,
             bounds: bounds,
-            language: language,
-            height: VectorTileFixture.height
+            language: language
         )
     }
 
@@ -62,7 +61,9 @@ struct VectorTileLabelsTests {
         #expect(try candidates(layers, language: "fr").map(\.name) == ["Wien"], "no French name, so the local one")
     }
 
-    @Test("summits, passes, huts, lakes, glaciers and places are named; benches and cafés are not")
+    /// Summits, huts and every other point are drawn with their icons, and
+    /// named under them, by `VectorTilePoints`.
+    @Test("places, lakes and glaciers are named here; summits, huts and cafés are left to the points")
     func whatIsNamed() throws {
         let layers: [VectorTileFixture.Layer] = [
             .init(name: "places", features: [
@@ -82,11 +83,7 @@ struct VectorTileLabelsTests {
 
         let named = try candidates(layers)
 
-        #expect(Set(named.map(\.name)) == [
-            "Gosau", "Dachstein", "Scharte", "Simonyhütte", "Gosausee", "Hallstätter Gletscher",
-        ])
-        #expect(named.first { $0.name == "Dachstein" }?.detail == "2995 m", "a summit carries its height")
-        #expect(named.first { $0.name == "Simonyhütte" }?.detail == nil)
+        #expect(Set(named.map(\.name)) == ["Gosau", "Gosausee", "Hallstätter Gletscher"])
     }
 
     /// The archive puts a name in a tile before the zoom it is meant for, and
@@ -94,14 +91,19 @@ struct VectorTileLabelsTests {
     @Test("a name waits for its own minimum zoom")
     func minimumZoom() throws {
         let layers: [VectorTileFixture.Layer] = [
-            .init(name: "pois", features: [
+            .init(name: "places", features: [
                 point(
-                    ["kind": .string("peak"), "name": .string("Kogel"), "min_zoom": .double(15)],
+                    [
+                        "kind": .string("locality"),
+                        "kind_detail": .string("hamlet"),
+                        "name": .string("Kogel"),
+                        "min_zoom": .double(15),
+                    ],
                     at: (grid / 4, grid / 4)
                 ),
             ]),
         ]
-        // The quarter of the tile the summit stands in, a zoom deeper.
+        // The quarter of the tile the hamlet stands in, a zoom deeper.
         let deeper = VectorTileAddress(z: tile.z + 1, x: tile.x * 2, y: tile.y * 2)
 
         #expect(try candidates(layers).isEmpty)
@@ -147,8 +149,7 @@ struct VectorTileLabelsTests {
                 source: target,
                 target: target,
                 bounds: bounds,
-                language: "en",
-                height: VectorTileFixture.height
+                language: "en"
             )
             return found.map(\.name)
         }
@@ -188,15 +189,15 @@ struct VectorTileLabelsTests {
     @Test("a point outside the tile is the neighbouring tile's to name")
     func pointsOutsideAreLeft() throws {
         let layers: [VectorTileFixture.Layer] = [
-            .init(name: "pois", features: [
-                point(["kind": .string("peak"), "name": .string("Outside")], at: (grid + 20, grid / 2)),
+            .init(name: "places", features: [
+                point(town("Outside", sortKey: 0), at: (grid + 20, grid / 2)),
             ]),
         ]
 
         #expect(try candidates(layers).isEmpty)
     }
 
-    @Test("names claim room by what they name, then by size or height")
+    @Test("names claim room by what they name, then by size")
     func importanceOrder() throws {
         let layers: [VectorTileFixture.Layer] = [
             .init(name: "places", features: [
@@ -204,13 +205,9 @@ struct VectorTileLabelsTests {
                 point(town("Small Town", sortKey: 5)),
                 point(town("Big Town", sortKey: -5)),
             ]),
-            .init(name: "pois", features: [
-                point(["kind": .string("peak"), "name": .string("Low"), "elevation": .double(1200)]),
-                point(["kind": .string("peak"), "name": .string("High"), "elevation": .double(2900)]),
-            ]),
         ]
 
-        #expect(try candidates(layers).map(\.name) == ["Big Town", "Small Town", "High", "Low", "Hamlet"])
+        #expect(try candidates(layers).map(\.name) == ["Big Town", "Small Town", "Hamlet"])
     }
 
     private func town(_ name: String, sortKey: Double) -> [String: VectorTileFixture.Value] {
@@ -229,7 +226,7 @@ struct VectorTileLabelsTests {
         at anchor: CGPoint,
         _ category: VectorTileLabelStyle.Category = .town
     ) -> VectorTileLabels.Candidate {
-        VectorTileLabels.Candidate(category: category, name: name, detail: nil, anchor: anchor, rank: 0)
+        VectorTileLabels.Candidate(category: category, name: name, anchor: anchor, rank: 0)
     }
 
     private func place(_ candidates: [VectorTileLabels.Candidate], size: CGSize) -> [VectorTileLabels.Placement] {
@@ -237,8 +234,7 @@ struct VectorTileLabelsTests {
             candidates,
             sizes: Array(repeating: size, count: candidates.count),
             bounds: bounds,
-            spacing: 4,
-            markerClearance: 10
+            spacing: 4
         )
     }
 
@@ -268,21 +264,6 @@ struct VectorTileLabelsTests {
         let placed = place([candidate("Wide", at: CGPoint(x: 256, y: 256))], size: CGSize(width: side, height: 20))
 
         #expect(placed.isEmpty)
-    }
-
-    @Test("a summit's name stands under its symbol, or over it when under is taken")
-    func markerNameUnderThenOver() throws {
-        let summit = CGPoint(x: 256, y: 256)
-        let placed = place(
-            [
-                candidate("Below", at: CGPoint(x: 256, y: 286)),
-                candidate("Summit", at: summit, .peak),
-            ],
-            size: CGSize(width: 60, height: 16)
-        )
-
-        let summitFrame = try #require(placed.first { $0.index == 1 }?.frame)
-        #expect(summitFrame.maxY <= summit.y, "under was taken by the town, so the summit's name went over")
     }
 
     // MARK: Drawing
