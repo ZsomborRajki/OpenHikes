@@ -36219,6 +36219,99 @@
         }
       }
     },
+    "openstreetmap.org" : {
+      "comment" : "The name of a map style on Map Modes: the map as OpenStreetMap's own website draws it",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "openstreetmap.org"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "openstreetmap.org"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "openstreetmap.org"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "openstreetmap.org"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "openstreetmap.org"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "openstreetmap.org"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "openstreetmap.org"
+          }
+        }
+      }
+    },
+    "OpenStreetMap’s data, drawn by OpenHikes. Tiles you view are auto-saved for offline use." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Daten von OpenStreetMap, gezeichnet von OpenHikes. Angesehene Kacheln werden automatisch für die Offlinenutzung gespeichert."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los datos de OpenStreetMap, dibujados por OpenHikes. Las teselas que ves se guardan automáticamente para usarlas sin conexión."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les données d’OpenStreetMap, dessinées par OpenHikes. Les tuiles que vous consultez sont enregistrées automatiquement pour une utilisation hors ligne."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I dati di OpenStreetMap, disegnati da OpenHikes. I tasselli che visualizzi vengono salvati automaticamente per l’uso offline."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dane OpenStreetMap narysowane przez aplikację OpenHikes. Oglądane kafelki są automatycznie zapisywane do użytku offline."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Данные OpenStreetMap, нарисованные приложением OpenHikes. Просмотренные тайлы автоматически сохраняются для использования офлайн."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Дані OpenStreetMap, намальовані програмою OpenHikes. Тайли, які ви переглядаєте, автоматично зберігаються для використання офлайн."
+          }
+        }
+      }
+    },
     "Operator" : {
       "localizations" : {
         "de" : {
@@ -49183,52 +49276,6 @@
         }
       }
     },
-    "Standard street map. Tiles you view are auto-saved for offline use." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Standard-Straßenkarte. Angesehene Kacheln werden automatisch für die Offlinenutzung gespeichert."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mapa de calles estándar. Las teselas que ves se guardan automáticamente para usarlas sin conexión."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Carte routière standard. Les tuiles que vous consultez sont enregistrées automatiquement pour une utilisation hors ligne."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mappa stradale standard. I tasselli che visualizzi vengono salvati automaticamente per l’uso offline."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Standardowa mapa ulic. Oglądane kafelki są automatycznie zapisywane do użytku offline."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Стандартная карта улиц. Просмотренные тайлы автоматически сохраняются для использования офлайн."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Стандартна карта вулиць. Тайли, які ви переглядаєте, автоматично зберігаються для використання офлайн."
-          }
-        }
-      }
-    },
     "Start" : {
       "localizations" : {
         "de" : {
@@ -52935,6 +52982,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Конструктор стежок зберігає лише одну стежку, тож ту, яку ви не домалювали, буде видалено."
+          }
+        }
+      }
+    },
+    "The map as openstreetmap.org draws it, to compare with the new one. Tiles you view are auto-saved for offline use." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Karte, wie openstreetmap.org sie zeichnet, zum Vergleich mit der neuen. Angesehene Kacheln werden automatisch für die Offlinenutzung gespeichert."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El mapa tal como lo dibuja openstreetmap.org, para compararlo con el nuevo. Las teselas que ves se guardan automáticamente para usarlas sin conexión."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La carte telle qu’openstreetmap.org la dessine, pour la comparer avec la nouvelle. Les tuiles que vous consultez sont enregistrées automatiquement pour une utilisation hors ligne."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La mappa come la disegna openstreetmap.org, per confrontarla con quella nuova. I tasselli che visualizzi vengono salvati automaticamente per l’uso offline."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mapa w postaci, w jakiej rysuje ją openstreetmap.org, do porównania z nową. Oglądane kafelki są automatycznie zapisywane do użytku offline."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Карта в том виде, в каком ее рисует openstreetmap.org, — для сравнения с новой. Просмотренные тайлы автоматически сохраняются для использования офлайн."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Карта в тому вигляді, у якому її малює openstreetmap.org, — для порівняння з новою. Тайли, які ви переглядаєте, автоматично зберігаються для використання офлайн."
           }
         }
       }

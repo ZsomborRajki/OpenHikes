@@ -1163,6 +1163,11 @@ a change to recording, the map, the sheet or the render path; the PR template,
     the device's own connection falls back to nothing: the load fails and is
     tried again, rather than filing a raster tile among the drawn ones for a
     week.
+  - **openstreetmap.org stands beside it while the style is new.**
+    `TileProvider.openStreetMapRaster` (`osm_raster`), the fourth card on
+    *Map Modes*, draws the OSMF's raster tiles alone, so the two can be
+    compared. It goes once the transition is over, and a choice stored for it
+    then reads as the default.
   - **No suite reaches the tile server.** `TileCache.shared` has no vector
     source under `isRunningTests`, UI tests included.
   - **A new build gets a new archive name**, carrying its date, and the app

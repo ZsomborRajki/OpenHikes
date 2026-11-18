@@ -158,7 +158,10 @@ nonisolated extension TileProvider {
     static let openStreetMap = TileProvider(
         id: "osm",
         name: String(localized: "OpenStreetMap", comment: "The name of a map style on Map Modes"),
-        summary: String(localized: "Standard street map. Tiles you view are auto-saved for offline use."),
+        summary: String(localized: """
+            OpenStreetMap’s data, drawn by OpenHikes. Tiles you view are auto-saved \
+            for offline use.
+            """),
         urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
         maximumZ: osmMaximumZ,
         attribution: TileAttribution([.openStreetMap, .esaWorldCover]),
@@ -168,6 +171,32 @@ nonisolated extension TileProvider {
         apiKeyPlistKey: nil,
         systemStyle: nil,
         vectorSource: .openHikesPlanet
+    )
+
+    /// The OSMF's raster tiles alone, as ``openStreetMap`` drew before its
+    /// vector style (#1481), offered beside it while that style is new so the
+    /// two can be compared. Its own id keeps its tiles apart from the drawn
+    /// ones in the cache. It goes once the transition is over, and a choice
+    /// stored for it then reads as the default.
+    static let openStreetMapRaster = TileProvider(
+        id: "osm_raster",
+        name: String(
+            localized: "openstreetmap.org",
+            comment: "The name of a map style on Map Modes: the map as OpenStreetMap's own website draws it"
+        ),
+        summary: String(localized: """
+            The map as openstreetmap.org draws it, to compare with the new one. Tiles you \
+            view are auto-saved for offline use.
+            """),
+        urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+        maximumZ: osmMaximumZ,
+        attribution: TileAttribution([.openStreetMap]),
+        supportsBulkDownload: false,
+        durableQuota: nil,
+        requiresPaidAccess: false,
+        apiKeyPlistKey: nil,
+        systemStyle: nil,
+        vectorSource: nil
     )
 
     /// MapKit's own base map: no raster tiles, and therefore no tile pipeline.
@@ -308,7 +337,8 @@ nonisolated extension TileProvider {
 
     /// All selectable providers, in display order.
     static let all: [TileProvider] = [
-        openStreetMap, appleMaps, appleSatellite, stadiaOutdoors, stamenTerrain, thunderforestOutdoors,
+        openStreetMap, appleMaps, appleSatellite, openStreetMapRaster, stadiaOutdoors, stamenTerrain,
+        thunderforestOutdoors,
     ]
 
     /// The entries that actually fetch raster tiles — ``all`` minus both

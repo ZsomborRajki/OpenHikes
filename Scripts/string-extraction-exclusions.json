@@ -360,6 +360,7 @@
       "\"Maps ©\"",
       "\"OpenStreetMap contributors\"",
       "\"Data ©\"",
+      "\"ESA WorldCover\"",
       "\"Apple\"",
       "\"Map data ©\""
     ]
@@ -370,6 +371,13 @@
     "literals": [
       "\"<unparseable \\(host() ?? \"URL\")>\"",
       "\"<unrenderable \\(host() ?? \"URL\")>\""
+    ]
+  },
+  {
+    "path": "OpenHikes/Tiles/Vector/VectorTileLabelStyle.swift",
+    "reason": "A Core Text font name, the fallback when the system font cannot be had, not display text.",
+    "literals": [
+      "\"Helvetica\""
     ]
   },
   {
