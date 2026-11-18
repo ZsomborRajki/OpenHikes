@@ -119,33 +119,6 @@ nonisolated final class TileCache: @unchecked Sendable {
         }
     }
 
-    /// Bytes the decoded bitmap for `image` occupies.
-    ///
-    /// The number that matters, and not the one the cache used to be bounded
-    /// by. A tile arrives as a compressed PNG of a few tens of kilobytes and
-    /// is held as an uncompressed bitmap: every raster template in
-    /// ``TileProvider`` asks for a plain 256×256 tile — none of them carries a
-    /// scale placeholder — so a tile decodes to 256×256×4 bytes, 256 KB, five
-    /// to ten times its file size. Counting *tiles* therefore said little
-    /// about the memory being used, and nothing at all about a decode that
-    /// came back a different size.
-    ///
-    /// Which is why this measures the bitmap rather than assuming one. A
-    /// provider template that later asks for a retina tile is charged the four
-    /// times as much it costs, with nothing here to update.
-    static func decodedByteCost(of image: TileImage) -> Int {
-        #if canImport(UIKit)
-        let bitmap = image.cgImage
-        #elseif canImport(AppKit)
-        let bitmap = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
-        #endif
-        if let bitmap, bitmap.bytesPerRow > 0, bitmap.height > 0 { return bitmap.bytesPerRow * bitmap.height }
-        // No backing bitmap to measure. Estimate from the point size at four
-        // bytes a pixel rather than charging nothing, which would exempt the
-        // entry from the limit entirely — `NSCache` treats a zero cost as free.
-        return max(Int(image.size.width * image.size.height * 4), 1)
-    }
-
     /// OSM requires cached tiles to honor response caching headers, or to use
     /// at least a seven-day TTL when the client does not persist those headers.
     ///
@@ -163,11 +136,12 @@ nonisolated final class TileCache: @unchecked Sendable {
 
     /// Ceiling on the decoded bytes held in the memory tier.
     ///
-    /// 512 tiles, at the 256 KB every raster provider actually serves. A
-    /// screenful is eight or so tiles on a phone, so this is deep pan and zoom
-    /// headroom: the level either side of the one being read stays resident
-    /// for the zoom back, and the lower-zoom ancestors the overzoom fallback
-    /// draws while children load are never the thing evicted.
+    /// 512 tiles, at the 256 KB every raster provider actually serves, or 128
+    /// of the 1 MB tiles drawn from vector tiles. A screenful is eight or so
+    /// tiles on a phone, so this is deep pan and zoom headroom: the level
+    /// either side of the one being read stays resident for the zoom back,
+    /// and the lower-zoom ancestors the overzoom fallback draws while
+    /// children load are never the thing evicted.
     ///
     /// Deliberately left at 128 MB rather than trimmed to the working set.
     /// This is a ceiling, not a reservation — a session reaches it only after
@@ -816,9 +790,15 @@ nonisolated extension TileCache {
     /// ``fetchTileOnce(forKey:url:)`` rather than calling this directly.
     private func fetchTile(forKey key: String, url: URL) async -> FetchedTile? {
         // A provider drawn from vector tiles asks the tile server first, and
-        // comes down to its raster template below whenever that brings nothing.
-        if let drawn = await vectorTiles?.pngData(forKey: key), let image = TileImage(data: drawn) {
-            return FetchedTile(data: drawn, image: image)
+        // comes down to its raster template below whenever that brings nothing,
+        // unless the device itself is offline, which the template would be too.
+        switch await vectorTiles?.drawing(forKey: key) {
+        case let .png(drawn):
+            if let image = TileImage(data: drawn) { return FetchedTile(data: drawn, image: image) }
+        case .offline:
+            return nil
+        case .fallBack, nil:
+            break
         }
         #if DEBUG
         Self.logger.debug("Requesting tile \(key, privacy: .public) from \(url.redactedForLogging, privacy: .public)")

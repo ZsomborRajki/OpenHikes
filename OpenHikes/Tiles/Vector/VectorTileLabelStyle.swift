@@ -66,6 +66,18 @@ nonisolated enum VectorTileLabelStyle {
             }
         }
 
+        /// The category of a point in the `water` layer, where the archive
+        /// puts the name of a lake or a reservoir, or `nil` for one not named
+        /// there: a river's or a canal's point, whose name runs along its
+        /// line instead, or a fountain's.
+        static func water(kind: String?, detail: String?) -> Self? {
+            guard kind == "water" else { return nil }
+            return switch detail {
+            case "river", "canal", "stream", "ditch", "drain": nil
+            default: .water
+            }
+        }
+
         /// Whether the name stands under a symbol drawn at its point, rather
         /// than over the point itself.
         var hasMarker: Bool { self == .peak || self == .hut }
@@ -93,7 +105,7 @@ nonisolated enum VectorTileLabelStyle {
         case .hamlet: Look(size: ZoomCurve([(12, 7), (14, 9), (16, 10)]), color: placeInk, face: .regular)
         case .neighborhood: Look(size: ZoomCurve([(12, 7), (15, 9)]), color: neighborhoodInk, face: .regular)
         case .peak, .saddle: Look(size: ZoomCurve([(12, 7), (15, 8), (16, 9)]), color: terrainInk, face: .regular)
-        case .hut: Look(size: ZoomCurve([(13, 7), (15, 8), (16, 9)]), color: terrainInk, face: .bold)
+        case .hut: Look(size: ZoomCurve([(14, 7), (15, 8), (16, 9)]), color: terrainInk, face: .bold)
         case .water, .glacier: Look(size: ZoomCurve([(8, 7), (12, 8), (15, 10)]), color: waterInk, face: .italic)
         }
     }
@@ -108,7 +120,7 @@ nonisolated enum VectorTileLabelStyle {
     static let markerGap: CGFloat = 1
     /// A height or a second line, as a share of the name's size.
     static let detailScale: CGFloat = 0.85
-    /// A hut's symbol, drawn from zoom 14.
+    /// A hut's symbol, drawn from zoom 14, the zoom its name starts at.
     static let hutZ = 14
     static let hutSize = ZoomCurve([(14, 4), (16, 5), (20, 6)])
 
@@ -162,6 +174,8 @@ nonisolated extension VectorTileLabelStyle {
             case ("roads", "minor_road"): .minorRoad
             case ("roads", "path"): detail == "pedestrian" ? .minorRoad : .path
             case ("roads", "aerialway"): .aerialway
+            // The archive's kind for a highway it has no other kind for.
+            case ("roads", "other"): detail == "living_street" ? .minorRoad : nil
             case ("water", "river"), ("water", "canal"): .river
             case ("water", "stream"): .stream
             default: nil
@@ -194,7 +208,8 @@ nonisolated extension VectorTileLabelStyle {
         }
     }
 
-    /// How far apart the same name is repeated along a long line.
+    /// The least distance between two of the same name along a long line,
+    /// on one tile or either side of the edge between two.
     static let lineNameRepeat: CGFloat = 100
     /// The sharpest turn from one letter to the next that a name follows,
     /// in radians: about thirty degrees. A tighter bend scatters the letters.

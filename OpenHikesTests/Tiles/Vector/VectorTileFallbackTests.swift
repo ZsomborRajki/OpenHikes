@@ -79,6 +79,20 @@ struct VectorTileFallbackTests {
         #expect(stub.isBrowsed(key))
     }
 
+    /// The connection that failed the tile server would fail the raster
+    /// template too, and a raster tile that came back would be filed for a
+    /// week among drawn ones.
+    @Test("a device without a connection does not ask the raster template")
+    func offlineDeviceDoesNotFallBack() async {
+        let stub = StubbedTileCache(vectorSources: sources)
+        defer { stub.tearDown() }
+        script(vector: .init(failure: URLError(.networkConnectionLost)))
+
+        #expect(await stub.cache.loadTile(forKey: key, url: rasterURL) == nil)
+        #expect(hosts == [vectorHost])
+        #expect(!stub.isBrowsed(key))
+    }
+
     @Test("a tile the archive does not have falls back to the raster template")
     func missingTileFallsBack() async throws {
         let stub = StubbedTileCache(vectorSources: sources)

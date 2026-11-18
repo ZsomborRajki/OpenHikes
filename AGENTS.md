@@ -1143,7 +1143,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
     - **Names along lines** (`VectorTileLineLabels`): streets, paths, cable
       cars and rivers, letter by letter, upright, following gentle bends.
       Pieces with the same name are joined end to end first, and point names
-      claim their room before any street's.
+      claim their room before any street's. A repeat stands on marks measured
+      from the line's middle, so the tiles cut from one archive tile agree on
+      them.
     - Each name is in the app's language where the tile carries it, and in
       the local one where not.
     - **A name never crosses its tile's edge**, because the tile beside it
@@ -1157,7 +1159,10 @@ a change to recording, the map, the sheet or the render path; the PR template,
   - **Fallback.** Wherever the server cannot answer — it is down or failing,
     or it has no tile there — the tile comes from `tile.openstreetmap.org` as
     before. A failing server is passed over for a minute, or for as long as
-    its `Retry-After` asks, within `RetryAfterHeader`'s ceiling.
+    its `Retry-After` asks, within `RetryAfterHeader`'s ceiling. A failure of
+    the device's own connection falls back to nothing: the load fails and is
+    tried again, rather than filing a raster tile among the drawn ones for a
+    week.
   - **No suite reaches the tile server.** `TileCache.shared` has no vector
     source under `isRunningTests`, UI tests included.
   - **A new build gets a new archive name**, carrying its date, and the app

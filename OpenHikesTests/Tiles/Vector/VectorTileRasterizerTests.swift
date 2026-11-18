@@ -31,6 +31,7 @@ struct VectorTileRasterizerTests {
     private var whole: [UInt32] { VectorTileFixture.rectangle(x: 0...grid, y: 0...grid) }
     private var leftHalf: [UInt32] { VectorTileFixture.rectangle(x: 0...(grid / 2), y: 0...grid) }
     private var rightHalf: [UInt32] { VectorTileFixture.rectangle(x: (grid / 2)...grid, y: 0...grid) }
+    private var topHalf: [UInt32] { VectorTileFixture.rectangle(x: 0...grid, y: 0...(grid / 2)) }
 
     @Test("with nothing on it a tile is open water")
     func emptyTileIsOcean() throws {
@@ -98,6 +99,41 @@ struct VectorTileRasterizerTests {
         #expect(pixel(rightmostImage, x: middle, y: middle, is: "#F2EFE9"))
     }
 
+    /// The same cut down the tile: a lake over the top half of the archive
+    /// tile fills its top children and none of its bottom ones.
+    @Test("a deeper tile is cut from its ancestor's rows as from its columns")
+    func deeperTileIsCutByRow() throws {
+        let layers = [
+            land,
+            .init(name: "water", features: [
+                .init(type: .polygon, properties: ["kind": .string("water")], geometry: topHalf),
+            ]),
+        ]
+        let topChild = VectorTileAddress(z: tile.z + 1, x: tile.x * 2 + 1, y: tile.y * 2)
+        let bottomChild = VectorTileAddress(z: tile.z + 1, x: tile.x * 2, y: tile.y * 2 + 1)
+
+        #expect(pixel(try draw(layers, from: tile, at: topChild), x: middle, y: right, is: "#AAD3DF"))
+        #expect(pixel(try draw(layers, from: tile, at: bottomChild), x: middle, y: left, is: "#F2EFE9"))
+    }
+
+    /// The spec has every line begin with a move, and a tile off the network
+    /// may still not: the stray stretch is left out rather than trusted.
+    @Test("a line that starts without a move is read without it")
+    func lineWithoutAMoveIsSkipped() throws {
+        // A line to (10, 10) with no move before it, then a line of its own.
+        let stray: [UInt32] = [2 | 1 << 3, 20, 20] + VectorTileFixture.line([(0, 0), (grid, 0)])
+        let decoded = try VectorTileFixture.decoded([
+            .init(name: "roads", features: [.init(type: .line, properties: [:], geometry: stray)]),
+        ])
+        let roads = try #require(decoded.layers["roads"])
+        let geometry = VectorTileGeometry(extent: roads.extent, source: tile, target: tile)
+
+        let lines = try #require(roads.features.first.map(geometry.lines(of:)))
+
+        #expect(lines.count == 1)
+        #expect(lines.first?.count == 2)
+    }
+
     @Test("a road is drawn over the ground in its color")
     func roadOverGround() throws {
         let layers = [
@@ -160,6 +196,27 @@ struct VectorTileRasterizerTests {
 
         #expect(pixel(close, x: middle, y: middle, is: "#8A5A3B"))
         #expect(pixel(wide, x: middle, y: middle, is: "#F2EFE9"))
+    }
+
+    /// Filling one hut's walls used to empty the path holding the roofs
+    /// before it, so only the last hut in a tile kept its roof.
+    @Test("every hut in a tile keeps its roof")
+    func everyHutHasARoof() throws {
+        let huts = [(grid / 4, grid / 2), (grid * 3 / 4, grid / 2)].map { position in
+            VectorTileFixture.Feature(
+                type: .point,
+                properties: ["kind": .string("alpine_hut")],
+                geometry: VectorTileFixture.points([position])
+            )
+        }
+        let target = VectorTileAddress(z: VectorTileLabelStyle.hutZ, x: 8800, y: 5700)
+
+        let image = try draw([land, .init(name: "pois", features: huts)], at: target)
+
+        // Three pixels above each point: inside the roof, above the walls.
+        let roofRow = middle - 3
+        #expect(pixel(image, x: VectorTileRasterizer.pixelSize / 4, y: roofRow, is: "#8A5A3B"), "the first hut")
+        #expect(pixel(image, x: VectorTileRasterizer.pixelSize * 3 / 4, y: roofRow, is: "#8A5A3B"), "the last hut")
     }
 
     @Test("the PNG handed to the cache is the size it was drawn at")

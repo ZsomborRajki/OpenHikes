@@ -108,6 +108,60 @@ struct VectorTileLabelsTests {
         #expect(try candidates(layers, at: deeper).map(\.name) == ["Kogel"])
     }
 
+    /// The archive offers a city from zoom 2 and the style sets one from
+    /// zoom 4: a name with no size of its own would be set at Core Text's.
+    @Test("a name waits for the first zoom its style sets it at")
+    func styleZoom() throws {
+        let decoded = try VectorTileFixture.decoded([
+            .init(name: "places", features: [
+                point(["kind": .string("locality"), "kind_detail": .string("city"), "name": .string("Wien")]),
+            ]),
+        ])
+        let named = { (z: Int) in
+            let target = VectorTileAddress(z: z, x: 0, y: 0)
+            let found = VectorTileLabels.candidates(
+                in: decoded,
+                source: target,
+                target: target,
+                bounds: bounds,
+                language: "en",
+                height: VectorTileFixture.height
+            )
+            return found.map(\.name)
+        }
+
+        #expect(named(3).isEmpty)
+        #expect(named(4) == ["Wien"])
+    }
+
+    /// The archive puts a lake's name on a point of the `water` layer, beside
+    /// the points of rivers and fountains, and a pond's in `pois` as well.
+    @Test("a lake is named from the water layer, once, and a river's or a fountain's point is not")
+    func lakesFromTheWaterLayer() throws {
+        let lake: [String: VectorTileFixture.Value] = [
+            "kind": .string("water"),
+            "kind_detail": .string("lake"),
+            "name": .string("Hallstätter See"),
+            "min_zoom": .double(12),
+        ]
+        let layers: [VectorTileFixture.Layer] = [
+            .init(name: "water", features: [
+                point(lake, at: (grid / 4, grid / 4)),
+                point(["kind": .string("water"), "kind_detail": .string("river"), "name": .string("Traun")]),
+                point(["kind": .string("fountain"), "name": .string("Brunnen")], at: (grid / 4, grid * 3 / 4)),
+                point(["kind": .string("water"), "name": .string("Teich")], at: (grid * 3 / 4, grid / 4)),
+            ]),
+            .init(name: "pois", features: [
+                point(["kind": .string("water"), "name": .string("Teich")], at: (grid * 3 / 4, grid * 3 / 4)),
+            ]),
+        ]
+
+        let named = try candidates(layers)
+
+        #expect(named.map(\.name).sorted() == ["Hallstätter See", "Teich"])
+        #expect(named.allSatisfy { $0.category == .water })
+    }
+
     @Test("a point outside the tile is the neighbouring tile's to name")
     func pointsOutsideAreLeft() throws {
         let layers: [VectorTileFixture.Layer] = [

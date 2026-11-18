@@ -11,9 +11,17 @@
 //  right whichever way the line was drawn, follows bends up to
 //  ``VectorTileLabelStyle/lineNameBend`` from one letter to the next, and is
 //  moved along the line, or left out, where it would bend more, cross the
-//  tile's edge or touch another name. A long line repeats its name every
-//  ``VectorTileLabelStyle/lineNameRepeat``. Point names claim their room
-//  first, so a street name never covers a district's or a summit's.
+//  tile's edge or touch another name. A long line repeats its name, never
+//  nearer itself than ``VectorTileLabelStyle/lineNameRepeat``, at marks
+//  measured from the line's middle, and a tile names only the marks inside
+//  it, so the tiles cut from one archive tile agree on where the repeats go.
+//  Point names claim their room first, so a street name never covers a
+//  district's or a summit's.
+//
+//  A right-to-left name, Hebrew or Arabic, is laid out letter by letter in
+//  the order its letters stand on the page. Each letter is still set on its
+//  own, so Arabic's letters stand in their separate forms rather than
+//  joined.
 //
 
 import CoreGraphics
@@ -146,14 +154,60 @@ nonisolated enum VectorTileLineLabels {
         return letters
     }
 
-    /// Where along a line `length` long a name `width` wide is tried: the
-    /// middle first, then outward in steps, so the first name sits central
-    /// and the later ones are its repeats.
-    static func centers(length: CGFloat, width: CGFloat, step: CGFloat) -> [CGFloat] {
-        guard width <= length, step > 0 else { return [] }
+    /// A place along a line a name may stand: the mark itself, then the
+    /// spots it may slide to, nearest first.
+    struct Mark: Equatable {
+        let distance: CGFloat
+        let spots: [CGFloat]
+    }
+
+    /// Where along a line `length` long a name `width` wide is tried: at its
+    /// middle and every one and a half `spacing` either side, the middle
+    /// first. Each mark may slide by `step` either way, no further than a
+    /// quarter of `spacing`, so two names at neighbouring marks stand at
+    /// least `spacing` apart however each slid. Measured from the whole
+    /// line's middle, the marks fall in the same places on every tile cut
+    /// from one archive tile, so that holds across the edge between two.
+    static func marks(length: CGFloat, width: CGFloat, spacing: CGFloat, step: CGFloat) -> [Mark] {
+        guard width <= length, spacing > 0, step > 0 else { return [] }
         let middle = length / 2
-        let along = Array(stride(from: width / 2, through: length - width / 2, by: step)) + [middle]
-        return along.sorted { abs($0 - middle) < abs($1 - middle) }
+        let reach = spacing / 4
+        var slides: [CGFloat] = [0]
+        for slide in stride(from: step, through: reach, by: step) {
+            slides += [slide, -slide]
+        }
+        let interval = spacing + 2 * reach
+        let count = Int((middle / interval).rounded(.down))
+        let distances = (-count...count).map { middle + CGFloat($0) * interval }
+        let nearestFirst = distances.sorted { lhs, rhs in
+            let (lhsOff, rhsOff) = (abs(lhs - middle), abs(rhs - middle))
+            return lhsOff == rhsOff ? lhs < rhs : lhsOff < rhsOff
+        }
+        let fits = (width / 2)...(length - width / 2)
+        return nearestFirst.compactMap { distance in
+            let spots = slides.map { distance + $0 }.filter(fits.contains)
+            return spots.isEmpty ? nil : Mark(distance: distance, spots: spots)
+        }
+    }
+
+    /// The characters of `text` in the order they stand on the page, left to
+    /// right: Core Text's bidirectional layout of the whole name, with each
+    /// right-to-left run's characters reversed.
+    static func visualOrder(of text: String) -> [String] {
+        let logical = text.map(String.init)
+        let line = CTLineCreateWithAttributedString(NSAttributedString(string: text))
+        guard let runs = CTLineGetGlyphRuns(line) as? [CTRun] else { return logical }
+        var visual: [String] = []
+        for run in runs.sorted(by: { origin(of: $0) < origin(of: $1) }) {
+            let range = CTRunGetStringRange(run)
+            guard let span = Range(NSRange(location: range.location, length: range.length), in: text) else {
+                return logical
+            }
+            let characters = text[span].map(String.init)
+            visual += CTRunGetStatus(run).contains(.rightToLeft) ? characters.reversed() : characters
+        }
+        // A run that split a character would lose or repeat it.
+        return visual.count == logical.count ? visual : logical
     }
 
     static func length(of points: [CGPoint]) -> CGFloat {
@@ -180,6 +234,13 @@ nonisolated enum VectorTileLineLabels {
         let lhsStart = lhs.points.first ?? .zero
         let rhsStart = rhs.points.first ?? .zero
         return (lhsStart.x, lhsStart.y) < (rhsStart.x, rhsStart.y)
+    }
+
+    /// Where a run's first glyph stands along the line.
+    private static func origin(of run: CTRun) -> CGFloat {
+        var position = CGPoint.zero
+        CTRunGetPositions(run, CFRange(location: 0, length: 1), &position)
+        return position.x
     }
 
     private static func close(_ lhs: CGPoint?, _ rhs: CGPoint?) -> Bool {
@@ -222,9 +283,9 @@ nonisolated extension VectorTileLineLabels {
         /// is narrower than this many sizes per character.
         private static let narrowestLetter: CGFloat = 0.25
 
-        /// `lines`, in order, each at as many places along it as fit: inside
-        /// `bounds`, clear of `occupied` and of each other, and no nearer the
-        /// same name than ``VectorTileLabelStyle/lineNameRepeat``.
+        /// `lines`, in order, each at as many of its marks inside `bounds` as
+        /// fit: inside `bounds`, clear of `occupied` and of each other, and no
+        /// nearer the same name than ``VectorTileLabelStyle/lineNameRepeat``.
         init(
             _ lines: [NamedLine],
             z: Int,
@@ -251,24 +312,29 @@ nonisolated extension VectorTileLineLabels {
                 let key = "\(line.category)/\(line.name)"
                 let text = texts[key] ?? SetText(line.name, size: size, look: look, language: language, unit: unit)
                 texts[key] = text
-                let spots = VectorTileLineLabels.centers(
+                let marks = VectorTileLineLabels.marks(
                     length: line.length,
                     width: text.width,
+                    spacing: room.repeatDistance,
                     step: max(text.width / 4, spacing)
                 )
-                guard !spots.isEmpty else { continue }
+                guard !marks.isEmpty else { continue }
                 let forward = MeasuredPath(line.points)
                 let backward = MeasuredPath(line.points.reversed())
-                for spot in spots {
-                    let letters = VectorTileLineLabels.letters(
-                        along: forward,
-                        reversed: backward,
-                        advances: text.advances,
-                        centeredAt: spot,
-                        maximumBend: VectorTileLabelStyle.lineNameBend
-                    )
-                    if room.claim(name: line.name, letters: letters, boxes: text.boxes(for: letters)) {
-                        placed.append(SetName(text: text, letters: letters))
+                // A mark outside the tile is the neighbouring tile's to name.
+                for mark in marks where bounds.contains(forward.point(at: mark.distance)) {
+                    for spot in mark.spots {
+                        let letters = VectorTileLineLabels.letters(
+                            along: forward,
+                            reversed: backward,
+                            advances: text.advances,
+                            centeredAt: spot,
+                            maximumBend: VectorTileLabelStyle.lineNameBend
+                        )
+                        if room.claim(name: line.name, letters: letters, boxes: text.boxes(for: letters)) {
+                            placed.append(SetName(text: text, letters: letters))
+                            break
+                        }
                     }
                 }
             }
@@ -311,9 +377,9 @@ nonisolated private struct Room {
     }
 }
 
-/// A name broken into its characters, each set on its own so it can be
-/// turned to the line under it. Kerning is given up for that; at a map's
-/// sizes it does not show.
+/// A name broken into its characters, in the order they stand on the page,
+/// each set on its own so it can be turned to the line under it. Kerning is
+/// given up for that; at a map's sizes it does not show.
 nonisolated private struct SetText {
     let characters: [InkedText]
     let height: CGFloat
@@ -325,9 +391,9 @@ nonisolated private struct SetText {
     var width: CGFloat { advances.reduce(0, +) }
 
     init(_ text: String, size: CGFloat, look: VectorTileLabelStyle.LineLook, language: String, unit: CGFloat) {
-        characters = text.map { character in
+        characters = VectorTileLineLabels.visualOrder(of: text).map { character in
             InkedText(
-                String(character),
+                character,
                 size: size,
                 color: look.color,
                 face: look.face,

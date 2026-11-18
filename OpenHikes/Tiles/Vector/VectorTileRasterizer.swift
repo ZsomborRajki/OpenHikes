@@ -270,7 +270,9 @@ nonisolated private struct Painter {
         context.fillPath()
     }
 
-    /// Huts as a small house, where a hiker would make for one.
+    /// Huts as a small house, where a hiker would make for one. Each is
+    /// filled on its own: filling a rectangle empties the path, so a roof
+    /// gathered for the hut before would be lost.
     private func paintHuts() {
         guard z >= VectorTileLabelStyle.hutZ else { return }
         let side = VectorTileLabelStyle.hutSize.value(at: z) * unit
@@ -286,9 +288,9 @@ nonisolated private struct Painter {
                 context.addLine(to: CGPoint(x: point.x, y: point.y - half - 1))
                 context.addLine(to: CGPoint(x: point.x + half + 1, y: point.y - half * 0.25))
                 context.closePath()
+                context.fillPath()
             }
         }
-        context.fillPath()
     }
 
     // MARK: Drawing
@@ -378,13 +380,15 @@ nonisolated struct VectorTileGeometry {
         return path
     }
 
-    /// A line feature's parts, each the points of one run between moves.
+    /// A line feature's parts, each the points of one run between moves. A
+    /// line drawn before any move, which the spec forbids and a tile off the
+    /// network may still hold, belongs to no part and is left out.
     func lines(of feature: MapboxVectorTile.Feature) -> [[CGPoint]] {
         var lines: [[CGPoint]] = []
         walk(feature.geometry) { command, point in
             switch command {
             case .moveTo: lines.append([point])
-            case .lineTo: lines[lines.count - 1].append(point)
+            case .lineTo: if !lines.isEmpty { lines[lines.count - 1].append(point) }
             case .closePath: break
             }
         }

@@ -103,8 +103,9 @@ enum TilePreviewRenderer {
         }
         guard loaded.count == requests.count, let first = loaded.first?.1 else { return nil }
 
-        // Every tile is drawn at the first one's size: a provider serves one
-        // size, and a block that mixed two would still come out square.
+        // Every tile is drawn at the first one's size, so a block that mixed
+        // two still comes out square: OpenStreetMap's drawn tiles are twice
+        // the side of the raster tiles that stand in for them.
         let tileSide = first.size.width * first.scale
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
