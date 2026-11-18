@@ -24,6 +24,7 @@
 #   Scripts/offline-countries.sh build [--only AT,US] [--out <dir>] [--planet <file>]
 #                                      [--extras <file>] [--margin-km <km>]
 #   Scripts/offline-countries.sh upload <dir> [--dry-run]
+#   Scripts/offline-countries.sh areas
 #   Scripts/offline-countries.sh inspect <file.pmtiles>...
 #   Scripts/offline-countries.sh selftest
 #
@@ -39,6 +40,7 @@
 #             and refusing one there with others, then merge its manifest into
 #             the server's and write that last, so the app never lists a file
 #             that is not there yet.
+#   areas     Print every area build cuts, its code and a region's country.
 #   inspect   Print an archive's header.
 #   selftest  Cut a made-up archive and read it back.
 #
@@ -243,6 +245,12 @@ command="$1"
 shift
 case "$command" in
     build) build "$@" ;;
+    areas)
+        prepare_tool
+        "$tool" areas --countries "$repository_root/Scripts/lib/offline-countries.json" \
+            --outlines "$(natural_earth_file "$outlines_url" "$outlines_sha256")" \
+            --regions "$(natural_earth_file "$regions_url" "$regions_sha256")"
+        ;;
     upload) upload "$@" ;;
     inspect) prepare_tool; "$tool" inspect "$@" ;;
     selftest) prepare_tool; "$tool" selftest ;;
