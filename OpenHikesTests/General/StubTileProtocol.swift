@@ -245,7 +245,8 @@ struct StubbedTileCache {
         reachable: Bool = true,
         mutationKeyLimit: Int = TileCache.mutationKeyVersionLimit,
         vectorSources: [String: VectorTileSource] = [:],
-        power: PowerState = PowerState()
+        power: PowerState = PowerState(),
+        countryArchives: OfflineCountryArchives? = nil
     ) {
         StubTileProtocol.reset()
         sandbox = TileSandbox(
@@ -253,7 +254,8 @@ struct StubbedTileCache {
             sessionConfiguration: StubTileProtocol.sessionConfiguration(),
             mutationKeyLimit: mutationKeyLimit,
             vectorSources: vectorSources,
-            power: power
+            power: power,
+            countryArchives: countryArchives
         )
     }
 

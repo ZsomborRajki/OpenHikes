@@ -1258,7 +1258,11 @@ owner, on the main actor.
   tile server, so it costs the server nothing once it is down. The tile is
   drawn as the server's bytes would have been (`OfflineCountryDrawing`),
   past the country's deepest zoom from the tile around it, and filed in the
-  cache as any tile is. A tile no country holds goes to the server as before.
+  cache as any tile is. A copy the cache drew before the country holding it
+  was installed, or updated, is not current there
+  (`OfflineCountryArchives.redraws(_:drawnAt:)`), so it is drawn again from
+  the build there is now. A tile no country holds goes to the server as
+  before.
 - **A download is `.speculative`.** It runs in a background `URLSession` that
   refuses cellular, expensive and constrained paths, so it waits for Wi-Fi by
   itself. Low Power Mode or heat refuse it outright (`TileNetworkPolicy`),
