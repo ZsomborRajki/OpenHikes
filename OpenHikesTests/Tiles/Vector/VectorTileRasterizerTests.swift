@@ -201,6 +201,24 @@ struct VectorTileRasterizerTests {
         #expect(pixel(image, x: middle, y: middle, is: "#FCD6A4"))
     }
 
+    /// The vector extras bring fences, walls and hedges, which Carto draws
+    /// from zoom 16, a hedge in the woods' green.
+    @Test("a hedge from the extras is drawn in Carto's green, and not before zoom 16")
+    func hedgeIsDrawn() throws {
+        let hedge = VectorTileFixture.Feature(
+            type: .line,
+            properties: ["kind": .string("hedge")],
+            geometry: VectorTileFixture.line([(-grid / 4, grid / 2), (grid + grid / 4, grid / 2)])
+        )
+        let layers = [land, .init(name: "barriers", features: [hedge])]
+
+        let close = try draw(layers, at: streetZoom)
+        let wide = try draw(layers, at: VectorTileAddress(z: 15, x: 17_600, y: 11_400))
+
+        #expect(pixel(close, x: middle, y: middle, is: "#ADD19E"))
+        #expect(pixel(wide, x: middle, y: middle, is: "#F2EFE9"))
+    }
+
     @Test("the PNG handed to the cache is the size it was drawn at")
     func pngKeepsItsSize() throws {
         let decoded = try VectorTileFixture.decoded([land])

@@ -74,6 +74,20 @@ nonisolated struct MapboxVectorTile: Sendable {
     /// The side of a layer's grid when the layer does not say.
     static let defaultExtent = 4096
 
+    /// This tile with `other`'s features added to it: a layer both hold
+    /// keeps this tile's features and then `other`'s, where the two lay them
+    /// on the same grid, and a layer only `other` holds is taken whole.
+    func merging(_ other: Self) -> Self {
+        Self(layers: layers.merging(other.layers) { own, added in
+            guard own.extent == added.extent else { return own }
+            return Layer(name: own.name, extent: own.extent, features: own.features + added.features)
+        })
+    }
+
+    private init(layers: [String: Layer]) {
+        self.layers = layers
+    }
+
     /// - Parameters:
     ///   - layerNames: the layers to keep. Every other layer is passed over
     ///     without its features being read.

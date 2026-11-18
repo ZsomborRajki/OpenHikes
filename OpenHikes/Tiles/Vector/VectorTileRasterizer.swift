@@ -32,6 +32,8 @@ nonisolated enum VectorTileRasterizer {
     /// The layers drawn.
     static let layerNames: Set<String> = [
         "earth", "landcover", "landuse", "water", "buildings", "roads", "boundaries", "pois", "places",
+        // The vector extras' own layer.
+        "barriers",
     ]
 
     /// The properties read, the names in `language` among them.
@@ -124,6 +126,7 @@ nonisolated private struct Painter {
         context.fill(CGRect(x: 0, y: 0, width: side, height: side))
         paintGround()
         paintWater()
+        paintBarriers()
         paintBuildings()
         paintRoads()
         paintBoundaries()
@@ -231,6 +234,19 @@ nonisolated private struct Painter {
                 geometry.path(of: feature),
                 VectorTileStyle.Line(color: VectorTileStyle.cliff, width: VectorTileStyle.cliffWidth)
             )
+        }
+    }
+
+    /// Fences, walls and hedges, from the vector extras: over the ground and
+    /// under the buildings and roads, where Carto draws them.
+    private func paintBarriers() {
+        for (feature, geometry) in features(in: "barriers", type: .line) {
+            let line = VectorTileStyle.barrier(kind: feature.string("kind"))
+            let path = geometry.path(of: feature)
+            stroke(path, line, cap: .butt)
+            if let center = line.center {
+                stroke(path, VectorTileStyle.Line(color: center.color, width: center.width), cap: .butt)
+            }
         }
     }
 

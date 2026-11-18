@@ -93,6 +93,32 @@ struct VectorTilePointStyleTests {
         #expect(style.look(kind: "fuel", detail: nil, named: true, z: 17)?.lowPriority == false)
     }
 
+    /// The vector extras carry an information point's type, which Carto
+    /// draws it by, and the basemap's own information points have none.
+    @Test("an information point is drawn by its type, and not without one")
+    func informationByType() {
+        let icon = { (type: String?) in
+            style.look(kind: "information", detail: type, named: true, z: 19)?.icons.first?.asset
+        }
+
+        #expect(icon("guidepost") == "carto-tourism-guidepost")
+        #expect(icon("board") == "carto-tourism-board")
+        #expect(icon(nil) == nil)
+    }
+
+    /// A gate the extras bring is a barrier on a path, though an airport's
+    /// gate goes by the same value.
+    @Test("a gate is a barrier, and an office is Carto's office dot")
+    func extrasKinds() throws {
+        let gate = try #require(style.look(kind: "gate", detail: nil, named: false, z: 17))
+        let office = try #require(style.look(kind: "office", detail: nil, named: true, z: 18)?.icons.first)
+
+        #expect(gate.lowPriority)
+        #expect(gate.icons.first?.asset == "carto-barrier-gate")
+        #expect(office.asset == nil)
+        #expect(office.fill == VectorTileStyle.color("#4863A0"))
+    }
+
     /// Carto draws 465 kinds of shop and has icons for 84: the rest are a
     /// purple dot.
     @Test("a shop Carto has no icon for is a dot in the shops' purple")

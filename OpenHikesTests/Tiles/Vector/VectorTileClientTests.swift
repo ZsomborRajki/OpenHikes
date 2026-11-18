@@ -32,11 +32,19 @@ struct VectorTileClientTests {
         ])
     }
 
-    private func makeClient() -> VectorTileClient {
+    /// The basemap with extras beside it, from zoom 14.
+    private var sourceWithExtras: VectorTileSource {
+        var withExtras = source
+        // swiftlint:disable:next force_unwrapping
+        withExtras.extras = .init(archiveURL: URL(string: "https://tiles.example.invalid/extras")!, minimumZ: 14)
+        return withExtras
+    }
+
+    private func makeClient(source: VectorTileSource? = nil) -> VectorTileClient {
         StubTileProtocol.reset()
         let now = clock
         return VectorTileClient(
-            sources: ["osm": source],
+            sources: ["osm": source ?? self.source],
             session: URLSession(configuration: StubTileProtocol.sessionConfiguration()),
             language: "en",
             now: { now.now }
@@ -187,6 +195,50 @@ struct VectorTileClientTests {
         #expect(!client.isPaused)
         #expect(await client.drawing(forKey: "osm/14/8801/5700") == .fallBack)
         #expect(StubTileProtocol.requestCount == 2)
+    }
+
+    // MARK: Extras
+
+    @Test("the extras are asked for beside the basemap, and a deeper tile shares both")
+    func extrasAreAskedFor() async {
+        let client = makeClient(source: sourceWithExtras)
+        defer { StubTileProtocol.reset() }
+        StubTileProtocol.alwaysRespond(with: .init(data: landTile))
+
+        #expect(await client.drawing(forKey: "osm/17/70400/45600").png != nil)
+        #expect(await client.drawing(forKey: "osm/17/70403/45603").png != nil)
+
+        #expect(Set(StubTileProtocol.requests.compactMap { $0.url?.path }) == [
+            "/planet/15/17600/11400.mvt", "/extras/15/17600/11400.mvt",
+        ])
+        #expect(StubTileProtocol.requestCount == 2)
+    }
+
+    @Test("a tile wider than the extras' first zoom asks only the basemap")
+    func extrasWaitForTheirZoom() async {
+        let client = makeClient(source: sourceWithExtras)
+        defer { StubTileProtocol.reset() }
+        StubTileProtocol.alwaysRespond(with: .init(data: landTile))
+
+        #expect(await client.drawing(forKey: "osm/13/4400/2850").png != nil)
+        #expect(StubTileProtocol.requests.map { $0.url?.path } == ["/planet/13/4400/2850.mvt"])
+    }
+
+    /// The extras add to the map and are never its reason to fall back: where
+    /// they have nothing, or their request fails, the basemap is drawn alone.
+    @Test("extras the server does not have, or fails to give, leave the basemap drawn", arguments: [
+        StubTileProtocol.Response(statusCode: 204),
+        StubTileProtocol.Response.status(404),
+        StubTileProtocol.Response.undecodable(),
+    ])
+    func missingExtrasLeaveTheBasemap(response: StubTileProtocol.Response) async {
+        let client = makeClient(source: sourceWithExtras)
+        defer { StubTileProtocol.reset() }
+        let land = StubTileProtocol.Response(data: landTile)
+        StubTileProtocol.respond { url in url.path.hasPrefix("/extras") ? response : land }
+
+        #expect(await client.drawing(forKey: "osm/15/17600/11400").png != nil)
+        #expect(!client.isPaused)
     }
 
     @Test("a failed request is the server's, unless the device's connection failed")

@@ -157,4 +157,63 @@ struct MapboxVectorTileTests {
 
         #expect(geometry.points(of: feature) == [CGPoint(x: 10, y: 20), CGPoint(x: 5, y: 3), CGPoint(x: 300, y: 2)])
     }
+
+    /// The vector extras are a second archive cut on the same grid, drawn
+    /// into the basemap's tile: their points join its `pois`, and a layer of
+    /// their own comes along whole.
+    @Test("a tile merged with another keeps its own features first and takes the other's after")
+    func merging() throws {
+        let point = { (kind: String) in
+            VectorTileFixture.Feature(
+                type: .point,
+                properties: ["kind": .string(kind)],
+                geometry: VectorTileFixture.points([(10, 10)])
+            )
+        }
+        let wall = VectorTileFixture.Feature(
+            type: .line,
+            properties: ["kind": .string("fence")],
+            geometry: VectorTileFixture.line([(0, 0), (100, 0)])
+        )
+        let names = everything.union(["barriers"])
+        let basemap = try MapboxVectorTile(
+            data: VectorTileFixture.data([.init(name: "pois", features: [point("peak")])]),
+            layerNames: names,
+            propertyKeys: names
+        )
+        let extras = try MapboxVectorTile(
+            data: VectorTileFixture.data([
+                .init(name: "pois", features: [point("gate")]),
+                .init(name: "barriers", features: [wall]),
+            ]),
+            layerNames: names,
+            propertyKeys: names
+        )
+
+        let merged = basemap.merging(extras)
+
+        #expect(merged.layers["pois"]?.features.map { $0.string("kind") } == ["peak", "gate"])
+        #expect(merged.layers["barriers"]?.features.count == 1)
+    }
+
+    @Test("a layer on another grid is not merged into one it would misplace")
+    func mergingKeepsItsGrid() throws {
+        let feature = VectorTileFixture.Feature(
+            type: .point,
+            properties: ["kind": .string("gate")],
+            geometry: VectorTileFixture.points([(10, 10)])
+        )
+        let basemap = try MapboxVectorTile(
+            data: VectorTileFixture.data([.init(name: "pois", features: [feature])]),
+            layerNames: everything,
+            propertyKeys: everything
+        )
+        let other = try MapboxVectorTile(
+            data: VectorTileFixture.data([.init(name: "pois", extent: 512, features: [feature])]),
+            layerNames: everything,
+            propertyKeys: everything
+        )
+
+        #expect(basemap.merging(other).layers["pois"]?.features.count == 1)
+    }
 }

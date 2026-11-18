@@ -446,6 +446,8 @@ let namedColors: [String: Color] = [
     "grey": Color(red: 128, green: 128, blue: 128),
     "gray": Color(red: 128, green: 128, blue: 128),
     "red": Color(red: 255, green: 0, blue: 0),
+    "green": Color(red: 0, green: 128, blue: 0),
+    "blue": Color(red: 0, green: 0, blue: 255),
     "transparent": Color(red: 0, green: 0, blue: 0, alpha: 0),
 ]
 
@@ -836,27 +838,42 @@ func minimumZoom(of id: String) -> Int {
     return Int(match.1) ?? 0
 }
 
-/// The features a layer's SQL builds, as (key, value), in the order its
-/// COALESCE tries them: `'amenity_' || CASE WHEN amenity IN (...) THEN amenity`.
-/// A feature that asks for a tag the archive does not keep is not drawable,
-/// and still claims its value from the keys after it: the archive's
-/// `vending_machine` is the amenity Carto draws only for what it sells, never
-/// the shop Carto also knows by that name.
-func features(of id: String) -> [(key: String, value: String, drawable: Bool)] {
+/// A feature a layer's SQL builds: `'amenity_' || CASE WHEN amenity IN
+/// (...) THEN amenity`.
+struct SQLFeature {
+    let key: String
+    let value: String
+    /// The further tag the feature asks for, and the values it must take:
+    /// `... AND tags->'vending' IN (...)`. The vector extras carry it as the
+    /// point's `kind_detail`.
+    let requires: (key: String, values: [String])?
+}
+
+/// The features a layer's SQL builds, in the order its COALESCE tries them.
+func features(of id: String) -> [SQLFeature] {
     let source = layerSource(id)
-    let pattern = #/'([a-z_]+)_' *\|\| *CASE WHEN *(?:"?([a-z_]+)"?|tags->'([a-z_:]+)') +IN *\(([^)]*)\)([^\n]*?)THEN *(?:"?([a-z_]+)"?|tags->'([a-z_:]+)') +END/#
-    var result: [(String, String, Bool)] = []
+    // The condition runs from the list to THEN, across lines where it must,
+    // and never past an END into the next CASE.
+    let pattern = #/'([a-z_]+)_' *\|\| *CASE WHEN *\(?(?:"?([a-z_]+)"?|tags->'([a-z_:]+)') +IN *\(([^)]*)\)((?:(?!END).)*?)THEN *(?:"?([a-z_]+)"?|tags->'([a-z_:]+)') +END/#
+    var result: [SQLFeature] = []
     for match in source.matches(of: pattern.dotMatchesNewlines()) {
         let column = match.2.map(String.init) ?? match.3.map(String.init) ?? ""
         let then = match.6.map(String.init) ?? match.7.map(String.init) ?? ""
         // `'diplomatic_' || CASE WHEN tags->'office' IN ('diplomatic') ...
         // THEN tags->'diplomatic'` names a value from another tag.
         guard then == column else { continue }
-        // `... AND tags->'vending' IN (...)` asks for a tag the archive does
-        // not keep.
-        let drawable = String(match.5).firstMatch(of: #/AND +tags->'[a-z_:]+' +IN/#) == nil
+        let condition = String(match.5)
+        // An `OR` outside brackets widens a feature rather than narrowing it.
+        var outside = condition
+        while let bracket = outside.firstMatch(of: #/\([^()]*\)/#) { outside.removeSubrange(bracket.range) }
+        let required = outside.contains(" OR ")
+            ? nil
+            : condition.firstMatch(of: #/AND +tags->'([a-z_:]+)' +IN *\(([^)]*)\)/#)
+        let requires = required.map { match in
+            (key: String(match.1), values: match.2.matches(of: #/'([^']+)'/#).map { String($0.1) })
+        }
         for value in match.4.matches(of: #/'([^']+)'/#) {
-            result.append((String(match.1), String(value.1), drawable))
+            result.append(SQLFeature(key: String(match.1), value: String(value.1), requires: requires))
         }
     }
     return result
@@ -936,7 +953,13 @@ func bands(of point: Point, textLayer: String, iconLayerZoom: Int, textLayerZoom
     return bands
 }
 
-func add(kind: String, feature: String, shop: String?, lowPriority: Bool) {
+func add(
+    kind: String,
+    feature: String,
+    shop: String?,
+    lowPriority: Bool,
+    requires: (key: String, values: [String])? = nil
+) {
     guard !namedElsewhere.contains(kind), seenKinds.insert(kind).inserted else { return }
     let iconLayer = lowPriority ? "amenity-low-priority" : "amenity-points"
     let textLayer = lowPriority ? "text-low-priority" : "text-point"
@@ -949,13 +972,15 @@ func add(kind: String, feature: String, shop: String?, lowPriority: Bool) {
         "way_pixels": lowPriority ? .null : .number(0),
     ]
     if let shop { base["shop"] = .text(iconShops.contains(shop) ? shop : "other") }
-    let details: [(key: String, value: String?)] = ["religion", "sport"]
+    let tested: [(key: String, value: String?)] = ["religion", "sport"]
         .filter { rules(of: feature, shop: shop, test: $0) }
         .flatMap { key in testedValues(key).map { (key, Optional($0)) } }
+    let required = requires.map { requires in requires.values.map { (key: requires.key, value: Optional($0)) } }
     let namings: [Bool?] = rules(of: feature, shop: shop, test: "name") ? [true, false] : [nil]
     var produced: [[Band]] = []
+    // A feature that asks for a further tag is drawn only with it.
     let plain: (key: String, value: String?) = ("", nil)
-    for detail in [plain] + details {
+    for detail in required ?? [plain] + tested {
         for named in namings {
             var attributes = base
             attributes["name"] = named == false ? .null : .text("name")
@@ -969,7 +994,7 @@ func add(kind: String, feature: String, shop: String?, lowPriority: Bool) {
             )
             guard !result.isEmpty else { continue }
             // A detail that changes nothing is the plain kind's.
-            if detail.value != nil, produced.contains(result) { continue }
+            if required == nil, detail.value != nil, produced.contains(result) { continue }
             produced.append(result)
             entries.append(Entry(
                 kind: kind,
@@ -984,19 +1009,22 @@ func add(kind: String, feature: String, shop: String?, lowPriority: Bool) {
     }
 }
 
-// Carto's own order of keys: where two keys share a value, the first wins.
-for (key, value, drawable) in mainFeatures {
-    guard drawable else {
-        seenKinds.insert(value)
-        continue
-    }
-    add(kind: value, feature: "\(key)_\(value)", shop: nil, lowPriority: false)
+// Where two keys share a value, the first here wins. The low-priority
+// layer's go first, because the vector extras bring barriers, and a `gate`
+// on a path is far likelier than an airport's; then Carto's own order of keys.
+for feature in lowFeatures {
+    let name = "\(feature.key)_\(feature.value)"
+    add(kind: feature.value, feature: name, shop: nil, lowPriority: true, requires: feature.requires)
 }
+for feature in mainFeatures {
+    let name = "\(feature.key)_\(feature.value)"
+    add(kind: feature.value, feature: name, shop: nil, lowPriority: false, requires: feature.requires)
+}
+// The vector extras file every office as `office`, as Carto draws them all
+// alike, ahead of the `shop=office` Carto also knows.
+add(kind: "office", feature: "office", shop: nil, lowPriority: false)
 for shop in drawnShops {
     add(kind: shop, feature: "shop", shop: shop, lowPriority: false)
-}
-for (key, value, drawable) in lowFeatures where drawable {
-    add(kind: value, feature: "\(key)_\(value)", shop: nil, lowPriority: true)
 }
 
 // MARK: - Writing
