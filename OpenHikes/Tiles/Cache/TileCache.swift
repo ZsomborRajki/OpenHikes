@@ -815,14 +815,14 @@ nonisolated extension TileCache {
     /// anywhere — the caller decides which tier it belongs in. Go through
     /// ``fetchTileOnce(forKey:url:)`` rather than calling this directly.
     private func fetchTile(forKey key: String, url: URL) async -> FetchedTile? {
-        #if DEBUG
-        Self.logger.debug("Requesting tile \(key, privacy: .public) from \(url.redactedForLogging, privacy: .public)")
-        #endif
         // A provider drawn from vector tiles asks the tile server first, and
         // comes down to its raster template below whenever that brings nothing.
         if let drawn = await vectorTiles?.pngData(forKey: key), let image = TileImage(data: drawn) {
             return FetchedTile(data: drawn, image: image)
         }
+        #if DEBUG
+        Self.logger.debug("Requesting tile \(key, privacy: .public) from \(url.redactedForLogging, privacy: .public)")
+        #endif
         // The one request an offline-first app is judged on. Everything else
         // in this file is about *not* reaching here; this is the only place
         // that does.
