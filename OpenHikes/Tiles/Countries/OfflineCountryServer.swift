@@ -11,6 +11,11 @@ import Foundation
 
 /// Where the manifest and the files are. A suite hands the model its own.
 protocol OfflineCountryServing: Sendable {
+    /// `@concurrent`, here rather than only on the server's, because off the
+    /// main actor is the promise: the manifest carries every area's outline,
+    /// megabytes of it, and every caller is on the main actor, where a plain
+    /// `nonisolated async` function would decode it.
+    @concurrent
     func manifest() async throws -> OfflineCountryManifest
     func url(of file: OfflineCountryManifest.File) -> URL
 }
@@ -28,6 +33,7 @@ nonisolated struct OfflineCountryServer: OfflineCountryServing {
         case status(Int)
     }
 
+    @concurrent
     func manifest() async throws -> OfflineCountryManifest {
         var request = URLRequest(
             url: root.appending(path: Self.manifestPath),
