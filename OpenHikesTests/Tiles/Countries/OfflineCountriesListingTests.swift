@@ -11,6 +11,7 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
+import RealModule
 import Testing
 
 // swiftlint:disable no_magic_numbers
@@ -64,6 +65,31 @@ struct OfflineCountriesListingTests {
             let groupTarget = sections.scrollTarget(for: "US-CA")
             #expect(groupTarget.rowID == OfflineCountrySections.groupRowID("US-CA"))
             #expect(groupTarget.opening == "US")
+        }
+    }
+
+    /// Alaska as Natural Earth draws it: the Aleutians run over the
+    /// antimeridian, so its box is the whole globe at its latitudes.
+    @Test("Nearby is measured to an area's outline, across the antimeridian, not to its box")
+    func nearbyByOutline() async throws {
+        try await OfflineCountryFixture.withDirectory { directory in
+            var alaska = Self.region("US-AK", "Alaska")
+            alaska.bounds = OfflineCountryManifest.Bounds(west: -180, south: 51, east: 180, north: 71.5)
+            alaska.outline = OfflineCountryFixture.outline(
+                of: OfflineCountryManifest.Bounds(west: -170, south: 54, east: -141, north: 71.5)
+            ) + OfflineCountryFixture.outline(
+                of: OfflineCountryManifest.Bounds(west: 172, south: 51, east: 180, north: 53)
+            )
+            let harness = await OfflineCountryHarness.make(in: directory, offering: [alaska])
+            let berlin = CLLocationCoordinate2D(latitude: 52.5, longitude: 13.4)
+            // A degree and a half east of the westernmost Aleutians' edge,
+            // over the antimeridian: about 103 km at that latitude.
+            let overTheLine = CLLocationCoordinate2D(latitude: 52, longitude: -178.5)
+
+            #expect(harness.countries.nearby(berlin).isEmpty, "inside the box, half a world from the outline")
+            #expect(harness.countries.nearby(overTheLine) == [alaska])
+            #expect(alaska.kilometers(from: overTheLine).isApproximatelyEqual(to: 103, absoluteTolerance: 2))
+            #expect(alaska.kilometers(from: CLLocationCoordinate2D(latitude: 61.2, longitude: -149.9)) == 0)
         }
     }
 
