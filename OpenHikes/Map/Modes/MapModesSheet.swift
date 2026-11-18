@@ -30,14 +30,16 @@ extension View {
         _ modals: MapControlModals,
         from presenter: MapControlModals.Presenter,
         entitlement: MapEntitlementStore,
-        locationManager: LocationManager
+        locationManager: LocationManager,
+        offlineCountries: OfflineCountries
     ) -> some View {
         modifier(
             MapModesSheetModifier(
                 modals: modals,
                 presenter: presenter,
                 entitlement: entitlement,
-                locationManager: locationManager
+                locationManager: locationManager,
+                offlineCountries: offlineCountries
             )
         )
     }
@@ -48,13 +50,19 @@ private struct MapModesSheetModifier: ViewModifier {
     let presenter: MapControlModals.Presenter
     let entitlement: MapEntitlementStore
     let locationManager: LocationManager
+    let offlineCountries: OfflineCountries
 
     func body(content: Content) -> some View {
-        content.sheet(isPresented: modals.binding(modals.mapModes.isPresentedBinding, for: presenter)) {
+        content.sheet(
+            isPresented: modals.binding(modals.mapModes.isPresentedBinding, for: presenter),
+            onDismiss: modals.mapModes.didDismiss
+        ) {
             MapModesView(
                 entitlement: entitlement,
                 locationManager: locationManager,
-                onClose: modals.mapModes.dismiss
+                offlineCountries: offlineCountries,
+                onClose: modals.mapModes.dismiss,
+                onOpenOfflineMaps: modals.mapModes.dismissOpeningOfflineMaps
             )
         }
     }
@@ -64,7 +72,9 @@ struct MapModesView: View {
     let entitlement: MapEntitlementStore
     /// Read once, by the cards, for the ground their previews show.
     let locationManager: LocationManager
+    let offlineCountries: OfflineCountries
     let onClose: () -> Void
+    let onOpenOfflineMaps: () -> Void
 
     @AppStorage(SettingsKey.tileProviderID) private var tileProviderID = TileProvider.default.id
     @AppStorage(SettingsKey.showsHikingRoutes) private var showsHikingRoutes = SettingsDefault.showsHikingRoutes
@@ -117,6 +127,7 @@ struct MapModesView: View {
                     showPaywall: { showPaywall = true }
                 )
                 HikingRoutesPicker(showsHikingRoutes: $showsHikingRoutes)
+                MapModesOfflineMapsRow(countries: offlineCountries, onOpen: onOpenOfflineMaps)
                 footer
             }
             .padding(.top, Self.topPadding)
@@ -206,6 +217,13 @@ struct MapModesView: View {
     MapModesView(
         entitlement: MapEntitlementStore(currentEntitlements: { false }),
         locationManager: LocationManager(),
-        onClose: { /* a preview has nothing to close */ }
+        offlineCountries: OfflineCountries(
+            store: OfflineCountryStore(directory: FileManager.default.temporaryDirectory),
+            server: nil,
+            downloader: nil,
+            archives: nil
+        ),
+        onClose: { /* a preview has nothing to close */ },
+        onOpenOfflineMaps: { /* nor anywhere to go */ }
     )
 }

@@ -24,6 +24,7 @@ struct FirstRunTipsTests {
         #expect(SearchThisAreaTip().id == "search-this-area")
         #expect(AddPlaceTip().id == "recording-add-place")
         #expect(PlacesNearbyTip().id == "recording-places-nearby")
+        #expect(OfflineMapsTip().id == "map-modes-offline-maps")
     }
 
     @Test("no two tips share an id, or one closing would close the other")
@@ -35,6 +36,7 @@ struct FirstRunTipsTests {
             SearchThisAreaTip().id,
             AddPlaceTip().id,
             PlacesNearbyTip().id,
+            OfflineMapsTip().id,
         ]
         #expect(Set(ids).count == ids.count)
     }

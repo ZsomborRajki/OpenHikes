@@ -174,6 +174,10 @@ struct MapView: MapViewRepresentable, Equatable {
     /// `MapCoordinator+JunctionButton.swift`. `nil` in a suite that is not
     /// about them.
     var junctionGuide: JunctionGuide?
+    /// *Offline Maps*' country outlines. Observed directly, as the places'
+    /// pins are — see `MapCoordinator+CountryOutlines.swift`. `nil` in a
+    /// suite that is not about them.
+    var countryOutlines: OfflineCountryOutlines?
 
     /// How far the landscape side panel reaches in from the leading edge, or
     /// zero in portrait where there is no panel and the sheet is over the map
@@ -315,6 +319,7 @@ struct MapView: MapViewRepresentable, Equatable {
         // rebuilt mid-walk has to offer it on this first pass.
         #if os(iOS)
         if let junctionGuide { coordinator.observeJunctionGuide(junctionGuide) }
+        if let countryOutlines { coordinator.observeCountryOutlines(countryOutlines, on: mapView) }
         #endif
 
         return mapView
@@ -925,6 +930,7 @@ extension MapView {
             && lhs.libraryLines === rhs.libraryLines
             && lhs.walk === rhs.walk
             && lhs.junctionGuide === rhs.junctionGuide
+            && lhs.countryOutlines === rhs.countryOutlines
             && lhs.sidePanelInset == rhs.sidePanelInset
             && lhs.isCoveredByPanel == rhs.isCoveredByPanel
     }

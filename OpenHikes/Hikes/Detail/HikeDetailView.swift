@@ -453,6 +453,10 @@ private extension HikeDetailView {
                         claim: offlineDownloadClaim
                     )
                 }
+            } else if activeProvider.vectorSource != nil {
+                // The OpenHikes map downloads whole countries — see
+                // ``HikeOfflineCountryTile``.
+                HikeOfflineCountryTile(line: line)
             }
         }
     }

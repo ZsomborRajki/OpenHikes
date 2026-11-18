@@ -5,12 +5,14 @@
 //  The first-run tips: the two queues they wait in, how a launch loads them,
 //  and what retires each one.
 //
-//  Six tips, in two queues. The main screen's four point at what a first
-//  launch has nothing else pointing at — the two buttons on the map, and the
-//  *Community* tab with its *Search this area* pill — and the recording
-//  screen's two at the places feature, which lives in that screen's bar. Each
-//  queue is one ordered `TipGroup`, so a screen never shows two tips at once,
-//  and a later tip waits until the one before it has been closed or used.
+//  Seven tips: six in two queues, and one on its own. The main screen's four
+//  point at what a first launch has nothing else pointing at — the two
+//  buttons on the map, and the *Community* tab with its *Search this area*
+//  pill — and the recording screen's two at the places feature, which lives
+//  in that screen's bar. Each queue is one ordered `TipGroup`, so a screen
+//  never shows two tips at once, and a later tip waits until the one before
+//  it has been closed or used. The seventh, ``OfflineMapsTip``, is the only
+//  tip *Map Modes* shows, so it needs no queue.
 //
 //  Everybody sees each tip once, with one exception. The two about making a
 //  hike are for a new hiker. TipKit cannot tell a first install from an

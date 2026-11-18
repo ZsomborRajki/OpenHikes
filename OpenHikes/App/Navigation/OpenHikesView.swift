@@ -326,6 +326,7 @@ struct OpenHikesView: View {
             libraryLines: appModel.libraryLines,
             walk: appModel.walkSession,
             junctionGuide: appModel.junctionGuide,
+            countryOutlines: appModel.offlineCountries.outlines,
             // Keeps the credit line and the camera pill beside the landscape
             // panel instead of behind it.
             sidePanelInset: usesSidePanel ? MapSidePanelLayout.mapInset : 0,
@@ -339,7 +340,7 @@ struct OpenHikesView: View {
             .ignoresSafeArea()
             .onAppear {
                 restoreLastSelectedHike()
-                claimMapTaps()
+                claimMapTaps(mapModes: mapControls.mapModes)
                 if AppLaunchEnvironment.usesLiveLocation {
                     appModel.locationManager.start()
                 }
@@ -862,6 +863,8 @@ struct ImportSelectionGate {
         /// The library's totals. Its own case so an import finishing while
         /// they are open does not pull the screen out from under them.
         case totals
+        /// *Offline Maps*, for the reason ``totals`` has a case.
+        case offlineCountries
         case hike(UUID)
         /// A published hike's preview, keyed by its listing.
         ///
