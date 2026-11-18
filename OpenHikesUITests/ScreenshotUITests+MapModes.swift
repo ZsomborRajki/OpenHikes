@@ -39,7 +39,7 @@ extension ScreenshotUITests {
         openMapModes(in: app)
         XCTAssertTrue(
             element("provider-row-osm", in: app).isSelected,
-            "the map behind the sheet, OpenStreetMap, should be the selected card"
+            "the map behind the sheet, OpenHikes, should be the selected card"
         )
         settleScreenshotScreen(in: app)
     }

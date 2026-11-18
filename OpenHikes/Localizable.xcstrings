@@ -34149,6 +34149,7 @@
       }
     },
     "OpenHikes" : {
+      "comment" : "The name of a map style on Map Modes: OpenStreetMap's data, drawn by OpenHikes",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -35759,7 +35760,7 @@
       }
     },
     "OpenStreetMap" : {
-      "comment" : "The name of a map style on Map Modes",
+      "comment" : "The name of a map style on Map Modes: the map as OpenStreetMap's own website draws it",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -36215,53 +36216,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenStreetMap недоступний"
-          }
-        }
-      }
-    },
-    "openstreetmap.org" : {
-      "comment" : "The name of a map style on Map Modes: the map as OpenStreetMap's own website draws it",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "openstreetmap.org"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "openstreetmap.org"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "openstreetmap.org"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "openstreetmap.org"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "openstreetmap.org"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "openstreetmap.org"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "openstreetmap.org"
           }
         }
       }

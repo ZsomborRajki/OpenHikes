@@ -155,9 +155,16 @@ nonisolated extension TileProvider {
     /// raster tiles as the fallback wherever that server cannot answer. The
     /// id and the cache keys are the raster style's, so saved coverage keeps
     /// answering and the choice persisted in settings stays this entry.
+    ///
+    /// Named for who draws it: the OpenStreetMap Foundation asks that a map
+    /// drawn by someone else from its data not go by its name, which belongs
+    /// to ``openStreetMapRaster``, the map its own servers draw.
     static let openStreetMap = TileProvider(
         id: "osm",
-        name: String(localized: "OpenStreetMap", comment: "The name of a map style on Map Modes"),
+        name: String(
+            localized: "OpenHikes",
+            comment: "The name of a map style on Map Modes: OpenStreetMap's data, drawn by OpenHikes"
+        ),
         summary: String(localized: """
             OpenStreetMap’s data, drawn by OpenHikes. Tiles you view are auto-saved \
             for offline use.
@@ -181,7 +188,7 @@ nonisolated extension TileProvider {
     static let openStreetMapRaster = TileProvider(
         id: "osm_raster",
         name: String(
-            localized: "openstreetmap.org",
+            localized: "OpenStreetMap",
             comment: "The name of a map style on Map Modes: the map as OpenStreetMap's own website draws it"
         ),
         summary: String(localized: """
