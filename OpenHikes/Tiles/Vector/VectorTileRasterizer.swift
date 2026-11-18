@@ -39,7 +39,7 @@ nonisolated enum VectorTileRasterizer {
     /// The properties read, the names in `language` among them.
     static func propertyKeys(language: String) -> Set<String> {
         VectorTileLabels.propertyKeys(language: language).union([
-            "kind", "kind_detail", "is_tunnel", "is_bridge", "disputed",
+            "kind", "kind_detail", "is_tunnel", "is_bridge", "disputed", "access",
         ])
     }
 
@@ -266,14 +266,18 @@ nonisolated private struct Painter {
     }
 
     /// Tunnels under the ground, bridges over it, and within each the more
-    /// important road over the less, in ``VectorTileStyle/road(kind:detail:)``'s
+    /// important road over the less, in ``VectorTileStyle/road(kind:detail:access:)``'s
     /// order. Every casing of a level is drawn before any fill of it, so a
     /// junction reads as one road surface rather than two outlined strips.
     private func paintRoads() {
         let styled = features(in: "roads", type: .line).compactMap { pair -> StyledLine? in
             let (feature, geometry) = pair
             guard let kind = feature.string("kind"),
-                  let road = VectorTileStyle.road(kind: kind, detail: feature.string("kind_detail"))
+                  let road = VectorTileStyle.road(
+                      kind: kind,
+                      detail: feature.string("kind_detail"),
+                      access: feature.string("access")
+                  )
             else { return nil }
             return StyledLine(feature: feature, geometry: geometry, road: road)
         }

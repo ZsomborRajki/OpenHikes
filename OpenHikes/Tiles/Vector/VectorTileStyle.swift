@@ -125,13 +125,35 @@ nonisolated enum VectorTileStyle {
     struct Road: Sendable {
         let line: Line
         let order: Int
+        /// The look where the way's `access` closes it, for the kinds Carto
+        /// draws a closed one of differently.
+        var closed: Line?
     }
 
     /// The style of a feature in the `roads` layer, or `nil` for one not drawn:
-    /// its `kind` and `kind_detail` first, then its `kind` alone.
-    static func road(kind: String, detail: String?) -> Road? {
-        roads["\(kind)/\(detail ?? "")"] ?? roads["\(kind)/*"]
+    /// its `kind` and `kind_detail` first, then its `kind` alone. A path,
+    /// track or flight of steps whose `access` closes it is drawn as Carto
+    /// draws one: paler, and not before ``closedPathZ``.
+    ///
+    /// Carto reads a path's `foot` (or `bicycle`, or `horse`) before its
+    /// `access`, and the archive carries `access` alone, so a path closed to
+    /// all but walkers is drawn closed. The archive carries `access` from
+    /// zoom 15, where Carto starts drawing closed paths, and leaves out a
+    /// way with `access=no` or `private` before it.
+    static func road(kind: String, detail: String?, access: String? = nil) -> Road? {
+        guard let road = roads["\(kind)/\(detail ?? "")"] ?? roads["\(kind)/*"] else { return nil }
+        guard let access, closingAccess.contains(access), let closed = road.closed else { return road }
+        return Road(line: closed, order: road.order)
     }
+
+    /// Carto draws a closed path from this zoom, and an open one before it.
+    static let closedPathZ = 15
+
+    /// The `access` values that close a way to the public, as Carto reads
+    /// them (`carto_int_access` in its `functions.sql`).
+    static let closingAccess: Set<String> = [
+        "no", "private", "permit", "agricultural", "forestry", "agricultural;forestry",
+    ]
 
     /// Keyed `kind/kind_detail`, with `kind/*` for every detail not listed,
     /// and listed in the order they are drawn: OpenStreetMap Carto's
@@ -170,8 +192,21 @@ nonisolated enum VectorTileStyle {
             ("rail/tram", tram),
             ("rail/*", railway),
             ("aerialway/*", aerialway),
-        ].enumerated().map { order, entry in (entry.0, Road(line: entry.1, order: order)) }
+        ].enumerated().map { order, entry in
+            (entry.0, Road(line: entry.1, order: order, closed: closedPaths[entry.0]))
+        }
     )
+
+    /// Carto's look for each kind of path where its `access` closes it:
+    /// `roads.mss`'s `-fill-noaccess` colors, and nothing before
+    /// ``closedPathZ``, where Carto still draws only the open ones.
+    private static let closedPaths: [String: Line] = [
+        "path/steps": steps.closed("#BBBBBB"),
+        "path/*": footpath.closed("#BBBBBB"),
+        "path/cycleway": cycleway.closed("#9999FF"),
+        "path/bridleway": bridleway.closed("#AADDAA"),
+        "path/track": track.closed("#E2C5BB"),
+    ]
 
     /// The style of a feature in the vector extras' `barriers` layer, as
     /// Carto draws it: a thin dark line from zoom 16 for a fence, a wall or a
@@ -342,6 +377,21 @@ nonisolated private extension VectorTileStyle {
     )
 }
 
+nonisolated private extension VectorTileStyle.Line {
+    /// This path as Carto draws it where its `access` closes it: in `hex`,
+    /// and not before ``VectorTileStyle/closedPathZ``.
+    func closed(_ hex: String) -> Self {
+        Self(
+            color: VectorTileStyle.color(hex),
+            width: width.starting(at: VectorTileStyle.closedPathZ),
+            casing: casing,
+            dash: dash,
+            alpha: alpha,
+            center: center
+        )
+    }
+}
+
 /// A size given at a few zooms: none below the first, each zoom between two
 /// stops in proportion on a doubling scale, and the last stop's past it.
 nonisolated struct ZoomCurve: Sendable {
@@ -349,6 +399,12 @@ nonisolated struct ZoomCurve: Sendable {
 
     init(_ stops: [(z: Int, value: CGFloat)]) {
         self.stops = stops
+    }
+
+    /// The same sizes from `z` on, and none below it.
+    func starting(at z: Int) -> Self {
+        guard let first = stops.first, z > first.z else { return self }
+        return Self([(z, value(at: z))] + stops.filter { $0.z > z })
     }
 
     /// The size at `z`, or zero below the first stop.
