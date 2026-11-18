@@ -12,8 +12,7 @@
 //  figures are quoted in; ``VectorTileRasterizer`` scales them to the size it
 //  draws at.
 //
-//  No labels yet: names need placement across tiles and fonts, which is the
-//  next step of #1481.
+//  Names are drawn over all of this, in ``VectorTileLabelStyle``'s looks.
 //
 
 import CoreGraphics

@@ -26,6 +26,34 @@ import AppKit
 
 nonisolated extension TileCache {
 
+    /// Bytes the decoded bitmap for `image` occupies.
+    ///
+    /// The number that matters, and not the one the cache used to be bounded
+    /// by. A tile arrives as a compressed PNG of a few tens of kilobytes and
+    /// is held as an uncompressed bitmap: every raster template in
+    /// ``TileProvider`` asks for a plain 256×256 tile — none of them carries a
+    /// scale placeholder — so a tile decodes to 256×256×4 bytes, 256 KB, five
+    /// to ten times its file size. A tile drawn from vector tiles is 512
+    /// pixels a side, and four times that. Counting *tiles* therefore said
+    /// little about the memory being used, and nothing at all about a decode
+    /// that came back a different size.
+    ///
+    /// Which is why this measures the bitmap rather than assuming one. A
+    /// provider template that later asks for a retina tile is charged the four
+    /// times as much it costs, with nothing here to update.
+    static func decodedByteCost(of image: TileImage) -> Int {
+        #if canImport(UIKit)
+        let bitmap = image.cgImage
+        #elseif canImport(AppKit)
+        let bitmap = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        #endif
+        if let bitmap, bitmap.bytesPerRow > 0, bitmap.height > 0 { return bitmap.bytesPerRow * bitmap.height }
+        // No backing bitmap to measure. Estimate from the point size at four
+        // bytes a pixel rather than charging nothing, which would exempt the
+        // entry from the limit entirely — `NSCache` treats a zero cost as free.
+        return max(Int(image.size.width * image.size.height * 4), 1)
+    }
+
     /// Puts a tile in the memory tier, charged at its decoded size.
     ///
     /// The single insertion point on purpose: `setObject(_:forKey:)` without a

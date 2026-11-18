@@ -49,7 +49,7 @@ struct VectorTileClientTests {
         defer { StubTileProtocol.reset() }
         StubTileProtocol.alwaysRespond(with: .init(data: landTile))
 
-        let png = try #require(await client.pngData(forKey: "osm/14/8800/5700"))
+        let png = try #require(await client.drawing(forKey: "osm/14/8800/5700").png)
 
         #expect(TileImage(data: png) != nil)
         #expect(StubTileProtocol.requests.map { $0.url?.path } == ["/planet/14/8800/5700.mvt"])
@@ -66,7 +66,7 @@ struct VectorTileClientTests {
         defer { StubTileProtocol.reset() }
         StubTileProtocol.alwaysRespond(with: .init(data: landTile))
 
-        #expect(await client.pngData(forKey: key) == nil)
+        #expect(await client.drawing(forKey: key) == .fallBack)
         #expect(StubTileProtocol.requestCount == 0)
     }
 
@@ -78,8 +78,8 @@ struct VectorTileClientTests {
         defer { StubTileProtocol.reset() }
         StubTileProtocol.alwaysRespond(with: .init(data: landTile))
 
-        let first = await client.pngData(forKey: "osm/17/70400/45600")
-        let sibling = await client.pngData(forKey: "osm/17/70403/45603")
+        let first = await client.drawing(forKey: "osm/17/70400/45600").png
+        let sibling = await client.drawing(forKey: "osm/17/70403/45603").png
 
         #expect(first != nil)
         #expect(sibling != nil)
@@ -97,15 +97,15 @@ struct VectorTileClientTests {
         defer { StubTileProtocol.reset() }
         StubTileProtocol.alwaysRespond(with: response)
 
-        #expect(await client.pngData(forKey: "osm/14/8800/5700") == nil)
+        #expect(await client.drawing(forKey: "osm/14/8800/5700") == .fallBack)
         #expect(client.isPaused)
-        #expect(await client.pngData(forKey: "osm/14/8801/5700") == nil)
+        #expect(await client.drawing(forKey: "osm/14/8801/5700") == .fallBack)
         #expect(StubTileProtocol.requestCount == 1, "the next tile goes straight to the fallback")
 
         clock.advance(by: VectorTileClient.failurePause + .seconds(1))
         StubTileProtocol.alwaysRespond(with: .init(data: landTile))
 
-        #expect(await client.pngData(forKey: "osm/14/8802/5700") != nil)
+        #expect(await client.drawing(forKey: "osm/14/8802/5700").png != nil)
         #expect(StubTileProtocol.requestCount == 2)
     }
 
@@ -121,17 +121,53 @@ struct VectorTileClientTests {
             headers: [RetryAfterHeader.name: "600"]
         ))
 
-        #expect(await client.pngData(forKey: "osm/14/8800/5700") == nil)
+        #expect(await client.drawing(forKey: "osm/14/8800/5700") == .fallBack)
         clock.advance(by: VectorTileClient.failurePause + .seconds(1))
         StubTileProtocol.alwaysRespond(with: .init(data: landTile))
 
-        #expect(await client.pngData(forKey: "osm/14/8801/5700") == nil)
+        #expect(await client.drawing(forKey: "osm/14/8801/5700") == .fallBack)
         #expect(StubTileProtocol.requestCount == 1, "the server asked for ten minutes, not one")
 
         clock.advance(by: .seconds(600) - VectorTileClient.failurePause)
 
-        #expect(await client.pngData(forKey: "osm/14/8802/5700") != nil)
+        #expect(await client.drawing(forKey: "osm/14/8802/5700").png != nil)
         #expect(StubTileProtocol.requestCount == 2)
+    }
+
+    /// A phone with no connection learns nothing of the server: the next tile
+    /// asks it again, and the raster template is not asked in its place.
+    @Test("a failure of the device's own connection pauses nothing and falls back to nothing", arguments: [
+        URLError.Code.notConnectedToInternet,
+        .networkConnectionLost,
+        .dataNotAllowed,
+    ])
+    func offlineIsNotTheServers(code: URLError.Code) async {
+        let client = makeClient()
+        defer { StubTileProtocol.reset() }
+        StubTileProtocol.alwaysRespond(with: .init(failure: URLError(code)))
+
+        #expect(await client.drawing(forKey: "osm/14/8800/5700") == .offline)
+        #expect(!client.isPaused)
+        StubTileProtocol.alwaysRespond(with: .init(data: landTile))
+
+        #expect(await client.drawing(forKey: "osm/14/8801/5700").png != nil)
+        #expect(StubTileProtocol.requestCount == 2)
+    }
+
+    /// The tiles past zoom 15 inside an archive tile already fetched need no
+    /// server, so a pause for another tile's failure does not reach them.
+    @Test("a tile already held is drawn while the server is passed over")
+    func keptTileOutlastsThePause() async {
+        let client = makeClient()
+        defer { StubTileProtocol.reset() }
+        StubTileProtocol.alwaysRespond(with: .init(data: landTile))
+        #expect(await client.drawing(forKey: "osm/17/70400/45600").png != nil)
+        StubTileProtocol.alwaysRespond(with: .status(503))
+        #expect(await client.drawing(forKey: "osm/15/17601/11400") == .fallBack)
+        #expect(client.isPaused)
+
+        #expect(await client.drawing(forKey: "osm/17/70403/45603").png != nil)
+        #expect(StubTileProtocol.requestCount == 2, "drawn from the archive tile already held")
     }
 
     /// A tile the archive does not have, or cannot be read, is that tile's
@@ -147,10 +183,20 @@ struct VectorTileClientTests {
         defer { StubTileProtocol.reset() }
         StubTileProtocol.alwaysRespond(with: response)
 
-        #expect(await client.pngData(forKey: "osm/14/8800/5700") == nil)
+        #expect(await client.drawing(forKey: "osm/14/8800/5700") == .fallBack)
         #expect(!client.isPaused)
-        #expect(await client.pngData(forKey: "osm/14/8801/5700") == nil)
+        #expect(await client.drawing(forKey: "osm/14/8801/5700") == .fallBack)
         #expect(StubTileProtocol.requestCount == 2)
+    }
+
+    @Test("a failed request is the server's, unless the device's connection failed")
+    func failedRequestOutcomes() {
+        #expect(VectorTileClient.outcome(of: URLError(.notConnectedToInternet)) == .offline)
+        #expect(VectorTileClient.outcome(of: URLError(.timedOut)) == .unavailable(pause: VectorTileClient.failurePause))
+        #expect(
+            VectorTileClient.outcome(of: URLError(.cannotConnectToHost))
+                == .unavailable(pause: VectorTileClient.failurePause)
+        )
     }
 
     @Test("a response is read as a tile, a missing tile, or a server to pass over")
@@ -176,6 +222,14 @@ struct VectorTileClientTests {
                 == .unavailable(pause: VectorTileClient.failurePause)
         )
         #expect(VectorTileClient.outcome(status: 404, data: body, retryAfter: longer) == .missing)
+    }
+}
+
+nonisolated private extension VectorTileClient.Drawing {
+    /// The drawn tile, if this is one.
+    var png: Data? {
+        guard case let .png(data) = self else { return nil }
+        return data
     }
 }
 

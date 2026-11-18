@@ -6,10 +6,10 @@
 //  ``VectorTileSource``: the archive tile off the OpenHikes tile server, drawn
 //  by ``VectorTileRasterizer``, as PNG bytes the cache files like any tile.
 //
-//  `nil` is the fallback, never a blank tile. ``TileCache`` goes on to the
-//  provider's raster template, tile.openstreetmap.org for OpenStreetMap, so a
-//  hiker sees the old map where the new one cannot be drawn. That covers
-//  three cases:
+//  ``Drawing/fallBack`` is the fallback, never a blank tile. ``TileCache``
+//  goes on to the provider's raster template, tile.openstreetmap.org for
+//  OpenStreetMap, so a hiker sees the old map where the new one cannot be
+//  drawn. That covers three cases:
 //  - the server is down or failing: a transport error, a timeout, a 5xx or
 //    a 429. The server is then passed over for ``failurePause``, or for as
 //    long as its `Retry-After` asks where ``RetryAfterHeader`` honors one,
@@ -17,10 +17,17 @@
 //  - the archive has no tile there.
 //  - the tile could not be read or drawn.
 //
+//  A failure of the device's own connection is not the server's: no route,
+//  a connection dropped between networks, cellular data off for the app. It
+//  pauses nothing and falls back to nothing (``Drawing/offline``), because
+//  the raster template would fail the same way, and a raster tile that came
+//  back would be filed for a week among the drawn ones.
+//
 //  A tile deeper than the archive is drawn from the archive tile that
 //  contains it, so the sixteen tiles of zoom 17 inside one of zoom 15 share
-//  one request: archive tiles are kept here for a while, and a request
-//  already out for one is waited on rather than made again.
+//  one request: archive tiles are kept here for a while, and drawn from even
+//  while the server is passed over, and a request already out for one is
+//  waited on rather than made again.
 //
 
 import Foundation
@@ -54,6 +61,17 @@ nonisolated final class VectorTileClient: Sendable {
         var inFlight: [VectorTileAddress: Task<Fetch, Never>] = [:]
     }
 
+    /// What the tile server made of one tile.
+    enum Drawing: Sendable, Equatable {
+        /// The tile, drawn, as PNG bytes.
+        case png(Data)
+        /// Not drawn: the provider's raster template is asked instead.
+        case fallBack
+        /// The device reached no server, so the raster template is not asked
+        /// either: the load fails, and is tried again as any failed load is.
+        case offline
+    }
+
     /// What one request for an archive tile came to.
     enum Fetch: Sendable, Equatable {
         case tile(Data)
@@ -62,6 +80,15 @@ nonisolated final class VectorTileClient: Sendable {
         case missing
         /// The server is down or failing, and is passed over for `pause`.
         case unavailable(pause: Duration)
+        /// The device's own connection failed: nothing is learnt of the server.
+        case offline
+    }
+
+    /// Where an archive tile is to be had.
+    private enum Lookup {
+        case kept(Data)
+        case fetching(Task<Fetch, Never>)
+        case paused
     }
 
     /// - Parameters:
@@ -83,24 +110,46 @@ nonisolated final class VectorTileClient: Sendable {
         self.now = now
     }
 
-    /// The tile `key` names, drawn as PNG bytes, or `nil` when the provider has
-    /// no vector source or the tile could not be drawn, for the caller to fall
-    /// back to the provider's raster template.
+    /// The tile `key` names, drawn, or what to do instead: ``Drawing/fallBack``
+    /// when the provider has no vector source or the tile could not be drawn.
     ///
     /// `@concurrent`, because reading and drawing a tile is tens of
     /// milliseconds of work that must not land on whichever actor asked.
     @concurrent
-    func pngData(forKey key: String) async -> Data? {
-        guard let named = TileCacheKey.named(key), let source = sources[named.providerID] else { return nil }
-        guard !isPaused else {
+    func drawing(forKey key: String) async -> Drawing {
+        guard let named = TileCacheKey.named(key), let source = sources[named.providerID] else { return .fallBack }
+        let target = VectorTileAddress(z: named.z, x: named.x, y: named.y)
+        let dataTile = source.dataTile(for: target)
+        let fetched: Fetch
+        switch lookUp(dataTile, from: source) {
+        case let .kept(bytes):
+            fetched = .tile(bytes)
+        case let .fetching(task):
+            fetched = await task.value
+        case .paused:
             #if DEBUG
             Self.logger.debug("Vector tile \(key, privacy: .public): server passed over after a failure")
             #endif
-            return nil
+            return .fallBack
         }
-        let target = VectorTileAddress(z: named.z, x: named.x, y: named.y)
-        let dataTile = source.dataTile(for: target)
-        guard case let .tile(bytes) = await archiveTile(dataTile, from: source) else { return nil }
+        switch fetched {
+        case let .tile(bytes):
+            return draw(bytes, from: dataTile, of: source, as: target, key: key).map(Drawing.png) ?? .fallBack
+        case .offline:
+            return .offline
+        case .missing, .unavailable:
+            return .fallBack
+        }
+    }
+
+    /// `bytes`, the archive tile at `dataTile`, drawn as `target`, or `nil`.
+    private func draw(
+        _ bytes: Data,
+        from dataTile: VectorTileAddress,
+        of source: VectorTileSource,
+        as target: VectorTileAddress,
+        key: String
+    ) -> Data? {
         do {
             let tile = try MapboxVectorTile(
                 data: bytes,
@@ -140,11 +189,14 @@ nonisolated final class VectorTileClient: Sendable {
         }
     }
 
-    /// One archive tile: kept, already being fetched, or fetched now.
-    private func archiveTile(_ tile: VectorTileAddress, from source: VectorTileSource) async -> Fetch {
-        let task = state.withLock { state -> Task<Fetch, Never>? in
-            if state.kept[tile] != nil { return nil }
-            if let running = state.inFlight[tile] { return running }
+    /// One archive tile: kept, already being fetched, or fetched now unless
+    /// the server is being passed over.
+    private func lookUp(_ tile: VectorTileAddress, from source: VectorTileSource) -> Lookup {
+        let paused = isPaused
+        return state.withLock { state -> Lookup in
+            if let bytes = state.kept[tile] { return .kept(bytes) }
+            if let running = state.inFlight[tile] { return .fetching(running) }
+            if paused { return .paused }
             let task = Task { [weak self] () -> Fetch in
                 guard let self else { return .missing }
                 let fetched = await request(tile, from: source)
@@ -152,12 +204,8 @@ nonisolated final class VectorTileClient: Sendable {
                 return fetched
             }
             state.inFlight[tile] = task
-            return task
+            return .fetching(task)
         }
-        guard let task else {
-            return state.withLock { $0.kept[tile] }.map(Fetch.tile) ?? .missing
-        }
-        return await task.value
     }
 
     private func finish(_ tile: VectorTileAddress, with fetched: Fetch) {
@@ -176,7 +224,7 @@ nonisolated final class VectorTileClient: Sendable {
                 // Two requests can fail together, and the one that comes back
                 // last must not cut short the longer wait the first was told.
                 state.pausedUntil = max(state.pausedUntil ?? instant, instant + pause)
-            case .missing:
+            case .missing, .offline:
                 break
             }
         }
@@ -204,9 +252,26 @@ nonisolated final class VectorTileClient: Sendable {
             let reason = error.localizedDescription
             Self.logger.error("Vector tile \(url, privacy: .public) failed: \(reason, privacy: .public)")
             #endif
-            return .unavailable(pause: Self.failurePause)
+            return Self.outcome(of: error)
         }
     }
+
+    /// A request that failed before any response, read as the server's
+    /// failure or the device's.
+    static func outcome(of error: any Error) -> Fetch {
+        guard let failure = error as? URLError, deviceFailures.contains(failure.code) else {
+            return .unavailable(pause: failurePause)
+        }
+        return .offline
+    }
+
+    /// The failures of the device's own connection: no route at all, a
+    /// connection dropped as the phone moved between networks, and cellular
+    /// data refused to the app, abroad or during a call. A timeout is not
+    /// among them: a server that hangs times out too.
+    private static let deviceFailures: Set<URLError.Code> = [
+        .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed, .internationalRoamingOff, .callIsActive,
+    ]
 
     /// A response read as the server's health and the tile's: a tile, a tile
     /// that is not there, or a server to pass over, for ``failurePause`` or

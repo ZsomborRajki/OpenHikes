@@ -52,7 +52,9 @@ nonisolated enum VectorTileLabels {
 
     /// The names `tile` offers at `target`'s zoom whose points lie inside
     /// `bounds`, most important first. A point outside is another tile's to
-    /// name, which is what keeps a name from being placed twice.
+    /// name, which is what keeps a name from being placed twice. A name the
+    /// archive offers before its style's first zoom waits for that zoom: set
+    /// at no size, Core Text would set it at its own.
     /// - Parameter height: a height in meters as the reader reads one.
     static func candidates(
         in tile: MapboxVectorTile,
@@ -63,11 +65,14 @@ nonisolated enum VectorTileLabels {
         height: (Double) -> String
     ) -> [Candidate] {
         var found: [Candidate] = []
-        for layerName in ["places", "pois"] {
+        // A lake's name stands in `water`; a pond's often in `pois`, and in
+        // `water` too a few zooms deeper.
+        for layerName in ["places", "pois", "water"] {
             guard let layer = tile.layers[layerName] else { continue }
             let geometry = VectorTileGeometry(extent: layer.extent, source: source, target: target)
             for feature in layer.features where feature.type == .point {
                 guard let category = category(of: feature, in: layerName),
+                      VectorTileLabelStyle.look(of: category).size.value(at: target.z) > 0,
                       let name = name(of: feature, language: language),
                       Double(target.z) >= feature.number("min_zoom") ?? 0
                 else { continue }
@@ -84,7 +89,10 @@ nonisolated enum VectorTileLabels {
                 }
             }
         }
-        return found.sorted(by: precedes)
+        var namedWater: Set<String> = []
+        return found.sorted(by: precedes).filter { candidate in
+            candidate.category != .water || namedWater.insert(candidate.name).inserted
+        }
     }
 
     /// The name in `language`, or the local one.
@@ -97,9 +105,13 @@ nonisolated enum VectorTileLabels {
         of feature: MapboxVectorTile.Feature,
         in layerName: String
     ) -> VectorTileLabelStyle.Category? {
-        layerName == "places"
-            ? .place(kind: feature.string("kind"), detail: feature.string("kind_detail"))
-            : .poi(kind: feature.string("kind"))
+        let kind = feature.string("kind")
+        let detail = feature.string("kind_detail")
+        return switch layerName {
+        case "places": .place(kind: kind, detail: detail)
+        case "water": .water(kind: kind, detail: detail)
+        default: .poi(kind: kind)
+        }
     }
 
     /// Places by the archive's own `sort_key`, the larger place first; the

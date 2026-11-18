@@ -93,13 +93,27 @@ struct VectorTileLineLabelsTests {
         #expect(letters.isEmpty)
     }
 
-    @Test("spots are tried from the middle of the line outward")
-    func spotsFromTheMiddle() {
-        let spots = VectorTileLineLabels.centers(length: 100, width: 20, step: 20)
+    /// Measured from the line's middle, so every tile cut from one archive
+    /// tile tries the same marks, and slid no further than a quarter of the
+    /// spacing either way, so names at neighbouring marks keep the spacing.
+    @Test("marks stand at the middle and further along either side, each sliding a little")
+    func marksFromTheMiddle() {
+        let marks = VectorTileLineLabels.marks(length: 1000, width: 400, spacing: 200, step: 20)
 
-        #expect(spots.first == 50)
-        #expect(spots.dropFirst().allSatisfy { $0 >= 10 && $0 <= 90 })
-        #expect(VectorTileLineLabels.centers(length: 10, width: 20, step: 5).isEmpty)
+        #expect(marks.map(\.distance) == [500, 200, 800])
+        #expect(marks.first?.spots == [500, 520, 480, 540, 460])
+        #expect(marks.allSatisfy { mark in mark.spots.allSatisfy { abs($0 - mark.distance) <= 50 } })
+        #expect(marks.last?.spots == [800, 780, 760], "no spot runs the name off the line")
+        #expect(VectorTileLineLabels.marks(length: 10, width: 20, spacing: 200, step: 5).isEmpty)
+    }
+
+    /// Hebrew and Arabic are written right to left, and a name is set one
+    /// character at a time from the left: the characters go in page order.
+    @Test("a right-to-left name is set in the order it stands on the page")
+    func rightToLeftNames() {
+        #expect(VectorTileLineLabels.visualOrder(of: "אבג") == ["ג", "ב", "א"])
+        #expect(VectorTileLineLabels.visualOrder(of: "רחוב 12") == ["1", "2", " ", "ב", "ו", "ח", "ר"])
+        #expect(VectorTileLineLabels.visualOrder(of: "Utca 12") == ["U", "t", "c", "a", " ", "1", "2"])
     }
 
     // MARK: Choosing
@@ -125,6 +139,23 @@ struct VectorTileLineLabelsTests {
         #expect(lines.first { $0.name == "Pernerweg" }?.category == .path)
     }
 
+    /// The archive files a living street as `other`, the kind it gives every
+    /// highway it has no kind for.
+    @Test("a living street carries its name as a street does; other highways the archive has no kind for do not")
+    func livingStreetIsNamed() throws {
+        let decoded = try VectorTileFixture.decoded([
+            .init(name: "roads", features: [
+                road("other", "Seestraße", from: (0, 2048), to: (4096, 2048), detail: "living_street"),
+                road("other", "Busspur", from: (0, 1000), to: (4096, 1000), detail: "busway"),
+            ]),
+        ])
+
+        let lines = VectorTileLineLabels.lines(in: decoded, source: tile, target: tile, language: "de")
+
+        #expect(lines.map(\.name) == ["Seestraße"])
+        #expect(lines.first?.category == .minorRoad)
+    }
+
     @Test("a side street waits for zoom 15 to carry its name")
     func sideStreetsWait() throws {
         let decoded = try VectorTileFixture.decoded([
@@ -142,7 +173,7 @@ struct VectorTileLineLabelsTests {
         let street = VectorTileLineLabels.NamedLine(
             category: .minorRoad,
             name: "Utca",
-            points: [CGPoint(x: -100, y: 256), CGPoint(x: 612, y: 256)]
+            points: [CGPoint(x: -500, y: 256), CGPoint(x: 712, y: 256)]
         )
         let layout = VectorTileLineLabels.Layout(
             [street],
@@ -154,6 +185,28 @@ struct VectorTileLineLabelsTests {
         )
 
         #expect(layout.count >= 2)
+    }
+
+    /// A line's marks are measured from its middle, which lies on the tile
+    /// beside: that tile names it.
+    @Test("a mark outside the tile is left to the tile it stands on")
+    func marksOutsideAreLeft() {
+        let street = VectorTileLineLabels.NamedLine(
+            category: .minorRoad,
+            name: "Utca",
+            points: [CGPoint(x: 400, y: 256), CGPoint(x: 700, y: 256)]
+        )
+
+        let layout = VectorTileLineLabels.Layout(
+            [street],
+            z: tile.z,
+            unit: 2,
+            bounds: bounds,
+            occupied: [],
+            language: "hu"
+        )
+
+        #expect(layout.count == 0)
     }
 
     @Test("a street's name stays off the room a point's name took")
