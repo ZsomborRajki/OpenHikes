@@ -86,11 +86,26 @@ struct VectorTileFallbackTests {
     func offlineDeviceDoesNotFallBack() async {
         let stub = StubbedTileCache(vectorSources: sources)
         defer { stub.tearDown() }
-        script(vector: .init(failure: URLError(.networkConnectionLost)))
+        script(vector: .init(failure: URLError(.notConnectedToInternet)))
 
         #expect(await stub.cache.loadTile(forKey: key, url: rasterURL) == nil)
         #expect(hosts == [vectorHost])
         #expect(!stub.isBrowsed(key))
+    }
+
+    /// A lost connection can be the server's doing: one that drops every
+    /// connection is failing, and the raster template draws its tile.
+    @Test("a connection lost twice hands the tile to the raster template")
+    func lostConnectionFallsBack() async throws {
+        let stub = StubbedTileCache(vectorSources: sources)
+        defer { stub.tearDown() }
+        script(vector: .init(failure: URLError(.networkConnectionLost)))
+
+        let image = try #require(await stub.cache.loadTile(forKey: key, url: rasterURL))
+
+        #expect(image.cgImage?.width != VectorTileRasterizer.pixelSize, "the raster tile, not a drawn one")
+        #expect(hosts == [vectorHost, vectorHost, rasterURL.host()], "asked again once, then handed over")
+        #expect(stub.isBrowsed(key))
     }
 
     @Test("a tile the archive does not have falls back to the raster template")
