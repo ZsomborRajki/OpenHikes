@@ -7130,7 +7130,6 @@
         }
       ],
       "detail" : "audioguide",
-      "elevation" : true,
       "feature" : "tourism_information",
       "kind" : "information",
       "lowPriority" : false
@@ -7151,7 +7150,6 @@
         }
       ],
       "detail" : "board",
-      "elevation" : true,
       "feature" : "tourism_information",
       "kind" : "information",
       "lowPriority" : false
@@ -7215,7 +7213,6 @@
         }
       ],
       "detail" : "office",
-      "elevation" : true,
       "feature" : "tourism_information",
       "kind" : "information",
       "lowPriority" : false
@@ -7247,7 +7244,6 @@
         }
       ],
       "detail" : "map",
-      "elevation" : true,
       "feature" : "tourism_information",
       "kind" : "information",
       "lowPriority" : false
@@ -7279,7 +7275,6 @@
         }
       ],
       "detail" : "tactile_map",
-      "elevation" : true,
       "feature" : "tourism_information",
       "kind" : "information",
       "lowPriority" : false
@@ -7311,7 +7306,6 @@
         }
       ],
       "detail" : "terminal",
-      "elevation" : true,
       "feature" : "tourism_information",
       "kind" : "information",
       "lowPriority" : false

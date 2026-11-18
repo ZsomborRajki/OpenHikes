@@ -106,6 +106,20 @@ struct VectorTilePointStyleTests {
         #expect(icon(nil) == nil)
     }
 
+    /// Carto's query writes the height of a guidepost alone among the
+    /// information points, and the extras carry every one's `ele`.
+    @Test("of the information points, only a guidepost is labeled with its height")
+    func onlyGuidepostsShowTheirHeight() {
+        let showsHeight = { (type: String) in
+            style.look(kind: "information", detail: type, named: true, z: 19)?.showsElevation
+        }
+
+        #expect(showsHeight("guidepost") == true)
+        #expect(showsHeight("board") == false)
+        #expect(showsHeight("office") == false)
+        #expect(showsHeight("map") == false)
+    }
+
     /// A gate the extras bring is a barrier on a path, though an airport's
     /// gate goes by the same value.
     @Test("a gate is a barrier, and an office is Carto's office dot")

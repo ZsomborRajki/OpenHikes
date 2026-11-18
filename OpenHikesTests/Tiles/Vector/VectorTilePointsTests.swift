@@ -34,6 +34,18 @@ struct VectorTilePointsTests {
         #expect(points.map(\.lines) == [["Kogel", "1200 m"], ["MOL"]])
     }
 
+    /// Two summits on the Dachstein's tile 13/4405/2865 have no name, and
+    /// openstreetmap.org writes their heights alone under them.
+    @Test("an unnamed summit is labeled with its height alone, and one with neither keeps its icon")
+    func unnamedSummitShowsItsHeight() throws {
+        let points = try candidates([
+            poi(["kind": .string("peak"), "elevation": .double(1888)]),
+            poi(["kind": .string("peak")], at: (grid / 4, grid / 4)),
+        ])
+
+        #expect(points.map(\.lines) == [["1888 m"], []])
+    }
+
     @Test("the higher summit claims room first, as Carto orders them")
     func higherSummitFirst() throws {
         let points = try candidates([
