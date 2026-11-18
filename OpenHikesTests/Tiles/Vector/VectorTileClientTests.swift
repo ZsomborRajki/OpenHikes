@@ -106,7 +106,7 @@ struct VectorTileClientTests {
         StubTileProtocol.alwaysRespond(with: response)
 
         #expect(await client.drawing(forKey: "osm/14/8800/5700") == .fallBack)
-        #expect(client.isPaused)
+        #expect(client.isPaused(source.archiveURL))
         #expect(await client.drawing(forKey: "osm/14/8801/5700") == .fallBack)
         #expect(StubTileProtocol.requestCount == 1, "the next tile goes straight to the fallback")
 
@@ -146,8 +146,8 @@ struct VectorTileClientTests {
     /// asks it again, and the raster template is not asked in its place.
     @Test("a failure of the device's own connection pauses nothing and falls back to nothing", arguments: [
         URLError.Code.notConnectedToInternet,
-        .networkConnectionLost,
         .dataNotAllowed,
+        .internationalRoamingOff,
     ])
     func offlineIsNotTheServers(code: URLError.Code) async {
         let client = makeClient()
@@ -155,7 +155,7 @@ struct VectorTileClientTests {
         StubTileProtocol.alwaysRespond(with: .init(failure: URLError(code)))
 
         #expect(await client.drawing(forKey: "osm/14/8800/5700") == .offline)
-        #expect(!client.isPaused)
+        #expect(!client.isPaused(source.archiveURL))
         StubTileProtocol.alwaysRespond(with: .init(data: landTile))
 
         #expect(await client.drawing(forKey: "osm/14/8801/5700").png != nil)
@@ -172,7 +172,7 @@ struct VectorTileClientTests {
         #expect(await client.drawing(forKey: "osm/17/70400/45600").png != nil)
         StubTileProtocol.alwaysRespond(with: .status(503))
         #expect(await client.drawing(forKey: "osm/15/17601/11400") == .fallBack)
-        #expect(client.isPaused)
+        #expect(client.isPaused(source.archiveURL))
 
         #expect(await client.drawing(forKey: "osm/17/70403/45603").png != nil)
         #expect(StubTileProtocol.requestCount == 2, "drawn from the archive tile already held")
@@ -192,7 +192,7 @@ struct VectorTileClientTests {
         StubTileProtocol.alwaysRespond(with: response)
 
         #expect(await client.drawing(forKey: "osm/14/8800/5700") == .fallBack)
-        #expect(!client.isPaused)
+        #expect(!client.isPaused(source.archiveURL))
         #expect(await client.drawing(forKey: "osm/14/8801/5700") == .fallBack)
         #expect(StubTileProtocol.requestCount == 2)
     }
@@ -225,11 +225,14 @@ struct VectorTileClientTests {
     }
 
     /// The extras add to the map and are never its reason to fall back: where
-    /// they have nothing, or their request fails, the basemap is drawn alone.
+    /// they have nothing, their request fails or the device loses it, the
+    /// basemap is drawn alone.
     @Test("extras the server does not have, or fails to give, leave the basemap drawn", arguments: [
         StubTileProtocol.Response(statusCode: 204),
         StubTileProtocol.Response.status(404),
         StubTileProtocol.Response.undecodable(),
+        StubTileProtocol.Response.status(503),
+        StubTileProtocol.Response(failure: URLError(.notConnectedToInternet)),
     ])
     func missingExtrasLeaveTheBasemap(response: StubTileProtocol.Response) async {
         let client = makeClient(source: sourceWithExtras)
@@ -238,7 +241,7 @@ struct VectorTileClientTests {
         StubTileProtocol.respond { url in url.path.hasPrefix("/extras") ? response : land }
 
         #expect(await client.drawing(forKey: "osm/15/17600/11400").png != nil)
-        #expect(!client.isPaused)
+        #expect(!client.isPaused(source.archiveURL))
     }
 
     @Test("a failed request is the server's, unless the device's connection failed")
@@ -246,18 +249,24 @@ struct VectorTileClientTests {
         #expect(VectorTileClient.outcome(of: URLError(.notConnectedToInternet)) == .offline)
         #expect(VectorTileClient.outcome(of: URLError(.timedOut)) == .unavailable(pause: VectorTileClient.failurePause))
         #expect(
+            VectorTileClient.outcome(of: URLError(.networkConnectionLost))
+                == .unavailable(pause: VectorTileClient.failurePause),
+            "a server can drop a connection too"
+        )
+        #expect(
             VectorTileClient.outcome(of: URLError(.cannotConnectToHost))
                 == .unavailable(pause: VectorTileClient.failurePause)
         )
     }
 
-    @Test("a response is read as a tile, a missing tile, or a server to pass over")
+    @Test("a response is read as a tile, a missing tile, a refused one, or a server to pass over")
     func outcomes() {
         let body = Data([1])
         #expect(VectorTileClient.outcome(status: 200, data: body) == .tile(body))
         #expect(VectorTileClient.outcome(status: 200, data: Data()) == .missing)
         #expect(VectorTileClient.outcome(status: 204, data: Data()) == .missing)
         #expect(VectorTileClient.outcome(status: 404, data: body) == .missing)
+        #expect(VectorTileClient.outcome(status: 403, data: body) == .refused)
         #expect(VectorTileClient.outcome(status: 429, data: body) == .unavailable(pause: VectorTileClient.failurePause))
         #expect(VectorTileClient.outcome(status: 502, data: body) == .unavailable(pause: VectorTileClient.failurePause))
     }
@@ -277,11 +286,136 @@ struct VectorTileClientTests {
     }
 }
 
+// MARK: What is kept, and what is passed over
+
+extension VectorTileClientTests {
+    /// An archive is passed over for its own failure: the extras failing
+    /// leave the basemap asked, for a tile they add to and for one too wide
+    /// for them.
+    @Test("failing extras pass over the extras alone")
+    func failingExtrasPassOverOnlyTheExtras() async throws {
+        let withExtras = sourceWithExtras
+        let extrasArchive = try #require(withExtras.extras?.archiveURL)
+        let client = makeClient(source: withExtras)
+        defer { StubTileProtocol.reset() }
+        let land = StubTileProtocol.Response(data: landTile)
+        StubTileProtocol.respond { url in url.path.hasPrefix("/extras") ? .status(503) : land }
+
+        #expect(await client.drawing(forKey: "osm/15/17600/11400").png != nil)
+        #expect(client.isPaused(extrasArchive))
+        #expect(!client.isPaused(source.archiveURL))
+        #expect(await client.drawing(forKey: "osm/13/4400/2850").png != nil)
+        #expect(await client.drawing(forKey: "osm/15/17601/11400").png != nil)
+
+        let paths = StubTileProtocol.requests.compactMap { $0.url?.path }
+        #expect(Set(paths.prefix(2)) == ["/planet/15/17600/11400.mvt", "/extras/15/17600/11400.mvt"])
+        #expect(
+            Array(paths.dropFirst(2)) == ["/planet/13/4400/2850.mvt", "/planet/15/17601/11400.mvt"],
+            "the basemap is still asked, and the extras are not"
+        )
+    }
+
+    /// The tile server answers 204 inside an archive's zooms where it has
+    /// nothing, and 404 outside them, which is most of the extras' tiles. The
+    /// answer is kept as a tile is, so the sixteen tiles of zoom 17 inside one
+    /// of zoom 15 ask once between them.
+    @Test("extras with nothing there are asked for once between the tiles they would add to", arguments: [
+        StubTileProtocol.Response(statusCode: 204),
+        StubTileProtocol.Response.status(404),
+    ])
+    func emptyExtrasAreKept(response: StubTileProtocol.Response) async {
+        let client = makeClient(source: sourceWithExtras)
+        defer { StubTileProtocol.reset() }
+        let land = StubTileProtocol.Response(data: landTile)
+        StubTileProtocol.respond { url in url.path.hasPrefix("/extras") ? response : land }
+
+        for x in 70_400...70_403 {
+            for y in 45_600...45_603 {
+                #expect(await client.drawing(forKey: "osm/17/\(x)/\(y)").png != nil)
+            }
+        }
+        #expect(StubTileProtocol.requestCount == 2)
+    }
+
+    @Test("a basemap the archive does not have is kept, and its tiles fall back without asking again")
+    func missingBasemapIsKept() async {
+        let client = makeClient()
+        defer { StubTileProtocol.reset() }
+        StubTileProtocol.alwaysRespond(with: .init(statusCode: 204))
+
+        #expect(await client.drawing(forKey: "osm/17/70400/45600") == .fallBack)
+        #expect(await client.drawing(forKey: "osm/17/70403/45603") == .fallBack)
+        #expect(StubTileProtocol.requestCount == 1)
+    }
+
+    /// A refusal says nothing of what the archive holds, so the next tile
+    /// asks again.
+    @Test("a refused tile is not kept")
+    func refusedTileIsNotKept() async {
+        let client = makeClient()
+        defer { StubTileProtocol.reset() }
+        StubTileProtocol.alwaysRespond(with: .status(403))
+
+        #expect(await client.drawing(forKey: "osm/17/70400/45600") == .fallBack)
+        #expect(await client.drawing(forKey: "osm/17/70403/45603") == .fallBack)
+        #expect(StubTileProtocol.requestCount == 2)
+        #expect(!client.isPaused(source.archiveURL))
+    }
+
+    /// An HTML page served once in place of a tile, by a proxy or a server
+    /// in trouble, is not kept for the tiles that share it: the next one asks
+    /// again, and is drawn from what comes back.
+    @Test("bytes that could not be read are not kept", arguments: ["/planet", "/extras"])
+    func unreadableBytesAreNotKept(archive: String) async {
+        let client = makeClient(source: sourceWithExtras)
+        defer { StubTileProtocol.reset() }
+        let land = StubTileProtocol.Response(data: landTile)
+        let answers = ScriptedAnswers([.undecodable()], then: land)
+        StubTileProtocol.respond { url in url.path.hasPrefix(archive) ? answers.next() : land }
+
+        let first = await client.drawing(forKey: "osm/17/70400/45600")
+        #expect((first.png != nil) == (archive == "/extras"), "unreadable extras leave the basemap drawn")
+        #expect(await client.drawing(forKey: "osm/17/70403/45603").png != nil)
+        #expect(StubTileProtocol.requests.filter { $0.url?.path.hasPrefix(archive) == true }.count == 2)
+        #expect(StubTileProtocol.requestCount == 3)
+    }
+
+    /// A lost connection can be the server closing one that was idle, and a
+    /// request that can be repeated is asked again at once (QA1941).
+    @Test("a connection lost mid-request is asked again at once")
+    func lostConnectionIsAskedAgain() async {
+        let client = makeClient()
+        defer { StubTileProtocol.reset() }
+        let answers = ScriptedAnswers([.init(failure: URLError(.networkConnectionLost))], then: .init(data: landTile))
+        StubTileProtocol.respond { _ in answers.next() }
+
+        #expect(await client.drawing(forKey: "osm/14/8800/5700").png != nil)
+        #expect(StubTileProtocol.requestCount == 2)
+        #expect(!client.isPaused(source.archiveURL))
+    }
+}
+
 nonisolated private extension VectorTileClient.Drawing {
     /// The drawn tile, if this is one.
     var png: Data? {
         guard case let .png(data) = self else { return nil }
         return data
+    }
+}
+
+/// Stub answers given in turn, and the last one from then on. The stub asks
+/// under its own lock, so the turn is kept under another.
+nonisolated private final class ScriptedAnswers: Sendable {
+    private let answers: Mutex<[StubTileProtocol.Response]>
+    private let last: StubTileProtocol.Response
+
+    init(_ first: [StubTileProtocol.Response], then last: StubTileProtocol.Response) {
+        answers = Mutex(first)
+        self.last = last
+    }
+
+    func next() -> StubTileProtocol.Response {
+        answers.withLock { $0.isEmpty ? last : $0.removeFirst() }
     }
 }
 

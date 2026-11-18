@@ -1158,7 +1158,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
     them beside the basemap under a new name each time, signing with R2 keys
     kept outside the repository. The app asks for their tile beside the
     basemap's from zoom 14. They add to the map and are never its reason to
-    fall back: a tile they lack or fail to give leaves the basemap drawn.
+    fall back: a tile they lack, fail to give or cannot read, or one the
+    device loses on the way, leaves the basemap drawn.
   - **Names are drawn into the tile.**
     - **Place names** (`VectorTileLabels`): places, lakes and glaciers.
       Summits, passes and huts are points, named under their icons with their
@@ -1184,11 +1185,15 @@ a change to recording, the map, the sheet or the render path; the PR template,
       or region shows only as tiles are fetched again.
   - **Fallback.** Wherever the server cannot answer — it is down or failing,
     or it has no tile there — the tile comes from `tile.openstreetmap.org` as
-    before. A failing server is passed over for a minute, or for as long as
-    its `Retry-After` asks, within `RetryAfterHeader`'s ceiling. A failure of
-    the device's own connection falls back to nothing: the load fails and is
-    tried again, rather than filing a raster tile among the drawn ones for a
-    week.
+    before. A failing archive is passed over for a minute, or for as long as
+    its `Retry-After` asks, within `RetryAfterHeader`'s ceiling, and only that
+    archive: the extras failing leave the basemap asked. An archive's answer
+    that it has nothing at a tile is kept as its tiles are, so the deeper
+    tiles inside it ask once, and bytes that could not be read are not kept.
+    A failure of the device's own connection falls back to nothing: the load
+    fails and is tried again, rather than filing a raster tile among the
+    drawn ones for a week. A connection lost mid-request is asked again at
+    once, and lost twice it is the server's.
   - **openstreetmap.org stands beside it while the style is new.**
     `TileProvider.openStreetMapRaster` (`osm_raster`), the fourth card on
     *Map Modes*, draws the OSMF's raster tiles alone, so the two can be
