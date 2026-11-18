@@ -1,0 +1,407 @@
+//
+//  VectorTileLineLabels.swift
+//  OpenHikes
+//
+//  Names along lines: streets, paths, tracks, cable cars and rivers, set
+//  letter by letter along the line they name.
+//
+//  The archive splits a street wherever its tags change, so a street arrives
+//  as many short ways. Pieces with the same name that meet end to end are
+//  joined first, which is what leaves room for the name. A name reads left to
+//  right whichever way the line was drawn, follows bends up to
+//  ``VectorTileLabelStyle/lineNameBend`` from one letter to the next, and is
+//  moved along the line, or left out, where it would bend more, cross the
+//  tile's edge or touch another name. A long line repeats its name every
+//  ``VectorTileLabelStyle/lineNameRepeat``. Point names claim their room
+//  first, so a street name never covers a district's or a summit's.
+//
+
+import CoreGraphics
+import CoreText
+import Foundation
+
+nonisolated enum VectorTileLineLabels {
+    /// One or more of the archive's ways, joined end to end, in the picture's
+    /// pixels.
+    struct NamedLine: Equatable {
+        let category: VectorTileLabelStyle.LineCategory
+        let name: String
+        let points: [CGPoint]
+        /// Measured once, because placing and ordering both read it.
+        let length: CGFloat
+
+        init(category: VectorTileLabelStyle.LineCategory, name: String, points: [CGPoint]) {
+            self.category = category
+            self.name = name
+            self.points = points
+            length = VectorTileLineLabels.length(of: points)
+        }
+    }
+
+    /// Where one letter goes: its centre, and the line's direction there.
+    struct Letter: Equatable {
+        let center: CGPoint
+        let angle: CGFloat
+    }
+
+    // MARK: Choosing
+
+    /// The named lines `tile` offers at `target`'s zoom, joined, most
+    /// important first and the longer first within a category.
+    static func lines(
+        in tile: MapboxVectorTile,
+        source: VectorTileAddress,
+        target: VectorTileAddress,
+        language: String
+    ) -> [NamedLine] {
+        var pieces: [NamedLineKey: [[CGPoint]]] = [:]
+        for layerName in ["roads", "water"] {
+            guard let layer = tile.layers[layerName] else { continue }
+            let geometry = VectorTileGeometry(extent: layer.extent, source: source, target: target)
+            for feature in layer.features where feature.type == .line {
+                let kind = feature.string("kind")
+                let detail = feature.string("kind_detail")
+                guard let category = VectorTileLabelStyle.LineCategory.line(in: layerName, kind: kind, detail: detail),
+                      target.z >= VectorTileLabelStyle.look(of: category).minimumZ,
+                      let name = VectorTileLabels.name(of: feature, language: language)
+                else { continue }
+                pieces[NamedLineKey(category: category, name: name), default: []] += geometry.lines(of: feature)
+            }
+        }
+        let lines = pieces.flatMap { key, parts in
+            joined(parts).map { NamedLine(category: key.category, name: key.name, points: $0) }
+        }
+        return lines.sorted(by: precedes)
+    }
+
+    /// `parts` joined wherever one ends where another begins or ends, which
+    /// is how a street the archive split comes back whole.
+    static func joined(_ parts: [[CGPoint]]) -> [[CGPoint]] {
+        var remaining = parts.filter { $0.count > 1 }
+        var lines: [[CGPoint]] = []
+        while var line = remaining.popLast() {
+            while let index = remaining.firstIndex(where: { touches($0, line) }) {
+                line = attach(remaining.remove(at: index), to: line)
+            }
+            lines.append(line)
+        }
+        return lines
+    }
+
+    // MARK: Setting letters
+
+    /// The letters of a name `advances` wide, centred at `middle` along
+    /// `points`, reading left to right: along the line, or along it reversed
+    /// where it was drawn leftward. Empty where the name runs off the line or
+    /// turns more than `maximumBend` from one letter to the next.
+    static func letters(
+        along points: [CGPoint],
+        advances: [CGFloat],
+        centeredAt middle: CGFloat,
+        maximumBend: CGFloat
+    ) -> [Letter] {
+        letters(
+            along: MeasuredPath(points),
+            reversed: MeasuredPath(points.reversed()),
+            advances: advances,
+            centeredAt: middle,
+            maximumBend: maximumBend
+        )
+    }
+
+    /// ``letters(along:advances:centeredAt:maximumBend:)`` on a line measured
+    /// once, both ways, for the many spots tried along it.
+    private static func letters(
+        along path: MeasuredPath,
+        reversed: MeasuredPath,
+        advances: [CGFloat],
+        centeredAt middle: CGFloat,
+        maximumBend: CGFloat
+    ) -> [Letter] {
+        let total = advances.reduce(0, +)
+        let start = middle - total / 2
+        guard start >= 0, middle + total / 2 <= path.length else { return [] }
+        guard path.point(at: start + total).x < path.point(at: start).x else {
+            return letters(on: path, advances: advances, from: start, maximumBend: maximumBend)
+        }
+        return letters(on: reversed, advances: advances, from: path.length - start - total, maximumBend: maximumBend)
+    }
+
+    private static func letters(
+        on path: MeasuredPath,
+        advances: [CGFloat],
+        from start: CGFloat,
+        maximumBend: CGFloat
+    ) -> [Letter] {
+        var letters: [Letter] = []
+        var distance = start
+        for advance in advances {
+            let before = path.point(at: distance)
+            let after = path.point(at: distance + advance)
+            let angle = advance > 0 ? atan2(after.y - before.y, after.x - before.x) : letters.last?.angle ?? 0
+            if let previous = letters.last, abs(turn(from: previous.angle, to: angle)) > maximumBend { return [] }
+            letters.append(Letter(center: path.point(at: distance + advance / 2), angle: angle))
+            distance += advance
+        }
+        return letters
+    }
+
+    /// Where along a line `length` long a name `width` wide is tried: the
+    /// middle first, then outward in steps, so the first name sits central
+    /// and the later ones are its repeats.
+    static func centers(length: CGFloat, width: CGFloat, step: CGFloat) -> [CGFloat] {
+        guard width <= length, step > 0 else { return [] }
+        let middle = length / 2
+        let along = Array(stride(from: width / 2, through: length - width / 2, by: step)) + [middle]
+        return along.sorted { abs($0 - middle) < abs($1 - middle) }
+    }
+
+    static func length(of points: [CGPoint]) -> CGFloat {
+        MeasuredPath(points).length
+    }
+
+    // MARK: Helpers
+
+    private struct NamedLineKey: Hashable {
+        let category: VectorTileLabelStyle.LineCategory
+        let name: String
+    }
+
+    /// Ends closer than this are one point: the archive gives both ways the
+    /// node they share, and only rounding parts them.
+    private static let joinTolerance: CGFloat = 0.5
+
+    /// More important first, then longer, then by name and place, so every
+    /// tile settles a tie the same way.
+    private static func precedes(_ lhs: NamedLine, _ rhs: NamedLine) -> Bool {
+        if lhs.category != rhs.category { return lhs.category < rhs.category }
+        if lhs.length != rhs.length { return lhs.length > rhs.length }
+        if lhs.name != rhs.name { return lhs.name < rhs.name }
+        let lhsStart = lhs.points.first ?? .zero
+        let rhsStart = rhs.points.first ?? .zero
+        return (lhsStart.x, lhsStart.y) < (rhsStart.x, rhsStart.y)
+    }
+
+    private static func close(_ lhs: CGPoint?, _ rhs: CGPoint?) -> Bool {
+        guard let lhs, let rhs else { return false }
+        return abs(lhs.x - rhs.x) <= joinTolerance && abs(lhs.y - rhs.y) <= joinTolerance
+    }
+
+    private static func touches(_ part: [CGPoint], _ line: [CGPoint]) -> Bool {
+        close(part.first, line.last) || close(part.last, line.last) || close(part.last, line.first)
+            || close(part.first, line.first)
+    }
+
+    private static func attach(_ part: [CGPoint], to line: [CGPoint]) -> [CGPoint] {
+        if close(part.first, line.last) { return line + part.dropFirst() }
+        if close(part.last, line.last) { return line + part.reversed().dropFirst() }
+        if close(part.last, line.first) { return part + line.dropFirst() }
+        return part.reversed() + line.dropFirst()
+    }
+
+    /// The signed turn from one direction to another, between -π and π.
+    private static func turn(from: CGFloat, to: CGFloat) -> CGFloat {
+        var difference = to - from
+        while difference > .pi { difference -= 2 * .pi }
+        while difference < -.pi { difference += 2 * .pi }
+        return difference
+    }
+}
+
+// MARK: - Drawing
+
+nonisolated extension VectorTileLineLabels {
+    /// The line names placed on one tile, set and ready to draw.
+    struct Layout {
+        private let names: [SetName]
+
+        /// How many names were placed, repeats included.
+        var count: Int { names.count }
+
+        /// A letter's width as a share of its size, at its narrowest: no name
+        /// is narrower than this many sizes per character.
+        private static let narrowestLetter: CGFloat = 0.25
+
+        /// `lines`, in order, each at as many places along it as fit: inside
+        /// `bounds`, clear of `occupied` and of each other, and no nearer the
+        /// same name than ``VectorTileLabelStyle/lineNameRepeat``.
+        init(
+            _ lines: [NamedLine],
+            z: Int,
+            unit: CGFloat,
+            bounds: CGRect,
+            occupied: [CGRect],
+            language: String
+        ) {
+            let spacing = VectorTileLabelStyle.spacing * unit
+            var room = Room(
+                inner: bounds.insetBy(dx: spacing, dy: spacing),
+                spacing: spacing,
+                repeatDistance: VectorTileLabelStyle.lineNameRepeat * unit,
+                taken: occupied.map { $0.insetBy(dx: -spacing, dy: -spacing) }
+            )
+            var placed: [SetName] = []
+            var texts: [String: SetText] = [:]
+            for line in lines {
+                let look = VectorTileLabelStyle.look(of: line.category)
+                let size = look.size.value(at: z) * unit
+                // A name about as long as its line will not fit it, so it is
+                // never set letter by letter: most of a city's ways are that.
+                guard line.length > CGFloat(line.name.count) * size * Self.narrowestLetter else { continue }
+                let key = "\(line.category)/\(line.name)"
+                let text = texts[key] ?? SetText(line.name, size: size, look: look, language: language, unit: unit)
+                texts[key] = text
+                let spots = VectorTileLineLabels.centers(
+                    length: line.length,
+                    width: text.width,
+                    step: max(text.width / 4, spacing)
+                )
+                guard !spots.isEmpty else { continue }
+                let forward = MeasuredPath(line.points)
+                let backward = MeasuredPath(line.points.reversed())
+                for spot in spots {
+                    let letters = VectorTileLineLabels.letters(
+                        along: forward,
+                        reversed: backward,
+                        advances: text.advances,
+                        centeredAt: spot,
+                        maximumBend: VectorTileLabelStyle.lineNameBend
+                    )
+                    if room.claim(name: line.name, letters: letters, boxes: text.boxes(for: letters)) {
+                        placed.append(SetName(text: text, letters: letters))
+                    }
+                }
+            }
+            names = placed
+        }
+
+        /// Draws every name's halo, then every name's letters, so no halo
+        /// covers a letter drawn before it.
+        func draw(into context: CGContext) {
+            context.saveGState()
+            context.setLineJoin(.round)
+            for name in names { name.draw(into: context, halo: true) }
+            for name in names { name.draw(into: context, halo: false) }
+            context.restoreGState()
+        }
+    }
+}
+
+/// The room left on a tile for names along lines.
+nonisolated private struct Room {
+    let inner: CGRect
+    let spacing: CGFloat
+    let repeatDistance: CGFloat
+    var taken: [CGRect]
+    var placedAt: [String: [CGPoint]] = [:]
+
+    /// Takes the room `boxes` need for `name`, if they fit inside the tile,
+    /// touch nothing placed, and stand far enough from the same name.
+    mutating func claim(name: String, letters: [VectorTileLineLabels.Letter], boxes: [CGRect]) -> Bool {
+        guard let middle = letters.dropFirst(letters.count / 2).first?.center else { return false }
+        let nearSame = placedAt[name, default: []].contains { spot in
+            hypot(spot.x - middle.x, spot.y - middle.y) < repeatDistance
+        }
+        let fits = boxes.allSatisfy { inner.contains($0) }
+        let clear = !boxes.contains { box in taken.contains { $0.intersects(box) } }
+        guard !nearSame, fits, clear else { return false }
+        taken += boxes.map { $0.insetBy(dx: -spacing, dy: -spacing) }
+        placedAt[name, default: []].append(middle)
+        return true
+    }
+}
+
+/// A name broken into its characters, each set on its own so it can be
+/// turned to the line under it. Kerning is given up for that; at a map's
+/// sizes it does not show.
+nonisolated private struct SetText {
+    let characters: [InkedText]
+    let height: CGFloat
+    /// From a letter's centre down to its baseline, so the letters sit
+    /// centred on the line.
+    let baselineDrop: CGFloat
+
+    var advances: [CGFloat] { characters.map(\.width) }
+    var width: CGFloat { advances.reduce(0, +) }
+
+    init(_ text: String, size: CGFloat, look: VectorTileLabelStyle.LineLook, language: String, unit: CGFloat) {
+        characters = text.map { character in
+            InkedText(
+                String(character),
+                size: size,
+                color: look.color,
+                face: look.face,
+                language: language,
+                unit: unit
+            )
+        }
+        let rise = characters.map(\.ascent).max() ?? 0
+        let fall = characters.map(\.descent).max() ?? 0
+        height = rise + fall
+        baselineDrop = (rise - fall) / 2
+    }
+
+    /// Each letter's box on the picture, as wide as its advance and as tall
+    /// as the line of text, turned with the line and boxed again.
+    func boxes(for letters: [VectorTileLineLabels.Letter]) -> [CGRect] {
+        zip(characters, letters).map { character, letter in
+            CGRect(x: -character.width / 2, y: -height / 2, width: character.width, height: height)
+                .applying(
+                    CGAffineTransform(translationX: letter.center.x, y: letter.center.y).rotated(by: letter.angle)
+                )
+        }
+    }
+}
+
+/// A name set along a line.
+nonisolated private struct SetName {
+    let text: SetText
+    let letters: [VectorTileLineLabels.Letter]
+
+    func draw(into context: CGContext, halo: Bool) {
+        for (character, letter) in zip(text.characters, letters) {
+            context.saveGState()
+            context.translateBy(x: letter.center.x, y: letter.center.y)
+            context.rotate(by: letter.angle)
+            context.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
+            let baseline = CGPoint(x: -character.width / 2, y: text.baselineDrop)
+            if halo {
+                character.drawHalo(at: baseline, context: context)
+            } else {
+                character.drawInk(at: baseline, context: context)
+            }
+            context.restoreGState()
+        }
+    }
+}
+
+/// A polyline with the distance along it to each of its points.
+nonisolated private struct MeasuredPath {
+    let points: [CGPoint]
+    let distances: [CGFloat]
+
+    var length: CGFloat { distances.last ?? 0 }
+
+    init(_ points: [CGPoint]) {
+        self.points = points
+        var running: [CGFloat] = [0]
+        for (from, to) in zip(points, points.dropFirst()) {
+            running.append((running.last ?? 0) + hypot(to.x - from.x, to.y - from.y))
+        }
+        distances = running
+    }
+
+    /// The point `distance` along the line, held to its ends.
+    func point(at distance: CGFloat) -> CGPoint {
+        guard let first = points.first else { return .zero }
+        guard distance > 0 else { return first }
+        guard let index = distances.firstIndex(where: { $0 >= distance }), index > 0 else {
+            return points.last ?? first
+        }
+        let span = distances[index] - distances[index - 1]
+        let fraction = span > 0 ? (distance - distances[index - 1]) / span : 0
+        let from = points[index - 1]
+        let to = points[index]
+        return CGPoint(x: from.x + (to.x - from.x) * fraction, y: from.y + (to.y - from.y) * fraction)
+    }
+}

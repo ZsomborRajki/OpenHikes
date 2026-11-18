@@ -124,7 +124,8 @@ nonisolated private struct Painter {
         paintLabels()
     }
 
-    /// Names last, over everything they name.
+    /// Names last, over everything they name: points first, so a street's
+    /// name never takes a district's or a summit's room.
     private func paintLabels() {
         let side = CGFloat(VectorTileRasterizer.pixelSize)
         let bounds = CGRect(x: 0, y: 0, width: side, height: side)
@@ -136,7 +137,17 @@ nonisolated private struct Painter {
             language: language,
             height: height
         )
-        VectorTileLabels.Layout(candidates, z: z, unit: unit, bounds: bounds, language: language).draw(into: context)
+        let points = VectorTileLabels.Layout(candidates, z: z, unit: unit, bounds: bounds, language: language)
+        let lines = VectorTileLineLabels.Layout(
+            VectorTileLineLabels.lines(in: tile, source: source, target: target, language: language),
+            z: z,
+            unit: unit,
+            bounds: bounds,
+            occupied: points.placements.map(\.frame),
+            language: language
+        )
+        lines.draw(into: context)
+        points.draw(into: context)
     }
 
     private func paintGround() {
@@ -365,6 +376,19 @@ nonisolated struct VectorTileGeometry {
             }
         }
         return path
+    }
+
+    /// A line feature's parts, each the points of one run between moves.
+    func lines(of feature: MapboxVectorTile.Feature) -> [[CGPoint]] {
+        var lines: [[CGPoint]] = []
+        walk(feature.geometry) { command, point in
+            switch command {
+            case .moveTo: lines.append([point])
+            case .lineTo: lines[lines.count - 1].append(point)
+            case .closePath: break
+            }
+        }
+        return lines
     }
 
     /// A point feature's points.

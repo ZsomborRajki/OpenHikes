@@ -203,15 +203,7 @@ nonisolated enum VectorTileLabels {
 
 /// A name and its detail line, set in their font and measured.
 nonisolated private struct TextBlock {
-    struct Line {
-        let fill: CTLine
-        let halo: CTLine
-        let width: CGFloat
-        let ascent: CGFloat
-        let descent: CGFloat
-    }
-
-    let lines: [Line]
+    let lines: [InkedText]
 
     var size: CGSize {
         CGSize(
@@ -223,10 +215,12 @@ nonisolated private struct TextBlock {
     init(_ candidate: VectorTileLabels.Candidate, z: Int, unit: CGFloat, language: String) {
         let look = VectorTileLabelStyle.look(of: candidate.category)
         let points = look.size.value(at: z) * unit
-        var set = [Self.line(candidate.name, size: points, look: look, language: language, unit: unit)]
+        let ink = { (text: String, size: CGFloat) in
+            InkedText(text, size: size, color: look.color, face: look.face, language: language, unit: unit)
+        }
+        var set = [ink(candidate.name, points)]
         if let detail = candidate.detail {
-            let detailPoints = points * VectorTileLabelStyle.detailScale
-            set.append(Self.line(detail, size: detailPoints, look: look, language: language, unit: unit))
+            set.append(ink(detail, points * VectorTileLabelStyle.detailScale))
         }
         lines = set
     }
@@ -235,38 +229,60 @@ nonisolated private struct TextBlock {
     func draw(in frame: CGRect, context: CGContext) {
         var top = frame.minY
         for line in lines {
-            context.textPosition = CGPoint(x: frame.midX - line.width / 2, y: top + line.ascent)
-            CTLineDraw(line.halo, context)
-            context.textPosition = CGPoint(x: frame.midX - line.width / 2, y: top + line.ascent)
-            CTLineDraw(line.fill, context)
+            let baseline = CGPoint(x: frame.midX - line.width / 2, y: top + line.ascent)
+            line.drawHalo(at: baseline, context: context)
+            line.drawInk(at: baseline, context: context)
             top += line.ascent + line.descent
         }
     }
+}
 
-    private static func line(
+/// Text set in a label's font and color, with the white halo drawn around
+/// its letters, measured. Drawn into a context whose y runs down and whose
+/// text matrix flips glyphs upright.
+nonisolated struct InkedText {
+    let ink: CTLine
+    let halo: CTLine
+    let width: CGFloat
+    let ascent: CGFloat
+    let descent: CGFloat
+
+    init(
         _ text: String,
         size: CGFloat,
-        look: VectorTileLabelStyle.Look,
+        color: CGColor,
+        face: VectorTileLabelStyle.Face,
         language: String,
         unit: CGFloat
-    ) -> Line {
-        let font = VectorTileLabelStyle.font(size: size, face: look.face, language: language)
+    ) {
+        let font = VectorTileLabelStyle.font(size: size, face: face, language: language)
         let key = { (name: CFString) in NSAttributedString.Key(name as String) }
-        let fill = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [
+        ink = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [
             key(kCTFontAttributeName): font,
-            key(kCTForegroundColorAttributeName): look.color,
+            key(kCTForegroundColorAttributeName): color,
         ]))
         // A positive stroke width strokes without filling. It is a share of
         // the font's size, and half of it lies outside the letters.
         let haloPercent = 2 * VectorTileLabelStyle.haloWidth * unit / max(size, 1) * 100
-        let halo = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [
+        halo = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [
             key(kCTFontAttributeName): font,
             key(kCTStrokeColorAttributeName): VectorTileLabelStyle.halo,
             key(kCTStrokeWidthAttributeName): haloPercent,
         ]))
-        var ascent: CGFloat = 0
-        var descent: CGFloat = 0
-        let width = CGFloat(CTLineGetTypographicBounds(fill, &ascent, &descent, nil))
-        return Line(fill: fill, halo: halo, width: width, ascent: ascent, descent: descent)
+        var rise: CGFloat = 0
+        var fall: CGFloat = 0
+        width = CGFloat(CTLineGetTypographicBounds(ink, &rise, &fall, nil))
+        ascent = rise
+        descent = fall
+    }
+
+    func drawHalo(at baseline: CGPoint, context: CGContext) {
+        context.textPosition = baseline
+        CTLineDraw(halo, context)
+    }
+
+    func drawInk(at baseline: CGPoint, context: CGContext) {
+        context.textPosition = baseline
+        CTLineDraw(ink, context)
     }
 }
