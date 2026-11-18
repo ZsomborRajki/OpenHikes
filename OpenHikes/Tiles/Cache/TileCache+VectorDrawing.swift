@@ -1,11 +1,13 @@
 //
-//  TileCache+Countries.swift
+//  TileCache+VectorDrawing.swift
 //  OpenHikes
 //
-//  The downloaded countries' half of a load: a tile a country holds is drawn
-//  out of it before the network policy is asked, so it draws with no signal,
-//  and before the tile server is, so a country costs the server nothing once
-//  it is down. See ``OfflineCountryDrawing``.
+//  The providers drawn from vector tiles: which loads are, and the
+//  downloaded countries' half of a load. A tile a country holds is drawn out
+//  of it before the network policy is asked, so it draws with no signal, and
+//  before the tile server is, so a country costs the server nothing once it
+//  is down. See ``OfflineCountryDrawing``. Out of `TileCache.swift`, which is
+//  at the length the linter allows.
 //
 
 import Foundation
@@ -26,6 +28,12 @@ nonisolated extension TileCache {
             VectorTileClient(sources: sources, session: session),
             countries.map { OfflineCountryDrawing(sources: sources, archives: $0) }
         )
+    }
+
+    /// Whether a load of `key` asks the OpenHikes tile server for a vector
+    /// tile before the provider's raster template.
+    func isDrawnFromVectorTiles(_ key: String) -> Bool {
+        vectorTiles?.draws(key) ?? false
     }
 
     /// The tile `key` names, drawn out of a downloaded country and filed back
