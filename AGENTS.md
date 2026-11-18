@@ -1141,11 +1141,12 @@ a change to recording, the map, the sheet or the render path; the PR template,
   - **The archive's landcover is ESA WorldCover's**, under CC BY 4.0, so the
     style credits it beside OpenStreetMap.
   - **Points are Carto's, read out of its style, never written by hand.**
-    `Scripts/carto-points.sh` reads a pinned Carto release into
-    `VectorTilePoints.json` and the icons it names into `CartoIcons.xcassets`
-    (both CC0); `VectorTilePointStyle` reads the table. A new Carto release is
-    a re-run and a read of the table's diff. The archive files a point by its
-    value alone, so where two keys share a value the table gives it to one: a
+    `Scripts/carto-points.sh` reads a pinned Carto release's
+    `amenity-points.mss` and `stations.mss` into `VectorTilePoints.json` and
+    the icons they name into `CartoIcons.xcassets` (both CC0);
+    `VectorTilePointStyle` reads the table. A new Carto release is a re-run
+    and a read of the table's diff. The archive files a point by its value
+    alone, so where two keys share a value the table gives it to one: a
     `gate` is a barrier's, not an airport's.
   - **The extras fill in what the archive leaves out** (`VectorTileSource.Extras`):
     unnamed car parks, barriers and the fences, walls and hedges Carto draws,
@@ -1169,10 +1170,10 @@ a change to recording, the map, the sheet or the render path; the PR template,
       Pieces with the same name are joined end to end first. A repeat stands
       on marks measured from the line's middle, so the tiles cut from one
       archive tile agree on them.
-    - **Room is claimed in Carto's layer order**: place names, the points'
-      icons, the names along streets and paths, the points' names, the names
-      along water, and last the low-priority icons and names (benches, bins,
-      wayside crosses).
+    - **Room is claimed in Carto's layer order**: place names, the stations
+      (each one's icon, then its name), the points' icons, the names along
+      streets and paths, the points' names, the names along water, and last
+      the low-priority icons and names (benches, bins, wayside crosses).
     - Each name is in the app's language where the tile carries it, and in
       the local one where not.
     - **A name never crosses its tile's edge**, because the tile beside it

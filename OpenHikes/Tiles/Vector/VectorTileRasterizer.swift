@@ -135,9 +135,9 @@ nonisolated private struct Painter {
 
     /// Names and the points' icons last, over everything they name, each
     /// claiming room in the order OpenStreetMap Carto's layers claim it:
-    /// places, the points' icons, the names along streets and paths, the
-    /// points' names, the names along water, and last the low-priority icons
-    /// and names — benches, bins, wayside crosses.
+    /// places, the stations' icons and names, the points' icons, the names
+    /// along streets and paths, the points' names, the names along water, and
+    /// last the low-priority icons and names — benches, bins, wayside crosses.
     private func paintLabels() {
         let side = CGFloat(VectorTileRasterizer.pixelSize)
         let bounds = CGRect(x: 0, y: 0, width: side, height: side)
@@ -156,11 +156,18 @@ nonisolated private struct Painter {
             height: height,
             style: points.style
         )
-        let main = candidates.filter { !$0.look.lowPriority }
+        let main = candidates.filter { !$0.look.lowPriority && !$0.look.isStation }
         let low = candidates.filter(\.look.lowPriority)
         // Mapnik keeps no room between a point and a name; the names along
         // lines keep theirs from everything, `occupied` included.
         var room = VectorTilePoints.Room(bounds: bounds, taken: places.placements.map(\.frame))
+        var fonts = LabelFonts(language: language)
+        let stations = VectorTilePoints.Stations(
+            candidates.filter(\.look.isStation),
+            unit: unit,
+            room: &room,
+            fonts: &fonts
+        )
         let icons = VectorTilePoints.Icons(main, unit: unit, room: &room)
         let named = VectorTileLineLabels.lines(in: tile, source: source, target: target, language: language)
         let streets = VectorTileLineLabels.Layout(
@@ -172,7 +179,6 @@ nonisolated private struct Painter {
             language: language
         )
         room = VectorTilePoints.Room(bounds: bounds, taken: streets.taken)
-        var fonts = LabelFonts(language: language)
         let names = VectorTilePoints.Names(main, unit: unit, room: &room, fonts: &fonts)
         let water = VectorTileLineLabels.Layout(
             named.filter(\.category.isWater),
@@ -185,11 +191,13 @@ nonisolated private struct Painter {
         room = VectorTilePoints.Room(bounds: bounds, taken: water.taken)
         let lowIcons = VectorTilePoints.Icons(low, unit: unit, room: &room)
         let lowNames = VectorTilePoints.Names(low, unit: unit, room: &room, fonts: &fonts)
+        stations.icons.draw(into: context, icons: points.icons)
         icons.draw(into: context, icons: points.icons)
         lowIcons.draw(into: context, icons: points.icons)
         streets.draw(into: context)
         water.draw(into: context)
         places.draw(into: context)
+        stations.names.draw(into: context)
         names.draw(into: context)
         lowNames.draw(into: context)
     }

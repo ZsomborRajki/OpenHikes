@@ -16,6 +16,10 @@
 //  archive keeps in `kind_detail`, and, for the few kinds Carto draws
 //  differently once named, whether it has a name.
 //
+//  The stops Carto draws in a layer of its own, `stations.mss` — railway
+//  stations and halts, tram stops and subway entrances — are in the same
+//  table, each marked with its place in that layer's order.
+//
 
 import CoreGraphics
 import Foundation
@@ -30,11 +34,19 @@ nonisolated struct VectorTilePointStyle: Sendable {
         /// Drawn after everything else, and only where room is left: benches,
         /// bins, gates and wayside crosses.
         let lowPriority: Bool
+        /// Where one of Carto's stations — a railway station or halt, a tram
+        /// stop or a subway entrance — stands in the order of their own
+        /// layer, which places them right after the names of places: a
+        /// station before a halt or a tram stop, and those before a subway
+        /// entrance. `nil` for every other point.
+        let stationOrder: Int?
         /// Whether the name carries the point's height under it, as a
         /// summit's, a pass's or a hut's does.
         let showsElevation: Bool
         let icons: [Icon]
         let text: Text?
+
+        var isStation: Bool { stationOrder != nil }
     }
 
     struct Icon: Sendable {
@@ -80,6 +92,7 @@ nonisolated struct VectorTilePointStyle: Sendable {
         guard let entry, let band = entry.bands.first(where: { $0.zooms.contains(z) }) else { return nil }
         return Look(
             lowPriority: entry.lowPriority,
+            stationOrder: entry.stationOrder,
             showsElevation: entry.showsElevation,
             icons: band.icons,
             text: band.text
@@ -98,6 +111,7 @@ nonisolated struct VectorTilePointStyle: Sendable {
         let detail: String?
         let naming: Naming
         let lowPriority: Bool
+        let stationOrder: Int?
         let showsElevation: Bool
         let bands: [Band]
     }
@@ -148,6 +162,7 @@ nonisolated extension VectorTilePointStyle {
                     detail: entry.detail,
                     naming: entry.naming,
                     lowPriority: entry.lowPriority,
+                    stationOrder: entry.stationOrder,
                     showsElevation: entry.showsElevation,
                     bands: entry.bands.map(\.band)
                 )
@@ -161,13 +176,14 @@ nonisolated extension VectorTilePointStyle {
         let entries: [FileEntry]
     }
 
-    /// An entry as written, where `named` and `elevation` are left out
-    /// rather than written for the many kinds they do not concern.
+    /// An entry as written, where `named`, `station` and `elevation` are left
+    /// out rather than written for the many kinds they do not concern.
     private struct FileEntry: Decodable {
         let kind: String
         let detail: String?
         let naming: Naming
         let lowPriority: Bool
+        let stationOrder: Int?
         let showsElevation: Bool
         let bands: [FileBand]
 
@@ -176,6 +192,7 @@ nonisolated extension VectorTilePointStyle {
             case detail = "detail"
             case named = "named"
             case lowPriority = "lowPriority"
+            case station = "station"
             case elevation = "elevation"
             case bands = "bands"
         }
@@ -187,6 +204,7 @@ nonisolated extension VectorTilePointStyle {
             naming = try container.decodeIfPresent(Bool.self, forKey: .named)
                 .map { $0 ? Naming.named : .unnamed } ?? .either
             lowPriority = try container.decode(Bool.self, forKey: .lowPriority)
+            stationOrder = try container.decodeIfPresent(Int.self, forKey: .station)
             showsElevation = try container.decodeIfPresent(Bool.self, forKey: .elevation) ?? false
             bands = try container.decode([FileBand].self, forKey: .bands)
         }

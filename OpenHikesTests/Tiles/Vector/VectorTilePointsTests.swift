@@ -56,6 +56,18 @@ struct VectorTilePointsTests {
         #expect(points.map(\.lines.first) == ["High", "Low"])
     }
 
+    /// Carto's stations layer orders a station before a subway entrance,
+    /// however early the archive offers either.
+    @Test("a station claims room before a subway entrance the archive offers from a wider zoom")
+    func stationBeforeEntrance() throws {
+        let points = try candidates([
+            poi(["kind": .string("subway_entrance"), "min_zoom": .double(14)]),
+            poi(["kind": .string("station"), "name": .string("Stephansplatz"), "min_zoom": .double(16)]),
+        ])
+
+        #expect(points.map(\.lines) == [["Stephansplatz"], []])
+    }
+
     // MARK: Placing
 
     @Test("an icon stands on its point, and a second icon on the same spot is left out")
@@ -117,6 +129,24 @@ struct VectorTilePointsTests {
         #expect(low.count == 0)
     }
 
+    /// One layer draws both a station's icon and its name, so the name is
+    /// placed before the next station's icon can take its room.
+    @Test("a station's name is placed before the next station's icon")
+    func stationNameBeforeNextIcon() throws {
+        let underTheName = Int(34 * CGFloat(grid) / side)
+        let points = try candidates([
+            poi(["kind": .string("station"), "name": .string("Stephansplatz")]),
+            poi(["kind": .string("subway_entrance")], at: (grid / 2, grid / 2 + underTheName)),
+        ])
+        var room = VectorTilePoints.Room(bounds: bounds, taken: [])
+        var fonts = LabelFonts(language: "en")
+
+        let stations = VectorTilePoints.Stations(points, unit: unit, room: &room, fonts: &fonts)
+
+        #expect(stations.names.count == 1)
+        #expect(stations.icons.count == 1)
+    }
+
     /// Mapnik ends a line once it is wider than the wrap width, after the
     /// word that made it so, which is how openstreetmap.org sets a school's
     /// name over four lines: "Arany János / Általános / Iskola és / Alapfokú".
@@ -150,10 +180,33 @@ struct VectorTilePointsTests {
         #expect(pixel(image, x: Int(side / 2), y: Int(side / 2)) == [0xFF, 0, 0])
     }
 
+    /// Carto's stations come right after the names of places, ahead of every
+    /// other point, as Stephansplatz's square does on 15/17874/11362.
+    @Test("a station's icon claims its room before the other points' icons")
+    func stationClaimsRoomFirst() throws {
+        let pois = VectorTileFixture.Layer(name: "pois", features: [
+            poi(["kind": .string("fuel"), "min_zoom": .double(14)]),
+            poi(["kind": .string("station"), "min_zoom": .double(16)]),
+        ])
+        let decoded = try VectorTileFixture.decoded([land, pois])
+
+        let image = try #require(VectorTileRasterizer.image(
+            of: decoded,
+            from: tile,
+            drawing: tile,
+            language: "en",
+            height: VectorTileFixture.height,
+            points: VectorTilePointSet(style: try Self.style(), icons: SquareIcons())
+        ))
+
+        #expect(pixel(image, x: Int(side / 2), y: Int(side / 2)) == [0, 0xFF, 0])
+    }
+
     // MARK: Helpers
 
-    /// Three kinds, as `Scripts/carto-points.sh` writes them: fuel with a
-    /// name under it, a summit with its height, and a low-priority bench.
+    /// Five kinds, as `Scripts/carto-points.sh` writes them: fuel with a
+    /// name under it, a summit with its height, a low-priority bench, and a
+    /// station and a subway entrance in the order of Carto's stations layer.
     private static func style() throws -> VectorTilePointStyle {
         let name = """
         {"field": "name", "size": 10, "fill": "#0066FF", "halo": "#FFFFFF99", "haloRadius": 1, "dy": 11,
@@ -172,7 +225,17 @@ struct VectorTilePointsTests {
         {"kind": "bench", "feature": "amenity_bench", "lowPriority": true, "bands": [{"from": 15, "to": 19,
         "icons": [{"asset": "bench", "fill": "#666666", "width": 14, "height": 14}]}]}
         """
-        let entries = [fuel, peak, bench].joined(separator: ",")
+        let station = """
+        {"kind": "station", "feature": "railway_station", "lowPriority": false, "station": 1, "bands": [
+        {"from": 15, "to": 19, "icons": [{"asset": "square", "fill": "#00FF00", "width": 14, "height": 14}],
+        "text": \(name)}]}
+        """
+        let entrance = """
+        {"kind": "subway_entrance", "feature": "railway_subway_entrance", "lowPriority": false, "station": 3,
+        "bands": [{"from": 15, "to": 19, "icons": [{"asset": "entrance", "fill": "#0000FF", "width": 10,
+        "height": 10}]}]}
+        """
+        let entries = [fuel, peak, bench, station, entrance].joined(separator: ",")
         let json = #"{"source": "openstreetmap-carto test", "entries": ["# + entries + "]}"
         return try VectorTilePointStyle(json: Data(json.utf8))
     }

@@ -4,9 +4,10 @@
 //  Scripts/lib
 //
 //  Reads OpenStreetMap Carto's points — the icons and names its
-//  `amenity-points.mss` draws, the style tile.openstreetmap.org is drawn in —
-//  and writes them out as the table the vector map draws points from, with
-//  every icon the table names copied into an asset catalog.
+//  `amenity-points.mss` and `stations.mss` draw, the style
+//  tile.openstreetmap.org is drawn in — and writes them out as the table the
+//  vector map draws points from, with every icon the table names copied into
+//  an asset catalog.
 //
 //  Carto is written in CartoCSS: nested blocks whose filters and zooms add
 //  up, where the more specific of two declarations wins and the later one
@@ -18,9 +19,10 @@
 //  religion and a pitch's sport, in `kind_detail`, and whether it has a name.
 //
 //  Only the CartoCSS these rules are written in is read: variables, nested
-//  blocks, filters on attributes and on zoom, and the color functions darken,
-//  lighten, saturate, desaturate, fade, fadeout and mix. Anything else stops
-//  the script rather than being read as something it is not.
+//  blocks, filters on attributes and on zoom, an attribute named as a text,
+//  quoted or not, and the color functions darken, lighten, saturate,
+//  desaturate, fade, fadeout and mix. Anything else stops the script rather
+//  than being read as something it is not.
 //
 //  Which OpenStreetMap key a feature belongs to comes from Carto's SQL, in
 //  `project.mml`: the archive files a point by its value alone (`parking`,
@@ -356,14 +358,18 @@ let styleFolder = cartoRoot.appending(path: "style")
 let styleFiles = (try? FileManager.default.contentsOfDirectory(atPath: styleFolder.path))?
     .filter { $0.hasSuffix(".mss") }
     .sorted() ?? []
-guard styleFiles.contains("amenity-points.mss") else { fail("no style/amenity-points.mss in \(cartoRoot.path)") }
+let pointFiles: Set = ["amenity-points.mss", "stations.mss"]
+let missingPointFiles = pointFiles.subtracting(styleFiles)
+guard missingPointFiles.isEmpty else {
+    fail("no style/\(missingPointFiles.sorted().joined(separator: " or style/")) in \(cartoRoot.path)")
+}
 for file in styleFiles {
     var reader = StatementReader(read("style/\(file)"))
     let statements = reader.statements()
     // Every file's variables are read, because the points' colors are named
     // after the land's; only the points' own rules are evaluated.
     let parents = [Selector()]
-    if file == "amenity-points.mss" {
+    if pointFiles.contains(file) {
         flatten(statements, under: parents, topLevel: true)
     } else {
         for case let .declaration(property, value) in statements where property.hasPrefix("@") {
@@ -487,6 +493,9 @@ func evaluate(_ text: String) -> Value {
     if let first = text.first, first == "'" || first == "\"", text.last == first {
         return .text(String(text.dropFirst().dropLast()))
     }
+    // An attribute named bare, as a subway entrance's `text-name: [ref]`, is
+    // the text `"[ref]"` is.
+    if text.hasPrefix("["), text.hasSuffix("]") { return .text(text) }
     if let open = text.firstIndex(of: "("), text.hasSuffix(")") {
         let name = String(text[..<open])
         let inner = String(text[text.index(after: open)..<text.index(before: text.endIndex)])
@@ -721,6 +730,9 @@ struct Entry: Codable {
     var named: Bool?
     var feature: String
     var lowPriority: Bool
+    /// Where one of Carto's stations stands in the order of the layer of
+    /// their own that places them, right after the names of places.
+    var station: Int?
     var elevation: Bool?
     var bands: [Band]
 }
@@ -1016,6 +1028,37 @@ func add(
     }
 }
 
+/// The stops Carto draws in its `stations` layer, by the `railway` value the
+/// archive files each under, and where the layer's `ORDER BY CASE railway`
+/// places each: stations first, subway entrances last. The archive keeps no
+/// `station` tag, so every station is drawn as one that is not a subway's;
+/// no `ref`, which Carto writes by an entrance from zoom 19; and no aerialway
+/// station.
+let stationOrders: [(kind: String, order: Int)] = {
+    let source = layerSource("stations")
+    let kinds = source.matches(of: #/railway (?:IN \(([^)]*)\)|= '([a-z_]+)')/#).flatMap { match in
+        match.1.map { $0.matches(of: #/'([^']+)'/#).map { String($0.1) } } ?? match.2.map { [String($0)] } ?? []
+    }
+    guard !kinds.isEmpty,
+          let order = source.firstMatch(of: #/CASE railway((?:\s+WHEN '[a-z_]+' THEN \d+)+)\s+ELSE (\d+)\s+END/#),
+          let otherwise = Int(order.2)
+    else { fail("no stations and their order in project.mml") }
+    let ranks = Dictionary(uniqueKeysWithValues: order.1.matches(of: #/WHEN '([a-z_]+)' THEN (\d+)/#).map { match in
+        (String(match.1), Int(match.2) ?? otherwise)
+    })
+    return kinds.map { (kind: $0, order: ranks[$0] ?? otherwise) }
+}()
+
+// The stations go first, ahead of the keys the amenity points share values
+// across: their layer comes before the amenity points' in Carto too.
+let stationsZoom = minimumZoom(of: "stations")
+for (kind, order) in stationOrders {
+    guard seenKinds.insert(kind).inserted else { fail("\(kind) is named twice") }
+    let point = Point(layer: "stations", attributes: ["railway": .text(kind), "name": .text("name")])
+    let result = bands(of: point, textLayer: "stations", iconLayerZoom: stationsZoom, textLayerZoom: stationsZoom)
+    guard !result.isEmpty else { fail("stations.mss draws no \(kind)") }
+    entries.append(Entry(kind: kind, feature: "railway_\(kind)", lowPriority: false, station: order, bands: result))
+}
 // Where two keys share a value, the first here wins. The low-priority
 // layer's go first, because the vector extras bring barriers, and a `gate`
 // on a path is far likelier than an airport's; then Carto's own order of keys.

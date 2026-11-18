@@ -7,12 +7,15 @@
 //  Carto writes one, its name under it (``VectorTilePointStyle``).
 //
 //  Room is claimed in the order Carto's layers claim it: the names of places
-//  first, then the points' icons, then the names along roads and rivers,
-//  then the points' names, and last the low-priority icons and their names.
-//  Within each, the higher summit goes first, as Carto orders points by
-//  height, then the point the archive offers from a wider zoom, which for an
-//  area is the larger. An icon and its name are placed apart, as Carto's two
-//  layers place them, so a name can stand where its icon found no room.
+//  first, then the stations, then the points' icons, then the names along
+//  roads and rivers, then the points' names, and last the low-priority icons
+//  and their names. Within each, the higher summit goes first, as Carto
+//  orders points by height, then the point the archive offers from a wider
+//  zoom, which for an area is the larger; a station goes before a halt or a
+//  tram stop, and those before a subway entrance. An icon and its name are
+//  placed apart, as Carto's two layers place them, so a name can stand where
+//  its icon found no room. A station's are placed together, its icon and then
+//  its name, because one layer draws both.
 //
 //  As with every name, a point belongs to the tile its point lies in, and
 //  what is drawn for it never crosses the tile's edge: near the edge it is
@@ -43,9 +46,14 @@ nonisolated enum VectorTilePoints {
         let rank: Rank
     }
 
-    /// Carto's order: the highest summit first, then the larger area, and
-    /// the rest settled the same way on every tile.
+    /// Carto's order: a station before a halt or a tram stop and those
+    /// before a subway entrance, the highest summit first, then the larger
+    /// area, and the rest settled the same way on every tile.
     struct Rank: Comparable {
+        /// The point's place in its layer's own order, as
+        /// ``VectorTilePointStyle/Look/stationOrder`` gives it; 0 for a
+        /// point with none.
+        let order: Int
         let height: Double
         let minimumZoom: Double
         let name: String
@@ -53,8 +61,8 @@ nonisolated enum VectorTilePoints {
         let y: CGFloat
 
         static func < (lhs: Self, rhs: Self) -> Bool {
-            let left = (-lhs.height, lhs.minimumZoom, lhs.name, lhs.x, lhs.y)
-            return left < (-rhs.height, rhs.minimumZoom, rhs.name, rhs.x, rhs.y)
+            let left = (lhs.order, -lhs.height, lhs.minimumZoom, lhs.name, lhs.x, lhs.y)
+            return left < (rhs.order, -rhs.height, rhs.minimumZoom, rhs.name, rhs.x, rhs.y)
         }
     }
 
@@ -94,6 +102,7 @@ nonisolated enum VectorTilePoints {
             guard !look.icons.isEmpty || !lines.isEmpty else { continue }
             for point in geometry.points(of: feature) where bounds.contains(point) {
                 found.append(Candidate(anchor: point, lines: lines, look: look, rank: Rank(
+                    order: look.stationOrder ?? 0,
                     height: rankedByHeight.contains(kind) ? elevation ?? -.infinity : -.infinity,
                     minimumZoom: feature.number("min_zoom") ?? .infinity,
                     name: name ?? "",
@@ -149,26 +158,32 @@ nonisolated enum VectorTilePoints {
         /// Each candidate's icons centred on its point, where they find room.
         /// - Parameter unit: pixels for each pixel of the style's 256-pixel tile.
         init(_ candidates: [Candidate], unit: CGFloat, room: inout Room) {
-            for candidate in candidates where !candidate.look.icons.isEmpty {
-                let iconFrames = candidate.look.icons.map { icon in
-                    CGRect(
-                        x: candidate.anchor.x - icon.size.width * unit / 2,
-                        y: candidate.anchor.y - icon.size.height * unit / 2,
-                        width: icon.size.width * unit,
-                        height: icon.size.height * unit
-                    )
-                }
-                let whole = iconFrames.dropFirst().reduce(iconFrames[0]) { $0.union($1) }
-                guard let moved = room.inside(whole) else { continue }
-                let shift = CGPoint(x: moved.minX - whole.minX, y: moved.minY - whole.minY)
-                let lead = candidate.look.icons[0]
-                guard lead.allowsOverlap || room.isFree(moved) else { continue }
-                if !lead.ignoresPlacement { room.take(moved) }
-                for (icon, frame) in zip(candidate.look.icons, iconFrames) {
-                    placed.append((icon, frame.offsetBy(dx: shift.x, dy: shift.y)))
-                }
-                count += 1
+            for candidate in candidates {
+                place(candidate, unit: unit, room: &room)
             }
+        }
+
+        /// The candidate's icons centred on its point, where they find room.
+        mutating func place(_ candidate: Candidate, unit: CGFloat, room: inout Room) {
+            guard !candidate.look.icons.isEmpty else { return }
+            let iconFrames = candidate.look.icons.map { icon in
+                CGRect(
+                    x: candidate.anchor.x - icon.size.width * unit / 2,
+                    y: candidate.anchor.y - icon.size.height * unit / 2,
+                    width: icon.size.width * unit,
+                    height: icon.size.height * unit
+                )
+            }
+            let whole = iconFrames.dropFirst().reduce(iconFrames[0]) { $0.union($1) }
+            guard let moved = room.inside(whole) else { return }
+            let shift = CGPoint(x: moved.minX - whole.minX, y: moved.minY - whole.minY)
+            let lead = candidate.look.icons[0]
+            guard lead.allowsOverlap || room.isFree(moved) else { return }
+            if !lead.ignoresPlacement { room.take(moved) }
+            for (icon, frame) in zip(candidate.look.icons, iconFrames) {
+                placed.append((icon, frame.offsetBy(dx: shift.x, dy: shift.y)))
+            }
+            count += 1
         }
 
         func draw(into context: CGContext, icons: any VectorTileIconDrawing) {
@@ -208,20 +223,26 @@ nonisolated enum VectorTilePoints {
         /// Each candidate's name under, over or on its point, as its style
         /// offsets it, where it finds room.
         init(_ candidates: [Candidate], unit: CGFloat, room: inout Room, fonts: inout LabelFonts) {
-            for candidate in candidates where !candidate.lines.isEmpty {
-                guard let style = candidate.look.text else { continue }
-                let block = NameBlock(candidate.lines, style: style, unit: unit, fonts: &fonts)
-                let size = block.size
-                let offset = style.offset * unit
-                let top = offset > 0 ? candidate.anchor.y + offset
-                    : offset < 0 ? candidate.anchor.y + offset - size.height
-                    : candidate.anchor.y - size.height / 2
-                let left = candidate.anchor.x - size.width / 2
-                let frame = CGRect(x: left, y: top, width: size.width, height: size.height)
-                guard let moved = room.inside(frame), room.isFree(moved) else { continue }
-                room.take(moved)
-                placed.append((block, moved))
+            for candidate in candidates {
+                place(candidate, unit: unit, room: &room, fonts: &fonts)
             }
+        }
+
+        /// The candidate's name under, over or on its point, as its style
+        /// offsets it, where it finds room.
+        mutating func place(_ candidate: Candidate, unit: CGFloat, room: inout Room, fonts: inout LabelFonts) {
+            guard !candidate.lines.isEmpty, let style = candidate.look.text else { return }
+            let block = NameBlock(candidate.lines, style: style, unit: unit, fonts: &fonts)
+            let size = block.size
+            let offset = style.offset * unit
+            let top = offset > 0 ? candidate.anchor.y + offset
+                : offset < 0 ? candidate.anchor.y + offset - size.height
+                : candidate.anchor.y - size.height / 2
+            let left = candidate.anchor.x - size.width / 2
+            let frame = CGRect(x: left, y: top, width: size.width, height: size.height)
+            guard let moved = room.inside(frame), room.isFree(moved) else { return }
+            room.take(moved)
+            placed.append((block, moved))
         }
 
         func draw(into context: CGContext) {
@@ -232,6 +253,23 @@ nonisolated enum VectorTilePoints {
                 block.draw(in: frame, context: context)
             }
             context.restoreGState()
+        }
+    }
+
+    /// Carto's stations placed on one tile, as the one layer that draws both
+    /// their icons and their names places them: each station's icon, then
+    /// its name, before the next station's.
+    struct Stations {
+        private(set) var icons: Icons
+        private(set) var names: Names
+
+        init(_ candidates: [Candidate], unit: CGFloat, room: inout Room, fonts: inout LabelFonts) {
+            icons = Icons([], unit: unit, room: &room)
+            names = Names([], unit: unit, room: &room, fonts: &fonts)
+            for candidate in candidates {
+                icons.place(candidate, unit: unit, room: &room)
+                names.place(candidate, unit: unit, room: &room, fonts: &fonts)
+            }
         }
     }
 

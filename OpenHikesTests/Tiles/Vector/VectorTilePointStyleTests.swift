@@ -85,6 +85,45 @@ struct VectorTilePointStyleTests {
         #expect(named.showsElevation)
     }
 
+    /// Carto draws stops in a layer of their own, `stations.mss`, as a square
+    /// in its station blue that grows with the zoom.
+    @Test("a station is a blue square from zoom 12, named in bold from 14; halts and tram stops come later")
+    func stations() throws {
+        let look = { (kind: String, z: Int) in style.look(kind: kind, detail: nil, named: true, z: z) }
+        let early = try #require(look("station", 12))
+        let named = try #require(look("station", 14))
+        let near = try #require(look("station", 15))
+
+        #expect(early.isStation)
+        #expect(early.icons.first?.asset == "carto-square")
+        #expect(early.icons.first?.fill == VectorTileStyle.color("#7981B0"))
+        #expect(early.icons.first?.size == CGSize(width: 4, height: 4))
+        #expect(early.text == nil)
+        #expect(named.text?.face == .bold)
+        #expect(near.icons.first?.size == CGSize(width: 9, height: 9))
+        #expect(near.text?.size == 11)
+        #expect(look("halt", 12) == nil)
+        #expect(look("halt", 15)?.text?.face == .bold)
+        #expect(look("tram_stop", 13) == nil)
+        #expect(look("tram_stop", 14)?.text == nil)
+        #expect(look("tram_stop", 16)?.text?.face == .regular)
+        #expect(look("fuel", 17)?.isStation == false)
+    }
+
+    /// Carto writes an entrance's `ref` by it from zoom 19, which the
+    /// archive does not keep.
+    @Test("a subway entrance is Carto's entrance icon from zoom 18, with no text, placed after the stations")
+    func subwayEntrance() throws {
+        #expect(style.look(kind: "subway_entrance", detail: nil, named: true, z: 17) == nil)
+        let entrance = try #require(style.look(kind: "subway_entrance", detail: nil, named: true, z: 19))
+        let station = try #require(style.look(kind: "station", detail: nil, named: true, z: 19)?.stationOrder)
+
+        #expect(entrance.icons.first?.asset == "carto-amenity-entrance")
+        #expect(entrance.icons.first?.fill == VectorTileStyle.color("#0092DA"))
+        #expect(entrance.text == nil)
+        #expect(try #require(entrance.stationOrder) > station)
+    }
+
     @Test("benches and wayside crosses claim room last; huts and fuel do not")
     func lowPriority() {
         #expect(style.look(kind: "bench", detail: nil, named: false, z: 19)?.lowPriority == true)

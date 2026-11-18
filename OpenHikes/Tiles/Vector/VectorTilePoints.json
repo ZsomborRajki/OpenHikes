@@ -3,6 +3,225 @@
     {
       "bands" : [
         {
+          "from" : 12,
+          "icons" : [
+            {
+              "asset" : "carto-square",
+              "fill" : "#7981B0",
+              "height" : 4,
+              "width" : 4
+            }
+          ],
+          "to" : 12
+        },
+        {
+          "from" : 13,
+          "icons" : [
+            {
+              "asset" : "carto-square",
+              "fill" : "#7981B0",
+              "height" : 6,
+              "width" : 6
+            }
+          ],
+          "to" : 13
+        },
+        {
+          "from" : 14,
+          "icons" : [
+            {
+              "asset" : "carto-square",
+              "fill" : "#7981B0",
+              "height" : 6,
+              "width" : 6
+            }
+          ],
+          "text" : {
+            "dy" : 9,
+            "face" : "bold",
+            "field" : "name",
+            "fill" : "#4957AD",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1.5,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 14
+        },
+        {
+          "from" : 15,
+          "icons" : [
+            {
+              "asset" : "carto-square",
+              "fill" : "#7981B0",
+              "height" : 9,
+              "width" : 9
+            }
+          ],
+          "text" : {
+            "dy" : 10,
+            "face" : "bold",
+            "field" : "name",
+            "fill" : "#4957AD",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1.5,
+            "lineSpacing" : -1.65,
+            "size" : 11,
+            "wrapWidth" : 33
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "railway_station",
+      "kind" : "station",
+      "lowPriority" : false,
+      "station" : 1
+    },
+    {
+      "bands" : [
+        {
+          "from" : 13,
+          "icons" : [
+            {
+              "asset" : "carto-square",
+              "fill" : "#7981B0",
+              "height" : 4,
+              "width" : 4
+            }
+          ],
+          "to" : 14
+        },
+        {
+          "from" : 15,
+          "icons" : [
+            {
+              "asset" : "carto-square",
+              "fill" : "#7981B0",
+              "height" : 6,
+              "width" : 6
+            }
+          ],
+          "text" : {
+            "dy" : 10,
+            "face" : "bold",
+            "field" : "name",
+            "fill" : "#4957AD",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1.5,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "railway_halt",
+      "kind" : "halt",
+      "lowPriority" : false,
+      "station" : 2
+    },
+    {
+      "bands" : [
+        {
+          "from" : 14,
+          "icons" : [
+            {
+              "asset" : "carto-square",
+              "fill" : "#7981B0",
+              "height" : 4,
+              "width" : 4
+            }
+          ],
+          "to" : 14
+        },
+        {
+          "from" : 15,
+          "icons" : [
+            {
+              "asset" : "carto-square",
+              "fill" : "#7981B0",
+              "height" : 6,
+              "width" : 6
+            }
+          ],
+          "to" : 15
+        },
+        {
+          "from" : 16,
+          "icons" : [
+            {
+              "asset" : "carto-square",
+              "fill" : "#7981B0",
+              "height" : 6,
+              "width" : 6
+            }
+          ],
+          "text" : {
+            "dy" : 10,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#4957AD",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1.5,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "railway_tram_stop",
+      "kind" : "tram_stop",
+      "lowPriority" : false,
+      "station" : 2
+    },
+    {
+      "bands" : [
+        {
+          "from" : 18,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-entrance",
+              "fill" : "#0092DA",
+              "height" : 10,
+              "width" : 10
+            }
+          ],
+          "to" : 18
+        },
+        {
+          "from" : 19,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-entrance",
+              "fill" : "#0092DA",
+              "height" : 10,
+              "width" : 10
+            }
+          ],
+          "text" : {
+            "dy" : 10,
+            "face" : "regular",
+            "field" : "ref",
+            "fill" : "#0066FF",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1.5,
+            "lineSpacing" : 0,
+            "size" : 10,
+            "wrapWidth" : 0
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "railway_subway_entrance",
+      "kind" : "subway_entrance",
+      "lowPriority" : false,
+      "station" : 3
+    },
+    {
+      "bands" : [
+        {
           "from" : 19,
           "icons" : [
             {
