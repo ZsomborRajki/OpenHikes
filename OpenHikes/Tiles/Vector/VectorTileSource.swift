@@ -10,6 +10,12 @@
 //  source keeps its raster template, as the fallback for every tile the
 //  server cannot give (`VectorTileClient`).
 //
+//  A second archive, the extras, holds what OpenStreetMap Carto draws and
+//  the basemap leaves out — car parks with no name, barriers, towers and
+//  crosses, offices, an information point's type — built from the planet by
+//  `Scripts/vector-extras.sh`. Its tile is drawn into the basemap's, where
+//  there is one.
+//
 
 import Foundation
 
@@ -21,9 +27,25 @@ nonisolated struct VectorTileSource: Hashable, Sendable {
     /// one at this zoom that contains it, which carries every vertex the
     /// deeper one would.
     let maximumZ: Int
+    /// The extras archive drawn into the same tiles, if there is one.
+    var extras: Extras?
+
+    /// An archive of what the basemap leaves out, cut on the same grid.
+    struct Extras: Hashable, Sendable {
+        let archiveURL: URL
+        /// The widest zoom it holds anything at: a wider tile does not ask.
+        let minimumZ: Int
+    }
 
     func url(of tile: VectorTileAddress) -> URL {
         archiveURL.appending(path: "\(tile.z)/\(tile.x)/\(tile.y).mvt")
+    }
+
+    /// Where the extras for `tile`, an archive tile, are, or `nil` where
+    /// there are none to ask for.
+    func extrasURL(of tile: VectorTileAddress) -> URL? {
+        guard let extras, tile.z >= extras.minimumZ else { return nil }
+        return extras.archiveURL.appending(path: "\(tile.z)/\(tile.x)/\(tile.y).mvt")
     }
 
     /// The archive tile `tile` is drawn from: itself, or the one at

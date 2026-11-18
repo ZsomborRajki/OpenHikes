@@ -29,6 +29,11 @@
 //  while the server is passed over, and a request already out for one is
 //  waited on rather than made again.
 //
+//  Where the source has extras (``VectorTileSource/Extras``), their tile is
+//  asked for beside the basemap's and drawn into it. The extras add to the
+//  map and are never its reason to fall back: a tile they do not have adds
+//  nothing, and one the server fails to give leaves the basemap's as it is.
+//
 
 import Foundation
 import OpenHikesData
@@ -44,9 +49,9 @@ nonisolated final class VectorTileClient: Sendable {
     /// well under the session's own minute, because every tile waiting on
     /// this server is a tile not yet drawn from the fallback.
     static let requestTimeout: TimeInterval = 10
-    /// Archive tiles kept in memory, as served. A zoom-15 tile is tens of
-    /// kilobytes, so this is a few megabytes at most.
-    static let keptArchiveTiles = 64
+    /// Archive tiles kept in memory, as served, the extras' among them. A
+    /// zoom-15 tile is tens of kilobytes, so this is a few megabytes at most.
+    static let keptArchiveTiles = 128
 
     private let sources: [String: VectorTileSource]
     private let session: URLSession
@@ -56,9 +61,10 @@ nonisolated final class VectorTileClient: Sendable {
 
     private struct State {
         var pausedUntil: ContinuousClock.Instant?
-        var kept: [VectorTileAddress: Data] = [:]
-        var keptOrder: [VectorTileAddress] = []
-        var inFlight: [VectorTileAddress: Task<Fetch, Never>] = [:]
+        /// By the archive tile's address on the server.
+        var kept: [URL: Data] = [:]
+        var keptOrder: [URL] = []
+        var inFlight: [URL: Task<Fetch, Never>] = [:]
     }
 
     /// What the tile server made of one tile.
@@ -120,13 +126,10 @@ nonisolated final class VectorTileClient: Sendable {
         guard let named = TileCacheKey.named(key), let source = sources[named.providerID] else { return .fallBack }
         let target = VectorTileAddress(z: named.z, x: named.x, y: named.y)
         let dataTile = source.dataTile(for: target)
-        let fetched: Fetch
-        switch lookUp(dataTile, from: source) {
-        case let .kept(bytes):
-            fetched = .tile(bytes)
-        case let .fetching(task):
-            fetched = await task.value
-        case .paused:
+        // Both asked for before either is waited on.
+        let basemap = lookUp(source.url(of: dataTile))
+        let extras = source.extrasURL(of: dataTile).map(lookUp)
+        guard let fetched = await Self.result(of: basemap) else {
             #if DEBUG
             Self.logger.debug("Vector tile \(key, privacy: .public): server passed over after a failure")
             #endif
@@ -134,7 +137,16 @@ nonisolated final class VectorTileClient: Sendable {
         }
         switch fetched {
         case let .tile(bytes):
-            return draw(bytes, from: dataTile, of: source, as: target, key: key).map(Drawing.png) ?? .fallBack
+            var added: Data?
+            if let extras {
+                switch await Self.result(of: extras) {
+                case let .tile(bytes): added = bytes
+                case .offline: return .offline
+                case .missing, .unavailable, nil: break
+                }
+            }
+            let drawn = draw(bytes, extras: added, from: dataTile, of: source, as: target, key: key)
+            return drawn.map(Drawing.png) ?? .fallBack
         case .offline:
             return .offline
         case .missing, .unavailable:
@@ -142,20 +154,34 @@ nonisolated final class VectorTileClient: Sendable {
         }
     }
 
-    /// `bytes`, the archive tile at `dataTile`, drawn as `target`, or `nil`.
+    /// What a lookup came to, or `nil` where the server is passed over.
+    private static func result(of lookup: Lookup) async -> Fetch? {
+        switch lookup {
+        case let .kept(bytes): .tile(bytes)
+        case let .fetching(task): await task.value
+        case .paused: nil
+        }
+    }
+
+    /// `bytes`, the archive tile at `dataTile`, with the extras' tile drawn
+    /// into it, drawn as `target`, or `nil`. Extras that cannot be read are
+    /// left out rather than costing the tile.
     private func draw(
         _ bytes: Data,
+        extras: Data?,
         from dataTile: VectorTileAddress,
         of source: VectorTileSource,
         as target: VectorTileAddress,
         key: String
     ) -> Data? {
         do {
-            let tile = try MapboxVectorTile(
-                data: bytes,
-                layerNames: VectorTileRasterizer.layerNames,
-                propertyKeys: VectorTileRasterizer.propertyKeys(language: language)
-            )
+            let layerNames = VectorTileRasterizer.layerNames
+            let propertyKeys = VectorTileRasterizer.propertyKeys(language: language)
+            var tile = try MapboxVectorTile(data: bytes, layerNames: layerNames, propertyKeys: propertyKeys)
+            if let extras,
+               let added = try? MapboxVectorTile(data: extras, layerNames: layerNames, propertyKeys: propertyKeys) {
+                tile = tile.merging(added)
+            }
             let png = VectorTileRasterizer.png(
                 of: tile,
                 from: dataTile,
@@ -189,34 +215,34 @@ nonisolated final class VectorTileClient: Sendable {
         }
     }
 
-    /// One archive tile: kept, already being fetched, or fetched now unless
-    /// the server is being passed over.
-    private func lookUp(_ tile: VectorTileAddress, from source: VectorTileSource) -> Lookup {
+    /// One archive tile, by its address on the server: kept, already being
+    /// fetched, or fetched now unless the server is being passed over.
+    private func lookUp(_ url: URL) -> Lookup {
         let paused = isPaused
         return state.withLock { state -> Lookup in
-            if let bytes = state.kept[tile] { return .kept(bytes) }
-            if let running = state.inFlight[tile] { return .fetching(running) }
+            if let bytes = state.kept[url] { return .kept(bytes) }
+            if let running = state.inFlight[url] { return .fetching(running) }
             if paused { return .paused }
             let task = Task { [weak self] () -> Fetch in
                 guard let self else { return .missing }
-                let fetched = await request(tile, from: source)
-                finish(tile, with: fetched)
+                let fetched = await request(url)
+                finish(url, with: fetched)
                 return fetched
             }
-            state.inFlight[tile] = task
+            state.inFlight[url] = task
             return .fetching(task)
         }
     }
 
-    private func finish(_ tile: VectorTileAddress, with fetched: Fetch) {
+    private func finish(_ url: URL, with fetched: Fetch) {
         let instant = now()
         state.withLock { state in
-            state.inFlight[tile] = nil
+            state.inFlight[url] = nil
             switch fetched {
             case let .tile(bytes):
-                state.kept[tile] = bytes
-                state.keptOrder.removeAll { $0 == tile }
-                state.keptOrder.append(tile)
+                state.kept[url] = bytes
+                state.keptOrder.removeAll { $0 == url }
+                state.keptOrder.append(url)
                 while state.keptOrder.count > Self.keptArchiveTiles {
                     state.kept[state.keptOrder.removeFirst()] = nil
                 }
@@ -230,8 +256,7 @@ nonisolated final class VectorTileClient: Sendable {
         }
     }
 
-    private func request(_ tile: VectorTileAddress, from source: VectorTileSource) async -> Fetch {
-        let url = source.url(of: tile)
+    private func request(_ url: URL) async -> Fetch {
         do {
             let request = URLRequest(url: url, timeoutInterval: Self.requestTimeout)
             let (data, response) = try await session.data(for: request)

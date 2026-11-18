@@ -1,0 +1,20 @@
+# The OpenStreetMap objects the vector extras are built from, as
+# `osmium tags-filter` expressions: what OpenStreetMap Carto draws and the
+# Protomaps basemap leaves out. Scripts/lib/vector-extras.yml decides what
+# each becomes; this only cuts the planet down to them first, so the two
+# lists move together.
+
+# Car parks: every area for its fill, the unnamed ones for their icon.
+nwr/amenity=parking
+# Carto draws a vending machine only for these, by what it sells.
+n/amenity=vending_machine
+# Barriers a path crosses, drawn as icons.
+n/barrier=bollard,gate,lift_gate,swing_gate,block,log,cattle_grid,stile,motorcycle_barrier,cycle_barrier,full-height_turnstile,turnstile,kissing_gate,toll_booth
+# Barriers along a line.
+w/barrier=chain,city_wall,ditch,fence,guard_rail,handrail,hedge,retaining_wall,wall,jersey_barrier
+w/historic=citywalls
+nwr/man_made=ceremonial_gate,chimney,communications_tower,crane,lighthouse,mast,obelisk,silo,storage_tank,telescope,tower,wastewater_plant,water_tower,water_works,windmill,works,cross
+nwr/office
+# Information points carry their type, which the basemap drops.
+nw/tourism=information
+n/waterway=waterfall

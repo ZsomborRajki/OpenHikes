@@ -3,15 +3,89 @@
     {
       "bands" : [
         {
+          "from" : 19,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-bench",
+              "fill" : "#666666",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "to" : 19
+        }
+      ],
+      "feature" : "amenity_bench",
+      "kind" : "bench",
+      "lowPriority" : true
+    },
+    {
+      "bands" : [
+        {
+          "from" : 19,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-waste_basket",
+              "fill" : "#666666",
+              "height" : 8,
+              "width" : 8
+            }
+          ],
+          "to" : 19
+        }
+      ],
+      "feature" : "amenity_waste_basket",
+      "kind" : "waste_basket",
+      "lowPriority" : true
+    },
+    {
+      "bands" : [
+        {
+          "from" : 19,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-waste_disposal",
+              "fill" : "#666666",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "to" : 19
+        }
+      ],
+      "feature" : "amenity_waste_disposal",
+      "kind" : "waste_disposal",
+      "lowPriority" : true
+    },
+    {
+      "bands" : [
+        {
+          "from" : 16,
+          "icons" : [
+            {
+              "asset" : "carto-man_made-cross",
+              "fill" : "#000000",
+              "height" : 7,
+              "width" : 7
+            }
+          ],
+          "to" : 16
+        },
+        {
           "from" : 17,
           "icons" : [
-
+            {
+              "asset" : "carto-man_made-cross",
+              "fill" : "#000000",
+              "height" : 7,
+              "width" : 7
+            }
           ],
           "text" : {
-            "dy" : 0,
+            "dy" : 6,
             "face" : "regular",
-            "field" : "ref",
-            "fill" : "#000000",
+            "field" : "name",
+            "fill" : "#333333",
             "halo" : "#FFFFFF99",
             "haloRadius" : 1,
             "lineSpacing" : -1.5,
@@ -21,9 +95,383 @@
           "to" : 19
         }
       ],
-      "feature" : "aeroway_gate",
+      "feature" : "historic_wayside_cross",
+      "kind" : "wayside_cross",
+      "lowPriority" : true
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-historic-shrine",
+              "fill" : "#666666",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 10,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#333333",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "historic_wayside_shrine",
+      "kind" : "wayside_shrine",
+      "lowPriority" : true
+    },
+    {
+      "bands" : [
+        {
+          "from" : 16,
+          "icons" : [
+            {
+              "asset" : "carto-man_made-cross",
+              "fill" : "#000000",
+              "height" : 7,
+              "width" : 7
+            }
+          ],
+          "to" : 16
+        },
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-man_made-cross",
+              "fill" : "#000000",
+              "height" : 7,
+              "width" : 7
+            }
+          ],
+          "text" : {
+            "dy" : 6,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#333333",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "man_made_cross",
+      "kind" : "cross",
+      "lowPriority" : true
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "fill" : "#7D7C7C",
+              "height" : 3,
+              "lineColor" : "#000000",
+              "lineWidth" : 0,
+              "width" : 3
+            }
+          ],
+          "to" : 17
+        },
+        {
+          "from" : 18,
+          "icons" : [
+            {
+              "fill" : "#7D7C7C",
+              "height" : 4,
+              "lineColor" : "#000000",
+              "lineWidth" : 0,
+              "width" : 4
+            }
+          ],
+          "to" : 19
+        }
+      ],
+      "feature" : "barrier_bollard",
+      "kind" : "bollard",
+      "lowPriority" : true
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-barrier-gate",
+              "height" : 5,
+              "width" : 6
+            }
+          ],
+          "to" : 19
+        }
+      ],
+      "feature" : "barrier_gate",
       "kind" : "gate",
-      "lowPriority" : false
+      "lowPriority" : true
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-barrier-lift_gate",
+              "fill" : "#3F3F3F",
+              "height" : 5,
+              "width" : 6
+            }
+          ],
+          "to" : 19
+        }
+      ],
+      "feature" : "barrier_lift_gate",
+      "kind" : "lift_gate",
+      "lowPriority" : true
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-barrier-lift_gate",
+              "fill" : "#3F3F3F",
+              "height" : 5,
+              "width" : 6
+            }
+          ],
+          "to" : 19
+        }
+      ],
+      "feature" : "barrier_swing_gate",
+      "kind" : "swing_gate",
+      "lowPriority" : true
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "fill" : "#7D7C7C",
+              "height" : 3,
+              "lineColor" : "#000000",
+              "lineWidth" : 0,
+              "width" : 3
+            }
+          ],
+          "to" : 17
+        },
+        {
+          "from" : 18,
+          "icons" : [
+            {
+              "fill" : "#7D7C7C",
+              "height" : 4,
+              "lineColor" : "#000000",
+              "lineWidth" : 0,
+              "width" : 4
+            }
+          ],
+          "to" : 19
+        }
+      ],
+      "feature" : "barrier_block",
+      "kind" : "block",
+      "lowPriority" : true
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "fill" : "#7D7C7C",
+              "height" : 3,
+              "lineColor" : "#000000",
+              "lineWidth" : 0,
+              "width" : 3
+            }
+          ],
+          "to" : 17
+        },
+        {
+          "from" : 18,
+          "icons" : [
+            {
+              "fill" : "#7D7C7C",
+              "height" : 4,
+              "lineColor" : "#000000",
+              "lineWidth" : 0,
+              "width" : 4
+            }
+          ],
+          "to" : 19
+        }
+      ],
+      "feature" : "barrier_log",
+      "kind" : "log",
+      "lowPriority" : true
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-barrier-cattle_grid",
+              "fill" : "#3F3F3F",
+              "height" : 10,
+              "width" : 10
+            }
+          ],
+          "to" : 19
+        }
+      ],
+      "feature" : "barrier_cattle_grid",
+      "kind" : "cattle_grid",
+      "lowPriority" : true
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-barrier-stile",
+              "fill" : "#3F3F3F",
+              "height" : 10,
+              "width" : 10
+            }
+          ],
+          "to" : 19
+        }
+      ],
+      "feature" : "barrier_stile",
+      "kind" : "stile",
+      "lowPriority" : true
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-barrier-motorcycle_barrier",
+              "fill" : "#3F3F3F",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "to" : 19
+        }
+      ],
+      "feature" : "barrier_motorcycle_barrier",
+      "kind" : "motorcycle_barrier",
+      "lowPriority" : true
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-barrier-cycle_barrier",
+              "fill" : "#3F3F3F",
+              "height" : 10,
+              "width" : 10
+            }
+          ],
+          "to" : 19
+        }
+      ],
+      "feature" : "barrier_cycle_barrier",
+      "kind" : "cycle_barrier",
+      "lowPriority" : true
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-barrier-full-height_turnstile",
+              "fill" : "#3F3F3F",
+              "height" : 12,
+              "width" : 12
+            }
+          ],
+          "to" : 19
+        }
+      ],
+      "feature" : "barrier_full-height_turnstile",
+      "kind" : "full-height_turnstile",
+      "lowPriority" : true
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "fill" : "#7D7C7C",
+              "height" : 3,
+              "lineColor" : "#000000",
+              "lineWidth" : 0,
+              "width" : 3
+            }
+          ],
+          "to" : 17
+        },
+        {
+          "from" : 18,
+          "icons" : [
+            {
+              "fill" : "#7D7C7C",
+              "height" : 4,
+              "lineColor" : "#000000",
+              "lineWidth" : 0,
+              "width" : 4
+            }
+          ],
+          "to" : 19
+        }
+      ],
+      "feature" : "barrier_turnstile",
+      "kind" : "turnstile",
+      "lowPriority" : true
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-barrier-kissing_gate",
+              "fill" : "#3F3F3F",
+              "height" : 12,
+              "width" : 12
+            }
+          ],
+          "to" : 19
+        }
+      ],
+      "feature" : "barrier_kissing_gate",
+      "kind" : "kissing_gate",
+      "lowPriority" : true
     },
     {
       "bands" : [
@@ -3243,8 +3691,8 @@
           "from" : 19,
           "icons" : [
             {
-              "asset" : "carto-amenity-waste_disposal",
-              "fill" : "#666666",
+              "asset" : "carto-amenity-excrement_bags",
+              "fill" : "#734A08",
               "height" : 14,
               "width" : 14
             }
@@ -3252,8 +3700,60 @@
           "to" : 19
         }
       ],
-      "feature" : "amenity_waste_disposal",
-      "kind" : "waste_disposal",
+      "detail" : "excrement_bags",
+      "feature" : "amenity_vending_machine",
+      "kind" : "vending_machine",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 19,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-parking_tickets",
+              "fill" : "#734A08",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "to" : 19
+        }
+      ],
+      "detail" : "parking_tickets",
+      "feature" : "amenity_vending_machine",
+      "kind" : "vending_machine",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 19,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-public_transport_tickets",
+              "fill" : "#734A08",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 10,
+            "face" : "regular",
+            "field" : "operator",
+            "fill" : "#734A08",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "detail" : "public_transport_tickets",
+      "feature" : "amenity_vending_machine",
+      "kind" : "vending_machine",
       "lowPriority" : false
     },
     {
@@ -4225,6 +4725,513 @@
         {
           "from" : 17,
           "icons" : [
+            {
+              "asset" : "carto-man_made-ceremonial_gate",
+              "fill" : "#666666",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 10,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#333333",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "man_made_ceremonial_gate",
+      "kind" : "ceremonial_gate",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+
+          ],
+          "text" : {
+            "dy" : 10,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#333333",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 17
+        },
+        {
+          "from" : 18,
+          "icons" : [
+            {
+              "asset" : "carto-man_made-chimney",
+              "fill" : "#666666",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 10,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#333333",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "man_made_chimney",
+      "kind" : "chimney",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 14,
+          "icons" : [
+            {
+              "asset" : "carto-man_made-communications_tower",
+              "fill" : "#666666",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "to" : 16
+        },
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-man_made-communications_tower",
+              "fill" : "#666666",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 10,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#333333",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "man_made_communications_tower",
+      "kind" : "communications_tower",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-man_made-crane",
+              "fill" : "#666666",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 10,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#333333",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "man_made_crane",
+      "kind" : "crane",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 15,
+          "icons" : [
+            {
+              "asset" : "carto-man_made-lighthouse",
+              "fill" : "#666666",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 10,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#333333",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "man_made_lighthouse",
+      "kind" : "lighthouse",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 18,
+          "icons" : [
+            {
+              "asset" : "carto-man_made-mast",
+              "fill" : "#666666",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 10,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#333333",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "man_made_mast",
+      "kind" : "mast",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-historic-obelisk",
+              "fill" : "#734A08",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 11,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#734A08",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "man_made_obelisk",
+      "kind" : "obelisk",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 18,
+          "icons" : [
+            {
+              "asset" : "carto-man_made-storage_tank",
+              "fill" : "#666666",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 10,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#333333",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "man_made_silo",
+      "kind" : "silo",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 18,
+          "icons" : [
+            {
+              "asset" : "carto-man_made-storage_tank",
+              "fill" : "#666666",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 10,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#333333",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "man_made_storage_tank",
+      "kind" : "storage_tank",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-man_made-telescope_dome",
+              "fill" : "#666666",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 10,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#333333",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "man_made_telescope",
+      "kind" : "telescope",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-man_made-tower_generic",
+              "fill" : "#666666",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 10,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#333333",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "man_made_tower",
+      "kind" : "tower",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+
+          ],
+          "text" : {
+            "dy" : 0,
+            "face" : "italic",
+            "field" : "name",
+            "fill" : "#5F3557",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "man_made_wastewater_plant",
+      "kind" : "wastewater_plant",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-man_made-water_tower",
+              "fill" : "#666666",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 10,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#333333",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "man_made_water_tower",
+      "kind" : "water_tower",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+
+          ],
+          "text" : {
+            "dy" : 0,
+            "face" : "italic",
+            "field" : "name",
+            "fill" : "#5F3557",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "man_made_water_works",
+      "kind" : "water_works",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 16,
+          "icons" : [
+            {
+              "asset" : "carto-man_made-windmill",
+              "fill" : "#666666",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "to" : 16
+        },
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-man_made-windmill",
+              "fill" : "#666666",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 10,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#333333",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "man_made_windmill",
+      "kind" : "windmill",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+
+          ],
+          "text" : {
+            "dy" : 0,
+            "face" : "italic",
+            "field" : "name",
+            "fill" : "#5F3557",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "man_made_works",
+      "kind" : "works",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
 
           ],
           "text" : {
@@ -4994,6 +6001,479 @@
     {
       "bands" : [
         {
+          "from" : 17,
+          "icons" : [
+
+          ],
+          "text" : {
+            "dy" : 0,
+            "face" : "italic",
+            "field" : "name",
+            "fill" : "#46673B",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "natural_wood",
+      "kind" : "wood",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+
+          ],
+          "text" : {
+            "dy" : 0,
+            "face" : "italic",
+            "field" : "name",
+            "fill" : "#0565BF",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "natural_mud",
+      "kind" : "mud",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+
+          ],
+          "text" : {
+            "dy" : 0,
+            "face" : "italic",
+            "field" : "name",
+            "fill" : "#0565BF",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "natural_wetland",
+      "kind" : "wetland",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 14,
+          "icons" : [
+            {
+              "asset" : "carto-natural-spring",
+              "fill" : "#7ABCEC",
+              "height" : 12,
+              "width" : 12
+            }
+          ],
+          "to" : 15
+        },
+        {
+          "from" : 16,
+          "icons" : [
+            {
+              "asset" : "carto-natural-spring",
+              "fill" : "#7ABCEC",
+              "height" : 12,
+              "width" : 12
+            }
+          ],
+          "text" : {
+            "dy" : 7,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#4D80B3",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "natural_spring",
+      "kind" : "spring",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+
+          ],
+          "text" : {
+            "dy" : 0,
+            "face" : "italic",
+            "field" : "name",
+            "fill" : "#896642",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "natural_scree",
+      "kind" : "scree",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+
+          ],
+          "text" : {
+            "dy" : 0,
+            "face" : "italic",
+            "field" : "name",
+            "fill" : "#896642",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "natural_shingle",
+      "kind" : "shingle",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+
+          ],
+          "text" : {
+            "dy" : 0,
+            "face" : "italic",
+            "field" : "name",
+            "fill" : "#896642",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "natural_bare_rock",
+      "kind" : "bare_rock",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+
+          ],
+          "text" : {
+            "dy" : 0,
+            "face" : "italic",
+            "field" : "name",
+            "fill" : "#A07E1C",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "natural_sand",
+      "kind" : "sand",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+
+          ],
+          "text" : {
+            "dy" : 0,
+            "face" : "italic",
+            "field" : "name",
+            "fill" : "#777B31",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "natural_heath",
+      "kind" : "heath",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+
+          ],
+          "text" : {
+            "dy" : 0,
+            "face" : "italic",
+            "field" : "name",
+            "fill" : "#4D7C20",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "natural_grassland",
+      "kind" : "grassland",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+
+          ],
+          "text" : {
+            "dy" : 0,
+            "face" : "italic",
+            "field" : "name",
+            "fill" : "#2D361A",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "natural_scrub",
+      "kind" : "scrub",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+
+          ],
+          "text" : {
+            "dy" : 0,
+            "face" : "italic",
+            "field" : "name",
+            "fill" : "#876C00",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "natural_beach",
+      "kind" : "beach",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+
+          ],
+          "text" : {
+            "dy" : 7,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#008000",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 17
+        },
+        {
+          "from" : 18,
+          "icons" : [
+
+          ],
+          "text" : {
+            "dy" : 8,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#008000",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 18
+        },
+        {
+          "from" : 19,
+          "icons" : [
+
+          ],
+          "text" : {
+            "dy" : 11,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#008000",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "natural_tree",
+      "kind" : "tree",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 14,
+          "icons" : [
+
+          ],
+          "text" : {
+            "dy" : 0,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#000000",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "natural_cape",
+      "kind" : "cape",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+
+          ],
+          "text" : {
+            "dy" : 0,
+            "face" : "italic",
+            "field" : "name",
+            "fill" : "#0565BF",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "natural_reef",
+      "kind" : "reef",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 16,
+          "icons" : [
+
+          ],
+          "text" : {
+            "dy" : 0,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#222222",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1.5,
+            "lineSpacing" : -0.8,
+            "margin" : 7,
+            "size" : 10,
+            "wrapWidth" : 45
+          },
+          "to" : 16
+        },
+        {
+          "from" : 17,
+          "icons" : [
+
+          ],
+          "text" : {
+            "dy" : 0,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#777777",
+            "halo" : "#FFFFFF",
+            "haloRadius" : 1.5,
+            "lineSpacing" : -0.6,
+            "margin" : 8.4,
+            "size" : 12,
+            "wrapWidth" : 60
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "natural_peninsula",
+      "kind" : "peninsula",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
           "from" : 15,
           "icons" : [
             {
@@ -5127,6 +6607,240 @@
       ],
       "feature" : "place_square",
       "kind" : "square",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-historic-memorial",
+              "fill" : "#734A08",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 11,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#734A08",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "historic_memorial",
+      "kind" : "memorial",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 16,
+          "icons" : [
+            {
+              "asset" : "carto-historic-monument",
+              "fill" : "#734A08",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 11,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#734A08",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "historic_monument",
+      "kind" : "monument",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 16,
+          "icons" : [
+            {
+              "asset" : "carto-historic-archaeological_site",
+              "fill" : "#734A08",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "to" : 16
+        },
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-historic-archaeological_site",
+              "fill" : "#734A08",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 11,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#734A08",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "historic_archaeological_site",
+      "kind" : "archaeological_site",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 16,
+          "icons" : [
+            {
+              "asset" : "carto-historic-fort",
+              "fill" : "#734A08",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 11,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#734A08",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "historic_fort",
+      "kind" : "fort",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 15,
+          "icons" : [
+            {
+              "asset" : "carto-historic-castle",
+              "fill" : "#734A08",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "to" : 15
+        },
+        {
+          "from" : 16,
+          "icons" : [
+            {
+              "asset" : "carto-historic-castle",
+              "fill" : "#734A08",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 11,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#734A08",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "historic_castle",
+      "kind" : "castle",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 16,
+          "icons" : [
+            {
+              "asset" : "carto-historic-manor",
+              "fill" : "#734A08",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 11,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#734A08",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "historic_manor",
+      "kind" : "manor",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-historic-city_gate",
+              "fill" : "#666666",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 10,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#333333",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "historic_city_gate",
+      "kind" : "city_gate",
       "lowPriority" : false
     },
     {
@@ -5325,6 +7039,56 @@
             "dy" : 0,
             "face" : "italic",
             "field" : "name",
+            "fill" : "#82643A",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "boundary_aboriginal_lands",
+      "kind" : "aboriginal_lands",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+
+          ],
+          "text" : {
+            "dy" : 0,
+            "face" : "italic",
+            "field" : "name",
+            "fill" : "#008000",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "boundary_national_park",
+      "kind" : "national_park",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+
+          ],
+          "text" : {
+            "dy" : 0,
+            "face" : "italic",
+            "field" : "name",
             "fill" : "#008000",
             "halo" : "#FFFFFF99",
             "haloRadius" : 1,
@@ -5337,6 +7101,219 @@
       ],
       "feature" : "leisure_nature_reserve",
       "kind" : "nature_reserve",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 19,
+          "icons" : [
+            {
+              "asset" : "carto-tourism-audioguide",
+              "fill" : "#666666",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 11,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#000000",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "detail" : "audioguide",
+      "elevation" : true,
+      "feature" : "tourism_information",
+      "kind" : "information",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 19,
+          "icons" : [
+            {
+              "asset" : "carto-tourism-board",
+              "fill" : "#666666",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "to" : 19
+        }
+      ],
+      "detail" : "board",
+      "elevation" : true,
+      "feature" : "tourism_information",
+      "kind" : "information",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 19,
+          "icons" : [
+            {
+              "asset" : "carto-tourism-guidepost",
+              "fill" : "#666666",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 11,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#000000",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "detail" : "guidepost",
+      "elevation" : true,
+      "feature" : "tourism_information",
+      "kind" : "information",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-tourism-office",
+              "fill" : "#734A08",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 11,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#734A08",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "detail" : "office",
+      "elevation" : true,
+      "feature" : "tourism_information",
+      "kind" : "information",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 19,
+          "icons" : [
+            {
+              "asset" : "carto-tourism-map",
+              "fill" : "#666666",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 11,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#000000",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "detail" : "map",
+      "elevation" : true,
+      "feature" : "tourism_information",
+      "kind" : "information",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 19,
+          "icons" : [
+            {
+              "asset" : "carto-tourism-map",
+              "fill" : "#666666",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 11,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#000000",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "detail" : "tactile_map",
+      "elevation" : true,
+      "feature" : "tourism_information",
+      "kind" : "information",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 19,
+          "icons" : [
+            {
+              "asset" : "carto-tourism-terminal",
+              "fill" : "#666666",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 11,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#000000",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "detail" : "terminal",
+      "elevation" : true,
+      "feature" : "tourism_information",
+      "kind" : "information",
       "lowPriority" : false
     },
     {
@@ -5486,6 +7463,57 @@
     {
       "bands" : [
         {
+          "from" : 18,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-parking_entrance_multistorey",
+              "fill" : "#0092DA",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "to" : 19
+        }
+      ],
+      "detail" : "multi-storey",
+      "feature" : "amenity_parking_entrance",
+      "kind" : "parking_entrance",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 18,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-parking_entrance_underground",
+              "fill" : "#0092DA",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 9,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#0066FF",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "detail" : "underground",
+      "feature" : "amenity_parking_entrance",
+      "kind" : "parking_entrance",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
           "from" : 16,
           "icons" : [
             {
@@ -5581,6 +7609,37 @@
       ],
       "feature" : "place_locality",
       "kind" : "locality",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 18,
+          "icons" : [
+            {
+              "fill" : "#4863A0",
+              "height" : 6,
+              "lineColor" : "#000000",
+              "lineWidth" : 0,
+              "width" : 6
+            }
+          ],
+          "text" : {
+            "dy" : 8,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#4863A0",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "feature" : "office",
+      "kind" : "office",
       "lowPriority" : false
     },
     {
@@ -6941,50 +9000,6 @@
       ],
       "feature" : "shop",
       "kind" : "battery",
-      "lowPriority" : false
-    },
-    {
-      "bands" : [
-        {
-          "from" : 17,
-          "icons" : [
-            {
-              "fill" : "#AC39AC",
-              "height" : 4,
-              "lineColor" : "#000000",
-              "lineWidth" : 0,
-              "width" : 4
-            }
-          ],
-          "to" : 17
-        },
-        {
-          "from" : 18,
-          "icons" : [
-            {
-              "fill" : "#AC39AC",
-              "height" : 6,
-              "lineColor" : "#000000",
-              "lineWidth" : 0,
-              "width" : 6
-            }
-          ],
-          "text" : {
-            "dy" : 8,
-            "face" : "regular",
-            "field" : "name",
-            "fill" : "#993399",
-            "halo" : "#FFFFFF99",
-            "haloRadius" : 1,
-            "lineSpacing" : -1.5,
-            "size" : 10,
-            "wrapWidth" : 30
-          },
-          "to" : 19
-        }
-      ],
-      "feature" : "shop",
-      "kind" : "beach",
       "lowPriority" : false
     },
     {
@@ -18207,50 +20222,6 @@
         }
       ],
       "feature" : "shop",
-      "kind" : "office",
-      "lowPriority" : false
-    },
-    {
-      "bands" : [
-        {
-          "from" : 17,
-          "icons" : [
-            {
-              "fill" : "#AC39AC",
-              "height" : 4,
-              "lineColor" : "#000000",
-              "lineWidth" : 0,
-              "width" : 4
-            }
-          ],
-          "to" : 17
-        },
-        {
-          "from" : 18,
-          "icons" : [
-            {
-              "fill" : "#AC39AC",
-              "height" : 6,
-              "lineColor" : "#000000",
-              "lineWidth" : 0,
-              "width" : 6
-            }
-          ],
-          "text" : {
-            "dy" : 8,
-            "face" : "regular",
-            "field" : "name",
-            "fill" : "#993399",
-            "halo" : "#FFFFFF99",
-            "haloRadius" : 1,
-            "lineSpacing" : -1.5,
-            "size" : 10,
-            "wrapWidth" : 30
-          },
-          "to" : 19
-        }
-      ],
-      "feature" : "shop",
       "kind" : "office_supplies",
       "lowPriority" : false
     },
@@ -25176,50 +27147,6 @@
         }
       ],
       "feature" : "shop",
-      "kind" : "wood",
-      "lowPriority" : false
-    },
-    {
-      "bands" : [
-        {
-          "from" : 17,
-          "icons" : [
-            {
-              "fill" : "#AC39AC",
-              "height" : 4,
-              "lineColor" : "#000000",
-              "lineWidth" : 0,
-              "width" : 4
-            }
-          ],
-          "to" : 17
-        },
-        {
-          "from" : 18,
-          "icons" : [
-            {
-              "fill" : "#AC39AC",
-              "height" : 6,
-              "lineColor" : "#000000",
-              "lineWidth" : 0,
-              "width" : 6
-            }
-          ],
-          "text" : {
-            "dy" : 8,
-            "face" : "regular",
-            "field" : "name",
-            "fill" : "#993399",
-            "halo" : "#FFFFFF99",
-            "haloRadius" : 1,
-            "lineSpacing" : -1.5,
-            "size" : 10,
-            "wrapWidth" : 30
-          },
-          "to" : 19
-        }
-      ],
-      "feature" : "shop",
       "kind" : "wool",
       "lowPriority" : false
     },
@@ -25310,442 +27237,6 @@
       "feature" : "shop",
       "kind" : "yarn",
       "lowPriority" : false
-    },
-    {
-      "bands" : [
-        {
-          "from" : 19,
-          "icons" : [
-            {
-              "asset" : "carto-amenity-bench",
-              "fill" : "#666666",
-              "height" : 14,
-              "width" : 14
-            }
-          ],
-          "to" : 19
-        }
-      ],
-      "feature" : "amenity_bench",
-      "kind" : "bench",
-      "lowPriority" : true
-    },
-    {
-      "bands" : [
-        {
-          "from" : 19,
-          "icons" : [
-            {
-              "asset" : "carto-amenity-waste_basket",
-              "fill" : "#666666",
-              "height" : 8,
-              "width" : 8
-            }
-          ],
-          "to" : 19
-        }
-      ],
-      "feature" : "amenity_waste_basket",
-      "kind" : "waste_basket",
-      "lowPriority" : true
-    },
-    {
-      "bands" : [
-        {
-          "from" : 16,
-          "icons" : [
-            {
-              "asset" : "carto-man_made-cross",
-              "fill" : "#000000",
-              "height" : 7,
-              "width" : 7
-            }
-          ],
-          "to" : 16
-        },
-        {
-          "from" : 17,
-          "icons" : [
-            {
-              "asset" : "carto-man_made-cross",
-              "fill" : "#000000",
-              "height" : 7,
-              "width" : 7
-            }
-          ],
-          "text" : {
-            "dy" : 6,
-            "face" : "regular",
-            "field" : "name",
-            "fill" : "#333333",
-            "halo" : "#FFFFFF99",
-            "haloRadius" : 1,
-            "lineSpacing" : -1.5,
-            "size" : 10,
-            "wrapWidth" : 30
-          },
-          "to" : 19
-        }
-      ],
-      "feature" : "historic_wayside_cross",
-      "kind" : "wayside_cross",
-      "lowPriority" : true
-    },
-    {
-      "bands" : [
-        {
-          "from" : 17,
-          "icons" : [
-            {
-              "asset" : "carto-historic-shrine",
-              "fill" : "#666666",
-              "height" : 14,
-              "width" : 14
-            }
-          ],
-          "text" : {
-            "dy" : 10,
-            "face" : "regular",
-            "field" : "name",
-            "fill" : "#333333",
-            "halo" : "#FFFFFF99",
-            "haloRadius" : 1,
-            "lineSpacing" : -1.5,
-            "size" : 10,
-            "wrapWidth" : 30
-          },
-          "to" : 19
-        }
-      ],
-      "feature" : "historic_wayside_shrine",
-      "kind" : "wayside_shrine",
-      "lowPriority" : true
-    },
-    {
-      "bands" : [
-        {
-          "from" : 16,
-          "icons" : [
-            {
-              "asset" : "carto-man_made-cross",
-              "fill" : "#000000",
-              "height" : 7,
-              "width" : 7
-            }
-          ],
-          "to" : 16
-        },
-        {
-          "from" : 17,
-          "icons" : [
-            {
-              "asset" : "carto-man_made-cross",
-              "fill" : "#000000",
-              "height" : 7,
-              "width" : 7
-            }
-          ],
-          "text" : {
-            "dy" : 6,
-            "face" : "regular",
-            "field" : "name",
-            "fill" : "#333333",
-            "halo" : "#FFFFFF99",
-            "haloRadius" : 1,
-            "lineSpacing" : -1.5,
-            "size" : 10,
-            "wrapWidth" : 30
-          },
-          "to" : 19
-        }
-      ],
-      "feature" : "man_made_cross",
-      "kind" : "cross",
-      "lowPriority" : true
-    },
-    {
-      "bands" : [
-        {
-          "from" : 17,
-          "icons" : [
-            {
-              "fill" : "#7D7C7C",
-              "height" : 3,
-              "lineColor" : "#000000",
-              "lineWidth" : 0,
-              "width" : 3
-            }
-          ],
-          "to" : 17
-        },
-        {
-          "from" : 18,
-          "icons" : [
-            {
-              "fill" : "#7D7C7C",
-              "height" : 4,
-              "lineColor" : "#000000",
-              "lineWidth" : 0,
-              "width" : 4
-            }
-          ],
-          "to" : 19
-        }
-      ],
-      "feature" : "barrier_bollard",
-      "kind" : "bollard",
-      "lowPriority" : true
-    },
-    {
-      "bands" : [
-        {
-          "from" : 17,
-          "icons" : [
-            {
-              "asset" : "carto-barrier-lift_gate",
-              "fill" : "#3F3F3F",
-              "height" : 5,
-              "width" : 6
-            }
-          ],
-          "to" : 19
-        }
-      ],
-      "feature" : "barrier_lift_gate",
-      "kind" : "lift_gate",
-      "lowPriority" : true
-    },
-    {
-      "bands" : [
-        {
-          "from" : 17,
-          "icons" : [
-            {
-              "asset" : "carto-barrier-lift_gate",
-              "fill" : "#3F3F3F",
-              "height" : 5,
-              "width" : 6
-            }
-          ],
-          "to" : 19
-        }
-      ],
-      "feature" : "barrier_swing_gate",
-      "kind" : "swing_gate",
-      "lowPriority" : true
-    },
-    {
-      "bands" : [
-        {
-          "from" : 17,
-          "icons" : [
-            {
-              "fill" : "#7D7C7C",
-              "height" : 3,
-              "lineColor" : "#000000",
-              "lineWidth" : 0,
-              "width" : 3
-            }
-          ],
-          "to" : 17
-        },
-        {
-          "from" : 18,
-          "icons" : [
-            {
-              "fill" : "#7D7C7C",
-              "height" : 4,
-              "lineColor" : "#000000",
-              "lineWidth" : 0,
-              "width" : 4
-            }
-          ],
-          "to" : 19
-        }
-      ],
-      "feature" : "barrier_block",
-      "kind" : "block",
-      "lowPriority" : true
-    },
-    {
-      "bands" : [
-        {
-          "from" : 17,
-          "icons" : [
-            {
-              "fill" : "#7D7C7C",
-              "height" : 3,
-              "lineColor" : "#000000",
-              "lineWidth" : 0,
-              "width" : 3
-            }
-          ],
-          "to" : 17
-        },
-        {
-          "from" : 18,
-          "icons" : [
-            {
-              "fill" : "#7D7C7C",
-              "height" : 4,
-              "lineColor" : "#000000",
-              "lineWidth" : 0,
-              "width" : 4
-            }
-          ],
-          "to" : 19
-        }
-      ],
-      "feature" : "barrier_log",
-      "kind" : "log",
-      "lowPriority" : true
-    },
-    {
-      "bands" : [
-        {
-          "from" : 17,
-          "icons" : [
-            {
-              "asset" : "carto-barrier-cattle_grid",
-              "fill" : "#3F3F3F",
-              "height" : 10,
-              "width" : 10
-            }
-          ],
-          "to" : 19
-        }
-      ],
-      "feature" : "barrier_cattle_grid",
-      "kind" : "cattle_grid",
-      "lowPriority" : true
-    },
-    {
-      "bands" : [
-        {
-          "from" : 17,
-          "icons" : [
-            {
-              "asset" : "carto-barrier-stile",
-              "fill" : "#3F3F3F",
-              "height" : 10,
-              "width" : 10
-            }
-          ],
-          "to" : 19
-        }
-      ],
-      "feature" : "barrier_stile",
-      "kind" : "stile",
-      "lowPriority" : true
-    },
-    {
-      "bands" : [
-        {
-          "from" : 17,
-          "icons" : [
-            {
-              "asset" : "carto-barrier-motorcycle_barrier",
-              "fill" : "#3F3F3F",
-              "height" : 14,
-              "width" : 14
-            }
-          ],
-          "to" : 19
-        }
-      ],
-      "feature" : "barrier_motorcycle_barrier",
-      "kind" : "motorcycle_barrier",
-      "lowPriority" : true
-    },
-    {
-      "bands" : [
-        {
-          "from" : 17,
-          "icons" : [
-            {
-              "asset" : "carto-barrier-cycle_barrier",
-              "fill" : "#3F3F3F",
-              "height" : 10,
-              "width" : 10
-            }
-          ],
-          "to" : 19
-        }
-      ],
-      "feature" : "barrier_cycle_barrier",
-      "kind" : "cycle_barrier",
-      "lowPriority" : true
-    },
-    {
-      "bands" : [
-        {
-          "from" : 17,
-          "icons" : [
-            {
-              "asset" : "carto-barrier-full-height_turnstile",
-              "fill" : "#3F3F3F",
-              "height" : 12,
-              "width" : 12
-            }
-          ],
-          "to" : 19
-        }
-      ],
-      "feature" : "barrier_full-height_turnstile",
-      "kind" : "full-height_turnstile",
-      "lowPriority" : true
-    },
-    {
-      "bands" : [
-        {
-          "from" : 17,
-          "icons" : [
-            {
-              "fill" : "#7D7C7C",
-              "height" : 3,
-              "lineColor" : "#000000",
-              "lineWidth" : 0,
-              "width" : 3
-            }
-          ],
-          "to" : 17
-        },
-        {
-          "from" : 18,
-          "icons" : [
-            {
-              "fill" : "#7D7C7C",
-              "height" : 4,
-              "lineColor" : "#000000",
-              "lineWidth" : 0,
-              "width" : 4
-            }
-          ],
-          "to" : 19
-        }
-      ],
-      "feature" : "barrier_turnstile",
-      "kind" : "turnstile",
-      "lowPriority" : true
-    },
-    {
-      "bands" : [
-        {
-          "from" : 17,
-          "icons" : [
-            {
-              "asset" : "carto-barrier-kissing_gate",
-              "fill" : "#3F3F3F",
-              "height" : 12,
-              "width" : 12
-            }
-          ],
-          "to" : 19
-        }
-      ],
-      "feature" : "barrier_kissing_gate",
-      "kind" : "kissing_gate",
-      "lowPriority" : true
     }
   ],
   "source" : "openstreetmap-carto v6.1.0"

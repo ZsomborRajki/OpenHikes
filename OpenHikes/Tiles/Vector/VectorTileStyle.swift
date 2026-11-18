@@ -173,6 +173,18 @@ nonisolated enum VectorTileStyle {
         ].enumerated().map { order, entry in (entry.0, Road(line: entry.1, order: order)) }
     )
 
+    /// The style of a feature in the vector extras' `barriers` layer, as
+    /// Carto draws it: a thin dark line from zoom 16 for a fence, a wall or a
+    /// guard rail, a hedge in the woods' green, and a city wall wider and
+    /// paler from zoom 15.
+    static func barrier(kind: String?) -> Line {
+        switch kind {
+        case "hedge": hedge
+        case "city_wall": cityWall
+        default: barrierLine
+        }
+    }
+
     /// The style of a feature in the `boundaries` layer, or `nil` for one
     /// not drawn. A disputed line is dotted whatever its level.
     static func boundary(kind: String, disputed: Bool) -> Line? {
@@ -298,6 +310,21 @@ nonisolated private extension VectorTileStyle {
     static let disusedRailway = Line(color: color("#AAAAAA"), width: ZoomCurve([(15, 2)]), dash: [1, 2])
     static let ferry = Line(color: color("#6666FF"), width: ZoomCurve([(8, 0.5), (12, 1), (16, 2)]), dash: [6, 4])
     static let aerialway = Line(color: color("#808080"), width: ZoomCurve([(12, 0.5), (15, 1), (20, 2)]))
+
+    static let barrierInk = color("#444444")
+    static let barrierWidth: CGFloat = 0.4
+    static let barrierLine = Line(color: barrierInk, width: ZoomCurve([(16, barrierWidth)]))
+    static let hedgeNarrowest: CGFloat = 1.5
+    static let hedge = Line(
+        color: color("#ADD19E"),
+        width: ZoomCurve([(16, hedgeNarrowest), (z17, 2), (z18, 3), (z19, 4), (20, 5)])
+    )
+    /// Carto's `lighten(#444, 30%)`, with the dark line down it from zoom 17.
+    static let cityWall = Line(
+        color: color("#919191"),
+        width: ZoomCurve([(15, 1), (16, hedgeNarrowest), (z17, 2), (z18, 3), (z19, 4)]),
+        center: Center(color: barrierInk, width: ZoomCurve([(z17, barrierWidth)]))
+    )
 
     static let boundaryPurple = color("#8D618B")
     static let country = Line(color: boundaryPurple, width: ZoomCurve([(2, 0.5), (5, 1), (12, 2), (16, 4)]), alpha: 0.5)
