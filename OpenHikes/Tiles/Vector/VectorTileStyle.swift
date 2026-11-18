@@ -25,7 +25,6 @@ nonisolated enum VectorTileStyle {
     static let buildingOutline = color("#C4B6AB")
     static let cliff = color("#999999")
     static let protectedArea = color("#008000", alpha: protectedAreaAlpha)
-    static let peak = color("#8A5A3B")
 
     /// Buildings are drawn from this zoom, and outlined from ``outlinedBuildingZ``.
     static let buildingZ = 13
@@ -34,7 +33,6 @@ nonisolated enum VectorTileStyle {
     /// takes over above it.
     static let deepestLandcoverZ = 7
     static let cliffZ = 13
-    static let peakZ = 12
     /// The zooms past 16 that OpenStreetMap Carto changes a size at.
     static let z17 = 17
     static let z18 = 18
@@ -91,7 +89,6 @@ nonisolated enum VectorTileStyle {
     }()
 
     static let cliffWidth = ZoomCurve([(13, 0.5), (16, 1), (20, 2)])
-    static let peakSize = ZoomCurve([(12, 4), (15, 5), (20, 7)])
 
     // MARK: Lines
 

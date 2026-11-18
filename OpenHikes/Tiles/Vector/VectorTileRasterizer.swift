@@ -28,9 +28,6 @@ nonisolated enum VectorTileRasterizer {
     static let styleTileSize: CGFloat = 256
     /// How much a tunnel is faded under the ground above it.
     static let tunnelAlpha: CGFloat = 0.45
-    /// A peak's triangle: its base as a share of its side below the point,
-    /// the apex as a share above it.
-    static let peakBaseDrop: CGFloat = 0.4
 
     /// The layers drawn.
     static let layerNames: Set<String> = [
@@ -50,16 +47,17 @@ nonisolated enum VectorTileRasterizer {
     /// - Parameters:
     ///   - language: the language whose names the map prefers.
     ///   - height: a summit's height in meters as the reader reads one.
+    ///   - points: what the points are drawn with.
     static func png(
         of tile: MapboxVectorTile,
         from source: VectorTileAddress,
         drawing target: VectorTileAddress,
         language: String,
-        height: @escaping (Double) -> String
+        height: @escaping (Double) -> String,
+        points: VectorTilePointSet = .standard
     ) -> Data? {
-        guard let image = image(of: tile, from: source, drawing: target, language: language, height: height) else {
-            return nil
-        }
+        let image = image(of: tile, from: source, drawing: target, language: language, height: height, points: points)
+        guard let image else { return nil }
         let data = CFDataCreateMutable(nil, 0)
         guard let data,
               let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil)
@@ -74,7 +72,8 @@ nonisolated enum VectorTileRasterizer {
         from source: VectorTileAddress,
         drawing target: VectorTileAddress,
         language: String,
-        height: @escaping (Double) -> String
+        height: @escaping (Double) -> String,
+        points: VectorTilePointSet = .standard
     ) -> CGImage? {
         guard target.z >= source.z,
               let space = CGColorSpace(name: CGColorSpace.sRGB),
@@ -91,8 +90,16 @@ nonisolated enum VectorTileRasterizer {
         // The tile's grid runs down the page, and Core Graphics' up it.
         context.translateBy(x: 0, y: CGFloat(pixelSize))
         context.scaleBy(x: 1, y: -1)
-        Painter(context: context, tile: tile, source: source, target: target, language: language, height: height)
-            .paint()
+        Painter(
+            context: context,
+            tile: tile,
+            source: source,
+            target: target,
+            language: language,
+            height: height,
+            points: points
+        )
+        .paint()
         return context.makeImage()
     }
 }
@@ -105,6 +112,7 @@ nonisolated private struct Painter {
     let target: VectorTileAddress
     let language: String
     let height: (Double) -> String
+    let points: VectorTilePointSet
     /// Pixels per pixel of a 256-pixel tile, the unit the style's widths are in.
     let unit = CGFloat(VectorTileRasterizer.pixelSize) / VectorTileRasterizer.styleTileSize
 
@@ -119,35 +127,68 @@ nonisolated private struct Painter {
         paintBuildings()
         paintRoads()
         paintBoundaries()
-        paintPeaks()
-        paintHuts()
         paintLabels()
     }
 
-    /// Names last, over everything they name: points first, so a street's
-    /// name never takes a district's or a summit's room.
+    /// Names and the points' icons last, over everything they name, each
+    /// claiming room in the order OpenStreetMap Carto's layers claim it:
+    /// places, the points' icons, the names along streets and paths, the
+    /// points' names, the names along water, and last the low-priority icons
+    /// and names — benches, bins, wayside crosses.
     private func paintLabels() {
         let side = CGFloat(VectorTileRasterizer.pixelSize)
         let bounds = CGRect(x: 0, y: 0, width: side, height: side)
-        let candidates = VectorTileLabels.candidates(
-            in: tile,
-            source: source,
-            target: target,
-            bounds: bounds,
-            language: language,
-            height: height
-        )
-        let points = VectorTileLabels.Layout(candidates, z: z, unit: unit, bounds: bounds, language: language)
-        let lines = VectorTileLineLabels.Layout(
-            VectorTileLineLabels.lines(in: tile, source: source, target: target, language: language),
+        let places = VectorTileLabels.Layout(
+            VectorTileLabels.candidates(in: tile, source: source, target: target, bounds: bounds, language: language),
             z: z,
             unit: unit,
             bounds: bounds,
-            occupied: points.placements.map(\.frame),
             language: language
         )
-        lines.draw(into: context)
-        points.draw(into: context)
+        let candidates = VectorTilePoints.candidates(
+            in: tile,
+            source: source,
+            target: target,
+            language: language,
+            height: height,
+            style: points.style
+        )
+        let main = candidates.filter { !$0.look.lowPriority }
+        let low = candidates.filter(\.look.lowPriority)
+        // Mapnik keeps no room between a point and a name; the names along
+        // lines keep theirs from everything, `occupied` included.
+        var room = VectorTilePoints.Room(bounds: bounds, taken: places.placements.map(\.frame))
+        let icons = VectorTilePoints.Icons(main, unit: unit, room: &room)
+        let named = VectorTileLineLabels.lines(in: tile, source: source, target: target, language: language)
+        let streets = VectorTileLineLabels.Layout(
+            named.filter { !$0.category.isWater },
+            z: z,
+            unit: unit,
+            bounds: bounds,
+            occupied: room.taken,
+            language: language
+        )
+        room = VectorTilePoints.Room(bounds: bounds, taken: streets.taken)
+        var fonts = LabelFonts(language: language)
+        let names = VectorTilePoints.Names(main, unit: unit, room: &room, fonts: &fonts)
+        let water = VectorTileLineLabels.Layout(
+            named.filter(\.category.isWater),
+            z: z,
+            unit: unit,
+            bounds: bounds,
+            occupied: room.taken,
+            language: language
+        )
+        room = VectorTilePoints.Room(bounds: bounds, taken: water.taken)
+        let lowIcons = VectorTilePoints.Icons(low, unit: unit, room: &room)
+        let lowNames = VectorTilePoints.Names(low, unit: unit, room: &room, fonts: &fonts)
+        icons.draw(into: context, icons: points.icons)
+        lowIcons.draw(into: context, icons: points.icons)
+        streets.draw(into: context)
+        water.draw(into: context)
+        places.draw(into: context)
+        names.draw(into: context)
+        lowNames.draw(into: context)
     }
 
     private func paintGround() {
@@ -257,48 +298,6 @@ nonisolated private struct Painter {
                   let line = VectorTileStyle.boundary(kind: kind, disputed: feature.flag("disputed"))
             else { continue }
             stroke(geometry.path(of: feature), line)
-        }
-    }
-
-    /// Summits, the one point a hiker reads a map by before any name.
-    private func paintPeaks() {
-        guard z >= VectorTileStyle.peakZ else { return }
-        let side = VectorTileStyle.peakSize.value(at: z) * unit
-        let half = side * 0.5
-        let drop = side * VectorTileRasterizer.peakBaseDrop
-        context.setFillColor(VectorTileStyle.peak)
-        for (feature, geometry) in features(in: "pois", type: .point) {
-            guard let kind = feature.string("kind"), kind == "peak" || kind == "volcano" else { continue }
-            for point in geometry.points(of: feature) {
-                context.move(to: CGPoint(x: point.x, y: point.y - half))
-                context.addLine(to: CGPoint(x: point.x + half, y: point.y + drop))
-                context.addLine(to: CGPoint(x: point.x - half, y: point.y + drop))
-                context.closePath()
-            }
-        }
-        context.fillPath()
-    }
-
-    /// Huts as a small house, where a hiker would make for one. Each is
-    /// filled on its own: filling a rectangle empties the path, so a roof
-    /// gathered for the hut before would be lost.
-    private func paintHuts() {
-        guard z >= VectorTileLabelStyle.hutZ else { return }
-        let side = VectorTileLabelStyle.hutSize.value(at: z) * unit
-        let half = side * 0.5
-        context.setFillColor(VectorTileStyle.peak)
-        for (feature, geometry) in features(in: "pois", type: .point) {
-            guard VectorTileLabelStyle.Category.poi(kind: feature.string("kind")) == .hut,
-                  Double(z) >= feature.number("min_zoom") ?? 0
-            else { continue }
-            for point in geometry.points(of: feature) {
-                context.fill(CGRect(x: point.x - half, y: point.y - half * 0.25, width: side, height: side * 0.75))
-                context.move(to: CGPoint(x: point.x - half - 1, y: point.y - half * 0.25))
-                context.addLine(to: CGPoint(x: point.x, y: point.y - half - 1))
-                context.addLine(to: CGPoint(x: point.x + half + 1, y: point.y - half * 0.25))
-                context.closePath()
-                context.fillPath()
-            }
         }
     }
 

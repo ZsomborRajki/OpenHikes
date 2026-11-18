@@ -381,6 +381,13 @@
     ]
   },
   {
+    "path": "OpenHikes/Tiles/Vector/VectorTilePointStyle.swift",
+    "reason": "The bundled JSON resource name of the map's point table.",
+    "literals": [
+      "\"VectorTilePoints\""
+    ]
+  },
+  {
     "path": "OpenHikesShared/Sources/OpenHikesShared/General/SharedStoreDiagnostics.swift",
     "reason": "Developer-only shared-store decoding diagnostics.",
     "literals": [

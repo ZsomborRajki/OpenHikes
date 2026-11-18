@@ -1134,18 +1134,33 @@ a change to recording, the map, the sheet or the render path; the PR template,
     tile, under the raster style's id and keys, so saved coverage keeps
     answering. Past zoom 15 a tile is drawn from the zoom-15 tile around it.
   - **Roads stack in OpenStreetMap Carto's order** (`VectorTileStyle.road`),
-    because the archive gives every road the same `sort_rank`.
+    because the archive gives every road the same `sort_rank`. **Areas are
+    drawn largest first**, as Carto orders them, because the archive gives
+    every area the same `sort_rank` too, and a residential area listed last
+    would cover the parks inside it.
   - **The archive's landcover is ESA WorldCover's**, under CC BY 4.0, so the
     style credits it beside OpenStreetMap.
+  - **Points are Carto's, read out of its style, never written by hand.**
+    `Scripts/carto-points.sh` reads a pinned Carto release into
+    `VectorTilePoints.json` and the icons it names into `CartoIcons.xcassets`
+    (both CC0); `VectorTilePointStyle` reads the table. A new Carto release is
+    a re-run and a read of the table's diff. The archive files a point by its
+    value alone, keeps no barrier, `man_made` or office tag, no information
+    point's type, no vending machine's goods and no unnamed area, so Carto's
+    points for those are not drawn.
   - **Names are drawn into the tile.**
-    - **Point names** (`VectorTileLabels`): places, summits and passes with
-      their heights, huts, lakes and glaciers.
+    - **Place names** (`VectorTileLabels`): places, lakes and glaciers.
+      Summits, passes and huts are points, named under their icons with their
+      heights (`VectorTilePoints`).
     - **Names along lines** (`VectorTileLineLabels`): streets, paths, cable
-      cars and rivers, letter by letter, upright, following gentle bends.
-      Pieces with the same name are joined end to end first, and point names
-      claim their room before any street's. A repeat stands on marks measured
-      from the line's middle, so the tiles cut from one archive tile agree on
-      them.
+      cars and waterways, letter by letter, upright, following gentle bends.
+      Pieces with the same name are joined end to end first. A repeat stands
+      on marks measured from the line's middle, so the tiles cut from one
+      archive tile agree on them.
+    - **Room is claimed in Carto's layer order**: place names, the points'
+      icons, the names along streets and paths, the points' names, the names
+      along water, and last the low-priority icons and names (benches, bins,
+      wayside crosses).
     - Each name is in the app's language where the tile carries it, and in
       the local one where not.
     - **A name never crosses its tile's edge**, because the tile beside it
