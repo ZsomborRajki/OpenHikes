@@ -90,10 +90,13 @@ nonisolated final class VectorTileClient: Sendable {
     /// milliseconds of work that must not land on whichever actor asked.
     @concurrent
     func pngData(forKey key: String) async -> Data? {
-        guard let named = TileCacheKey.named(key),
-              let source = sources[named.providerID],
-              !isPaused
-        else { return nil }
+        guard let named = TileCacheKey.named(key), let source = sources[named.providerID] else { return nil }
+        guard !isPaused else {
+            #if DEBUG
+            Self.logger.debug("Vector tile \(key, privacy: .public): server passed over after a failure")
+            #endif
+            return nil
+        }
         let target = VectorTileAddress(z: named.z, x: named.x, y: named.y)
         let dataTile = source.dataTile(for: target)
         guard case let .tile(bytes) = await archiveTile(dataTile, from: source) else { return nil }
@@ -103,13 +106,19 @@ nonisolated final class VectorTileClient: Sendable {
                 layerNames: VectorTileRasterizer.layerNames,
                 propertyKeys: VectorTileRasterizer.propertyKeys(language: language)
             )
-            return VectorTileRasterizer.png(
+            let png = VectorTileRasterizer.png(
                 of: tile,
                 from: dataTile,
                 drawing: target,
                 language: language,
                 height: { HikeFormat.elevation(Measurement(value: $0, unit: .meters)) }
             )
+            #if DEBUG
+            let archiveURL = source.url(of: dataTile)
+            let size = png?.count ?? 0
+            Self.logger.debug("Drew tile \(key, privacy: .public) from \(archiveURL, privacy: .public) (\(size) bytes)")
+            #endif
+            return png
         } catch {
             #if DEBUG
             let reason = String(describing: error)
