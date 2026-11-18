@@ -23,6 +23,7 @@ struct Tool {
         let command = arguments.removeFirst()
         do {
             switch command {
+            case "areas": try areas(Options(arguments))
             case "build": try await build(Options(arguments))
             case "merge": try merge(Options(arguments))
             case "files": try files(Options(arguments))
@@ -83,6 +84,21 @@ extension Tool {
     /// deepest, a zoom further, is the *Extra Detail* files'.
     static let baseZoom = 14
     static let detailZoom = 15
+
+    /// `areas`: every area `build` would cut, its code and, for a region,
+    /// its country's, a line each.
+    static func areas(_ options: Options) throws {
+        let plan = try JSONDecoder().decode(
+            AreaPlan.self,
+            from: Data(contentsOf: URL(fileURLWithPath: options.required("countries")))
+        )
+        let areas = try Areas.all(
+            plan: plan,
+            countries: Outlines.features(at: URL(fileURLWithPath: options.required("outlines"))),
+            regions: Outlines.features(at: URL(fileURLWithPath: options.required("regions")))
+        )
+        for area in areas { print([area.id, area.group].compactMap(\.self).joined(separator: "\t")) }
+    }
 
     static func build(_ options: Options) async throws {
         let planet = try await Extractor(source: openSource(options.required("planet")))
