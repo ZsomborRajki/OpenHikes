@@ -66,7 +66,8 @@ nonisolated struct VectorTileAddress: Hashable, Sendable {
 
 nonisolated extension VectorTileSource {
     /// Protomaps' basemap build of 17 November 2026: OpenStreetMap's data
-    /// under the ODbL, to zoom 15, on `tiles.openhikes.app`.
+    /// under the ODbL, to zoom 15, on `tiles.openhikes.app`, with the extras
+    /// built from the planet of the same day.
     ///
     /// A new build goes up under a new name, and this changes with it. The
     /// server's cache keeps a tile for a day, so a build overwritten in place
@@ -74,6 +75,11 @@ nonisolated extension VectorTileSource {
     static let openHikesPlanet = Self(
         // swiftlint:disable:next force_unwrapping
         archiveURL: URL(string: "https://tiles.openhikes.app/planet-20261117")!,
-        maximumZ: 15
+        maximumZ: 15,
+        extras: Extras(
+            // swiftlint:disable:next force_unwrapping
+            archiveURL: URL(string: "https://tiles.openhikes.app/extras-20261117")!,
+            minimumZ: 14
+        )
     )
 }
