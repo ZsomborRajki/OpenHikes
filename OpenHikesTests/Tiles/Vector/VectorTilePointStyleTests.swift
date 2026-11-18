@@ -10,6 +10,7 @@
 
 import CoreGraphics
 @testable import OpenHikes
+import RealModule
 import Testing
 
 @Suite("Vector tile point style")
@@ -50,6 +51,35 @@ struct VectorTilePointStyleTests {
         #expect(marked.icons.first?.fill == VectorTileStyle.color("#0092DA"))
         #expect(marked.text == nil)
         #expect(named.text != nil)
+    }
+
+    @Test("a car park its access closes is faded, its name without a halo, and an open one is not")
+    func restrictedParking() throws {
+        let faded: CGFloat = 0.33
+        for access in ["private", "no", "customers", "permit", "delivery"] {
+            let look = try #require(style.look(kind: "parking", detail: nil, named: true, z: 18, access: access))
+            let text = try #require(look.text)
+
+            #expect(look.icons.first?.opacity.isApproximatelyEqual(to: faded, absoluteTolerance: 1e-9) == true)
+            #expect(text.opacity.isApproximatelyEqual(to: faded, absoluteTolerance: 1e-9))
+            #expect(text.haloRadius == 0)
+        }
+        for access in [nil, "yes", "permissive", "destination"] {
+            let look = try #require(style.look(kind: "parking", detail: nil, named: true, z: 18, access: access))
+
+            #expect(look.icons.first?.opacity == 1)
+            #expect(look.text?.opacity == 1)
+            #expect(look.text?.haloRadius == 1)
+        }
+    }
+
+    @Test("a private elevator is not drawn, and private toilets wait a zoom longer, as in Carto")
+    func restrictedAccessHides() {
+        #expect(style.look(kind: "elevator", detail: nil, named: false, z: 18) != nil)
+        #expect(style.look(kind: "elevator", detail: nil, named: false, z: 18, access: "private") == nil)
+        #expect(style.look(kind: "toilets", detail: nil, named: false, z: 18) != nil)
+        #expect(style.look(kind: "toilets", detail: nil, named: false, z: 18, access: "private") == nil)
+        #expect(style.look(kind: "toilets", detail: nil, named: false, z: 19, access: "private") != nil)
     }
 
     @Test("a restaurant is a dot at zoom 17 and its icon from 18")

@@ -236,7 +236,22 @@
       ],
       "feature" : "amenity_bench",
       "kind" : "bench",
-      "lowPriority" : true
+      "lowPriority" : true,
+      "restricted" : [
+        {
+          "from" : 19,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-bench",
+              "fill" : "#666666",
+              "height" : 14,
+              "opacity" : 0.33,
+              "width" : 14
+            }
+          ],
+          "to" : 19
+        }
+      ]
     },
     {
       "bands" : [
@@ -255,7 +270,22 @@
       ],
       "feature" : "amenity_waste_basket",
       "kind" : "waste_basket",
-      "lowPriority" : true
+      "lowPriority" : true,
+      "restricted" : [
+        {
+          "from" : 19,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-waste_basket",
+              "fill" : "#666666",
+              "height" : 8,
+              "opacity" : 0.33,
+              "width" : 8
+            }
+          ],
+          "to" : 19
+        }
+      ]
     },
     {
       "bands" : [
@@ -274,7 +304,10 @@
       ],
       "feature" : "amenity_waste_disposal",
       "kind" : "waste_disposal",
-      "lowPriority" : true
+      "lowPriority" : true,
+      "restricted" : [
+
+      ]
     },
     {
       "bands" : [
@@ -830,7 +863,47 @@
       "elevation" : true,
       "feature" : "tourism_alpine_hut",
       "kind" : "alpine_hut",
-      "lowPriority" : false
+      "lowPriority" : false,
+      "restricted" : [
+        {
+          "from" : 13,
+          "icons" : [
+            {
+              "asset" : "carto-tourism-alpinehut",
+              "fill" : "#0092DA",
+              "height" : 14,
+              "opacity" : 0.33,
+              "width" : 14
+            }
+          ],
+          "to" : 13
+        },
+        {
+          "from" : 14,
+          "icons" : [
+            {
+              "asset" : "carto-tourism-alpinehut",
+              "fill" : "#0092DA",
+              "height" : 14,
+              "opacity" : 0.33,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 11,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#0066FF",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 0,
+            "lineSpacing" : -1.5,
+            "opacity" : 0.33,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ]
     },
     {
       "bands" : [
@@ -1262,7 +1335,47 @@
       ],
       "feature" : "tourism_picnic_site",
       "kind" : "picnic_site",
-      "lowPriority" : false
+      "lowPriority" : false,
+      "restricted" : [
+        {
+          "from" : 16,
+          "icons" : [
+            {
+              "asset" : "carto-tourism-picnic",
+              "fill" : "#0C8416",
+              "height" : 14,
+              "opacity" : 0.33,
+              "width" : 14
+            }
+          ],
+          "to" : 16
+        },
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-tourism-picnic",
+              "fill" : "#0C8416",
+              "height" : 14,
+              "opacity" : 0.33,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 10,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#0C8416",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 0,
+            "lineSpacing" : -1.5,
+            "opacity" : 0.33,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ]
     },
     {
       "bands" : [
@@ -1330,7 +1443,47 @@
       "elevation" : true,
       "feature" : "tourism_wilderness_hut",
       "kind" : "wilderness_hut",
-      "lowPriority" : false
+      "lowPriority" : false,
+      "restricted" : [
+        {
+          "from" : 13,
+          "icons" : [
+            {
+              "asset" : "carto-tourism-wilderness_hut",
+              "fill" : "#0092DA",
+              "height" : 14,
+              "opacity" : 0.33,
+              "width" : 14
+            }
+          ],
+          "to" : 13
+        },
+        {
+          "from" : 14,
+          "icons" : [
+            {
+              "asset" : "carto-tourism-wilderness_hut",
+              "fill" : "#0092DA",
+              "height" : 14,
+              "opacity" : 0.33,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 11,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#0066FF",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 0,
+            "lineSpacing" : -1.5,
+            "opacity" : 0.33,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ]
     },
     {
       "bands" : [
@@ -1507,7 +1660,34 @@
       ],
       "feature" : "amenity_bbq",
       "kind" : "bbq",
-      "lowPriority" : false
+      "lowPriority" : false,
+      "restricted" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-bbq",
+              "fill" : "#734A08",
+              "height" : 14,
+              "opacity" : 0.33,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 10,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#734A08",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 0,
+            "lineSpacing" : -1.5,
+            "opacity" : 0.33,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ]
     },
     {
       "bands" : [
@@ -1567,7 +1747,34 @@
       ],
       "feature" : "amenity_bicycle_repair_station",
       "kind" : "bicycle_repair_station",
-      "lowPriority" : false
+      "lowPriority" : false,
+      "restricted" : [
+        {
+          "from" : 19,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-bicycle_repair_station",
+              "fill" : "#734A08",
+              "height" : 14,
+              "opacity" : 0.33,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 10,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#734A08",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 0,
+            "lineSpacing" : -1.5,
+            "opacity" : 0.33,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ]
     },
     {
       "bands" : [
@@ -1710,7 +1917,43 @@
       ],
       "feature" : "amenity_bus_station",
       "kind" : "bus_station",
-      "lowPriority" : false
+      "lowPriority" : false,
+      "restricted" : [
+        {
+          "from" : 16,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-bus_station",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "to" : 16
+        },
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-bus_station",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 11,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#0066FF",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 0,
+            "lineSpacing" : -1.5,
+            "opacity" : 0.33,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ]
     },
     {
       "bands" : [
@@ -1862,7 +2105,22 @@
       ],
       "feature" : "amenity_charging_station",
       "kind" : "charging_station",
-      "lowPriority" : false
+      "lowPriority" : false,
+      "restricted" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-charging_station",
+              "fill" : "#0092DA",
+              "height" : 14,
+              "opacity" : 0.33,
+              "width" : 14
+            }
+          ],
+          "to" : 19
+        }
+      ]
     },
     {
       "bands" : [
@@ -2189,7 +2447,34 @@
       ],
       "feature" : "amenity_drinking_water",
       "kind" : "drinking_water",
-      "lowPriority" : false
+      "lowPriority" : false,
+      "restricted" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-drinking_water",
+              "fill" : "#734A08",
+              "height" : 14,
+              "opacity" : 0.33,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 10,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#734A08",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 0,
+            "lineSpacing" : -1.5,
+            "opacity" : 0.33,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ]
     },
     {
       "bands" : [
@@ -2471,7 +2756,33 @@
       ],
       "feature" : "amenity_fuel",
       "kind" : "fuel",
-      "lowPriority" : false
+      "lowPriority" : false,
+      "restricted" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-fuel",
+              "fill" : "#0092DA",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 11,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#0066FF",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 0,
+            "lineSpacing" : -1.5,
+            "opacity" : 0.33,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ]
     },
     {
       "bands" : [
@@ -3494,7 +3805,33 @@
       ],
       "feature" : "amenity_recycling",
       "kind" : "recycling",
-      "lowPriority" : false
+      "lowPriority" : false,
+      "restricted" : [
+        {
+          "from" : 19,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-recycling",
+              "fill" : "#734A08",
+              "height" : 14,
+              "opacity" : 0.33,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 10,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#734A08",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ]
     },
     {
       "bands" : [
@@ -3605,7 +3942,47 @@
       "elevation" : true,
       "feature" : "amenity_shelter",
       "kind" : "shelter",
-      "lowPriority" : false
+      "lowPriority" : false,
+      "restricted" : [
+        {
+          "from" : 16,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-shelter",
+              "fill" : "#666666",
+              "height" : 14,
+              "opacity" : 0.33,
+              "width" : 14
+            }
+          ],
+          "to" : 16
+        },
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-shelter",
+              "fill" : "#666666",
+              "height" : 14,
+              "opacity" : 0.33,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 11,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#666666",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 0,
+            "lineSpacing" : -1.5,
+            "opacity" : 0.33,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ]
     },
     {
       "bands" : [
@@ -3635,7 +4012,34 @@
       ],
       "feature" : "amenity_shower",
       "kind" : "shower",
-      "lowPriority" : false
+      "lowPriority" : false,
+      "restricted" : [
+        {
+          "from" : 18,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-shower",
+              "fill" : "#734A08",
+              "height" : 14,
+              "opacity" : 0.33,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 10,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#734A08",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 0,
+            "lineSpacing" : -1.5,
+            "opacity" : 0.33,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ]
     },
     {
       "bands" : [
@@ -3775,7 +4179,22 @@
       ],
       "feature" : "amenity_toilets",
       "kind" : "toilets",
-      "lowPriority" : false
+      "lowPriority" : false,
+      "restricted" : [
+        {
+          "from" : 19,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-toilets",
+              "fill" : "#734A08",
+              "height" : 14,
+              "opacity" : 0.33,
+              "width" : 14
+            }
+          ],
+          "to" : 19
+        }
+      ]
     },
     {
       "bands" : [
@@ -4227,7 +4646,33 @@
       ],
       "feature" : "leisure_dog_park",
       "kind" : "dog_park",
-      "lowPriority" : false
+      "lowPriority" : false,
+      "restricted" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-shop-pet",
+              "fill" : "#0C8416",
+              "height" : 14,
+              "opacity" : 0.33,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 13,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#10B31D",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 0,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ]
     },
     {
       "bands" : [
@@ -4246,7 +4691,22 @@
       ],
       "feature" : "leisure_firepit",
       "kind" : "firepit",
-      "lowPriority" : false
+      "lowPriority" : false,
+      "restricted" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-leisure-firepit",
+              "fill" : "#734A08",
+              "height" : 14,
+              "opacity" : 0.33,
+              "width" : 14
+            }
+          ],
+          "to" : 19
+        }
+      ]
     },
     {
       "bands" : [
@@ -4306,7 +4766,33 @@
       ],
       "feature" : "leisure_fitness_centre",
       "kind" : "fitness_centre",
-      "lowPriority" : false
+      "lowPriority" : false,
+      "restricted" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-leisure-fitness",
+              "fill" : "#0C8416",
+              "height" : 14.933333,
+              "opacity" : 0.33,
+              "width" : 14.933333
+            }
+          ],
+          "text" : {
+            "dy" : 13,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#10B31D",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 0,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ]
     },
     {
       "bands" : [
@@ -4336,7 +4822,33 @@
       ],
       "feature" : "leisure_fitness_station",
       "kind" : "fitness_station",
-      "lowPriority" : false
+      "lowPriority" : false,
+      "restricted" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-leisure-fitness",
+              "fill" : "#0C8416",
+              "height" : 14.933333,
+              "opacity" : 0.33,
+              "width" : 14.933333
+            }
+          ],
+          "text" : {
+            "dy" : 13,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#10B31D",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 0,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ]
     },
     {
       "bands" : [
@@ -4556,7 +5068,33 @@
       ],
       "feature" : "leisure_picnic_table",
       "kind" : "picnic_table",
-      "lowPriority" : false
+      "lowPriority" : false,
+      "restricted" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-tourism-picnic",
+              "fill" : "#666666",
+              "height" : 14,
+              "opacity" : 0.33,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 11,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#666666",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ]
     },
     {
       "bands" : [
@@ -4611,7 +5149,33 @@
       ],
       "feature" : "leisure_playground",
       "kind" : "playground",
-      "lowPriority" : false
+      "lowPriority" : false,
+      "restricted" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-leisure-playground",
+              "fill" : "#0C8416",
+              "height" : 14,
+              "opacity" : 0.33,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 13,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#10B31D",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 0,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ]
     },
     {
       "bands" : [
@@ -7207,7 +7771,45 @@
       ],
       "feature" : "highway_bus_stop",
       "kind" : "bus_stop",
-      "lowPriority" : false
+      "lowPriority" : false,
+      "restricted" : [
+        {
+          "from" : 16,
+          "icons" : [
+            {
+              "asset" : "carto-square",
+              "fill" : "#0092DA",
+              "height" : 6,
+              "width" : 6
+            }
+          ],
+          "to" : 16
+        },
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-highway-bus_stop",
+              "fill" : "#0092DA",
+              "height" : 10,
+              "width" : 10
+            }
+          ],
+          "text" : {
+            "dy" : 9,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#0066FF",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 0,
+            "lineSpacing" : -1.5,
+            "opacity" : 0.33,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ]
     },
     {
       "bands" : [
@@ -7226,7 +7828,10 @@
       ],
       "feature" : "highway_elevator",
       "kind" : "elevator",
-      "lowPriority" : false
+      "lowPriority" : false,
+      "restricted" : [
+
+      ]
     },
     {
       "bands" : [
@@ -7599,7 +8204,34 @@
       ],
       "feature" : "amenity_bicycle_parking",
       "kind" : "bicycle_parking",
-      "lowPriority" : false
+      "lowPriority" : false,
+      "restricted" : [
+        {
+          "from" : 18,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-bicycle_parking",
+              "fill" : "#0092DA",
+              "height" : 14,
+              "opacity" : 0.33,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 12,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#0066FF",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 0,
+            "lineSpacing" : -1.5,
+            "opacity" : 0.33,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ]
     },
     {
       "bands" : [
@@ -7629,7 +8261,34 @@
       ],
       "feature" : "amenity_motorcycle_parking",
       "kind" : "motorcycle_parking",
-      "lowPriority" : false
+      "lowPriority" : false,
+      "restricted" : [
+        {
+          "from" : 18,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-motorcycle_parking",
+              "fill" : "#0092DA",
+              "height" : 14,
+              "opacity" : 0.33,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 12,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#0066FF",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 0,
+            "lineSpacing" : -1.5,
+            "opacity" : 0.33,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ]
     },
     {
       "bands" : [
@@ -7671,7 +8330,47 @@
       ],
       "feature" : "amenity_parking",
       "kind" : "parking",
-      "lowPriority" : false
+      "lowPriority" : false,
+      "restricted" : [
+        {
+          "from" : 17,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-parking",
+              "fill" : "#0092DA",
+              "height" : 12,
+              "opacity" : 0.33,
+              "width" : 12
+            }
+          ],
+          "to" : 17
+        },
+        {
+          "from" : 18,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-parking",
+              "fill" : "#0092DA",
+              "height" : 12,
+              "opacity" : 0.33,
+              "width" : 12
+            }
+          ],
+          "text" : {
+            "dy" : 9,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#0066FF",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 0,
+            "lineSpacing" : -1.5,
+            "opacity" : 0.33,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ]
     },
     {
       "bands" : [
@@ -7691,7 +8390,22 @@
       "detail" : "multi-storey",
       "feature" : "amenity_parking_entrance",
       "kind" : "parking_entrance",
-      "lowPriority" : false
+      "lowPriority" : false,
+      "restricted" : [
+        {
+          "from" : 18,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-parking_entrance_multistorey",
+              "fill" : "#0092DA",
+              "height" : 14,
+              "opacity" : 0.33,
+              "width" : 14
+            }
+          ],
+          "to" : 19
+        }
+      ]
     },
     {
       "bands" : [
@@ -7722,7 +8436,34 @@
       "detail" : "underground",
       "feature" : "amenity_parking_entrance",
       "kind" : "parking_entrance",
-      "lowPriority" : false
+      "lowPriority" : false,
+      "restricted" : [
+        {
+          "from" : 18,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-parking_entrance_underground",
+              "fill" : "#0092DA",
+              "height" : 14,
+              "opacity" : 0.33,
+              "width" : 14
+            }
+          ],
+          "text" : {
+            "dy" : 9,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#0066FF",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 0,
+            "lineSpacing" : -1.5,
+            "opacity" : 0.33,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ]
     },
     {
       "bands" : [
@@ -27451,6 +28192,13 @@
       "kind" : "yarn",
       "lowPriority" : false
     }
+  ],
+  "restrictedAccess" : [
+    "private",
+    "no",
+    "customers",
+    "permit",
+    "delivery"
   ],
   "source" : "openstreetmap-carto v6.1.0"
 }

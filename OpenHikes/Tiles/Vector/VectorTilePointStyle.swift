@@ -20,6 +20,12 @@
 //  stations and halts, tram stops and subway entrances — are in the same
 //  table, each marked with its place in that layer's order.
 //
+//  Carto draws some points differently where their `access` is one its
+//  queries count as restricted (`private`, `customers`…): a private car
+//  park's icon and name faded, a private toilet only from a deeper zoom, a
+//  private elevator not at all. Those kinds carry a second set of bands, and
+//  the table lists the values, both read out of Carto as the rest is.
+//
 
 import CoreGraphics
 import Foundation
@@ -27,6 +33,8 @@ import Foundation
 nonisolated struct VectorTilePointStyle: Sendable {
     /// The Carto release the table was read from.
     let source: String
+    /// The `access` values Carto draws a point as restricted for.
+    private let restrictedAccess: Set<String>
     private let entries: [String: [Entry]]
 
     /// How a point of one kind is drawn at one zoom.
@@ -85,11 +93,14 @@ nonisolated struct VectorTilePointStyle: Sendable {
     /// - Parameters:
     ///   - detail: the archive's `kind_detail`: a religion or a sport.
     ///   - named: whether the point has a name.
-    func look(kind: String, detail: String?, named: Bool, z: Int) -> Look? {
+    ///   - access: the point's `access` tag, where the archive carries it.
+    func look(kind: String, detail: String?, named: Bool, z: Int, access: String? = nil) -> Look? {
         guard let variants = entries[kind] else { return nil }
         let fitting = variants.filter { $0.naming.admits(named: named) }
         let entry = fitting.first { $0.detail != nil && $0.detail == detail } ?? fitting.first { $0.detail == nil }
-        guard let entry, let band = entry.bands.first(where: { $0.zooms.contains(z) }) else { return nil }
+        guard let entry else { return nil }
+        let bands = access.map(restrictedAccess.contains) == true ? entry.restricted : entry.bands
+        guard let band = bands.first(where: { $0.zooms.contains(z) }) else { return nil }
         return Look(
             lowPriority: entry.lowPriority,
             stationOrder: entry.stationOrder,
@@ -101,7 +112,8 @@ nonisolated struct VectorTilePointStyle: Sendable {
 
     /// Every icon the table names, which `CartoIcons.xcassets` must hold.
     var assets: Set<String> {
-        Set(entries.values.joined().flatMap(\.bands).flatMap(\.icons).compactMap(\.asset))
+        let bands = entries.values.joined().flatMap { $0.bands + $0.restricted }
+        return Set(bands.flatMap(\.icons).compactMap(\.asset))
     }
 
     /// How many kinds the table draws.
@@ -114,6 +126,9 @@ nonisolated struct VectorTilePointStyle: Sendable {
         let stationOrder: Int?
         let showsElevation: Bool
         let bands: [Band]
+        /// How Carto draws the point where its access is restricted: the
+        /// same as `bands` for most kinds, and nothing where it is empty.
+        let restricted: [Band]
     }
 
     private struct Band: Sendable {
@@ -148,7 +163,7 @@ nonisolated extension VectorTilePointStyle {
         guard let url = Bundle.main.url(forResource: "VectorTilePoints", withExtension: "json"),
               let data = try? Data(contentsOf: url),
               let style = try? Self(json: data)
-        else { return Self(source: "", entries: [:]) }
+        else { return Self(source: "", restrictedAccess: [], entries: [:]) }
         return style
     }()
 
@@ -156,6 +171,7 @@ nonisolated extension VectorTilePointStyle {
     init(json: Data) throws {
         let file = try JSONDecoder().decode(File.self, from: json)
         source = file.source
+        restrictedAccess = Set(file.restrictedAccess)
         entries = Dictionary(grouping: file.entries, by: \.kind).mapValues { entries in
             entries.map { entry in
                 Entry(
@@ -164,7 +180,8 @@ nonisolated extension VectorTilePointStyle {
                     lowPriority: entry.lowPriority,
                     stationOrder: entry.stationOrder,
                     showsElevation: entry.showsElevation,
-                    bands: entry.bands.map(\.band)
+                    bands: entry.bands.map(\.band),
+                    restricted: entry.restricted.map(\.band)
                 )
             }
         }
@@ -173,11 +190,14 @@ nonisolated extension VectorTilePointStyle {
     /// The file as the script writes it.
     private struct File: Decodable {
         let source: String
+        let restrictedAccess: [String]
         let entries: [FileEntry]
     }
 
-    /// An entry as written, where `named`, `station` and `elevation` are left
-    /// out rather than written for the many kinds they do not concern.
+    /// An entry as written, where `named`, `station`, `elevation` and
+    /// `restricted` are left out rather than written for the many kinds they
+    /// do not concern: a kind without `restricted` is drawn the same
+    /// whatever its access.
     private struct FileEntry: Decodable {
         let kind: String
         let detail: String?
@@ -186,6 +206,7 @@ nonisolated extension VectorTilePointStyle {
         let stationOrder: Int?
         let showsElevation: Bool
         let bands: [FileBand]
+        let restricted: [FileBand]
 
         private enum CodingKeys: String, CodingKey {
             case kind = "kind"
@@ -195,6 +216,7 @@ nonisolated extension VectorTilePointStyle {
             case station = "station"
             case elevation = "elevation"
             case bands = "bands"
+            case restricted = "restricted"
         }
 
         init(from decoder: any Decoder) throws {
@@ -207,6 +229,7 @@ nonisolated extension VectorTilePointStyle {
             stationOrder = try container.decodeIfPresent(Int.self, forKey: .station)
             showsElevation = try container.decodeIfPresent(Bool.self, forKey: .elevation) ?? false
             bands = try container.decode([FileBand].self, forKey: .bands)
+            restricted = try container.decodeIfPresent([FileBand].self, forKey: .restricted) ?? bands
         }
     }
 

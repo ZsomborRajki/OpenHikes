@@ -734,11 +734,16 @@ struct Entry: Codable {
     /// their own that places them, right after the names of places.
     var station: Int?
     var elevation: Bool?
+    /// The bands Carto draws the point with when its access is one of the
+    /// table's `restrictedAccess`, where they are not `bands`.
+    var restricted: [Band]?
     var bands: [Band]
 }
 
 struct Table: Codable {
     var source: String
+    /// The `access` values Carto counts as restricted.
+    var restrictedAccess: [String]
     var entries: [Entry]
 }
 
@@ -849,6 +854,24 @@ func minimumZoom(of id: String) -> Int {
     guard let match = layerSource(id).firstMatch(of: #/\n\s+minzoom: (\d+)/#) else { return 0 }
     return Int(match.1) ?? 0
 }
+
+/// The `access` values a layer's SQL turns into `int_access = 'restricted'`.
+func restrictedAccessValues(in id: String) -> [String] {
+    let pattern = #/CASE WHEN access IN \(([^)]*)\) THEN 'restricted' ELSE 'yes' END AS int_access/#
+    guard let match = layerSource(id).firstMatch(of: pattern) else { fail("no int_access in \(id)'s SQL") }
+    return match.1.split(separator: ",").map { $0.trimmingCharacters(in: CharacterSet(charactersIn: " '")) }
+}
+
+/// The access Carto's points count as restricted, which its rules draw
+/// faded, or later, or not at all. The text layers read the same SQL as the
+/// icon layers they name.
+let restrictedAccess: [String] = {
+    let values = restrictedAccessValues(in: "amenity-points")
+    guard !values.isEmpty, restrictedAccessValues(in: "amenity-low-priority") == values else {
+        fail("the point layers count different access as restricted")
+    }
+    return values
+}()
 
 /// A feature a layer's SQL builds: `'amenity_' || CASE WHEN amenity IN
 /// (...) THEN amenity`.
@@ -984,7 +1007,6 @@ func add(
     let textLayer = lowPriority ? "text-low-priority" : "text-point"
     var base: [String: Literal] = [
         "feature": .text(feature),
-        "int_access": .text("yes"),
         "is_building": .text("no"),
         // A point has no area: the main layer counts that as nothing, the
         // low-priority one as missing.
@@ -996,7 +1018,7 @@ func add(
         .flatMap { key in testedValues(key).map { (key, Optional($0)) } }
     let required = requires.map { requires in requires.values.map { (key: requires.key, value: Optional($0)) } }
     let namings: [Bool?] = rules(of: feature, shop: shop, test: "name") ? [true, false] : [nil]
-    var produced: [[Band]] = []
+    var produced: [[[Band]]] = []
     // A feature that asks for a further tag is drawn only with it.
     let plain: (key: String, value: String?) = ("", nil)
     for detail in required ?? [plain] + tested {
@@ -1004,17 +1026,21 @@ func add(
             var attributes = base
             attributes["name"] = named == false ? .null : .text("name")
             if let value = detail.value { attributes[detail.key] = .text(value) }
-            let point = Point(layer: iconLayer, attributes: attributes)
-            let result = bands(
-                of: point,
-                textLayer: textLayer,
-                iconLayerZoom: minimumZoom(of: iconLayer),
-                textLayerZoom: minimumZoom(of: textLayer)
-            )
+            let withAccess = { (access: String) in
+                attributes["int_access"] = .text(access)
+                return bands(
+                    of: Point(layer: iconLayer, attributes: attributes),
+                    textLayer: textLayer,
+                    iconLayerZoom: minimumZoom(of: iconLayer),
+                    textLayerZoom: minimumZoom(of: textLayer)
+                )
+            }
+            let result = withAccess("yes")
+            let restricted = withAccess("restricted")
             guard !result.isEmpty else { continue }
             // A detail that changes nothing is the plain kind's.
-            if required == nil, detail.value != nil, produced.contains(result) { continue }
-            produced.append(result)
+            if required == nil, detail.value != nil, produced.contains([result, restricted]) { continue }
+            produced.append([result, restricted])
             entries.append(Entry(
                 kind: kind,
                 detail: detail.value,
@@ -1022,6 +1048,7 @@ func add(
                 feature: feature,
                 lowPriority: lowPriority,
                 elevation: writesElevation(feature: feature, detail: detail.value) ? true : nil,
+                restricted: restricted == result ? nil : restricted,
                 bands: result
             ))
         }
@@ -1081,7 +1108,7 @@ for shop in drawnShops {
 
 // The release, which `Scripts/carto-points.sh` names: a tarball has no tag.
 let version = ProcessInfo.processInfo.environment["CARTO_VERSION"] ?? "unknown"
-let table = Table(source: "openstreetmap-carto \(version)", entries: entries)
+let table = Table(source: "openstreetmap-carto \(version)", restrictedAccess: restrictedAccess, entries: entries)
 let encoder = JSONEncoder()
 encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
 do {

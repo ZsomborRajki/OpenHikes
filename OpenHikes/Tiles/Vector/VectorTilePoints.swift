@@ -92,7 +92,13 @@ nonisolated enum VectorTilePoints {
             guard let kind = feature.string("kind") else { continue }
             let name = VectorTileLabels.name(of: feature, language: language)
             let detail = feature.string("kind_detail")
-            guard let look = style.look(kind: kind, detail: detail, named: name != nil, z: target.z) else { continue }
+            guard let look = style.look(
+                kind: kind,
+                detail: detail,
+                named: name != nil,
+                z: target.z,
+                access: feature.string("access")
+            ) else { continue }
             let elevation = feature.number("elevation")
             var lines: [String] = []
             if look.text != nil {

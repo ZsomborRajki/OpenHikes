@@ -1147,20 +1147,23 @@ a change to recording, the map, the sheet or the render path; the PR template,
     `VectorTilePointStyle` reads the table. A new Carto release is a re-run
     and a read of the table's diff. The archive files a point by its value
     alone, so where two keys share a value the table gives it to one: a
-    `gate` is a barrier's, not an airport's.
+    `gate` is a barrier's, not an airport's. Where Carto draws a point
+    differently for an `access` its queries count as restricted — a private
+    car park faded, a private toilet a zoom later — the table holds that look
+    too, for whichever points the tile carries an `access` on.
   - **The extras fill in what the archive leaves out** (`VectorTileSource.Extras`):
-    unnamed car parks, barriers and the fences, walls and hedges Carto draws,
-    `man_made` points, offices, an information point's type, a vending
-    machine's goods and waterfalls. `Scripts/vector-extras.sh` builds them
-    from the planet (`osmium` with `Scripts/lib/vector-extras.filter`, then
-    Planetiler with `Scripts/lib/vector-extras.yml`) into
-    `extras-<planet date>.pmtiles`, named as the archive's layers are so a
-    tile of each merges into one, and `Scripts/vector-extras.sh upload` puts
-    them beside the basemap under a new name each time, signing with R2 keys
-    kept outside the repository. The app asks for their tile beside the
-    basemap's from zoom 14. They add to the map and are never its reason to
-    fall back: a tile they lack, fail to give or cannot read, or one the
-    device loses on the way, leaves the basemap drawn.
+    unnamed car parks with their `access`, barriers and the fences, walls and
+    hedges Carto draws, `man_made` points, offices, an information point's
+    type, a vending machine's goods and waterfalls. `Scripts/vector-extras.sh`
+    builds them from the planet (`osmium` with
+    `Scripts/lib/vector-extras.filter`, then Planetiler with
+    `Scripts/lib/vector-extras.yml`) into `extras-<planet date>.pmtiles`,
+    named as the archive's layers are so a tile of each merges into one, and
+    `Scripts/vector-extras.sh upload` puts them beside the basemap under a new
+    name each time, signing with R2 keys kept outside the repository. The app
+    asks for their tile beside the basemap's from zoom 14. They add to the map
+    and are never its reason to fall back: a tile they lack, fail to give or
+    cannot read, or one the device loses on the way, leaves the basemap drawn.
   - **Names are drawn into the tile.**
     - **Place names** (`VectorTileLabels`): places, lakes and glaciers.
       Summits, passes and huts are points, named under their icons with their

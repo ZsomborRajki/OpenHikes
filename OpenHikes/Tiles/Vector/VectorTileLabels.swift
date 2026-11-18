@@ -199,7 +199,9 @@ nonisolated enum VectorTileLabels {
 /// text matrix flips glyphs upright.
 nonisolated struct InkedText {
     let ink: CTLine
-    let halo: CTLine
+    /// None where the halo has no width: a stroke of no width is CoreText's
+    /// default, filling the letters in black.
+    let halo: CTLine?
     let width: CGFloat
     let ascent: CGFloat
     let descent: CGFloat
@@ -223,11 +225,11 @@ nonisolated struct InkedText {
         // A positive stroke width strokes without filling. It is a share of
         // the font's size, and half of it lies outside the letters.
         let haloPercent = 2 * haloWidth * unit / max(size, 1) * 100
-        halo = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [
+        halo = haloPercent > 0 ? CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [
             key(kCTFontAttributeName): font,
             key(kCTStrokeColorAttributeName): haloColor,
             key(kCTStrokeWidthAttributeName): haloPercent,
-        ]))
+        ])) : nil
         var rise: CGFloat = 0
         var fall: CGFloat = 0
         width = CGFloat(CTLineGetTypographicBounds(ink, &rise, &fall, nil))
@@ -236,6 +238,7 @@ nonisolated struct InkedText {
     }
 
     func drawHalo(at baseline: CGPoint, context: CGContext) {
+        guard let halo else { return }
         context.textPosition = baseline
         CTLineDraw(halo, context)
     }
