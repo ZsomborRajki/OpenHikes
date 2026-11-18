@@ -1317,11 +1317,11 @@ owner, on the main actor.
 - **No suite reaches the server or the session.**
   `OfflineCountries.forThisLaunch()` has neither under `isRunningTests`, and
   `TileCache.shared` has no areas there.
-- **Deployment state, checked 2026-11-18.** The bucket holds Slovenia, cut
-  from planet build `20261117` as one file to zoom 15 before the files were
-  split by zoom, and a manifest listing it in that form. The Worker deployed
-  to `tiles.openhikes.app` has no `countries/` route yet, so the list fails
-  to load until it does.
+- **Deployment state, checked 2026-11-18.** The bucket holds every area cut
+  from planet build `20261117`: 381 of them (234 countries, and the 51
+  states, 13 provinces and 83 regions of the three split ones), 1,524 files
+  and 147.6 GB, each at the size and SHA-256 the manifest lists. The Worker
+  on `tiles.openhikes.app` serves the manifest and the files, with ranges.
 
 ### Accessibility
 
