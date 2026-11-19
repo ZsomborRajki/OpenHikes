@@ -21,6 +21,7 @@ suites=(
   LibraryLinesUITests
   MapModesUITests
   MapScreenAlertUITests
+  OfflineMapsUITests
   OrientationUITests
   RecordingUITests
   TrailMakerUITests
