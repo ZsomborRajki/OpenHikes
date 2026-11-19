@@ -127,7 +127,7 @@ struct SeededOfflineCountryServerTests {
         let countries = countries(.seeded)
         await countries.refreshList()
 
-        #expect(countries.countries(along: [Self.trailhead]).map(\.id) == ["DE"])
+        #expect(countries.coverage(along: [Self.trailhead]).crossed.map(\.id) == ["DE"])
     }
 
     @Test("a refused list fails, and the seeded one downloads nothing")

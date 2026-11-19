@@ -4,14 +4,14 @@
 //
 //  What a launch makes of the countries: the list kept from the last visit
 //  is there with no signal, a download that landed while the app was away is
-//  installed, and the screens' questions — which countries a trail crosses,
-//  which the list puts first — are answered from the outlines.
+//  installed, and the list's question — which countries it puts first — is
+//  answered from the outlines. Which countries a trail crosses is
+//  `OfflineRouteCoverageTests`'.
 //
 
 import CoreLocation
 import Foundation
 @testable import OpenHikes
-import OpenHikesData
 import Testing
 
 @MainActor
@@ -143,47 +143,6 @@ struct OfflineCountriesLaunchTests {
             await countries.refreshList()
 
             #expect(countries.listed == [country])
-        }
-    }
-
-    @Test("a trail's countries are the ones it passes through, in the order it reaches them")
-    func countriesAlongATrail() async throws {
-        try await OfflineCountryFixture.withDirectory { directory in
-            let store = OfflineCountryStore(directory: directory)
-            let austria = OfflineCountryFixture.northernCountry(bytes: basemap)
-            let slovenia = OfflineCountryFixture.country(bytes: basemap, id: "SI")
-            let server = StubCountryServer(OfflineCountryFixture.manifest([austria, slovenia]))
-            let countries = countries(store, server: server)
-            await countries.refreshList()
-
-            // North out of the one outline and into the other.
-            let trail = [
-                CLLocationCoordinate2D(latitude: 46.48, longitude: 13.78),
-                CLLocationCoordinate2D(latitude: 46.85, longitude: 13.80),
-                CLLocationCoordinate2D(latitude: 47.01, longitude: 13.85),
-            ]
-            #expect(countries.countries(along: trail).map(\.id) == ["SI", "AT"])
-            #expect(countries.countries(along: [CLLocationCoordinate2D(latitude: 40, longitude: -3)]).isEmpty)
-        }
-    }
-
-    /// A saved line is thinned before it is tested, and its last point is
-    /// always among those tested: a trail that only just crosses a border at
-    /// its end still names the country it ends in.
-    @Test("a saved line's countries include the one it ends in")
-    func countriesAlongASavedLine() async throws {
-        try await OfflineCountryFixture.withDirectory { directory in
-            let austria = OfflineCountryFixture.northernCountry(bytes: basemap)
-            let slovenia = OfflineCountryFixture.country(bytes: basemap, id: "SI")
-            let server = StubCountryServer(OfflineCountryFixture.manifest([austria, slovenia]))
-            let countries = countries(OfflineCountryStore(directory: directory), server: server)
-            await countries.refreshList()
-            // A thousand points in the one, and the last a step over the line.
-            var route = (0..<1000).map { RouteCoordinate(latitude: 46.0 + Double($0) * 0.0009, longitude: 14.0) }
-            route.append(RouteCoordinate(latitude: 47.0, longitude: 14.0))
-
-            #expect(countries.countries(alongRoute: route, testing: 3).map(\.id) == ["SI", "AT"])
-            #expect(countries.countries(alongRoute: []).isEmpty)
         }
     }
 
