@@ -26,7 +26,6 @@ nonisolated final class PMTilesArchive: Sendable {
     /// The format's own limit on how deep leaf directories nest.
     static let maximumDirectoryDepth = 4
 
-    let url: URL
     let header: PMTilesHeader
     private let fileSize: UInt64
     private let root: [PMTilesEntry]
@@ -56,7 +55,6 @@ nonisolated final class PMTilesArchive: Sendable {
         } else {
             rootBytes = try Self.read(parsed.rootDirectoryOffset, parsed.rootDirectoryLength, from: handle, size: size)
         }
-        self.url = url
         header = parsed
         fileSize = size
         root = try PMTilesDirectory.entries(
