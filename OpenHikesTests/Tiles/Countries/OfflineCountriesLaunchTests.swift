@@ -5,7 +5,7 @@
 //  What a launch makes of the countries: the list kept from the last visit
 //  is there with no signal, a download that landed while the app was away is
 //  installed, and the screens' questions — which countries a trail crosses,
-//  which are near — are answered from the outlines.
+//  which the list puts first — are answered from the outlines.
 //
 
 import CoreLocation
@@ -164,10 +164,6 @@ struct OfflineCountriesLaunchTests {
             ]
             #expect(countries.countries(along: trail).map(\.id) == ["SI", "AT"])
             #expect(countries.countries(along: [CLLocationCoordinate2D(latitude: 40, longitude: -3)]).isEmpty)
-
-            let nearby = countries.nearby(CLLocationCoordinate2D(latitude: 46.05, longitude: 14.5))
-            #expect(nearby.map(\.id) == ["SI", "AT"])
-            #expect(countries.nearby(CLLocationCoordinate2D(latitude: 40, longitude: -3)).isEmpty)
         }
     }
 
@@ -209,14 +205,28 @@ struct OfflineCountriesLaunchTests {
             await countries.start()
             await countries.refreshList()
 
+            let listing = { (near: CLLocationCoordinate2D?) in
+                OfflineCountryDirectory(
+                    listed: countries.listed,
+                    near: near,
+                    letter: OfflineCountryLetter.ofTheAppLanguage()
+                )
+            }
             let fromLjubljana = countries.sections(
-                of: countries.listed,
-                near: CLLocationCoordinate2D(latitude: 46.05, longitude: 14.5)
+                of: listing(CLLocationCoordinate2D(latitude: 46.05, longitude: 14.5)),
+                by: .nearest
             )
-            #expect(fromLjubljana == OfflineCountrySections(held: [slovenia], nearby: [austria], rest: [.area(spain)]))
-            let nowhere = countries.sections(of: countries.listed, near: nil)
-            #expect(nowhere.nearby.isEmpty)
-            #expect(nowhere.rest.map(\.id).sorted() == ["AT", "ES"])
+            #expect(fromLjubljana == OfflineCountrySections(
+                held: [slovenia],
+                parts: [
+                    OfflineCountrySections.Part(heading: .nearby, lines: [.area(austria)]),
+                    OfflineCountrySections.Part(heading: .all, lines: [.area(spain)]),
+                ]
+            ))
+            let nowhere = countries.sections(of: listing(nil), by: .nearest)
+            #expect(nowhere.held == [slovenia])
+            #expect(nowhere.parts.map(\.heading) == [.letter("A"), .letter("S")], "by name, with no position")
+            #expect(nowhere.parts.flatMap(\.lines).map(\.id) == ["AT", "ES"])
         }
     }
 }

@@ -5,7 +5,8 @@
 //  *Offline Maps*, pushed into the map sheet from *Map Modes*: the list of
 //  countries over the map, with every country outlined behind it and the
 //  downloaded ones filled. A row shows its country on the map; a tap inside
-//  an outline chooses its row. The map is the point of putting the list here
+//  an outline chooses its row. The list's search field takes the whole sheet,
+//  as the sheet's own does. The map is the point of putting the list here
 //  rather than in Settings alone: whether the stretch of a trail over a
 //  border is in a download is a question the map answers at a glance.
 //
@@ -17,20 +18,26 @@ struct OfflineCountriesScreen: View {
     let countries: OfflineCountries
     let locationManager: LocationManager
     let mapController: MapController
-    /// Brings the sheet down to its middle, so the map is in view.
-    let onShowMap: () -> Void
+    /// The sheet the list is in, for the height it stands at: its middle to
+    /// show an area on the map, and the whole of it to search in. Only the
+    /// coarse flag is read here, so a drag re-runs this once it settles.
+    let presentation: SheetPresentation
 
     @State private var token: Int?
     @State private var selectedID: String?
     @State private var near: CLLocationCoordinate2D?
 
     var body: some View {
-        OfflineCountriesList(countries: countries, near: near, selectedID: selectedID) { country in
+        OfflineCountriesList(
+            countries: countries,
+            near: near,
+            selectedID: selectedID,
+            hasFullHeight: presentation.isFullHeight,
+            onSearch: presentation.makeRoomToSearch
+        ) { country in
             select(country.id, framing: true)
         }
         .scrollContentBackground(.hidden)
-        // What the side panel stands as tall as — see ``SidePanelFit``.
-        .fitsSidePanel()
         .navigationTitle("Offline Maps")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -80,7 +87,7 @@ struct OfflineCountriesScreen: View {
         selectedID = id
         showOutlines()
         guard framing, let country = countries.listed.first(where: { $0.id == id }) else { return }
-        onShowMap()
+        presentation.makeRoomForTheMap()
         mapController.show(country.bounds.framingRegion)
     }
 }

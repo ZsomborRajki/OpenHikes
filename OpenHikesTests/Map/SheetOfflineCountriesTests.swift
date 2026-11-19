@@ -6,7 +6,7 @@
 //  over whatever the sheet shows, so it is pushed on top of that, with the
 //  sheet at its middle so the outlines behind it are in view; and opened
 //  again while it is already further down, it is come back to rather than
-//  pushed twice.
+//  pushed twice. Its search field takes the whole sheet.
 //
 
 @testable import OpenHikes
@@ -49,5 +49,16 @@ struct SheetOfflineCountriesTests {
 
         presentation.showOfflineCountries()
         #expect(presentation.path == [.offlineCountries])
+    }
+
+    @Test("the list's search field raises the sheet to its full height")
+    func searching() {
+        let presentation = SheetPresentation(detent: .medium)
+        presentation.path = [.offlineCountries]
+
+        presentation.makeRoomToSearch()
+
+        #expect(presentation.detent == .large)
+        #expect(presentation.isFullHeight)
     }
 }

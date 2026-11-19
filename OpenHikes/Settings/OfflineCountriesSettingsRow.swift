@@ -46,8 +46,20 @@ private struct SettingsOfflineCountries: View {
 
     @State private var near: CLLocationCoordinate2D?
 
+    private static let ground: Color = {
+        #if os(macOS)
+        Color(nsColor: .windowBackgroundColor)
+        #else
+        Color(uiColor: .systemGroupedBackground)
+        #endif
+    }()
+
     var body: some View {
         OfflineCountriesList(countries: countries, near: near)
+            // The list's own ground, under the bar that stands over it too:
+            // in the map's sheet both are on its glass, and here there is
+            // none.
+            .background(Self.ground)
             .navigationTitle("Offline Maps")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)

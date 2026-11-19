@@ -25,7 +25,7 @@ extension MapSheet {
                 countries: appModel.offlineCountries,
                 locationManager: appModel.locationManager,
                 mapController: mapController,
-                onShowMap: presentation.makeRoomForTheMap
+                presentation: presentation
             )
         case .commonsGallery, .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto, .hike, .newPlace,
             .pendingPhotos, .pendingSubmission, .photo, .place, .placesAround, .placesNearby, .recording,

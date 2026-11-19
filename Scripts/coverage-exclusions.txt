@@ -219,6 +219,18 @@
 # `MapCoordinatorTests+CountryOutlines`), and the push is
 # `SheetPresentation.showOfflineCountries()`'s (`SheetOfflineCountriesTests`).
 #
+# Four arrived on 2026-11-19 with the list's search and orders: the bar over
+# the list (`OfflineCountriesBar`) and the head of it, which says which map
+# the downloads are for and holds *Extra Detail* (`OfflineCountriesHead`),
+# and two pieces of body code the hikes list shares: the capsule that says a
+# list's order (`SortMenu`, folded out of `MapSheetHikes`) and the modifiers
+# that file a list's sections in its index (`SectionIndex`). What they decide
+# stays measured: the orders and the search are `OfflineCountryDirectory`'s
+# and `OfflineCountrySort`'s (`OfflineCountryDirectoryTests`), which map the
+# downloads are drawn on is `OfflineCountries.areDrawn(on:)`'s
+# (`OfflineCountriesListingTests`), and the way back to it is
+# `StoredSettings.setTileProviderID(_:)`'s (`StoredSettingsTests`).
+#
 # The UI suites still exist and still run locally:
 #
 #   Scripts/run-ui-tests.sh --all
@@ -328,3 +340,7 @@ OpenHikes/Map/MapSheet+OfflineCountries.swift
 OpenHikes/Map/Modes/MapModesOfflineMapsRow.swift
 OpenHikes/Settings/OfflineCountriesSettingsRow.swift
 OpenHikes/Hikes/Detail/HikeOfflineCountryTile.swift
+OpenHikes/Tiles/Countries/OfflineCountriesBar.swift
+OpenHikes/Tiles/Countries/OfflineCountriesHead.swift
+OpenHikes/General/SortMenu.swift
+OpenHikes/General/SectionIndex.swift
