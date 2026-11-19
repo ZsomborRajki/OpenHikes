@@ -9,12 +9,14 @@
 # one-way ways in their own direction, the size of each named area, the
 # ground it has no kind for (scree, heath, quarries, vineyards), parks and
 # protected areas, lifts and their stations, power lines, dams and ridges,
-# and the huts, stations and summits Carto shows before the basemap has
-# them. The extras are those, as a second PMTiles archive the app draws into
-# the basemap's tiles (`VectorTileSource.extras`).
+# cliffs in their own direction, trees, the water that is not always there,
+# what picks the symbols of a wood or a wetland, the names of buildings, and
+# the huts, stations and summits Carto shows before the basemap has them.
+# The extras are those, as a second PMTiles archive the app draws into the
+# basemap's tiles (`VectorTileSource.extras`).
 #
 # It cuts the planet down with `osmium tags-filter` and
-# Scripts/lib/vector-extras.filter, and the named areas with
+# Scripts/lib/vector-extras.filter, and the named areas and buildings with
 # Scripts/lib/vector-extras-areas.filter and a second cut for a name, then
 # builds the archive with Planetiler from Scripts/lib/vector-extras.yml. Bring the planet up to date first with
 # `Scripts/trail-cells.sh update-planet`. The archive is named for the date
@@ -128,8 +130,9 @@ trap 'rm -rf "$SCRATCH"' EXIT
 osmium tags-filter "$PLANET" \
   --expressions="$REPO_ROOT/Scripts/lib/vector-extras.filter" \
   --output="$SCRATCH/points.osm.pbf" --overwrite
-# The named areas: every area of the kinds whose names the extras keep, then
-# the named ones among them, which osmium cannot ask for in one pass.
+# The named areas and buildings: every area of the kinds whose names the
+# extras keep and every building, then the named ones among them, which
+# osmium cannot ask for in one pass.
 osmium tags-filter "$PLANET" \
   --expressions="$REPO_ROOT/Scripts/lib/vector-extras-areas.filter" \
   --output="$SCRATCH/areas.osm.pbf" --overwrite

@@ -53,3 +53,20 @@ wr/boundary=aboriginal_lands,national_park,protected_area
 w/power=line,minor_line
 w/waterway=dam,weir,lock_gate
 w/natural=ridge,arete
+# What Carto picks an area's symbols by and the basemap drops: a wood's
+# leaves, a wetland's kind, a beach's surface, a cemetery's religion. The
+# first two are asked for by the tag itself, because the woods and wetlands
+# without one are most of them and the schema keeps none.
+wr/leaf_type=broadleaved,needleleaved,mixed,leafless
+wr/wetland=marsh,saltmarsh,wet_meadow,reedbed,mangrove,swamp,bog,fen,string_bog,tidalflat
+wr/natural=beach,shoal
+wr/landuse=cemetery,salt_pond
+wr/military=danger_area
+# Cliffs and embankments in their own direction, the lines cut through a
+# forest, and trees alone or in a row.
+w/natural=cliff,tree_row
+w/man_made=embankment,cutline
+n/natural=tree
+# Water that is not always there.
+wr/intermittent=yes
+wr/seasonal=yes,spring,summer,autumn,winter,wet_season,dry_season
