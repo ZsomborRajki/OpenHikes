@@ -228,15 +228,30 @@ nonisolated enum VectorTilePoints {
 
         /// Each candidate's name under, over or on its point, as its style
         /// offsets it, where it finds room.
-        init(_ candidates: [Candidate], unit: CGFloat, room: inout Room, fonts: inout LabelFonts) {
+        /// - Parameter margin: the room each name keeps from everything
+        ///   placed before it, in the picture's pixels.
+        init(
+            _ candidates: [Candidate],
+            unit: CGFloat,
+            room: inout Room,
+            fonts: inout LabelFonts,
+            margin: CGFloat = 0
+        ) {
             for candidate in candidates {
-                place(candidate, unit: unit, room: &room, fonts: &fonts)
+                place(candidate, unit: unit, room: &room, fonts: &fonts, margin: margin)
             }
         }
 
         /// The candidate's name under, over or on its point, as its style
-        /// offsets it, where it finds room.
-        mutating func place(_ candidate: Candidate, unit: CGFloat, room: inout Room, fonts: inout LabelFonts) {
+        /// offsets it, where it finds room `margin` pixels clear of
+        /// everything placed before it.
+        mutating func place(
+            _ candidate: Candidate,
+            unit: CGFloat,
+            room: inout Room,
+            fonts: inout LabelFonts,
+            margin: CGFloat = 0
+        ) {
             guard !candidate.lines.isEmpty, let style = candidate.look.text else { return }
             let block = NameBlock(candidate.lines, style: style, unit: unit, fonts: &fonts)
             let size = block.size
@@ -246,7 +261,7 @@ nonisolated enum VectorTilePoints {
                 : candidate.anchor.y - size.height / 2
             let left = candidate.anchor.x - size.width / 2
             let frame = CGRect(x: left, y: top, width: size.width, height: size.height)
-            guard let moved = room.inside(frame), room.isFree(moved) else { return }
+            guard let moved = room.inside(frame), room.isFree(moved.insetBy(dx: -margin, dy: -margin)) else { return }
             room.take(moved)
             placed.append((block, moved))
         }

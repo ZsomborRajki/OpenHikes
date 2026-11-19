@@ -39,7 +39,7 @@ nonisolated enum VectorTileRasterizer {
     /// The properties read, the names in `language` among them.
     static func propertyKeys(language: String) -> Set<String> {
         VectorTileLabels.propertyKeys(language: language).union([
-            "kind", "kind_detail", "is_tunnel", "is_bridge", "disputed", "access",
+            "kind", "kind_detail", "is_tunnel", "is_bridge", "disputed", "access", "oneway", "addr_housenumber",
         ])
     }
 
@@ -132,75 +132,6 @@ nonisolated private struct Painter {
         paintRoads()
         paintBoundaries()
         paintLabels()
-    }
-
-    /// Names and the points' icons last, over everything they name, each
-    /// claiming room in the order OpenStreetMap Carto's layers claim it:
-    /// places, the stations' icons and names, the points' icons, the names
-    /// along streets and paths, the points' names, the names along water, and
-    /// last the low-priority icons and names — benches, bins, wayside crosses.
-    private func paintLabels() {
-        let side = CGFloat(VectorTileRasterizer.pixelSize)
-        let bounds = CGRect(x: 0, y: 0, width: side, height: side)
-        let places = VectorTileLabels.Layout(
-            VectorTileLabels.candidates(in: tile, source: source, target: target, bounds: bounds, language: language),
-            z: z,
-            unit: unit,
-            bounds: bounds,
-            language: language
-        )
-        let candidates = VectorTilePoints.candidates(
-            in: tile,
-            source: source,
-            target: target,
-            language: language,
-            height: height,
-            style: points.style
-        )
-        let main = candidates.filter { !$0.look.lowPriority && !$0.look.isStation }
-        let low = candidates.filter(\.look.lowPriority)
-        // Mapnik keeps no room between a point and a name; the names along
-        // lines keep theirs from everything, `occupied` included.
-        var room = VectorTilePoints.Room(bounds: bounds, taken: places.placements.map(\.frame))
-        var fonts = LabelFonts(language: language)
-        let stations = VectorTilePoints.Stations(
-            candidates.filter(\.look.isStation),
-            unit: unit,
-            room: &room,
-            fonts: &fonts
-        )
-        let icons = VectorTilePoints.Icons(main, unit: unit, room: &room)
-        let named = VectorTileLineLabels.lines(in: tile, source: source, target: target, language: language)
-        let streets = VectorTileLineLabels.Layout(
-            named.filter { !$0.category.isWater },
-            z: z,
-            unit: unit,
-            bounds: bounds,
-            occupied: room.taken,
-            language: language
-        )
-        room = VectorTilePoints.Room(bounds: bounds, taken: streets.taken)
-        let names = VectorTilePoints.Names(main, unit: unit, room: &room, fonts: &fonts)
-        let water = VectorTileLineLabels.Layout(
-            named.filter(\.category.isWater),
-            z: z,
-            unit: unit,
-            bounds: bounds,
-            occupied: room.taken,
-            language: language
-        )
-        room = VectorTilePoints.Room(bounds: bounds, taken: water.taken)
-        let lowIcons = VectorTilePoints.Icons(low, unit: unit, room: &room)
-        let lowNames = VectorTilePoints.Names(low, unit: unit, room: &room, fonts: &fonts)
-        stations.icons.draw(into: context, icons: points.icons)
-        icons.draw(into: context, icons: points.icons)
-        lowIcons.draw(into: context, icons: points.icons)
-        streets.draw(into: context)
-        water.draw(into: context)
-        places.draw(into: context)
-        stations.names.draw(into: context)
-        names.draw(into: context)
-        lowNames.draw(into: context)
     }
 
     private func paintGround() {
@@ -410,6 +341,103 @@ nonisolated private struct Painter {
         return measured
             .sorted { lhs, rhs in lhs.area == rhs.area ? lhs.index < rhs.index : lhs.area > rhs.area }
             .map(\.pair)
+    }
+}
+
+// MARK: - Names, points and arrows
+
+nonisolated private extension Painter {
+    var bounds: CGRect {
+        let side = CGFloat(VectorTileRasterizer.pixelSize)
+        return CGRect(x: 0, y: 0, width: side, height: side)
+    }
+
+    /// Names, the points' icons and the one-way arrows last, over everything
+    /// they name, each claiming room in the order OpenStreetMap Carto's
+    /// layers claim it: places, the stations' icons and names, the points'
+    /// icons, the names along streets and paths and then their arrows, the
+    /// points' names, the house numbers, the names along water, and last the
+    /// low-priority icons and names — benches, bins, wayside crosses.
+    func paintLabels() {
+        let places = placeNames()
+        let candidates = pointCandidates()
+        let main = candidates.filter { !$0.look.lowPriority && !$0.look.isStation }
+        let low = candidates.filter(\.look.lowPriority)
+        // Mapnik keeps no room between a point and a name; the names along
+        // lines keep theirs from everything, `occupied` included.
+        var room = VectorTilePoints.Room(bounds: bounds, taken: places.placements.map(\.frame))
+        var fonts = LabelFonts(language: language)
+        let stations = VectorTilePoints.Stations(
+            candidates.filter(\.look.isStation),
+            unit: unit,
+            room: &room,
+            fonts: &fonts
+        )
+        let icons = VectorTilePoints.Icons(main, unit: unit, room: &room)
+        let named = VectorTileLineLabels.lines(in: tile, source: source, target: target, language: language)
+        let streets = VectorTileLineLabels.Layout(
+            named.filter { !$0.category.isWater },
+            z: z,
+            unit: unit,
+            bounds: bounds,
+            occupied: room.taken,
+            language: language
+        )
+        room = VectorTilePoints.Room(bounds: bounds, taken: streets.taken)
+        let oneWay = VectorTileArrows.lines(in: tile, source: source, target: target)
+        let arrows = VectorTileArrows.Layout(oneWay, unit: unit, room: &room)
+        let names = VectorTilePoints.Names(main, unit: unit, room: &room, fonts: &fonts)
+        let numbers = VectorTilePoints.Names(
+            VectorTileHouseNumbers.candidates(in: tile, source: source, target: target),
+            unit: unit,
+            room: &room,
+            fonts: &fonts,
+            margin: VectorTileHouseNumbers.margin * unit
+        )
+        let water = VectorTileLineLabels.Layout(
+            named.filter(\.category.isWater),
+            z: z,
+            unit: unit,
+            bounds: bounds,
+            occupied: room.taken,
+            language: language
+        )
+        room = VectorTilePoints.Room(bounds: bounds, taken: water.taken)
+        let lowIcons = VectorTilePoints.Icons(low, unit: unit, room: &room)
+        let lowNames = VectorTilePoints.Names(low, unit: unit, room: &room, fonts: &fonts)
+        stations.icons.draw(into: context, icons: points.icons)
+        icons.draw(into: context, icons: points.icons)
+        lowIcons.draw(into: context, icons: points.icons)
+        arrows.draw(into: context, unit: unit)
+        streets.draw(into: context)
+        water.draw(into: context)
+        places.draw(into: context)
+        stations.names.draw(into: context)
+        names.draw(into: context)
+        numbers.draw(into: context)
+        lowNames.draw(into: context)
+    }
+
+    /// The names of places, lakes and glaciers, which claim room first.
+    func placeNames() -> VectorTileLabels.Layout {
+        VectorTileLabels.Layout(
+            VectorTileLabels.candidates(in: tile, source: source, target: target, bounds: bounds, language: language),
+            z: z,
+            unit: unit,
+            bounds: bounds,
+            language: language
+        )
+    }
+
+    func pointCandidates() -> [VectorTilePoints.Candidate] {
+        VectorTilePoints.candidates(
+            in: tile,
+            source: source,
+            target: target,
+            language: language,
+            height: height,
+            style: points.style
+        )
     }
 }
 
