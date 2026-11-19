@@ -13,7 +13,9 @@
 //  addresses comes, and each keeps Carto's margin from everything placed
 //  before it. They are placed as the points' names are
 //  (``VectorTilePoints/Names``), so a number belongs to the tile its point
-//  lies in, and is moved inward rather than cut at the tile's edge.
+//  lies in, and is moved inward rather than cut at the tile's edge. It keeps
+//  the margin from the edge too, because the number across it is placed by
+//  another tile, and two numbers either side of the edge would run together.
 //
 
 import CoreGraphics
@@ -23,7 +25,8 @@ nonisolated enum VectorTileHouseNumbers {
     /// Carto writes house numbers from this zoom.
     static let minimumZ = 17
     /// Carto's `text-margin`: the room a number keeps from everything placed
-    /// before it, in the pixels of a 256-pixel tile.
+    /// before it, and here from the tile's edge, in the pixels of a 256-pixel
+    /// tile.
     static let margin: CGFloat = 3
 
     /// The house numbers `tile` offers at `target`'s zoom whose points lie on

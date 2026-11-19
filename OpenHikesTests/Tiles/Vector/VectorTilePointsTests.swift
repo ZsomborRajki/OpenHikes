@@ -11,6 +11,7 @@
 import CoreGraphics
 import Foundation
 @testable import OpenHikes
+import RealModule
 import Testing
 
 @Suite("Vector tile points")
@@ -113,6 +114,21 @@ struct VectorTilePointsTests {
 
         let frame = try #require(icons.frames.first)
         #expect(frame.minX == 0)
+    }
+
+    /// The tile beside could not finish a halo cut at the edge.
+    @Test("a name near the tile's edge is moved in until its halo is inside")
+    func nameKeepsItsHaloInside() throws {
+        let points = try candidates([poi(["kind": .string("fuel"), "name": .string("MOL")], at: (2, grid / 2))])
+        let halo = try #require(points.first?.look.text?.haloRadius) * unit
+        var room = VectorTilePoints.Room(bounds: bounds, taken: [])
+        var fonts = LabelFonts(language: "en")
+
+        let names = VectorTilePoints.Names(points, unit: unit, room: &room, fonts: &fonts)
+
+        let frame = try #require(names.frames.first)
+        #expect(halo > 0)
+        #expect(frame.minX.isApproximatelyEqual(to: halo, absoluteTolerance: 0.001))
     }
 
     @Test("a point's name stands under its icon")

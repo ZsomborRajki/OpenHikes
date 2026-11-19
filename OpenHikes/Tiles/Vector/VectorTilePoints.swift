@@ -18,8 +18,9 @@
 //  its name, because one layer draws both.
 //
 //  As with every name, a point belongs to the tile its point lies in, and
-//  what is drawn for it never crosses the tile's edge: near the edge it is
-//  moved inward, by no more than it would have crossed.
+//  what is drawn for it, a name's halo included, never crosses the tile's
+//  edge: near the edge it is moved inward, by no more than it would have
+//  crossed.
 //
 
 import CoreGraphics
@@ -229,7 +230,8 @@ nonisolated enum VectorTilePoints {
         /// Each candidate's name under, over or on its point, as its style
         /// offsets it, where it finds room.
         /// - Parameter margin: the room each name keeps from everything
-        ///   placed before it, in the picture's pixels.
+        ///   placed before it and from the tile's edge, in the picture's
+        ///   pixels.
         init(
             _ candidates: [Candidate],
             unit: CGFloat,
@@ -244,7 +246,11 @@ nonisolated enum VectorTilePoints {
 
         /// The candidate's name under, over or on its point, as its style
         /// offsets it, where it finds room `margin` pixels clear of
-        /// everything placed before it.
+        /// everything placed before it. Near the edge it is moved inward
+        /// until its halo, and `margin` beyond it, are inside the tile: the
+        /// tile beside cannot finish a halo cut at the edge, and its own
+        /// names cannot see this one, so the margin keeps two names either
+        /// side of the edge apart, as the names along lines keep theirs.
         mutating func place(
             _ candidate: Candidate,
             unit: CGFloat,
@@ -261,7 +267,10 @@ nonisolated enum VectorTilePoints {
                 : candidate.anchor.y - size.height / 2
             let left = candidate.anchor.x - size.width / 2
             let frame = CGRect(x: left, y: top, width: size.width, height: size.height)
-            guard let moved = room.inside(frame), room.isFree(moved.insetBy(dx: -margin, dy: -margin)) else { return }
+            let reach = style.haloRadius * unit + margin
+            guard let fitted = room.inside(frame.insetBy(dx: -reach, dy: -reach)) else { return }
+            let moved = fitted.insetBy(dx: reach, dy: reach)
+            guard room.isFree(moved.insetBy(dx: -margin, dy: -margin)) else { return }
             room.take(moved)
             placed.append((block, moved))
         }

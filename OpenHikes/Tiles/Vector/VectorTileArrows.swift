@@ -8,31 +8,32 @@
 //  street's casing; along a path, a barbed arrow in a darker shade of the
 //  path, with a halo.
 //
-//  The archive keeps a way's `oneway` tag as it is tagged, from zoom 14. An
-//  arrow points along the line as drawn where it is `yes`, and against it
-//  where it is `-1`; any other value has none, as in Carto. Carto also takes
-//  a roundabout to be one-way, and the archive keeps no `junction`, so a
-//  roundabout has arrows only where it is tagged `oneway` itself.
-//
-//  The archive merges a street's pieces into one line and keeps the way each
-//  runs where it can. Where two pieces with the same tags meet head to head
-//  it cannot, and one of them is drawn pointing back.
+//  The arrows come from the vector extras' `oneways` layer, where every
+//  one-way street and path is a line of its own, its nodes in OpenStreetMap's
+//  order (`Scripts/lib/vector-extras.yml`). The basemap's roads carry
+//  `oneway` too, but Planetiler merges a road's pieces into one line to build
+//  them, and turns a piece around where that joins it, so an arrow along the
+//  basemap's line can point back. An arrow points along the way where it is
+//  `yes` and against it where it is `-1`, and a roundabout is one-way unless
+//  tagged otherwise, as Carto takes one. A tile drawn without its extras has
+//  no arrows.
 //
 //  Carto spaces the two kinds of arrow differently, because Mapnik places a
 //  marker and a line's text by different rules (``Arrow/Style``), and both
 //  rules are kept: a short one-way street has no arrow, and a short one-way
-//  path has one. Pieces of one kind of line that meet end to start are joined
-//  first, keeping their direction. As with a name along a line, a tile draws
-//  only the arrows whose marks lie inside it, and an arrow only where it lies
-//  wholly inside the tile, clear of everything that claimed room before it —
-//  the streets' names, which Carto places first — so no arrow is cut at a
-//  tile's edge.
+//  path has one. Each way is spaced on its own, as Mapnik spaces each of
+//  Carto's lines. As with a name along a line, a tile draws only the arrows
+//  whose marks lie inside it, and an arrow only where it lies wholly inside
+//  the tile, clear of everything that claimed room before it — the streets'
+//  names, which Carto places first — so no arrow is cut at a tile's edge.
 //
 
 import CoreGraphics
 import Foundation
 
 nonisolated enum VectorTileArrows {
+    /// The vector extras' layer of one-way ways.
+    static let layerName = "oneways"
     /// Carto draws the arrows from this zoom.
     static let minimumZ = 16
     /// From one arrow to the next along a line, in the pixels of a 256-pixel
@@ -44,16 +45,15 @@ nonisolated enum VectorTileArrows {
     enum Kind: Sendable {
         case bridleway
         case cycleway
-        /// Footways, paths and steps: every path not listed.
+        /// Footways, paths and steps.
         case footway
         case livingStreet
-        /// Residential, unclassified and service roads: every minor road.
+        /// Residential, unclassified, service and unknown roads.
         case minorRoad
         case motorway
         case pedestrian
         case primary
         case secondary
-        /// Tertiary, and every other major road.
         case tertiary
         case track
         case trunk
@@ -64,33 +64,38 @@ nonisolated enum VectorTileArrows {
             .footway, .cycleway, .track, .bridleway,
         ]
 
-        /// The kind of a line in the `roads` layer, or `nil` for one Carto
-        /// draws no arrows along: a railway, a ferry, a pier. Its `kind`
-        /// and `kind_detail` first, then its `kind` alone.
-        init?(kind: String?, detail: String?) {
-            guard let kind, !VectorTileStyle.isPier(kind: kind, detail: detail),
-                  let found = Self.keyed["\(kind)/\(detail ?? "")"] ?? Self.keyed["\(kind)/*"]
-            else { return nil }
+        /// The kind of a way by its `highway` tag, which the extras keep as
+        /// its `kind`, or `nil` for one Carto draws no arrows along.
+        init?(highway: String?) {
+            guard let highway, let found = Self.byHighway[highway] else { return nil }
             self = found
         }
 
-        /// Keyed `kind/kind_detail`, with `kind/*` for every detail not listed.
-        private static let keyed: [String: Self] = [
-            "highway/*": .motorway,
-            "major_road/trunk": .trunk,
-            "major_road/trunk_link": .trunk,
-            "major_road/primary": .primary,
-            "major_road/primary_link": .primary,
-            "major_road/secondary": .secondary,
-            "major_road/secondary_link": .secondary,
-            "major_road/*": .tertiary,
-            "minor_road/*": .minorRoad,
-            "other/living_street": .livingStreet,
-            "path/pedestrian": .pedestrian,
-            "path/cycleway": .cycleway,
-            "path/track": .track,
-            "path/bridleway": .bridleway,
-            "path/*": .footway,
+        /// The highways Carto draws arrows along, a link as its road. The
+        /// extras keep these alone, listed under `&arrowed`.
+        static let byHighway: [String: Self] = [
+            "motorway": .motorway,
+            "motorway_link": .motorway,
+            "trunk": .trunk,
+            "trunk_link": .trunk,
+            "primary": .primary,
+            "primary_link": .primary,
+            "secondary": .secondary,
+            "secondary_link": .secondary,
+            "tertiary": .tertiary,
+            "tertiary_link": .tertiary,
+            "residential": .minorRoad,
+            "unclassified": .minorRoad,
+            "road": .minorRoad,
+            "service": .minorRoad,
+            "living_street": .livingStreet,
+            "pedestrian": .pedestrian,
+            "footway": .footway,
+            "path": .footway,
+            "steps": .footway,
+            "cycleway": .cycleway,
+            "track": .track,
+            "bridleway": .bridleway,
         ]
 
         /// Carto's `-oneway-arrow-color`s: each the street's casing or the
@@ -195,8 +200,8 @@ nonisolated enum VectorTileArrows {
         }
     }
 
-    /// One or more of the archive's one-way lines, joined end to start, its
-    /// points in the order the way is travelled, in the picture's pixels.
+    /// One of the extras' one-way ways, or the part of one a tile holds, its
+    /// points in the order it is travelled, in the picture's pixels.
     struct OneWayLine: Equatable {
         let kind: Kind
         let points: [CGPoint]
@@ -211,48 +216,27 @@ nonisolated enum VectorTileArrows {
 
     // MARK: Choosing
 
-    /// The one-way lines `tile` offers at `target`'s zoom, joined, each
-    /// running the way it is travelled, the more important kind first.
+    /// The one-way ways `tile` offers at `target`'s zoom, each running the
+    /// way it is travelled, the more important kind first.
     static func lines(
         in tile: MapboxVectorTile,
         source: VectorTileAddress,
         target: VectorTileAddress
     ) -> [OneWayLine] {
-        guard target.z >= minimumZ, let layer = tile.layers["roads"] else { return [] }
+        guard target.z >= minimumZ, let layer = tile.layers[layerName] else { return [] }
         let geometry = VectorTileGeometry(extent: layer.extent, source: source, target: target)
-        var pieces: [Kind: [[CGPoint]]] = [:]
+        var ways: [Kind: [[CGPoint]]] = [:]
         for feature in layer.features where feature.type == .line {
-            guard let kind = Kind(kind: feature.string("kind"), detail: feature.string("kind_detail")) else { continue }
+            guard let kind = Kind(highway: feature.string("kind")) else { continue }
             switch feature.string("oneway") {
-            case "yes": pieces[kind, default: []] += geometry.lines(of: feature)
-            case "-1": pieces[kind, default: []] += geometry.lines(of: feature).map { $0.reversed() }
+            case "yes": ways[kind, default: []] += geometry.lines(of: feature)
+            case "-1": ways[kind, default: []] += geometry.lines(of: feature).map { $0.reversed() }
             default: continue
             }
         }
         return Kind.importance.flatMap { kind in
-            joined(pieces[kind] ?? []).map { OneWayLine(kind: kind, points: $0) }
+            (ways[kind] ?? []).filter { $0.count > 1 }.map { OneWayLine(kind: kind, points: $0) }
         }
-    }
-
-    /// `parts` joined wherever one ends where another begins, which brings
-    /// back a street the archive split while keeping the way it runs. Two
-    /// parts that meet head to head stay apart.
-    static func joined(_ parts: [[CGPoint]]) -> [[CGPoint]] {
-        var remaining = parts.filter { $0.count > 1 }
-        var lines: [[CGPoint]] = []
-        while var line = remaining.popLast() {
-            while true {
-                if let next = remaining.firstIndex(where: { meets(line.last, $0.first) }) {
-                    line += remaining.remove(at: next).dropFirst()
-                } else if let previous = remaining.firstIndex(where: { meets($0.last, line.first) }) {
-                    line = remaining.remove(at: previous) + line.dropFirst()
-                } else {
-                    break
-                }
-            }
-            lines.append(line)
-        }
-        return lines
     }
 
     // MARK: Placing
@@ -302,15 +286,22 @@ nonisolated enum VectorTileArrows {
         /// The room it takes, halo included.
         let frame: CGRect
 
-        /// The arrow `distance` along `path`, turned to the line between its
-        /// tail and its head.
+        /// The arrow `distance` along `path`, turned as Mapnik turns it: a
+        /// marker to the segment under its middle, and a line's text to the
+        /// line between its tail and its head, which is that segment's way
+        /// wherever the arrow lies along one.
         init(arrow: Arrow, along path: MeasuredPath, at distance: CGFloat, unit: CGFloat) {
             let half = arrow.outline.width * unit / 2
-            let tail = path.point(at: distance - half)
-            let head = path.point(at: distance + half)
             self.arrow = arrow
             center = path.point(at: distance)
-            angle = atan2(head.y - tail.y, head.x - tail.x)
+            switch arrow.style {
+            case .marker:
+                angle = path.segmentAngle(at: distance)
+            case .text:
+                let tail = path.point(at: distance - half)
+                let head = path.point(at: distance + half)
+                angle = atan2(head.y - tail.y, head.x - tail.x)
+            }
             let reach = arrow.haloRadius * unit
             let height = arrow.outline.height * unit
             let outline = CGRect(x: -half, y: -height / 2, width: 2 * half, height: height)
@@ -376,14 +367,17 @@ nonisolated enum VectorTileArrows {
         }
     }
 
-    // MARK: Helpers
+}
 
-    /// Ends closer than this are one point: the archive gives both ways the
-    /// node they share, and only rounding parts them.
-    private static let joinTolerance: CGFloat = 0.5
-
-    private static func meets(_ end: CGPoint?, _ start: CGPoint?) -> Bool {
-        guard let end, let start else { return false }
-        return abs(end.x - start.x) <= joinTolerance && abs(end.y - start.y) <= joinTolerance
+nonisolated extension MeasuredPath {
+    /// The way the segment under the point `distance` along the line runs,
+    /// in radians from the picture's x axis, passing over segments of no
+    /// length: the angle Mapnik turns a marker to.
+    func segmentAngle(at distance: CGFloat) -> CGFloat {
+        let segments = distances.indices.dropFirst().filter { distances[$0] > distances[$0 - 1] }
+        guard let index = segments.first(where: { distances[$0] >= distance }) ?? segments.last else { return 0 }
+        let from = points[index - 1]
+        let to = points[index]
+        return atan2(to.y - from.y, to.x - from.x)
     }
 }

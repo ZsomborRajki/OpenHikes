@@ -18,3 +18,7 @@ nwr/office
 # Information points carry their type, which the basemap drops.
 nw/tourism=information
 n/waterway=waterfall
+# One-way ways, for their arrows, and roundabouts, which Carto takes to be
+# one-way; the schema keeps the highways among them.
+w/oneway=yes,-1
+w/junction=roundabout

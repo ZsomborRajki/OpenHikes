@@ -3,8 +3,8 @@
 //  OpenHikesTests
 //
 //  The one-way arrows on a drawn tile, read from tiles written by
-//  `VectorTileFixture`: which lines carry them and which way they point,
-//  where Carto's two placements put them along a line, and that an arrow is
+//  `VectorTileFixture`: which ways carry them and which way they point,
+//  where Carto's two placements put them along a way, and that an arrow is
 //  never cut at a tile's edge or drawn over a name.
 //
 
@@ -24,15 +24,15 @@ struct VectorTileArrowsTests {
 
     // MARK: Choosing
 
-    /// Budapest's Szent István tér is tagged `oneway=yes` and drawn the way
-    /// it runs; a way tagged `-1` runs against its drawing.
-    @Test("a one-way line runs as drawn for yes, against it for -1, and a line not one-way has none")
+    /// The extras keep each way's nodes in OpenStreetMap's order, which is
+    /// the way it is travelled for `yes` and against it for `-1`.
+    @Test("a one-way way runs as drawn for yes, against it for -1, and a way not one-way has none")
     func direction() throws {
         let lines = try oneWay([
-            road(oneway: "yes", y: grid / 4),
-            road(oneway: "-1", y: grid / 2),
-            road(oneway: "no", y: grid * 3 / 4),
-            road(oneway: nil, y: grid * 7 / 8),
+            way(oneway: "yes", y: grid / 4),
+            way(oneway: "-1", y: grid / 2),
+            way(oneway: "no", y: grid * 3 / 4),
+            way(oneway: nil, y: grid * 7 / 8),
         ])
 
         #expect(lines.count == 2)
@@ -45,29 +45,60 @@ struct VectorTileArrowsTests {
     @Test("Carto draws no arrows before zoom 16")
     func notBeforeZoom16() throws {
         let wide = VectorTileAddress(z: 15, x: 17_600, y: 11_400)
-        let decoded = try VectorTileFixture.decoded([roads([road(oneway: "yes", y: grid / 2)])])
+        let decoded = try VectorTileFixture.decoded([oneways([way(oneway: "yes", y: grid / 2)])])
 
         #expect(VectorTileArrows.lines(in: decoded, source: wide, target: wide).isEmpty)
     }
 
+    /// The basemap's build merges a road's pieces and can turn one around,
+    /// so its `oneway` is never drawn: Király utca's arrows pointed back.
+    @Test("the basemap's roads carry no arrows, one-way or not")
+    func notFromTheBasemap() throws {
+        let road = VectorTileFixture.Feature(
+            type: .line,
+            properties: [
+                "kind": .string("minor_road"), "kind_detail": .string("residential"), "oneway": .string("yes"),
+            ],
+            geometry: VectorTileFixture.line([(0, grid / 2), (grid, grid / 2)])
+        )
+        let decoded = try VectorTileFixture.decoded([.init(name: "roads", features: [road])])
+
+        #expect(VectorTileArrows.lines(in: decoded, source: tile, target: tile).isEmpty)
+    }
+
     @Test(
-        "each kind of street and path is read from the archive's kinds, and a pier or a railway is none",
+        "each street and path is read by its highway, a link as its road, and a raceway or a platform is none",
         arguments: [
-            ("highway", "motorway", VectorTileArrows.Kind.motorway),
-            ("major_road", "trunk_link", .trunk),
-            ("major_road", "tertiary", .tertiary),
-            ("minor_road", "service", .minorRoad),
-            ("other", "living_street", .livingStreet),
-            ("path", "pedestrian", .pedestrian),
-            ("path", "steps", .footway),
-            ("path", "cycleway", .cycleway),
-            ("path", "pier", nil),
-            ("rail", "tram", nil),
-            ("other", "busway", nil),
-        ] as [(String, String, VectorTileArrows.Kind?)]
+            ("motorway", VectorTileArrows.Kind.motorway),
+            ("trunk_link", .trunk),
+            ("tertiary", .tertiary),
+            ("service", .minorRoad),
+            ("living_street", .livingStreet),
+            ("pedestrian", .pedestrian),
+            ("steps", .footway),
+            ("cycleway", .cycleway),
+            ("raceway", nil),
+            ("platform", nil),
+            ("construction", nil),
+        ] as [(String, VectorTileArrows.Kind?)]
     )
-    func kinds(kind: String, detail: String, expected: VectorTileArrows.Kind?) {
-        #expect(VectorTileArrows.Kind(kind: kind, detail: detail) == expected)
+    func kinds(highway: String, expected: VectorTileArrows.Kind?) {
+        #expect(VectorTileArrows.Kind(highway: highway) == expected)
+    }
+
+    /// The extras' build keeps only the highways the arrows read, listed
+    /// once under `&arrowed`.
+    @Test("the extras keep exactly the highways the arrows are drawn along")
+    func extrasKeepTheArrowedHighways() throws {
+        let schema = try String(
+            contentsOf: StringCatalogTests.sourceRoot.appending(path: "Scripts/lib/vector-extras.yml"),
+            encoding: .utf8
+        )
+        let line = try #require(schema.split(separator: "\n").first { $0.contains("&arrowed [") })
+        let list = try #require(line.split(separator: "[").last?.split(separator: "]").first)
+        let highways = Set(list.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) })
+
+        #expect(highways == Set(VectorTileArrows.Kind.byHighway.keys))
     }
 
     @Test(
@@ -82,19 +113,6 @@ struct VectorTileArrowsTests {
     )
     func styles(kind: VectorTileArrows.Kind, style: VectorTileArrows.Arrow.Style) {
         #expect(kind.arrow.style == style)
-    }
-
-    @Test("pieces that meet end to start are joined, and two that meet head to head stay apart")
-    func joining() {
-        let first = [CGPoint.zero, CGPoint(x: 10, y: 0)]
-        let second = [CGPoint(x: 10, y: 0), CGPoint(x: 20, y: 0)]
-        let headToHead = [CGPoint(x: 30, y: 0), CGPoint(x: 20, y: 0)]
-
-        let joined = VectorTileArrows.joined([second, headToHead, first])
-
-        #expect(joined.count == 2)
-        #expect(joined.contains([.zero, CGPoint(x: 10, y: 0), CGPoint(x: 20, y: 0)]))
-        #expect(joined.contains(headToHead))
     }
 
     // MARK: Placing
@@ -126,15 +144,60 @@ struct VectorTileArrowsTests {
         #expect(tooShort.isEmpty)
     }
 
+    /// Mapnik spaces each of Carto's lines on its own, so two streets that
+    /// meet are not one line: a 120-pixel and a 105-pixel street each have
+    /// room for an arrow, and joined end to start they would have one.
+    @Test("each way is spaced on its own, where it meets another")
+    func waysAreSpacedApart() throws {
+        let pixel = grid / Int(VectorTileRasterizer.styleTileSize)
+        let corner = (32 + 120) * pixel
+        let across = VectorTileFixture.Feature(
+            type: .line,
+            properties: ["kind": .string("residential"), "oneway": .string("yes")],
+            geometry: VectorTileFixture.line([(32 * pixel, 64 * pixel), (corner, 64 * pixel)])
+        )
+        let down = VectorTileFixture.Feature(
+            type: .line,
+            properties: ["kind": .string("residential"), "oneway": .string("yes")],
+            geometry: VectorTileFixture.line([(corner, 64 * pixel), (corner, (64 + 105) * pixel)])
+        )
+
+        let layout = try layout([across, down])
+
+        #expect(layout.placements.count == 2)
+        #expect(layout.placements.contains { $0.center.y.isApproximatelyEqual(to: 64 * unit, absoluteTolerance: 1) })
+        #expect(layout.placements.contains { $0.center.x.isApproximatelyEqual(to: 152 * unit, absoluteTolerance: 1) })
+    }
+
     @Test("an arrow points the way its line is travelled")
     func arrowsPointAlongTheirLine() throws {
-        let layout = try layout([road(oneway: "yes", y: grid / 4), road(oneway: "-1", y: grid / 2)])
+        let layout = try layout([way(oneway: "yes", y: grid / 4), way(oneway: "-1", y: grid / 2)])
 
         let along = layout.placements.filter { $0.center.y.isApproximatelyEqual(to: side / 4, absoluteTolerance: 1) }
         let against = layout.placements.filter { $0.center.y.isApproximatelyEqual(to: side / 2, absoluteTolerance: 1) }
         #expect(!along.isEmpty && !against.isEmpty)
         #expect(along.allSatisfy { $0.angle.isApproximatelyEqual(to: 0, absoluteTolerance: 0.01) })
         #expect(against.allSatisfy { abs($0.angle).isApproximatelyEqual(to: .pi, absoluteTolerance: 0.01) })
+    }
+
+    /// Mapnik turns a marker to the segment under it. Here the line between
+    /// the arrow's ends runs east, across a jog whose middle runs west.
+    @Test("a street's arrow turns to the segment under its middle")
+    func markerTurnsToItsSegment() {
+        let jog = MeasuredPath([
+            CGPoint(x: 20, y: 100), CGPoint(x: 196, y: 100), CGPoint(x: 196, y: 101),
+            CGPoint(x: 190, y: 101), CGPoint(x: 190, y: 102), CGPoint(x: 400, y: 102),
+        ])
+
+        let street = VectorTileArrows.Kind.minorRoad.arrow
+        let path = VectorTileArrows.Kind.footway.arrow
+
+        let marker = VectorTileArrows.Placement(arrow: street, along: jog, at: 180, unit: 2)
+        let text = VectorTileArrows.Placement(arrow: path, along: jog, at: 180, unit: 2)
+
+        #expect(marker.center == CGPoint(x: 193, y: 101))
+        #expect(abs(marker.angle).isApproximatelyEqual(to: .pi, absoluteTolerance: 0.01))
+        #expect(abs(text.angle) < .pi / 2, "a path's arrow follows the line between its ends, as Mapnik's text does")
     }
 
     /// The next tile could not finish an arrow cut at the edge, so one is
@@ -144,7 +207,7 @@ struct VectorTileArrowsTests {
         // A street from just outside the tile's left edge, whose first mark
         // falls on the edge itself.
         let start = -Int(VectorTileArrows.spacing / 2 * CGFloat(grid) / VectorTileRasterizer.styleTileSize)
-        let street = road(oneway: "yes", y: grid / 2, from: start)
+        let street = way(oneway: "yes", y: grid / 2, from: start)
 
         let layout = try layout([street])
 
@@ -156,7 +219,7 @@ struct VectorTileArrowsTests {
     /// moves along its street to stand clear of a name.
     @Test("an arrow slides along its line to stand clear of a name")
     func arrowsKeepClearOfNames() throws {
-        let decoded = try VectorTileFixture.decoded([roads([road(oneway: "yes", y: grid / 2)])])
+        let decoded = try VectorTileFixture.decoded([oneways([way(oneway: "yes", y: grid / 2)])])
         let lines = VectorTileArrows.lines(in: decoded, source: tile, target: tile)
         let firstMark = VectorTileArrows.spacing / 2 * unit
         let name = CGRect(x: firstMark - 20, y: side / 2 - 10, width: 40, height: 20)
@@ -178,8 +241,8 @@ struct VectorTileArrowsTests {
                 geometry: VectorTileFixture.rectangle(x: 0...grid, y: 0...grid)
             ),
         ])
-        let oneWay = [land, roads([road(oneway: "yes", y: grid / 2)])]
-        let twoWay = [land, roads([road(oneway: "no", y: grid / 2)])]
+        let oneWay = [land, oneways([way(oneway: "yes", y: grid / 2)])]
+        let twoWay = [land, oneways([way(oneway: "no", y: grid / 2)])]
         let wide = VectorTileAddress(z: 15, x: 17_600, y: 11_400)
 
         let drawn = try #require(try VectorTileFixture.image(oneWay, from: tile, drawing: tile))
@@ -193,23 +256,22 @@ struct VectorTileArrowsTests {
 
     // MARK: Helpers
 
-    /// A residential street across the tile at `y`, from `start` to a
-    /// quarter of the tile past its right edge.
-    private func road(oneway: String?, y: Int, from start: Int = 0) -> VectorTileFixture.Feature {
-        var properties: [String: VectorTileFixture.Value] = [
-            "kind": .string("minor_road"), "kind_detail": .string("residential"),
-        ]
+    /// A residential street across the tile at `y`, as the extras keep it:
+    /// from `start` to the tile's right edge, or to a quarter of the tile
+    /// past it for a street that starts elsewhere.
+    private func way(oneway: String?, y: Int, from start: Int = 0) -> VectorTileFixture.Feature {
+        var properties: [String: VectorTileFixture.Value] = ["kind": .string("residential")]
         if let oneway { properties["oneway"] = .string(oneway) }
         let end = start == 0 ? grid : grid + grid / 4
         return .init(type: .line, properties: properties, geometry: VectorTileFixture.line([(start, y), (end, y)]))
     }
 
-    private func roads(_ features: [VectorTileFixture.Feature]) -> VectorTileFixture.Layer {
-        .init(name: "roads", features: features)
+    private func oneways(_ features: [VectorTileFixture.Feature]) -> VectorTileFixture.Layer {
+        .init(name: VectorTileArrows.layerName, features: features)
     }
 
     private func oneWay(_ features: [VectorTileFixture.Feature]) throws -> [VectorTileArrows.OneWayLine] {
-        let decoded = try VectorTileFixture.decoded([roads(features)])
+        let decoded = try VectorTileFixture.decoded([oneways(features)])
         return VectorTileArrows.lines(in: decoded, source: tile, target: tile)
     }
 

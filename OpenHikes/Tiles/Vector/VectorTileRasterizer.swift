@@ -32,8 +32,8 @@ nonisolated enum VectorTileRasterizer {
     /// The layers drawn.
     static let layerNames: Set<String> = [
         "earth", "landcover", "landuse", "water", "buildings", "roads", "boundaries", "pois", "places",
-        // The vector extras' own layer.
-        "barriers",
+        // The vector extras' own layers.
+        "barriers", VectorTileArrows.layerName,
     ]
 
     /// The properties read, the names in `language` among them.

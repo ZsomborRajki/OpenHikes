@@ -5,7 +5,7 @@
 //  House numbers on a drawn tile, read from tiles written by
 //  `VectorTileFixture`: which addresses are numbered and from which zoom,
 //  how a long list of numbers is shortened, and the room a number keeps
-//  from what was placed before it.
+//  from what was placed before it and from the tile's edge.
 //
 
 import CoreGraphics
@@ -103,6 +103,23 @@ struct VectorTileHouseNumbersTests {
         #expect(plain.count == 1)
     }
 
+    /// Two tiles place their numbers without seeing each other's, so each
+    /// keeps its halo and Carto's margin inside its own edge: `12` and `14`
+    /// either side of a seam at zoom 18 stood two pixels apart, reading
+    /// `1214`.
+    @Test("two numbers either side of a tile's edge keep its margin apart, halos and all")
+    func numbersKeepApartAcrossTheEdge() throws {
+        let left = VectorTileAddress(z: 18, x: 144_946, y: 91_666)
+        let right = VectorTileAddress(z: 18, x: left.x + 1, y: left.y)
+        let twelve = try placed(address("12", at: (grid - 4, grid / 2)), at: left)
+        let fourteen = try placed(address("14", at: (4, grid / 2)), at: right)
+        let halo = try #require(VectorTileHouseNumbers.look(z: 18).text?.haloRadius) * unit
+        let margin = VectorTileHouseNumbers.margin * unit
+
+        #expect(twelve.maxX + halo + margin <= side)
+        #expect(fourteen.minX - halo - margin >= 0)
+    }
+
     @Test("a number is drawn on the map at zoom 17, and not at zoom 16")
     func numbersAreDrawn() throws {
         let land = VectorTileFixture.Layer(name: "earth", features: [
@@ -135,6 +152,21 @@ struct VectorTileHouseNumbersTests {
             properties: ["kind": .string("address"), "addr_housenumber": .string(number)],
             geometry: VectorTileFixture.points([position ?? (grid / 2, grid / 2)])
         )
+    }
+
+    /// Where `number` stands on `target` placed alone, as the map places
+    /// house numbers.
+    private func placed(_ number: VectorTileFixture.Feature, at target: VectorTileAddress) throws -> CGRect {
+        var room = VectorTilePoints.Room(bounds: bounds, taken: [])
+        var fonts = LabelFonts(language: "en")
+        let names = VectorTilePoints.Names(
+            try candidates([number], at: target),
+            unit: unit,
+            room: &room,
+            fonts: &fonts,
+            margin: VectorTileHouseNumbers.margin * unit
+        )
+        return try #require(names.frames.first)
     }
 
     private func candidates(

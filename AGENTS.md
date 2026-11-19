@@ -1161,7 +1161,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
   - **The extras fill in what the archive leaves out** (`VectorTileSource.Extras`):
     unnamed car parks with their `access`, barriers and the fences, walls and
     hedges Carto draws, `man_made` points, offices, an information point's
-    type, a vending machine's goods and waterfalls. `Scripts/vector-extras.sh`
+    type, a vending machine's goods, waterfalls, and every one-way street and
+    path as a line of its own (`oneways`). `Scripts/vector-extras.sh`
     builds them from the planet (`osmium` with
     `Scripts/lib/vector-extras.filter`, then Planetiler with
     `Scripts/lib/vector-extras.yml`) into `extras-<planet date>.pmtiles`,
@@ -1185,11 +1186,13 @@ a change to recording, the map, the sheet or the render path; the PR template,
       on marks measured from the line's middle, so the tiles cut from one
       archive tile agree on them.
     - **One-way arrows** (`VectorTileArrows`) from zoom 16, on a way tagged
-      `oneway` `yes` or `-1`. Along a street they are Carto's marker, spaced
-      as Mapnik spaces markers, so a short one-way street has none; along a
-      path they are its barbed arrow, spaced as Mapnik spaces a line's text,
-      so a short one-way path has one. The archive keeps no `junction`, so a
-      roundabout has arrows only where it is tagged `oneway` itself.
+      `oneway` `yes` or `-1`, or a roundabout not tagged otherwise. They are
+      drawn along the extras' ways, never the archive's roads: its build
+      merges a road's pieces into one line and can turn one around, so an
+      arrow along it points back. Each way is spaced on its own. Along a
+      street they are Carto's marker, spaced as Mapnik spaces markers, so a
+      short one-way street has none; along a path they are its barbed arrow,
+      spaced as Mapnik spaces a line's text, so a short one-way path has one.
     - **House numbers** (`VectorTileHouseNumbers`) from zoom 17, from the
       archive's address points, which carry `addr_housenumber` alone.
     - **Room is claimed in Carto's layer order**: place names, the stations
