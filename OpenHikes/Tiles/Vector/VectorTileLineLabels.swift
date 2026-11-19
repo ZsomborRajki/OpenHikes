@@ -468,7 +468,7 @@ nonisolated private struct SetName {
 }
 
 /// A polyline with the distance along it to each of its points.
-nonisolated private struct MeasuredPath {
+nonisolated struct MeasuredPath {
     let points: [CGPoint]
     let distances: [CGFloat]
 

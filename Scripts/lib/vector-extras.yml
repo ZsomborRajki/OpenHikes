@@ -4,10 +4,10 @@
 #
 # Its layers and attributes are named as the basemap's are — `landuse` and
 # `pois` with `kind`, `kind_detail` and `name:<language>` — so a tile of each
-# merges into one and is read by the same code. `barriers` is the one layer
-# of its own, and an unnamed car park's `access` the one attribute. Every
-# feature waits for zoom 14 or 15: the map draws deeper zooms from zoom 15,
-# and Carto draws none of these wider.
+# merges into one and is read by the same code. `barriers` and `oneways` are
+# the layers of its own, and an unnamed car park's `access` the one
+# attribute. Every feature waits for zoom 14 or 15: the map draws deeper
+# zooms from zoom 15, and Carto draws none of these wider.
 #
 # Scripts/lib/vector-extras.filter cuts the planet down to these tags first;
 # change both together. Built by Scripts/vector-extras.sh.
@@ -286,3 +286,41 @@ layers:
     attributes:
     - key: kind
       value: city_wall
+
+# One-way streets and paths, for their arrows (`VectorTileArrows`), which
+# Carto draws from zoom 16. The basemap's roads carry `oneway`, but its
+# build merges a road's pieces and turns one around where that joins it, so
+# the arrows would point back. Here every way is a line of its own, its nodes
+# in OpenStreetMap's order: travelled along it for `yes`, against it for
+# `-1`. A roundabout is one-way unless tagged otherwise, as Carto takes one.
+# `kind` is the way's `highway`, and only the highways Carto puts arrows on
+# are kept: `VectorTileArrows.Kind.byHighway`, which a test holds to this
+# list.
+- id: oneways
+  features:
+  - source: osm
+    geometry: line
+    min_zoom: 15
+    include_when:
+      __all__:
+      - highway: &arrowed [motorway, motorway_link, trunk, trunk_link, primary, primary_link, secondary, secondary_link, tertiary, tertiary_link, residential, unclassified, road, service, living_street, pedestrian, footway, path, steps, cycleway, track, bridleway]
+      - oneway: ['yes', '-1']
+    attributes:
+    - key: kind
+      tag_value: highway
+    - key: oneway
+      tag_value: oneway
+  - source: osm
+    geometry: line
+    min_zoom: 15
+    include_when:
+      __all__:
+      - highway: *arrowed
+      - junction: roundabout
+    exclude_when:
+      oneway: ['yes', '-1', 'no', reversible]
+    attributes:
+    - key: kind
+      tag_value: highway
+    - key: oneway
+      value: 'yes'
