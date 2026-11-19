@@ -42,6 +42,13 @@ struct PackedEnvelopeTests {
         format.expectCorrupt(format.file(declaring: square.count, packed: Array(packed)))
     }
 
+    /// The writer packs only a body packing makes smaller, so an empty body
+    /// is never packed, though an empty DEFLATE stream ends where it said.
+    @Test("a packed body the envelope says is empty is refused", arguments: PackedSquareFormat.allCases)
+    func anEmptyBody(_ format: PackedSquareFormat) {
+        format.expectCorrupt(format.file(declaring: 0, packed: [0x03, 0x00]))
+    }
+
     @Test("a packed body shorter than the envelope says is refused", arguments: PackedSquareFormat.allCases)
     func aShorterBody(_ format: PackedSquareFormat) throws {
         let body = format.body(points: Self.points)
