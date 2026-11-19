@@ -2,8 +2,9 @@
 //  SeededOfflineCountryServerTests.swift
 //  OpenHikesTests
 //
-//  The stand-in country list `OfflineMapsUITests` and the *Offline Maps*
-//  audit are built on, checked here so a seed that drifted reports as that —
+//  The stand-in country lists `OfflineMapsUITests`, the *Offline Maps*
+//  audit and the App Store frame are built on, checked here so a seed that
+//  drifted reports as that —
 //  rather than as a UI test that found the wrong row first, which reads as a
 //  broken screen.
 //
@@ -23,6 +24,8 @@ import Testing
 struct SeededOfflineCountryServerTests {
     /// The `ThumseeLoopFast` trailhead, where the UI tests stand.
     private static let trailhead = CLLocationCoordinate2D(latitude: 47.718420, longitude: 12.831774)
+    /// Schönau am Königssee, where the App Store frame stands.
+    private static let schoenau = CLLocationCoordinate2D(latitude: 47.592975, longitude: 12.987199)
 
     private func countries(_ scenario: SeededOfflineCountryServer.Scenario) -> OfflineCountries {
         // A directory that is never made, so the list each test loads is
@@ -80,6 +83,7 @@ struct SeededOfflineCountryServerTests {
 
         #expect(scenario(["--ui-test-offline-countries=seeded"]) == .seeded)
         #expect(scenario(["--ui-test-offline-countries=refused"]) == .refused)
+        #expect(scenario(["--ui-test-offline-countries=showcase"]) == .showcase)
         #expect(scenario([]) == nil)
         #expect(scenario(["--ui-test-offline-countries="]) == nil)
         #expect(scenario(["--ui-test-offline-countries=everything"]) == nil)
@@ -94,6 +98,31 @@ struct SeededOfflineCountryServerTests {
 
         #expect(manifest.countries.count == 10)
         #expect(manifest.readableCountries == manifest.countries)
+    }
+
+    /// The server's own list, as many areas as the deployment state in
+    /// AGENTS.md counts, every one of them one the list keeps.
+    @Test("the showcase lists every area the server does")
+    func showcaseListsEveryArea() async throws {
+        let manifest = try await SeededOfflineCountryServer(scenario: .showcase).manifest()
+
+        #expect(manifest.countries.count == 381)
+        #expect(manifest.readableCountries == manifest.countries)
+    }
+
+    /// What the App Store frame stands on: Germany at the head of the list
+    /// nearest Schönau, and the town inside its outline, where a tap on the
+    /// map chooses it.
+    @Test("nearest Schönau, the showcase leads with Germany")
+    func showcaseLeadsWithGermanyNearSchoenau() async throws {
+        let countries = countries(.showcase)
+        await countries.refreshList()
+        let nearest = sections(of: countries, by: .nearest, near: Self.schoenau)
+
+        #expect(nearest.parts.first?.heading == .nearby)
+        #expect(nearest.parts.first?.lines.first?.id == "DE")
+        let germany = try #require(countries.listed.first { $0.id == "DE" })
+        #expect(germany.contains(longitude: Self.schoenau.longitude, latitude: Self.schoenau.latitude))
     }
 
     @Test("by name, the United States is one line holding its three states")
