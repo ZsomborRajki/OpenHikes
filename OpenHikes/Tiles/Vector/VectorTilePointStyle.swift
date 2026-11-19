@@ -13,8 +13,9 @@
 //  The archive names a point by its tag's value alone (`parking`, not
 //  `amenity=parking`), and the table is keyed the same way. A kind can come
 //  in variants: a place of worship's religion and a pitch's sport, which the
-//  archive keeps in `kind_detail`, and, for the few kinds Carto draws
-//  differently once named, whether it has a name.
+//  archive keeps in `kind_detail`, a car park's `parking`, which the vector
+//  extras keep there, and, for the few kinds Carto draws differently once
+//  named, whether it has a name.
 //
 //  The stops Carto draws in a layer of its own, `stations.mss` — railway
 //  stations and halts, tram stops and subway entrances — are in the same
@@ -104,8 +105,8 @@ nonisolated struct VectorTilePointStyle: Sendable {
     /// How a point of `kind` is drawn at zoom `z`, or `nil` where Carto draws
     /// nothing of it there.
     /// - Parameters:
-    ///   - detail: the archive's `kind_detail`: a religion, a sport or a
-    ///     protected area's class.
+    ///   - detail: the archive's `kind_detail`: a religion, a sport, a car
+    ///     park's `parking` or a protected area's class.
     ///   - named: whether the point has a name.
     ///   - access: the point's `access` tag, where the archive carries it.
     ///   - pixels: the size of the area the point stands for, at zoom `z`,

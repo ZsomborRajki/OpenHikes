@@ -15,11 +15,12 @@
 //  evaluates the same cascade for each kind of point the archive can name, at
 //  each zoom, and keeps what a point read from the archive can meet: open to
 //  everyone or not, not a building, and with only the details the archive
-//  keeps — a place of worship's religion, a pitch's sport and a protected
-//  area's class, in `kind_detail`, and whether it has a name. A point has no
-//  size (`way_pixels` 0); an area, which the vector extras give with its
-//  size, is evaluated again for each range of sizes the rules tell apart,
-//  below zoom 10 in the layer Carto names large areas in at low zooms.
+//  keeps — a place of worship's religion, a pitch's sport, a car park's
+//  `parking` and a protected area's class, in `kind_detail`, and whether it
+//  has a name. A point has no size (`way_pixels` 0); an area, which the
+//  vector extras give with its size, is evaluated again for each range of
+//  sizes the rules tell apart, below zoom 10 in the layer Carto names large
+//  areas in at low zooms.
 //
 //  Only the CartoCSS these rules are written in is read: variables, nested
 //  blocks, filters on attributes and on zoom, an attribute named as a text,
@@ -968,6 +969,17 @@ func testedValues(_ key: String) -> [String] {
     return values.sorted()
 }
 
+/// The tags the archive keeps as a point's `kind_detail` that Carto's rules
+/// test, each with the features it is kept for where not every one: a place
+/// of worship's religion and a pitch's sport, which the basemap keeps, and a
+/// car park's `parking`, which the vector extras keep. Carto also tests a
+/// bicycle or a motorcycle parking's `parking`, which neither keeps.
+let testedDetails: [(key: String, features: Set<String>?)] = [
+    ("religion", nil),
+    ("sport", nil),
+    ("parking", ["amenity_parking"]),
+]
+
 /// Whether any rule that can draw `feature` tests `key`.
 func rules(of feature: String, shop: String?, test key: String) -> Bool {
     rules.contains { rule in
@@ -1165,12 +1177,15 @@ func add(
         "way_pixels": lowPriority ? .null : .number(0),
     ]
     if let shop { base["shop"] = .text(iconShops.contains(shop) ? shop : "other") }
-    let tested: [(key: String, value: String?)] = ["religion", "sport"]
+    let tested: [(key: String, value: String?)] = testedDetails
+        .filter { $0.features?.contains(feature) ?? true }
+        .map(\.key)
         .filter { rules(of: feature, shop: shop, test: $0) }
         .flatMap { key in testedValues(key).map { (key, Optional($0)) } }
     let required = requires.map { requires in requires.values.map { (key: requires.key, value: Optional($0)) } }
     let namings: [Bool?] = rules(of: feature, shop: shop, test: "name") ? [true, false] : [nil]
-    var produced: [Drawn] = []
+    // What the kind draws without a detail, named or not.
+    var plainDrawn: [Bool?: Drawn] = [:]
     // A feature that asks for a further tag is drawn only with it.
     let plain: (key: String, value: String?) = ("", nil)
     for detail in required ?? [plain] + tested {
@@ -1194,10 +1209,18 @@ func add(
             let (result, areas) = withAccess("yes")
             let (restricted, restrictedAreas) = withAccess("restricted")
             guard !result.isEmpty || areas != nil else { continue }
-            // A detail that changes nothing is the plain kind's.
             let drawn = Drawn(point: result, restricted: restricted, areas: areas, restrictedAreas: restrictedAreas)
-            if required == nil, detail.value != nil, produced.contains(drawn) { continue }
-            produced.append(drawn)
+            if required == nil {
+                // A detail that changes nothing is the plain kind's. Two
+                // details drawn alike are each their own entry: a point
+                // with either would find no entry of the other's and fall
+                // back to the plain kind's.
+                if detail.value == nil {
+                    plainDrawn[named] = drawn
+                } else if plainDrawn[named] == drawn {
+                    continue
+                }
+            }
             entries.append(Entry(
                 kind: kind,
                 detail: detail.value,

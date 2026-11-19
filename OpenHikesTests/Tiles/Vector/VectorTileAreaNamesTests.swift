@@ -76,6 +76,45 @@ struct VectorTileAreaNamesTests {
         #expect(try #require(closed.icons.first?.opacity) < 1)
     }
 
+    /// The extras carry a car park's `parking` as its detail, because Carto
+    /// marks parking along a street, or in a lane of it, only from zoom 18,
+    /// and with a quieter icon, however large it is: way 995944380, a lane
+    /// of 1,139 square pixels at zoom 15, took the car park's icon there.
+    @Test(
+        "parking along a street or in a lane is marked from zoom 18 alone, with Carto's quieter icon",
+        arguments: ["street_side", "lane"]
+    )
+    func streetParking(parking: String) throws {
+        let marked = { (z: Int, pixels: Double?) in
+            style.look(kind: "parking", detail: parking, named: false, z: z, pixels: pixels)
+        }
+
+        #expect(marked(15, 1139) == nil)
+        #expect(marked(17, nil) == nil)
+        #expect(try #require(marked(18, 1139)).icons.first?.asset == "carto-amenity-parking_subtle")
+        #expect(
+            style.look(kind: "parking", detail: "surface", named: false, z: 15, pixels: 1139)?.icons.first?.asset
+                == "carto-amenity-parking",
+            "any other car park is marked as before"
+        )
+    }
+
+    @Test("a car park's detail is read from the extras' point")
+    func streetParkingFromTheTile() throws {
+        let wide = VectorTileAddress(z: 15, x: tile.x << 3, y: tile.y << 3)
+        let lane = point([
+            "kind": .string("parking"), "kind_detail": .string("lane"), "area": .double(area(1139, at: wide.z)),
+        ])
+        let surface = point(
+            ["kind": .string("parking"), "kind_detail": .string("surface"), "area": .double(area(1139, at: wide.z))],
+            at: (grid / 4, grid / 4)
+        )
+
+        let points = try candidates([lane, surface], at: wide)
+
+        #expect(points.map(\.look.icons.first?.asset) == ["carto-amenity-parking"])
+    }
+
     /// The extras carry a protected area's class as its detail, because
     /// Carto draws only the classes from 1 to 6.
     @Test("a protected area is named only for the classes Carto draws")

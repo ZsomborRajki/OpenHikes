@@ -14723,6 +14723,320 @@
     {
       "areas" : [
         {
+          "above" : 3000,
+          "bands" : [
+            {
+              "from" : 14,
+              "icons" : [
+
+              ],
+              "text" : {
+                "dy" : 9,
+                "face" : "regular",
+                "field" : "name",
+                "fill" : "#0066FF",
+                "halo" : "#FFFFFF99",
+                "haloRadius" : 1,
+                "lineSpacing" : -1.5,
+                "size" : 10,
+                "wrapWidth" : 30
+              },
+              "to" : 17
+            },
+            {
+              "from" : 18,
+              "icons" : [
+                {
+                  "asset" : "carto-amenity-parking_subtle",
+                  "fill" : "#0092DA",
+                  "height" : 7,
+                  "width" : 7
+                }
+              ],
+              "text" : {
+                "dy" : 9,
+                "face" : "regular",
+                "field" : "name",
+                "fill" : "#0066FF",
+                "halo" : "#FFFFFF99",
+                "haloRadius" : 1,
+                "lineSpacing" : -1.5,
+                "size" : 10,
+                "wrapWidth" : 30
+              },
+              "to" : 19
+            }
+          ]
+        }
+      ],
+      "bands" : [
+        {
+          "from" : 18,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-parking_subtle",
+              "fill" : "#0092DA",
+              "height" : 7,
+              "width" : 7
+            }
+          ],
+          "text" : {
+            "dy" : 9,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#0066FF",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "detail" : "lane",
+      "feature" : "amenity_parking",
+      "kind" : "parking",
+      "lowPriority" : false,
+      "restricted" : [
+        {
+          "from" : 18,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-parking_subtle",
+              "fill" : "#0092DA",
+              "height" : 7,
+              "opacity" : 0.33,
+              "width" : 7
+            }
+          ],
+          "text" : {
+            "dy" : 9,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#0066FF",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 0,
+            "lineSpacing" : -1.5,
+            "opacity" : 0.33,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "restrictedAreas" : [
+        {
+          "above" : 3000,
+          "bands" : [
+            {
+              "from" : 14,
+              "icons" : [
+
+              ],
+              "text" : {
+                "dy" : 9,
+                "face" : "regular",
+                "field" : "name",
+                "fill" : "#0066FF",
+                "halo" : "#FFFFFF99",
+                "haloRadius" : 0,
+                "lineSpacing" : -1.5,
+                "opacity" : 0.33,
+                "size" : 10,
+                "wrapWidth" : 30
+              },
+              "to" : 17
+            },
+            {
+              "from" : 18,
+              "icons" : [
+                {
+                  "asset" : "carto-amenity-parking_subtle",
+                  "fill" : "#0092DA",
+                  "height" : 7,
+                  "opacity" : 0.33,
+                  "width" : 7
+                }
+              ],
+              "text" : {
+                "dy" : 9,
+                "face" : "regular",
+                "field" : "name",
+                "fill" : "#0066FF",
+                "halo" : "#FFFFFF99",
+                "haloRadius" : 0,
+                "lineSpacing" : -1.5,
+                "opacity" : 0.33,
+                "size" : 10,
+                "wrapWidth" : 30
+              },
+              "to" : 19
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "areas" : [
+        {
+          "above" : 3000,
+          "bands" : [
+            {
+              "from" : 14,
+              "icons" : [
+
+              ],
+              "text" : {
+                "dy" : 9,
+                "face" : "regular",
+                "field" : "name",
+                "fill" : "#0066FF",
+                "halo" : "#FFFFFF99",
+                "haloRadius" : 1,
+                "lineSpacing" : -1.5,
+                "size" : 10,
+                "wrapWidth" : 30
+              },
+              "to" : 17
+            },
+            {
+              "from" : 18,
+              "icons" : [
+                {
+                  "asset" : "carto-amenity-parking_subtle",
+                  "fill" : "#0092DA",
+                  "height" : 7,
+                  "width" : 7
+                }
+              ],
+              "text" : {
+                "dy" : 9,
+                "face" : "regular",
+                "field" : "name",
+                "fill" : "#0066FF",
+                "halo" : "#FFFFFF99",
+                "haloRadius" : 1,
+                "lineSpacing" : -1.5,
+                "size" : 10,
+                "wrapWidth" : 30
+              },
+              "to" : 19
+            }
+          ]
+        }
+      ],
+      "bands" : [
+        {
+          "from" : 18,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-parking_subtle",
+              "fill" : "#0092DA",
+              "height" : 7,
+              "width" : 7
+            }
+          ],
+          "text" : {
+            "dy" : 9,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#0066FF",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "detail" : "street_side",
+      "feature" : "amenity_parking",
+      "kind" : "parking",
+      "lowPriority" : false,
+      "restricted" : [
+        {
+          "from" : 18,
+          "icons" : [
+            {
+              "asset" : "carto-amenity-parking_subtle",
+              "fill" : "#0092DA",
+              "height" : 7,
+              "opacity" : 0.33,
+              "width" : 7
+            }
+          ],
+          "text" : {
+            "dy" : 9,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#0066FF",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 0,
+            "lineSpacing" : -1.5,
+            "opacity" : 0.33,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "restrictedAreas" : [
+        {
+          "above" : 3000,
+          "bands" : [
+            {
+              "from" : 14,
+              "icons" : [
+
+              ],
+              "text" : {
+                "dy" : 9,
+                "face" : "regular",
+                "field" : "name",
+                "fill" : "#0066FF",
+                "halo" : "#FFFFFF99",
+                "haloRadius" : 0,
+                "lineSpacing" : -1.5,
+                "opacity" : 0.33,
+                "size" : 10,
+                "wrapWidth" : 30
+              },
+              "to" : 17
+            },
+            {
+              "from" : 18,
+              "icons" : [
+                {
+                  "asset" : "carto-amenity-parking_subtle",
+                  "fill" : "#0092DA",
+                  "height" : 7,
+                  "opacity" : 0.33,
+                  "width" : 7
+                }
+              ],
+              "text" : {
+                "dy" : 9,
+                "face" : "regular",
+                "field" : "name",
+                "fill" : "#0066FF",
+                "halo" : "#FFFFFF99",
+                "haloRadius" : 0,
+                "lineSpacing" : -1.5,
+                "opacity" : 0.33,
+                "size" : 10,
+                "wrapWidth" : 30
+              },
+              "to" : 19
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "areas" : [
+        {
           "above" : 750,
           "bands" : [
             {

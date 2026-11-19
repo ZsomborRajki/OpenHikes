@@ -80,7 +80,9 @@ layers:
   # A car park mapped as an area, at a point inside it, named or not: the
   # basemap keeps an area's point only when it is named, and never its size,
   # which Carto marks a car park by from zoom 14. Its access is kept because
-  # Carto fades a car park that is private or for customers.
+  # Carto fades a car park that is private or for customers, and its `parking`
+  # as its `kind_detail` because Carto marks parking along a street, or in a
+  # lane of it, only from zoom 18, and with a quieter icon, whatever its size.
   - source: osm
     geometry: polygon_point_on_surface
     min_zoom:
@@ -94,6 +96,8 @@ layers:
     attributes:
     - key: kind
       value: parking
+    - key: kind_detail
+      tag_value: parking
     - key: access
       tag_value: access
     - *area
