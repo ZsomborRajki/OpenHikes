@@ -6,9 +6,12 @@
 # which leaves out much of what OpenStreetMap Carto draws: car parks mapped
 # as areas with no name, barriers, towers and crosses, offices, the type of
 # an information point and the goods of a vending machine, waterfalls,
-# one-way ways in their own direction, and the size of each named area. The
-# extras are those, as a second PMTiles archive the app draws into the
-# basemap's tiles (`VectorTileSource.extras`).
+# one-way ways in their own direction, the size of each named area, the
+# ground it has no kind for (scree, heath, quarries, vineyards), parks and
+# protected areas, lifts and their stations, power lines, dams and ridges,
+# and the huts, stations and summits Carto shows before the basemap has
+# them. The extras are those, as a second PMTiles archive the app draws into
+# the basemap's tiles (`VectorTileSource.extras`).
 #
 # It cuts the planet down with `osmium tags-filter` and
 # Scripts/lib/vector-extras.filter, and the named areas with

@@ -2,13 +2,16 @@
 # on tiles.openhikes.app leaves out, as a second PMTiles archive the app
 # draws into the same tiles (`VectorTileSource.extras`).
 #
-# Its layers and attributes are named as the basemap's are — `landuse` and
-# `pois` with `kind`, `kind_detail` and `name:<language>` — so a tile of each
-# merges into one and is read by the same code. `barriers` and `oneways` are
+# Its layers and attributes are named as the basemap's are — `landuse`,
+# `roads` and `pois` with `kind`, `kind_detail` and `name:<language>` — so a
+# tile of each merges into one and is read by the same code. `parks`,
+# `protected_areas`, `barriers`, `oneways`, `power`, `dams` and `ridges` are
 # the layers of its own, and a car park's `access` and an area's `area` the
 # attributes. Most features wait for zoom 14 or 15: the map draws deeper
 # zooms from zoom 15, and Carto draws none of these wider. The names of
-# areas come in from the zoom Carto could first name each, by its size.
+# areas come in from the zoom Carto could first name each, by its size, and
+# the ground, the lifts, the huts and the stations from the zoom Carto first
+# draws each.
 #
 # Scripts/lib/vector-extras.filter cuts the planet down to these tags first;
 # change both together. Built by Scripts/vector-extras.sh.
@@ -74,6 +77,187 @@ layers:
     attributes:
     - key: kind
       value: parking
+
+  # Ground the basemap has no kind for, which Carto fills: the scree, heath
+  # and shingle of open mountains from zoom 8, where Carto's low-zoom picture
+  # has them, and the rest from zoom 10, where its landcover begins. `kind`
+  # is the tag's value, as the basemap's landuse is named. The basemap files
+  # an orchard and a farmyard as farmland and a brownfield as industry; the
+  # same area from here is drawn over it. A building is never ground.
+  - source: osm
+    geometry: polygon
+    min_zoom: 8
+    include_when:
+      natural: [scree, heath, shingle, mud]
+    exclude_when: &is_building
+      __all__:
+      - building: __any__
+      - __not__:
+          building: 'no'
+    attributes: &kind_of_ground
+    - key: kind
+      type: match_value
+  - source: osm
+    geometry: polygon
+    min_zoom: 10
+    include_when:
+      landuse: [retail, quarry, vineyard, orchard, plant_nursery, farmyard, construction, brownfield, landfill, garages, greenhouse_horticulture, religious]
+    exclude_when: *is_building
+    attributes: *kind_of_ground
+  - source: osm
+    geometry: polygon
+    min_zoom: 10
+    include_when:
+      tourism: [camp_site, caravan_site, picnic_site]
+    exclude_when: *is_building
+    attributes: *kind_of_ground
+  - source: osm
+    geometry: polygon
+    min_zoom: 10
+    include_when:
+      amenity: grave_yard
+    exclude_when: *is_building
+    attributes: *kind_of_ground
+  - source: osm
+    geometry: polygon
+    min_zoom: 10
+    include_when:
+      leisure: [stadium, sports_centre, track, ice_rink, miniature_golf, fitness_station, fitness_centre, water_park]
+    exclude_when: *is_building
+    attributes: *kind_of_ground
+  - source: osm
+    geometry: polygon
+    min_zoom: 10
+    include_when:
+      power: [plant, generator, substation]
+    exclude_when: *is_building
+    attributes:
+    - key: kind
+      value: power
+  - source: osm
+    geometry: polygon
+    min_zoom: 10
+    include_when:
+      man_made: [works, wastewater_plant, water_works]
+    exclude_when: *is_building
+    attributes: *kind_of_ground
+  - source: osm
+    geometry: polygon
+    min_zoom: 10
+    include_when:
+      aeroway: apron
+    attributes: *kind_of_ground
+  - source: osm
+    geometry: polygon
+    min_zoom: 10
+    include_when:
+      highway: [services, rest_area]
+    exclude_when: *is_building
+    attributes:
+    - key: kind
+      value: rest_area
+
+# Parks. The basemap files a park and most national parks under one kind, so
+# a national park's rock and ice would be filled as a city park is: the map
+# fills these and none of the basemap's. From zoom 10, where Carto first
+# fills one.
+- id: parks
+  features:
+  - source: osm
+    geometry: polygon
+    min_zoom: 10
+    include_when:
+      leisure: park
+    exclude_when: *is_building
+    attributes:
+    - key: kind
+      value: park
+
+# The borders of national parks, nature reserves and the protected areas of
+# the classes Carto draws, as the areas they enclose: the map strokes each
+# one's edge. The basemap has a kind for a few national parks and no
+# protected area. From zoom 8 and only once an area covers 750 square pixels,
+# as in Carto, until zoom 15, which every deeper zoom is drawn from. The
+# wider buffer keeps the cut edge of an area that runs past a tile outside
+# the band drawn along its border.
+- id: protected_areas
+  buffer: 8
+  features:
+  - source: osm
+    geometry: polygon
+    min_zoom: 8
+    min_size: 27
+    include_when:
+      boundary: aboriginal_lands
+    attributes:
+    - key: kind
+      value: aboriginal_lands
+  - source: osm
+    geometry: polygon
+    min_zoom: 8
+    min_size: 27
+    include_when:
+      __any__:
+      - boundary: national_park
+      - leisure: nature_reserve
+      - __all__:
+        - boundary: protected_area
+        - protect_class: ['1', '1a', '1b', '2', '3', '4', '5', '6']
+    exclude_when:
+      boundary: aboriginal_lands
+    attributes:
+    - key: kind
+      value: protected_area
+
+# Aerial lifts, of which the basemap keeps the cable cars alone: gondolas,
+# chair lifts, drag lifts and the rest, from zoom 12, where Carto draws them
+# all. Named as the basemap's own cable cars are, so they are drawn and named
+# with them. And the railways the basemap keeps only from zoom 14, at the
+# zooms before it: narrow-gauge and light railways and funiculars from 10,
+# trams and subways from 12.
+- id: roads
+  features:
+  - source: osm
+    geometry: line
+    min_zoom: 10
+    max_zoom: 13
+    include_when:
+      railway: [narrow_gauge, light_rail, funicular]
+    attributes: &light_railway
+    - key: kind
+      value: rail
+    - key: kind_detail
+      tag_value: railway
+    - key: is_tunnel
+      value: true
+      include_when:
+        tunnel: ['yes', building_passage, covered]
+  - source: osm
+    geometry: line
+    min_zoom: 12
+    max_zoom: 13
+    include_when:
+      railway: [tram, subway]
+    attributes: *light_railway
+  - source: osm
+    geometry: line
+    min_zoom: 12
+    include_when:
+      aerialway: [gondola, mixed_lift, goods, chair_lift, drag_lift, t-bar, j-bar, platter, rope_tow, zip_line]
+    attributes:
+    - key: kind
+      value: aerialway
+    - key: kind_detail
+      tag_value: aerialway
+    - *name
+    - *name_en
+    - *name_de
+    - *name_fr
+    - *name_es
+    - *name_it
+    - *name_ru
+    - *name_pl
+    - *name_uk
 
 - id: pois
   features:
@@ -683,6 +867,237 @@ layers:
     - *name_pl
     - *name_uk
 
+  # The stops Carto draws from zoom 12: a railway station, from 13 a halt and
+  # from 14 a tram stop. The basemap keeps a station from zoom 15 and without
+  # its `station` tag, by which Carto holds a subway's back a zoom; here it
+  # is the `kind_detail`. From zoom 15 the map draws these in the basemap's
+  # place (`VectorTilePoints.Superseding`).
+  - source: osm
+    geometry: point
+    min_zoom: 12
+    include_when: &railway_station
+      railway: station
+    attributes: &station_attributes
+    - key: kind
+      type: match_value
+    - key: kind_detail
+      tag_value: station
+    - *name
+    - *name_en
+    - *name_de
+    - *name_fr
+    - *name_es
+    - *name_it
+    - *name_ru
+    - *name_pl
+    - *name_uk
+  - source: osm
+    geometry: polygon_point_on_surface
+    min_zoom: 12
+    include_when: *railway_station
+    attributes: *station_attributes
+  - source: osm
+    geometry: point
+    min_zoom: 13
+    include_when: &railway_halt
+      railway: halt
+    attributes: *station_attributes
+  - source: osm
+    geometry: polygon_point_on_surface
+    min_zoom: 13
+    include_when: *railway_halt
+    attributes: *station_attributes
+  - source: osm
+    geometry: point
+    min_zoom: 14
+    include_when: &tram_stop
+      railway: tram_stop
+    attributes: *station_attributes
+  - source: osm
+    geometry: polygon_point_on_surface
+    min_zoom: 14
+    include_when: *tram_stop
+    attributes: *station_attributes
+
+  # A lift's stations, which the basemap has no kind for: a `station` whose
+  # `kind_detail` says it is a lift's, from zoom 13.
+  - source: osm
+    geometry: point
+    min_zoom: 13
+    include_when: &lift_station
+      aerialway: station
+    exclude_when: &railway_stop
+      railway: [station, halt, tram_stop]
+    attributes: &lift_station_attributes
+    - key: kind
+      value: station
+    - key: kind_detail
+      value: aerialway
+    - *name
+    - *name_en
+    - *name_de
+    - *name_fr
+    - *name_es
+    - *name_it
+    - *name_ru
+    - *name_pl
+    - *name_uk
+  - source: osm
+    geometry: polygon_point_on_surface
+    min_zoom: 13
+    include_when: *lift_station
+    exclude_when: *railway_stop
+    attributes: *lift_station_attributes
+
+  # Mountain huts, which Carto marks from zoom 13 and the basemap keeps from
+  # 15, and as a restaurant where a hut is tagged as one too: Carto asks a
+  # point's `tourism` before its `amenity`. Kept at every zoom, so the map can
+  # draw the hut in the basemap's point's place.
+  - source: osm
+    geometry: point
+    min_zoom: 13
+    include_when: &hut
+      tourism: [alpine_hut, wilderness_hut]
+    attributes: &hut_attributes
+    - key: kind
+      type: match_value
+    - key: elevation
+      tag_value: ele
+      type: double
+    - key: access
+      tag_value: access
+    - *name
+    - *name_en
+    - *name_de
+    - *name_fr
+    - *name_es
+    - *name_it
+    - *name_ru
+    - *name_pl
+    - *name_uk
+  - source: osm
+    geometry: polygon_point_on_surface
+    min_zoom: 13
+    include_when: *hut
+    attributes: *hut_attributes
+
+  # A castle, a monument or a wayside cross that is also tagged as an
+  # attraction, which the basemap files as the attraction: Carto asks for the
+  # `historic` first.
+  - source: osm
+    geometry: point
+    min_zoom: 15
+    include_when: &historic_attraction
+      __all__:
+      - historic: [castle, fort, manor, monument, memorial, archaeological_site, city_gate, wayside_cross, wayside_shrine]
+      - tourism: attraction
+    attributes: &historic_attributes
+    - key: kind
+      tag_value: historic
+    - *name
+    - *name_en
+    - *name_de
+    - *name_fr
+    - *name_es
+    - *name_it
+    - *name_ru
+    - *name_pl
+    - *name_uk
+  - source: osm
+    geometry: polygon_point_on_surface
+    min_zoom: 15
+    include_when: *historic_attraction
+    attributes: *historic_attributes
+
+  # Summits at the zooms the basemap has almost none, 11 and 12, where Carto
+  # marks every one without its name; volcanoes until the basemap's at 15;
+  # springs and capes at 14, a zoom before the basemap's. None is kept where
+  # the basemap takes over.
+  - source: osm
+    geometry: point
+    min_zoom: 11
+    max_zoom: 12
+    include_when:
+      natural: peak
+    attributes:
+    - key: kind
+      value: peak
+    - key: elevation
+      tag_value: ele
+      type: double
+  - source: osm
+    geometry: point
+    min_zoom: 11
+    max_zoom: 14
+    include_when:
+      natural: volcano
+    attributes:
+    - key: kind
+      value: volcano
+    - key: elevation
+      tag_value: ele
+      type: double
+    - *name
+    - *name_en
+    - *name_de
+    - *name_fr
+    - *name_es
+    - *name_it
+    - *name_ru
+    - *name_pl
+    - *name_uk
+  - source: osm
+    geometry: point
+    min_zoom: 14
+    max_zoom: 14
+    include_when:
+      natural: [spring, cape]
+    attributes:
+    - key: kind
+      type: match_value
+    - *name
+    - *name_en
+    - *name_de
+    - *name_fr
+    - *name_es
+    - *name_it
+    - *name_ru
+    - *name_pl
+    - *name_uk
+
+  # A pass marked on a road or a path rather than as a saddle, and a ford,
+  # neither of which the basemap has a kind for.
+  - source: osm
+    geometry: point
+    min_zoom: 15
+    include_when:
+      mountain_pass: 'yes'
+    exclude_when:
+      natural: [saddle, peak, volcano]
+    attributes:
+    - key: kind
+      value: mountain_pass
+    - key: elevation
+      tag_value: ele
+      type: double
+    - *name
+    - *name_en
+    - *name_de
+    - *name_fr
+    - *name_es
+    - *name_it
+    - *name_ru
+    - *name_pl
+    - *name_uk
+  - source: osm
+    geometry: point
+    min_zoom: 15
+    include_when:
+      ford: ['yes', stepping_stones]
+    attributes:
+    - key: kind
+      value: ford
+
 # Fences, hedges and walls, which Carto draws from zoom 16, city walls from 15.
 - id: barriers
   features:
@@ -750,3 +1165,57 @@ layers:
       tag_value: highway
     - key: oneway
       value: 'yes'
+
+# Power lines, which Carto draws from zoom 14, and the minor ones from 16.
+- id: power
+  features:
+  - source: osm
+    geometry: line
+    min_zoom: 14
+    include_when:
+      power: line
+    attributes:
+    - key: kind
+      value: line
+  - source: osm
+    geometry: line
+    min_zoom: 15
+    include_when:
+      power: minor_line
+    attributes:
+    - key: kind
+      value: minor_line
+
+# Dams, weirs and lock gates mapped as lines, which Carto draws from zoom 13.
+# The basemap has the dams mapped as areas.
+- id: dams
+  features:
+  - source: osm
+    geometry: line
+    min_zoom: 13
+    include_when:
+      waterway: [dam, weir, lock_gate]
+    attributes:
+    - key: kind
+      type: match_value
+
+# Ridges and arêtes, which Carto draws from zoom 14 and names from 15.
+- id: ridges
+  features:
+  - source: osm
+    geometry: line
+    min_zoom: 14
+    include_when:
+      natural: [ridge, arete]
+    attributes:
+    - key: kind
+      type: match_value
+    - *name
+    - *name_en
+    - *name_de
+    - *name_fr
+    - *name_es
+    - *name_it
+    - *name_ru
+    - *name_pl
+    - *name_uk
