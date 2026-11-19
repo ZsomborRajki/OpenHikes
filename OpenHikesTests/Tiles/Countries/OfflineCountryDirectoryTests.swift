@@ -215,6 +215,22 @@ struct OfflineCountryDirectoryTests {
         #expect(cache.builds == 3)
     }
 
+    /// The server can correct a name without cutting the area again, and the
+    /// rows and the search read the areas the directory kept.
+    @Test("a list off the server that renames an area at the same build is named and found by the new name")
+    func renamedAtTheSameBuild() {
+        let cache = OfflineCountryDirectoryCache()
+        var misspelled = california
+        misspelled.names = ["en": "Californa"]
+
+        _ = cache.directory(offered: [austria, misspelled], installed: [:], near: nil)
+        let refreshed = cache.directory(offered: [austria, california], installed: [:], near: nil)
+
+        #expect(cache.builds == 2)
+        #expect(refreshed.entries.map(\.country) == [austria, california])
+        #expect(refreshed.areas(matching: "California") == [california])
+    }
+
     @Test("an area downloaded and no longer offered is still listed")
     func keepsWhatIsNoLongerOffered() {
         let cache = OfflineCountryDirectoryCache()

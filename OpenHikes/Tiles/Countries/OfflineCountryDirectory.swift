@@ -302,12 +302,17 @@ enum OfflineCountryListing: Equatable, Identifiable {
 /// Keeps the directory across the list's body passes, which far outnumber
 /// the changes to what it is made from: a new list off the server, an area
 /// downloaded or deleted, and the hiker's position as the list comes up.
+///
+/// Kept against the areas themselves, not their ids and builds: a list off
+/// the server can correct a region's name at the same build, and the rows and
+/// the search are read from what was kept. Comparing them costs nothing on a
+/// pass that reads the same list, which is the same storage; a refresh that
+/// changes nothing walks the areas once, and its storage is kept from then.
 final class OfflineCountryDirectoryCache {
-    /// What a directory is made from, reduced to what a change of it moves:
-    /// each area's id and build, and the position.
+    /// What a directory is made from.
     private struct Key: Equatable {
-        let offered: [String]
-        let installed: [String]
+        let offered: [OfflineCountryManifest.Country]
+        let installed: [String: OfflineCountryStore.Record]
         let latitude: Double?
         let longitude: Double?
     }
@@ -323,13 +328,14 @@ final class OfflineCountryDirectoryCache {
         installed: [String: OfflineCountryStore.Record],
         near: CLLocationCoordinate2D?
     ) -> OfflineCountryDirectory {
-        let asked = Key(
-            offered: offered.map(Self.stamp),
-            installed: installed.values.map { Self.stamp($0.country) }.sorted(),
-            latitude: near?.latitude,
-            longitude: near?.longitude
-        )
-        if asked == key, let directory { return directory }
+        let asked = Key(offered: offered, installed: installed, latitude: near?.latitude, longitude: near?.longitude)
+        if asked == key, let directory {
+            // The storage asked about kept, so that the next pass compares
+            // the very same arrays rather than an equal copy, outline by
+            // outline.
+            key = asked
+            return directory
+        }
         let built = OfflineCountryDirectory(
             listed: OfflineCountries.listed(offered: offered, installed: installed),
             near: near,
@@ -339,9 +345,5 @@ final class OfflineCountryDirectoryCache {
         key = asked
         directory = built
         return built
-    }
-
-    private static func stamp(_ country: OfflineCountryManifest.Country) -> String {
-        "\(country.id)@\(country.build)"
     }
 }
