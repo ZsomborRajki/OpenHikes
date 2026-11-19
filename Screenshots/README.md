@@ -32,7 +32,7 @@ rather than the order they are worth.
 | 6 | `06-the-trail-in-3d` | The walk on a tilted map, the mountains risen under it, on Thunderforest Outdoors — OpenHikes Pro |
 | 7 | `07-choose-your-map` | Every map the walk can be drawn on, chosen over the map it changes |
 | 8 | `08-draw-your-own-trail` | Plan Saturday: search three places and walk between them |
-| 9 | `09-a-place-and-its-photos` | A place on the walk, kept with its own photographs |
+| 9 | `09-download-a-country` | Any country's map, kept for a walk with no signal, chosen on the map it covers |
 | 10 | `10-share-a-hike` | The walk as a picture to send: its figures and line over one of its photographs |
 
 Frame 8 is the only one that shows the app *making* something rather than
@@ -137,18 +137,23 @@ Apple for directions and Stadia for the climb, which needs
 `OpenHikes/Secrets.plist` and spends one Stadia call a run. Like frame 6 it is
 captured with `--ui-test-entitled`, since the climb is a Pro feature.
 
-**09, a place**, is one of the hiker's own, made from the map pill's *Add Place*
-on the frame-1 hike: two of the stamped photographs picked in the system
-picker, a name and a note, then *Add*. The pill puts the place where the
-elevation graph's tracker is, so the frame taps the chart where the walk comes
-out over the lake first, rather than leaving it at the start, which is a car
-park in Schönau. A viewpoint, the kind the form starts at, named for what it
-looks at — *Above the Königssee* — rather than after the Archenkanzel, which is
-169 m off the line and labelled on the map where it really stands. The
-photographs are pinned at the place and stand behind its pin. It needs the
-stamped library like frames 1 and 2, and skips without it. The fixture itself
-carries no `<wpt>` on purpose: a place in it would stand on the map in every
-other frame too.
+**09, Offline Maps**, is the list of countries a hiker can keep, pushed into
+the map sheet from the row at the foot of *Map Modes* and resting at its
+middle detent, with Germany chosen on the map behind it. The list is the real
+one: `--ui-test-offline-countries=showcase` reads
+`OfflineCountriesShowcase.json`, a byte-for-byte copy of the tile server's
+`countries/manifest.json` — every country and region, their outlines and what
+each costs — rather than the ten coarse areas the suites predict. The hiker
+stands in Schönau, as in frame 03, so the list opens nearest first with
+Germany at its head. A tap on the map, a couple of kilometres of Bavaria,
+chooses Germany, as a tap inside any outline chooses its country; a tap on the
+row it chose then draws the map out to the whole country, outlined bolder and
+tinted among its neighbours. The launch has no download session, so nothing
+downloads and the row offers *Download* with Germany's real size. When the
+server's build moves, copy the manifest again
+(`curl -sS https://tiles.openhikes.app/countries/manifest.json`) and give
+`SeededOfflineCountryServerTests` the new count. It replaced a place of the
+hiker's own with two photographs, made from the map pill's *Add Place*.
 
 **10, the share card**, opens the summary of the walk that covered the whole
 trail, *Share*, and the sixth of its photographs — the viewing platform with
@@ -240,10 +245,10 @@ frames from tests whose structured result is `Passed`; failed and crashed
 tests contribute no images, and only missing frames are retried.
 
 **Permissions are granted, never prompted for** — and location only for the
-four frames that use it (03, 04, 05, 08), which run as a group of their own
-after the grant. The alert used to come up over the first tap of each of them;
-a frame is a picture of the app, not of its permission prompt. The grant is not
-given to the other six, because MapKit draws the location dot on every map of
+five frames that use it (03, 04, 05, 08, 09), which run as a group of their
+own after the grant. The alert used to come up over the first tap of each of
+them; a frame is a picture of the app, not of its permission prompt. The grant
+is not given to the other five, because MapKit draws the location dot on every map of
 an authorised app, and the hero frame grew a stale dot beside its trailhead the
 one time it was.
 
@@ -323,7 +328,7 @@ list has something in it here, which is not a safe assumption everywhere.
 
 ## Photographs
 
-Frames 01, 02, 06, 09 and 10 import real photographs through the real library
+Frames 01, 02, 06 and 10 import real photographs through the real library
 and the real matcher, and skip without them. `--ui-test-seed-photos`, which the
 functional suites use, generates gradients and scattered shapes — fine for a
 layout, useless in a store listing.
@@ -411,7 +416,7 @@ a gesture known to disturb the screen and correct afterwards.
   That is honest — both are real features — but App Store guideline 2.3.2 asks
   the listing to say which featured items need a purchase, so the description's
   Pro paragraph has to name both, not only the maps and the offline download.
-- Frames 01, 02, 06, 09 and 10 import the stamped photographs and skip without
+- Frames 01, 02, 06 and 10 import the stamped photographs and skip without
   them; see *Photographs* below.
 
 ## The iPhone Duo set
@@ -637,7 +642,7 @@ because the app is genuinely gone.
 
 The site's home page, `docs/index.html`, shows five of the iPhone frames —
 04, 05, 08, 03 and 07, from the English light set — and watch frames 03 and
-04, as WebP copies in `docs/images/`. Frames 01, 02, 06, 09 and 10 are not
+04, as WebP copies in `docs/images/`. Frames 01, 02, 06 and 10 are not
 among them: they carry the stock photographs, which stay out of this
 repository's history (*Photographs*). Frame 08 shows a Pro feature, the drawn
 trail's climb, so the page's Pro paragraph has to keep naming elevation.
