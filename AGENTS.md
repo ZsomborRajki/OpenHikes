@@ -1213,7 +1213,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
       A car park's `parking` is its `kind_detail`, because Carto marks
       parking along a street only from zoom 18. Carto names a protected
       area too large for a point along its edge, from zoom 13; the map does
-      not, because the edges as areas tripled the extras.
+      not, because keeping the edges as areas made the extras half as large
+      again, for names few of the tiles an edge crosses had room for.
     - **Room is claimed in Carto's layer order**: place names, the stations
       (each one's icon, then its name), the points' icons, the names along
       streets and paths, then their one-way arrows, the points' names and
