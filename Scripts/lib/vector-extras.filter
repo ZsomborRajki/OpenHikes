@@ -46,6 +46,9 @@ wr/leisure=stadium,sports_centre,track,ice_rink,miniature_golf,fitness_station,f
 wr/power=plant,generator,substation
 wr/aeroway=apron
 wr/highway=services,rest_area
+# Squares and pedestrian streets mapped as relations, which the basemap
+# passes over.
+r/highway=pedestrian,footway
 # Every park and protected area, for its fill or its border.
 wr/leisure=park,nature_reserve
 wr/boundary=aboriginal_lands,national_park,protected_area

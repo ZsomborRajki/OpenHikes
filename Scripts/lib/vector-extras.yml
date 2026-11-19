@@ -166,6 +166,23 @@ layers:
     - key: kind
       value: rest_area
 
+  # A square or a pedestrian street mapped as a relation, which the basemap
+  # passes over: it keeps the ones mapped as a way tagged `area=yes`. Filed
+  # under the basemap's own kind for those, from zoom 14, where Carto fills
+  # one.
+  - source: osm
+    geometry: polygon
+    min_zoom: 14
+    include_when:
+      __all__:
+      - highway: [pedestrian, footway]
+      - type: multipolygon
+    exclude_when:
+      area: 'yes'
+    attributes:
+    - key: kind
+      value: pedestrian
+
   # A shoal and a salt pond, which the basemap has no kind for, and a danger
   # area, which Carto hatches in red over whatever lies in it, from zoom 9.
   # A shoal's surface is its `kind_detail`, which Carto picks its symbols by.

@@ -1192,7 +1192,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
     line of its own (`oneways`), and each named area's point with its size
     (`area`). And what a hiker's map is read by: the ground the basemap has
     no kind for (scree, heath, shingle, quarries, vineyards, camp sites,
-    danger areas), parks and the borders of protected areas, every lift but
+    danger areas, a square mapped as a relation), parks and the borders of
+    protected areas, every lift but
     the cable cars with its stations, the light railways before zoom 14,
     power lines, dams and weirs, ridges, cliffs and embankments in the
     direction they were mapped, the lines cut through a forest, trees and
