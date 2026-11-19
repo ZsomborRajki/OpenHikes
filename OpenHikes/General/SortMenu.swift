@@ -25,7 +25,7 @@ enum SortMenuMetrics {
 }
 
 /// One order a ``SortMenu`` offers.
-struct SortMenuOption<Value: Hashable>: Identifiable {
+struct SortMenuOption<Value: Hashable>: Identifiable, Equatable {
     let value: Value
     /// What the menu calls it.
     let title: String

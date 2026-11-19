@@ -101,6 +101,20 @@ struct OfflineRouteCoverageTests {
         }
     }
 
+    @Test("a trail in no country on offer crosses none, and leaves them")
+    func noCountryOnOffer() async throws {
+        try await OfflineCountryFixture.withDirectory { directory in
+            let austria = OfflineCountryFixture.northernCountry(bytes: basemap)
+            let slovenia = OfflineCountryFixture.country(bytes: basemap)
+            let countries = try await countries(in: directory, offering: [austria, slovenia], installed: [])
+
+            let coverage = countries.coverage(alongRoute: [RouteCoordinate(latitude: 40, longitude: -3)])
+
+            #expect(coverage == OfflineRouteCoverage(crossed: [], leavesThem: true))
+            #expect(countries.saving(coverage) == .unsaved)
+        }
+    }
+
     @Test("a trail with none of its countries downloaded is not saved")
     func nothingDownloaded() async throws {
         try await OfflineCountryFixture.withDirectory { directory in
@@ -126,6 +140,24 @@ struct OfflineRouteCoverageTests {
 
             #expect(coverage.leavesThem)
             #expect(countries.saving(coverage) == .part)
+        }
+    }
+
+    /// The same thinning: a trail that only just crosses a border at its last
+    /// point still names the country it ends in.
+    @Test("a trail's countries include the one it ends in")
+    func endsInTheNextCountry() async throws {
+        try await OfflineCountryFixture.withDirectory { directory in
+            let austria = OfflineCountryFixture.northernCountry(bytes: basemap)
+            let slovenia = OfflineCountryFixture.country(bytes: basemap)
+            let countries = try await countries(in: directory, offering: [austria, slovenia], installed: [])
+            var route = (0..<1000).map { RouteCoordinate(latitude: 46.0 + Double($0) * 0.0009, longitude: 14.0) }
+            route.append(RouteCoordinate(latitude: 47.0, longitude: 14.0))
+
+            let coverage = countries.coverage(alongRoute: route, testing: 3)
+
+            #expect(coverage.crossed.map(\.id) == ["SI", "AT"])
+            #expect(!coverage.leavesThem)
         }
     }
 }

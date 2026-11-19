@@ -4,15 +4,14 @@
 //
 //  What *Offline Maps* and the hike screen read off ``OfflineCountries``: the
 //  areas to list, each named in the app's language, which of them the list
-//  puts first, which a line crosses and how far one is from a hiker. Worked
-//  out here rather than in the views, so that a suite can hold each of them.
-//  The order the list is in is ``OfflineCountryDirectory``'s.
+//  puts first and how far one is from a hiker. Worked out here rather than in
+//  the views, so that a suite can hold each of them. The order the list is in
+//  is ``OfflineCountryDirectory``'s, and the areas a line crosses are
+//  `OfflineCountries+Coverage.swift`'s.
 //
 
-import Algorithms
 import CoreLocation
 import Foundation
-import OpenHikesData
 
 extension OfflineCountries {
     /// Every area to list: those offered, and those downloaded that no
@@ -101,32 +100,6 @@ extension OfflineCountries {
             isHeld: { isInstalled($0.id) || downloads[$0.id] != nil },
             byteCount: { listedByteCount(of: $0) }
         )
-    }
-
-    // MARK: - Where
-
-    /// The areas a saved line passes through, tested every so many points:
-    /// an area is tens of kilometres across, so one point every few hundred
-    /// metres of a long trail still finds every one it reaches.
-    func countries(alongRoute route: [RouteCoordinate], testing points: Int = 400) -> [Country] {
-        guard !route.isEmpty else { return [] }
-        let step = max(route.count / points, 1)
-        var sampled = route.striding(by: step).map(\.clCoordinate)
-        if let last = route.last { sampled.append(last.clCoordinate) }
-        return countries(along: sampled)
-    }
-
-    /// The areas a line passes through, in the order it reaches them.
-    func countries(along coordinates: [CLLocationCoordinate2D]) -> [Country] {
-        let candidates = listed
-        var found: [Country] = []
-        for coordinate in coordinates {
-            for country in candidates where !found.contains(where: { $0.id == country.id })
-                && country.contains(longitude: coordinate.longitude, latitude: coordinate.latitude) {
-                found.append(country)
-            }
-        }
-        return found
     }
 }
 
