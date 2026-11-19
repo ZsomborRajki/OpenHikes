@@ -31,6 +31,7 @@
 //  answers to its country's name too, so *United States* finds its states.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 #if canImport(UIKit)
@@ -150,17 +151,15 @@ struct OfflineCountryDirectory {
     }
 
     private func named(isHeld: (Country) -> Bool) -> OfflineCountrySections {
-        var parts: [OfflineCountrySections.Part] = []
-        for line in lines {
+        let listed = lines.filter { line in
             // A country downloaded is listed above. A split country is never
             // one, and keeps every region under it, the downloaded ones too.
-            if case let .area(country) = line.listing, isHeld(country) { continue }
-            let heading = OfflineCountrySections.Part.Heading.letter(line.letter.title)
-            if parts.last?.heading == heading {
-                parts[parts.count - 1].lines.append(line.listing)
-            } else {
-                parts.append(OfflineCountrySections.Part(heading: heading, lines: [line.listing]))
-            }
+            guard case let .area(country) = line.listing else { return true }
+            return !isHeld(country)
+        }
+        // The lines are in their letters' order, so each letter's are a run.
+        let parts = listed.chunked(on: \.letter.title).map { title, run in
+            OfflineCountrySections.Part(heading: .letter(title), lines: run.map(\.listing))
         }
         return OfflineCountrySections(held: entries.map(\.country).filter(isHeld), parts: parts)
     }
