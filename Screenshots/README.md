@@ -126,6 +126,16 @@ and the sheet says they need OpenHikes Pro, rather than the frame showing
 every map as included. It replaced the summary of a finished walk, which frame
 10 still passes through on its way to the share card.
 
+*Map Modes* grew a row for *Offline Maps*, and on a phone it came up over the
+walk's last stretch to St. Bartholomä. So where the sheet covers the walk, the
+frame measures how far up the sheet comes, closes it, and draws the walk into
+the band above it with MapKit's one-finger zoom — a tap, then the same spot
+held and drawn up — which zooms by any amount and, unlike a pinch, never turns
+the map. Where the walk is drawn is read from the region MapKit reports for the
+map and the fixture's own latitudes, since the line is no accessibility
+element. The closed iPhone Duo's *Map Modes* leaves no band at all, and is shot
+as it stands.
+
 **08, the drawn trail**, is the walk frame 1 is of, planned rather than
 imported: *Schönau am Königssee*, *Kühroint* and *St. Bartholomä*, picked from
 the maker's own search, routed in **Walking** mode. Apple's walking answer
@@ -148,9 +158,12 @@ stands in Schönau, as in frame 03, so the list opens nearest first with
 Germany at its head. A tap on the map, a couple of kilometres of Bavaria,
 chooses Germany, as a tap inside any outline chooses its country; a tap on the
 row it chose then draws the map out to the whole country, outlined bolder and
-tinted among its neighbours. The launch has no download session, so nothing
-downloads and the row offers *Download* with Germany's real size. When the
-server's build moves, copy the manifest again
+tinted among its neighbours. The list goes to the row chosen on the map by
+centring it, which leaves a line cut in half under the search field wherever
+that falls, so the frame draws the list down — never up, which would raise the
+sheet — until the edge falls in a gap. The launch has no download session, so
+nothing downloads and the row offers *Download* with Germany's real size. When
+the server's build moves, copy the manifest again
 (`curl -sS https://tiles.openhikes.app/countries/manifest.json`) and give
 `SeededOfflineCountryServerTests` the new count. It replaced a place of the
 hiker's own with two photographs, made from the map pill's *Add Place*.
