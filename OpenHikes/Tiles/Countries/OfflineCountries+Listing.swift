@@ -9,6 +9,7 @@
 //  The order the list is in is ``OfflineCountryDirectory``'s.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 import OpenHikesData
@@ -110,7 +111,7 @@ extension OfflineCountries {
     func countries(alongRoute route: [RouteCoordinate], testing points: Int = 400) -> [Country] {
         guard !route.isEmpty else { return [] }
         let step = max(route.count / points, 1)
-        var sampled = stride(from: 0, to: route.count, by: step).map { route[$0].clCoordinate }
+        var sampled = route.striding(by: step).map(\.clCoordinate)
         if let last = route.last { sampled.append(last.clCoordinate) }
         return countries(along: sampled)
     }

@@ -10,6 +10,7 @@
 //  downloaded country, and *Partly Saved* for one that leaves them.
 //
 
+import Algorithms
 import CoreLocation
 import OpenHikesData
 
@@ -34,7 +35,7 @@ extension OfflineCountries {
     ) -> OfflineRouteCoverage {
         guard !route.isEmpty else { return OfflineRouteCoverage() }
         let step = max(route.count / points, 1)
-        var sampled = stride(from: 0, to: route.count, by: step).map { route[$0].clCoordinate }
+        var sampled = route.striding(by: step).map(\.clCoordinate)
         if let last = route.last { sampled.append(last.clCoordinate) }
         return coverage(along: sampled)
     }
@@ -43,17 +44,15 @@ extension OfflineCountries {
     /// in none of them.
     func coverage(along coordinates: [CLLocationCoordinate2D]) -> OfflineRouteCoverage {
         let candidates = listed
-        var coverage = OfflineRouteCoverage()
-        for coordinate in coordinates {
-            let holding = candidates.filter { country in
+        let holding = coordinates.map { coordinate in
+            candidates.filter { country in
                 country.contains(longitude: coordinate.longitude, latitude: coordinate.latitude)
             }
-            if holding.isEmpty { coverage.leavesThem = true }
-            for country in holding where !coverage.crossed.contains(where: { $0.id == country.id }) {
-                coverage.crossed.append(country)
-            }
         }
-        return coverage
+        return OfflineRouteCoverage(
+            crossed: holding.joined().uniqued(on: \.id),
+            leavesThem: holding.contains(where: \.isEmpty)
+        )
     }
 
     /// Whether the downloaded countries draw all of `coverage`'s line, part
