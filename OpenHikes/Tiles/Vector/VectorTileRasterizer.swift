@@ -40,6 +40,7 @@ nonisolated enum VectorTileRasterizer {
     static func propertyKeys(language: String) -> Set<String> {
         VectorTileLabels.propertyKeys(language: language).union([
             "kind", "kind_detail", "is_tunnel", "is_bridge", "disputed", "access", "oneway", "addr_housenumber",
+            VectorTilePoints.sizeKey,
         ])
     }
 

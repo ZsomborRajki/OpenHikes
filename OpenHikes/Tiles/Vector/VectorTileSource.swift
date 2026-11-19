@@ -12,9 +12,9 @@
 //
 //  A second archive, the extras, holds what OpenStreetMap Carto draws and
 //  the basemap leaves out — car parks with no name, barriers, towers and
-//  crosses, offices, an information point's type — built from the planet by
-//  `Scripts/vector-extras.sh`. Its tile is drawn into the basemap's, where
-//  there is one.
+//  crosses, offices, an information point's type, one-way ways and the size
+//  of each named area — built from the planet by `Scripts/vector-extras.sh`.
+//  Its tile is drawn into the basemap's, where there is one.
 //
 
 import Foundation
@@ -67,7 +67,8 @@ nonisolated struct VectorTileAddress: Hashable, Sendable {
 nonisolated extension VectorTileSource {
     /// Protomaps' basemap build of 17 November 2026: OpenStreetMap's data
     /// under the ODbL, to zoom 15, on `tiles.openhikes.app`, with the extras
-    /// built from the planet of the same day.
+    /// built from the planet of 19 November. The extras hold the names of
+    /// the largest areas from zoom 4, where Carto names an island.
     ///
     /// A new build goes up under a new name, and this changes with it. The
     /// server's cache keeps a tile for a day, so a build overwritten in place
@@ -78,8 +79,8 @@ nonisolated extension VectorTileSource {
         maximumZ: 15,
         extras: Extras(
             // swiftlint:disable:next force_unwrapping
-            archiveURL: URL(string: "https://tiles.openhikes.app/extras-20261117")!,
-            minimumZ: 14
+            archiveURL: URL(string: "https://tiles.openhikes.app/extras-20261119")!,
+            minimumZ: 4
         )
     )
 }

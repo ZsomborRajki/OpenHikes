@@ -5,13 +5,15 @@
 # The OpenStreetMap style draws the Protomaps basemap on tiles.openhikes.app,
 # which leaves out much of what OpenStreetMap Carto draws: car parks mapped
 # as areas with no name, barriers, towers and crosses, offices, the type of
-# an information point and the goods of a vending machine, waterfalls. The
+# an information point and the goods of a vending machine, waterfalls,
+# one-way ways in their own direction, and the size of each named area. The
 # extras are those, as a second PMTiles archive the app draws into the
 # basemap's tiles (`VectorTileSource.extras`).
 #
 # It cuts the planet down with `osmium tags-filter` and
-# Scripts/lib/vector-extras.filter, then builds the archive with Planetiler
-# from Scripts/lib/vector-extras.yml. Bring the planet up to date first with
+# Scripts/lib/vector-extras.filter, and the named areas with
+# Scripts/lib/vector-extras-areas.filter and a second cut for a name, then
+# builds the archive with Planetiler from Scripts/lib/vector-extras.yml. Bring the planet up to date first with
 # `Scripts/trail-cells.sh update-planet`. The archive is named for the date
 # the planet is current to, `extras-YYYYMMDD.pmtiles`.
 #
@@ -28,9 +30,10 @@
 # the file in one request, which R2 takes up to 5 GiB.
 #
 # It is a development tool and is in no gate. It needs osmium and Planetiler
-# (`brew install osmium-tool planetiler`). On an M4 Max the planet took seven
-# minutes to filter, and the filtered 2.4 GB a minute and a quarter to build
-# into 1.8 GB.
+# (`brew install osmium-tool planetiler`). On an M4 Max the planet took 23
+# minutes to cut, and the cut's 7.2 GB two minutes to build into 3.3 GB. The
+# areas of the named areas' kinds, named or not, pass through the work
+# directory on the way: in Slovenia's extract they were three fifths of it.
 #
 # Usage:
 #   Scripts/vector-extras.sh build <planet.osm.pbf> [<work-dir>]
@@ -120,6 +123,16 @@ trap 'rm -rf "$SCRATCH"' EXIT
 
 osmium tags-filter "$PLANET" \
   --expressions="$REPO_ROOT/Scripts/lib/vector-extras.filter" \
+  --output="$SCRATCH/points.osm.pbf" --overwrite
+# The named areas: every area of the kinds whose names the extras keep, then
+# the named ones among them, which osmium cannot ask for in one pass.
+osmium tags-filter "$PLANET" \
+  --expressions="$REPO_ROOT/Scripts/lib/vector-extras-areas.filter" \
+  --output="$SCRATCH/areas.osm.pbf" --overwrite
+osmium tags-filter "$SCRATCH/areas.osm.pbf" wr/name \
+  --output="$SCRATCH/named-areas.osm.pbf" --overwrite
+rm "$SCRATCH/areas.osm.pbf"
+osmium merge "$SCRATCH/points.osm.pbf" "$SCRATCH/named-areas.osm.pbf" \
   --output="$WORK/extras.osm.pbf" --overwrite
 
 planetiler generate-custom \

@@ -397,8 +397,10 @@ case "${1:-} ${2:-}" in
 esac
 STUB
 
-# Answers the four osmium commands Scripts/trail-cells.sh makes, and records
-# each. It reads no extract. `cat` writes the OPL fixture STUB_OSMIUM_RELATIONS,
+# Answers the four osmium commands Scripts/trail-cells.sh makes, and the
+# `merge` Scripts/vector-extras.sh makes besides, and records each. It reads no
+# extract: `tags-filter`, `add-locations-to-ways` and `merge` write an empty
+# file where `-o` or `--output` says. `cat` writes the OPL fixture STUB_OSMIUM_RELATIONS,
 # STUB_OSMIUM_NODES or STUB_OSMIUM_WAYS names, whichever `-t` asks for, to the
 # file `-o` names — and writes the ways without their nodes' positions unless
 # the format asks for them, which is what the real one does and is the option
@@ -420,7 +422,7 @@ for (( index = 0; index < ${#arguments[@]}; index++ )); do
     esac
 done
 case "$command" in
-    tags-filter|add-locations-to-ways)
+    tags-filter|add-locations-to-ways|merge)
         : > "$output"
         ;;
     cat)
@@ -5278,10 +5280,14 @@ if expect_status 1 \
     pass
 fi
 
-# The build hands Planetiler a scratch directory and removes it after, and
-# what a work directory passed in already holds is not its to remove: a `tmp`
-# of the caller's own, or another build's scratch files. The stub writes a file
-# into the scratch directory it is given, and the archive it is asked for.
+# The build cuts the planet twice in its scratch directory — the points and
+# lines once, the areas whose names it keeps once and then the named ones among
+# those, because osmium cannot ask for a kind and a name at once — and merges
+# the two into the one file Planetiler reads. It hands Planetiler the same
+# scratch directory and removes it after, and what a work directory passed in
+# already holds is not its to remove: a `tmp` of the caller's own, or another
+# build's scratch files. The stub writes a file into the scratch directory it
+# is given, and the archive it is asked for.
 cat > "$stub_bin/planetiler" <<'STUB'
 #!/usr/bin/env bash
 printf 'planetiler %s\n' "$*" >> "$STUB_CALL_LOG"
@@ -5299,13 +5305,25 @@ printf 'keep' > "$extras_build/tmp/keep"
 printf 'planet' > "$extras_work/planet.osm.pbf"
 
 STUB_OSMIUM_TIMESTAMP="2026-11-17T21:00:00Z" \
-    run_script "vector-extras build removes only the scratch directory it made" \
+    run_script "vector-extras build cuts the points and the named areas, merges them, and removes only its scratch" \
     "$vector_extras" build "$extras_work/planet.osm.pbf" "$extras_build"
 leftover_scratch="$(find "$extras_build" -maxdepth 1 -name 'tmp.*')"
+extras_scratch="$(sed -nE 's/.*--tmpdir=([^ ]+).*/\1/p' <<< "$calls")"
+extras_steps="osmium fileinfo --get header.option.osmosis_replication_timestamp $extras_work/planet.osm.pbf
+osmium tags-filter $extras_work/planet.osm.pbf --expressions=$repository_root/Scripts/lib/vector-extras.filter \
+--output=$extras_scratch/points.osm.pbf --overwrite
+osmium tags-filter $extras_work/planet.osm.pbf --expressions=$repository_root/Scripts/lib/vector-extras-areas.filter \
+--output=$extras_scratch/areas.osm.pbf --overwrite
+osmium tags-filter $extras_scratch/areas.osm.pbf wr/name --output=$extras_scratch/named-areas.osm.pbf --overwrite
+osmium merge $extras_scratch/points.osm.pbf $extras_scratch/named-areas.osm.pbf \
+--output=$extras_build/extras.osm.pbf --overwrite"
 if expect_status 0 \
     && expect_contains "$output" "built $extras_build/extras-20261117.pmtiles" "the output" \
-    && expect_contains "$calls" "--tmpdir=$extras_build/tmp." "the recorded calls"; then
-    if [[ ! -f "$extras_build/tmp/keep" ]]; then
+    && expect_contains "$calls" "--tmpdir=$extras_build/tmp." "the recorded calls" \
+    && expect_contains "$calls" "--osm_path=$extras_build/extras.osm.pbf" "the recorded calls"; then
+    if [[ "$(grep '^osmium ' <<< "$calls")" != "$extras_steps" ]]; then
+        fail "osmium was not handed the two cuts and the merge, in that order" "$calls"
+    elif [[ ! -f "$extras_build/tmp/keep" ]]; then
         fail "the work directory's own tmp was removed"
     elif [[ -n "$leftover_scratch" ]]; then
         fail "the build left its scratch directory behind" "$leftover_scratch"

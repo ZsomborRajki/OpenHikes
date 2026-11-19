@@ -10,12 +10,19 @@
 //  first, then the stations, then the points' icons, then the names along
 //  roads and rivers, then the points' names, and last the low-priority icons
 //  and their names. Within each, the higher summit goes first, as Carto
-//  orders points by height, then the point the archive offers from a wider
-//  zoom, which for an area is the larger; a station goes before a halt or a
-//  tram stop, and those before a subway entrance. An icon and its name are
+//  orders points by height, then the larger area, then the point the archive
+//  offers from a wider zoom; a station goes before a halt or a tram stop, and
+//  those before a subway entrance. An icon and its name are
 //  placed apart, as Carto's two layers place them, so a name can stand where
 //  its icon found no room. A station's are placed together, its icon and then
 //  its name, because one layer draws both.
+//
+//  An area — a forest, a park, a car park — is a point inside it. The vector
+//  extras give one with the area's size, which Carto draws it by: named from
+//  a wider zoom and larger the larger the area. The basemap gives most of the
+//  same areas' points, without a size, at the same spot, both being cut from
+//  one OpenStreetMap area by Planetiler; where the extras give an area's
+//  point, the basemap's is left out.
 //
 //  As with every name, a point belongs to the tile its point lies in, and
 //  what is drawn for it, a name's halo included, never crosses the tile's
@@ -56,14 +63,18 @@ nonisolated enum VectorTilePoints {
         /// point with none.
         let order: Int
         let height: Double
+        /// The area's size on the picture, Carto's `way_pixels`; 0 for a
+        /// point, which Carto counts as no size.
+        var pixels: Double = 0
         let minimumZoom: Double
         let name: String
         let x: CGFloat
         let y: CGFloat
 
         static func < (lhs: Self, rhs: Self) -> Bool {
-            let left = (lhs.order, -lhs.height, lhs.minimumZoom, lhs.name, lhs.x, lhs.y)
-            return left < (rhs.order, -rhs.height, rhs.minimumZoom, rhs.name, rhs.x, rhs.y)
+            let (left, right) = ((lhs.order, -lhs.height, -lhs.pixels), (rhs.order, -rhs.height, -rhs.pixels))
+            guard left == right else { return left < right }
+            return (lhs.minimumZoom, lhs.name, lhs.x, lhs.y) < (rhs.minimumZoom, rhs.name, rhs.x, rhs.y)
         }
     }
 
@@ -88,17 +99,20 @@ nonisolated enum VectorTilePoints {
         let side = CGFloat(VectorTileRasterizer.pixelSize)
         let bounds = CGRect(x: 0, y: 0, width: side, height: side)
         let geometry = VectorTileGeometry(extent: layer.extent, source: source, target: target)
+        let areas = SizedAreas(layer.features, geometry: geometry)
         var found: [Candidate] = []
         for feature in layer.features where feature.type == .point {
-            guard let kind = feature.string("kind") else { continue }
+            guard let kind = feature.string("kind"), !areas.repeats(feature) else { continue }
             let name = VectorTileLabels.name(of: feature, language: language)
             let detail = feature.string("kind_detail")
+            let pixels = feature.number(sizeKey).map { $0 * pow(4, Double(target.z)) }
             guard let look = style.look(
                 kind: kind,
                 detail: detail,
                 named: name != nil,
                 z: target.z,
-                access: feature.string("access")
+                access: feature.string("access"),
+                pixels: pixels
             ) else { continue }
             let elevation = feature.number("elevation")
             var lines: [String] = []
@@ -111,6 +125,7 @@ nonisolated enum VectorTilePoints {
                 found.append(Candidate(anchor: point, lines: lines, look: look, rank: Rank(
                     order: look.stationOrder ?? 0,
                     height: rankedByHeight.contains(kind) ? elevation ?? -.infinity : -.infinity,
+                    pixels: pixels ?? 0,
                     minimumZoom: feature.number("min_zoom") ?? .infinity,
                     name: name ?? "",
                     x: point.x,
@@ -119,6 +134,43 @@ nonisolated enum VectorTilePoints {
             }
         }
         return found.sorted { $0.rank < $1.rank }
+    }
+
+    /// The property the vector extras give an area's size in: the square
+    /// pixels it covers of the whole world drawn as one 256-pixel tile, so
+    /// 4 to the power of a zoom times it at that zoom.
+    static let sizeKey = "area"
+
+    /// The areas the extras give with their sizes, by name and where they
+    /// stand, to tell the basemap's point for the same area.
+    private struct SizedAreas {
+        private let spots: [String: [CGPoint]]
+        private let geometry: VectorTileGeometry
+        /// How far apart two points of one area may stand: two steps of the
+        /// archive's grid. Both archives put it on the same step.
+        private let reach: CGFloat
+
+        init(_ features: [MapboxVectorTile.Feature], geometry: VectorTileGeometry) {
+            var found: [String: [CGPoint]] = [:]
+            for feature in features where feature.type == .point && feature.number(sizeKey) != nil {
+                guard let name = feature.string("name") else { continue }
+                found[name, default: []] += geometry.points(of: feature)
+            }
+            spots = found
+            self.geometry = geometry
+            reach = 2 * geometry.scale
+        }
+
+        /// Whether `feature` is the basemap's point for an area the extras
+        /// give: the same name at the same spot, with no size.
+        func repeats(_ feature: MapboxVectorTile.Feature) -> Bool {
+            guard feature.number(sizeKey) == nil, let name = feature.string("name"), let named = spots[name] else {
+                return false
+            }
+            return geometry.points(of: feature).contains { point in
+                named.contains { abs($0.x - point.x) <= reach && abs($0.y - point.y) <= reach }
+            }
+        }
     }
 
     // MARK: Placing

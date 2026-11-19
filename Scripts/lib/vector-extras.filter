@@ -4,7 +4,8 @@
 # each becomes; this only cuts the planet down to them first, so the two
 # lists move together.
 
-# Car parks: every area for its fill, the unnamed ones for their icon.
+# Car parks: every area for its fill, and for its icon with its size, named
+# or not.
 nwr/amenity=parking
 # Carto draws a vending machine only for these, by what it sells.
 n/amenity=vending_machine

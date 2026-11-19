@@ -13,10 +13,14 @@
 //  up, where the more specific of two declarations wins and the later one
 //  breaks a tie. Carto's own compiler flattens that into Mapnik's rules; this
 //  evaluates the same cascade for each kind of point the archive can name, at
-//  each zoom, and keeps what a point read from the archive can meet: a point
-//  rather than an area (`way_pixels` 0), open to everyone, not a building,
-//  and with only the details the archive keeps — a place of worship's
-//  religion and a pitch's sport, in `kind_detail`, and whether it has a name.
+//  each zoom, and keeps what a point read from the archive can meet: open to
+//  everyone or not, not a building, and with only the details the archive
+//  keeps — a place of worship's religion, a pitch's sport, a car park's
+//  `parking` and a protected area's class, in `kind_detail`, and whether it
+//  has a name. A point has no size (`way_pixels` 0); an area, which the
+//  vector extras give with its size, is evaluated again for each range of
+//  sizes the rules tell apart, below zoom 10 in the layer Carto names large
+//  areas in at low zooms.
 //
 //  Only the CartoCSS these rules are written in is read: variables, nested
 //  blocks, filters on attributes and on zoom, an attribute named as a text,
@@ -724,6 +728,13 @@ struct Band: Codable, Equatable {
     var text: Text?
 }
 
+/// How an area is drawn once its size, in pixels, is past `above`, until
+/// the next range's.
+struct AreaBands: Codable, Equatable {
+    var above: Double
+    var bands: [Band]
+}
+
 struct Entry: Codable {
     var kind: String
     var detail: String?
@@ -738,12 +749,21 @@ struct Entry: Codable {
     /// table's `restrictedAccess`, where they are not `bands`.
     var restricted: [Band]?
     var bands: [Band]
+    /// How an area of the kind is drawn, by its size, where Carto's rules
+    /// look at the size.
+    var areas: [AreaBands]?
+    /// The same where its access is restricted, where they are not `areas`:
+    /// empty where a restricted area is drawn as its point is at any size,
+    /// because a table without them reads `areas` here.
+    var restrictedAreas: [AreaBands]?
 }
 
 struct Table: Codable {
     var source: String
     /// The `access` values Carto counts as restricted.
     var restrictedAccess: [String]
+    /// The largest area, in pixels, drawn at a point.
+    var areaLimit: Double
     var entries: [Entry]
 }
 
@@ -910,6 +930,16 @@ func features(of id: String) -> [SQLFeature] {
         for value in match.4.matches(of: #/'([^']+)'/#) {
             result.append(SQLFeature(key: String(match.1), value: String(value.1), requires: requires))
         }
+        // `OR (boundary = 'protected_area' AND tags->'protect_class' IN
+        // (...))`: one more value, drawn only with the further tag.
+        let alternative = #/OR +\("?([a-z_]+)"? *= *'([a-z_]+)' +AND +tags->'([a-z_:]+)' +IN *\(([^)]*)\)\)/#
+        for other in condition.matches(of: alternative) where String(other.1) == column {
+            result.append(SQLFeature(
+                key: String(match.1),
+                value: String(other.2),
+                requires: (key: String(other.3), values: other.4.matches(of: #/'([^']+)'/#).map { String($0.1) })
+            ))
+        }
     }
     return result
 }
@@ -940,6 +970,17 @@ func testedValues(_ key: String) -> [String] {
     }
     return values.sorted()
 }
+
+/// The tags the archive keeps as a point's `kind_detail` that Carto's rules
+/// test, each with the features it is kept for where not every one: a place
+/// of worship's religion and a pitch's sport, which the basemap keeps, and a
+/// car park's `parking`, which the vector extras keep. Carto also tests a
+/// bicycle or a motorcycle parking's `parking`, which neither keeps.
+let testedDetails: [(key: String, features: Set<String>?)] = [
+    ("religion", nil),
+    ("sport", nil),
+    ("parking", ["amenity_parking"]),
+]
 
 /// Whether any rule that can draw `feature` tests `key`.
 func rules(of feature: String, shop: String?, test key: String) -> Bool {
@@ -974,16 +1015,12 @@ let namedElsewhere: Set<String> = ["water", "glacier"]
 var entries: [Entry] = []
 var seenKinds: Set<String> = []
 
-func bands(of point: Point, textLayer: String, iconLayerZoom: Int, textLayerZoom: Int) -> [Band] {
+/// The icons and the text Carto draws at each zoom, run together where they
+/// stay the same.
+func bands(_ look: (Int) -> (icons: [Icon], text: Text?)) -> [Band] {
     var bands: [Band] = []
     for zoom in zooms {
-        let icons = zoom < iconLayerZoom ? [] : symbolizers(for: point, at: zoom)
-            .filter { $0.properties.keys.contains { $0.hasPrefix("marker-") } }
-            .map { icon($0.properties) }
-        let textPoint = Point(layer: textLayer, attributes: point.attributes)
-        let label = zoom < textLayerZoom
-            ? nil
-            : symbolizers(for: textPoint, at: zoom).lazy.compactMap { text($0.properties) }.first
+        let (icons, label) = look(zoom)
         guard !icons.isEmpty || label != nil else { continue }
         if var last = bands.last, last.to == zoom - 1, last.icons == icons, last.text == label {
             last.to = zoom
@@ -993,6 +1030,135 @@ func bands(of point: Point, textLayer: String, iconLayerZoom: Int, textLayerZoom
         }
     }
     return bands
+}
+
+func icons(of point: Point, at zoom: Int) -> [Icon] {
+    symbolizers(for: point, at: zoom)
+        .filter { $0.properties.keys.contains { $0.hasPrefix("marker-") } }
+        .map { icon($0.properties) }
+}
+
+func label(of point: Point, at zoom: Int) -> Text? {
+    symbolizers(for: point, at: zoom).lazy.compactMap { text($0.properties) }.first
+}
+
+func bands(of point: Point, textLayer: String, iconLayerZoom: Int, textLayerZoom: Int) -> [Band] {
+    bands { zoom in
+        let textPoint = Point(layer: textLayer, attributes: point.attributes)
+        return (
+            zoom < iconLayerZoom ? [] : icons(of: point, at: zoom),
+            zoom < textLayerZoom ? nil : label(of: textPoint, at: zoom)
+        )
+    }
+}
+
+// MARK: - Areas
+
+// An area is drawn at a point inside it, by the same rules as a point, but
+// those rules also test its size on the screen, `way_pixels`: the area in
+// the square pixels of a 256-pixel tile at the zoom drawn. A larger forest
+// is named from a wider zoom and in a larger size. The vector extras carry
+// each area's size, and the table gives each kind its bands for each range
+// of sizes the rules tell apart.
+
+/// The bounds a layer's SQL puts on the areas it reads, in pixels:
+/// `way_area > 100*POW(...)` and `way_area < 768000*POW(...)`.
+func areaBounds(of id: String) -> (above: Double?, below: Double?) {
+    let source = layerSource(id)
+    let bound = { (operation: String) -> Double? in
+        let pattern = try! Regex(#"way_area \#(operation) (\d+)\*POW\(!scale_denominator!"#)
+        return source.firstMatch(of: pattern).flatMap { ($0.output[1].substring).flatMap { Double($0) } }
+    }
+    return (bound(">"), bound("<"))
+}
+
+/// The layer Carto names areas in below the zoom its points begin at, and
+/// the features it names there.
+let lowZoomTextLayer = "text-poly-low-zoom"
+let lowZoomTextFeatures = Set(features(of: lowZoomTextLayer).map { "\($0.key)_\($0.value)" })
+let lowZoomTextZooms: ClosedRange<Int> = {
+    let source = layerSource(lowZoomTextLayer)
+    guard let match = source.firstMatch(of: #/\n\s+minzoom: (\d+)\n\s+maxzoom: (\d+)/#),
+          let lowest = Int(match.1), let highest = Int(match.2)
+    else { fail("no zooms for \(lowZoomTextLayer) in project.mml") }
+    return lowest...highest
+}()
+let lowZoomTextBounds = areaBounds(of: lowZoomTextLayer)
+
+/// The largest area, in pixels, Carto names or marks at a point: past it
+/// Carto names only a protected area, along its edge.
+let areaLimit: Double = {
+    let limits = ["amenity-points", "amenity-low-priority"].map { areaBounds(of: $0).below }
+    guard let limit = limits.first ?? nil, limits.allSatisfy({ $0 == limit }),
+          lowZoomTextBounds.below == limit, lowZoomTextBounds.above != nil
+    else { fail("the point layers bound their areas differently") }
+    return limit
+}()
+
+/// Every size the rules tell apart, smallest first: the area thresholds of
+/// the rules and of the SQL.
+let areaThresholds: [Double] = {
+    var thresholds: Set<Double> = [lowZoomTextBounds.above].compactMap { $0 }.reduce(into: []) { $0.insert($1) }
+    for rule in rules {
+        for condition in rule.selector.conditions where condition.key == "way_pixels" {
+            if case let .number(number) = condition.value, number > 0, number < areaLimit { thresholds.insert(number) }
+        }
+    }
+    return thresholds.sorted()
+}()
+
+/// The ranges of size an area can fall in, by their lower bound, which a
+/// size must exceed; each with a size inside it to evaluate the rules at.
+let areaRanges: [(above: Double, sample: Double)] = zip([0] + areaThresholds, areaThresholds + [areaLimit])
+    .map { (above: $0, sample: ($0 + $1) / 2) }
+
+/// How an area of `feature` with `attributes` and `pixels` in size is
+/// drawn at each zoom: below the points' first zoom only in the low-zoom
+/// layer, and then only for the features and sizes its SQL reads.
+func areaBands(of attributes: [String: Literal], feature: String, pixels: Double) -> [Band] {
+    var area = attributes
+    area["way_pixels"] = .number(pixels)
+    let iconLayer = Point(layer: "amenity-points", attributes: area)
+    let textLayer = Point(layer: "text-point", attributes: area)
+    let lowZoomText = Point(layer: lowZoomTextLayer, attributes: area)
+    let pointsZoom = minimumZoom(of: "amenity-points")
+    let textZoom = minimumZoom(of: "text-point")
+    let namedAtLowZoom = lowZoomTextFeatures.contains(feature) && pixels > (lowZoomTextBounds.above ?? 0)
+    return bands { zoom in
+        let text = zoom >= textZoom ? label(of: textLayer, at: zoom)
+            : namedAtLowZoom && lowZoomTextZooms.contains(zoom) ? label(of: lowZoomText, at: zoom)
+            : nil
+        return (zoom < pointsZoom ? [] : icons(of: iconLayer, at: zoom), text)
+    }
+}
+
+/// Whether the table gives a kind its bands by size. The low-priority layer
+/// marks points alone. A shop's or an office's size tells Carto only to name
+/// a large one a zoom early, and the extras carry neither's, so the table
+/// leaves out ranges no tile could reach; a mall is named as land is.
+func drawnBySize(feature: String, shop: String?, lowPriority: Bool) -> Bool {
+    !lowPriority && feature != "office" && (shop == nil || shop == "mall")
+}
+
+/// An area's bands for each range of size where they differ from the
+/// range below, or `nil` where they are the point's at every size: the
+/// rules for that kind do not look at the size. An area smaller than the
+/// first range is drawn as the point is.
+func areas(of attributes: [String: Literal], feature: String, point: [Band]) -> [AreaBands]? {
+    var result: [AreaBands] = []
+    for range in areaRanges {
+        let bands = areaBands(of: attributes, feature: feature, pixels: range.sample)
+        if (result.last?.bands ?? point) != bands { result.append(AreaBands(above: range.above, bands: bands)) }
+    }
+    return result.isEmpty ? nil : result
+}
+
+/// Everything an entry draws, to tell a detail that changes nothing.
+struct Drawn: Equatable {
+    let point: [Band]
+    let restricted: [Band]
+    let areas: [AreaBands]?
+    let restrictedAreas: [AreaBands]?
 }
 
 func add(
@@ -1013,12 +1179,15 @@ func add(
         "way_pixels": lowPriority ? .null : .number(0),
     ]
     if let shop { base["shop"] = .text(iconShops.contains(shop) ? shop : "other") }
-    let tested: [(key: String, value: String?)] = ["religion", "sport"]
+    let tested: [(key: String, value: String?)] = testedDetails
+        .filter { $0.features?.contains(feature) ?? true }
+        .map(\.key)
         .filter { rules(of: feature, shop: shop, test: $0) }
         .flatMap { key in testedValues(key).map { (key, Optional($0)) } }
     let required = requires.map { requires in requires.values.map { (key: requires.key, value: Optional($0)) } }
     let namings: [Bool?] = rules(of: feature, shop: shop, test: "name") ? [true, false] : [nil]
-    var produced: [[[Band]]] = []
+    // What the kind draws without a detail, named or not.
+    var plainDrawn: [Bool?: Drawn] = [:]
     // A feature that asks for a further tag is drawn only with it.
     let plain: (key: String, value: String?) = ("", nil)
     for detail in required ?? [plain] + tested {
@@ -1026,21 +1195,34 @@ func add(
             var attributes = base
             attributes["name"] = named == false ? .null : .text("name")
             if let value = detail.value { attributes[detail.key] = .text(value) }
-            let withAccess = { (access: String) in
+            let withAccess = { (access: String) -> (point: [Band], areas: [AreaBands]?) in
                 attributes["int_access"] = .text(access)
-                return bands(
+                let point = bands(
                     of: Point(layer: iconLayer, attributes: attributes),
                     textLayer: textLayer,
                     iconLayerZoom: minimumZoom(of: iconLayer),
                     textLayerZoom: minimumZoom(of: textLayer)
                 )
+                let areas = drawnBySize(feature: feature, shop: shop, lowPriority: lowPriority)
+                    ? areas(of: attributes, feature: feature, point: point)
+                    : nil
+                return (point, areas)
             }
-            let result = withAccess("yes")
-            let restricted = withAccess("restricted")
-            guard !result.isEmpty else { continue }
-            // A detail that changes nothing is the plain kind's.
-            if required == nil, detail.value != nil, produced.contains([result, restricted]) { continue }
-            produced.append([result, restricted])
+            let (result, areas) = withAccess("yes")
+            let (restricted, restrictedAreas) = withAccess("restricted")
+            guard !result.isEmpty || areas != nil else { continue }
+            let drawn = Drawn(point: result, restricted: restricted, areas: areas, restrictedAreas: restrictedAreas)
+            if required == nil {
+                // A detail that changes nothing is the plain kind's. Two
+                // details drawn alike are each their own entry: a point
+                // with either would find no entry of the other's and fall
+                // back to the plain kind's.
+                if detail.value == nil {
+                    plainDrawn[named] = drawn
+                } else if plainDrawn[named] == drawn {
+                    continue
+                }
+            }
             entries.append(Entry(
                 kind: kind,
                 detail: detail.value,
@@ -1049,7 +1231,9 @@ func add(
                 lowPriority: lowPriority,
                 elevation: writesElevation(feature: feature, detail: detail.value) ? true : nil,
                 restricted: restricted == result ? nil : restricted,
-                bands: result
+                bands: result,
+                areas: areas,
+                restrictedAreas: restrictedAreas == areas ? nil : restrictedAreas ?? []
             ))
         }
     }
@@ -1108,7 +1292,12 @@ for shop in drawnShops {
 
 // The release, which `Scripts/carto-points.sh` names: a tarball has no tag.
 let version = ProcessInfo.processInfo.environment["CARTO_VERSION"] ?? "unknown"
-let table = Table(source: "openstreetmap-carto \(version)", restrictedAccess: restrictedAccess, entries: entries)
+let table = Table(
+    source: "openstreetmap-carto \(version)",
+    restrictedAccess: restrictedAccess,
+    areaLimit: areaLimit,
+    entries: entries
+)
 let encoder = JSONEncoder()
 encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
 do {
@@ -1139,4 +1328,6 @@ do {
     fail("cannot write \(catalogURL.path): \(error)")
 }
 
+let areaKinds = Set(entries.filter { $0.areas != nil }.map(\.kind)).sorted()
 print("carto-points: \(entries.count) kinds of point, \(usedIcons.count) icons, from \(table.source)")
+print("carto-points: drawn by their size: \(areaKinds.joined(separator: " "))")

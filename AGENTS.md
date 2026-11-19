@@ -1162,18 +1162,21 @@ a change to recording, the map, the sheet or the render path; the PR template,
     car park faded, a private toilet a zoom later — the table holds that look
     too, for whichever points the tile carries an `access` on.
   - **The extras fill in what the archive leaves out** (`VectorTileSource.Extras`):
-    unnamed car parks with their `access`, barriers and the fences, walls and
-    hedges Carto draws, `man_made` points, offices, an information point's
-    type, a vending machine's goods, waterfalls, and every one-way street and
-    path as a line of its own (`oneways`). `Scripts/vector-extras.sh`
-    builds them from the planet (`osmium` with
-    `Scripts/lib/vector-extras.filter`, then Planetiler with
-    `Scripts/lib/vector-extras.yml`) into `extras-<planet date>.pmtiles`,
+    car parks with their `access`, barriers and the fences, walls and hedges
+    Carto draws, `man_made` points, offices, an information point's type, a
+    vending machine's goods, waterfalls, every one-way street and path as a
+    line of its own (`oneways`), and each named area's point with its size
+    (`area`).
+    `Scripts/vector-extras.sh` builds them from the planet (`osmium` with
+    `Scripts/lib/vector-extras.filter`, and the named areas through
+    `Scripts/lib/vector-extras-areas.filter` and then a cut for a name, then
+    Planetiler with `Scripts/lib/vector-extras.yml`) into
+    `extras-<planet date>.pmtiles`,
     named as the archive's layers are so a tile of each merges into one, and
     `Scripts/vector-extras.sh upload` puts them beside the basemap under a new
     name each time, signing with R2 keys kept outside the repository. The app
-    asks for their tile beside the basemap's from zoom 14, unless the
-    basemap's is already falling back. They add to the map and are never its
+    asks for their tile beside the basemap's from zoom 4, where Carto names an
+    island, unless the basemap's is already falling back. They add to the map and are never its
     reason to fall back: a tile they lack, fail to give or cannot read, or one
     the device loses on the way, leaves the basemap drawn. Drawn without
     extras it failed to get, a tile is provisional
@@ -1198,11 +1201,28 @@ a change to recording, the map, the sheet or the render path; the PR template,
       spaced as Mapnik spaces a line's text, so a short one-way path has one.
     - **House numbers** (`VectorTileHouseNumbers`) from zoom 17, from the
       archive's address points, which carry `addr_housenumber` alone.
+    - **Names of areas** (`VectorTilePoints`) by the area's size, as Carto
+      names them: a forest or a national park from zoom 8 once it covers
+      3,000 square pixels, a park from 10, an island from 4, larger the
+      larger it is, and none at a point past 768,000. The table gives each
+      kind its bands for each range of sizes Carto's rules tell apart
+      (`VectorTilePointStyle`). The size is the extras' `area`: the basemap
+      gives a named area's point without one, from a zoom of its own
+      choosing, so where the extras give an area's point, the basemap's
+      point of the same name at the same spot is left out. The extras file
+      an area under the first of its tags Carto's query tries, and below
+      zoom 10 under its low-zoom query's, which tries fewer keys in another
+      order: a national park that is also a park is a national park there.
+      A car park's `parking` is its `kind_detail`, because Carto marks
+      parking along a street only from zoom 18. Carto names a protected
+      area too large for a point along its edge, from zoom 13; the map does
+      not, because keeping the edges as areas made the extras half as large
+      again, for names few of the tiles an edge crosses had room for.
     - **Room is claimed in Carto's layer order**: place names, the stations
       (each one's icon, then its name), the points' icons, the names along
-      streets and paths, then their one-way arrows, the points' names, the
-      house numbers, the names along water, and last the low-priority icons
-      and names (benches, bins, wayside crosses).
+      streets and paths, then their one-way arrows, the points' names and
+      the areas', the house numbers, the names along water, and last the
+      low-priority icons and names (benches, bins, wayside crosses).
     - Each name is in the app's language where the tile carries it, and in
       the local one where not.
     - **A name never crosses its tile's edge**, because the tile beside it
