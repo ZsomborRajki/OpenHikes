@@ -223,6 +223,183 @@
     {
       "bands" : [
         {
+          "from" : 12,
+          "icons" : [
+            {
+              "asset" : "carto-square",
+              "fill" : "#7981B0",
+              "height" : 1,
+              "width" : 1
+            }
+          ],
+          "to" : 13
+        },
+        {
+          "from" : 14,
+          "icons" : [
+            {
+              "asset" : "carto-square",
+              "fill" : "#7981B0",
+              "height" : 6,
+              "width" : 6
+            }
+          ],
+          "to" : 14
+        },
+        {
+          "from" : 15,
+          "icons" : [
+            {
+              "asset" : "carto-square",
+              "fill" : "#7981B0",
+              "height" : 6,
+              "width" : 6
+            }
+          ],
+          "text" : {
+            "dy" : 9,
+            "face" : "bold",
+            "field" : "name",
+            "fill" : "#4957AD",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1.5,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 15
+        },
+        {
+          "from" : 16,
+          "icons" : [
+            {
+              "asset" : "carto-square",
+              "fill" : "#7981B0",
+              "height" : 6,
+              "width" : 6
+            }
+          ],
+          "text" : {
+            "dy" : 10,
+            "face" : "bold",
+            "field" : "name",
+            "fill" : "#4957AD",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1.5,
+            "lineSpacing" : -1.65,
+            "size" : 11,
+            "wrapWidth" : 33
+          },
+          "to" : 19
+        }
+      ],
+      "detail" : "subway",
+      "feature" : "railway_station",
+      "kind" : "station",
+      "lowPriority" : false,
+      "station" : 1
+    },
+    {
+      "bands" : [
+        {
+          "from" : 13,
+          "icons" : [
+            {
+              "asset" : "carto-square",
+              "fill" : "#7981B0",
+              "height" : 4,
+              "width" : 4
+            }
+          ],
+          "to" : 13
+        },
+        {
+          "from" : 14,
+          "icons" : [
+            {
+              "asset" : "carto-square",
+              "fill" : "#7981B0",
+              "height" : 4,
+              "width" : 4
+            }
+          ],
+          "text" : {
+            "dy" : 10,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#4957AD",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1.5,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 14
+        },
+        {
+          "from" : 15,
+          "icons" : [
+            {
+              "asset" : "carto-square",
+              "fill" : "#7981B0",
+              "height" : 6,
+              "width" : 6
+            }
+          ],
+          "text" : {
+            "dy" : 10,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#4957AD",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1.5,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "detail" : "aerialway",
+      "feature" : "aerialway_station",
+      "kind" : "station",
+      "lowPriority" : false,
+      "station" : 2
+    },
+    {
+      "bands" : [
+        {
+          "from" : 14,
+          "icons" : [
+            {
+              "asset" : "carto-barrier-level_crossing",
+              "fill" : "#4D4D4D",
+              "height" : 7,
+              "width" : 7
+            }
+          ],
+          "to" : 15
+        },
+        {
+          "from" : 16,
+          "icons" : [
+            {
+              "asset" : "carto-barrier-level_crossing2",
+              "fill" : "#4D4D4D",
+              "height" : 11,
+              "width" : 11
+            }
+          ],
+          "to" : 19
+        }
+      ],
+      "feature" : "railway_level_crossing",
+      "kind" : "level_crossing",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
           "from" : 19,
           "icons" : [
             {
@@ -15440,6 +15617,56 @@
       ],
       "feature" : "office",
       "kind" : "office",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 15,
+          "icons" : [
+            {
+              "asset" : "carto-natural-saddle",
+              "fill" : "#0092DA",
+              "height" : 8,
+              "width" : 8
+            }
+          ],
+          "text" : {
+            "dy" : 7,
+            "face" : "regular",
+            "field" : "name",
+            "fill" : "#0066FF",
+            "halo" : "#FFFFFF99",
+            "haloRadius" : 1,
+            "lineSpacing" : -1.5,
+            "size" : 10,
+            "wrapWidth" : 30
+          },
+          "to" : 19
+        }
+      ],
+      "elevation" : true,
+      "feature" : "mountain_pass",
+      "kind" : "mountain_pass",
+      "lowPriority" : false
+    },
+    {
+      "bands" : [
+        {
+          "from" : 16,
+          "icons" : [
+            {
+              "asset" : "carto-highway-ford",
+              "fill" : "#0092DA",
+              "height" : 14,
+              "width" : 14
+            }
+          ],
+          "to" : 19
+        }
+      ],
+      "feature" : "highway_ford",
+      "kind" : "ford",
       "lowPriority" : false
     },
     {

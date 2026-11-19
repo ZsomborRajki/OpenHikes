@@ -999,7 +999,7 @@ func rules(of feature: String, shop: String?, test key: String) -> Bool {
 /// alone where there is no name (`project.mml`'s amenity-points query).
 let featuresWithElevation: Set<String> = [
     "natural_peak", "natural_volcano", "natural_saddle", "tourism_alpine_hut", "tourism_wilderness_hut",
-    "amenity_shelter",
+    "amenity_shelter", "mountain_pass",
 ]
 
 /// Whether Carto writes the height of `feature` with `detail`: of the
@@ -1241,10 +1241,11 @@ func add(
 
 /// The stops Carto draws in its `stations` layer, by the `railway` value the
 /// archive files each under, and where the layer's `ORDER BY CASE railway`
-/// places each: stations first, subway entrances last. The archive keeps no
-/// `station` tag, so every station is drawn as one that is not a subway's;
-/// no `ref`, which Carto writes by an entrance from zoom 19; and no aerialway
-/// station.
+/// places each: stations first, subway entrances last. The basemap keeps no
+/// `station` tag, so its station is drawn as one that is not a subway's; the
+/// vector extras keep it as the `kind_detail`, and bring a lift's station as
+/// a `station` whose detail is `aerialway`. Neither keeps a `ref`, which
+/// Carto writes by an entrance from zoom 19.
 let stationOrders: [(kind: String, order: Int)] = {
     let source = layerSource("stations")
     let kinds = source.matches(of: #/railway (?:IN \(([^)]*)\)|= '([a-z_]+)')/#).flatMap { match in
@@ -1270,6 +1271,42 @@ for (kind, order) in stationOrders {
     guard !result.isEmpty else { fail("stations.mss draws no \(kind)") }
     entries.append(Entry(kind: kind, feature: "railway_\(kind)", lowPriority: false, station: order, bands: result))
 }
+// A subway's station, which Carto holds back a zoom, and a lift's, which it
+// draws from a zoom of its own and names in a lighter face: both a `station`
+// to the archive, told apart by the detail the vector extras give.
+let stationVariants: [(detail: String, feature: String, attributes: [String: Literal])] = [
+    ("subway", "railway_station", ["railway": .text("station"), "station": .text("subway")]),
+    ("aerialway", "aerialway_station", ["aerialway": .text("station")]),
+]
+for variant in stationVariants {
+    guard let order = stationOrders.first(where: { $0.kind == "station" })?.order else { fail("no station's order") }
+    let attributes = variant.attributes.merging(["name": .text("name")]) { own, _ in own }
+    let point = Point(layer: "stations", attributes: attributes)
+    let result = bands(of: point, textLayer: "stations", iconLayerZoom: stationsZoom, textLayerZoom: stationsZoom)
+    guard !result.isEmpty else { fail("stations.mss draws no \(variant.feature) of \(variant.detail)") }
+    entries.append(Entry(
+        kind: "station",
+        detail: variant.detail,
+        feature: variant.feature,
+        lowPriority: false,
+        // A lift's station is none of the layer's three railway stops, which
+        // its order places with the halts.
+        station: variant.detail == "aerialway" ? order + 1 : order,
+        bands: result
+    ))
+}
+// A level crossing, which Carto draws in a layer of its own with no name:
+// the kind the basemap files a `railway=level_crossing` under.
+let crossingsZoom = minimumZoom(of: "railway-crossings")
+let crossing = Point(
+    layer: "railway-crossings",
+    attributes: ["railway": .text("level_crossing"), "int_isminor": .text("no")]
+)
+let crossingBands = bands { zoom in (zoom < crossingsZoom ? [] : icons(of: crossing, at: zoom), nil) }
+guard !crossingBands.isEmpty, seenKinds.insert("level_crossing").inserted else {
+    fail("amenity-points.mss draws no level crossing")
+}
+entries.append(Entry(kind: "level_crossing", feature: "railway_level_crossing", lowPriority: false, bands: crossingBands))
 // Where two keys share a value, the first here wins. The low-priority
 // layer's go first, because the vector extras bring barriers, and a `gate`
 // on a path is far likelier than an airport's; then Carto's own order of keys.
@@ -1282,8 +1319,12 @@ for feature in mainFeatures {
     add(kind: feature.value, feature: name, shop: nil, lowPriority: false, requires: feature.requires)
 }
 // The vector extras file every office as `office`, as Carto draws them all
-// alike, ahead of the `shop=office` Carto also knows.
+// alike, ahead of the `shop=office` Carto also knows; a pass marked on a road
+// as `mountain_pass`, the name Carto's query gives one; and a ford on a path
+// as `ford`.
 add(kind: "office", feature: "office", shop: nil, lowPriority: false)
+add(kind: "mountain_pass", feature: "mountain_pass", shop: nil, lowPriority: false)
+add(kind: "ford", feature: "highway_ford", shop: nil, lowPriority: false)
 for shop in drawnShops {
     add(kind: shop, feature: "shop", shop: shop, lowPriority: false)
 }
