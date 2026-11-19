@@ -1151,6 +1151,15 @@ a change to recording, the map, the sheet or the render path; the PR template,
     drawn largest first**, as Carto orders them, because the archive gives
     every area the same `sort_rank` too, and a residential area listed last
     would cover the parks inside it.
+  - **Only track is drawn as a railway.** The archive files every way with a
+    `railway` tag under `rail`, a station's outline and a turntable among
+    them, so the style lists the details that are track and draws no other.
+    A lift is listed by its kind too.
+  - **A park is the extras', never the basemap's.** The basemap files most
+    national parks under the kind it files a city park under, so its `park`
+    has no fill: the parks filled are the extras' `parks` layer, and the
+    borders of protected areas their `protected_areas` layer, stroked with
+    Carto's band inside each.
   - **The archive's landcover is ESA WorldCover's**, under CC BY 4.0, so the
     style credits it beside OpenStreetMap.
   - **Points are Carto's, read out of its style, never written by hand.**
@@ -1169,7 +1178,19 @@ a change to recording, the map, the sheet or the render path; the PR template,
     Carto draws, `man_made` points, offices, an information point's type, a
     vending machine's goods, waterfalls, every one-way street and path as a
     line of its own (`oneways`), and each named area's point with its size
-    (`area`).
+    (`area`). And what a hiker's map is read by: the ground the basemap has
+    no kind for (scree, heath, shingle, quarries, vineyards, camp sites),
+    parks and the borders of protected areas, every lift but the cable cars
+    with its stations, the light railways before zoom 14, power lines, dams
+    and weirs, ridges, and the points Carto draws before the basemap has
+    them: huts and stations with the tags Carto files them by, summits,
+    springs, passes and fords.
+  - **Where both archives have a point for one thing, the extras' is drawn.**
+    The basemap files a hut tagged as a restaurant as the restaurant, and a
+    castle tagged as an attraction as the attraction; the extras file each as
+    Carto does, and the basemap's point of the same name at the same spot is
+    left out (`VectorTilePoints.supersedingKinds`). A feature merged from the
+    extras says so (`MapboxVectorTile.Feature.isFromExtras`).
     `Scripts/vector-extras.sh` builds them from the planet (`osmium` with
     `Scripts/lib/vector-extras.filter`, and the named areas through
     `Scripts/lib/vector-extras-areas.filter` and then a cut for a name, then
@@ -1190,11 +1211,20 @@ a change to recording, the map, the sheet or the render path; the PR template,
     - **Place names** (`VectorTileLabels`): places, lakes and glaciers.
       Summits, passes and huts are points, named under their icons with their
       heights (`VectorTilePoints`).
-    - **Names along lines** (`VectorTileLineLabels`): streets, paths, cable
-      cars and waterways, letter by letter, upright, following gentle bends.
-      Pieces with the same name are joined end to end first. A repeat stands
-      on marks measured from the line's middle, so the tiles cut from one
-      archive tile agree on them.
+    - **Names along lines** (`VectorTileLineLabels`): streets, paths, lifts,
+      waterways, ridges and cliffs, letter by letter, upright, following
+      bends no sharper than Mapnik follows them (22.5 degrees from one letter
+      to the next, 15 for water). Pieces with the same name are joined end to
+      end first. A repeat stands on marks measured from the line's middle, so
+      the tiles cut from one archive tile agree on them. A name written
+      beside its line, a stream's or a ridge's, is set along the line that
+      runs beside it (`MeasuredPath.offset`), never shifted letter by letter,
+      which crowds the letters inside every bend.
+    - **Road numbers** (`VectorTileShields`): a plate in its road's colors, a
+      motorway's from zoom 10 down to a tertiary road's from 13. A plate
+      stands where its road crosses a grid laid over the whole world, which
+      every tile works out alike, so a road is numbered evenly however it is
+      cut into tiles. The grid is half Carto's spacing, for a phone's screen.
     - **One-way arrows** (`VectorTileArrows`) from zoom 16, on a way tagged
       `oneway` `yes` or `-1`, or a roundabout not tagged otherwise. They are
       drawn along the extras' ways, never the archive's roads: its build
@@ -1223,10 +1253,14 @@ a change to recording, the map, the sheet or the render path; the PR template,
       not, because keeping the edges as areas made the extras half as large
       again, for names few of the tiles an edge crosses had room for.
     - **Room is claimed in Carto's layer order**: place names, the stations
-      (each one's icon, then its name), the points' icons, the names along
-      streets and paths, then their one-way arrows, the points' names and
-      the areas', the house numbers, the names along water, and last the
-      low-priority icons and names (benches, bins, wayside crosses).
+      (each one's icon, then its name), the points' icons, the road numbers,
+      the names along streets and paths, then their one-way arrows, the
+      points' names and the areas', the localities', the house numbers, the
+      names along water and ridges, and last the low-priority icons and
+      names (benches, bins, wayside crosses).
+    - **A place's name comes in at Carto's zoom**: a hamlet's from 14, a
+      farm's from 15, and a locality's, a spot nobody lives at, from 16 and
+      after the points, so a gully's name never takes a summit's room.
     - Each name is in the app's language where the tile carries it, and in
       the local one where not.
     - **A name never crosses its tile's edge**, because the tile beside it

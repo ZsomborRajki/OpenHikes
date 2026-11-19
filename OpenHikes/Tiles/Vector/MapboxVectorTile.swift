@@ -36,6 +36,11 @@ nonisolated struct MapboxVectorTile: Sendable {
         /// The geometry's command integers as encoded; ``VectorTileGeometry``
         /// reads them.
         let geometry: [UInt32]
+        /// Whether the vector extras gave it, rather than the basemap: the
+        /// two name their layers and kinds alike, and where both have a
+        /// point for one thing the extras' is the one filed as Carto files
+        /// it (``VectorTilePoints``).
+        var isFromExtras = false
 
         func string(_ key: String) -> String? {
             guard case let .string(value) = properties[key] else { return nil }
@@ -74,11 +79,19 @@ nonisolated struct MapboxVectorTile: Sendable {
     /// The side of a layer's grid when the layer does not say.
     static let defaultExtent = 4096
 
-    /// This tile with `other`'s features added to it: a layer both hold
+    /// This tile, the basemap's, with the vector extras' tile `other` added
+    /// to it, each of its features marked as the extras': a layer both hold
     /// keeps this tile's features and then `other`'s, where the two lay them
     /// on the same grid, and a layer only `other` holds is taken whole.
     func merging(_ other: Self) -> Self {
-        Self(layers: layers.merging(other.layers) { own, added in
+        let extras = other.layers.mapValues { layer in
+            Layer(name: layer.name, extent: layer.extent, features: layer.features.map { feature in
+                var marked = feature
+                marked.isFromExtras = true
+                return marked
+            })
+        }
+        return Self(layers: layers.merging(extras) { own, added in
             guard own.extent == added.extent else { return own }
             return Layer(name: own.name, extent: own.extent, features: own.features + added.features)
         })

@@ -2,14 +2,15 @@
 //  VectorTileLineLabels.swift
 //  OpenHikes
 //
-//  Names along lines: streets, paths, tracks, cable cars and rivers, set
-//  letter by letter along the line they name.
+//  Names along lines: streets, paths, tracks, lifts, rivers, ridges and
+//  cliffs, set letter by letter along the line they name, or beside it where
+//  the name would hide the line: a stream's, a ridge's.
 //
 //  The archive splits a street wherever its tags change, so a street arrives
 //  as many short ways. Pieces with the same name that meet end to end are
 //  joined first, which is what leaves room for the name. A name reads left to
-//  right whichever way the line was drawn, follows bends up to
-//  ``VectorTileLabelStyle/lineNameBend`` from one letter to the next, and is
+//  right whichever way the line was drawn, follows bends up to its look's
+//  ``VectorTileLabelStyle/LineLook/bend`` from one letter to the next, and is
 //  moved along the line, or left out, where it would bend more, cross the
 //  tile's edge or touch another name. A long line repeats its name, never
 //  nearer itself than its look's repeat distance, at marks
@@ -57,15 +58,6 @@ nonisolated enum VectorTileLineLabels {
     struct Letter: Equatable {
         let center: CGPoint
         let angle: CGFloat
-
-        /// The letter `distance` below where it stood, as the name reads.
-        func moved(by distance: CGFloat) -> Self {
-            guard distance != 0 else { return self }
-            return Self(
-                center: CGPoint(x: center.x - sin(angle) * distance, y: center.y + cos(angle) * distance),
-                angle: angle
-            )
-        }
     }
 
     // MARK: Choosing
@@ -79,7 +71,7 @@ nonisolated enum VectorTileLineLabels {
         language: String
     ) -> [NamedLine] {
         var pieces: [NamedLineKey: [[CGPoint]]] = [:]
-        for layerName in ["roads", "water"] {
+        for layerName in ["roads", "water", VectorTileRasterizer.ridgesLayer, "earth"] {
             guard let layer = tile.layers[layerName] else { continue }
             let geometry = VectorTileGeometry(extent: layer.extent, source: source, target: target)
             for feature in layer.features where feature.type == .line {
@@ -148,7 +140,11 @@ nonisolated enum VectorTileLineLabels {
         guard path.point(at: start + total).x < path.point(at: start).x else {
             return letters(on: path, advances: advances, from: start, maximumBend: maximumBend)
         }
-        return letters(on: reversed, advances: advances, from: path.length - start - total, maximumBend: maximumBend)
+        // The same share of the way along the line read the other way, which
+        // is as long unless the two run beside the line, one on each side.
+        let turned = reversed.length * (1 - middle / path.length) - total / 2
+        guard turned >= 0, turned + total <= reversed.length else { return [] }
+        return letters(on: reversed, advances: advances, from: turned, maximumBend: maximumBend)
     }
 
     private static func letters(
@@ -332,15 +328,19 @@ nonisolated extension VectorTileLineLabels {
                     ?? SetText(line.name, font: fonts.font(size: size, face: look.face), look: look, unit: unit)
                 texts[key] = text
                 let repeatDistance = look.repeatDistance * unit
+                // A name written beside its line is set along the line that
+                // runs beside it, on the side below the name whichever way it
+                // reads.
+                let offset = look.offset * unit
+                let forward = MeasuredPath(MeasuredPath.offset(line.points, by: offset))
+                let backward = MeasuredPath(MeasuredPath.offset(line.points.reversed(), by: offset))
                 let marks = VectorTileLineLabels.marks(
-                    length: line.length,
+                    length: forward.length,
                     width: text.width,
                     spacing: repeatDistance,
                     step: max(text.width / 4, spacing)
                 )
                 guard !marks.isEmpty else { continue }
-                let forward = MeasuredPath(line.points)
-                let backward = MeasuredPath(line.points.reversed())
                 // A mark outside the tile is the neighbouring tile's to name.
                 for mark in marks where bounds.contains(forward.point(at: mark.distance)) {
                     for spot in mark.spots {
@@ -349,9 +349,8 @@ nonisolated extension VectorTileLineLabels {
                             reversed: backward,
                             advances: text.advances,
                             centeredAt: spot,
-                            maximumBend: VectorTileLabelStyle.lineNameBend
+                            maximumBend: look.bend
                         )
-                        .map { $0.moved(by: look.offset * unit) }
                         let boxes = text.boxes(for: letters)
                         if room.claim(name: line.name, letters: letters, boxes: boxes, apart: repeatDistance) {
                             placed.append(SetName(text: text, letters: letters))
@@ -460,37 +459,5 @@ nonisolated private struct SetName {
             }
             context.restoreGState()
         }
-    }
-}
-
-/// A polyline with the distance along it to each of its points.
-nonisolated struct MeasuredPath {
-    let points: [CGPoint]
-    let distances: [CGFloat]
-
-    var length: CGFloat { distances.last ?? 0 }
-
-    init(_ points: [CGPoint]) {
-        self.points = points
-        distances = points.adjacentPairs().reductions(0) { distance, step in
-            let (from, to) = step
-            return distance + hypot(to.x - from.x, to.y - from.y)
-        }
-    }
-
-    /// The point `distance` along the line, held to its ends. Looked up by
-    /// bisection, which the distances allow because they never fall: a name
-    /// asks for a few points for each of its letters, along lines of
-    /// hundreds of points where a tile is drawn from a wider archive tile.
-    func point(at distance: CGFloat) -> CGPoint {
-        guard let first = points.first else { return .zero }
-        guard distance > 0 else { return first }
-        let index = distances.partitioningIndex { $0 >= distance }
-        guard index < distances.endIndex, index > 0 else { return points.last ?? first }
-        let span = distances[index] - distances[index - 1]
-        let fraction = span > 0 ? (distance - distances[index - 1]) / span : 0
-        let from = points[index - 1]
-        let to = points[index]
-        return CGPoint(x: from.x + (to.x - from.x) * fraction, y: from.y + (to.y - from.y) * fraction)
     }
 }

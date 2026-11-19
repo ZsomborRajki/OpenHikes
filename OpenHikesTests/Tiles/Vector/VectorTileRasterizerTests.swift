@@ -74,7 +74,7 @@ struct VectorTileRasterizerTests {
     }
 
     /// Every area in the archive has the same `sort_rank`, and a city's
-    /// residential area comes after the parks inside it as often as before:
+    /// residential area comes after the gardens inside it as often as before:
     /// drawn in the tile's order, it covered them.
     @Test("a smaller area is drawn over the larger one it lies in, in either order", arguments: [false, true])
     func smallerAreaOverLarger(parkFirst: Bool) throws {
@@ -85,14 +85,14 @@ struct VectorTileRasterizerTests {
         )
         let park = VectorTileFixture.Feature(
             type: .polygon,
-            properties: ["kind": .string("park"), "sort_rank": .int(189)],
+            properties: ["kind": .string("garden"), "sort_rank": .int(189)],
             geometry: leftHalf
         )
         let listed = parkFirst ? [park, residential] : [residential, park]
 
         let image = try draw([land, .init(name: "landuse", features: listed)], at: tile)
 
-        #expect(pixel(image, x: left, y: middle, is: "#C8FACC"), "the park")
+        #expect(pixel(image, x: left, y: middle, is: "#CDEBB0"), "the garden")
         #expect(pixel(image, x: right, y: middle, is: "#E0DFDF"), "the residential area around it")
     }
 
@@ -401,5 +401,131 @@ extension VectorTileRasterizerTests {
         #expect(pixel(close, x: right, y: middle, is: "#F2EFE9"), "the walkway out over the lake")
         #expect(!row(close, y: middle, has: "#FA8072"), "which is no footpath")
         #expect(pixel(wide, x: left, y: left, is: "#AAD3DF"), "and neither is drawn before zoom 12")
+    }
+}
+
+// MARK: The extras' ground and lines
+
+extension VectorTileRasterizerTests {
+    private func area(_ kind: String, in layer: String, _ geometry: [UInt32]) -> VectorTileFixture.Layer {
+        .init(name: layer, features: [.init(type: .polygon, properties: ["kind": .string(kind)], geometry: geometry)])
+    }
+
+    /// Triglav's rock and ice were filled in a city park's green: the basemap
+    /// files most national parks under the kind it files a park under.
+    @Test("a park is filled from the extras' own layer, from zoom 10, and the basemap's park not at all")
+    func parksAreTheExtras() throws {
+        let layers = [land, area("park", in: "landuse", rightHalf), area("park", in: "parks", leftHalf)]
+
+        let image = try draw(layers, at: tile)
+        let wide = try draw(layers, at: VectorTileAddress(z: 9, x: 275, y: 178))
+
+        #expect(pixel(image, x: left, y: middle, is: "#C8FACC"), "the extras' park")
+        #expect(pixel(image, x: right, y: middle, is: "#F2EFE9"), "the basemap's is left as the ground it lies on")
+        #expect(pixel(wide, x: left, y: middle, is: "#F2EFE9"), "and no park is filled before zoom 10")
+    }
+
+    @Test("the extras' area is drawn over the basemap's of the same ground")
+    func extrasGroundOverTheBasemaps() throws {
+        let ground = VectorTileFixture.Layer(name: "landuse", features: [
+            .init(type: .polygon, properties: ["kind": .string("farmland")], geometry: whole),
+            .init(type: .polygon, properties: ["kind": .string("orchard")], geometry: whole),
+        ])
+
+        let image = try draw([land, ground], at: tile)
+
+        #expect(pixel(image, x: middle, y: middle, is: "#AEDFA3"), "the orchard the basemap files as farmland")
+    }
+
+    @Test("scree and heath are filled in Carto's colors")
+    func screeAndHeath() throws {
+        let ground = VectorTileFixture.Layer(name: "landuse", features: [
+            .init(type: .polygon, properties: ["kind": .string("scree")], geometry: leftHalf),
+            .init(type: .polygon, properties: ["kind": .string("heath")], geometry: rightHalf),
+        ])
+
+        let image = try draw([land, ground], at: tile)
+
+        #expect(pixel(image, x: left, y: middle, is: "#EEE5DC"))
+        #expect(pixel(image, x: right, y: middle, is: "#D6D99F"))
+    }
+
+    /// At zoom 14 Carto's band is six pixels wide, inside the border.
+    @Test("a protected area's border is a band inside its edge, and the ground within is left as it was")
+    func protectedBorder() throws {
+        let layers = [land, area("protected_area", in: "protected_areas", leftHalf)]
+        let band = 8
+
+        let image = try draw(layers, at: tile)
+        let wide = try draw(layers, at: VectorTileAddress(z: 7, x: 68, y: 44))
+
+        #expect(!pixel(image, x: middle - band, y: middle, is: "#F2EFE9"), "the band, just inside the border")
+        #expect(pixel(image, x: left, y: middle, is: "#F2EFE9"), "the ground further in")
+        #expect(pixel(image, x: middle + band, y: middle, is: "#F2EFE9"), "and nothing outside it")
+        #expect(pixel(wide, x: middle - 1, y: middle, is: "#F2EFE9"), "no border before zoom 8")
+    }
+
+    @Test("a building is drawn, and a part of one is not")
+    func buildingPartsAreLeftOut() throws {
+        let buildings = VectorTileFixture.Layer(name: "buildings", features: [
+            .init(type: .polygon, properties: ["kind": .string("building")], geometry: leftHalf),
+            .init(type: .polygon, properties: ["kind": .string("building_part")], geometry: rightHalf),
+        ])
+
+        let image = try draw([land, buildings], at: tile)
+
+        #expect(pixel(image, x: left, y: middle, is: "#D9D0C9"))
+        #expect(pixel(image, x: right, y: middle, is: "#F2EFE9"))
+    }
+
+    @Test("a dam mapped as an area is filled from zoom 13")
+    func damArea() throws {
+        let layers = [land, area("dam", in: "landuse", leftHalf)]
+
+        let image = try draw(layers, at: tile)
+        let wide = try draw(layers, at: VectorTileAddress(z: 12, x: 2200, y: 1425))
+
+        #expect(pixel(image, x: left, y: middle, is: "#ADADAD"))
+        #expect(pixel(wide, x: left, y: middle, is: "#F2EFE9"))
+    }
+
+    /// The archive files a station's outline as a railway of the detail
+    /// `station`, and Penn Station was ringed with dashed track.
+    @Test("a gondola is drawn as a lift, a runway as a runway, and a station's outline not as track")
+    func liftsRunwaysAndStations() throws {
+        let lift = try draw([land, roads([street(kind: "aerialway", detail: "gondola", across: true)])], at: tile)
+        let runway = try draw([land, roads([street(kind: "aeroway", detail: "runway", across: true)])], at: tile)
+        let station = try draw([land, roads([street(kind: "rail", detail: "station", across: true)])], at: tile)
+        let track = try draw([land, roads([street(kind: "rail", detail: "rail", across: true)])], at: tile)
+
+        #expect(row(lift, y: middle, has: "#808080"))
+        #expect(pixel(runway, x: left, y: middle, is: "#BBBBCC"))
+        #expect(pixel(station, x: left, y: middle, is: "#F2EFE9"))
+        #expect(!pixel(track, x: left, y: middle, is: "#F2EFE9"))
+    }
+
+    @Test("a power line, a weir and a ridge from the extras are drawn, each from its zoom")
+    func extrasLines() throws {
+        let across = VectorTileFixture.line([(-grid / 4, grid / 2), (grid + grid / 4, grid / 2)])
+        let layers = [
+            land,
+            VectorTileFixture.Layer(name: "power", features: [
+                .init(type: .line, properties: ["kind": .string("line")], geometry: across),
+            ]),
+        ]
+        let weir = VectorTileFixture.Layer(name: "dams", features: [
+            .init(type: .line, properties: ["kind": .string("weir")], geometry: across),
+        ])
+        let arete = VectorTileFixture.Layer(name: "ridges", features: [
+            .init(type: .line, properties: ["kind": .string("arete")], geometry: across),
+        ])
+
+        let power = try draw(layers, at: streetZoom)
+        let early = try draw(layers, at: VectorTileAddress(z: 13, x: 4400, y: 2850))
+
+        #expect(!pixel(power, x: left, y: middle, is: "#F2EFE9"))
+        #expect(pixel(early, x: left, y: middle, is: "#F2EFE9"), "no power line before zoom 14")
+        #expect(row(try draw([land, weir], at: tile), y: middle, has: "#AAAAAA"))
+        #expect(!pixel(try draw([land, arete], at: streetZoom), x: left, y: middle, is: "#F2EFE9"))
     }
 }

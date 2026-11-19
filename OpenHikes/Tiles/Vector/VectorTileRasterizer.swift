@@ -33,14 +33,23 @@ nonisolated enum VectorTileRasterizer {
     static let layerNames: Set<String> = [
         "earth", "landcover", "landuse", "water", "buildings", "roads", "boundaries", "pois", "places",
         // The vector extras' own layers.
-        "barriers", VectorTileArrows.layerName,
+        "barriers", VectorTileArrows.layerName, parksLayer, protectedAreasLayer, powerLayer, damsLayer, ridgesLayer,
     ]
+
+    /// The vector extras' layers of their own that the rasterizer fills or
+    /// strokes: the parks, the protected areas whose borders are drawn, the
+    /// power lines, the dams and weirs mapped as lines, and the ridges.
+    static let parksLayer = "parks"
+    static let protectedAreasLayer = "protected_areas"
+    static let powerLayer = "power"
+    static let damsLayer = "dams"
+    static let ridgesLayer = "ridges"
 
     /// The properties read, the names in `language` among them.
     static func propertyKeys(language: String) -> Set<String> {
         VectorTileLabels.propertyKeys(language: language).union([
             "kind", "kind_detail", "is_tunnel", "is_bridge", "disputed", "access", "oneway", "addr_housenumber",
-            VectorTilePoints.sizeKey,
+            "service", VectorTileShields.refKey, VectorTilePoints.sizeKey,
         ])
     }
 
@@ -127,11 +136,13 @@ nonisolated private struct Painter {
         context.fill(CGRect(x: 0, y: 0, width: side, height: side))
         paintGround()
         paintWater()
-        paintPiers()
+        paintWaterStructures()
         paintBarriers()
         paintBuildings()
         paintRoads()
         paintBoundaries()
+        paintPowerLines()
+        paintProtectedAreas()
         paintLabels()
     }
 
@@ -147,17 +158,19 @@ nonisolated private struct Painter {
                 fill(geometry.path(of: feature), color)
             }
         }
-        let landuse = largestFirst(features(in: "landuse", type: .polygon))
-        for (feature, geometry) in landuse {
-            guard let kind = feature.string("kind"), let color = VectorTileStyle.landuseFills[kind] else { continue }
-            fill(geometry.path(of: feature), color)
+        // The parks are the extras' own: the basemap's kind for one takes in
+        // most national parks, whose rock and ice are no park's green.
+        let landuse = features(in: "landuse", type: .polygon).compactMap { feature, geometry -> FilledArea? in
+            guard let color = feature.string("kind").flatMap({ VectorTileStyle.landuseFills[$0] }) else { return nil }
+            return FilledArea(feature: feature, geometry: geometry, color: color)
         }
-        for (feature, geometry) in landuse {
-            guard let kind = feature.string("kind"), VectorTileStyle.protectedAreaKinds.contains(kind) else { continue }
-            stroke(
-                geometry.path(of: feature),
-                VectorTileStyle.Line(color: VectorTileStyle.protectedArea, width: VectorTileStyle.protectedAreaWidth)
-            )
+        let parks = z >= VectorTileStyle.parkZ
+            ? features(in: VectorTileRasterizer.parksLayer, type: .polygon).map { feature, geometry in
+                FilledArea(feature: feature, geometry: geometry, color: VectorTileStyle.park)
+            }
+            : []
+        for area in largestFirst(landuse + parks) {
+            fill(area.geometry.path(of: area.feature), area.color)
         }
     }
 
@@ -176,19 +189,33 @@ nonisolated private struct Painter {
                 VectorTileStyle.Line(color: VectorTileStyle.cliff, width: VectorTileStyle.cliffWidth)
             )
         }
+        for (feature, geometry) in features(in: VectorTileRasterizer.ridgesLayer, type: .line) {
+            stroke(geometry.path(of: feature), VectorTileStyle.ridge(kind: feature.string("kind")), cap: .butt)
+        }
     }
 
-    /// Piers over the water they stand in, as Carto draws them after the
-    /// water and before the buildings and roads.
-    private func paintPiers() {
+    /// What stands in the water, as Carto draws it after the water and
+    /// before the buildings and roads: piers, and the dams, weirs and lock
+    /// gates that hold it back.
+    private func paintWaterStructures() {
         guard z >= VectorTileStyle.pierZ else { return }
-        for (feature, geometry) in features(in: "landuse", type: .polygon)
-        where feature.string("kind") == VectorTileStyle.pierKind {
-            fill(geometry.path(of: feature), VectorTileStyle.land)
+        for (feature, geometry) in features(in: "landuse", type: .polygon) {
+            switch feature.string("kind") {
+            case VectorTileStyle.pierKind: fill(geometry.path(of: feature), VectorTileStyle.land)
+            case "dam" where z >= VectorTileStyle.damZ: fill(geometry.path(of: feature), VectorTileStyle.dam)
+            default: break
+            }
         }
         for (feature, geometry) in features(in: "roads", type: .line)
         where VectorTileStyle.isPier(kind: feature.string("kind"), detail: feature.string("kind_detail")) {
             stroke(geometry.path(of: feature), VectorTileStyle.pier, cap: .square)
+        }
+        for (feature, geometry) in features(in: VectorTileRasterizer.damsLayer, type: .line) {
+            strokeWithCenter(
+                geometry.path(of: feature),
+                VectorTileStyle.waterBarrier(kind: feature.string("kind")),
+                cap: .butt
+            )
         }
     }
 
@@ -196,19 +223,19 @@ nonisolated private struct Painter {
     /// under the buildings and roads, where Carto draws them.
     private func paintBarriers() {
         for (feature, geometry) in features(in: "barriers", type: .line) {
-            let line = VectorTileStyle.barrier(kind: feature.string("kind"))
-            let path = geometry.path(of: feature)
-            stroke(path, line, cap: .butt)
-            if let center = line.center {
-                stroke(path, VectorTileStyle.Line(color: center.color, width: center.width), cap: .butt)
-            }
+            strokeWithCenter(
+                geometry.path(of: feature),
+                VectorTileStyle.barrier(kind: feature.string("kind")),
+                cap: .butt
+            )
         }
     }
 
     private func paintBuildings() {
         guard z >= VectorTileStyle.buildingZ else { return }
         let outlined = z >= VectorTileStyle.outlinedBuildingZ
-        for (feature, geometry) in features(in: "buildings", type: .polygon) {
+        for (feature, geometry) in features(in: "buildings", type: .polygon)
+        where feature.string("kind") != VectorTileStyle.buildingPartKind {
             let path = geometry.path(of: feature)
             fill(path, VectorTileStyle.building)
             if outlined {
@@ -231,7 +258,8 @@ nonisolated private struct Painter {
                   let road = VectorTileStyle.road(
                       kind: kind,
                       detail: feature.string("kind_detail"),
-                      access: feature.string("access")
+                      access: feature.string("access"),
+                      service: feature.string("service")
                   )
             else { return nil }
             return StyledLine(feature: feature, geometry: geometry, road: road)
@@ -253,16 +281,7 @@ nonisolated private struct Painter {
             for road in ordered {
                 var line = road.road.line
                 if isTunnel { line.alpha *= VectorTileRasterizer.tunnelAlpha }
-                let path = road.geometry.path(of: road.feature)
-                stroke(path, line)
-                if let center = line.center {
-                    stroke(path, VectorTileStyle.Line(
-                        color: center.color,
-                        width: center.width,
-                        dash: center.dash,
-                        alpha: line.alpha
-                    ))
-                }
+                strokeWithCenter(road.geometry.path(of: road.feature), line)
             }
         }
     }
@@ -276,6 +295,36 @@ nonisolated private struct Painter {
         }
     }
 
+    /// Power lines over the roads they cross, where Carto draws them.
+    private func paintPowerLines() {
+        for (feature, geometry) in features(in: VectorTileRasterizer.powerLayer, type: .line) {
+            stroke(geometry.path(of: feature), VectorTileStyle.powerLine(kind: feature.string("kind")), cap: .butt)
+        }
+    }
+
+    /// The borders of national parks, nature reserves and protected areas,
+    /// from the vector extras: a line along each and, from zoom 10, Carto's
+    /// pale band just inside it. The band is the border stroked twice as
+    /// wide and cut to the area's inside. An area that runs past the tile is
+    /// cut beyond its edge, further out than the band is wide.
+    private func paintProtectedAreas() {
+        guard z >= VectorTileStyle.protectedAreaZ else { return }
+        for (feature, geometry) in features(in: VectorTileRasterizer.protectedAreasLayer, type: .polygon) {
+            let border = VectorTileStyle.protectedBorder(kind: feature.string("kind"))
+            let path = geometry.path(of: feature)
+            let alpha = border.alpha.value(at: z)
+            let band = border.band.value(at: z)
+            if band > 0 {
+                context.saveGState()
+                context.addPath(path)
+                context.clip(using: .evenOdd)
+                stroke(path, VectorTileStyle.Line(color: border.color, width: ZoomCurve([(z, 2 * band)]), alpha: alpha))
+                context.restoreGState()
+            }
+            stroke(path, VectorTileStyle.Line(color: border.color, width: border.line, alpha: alpha))
+        }
+    }
+
     // MARK: Drawing
 
     private func fill(_ path: CGPath, _ color: CGColor) {
@@ -284,7 +333,15 @@ nonisolated private struct Painter {
         context.fillPath(using: .evenOdd)
     }
 
-    private func stroke(_ path: CGPath, _ line: VectorTileStyle.Line, cap: CGLineCap = .round) {
+    /// - Parameters:
+    ///   - cap: how an unbroken line ends.
+    ///   - dashCap: how each dash of a broken one ends.
+    private func stroke(
+        _ path: CGPath,
+        _ line: VectorTileStyle.Line,
+        cap: CGLineCap = .round,
+        dashCap: CGLineCap = .butt
+    ) {
         let width = line.width.value(at: z)
         guard width > 0 else { return }
         context.saveGState()
@@ -296,11 +353,24 @@ nonisolated private struct Painter {
         if line.dash.isEmpty {
             context.setLineCap(cap)
         } else {
-            context.setLineCap(.butt)
+            context.setLineCap(dashCap)
             context.setLineDash(phase: 0, lengths: line.dash.map { $0 * width * unit })
         }
         context.strokePath()
         context.restoreGState()
+    }
+
+    /// A line, and then what it carries down its middle: a railway's white
+    /// dashes, a lift's cabins, a city wall's dark line.
+    private func strokeWithCenter(_ path: CGPath, _ line: VectorTileStyle.Line, cap: CGLineCap = .round) {
+        stroke(path, line, cap: cap)
+        guard let center = line.center else { return }
+        stroke(
+            path,
+            VectorTileStyle.Line(color: center.color, width: center.width, dash: center.dash, alpha: line.alpha),
+            cap: cap,
+            dashCap: center.cap
+        )
     }
 
     /// No casing for a road not drawn at this zoom: the casing starts at
@@ -331,18 +401,25 @@ nonisolated private struct Painter {
     /// because it gives every area the same `sort_rank`. An area is measured
     /// as the archive tile holds it, cut at its edge, which keeps the order
     /// of one area lying inside another.
-    private func largestFirst(
-        _ features: [(MapboxVectorTile.Feature, VectorTileGeometry)]
-    ) -> [(MapboxVectorTile.Feature, VectorTileGeometry)] {
-        let measured = features.enumerated().map { index, pair in
-            (pair: pair, area: pair.1.area(of: pair.0), index: index)
+    private func largestFirst(_ areas: [FilledArea]) -> [FilledArea] {
+        let measured = areas.enumerated().map { index, area in
+            (filled: area, area: area.geometry.area(of: area.feature), index: index)
         }
         // Equal areas keep the tile's order, so every tile cut from one
-        // archive tile settles a tie the same way.
+        // archive tile settles a tie the same way, and the extras' area is
+        // drawn over the basemap's of the same ground: an orchard over the
+        // farmland the basemap files it as.
         return measured
             .sorted { lhs, rhs in lhs.area == rhs.area ? lhs.index < rhs.index : lhs.area > rhs.area }
-            .map(\.pair)
+            .map(\.filled)
     }
+}
+
+/// An area and the color it is filled in.
+nonisolated private struct FilledArea {
+    let feature: MapboxVectorTile.Feature
+    let geometry: VectorTileGeometry
+    let color: CGColor
 }
 
 // MARK: - Names, points and arrows
@@ -353,17 +430,25 @@ nonisolated private extension Painter {
         return CGRect(x: 0, y: 0, width: side, height: side)
     }
 
-    /// Names, the points' icons and the one-way arrows last, over everything
-    /// they name, each claiming room in the order OpenStreetMap Carto's
-    /// layers claim it: places, the stations' icons and names, the points'
-    /// icons, the names along streets and paths and then their arrows, the
-    /// points' names, the house numbers, the names along water, and last the
-    /// low-priority icons and names — benches, bins, wayside crosses.
+    /// Names, the points' icons, the roads' numbers and the one-way arrows
+    /// last, over everything they name, each claiming room in the order
+    /// OpenStreetMap Carto's layers claim it: places, the stations' icons and
+    /// names, the points' icons, the roads' numbers, the names along streets
+    /// and paths and then their arrows, the points' names and the
+    /// localities', the house numbers, the names along water and ridges, and
+    /// last the low-priority icons and names — benches, bins, wayside
+    /// crosses.
     func paintLabels() {
-        let places = placeNames()
+        let placeCandidates = VectorTileLabels.candidates(
+            in: tile,
+            source: source,
+            target: target,
+            bounds: bounds,
+            language: language
+        )
+        let places = placeNames(placeCandidates.filter { !$0.category.isPlacedAfterPoints }, clearOf: [])
         let candidates = pointCandidates()
         let main = candidates.filter { !$0.look.lowPriority && !$0.look.isStation }
-        let low = candidates.filter(\.look.lowPriority)
         // Mapnik keeps no room between a point and a name; the names along
         // lines keep theirs from everything, `occupied` included.
         var room = VectorTilePoints.Room(bounds: bounds, taken: places.placements.map(\.frame))
@@ -375,19 +460,47 @@ nonisolated private extension Painter {
             fonts: &fonts
         )
         let icons = VectorTilePoints.Icons(main, unit: unit, room: &room)
-        let named = VectorTileLineLabels.lines(in: tile, source: source, target: target, language: language)
-        let streets = VectorTileLineLabels.Layout(
-            named.filter { !$0.category.isWater },
-            z: z,
+        let shields = VectorTileShields.Layout(
+            VectorTileShields.lines(in: tile, source: source, target: target),
+            target: target,
             unit: unit,
-            bounds: bounds,
-            occupied: room.taken,
-            language: language
+            room: &room,
+            fonts: &fonts
         )
+        let named = VectorTileLineLabels.lines(in: tile, source: source, target: target, language: language)
+        let streets = lineNames(named.filter { !$0.category.isPlacedAfterPoints }, clearOf: room.taken)
         room = VectorTilePoints.Room(bounds: bounds, taken: streets.taken)
         let oneWay = VectorTileArrows.lines(in: tile, source: source, target: target)
         let arrows = VectorTileArrows.Layout(oneWay, unit: unit, room: &room)
         let names = VectorTilePoints.Names(main, unit: unit, room: &room, fonts: &fonts)
+        let localities = placeNames(placeCandidates.filter(\.category.isPlacedAfterPoints), clearOf: room.taken)
+        for placement in localities.placements { room.take(placement.frame) }
+        stations.icons.draw(into: context, icons: points.icons)
+        icons.draw(into: context, icons: points.icons)
+        arrows.draw(into: context, unit: unit)
+        shields.draw(into: context, unit: unit)
+        streets.draw(into: context)
+        paintLateLabels(
+            low: candidates.filter(\.look.lowPriority),
+            lines: named.filter(\.category.isPlacedAfterPoints),
+            room: &room,
+            fonts: &fonts
+        )
+        places.draw(into: context)
+        localities.draw(into: context)
+        stations.names.draw(into: context)
+        names.draw(into: context)
+    }
+
+    /// What claims its room after the points' names, and is drawn under
+    /// them: the house numbers, the names along water and ridges, and the
+    /// low-priority icons and names.
+    func paintLateLabels(
+        low: [VectorTilePoints.Candidate],
+        lines: [VectorTileLineLabels.NamedLine],
+        room: inout VectorTilePoints.Room,
+        fonts: inout LabelFonts
+    ) {
         let numbers = VectorTilePoints.Names(
             VectorTileHouseNumbers.candidates(in: tile, source: source, target: target),
             unit: unit,
@@ -395,39 +508,35 @@ nonisolated private extension Painter {
             fonts: &fonts,
             margin: VectorTileHouseNumbers.margin * unit
         )
-        let water = VectorTileLineLabels.Layout(
-            named.filter(\.category.isWater),
-            z: z,
-            unit: unit,
-            bounds: bounds,
-            occupied: room.taken,
-            language: language
-        )
+        let water = lineNames(lines, clearOf: room.taken)
         room = VectorTilePoints.Room(bounds: bounds, taken: water.taken)
         let lowIcons = VectorTilePoints.Icons(low, unit: unit, room: &room)
         let lowNames = VectorTilePoints.Names(low, unit: unit, room: &room, fonts: &fonts)
-        stations.icons.draw(into: context, icons: points.icons)
-        icons.draw(into: context, icons: points.icons)
         lowIcons.draw(into: context, icons: points.icons)
-        arrows.draw(into: context, unit: unit)
-        streets.draw(into: context)
         water.draw(into: context)
-        places.draw(into: context)
-        stations.names.draw(into: context)
-        names.draw(into: context)
         numbers.draw(into: context)
         lowNames.draw(into: context)
     }
 
-    /// The names of places, lakes and glaciers, which claim room first.
-    func placeNames() -> VectorTileLabels.Layout {
+    /// `candidates` set and placed clear of `occupied`: the names of places,
+    /// lakes and glaciers, which claim room first, and the localities',
+    /// which wait for the points.
+    func placeNames(_ candidates: [VectorTileLabels.Candidate], clearOf occupied: [CGRect]) -> VectorTileLabels.Layout {
         VectorTileLabels.Layout(
-            VectorTileLabels.candidates(in: tile, source: source, target: target, bounds: bounds, language: language),
+            candidates,
             z: z,
             unit: unit,
             bounds: bounds,
-            language: language
+            language: language,
+            occupied: occupied
         )
+    }
+
+    func lineNames(
+        _ lines: [VectorTileLineLabels.NamedLine],
+        clearOf occupied: [CGRect]
+    ) -> VectorTileLineLabels.Layout {
+        VectorTileLineLabels.Layout(lines, z: z, unit: unit, bounds: bounds, occupied: occupied, language: language)
     }
 
     func pointCandidates() -> [VectorTilePoints.Candidate] {
@@ -446,122 +555,4 @@ nonisolated private struct StyledLine {
     let feature: MapboxVectorTile.Feature
     let geometry: VectorTileGeometry
     let road: VectorTileStyle.Road
-}
-
-/// A layer's grid placed on the picture: pixel = grid × scale − offset.
-nonisolated struct VectorTileGeometry {
-    let scale: CGFloat
-    let offset: CGPoint
-
-    /// The grid of `source`, whose side is `extent`, placed so that the part
-    /// of it `target` covers fills a ``VectorTileRasterizer/pixelSize`` picture.
-    init(extent: Int, source: VectorTileAddress, target: VectorTileAddress) {
-        let factor = CGFloat(1 << max(target.z - source.z, 0))
-        let size = CGFloat(VectorTileRasterizer.pixelSize)
-        scale = size * factor / CGFloat(extent)
-        offset = CGPoint(
-            x: (CGFloat(target.x) - CGFloat(source.x) * factor) * size,
-            y: (CGFloat(target.y) - CGFloat(source.y) * factor) * size
-        )
-    }
-
-    /// A line or polygon feature's path. Each ring of a polygon is its own
-    /// subpath, so an even-odd fill leaves its holes empty.
-    func path(of feature: MapboxVectorTile.Feature) -> CGPath {
-        let path = CGMutablePath()
-        walk(feature.geometry) { command, point in
-            switch command {
-            case .moveTo: path.move(to: point)
-            case .lineTo: path.addLine(to: point)
-            case .closePath: path.closeSubpath()
-            }
-        }
-        return path
-    }
-
-    /// A line feature's parts, each the points of one run between moves. A
-    /// line drawn before any move, which the spec forbids and a tile off the
-    /// network may still hold, belongs to no part and is left out.
-    func lines(of feature: MapboxVectorTile.Feature) -> [[CGPoint]] {
-        var lines: [[CGPoint]] = []
-        walk(feature.geometry) { command, point in
-            switch command {
-            case .moveTo: lines.append([point])
-            case .lineTo: if !lines.isEmpty { lines[lines.count - 1].append(point) }
-            case .closePath: break
-            }
-        }
-        return lines
-    }
-
-    /// A polygon feature's area in the picture's square pixels: its outer
-    /// rings' less its holes', which the spec winds the other way round.
-    func area(of feature: MapboxVectorTile.Feature) -> CGFloat {
-        var twice: CGFloat = 0
-        var ringStart: CGPoint?
-        var previous: CGPoint?
-        walk(feature.geometry) { command, point in
-            switch command {
-            case .moveTo:
-                ringStart = point
-                previous = point
-            case .lineTo:
-                if let last = previous { twice += last.x * point.y - point.x * last.y }
-                previous = point
-            case .closePath:
-                if let last = previous, let start = ringStart { twice += last.x * start.y - start.x * last.y }
-                ringStart = nil
-                previous = nil
-            }
-        }
-        return abs(twice) / 2
-    }
-
-    /// A point feature's points.
-    func points(of feature: MapboxVectorTile.Feature) -> [CGPoint] {
-        var points: [CGPoint] = []
-        walk(feature.geometry) { command, point in
-            if command == .moveTo { points.append(point) }
-        }
-        return points
-    }
-
-    private enum Command: UInt32 {
-        case moveTo = 1
-        case lineTo = 2
-        case closePath = 7
-    }
-
-    /// Commands as the spec encodes them: an id and a count in one integer,
-    /// then for a move or a line that many zigzag-encoded steps from the
-    /// cursor, which carries on across a feature's parts. Stops at the first
-    /// command it cannot read, keeping what came before.
-    private func walk(_ geometry: [UInt32], _ visit: (Command, CGPoint) -> Void) {
-        var index = 0
-        var cursorX = 0
-        var cursorY = 0
-        while index < geometry.count {
-            guard let command = Command(rawValue: geometry[index] & 0x7) else { return }
-            let count = Int(geometry[index] >> 3)
-            index += 1
-            if command == .closePath {
-                visit(.closePath, .zero)
-                continue
-            }
-            guard geometry.count - index >= count * 2 else { return }
-            for _ in 0..<count {
-                cursorX += Self.zigZag(geometry[index])
-                cursorY += Self.zigZag(geometry[index + 1])
-                index += 2
-                visit(command, CGPoint(
-                    x: CGFloat(cursorX) * scale - offset.x,
-                    y: CGFloat(cursorY) * scale - offset.y
-                ))
-            }
-        }
-    }
-
-    private static func zigZag(_ value: UInt32) -> Int {
-        Int(value >> 1) ^ -Int(value & 1)
-    }
 }

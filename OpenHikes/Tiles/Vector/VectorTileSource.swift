@@ -12,9 +12,12 @@
 //
 //  A second archive, the extras, holds what OpenStreetMap Carto draws and
 //  the basemap leaves out — car parks with no name, barriers, towers and
-//  crosses, offices, an information point's type, one-way ways and the size
-//  of each named area — built from the planet by `Scripts/vector-extras.sh`.
-//  Its tile is drawn into the basemap's, where there is one.
+//  crosses, offices, an information point's type, one-way ways, the size of
+//  each named area, the scree and heath of open mountains, parks and the
+//  borders of protected areas, lifts and their stations, and the huts,
+//  stations and summits Carto shows from a wider zoom — built from the
+//  planet by `Scripts/vector-extras.sh`. Its tile is drawn into the
+//  basemap's, where there is one.
 //
 
 import Foundation

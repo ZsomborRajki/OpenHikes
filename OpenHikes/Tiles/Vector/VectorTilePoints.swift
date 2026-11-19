@@ -24,6 +24,12 @@
 //  one OpenStreetMap area by Planetiler; where the extras give an area's
 //  point, the basemap's is left out.
 //
+//  The extras also give the points the basemap files unlike Carto, or later:
+//  a hut the basemap takes for a restaurant, a castle it takes for an
+//  attraction, a station it keeps without the tag that says it is a
+//  subway's. There too the basemap's point of the same name at the same spot
+//  is left out (``Superseded``).
+//
 //  As with every name, a point belongs to the tile its point lies in, and
 //  what is drawn for it, a name's halo included, never crosses the tile's
 //  edge: near the edge it is moved inward, by no more than it would have
@@ -79,7 +85,23 @@ nonisolated enum VectorTilePoints {
     }
 
     /// The kinds Carto orders by height.
-    private static let rankedByHeight: Set<String> = ["peak", "volcano", "saddle"]
+    private static let rankedByHeight: Set<String> = ["peak", "volcano", "saddle", "mountain_pass"]
+
+    /// The kinds of point the vector extras file as Carto files them where
+    /// the basemap's own point for the same thing may say otherwise, so the
+    /// extras' stands in its place: a mountain hut, which the basemap files
+    /// by its `amenity` where it has one; Carto's stops, which the basemap
+    /// keeps without their `station` tag; and the historic kinds the basemap
+    /// files as an attraction where they are tagged as one too.
+    static let supersedingKinds: Set<String> = [
+        "alpine_hut", "wilderness_hut", "station", "halt", "tram_stop",
+        "castle", "fort", "manor", "monument", "memorial", "archaeological_site", "city_gate", "wayside_cross",
+        "wayside_shrine",
+    ]
+
+    /// The basemap's kind for a named street or square mapped as an area,
+    /// whose name Carto writes inside it (``VectorTilePointStyle/square(z:firstZoom:)``).
+    static let squareKind = "pedestrian"
 
     // MARK: Choosing
 
@@ -99,14 +121,17 @@ nonisolated enum VectorTilePoints {
         let side = CGFloat(VectorTileRasterizer.pixelSize)
         let bounds = CGRect(x: 0, y: 0, width: side, height: side)
         let geometry = VectorTileGeometry(extent: layer.extent, source: source, target: target)
-        let areas = SizedAreas(layer.features, geometry: geometry)
+        let superseded = Superseded(layer.features, geometry: geometry)
         var found: [Candidate] = []
         for feature in layer.features where feature.type == .point {
-            guard let kind = feature.string("kind"), !areas.repeats(feature) else { continue }
+            guard let kind = feature.string("kind"), !superseded.repeats(feature) else { continue }
             let name = VectorTileLabels.name(of: feature, language: language)
             let detail = feature.string("kind_detail")
             let pixels = feature.number(sizeKey).map { $0 * pow(4, Double(target.z)) }
-            guard let look = style.look(
+            let square = kind == squareKind && name != nil
+                ? VectorTilePointStyle.square(z: target.z, firstZoom: feature.number("min_zoom"))
+                : nil
+            guard let look = square ?? style.look(
                 kind: kind,
                 detail: detail,
                 named: name != nil,
@@ -141,18 +166,20 @@ nonisolated enum VectorTilePoints {
     /// 4 to the power of a zoom times it at that zoom.
     static let sizeKey = "area"
 
-    /// The areas the extras give with their sizes, by name and where they
-    /// stand, to tell the basemap's point for the same area.
-    private struct SizedAreas {
+    /// The points of the vector extras that stand in the basemap's place,
+    /// by name and where they stand, to tell the basemap's point for the
+    /// same thing: an area the extras give with its size, and a point of one
+    /// of the ``supersedingKinds``.
+    private struct Superseded {
         private let spots: [String: [CGPoint]]
         private let geometry: VectorTileGeometry
-        /// How far apart two points of one area may stand: two steps of the
+        /// How far apart two points of one thing may stand: two steps of the
         /// archive's grid. Both archives put it on the same step.
         private let reach: CGFloat
 
         init(_ features: [MapboxVectorTile.Feature], geometry: VectorTileGeometry) {
             var found: [String: [CGPoint]] = [:]
-            for feature in features where feature.type == .point && feature.number(sizeKey) != nil {
+            for feature in features where feature.type == .point && Self.supersedes(feature) {
                 guard let name = feature.string("name") else { continue }
                 found[name, default: []] += geometry.points(of: feature)
             }
@@ -161,15 +188,22 @@ nonisolated enum VectorTilePoints {
             reach = 2 * geometry.scale
         }
 
-        /// Whether `feature` is the basemap's point for an area the extras
-        /// give: the same name at the same spot, with no size.
+        /// Whether `feature` is the basemap's point for a thing the extras
+        /// give in its place: the same name at the same spot, and itself
+        /// neither sized nor the extras'.
         func repeats(_ feature: MapboxVectorTile.Feature) -> Bool {
-            guard feature.number(sizeKey) == nil, let name = feature.string("name"), let named = spots[name] else {
+            guard !Self.supersedes(feature), let name = feature.string("name"), let named = spots[name] else {
                 return false
             }
             return geometry.points(of: feature).contains { point in
                 named.contains { abs($0.x - point.x) <= reach && abs($0.y - point.y) <= reach }
             }
+        }
+
+        private static func supersedes(_ feature: MapboxVectorTile.Feature) -> Bool {
+            if feature.number(sizeKey) != nil { return true }
+            guard feature.isFromExtras, let kind = feature.string("kind") else { return false }
+            return supersedingKinds.contains(kind)
         }
     }
 
