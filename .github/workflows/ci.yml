@@ -895,7 +895,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: xcode-27
-    timeout-minutes: 60
+    timeout-minutes: 90
     # Gating. The trial this job was admitted on ran from 2026-08-15 to
     # 2026-09-06 and produced 192 completed runs with zero failures, at the
     # job level and at the step level both — the `if: failure()` upload below
@@ -932,6 +932,14 @@ jobs:
     # would have failed — on a green job, for a comment-only commit. Read that
     # as the reason the note above says to raise a gate on the drift rather
     # than on the first timeout.
+    #
+    # It drifted again. Over the 14 runs that passed from 2026-11-17 to
+    # 2026-11-19 it took **49m55s median, 57m14s p90 and 59m02s longest**, three
+    # of the 14 within five minutes of the gate, and on 2026-11-19 a run on
+    # `main` (44515257858) was stopped at 60m44s. The median has nearly doubled
+    # since September, as the project grew by the vector map and the offline
+    # countries, so 90: half an hour clear of the longest green run, where 60
+    # left the September one sixteen minutes.
     #
     # **Almost none of it is the tests.** Measured on the longest run: booting
     # the simulator 157s, granting location 222s, the audits 2031s of which 675
