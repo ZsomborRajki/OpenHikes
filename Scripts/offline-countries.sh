@@ -47,7 +47,8 @@
 #             from the local copies where there are whole ones, which is what
 #             makes cutting the whole world take hours rather than a day, and
 #             from the bucket where not; --planet and --extras name other
-#             files. A 3 km margin by default.
+#             files. The build is named for the later of the two archives'
+#             days. A 3 km margin by default.
 #   upload    Put <dir>'s files in the bucket under countries/, each with its
 #             SHA-256 beside it, skipping any already there with the same bytes
 #             and refusing one there with others, then merge its manifest into
@@ -178,19 +179,30 @@ build() {
             *) usage ;;
         esac
     done
-    local basemap planet
+    local basemap planet extras_name extras_day build
     basemap="$(archive_name basemaps)"
     planet="${basemap#planet-}"
     [[ "$planet" =~ ^[0-9]{8}$ ]] || die "the basemap $basemap is not named planet-YYYYMMDD"
+    extras_name="$(archive_name extras)"
+    [[ "$extras_name" =~ ^extras-([0-9]{8})(-[0-9]{2})?$ ]] \
+        || die "the extras $extras_name are not named extras-YYYYMMDD-HH"
+    extras_day="${BASH_REMATCH[1]}"
+    # A build is named for the later of its two archives' days, so a cut
+    # over new extras on the same basemap goes up under names of its own,
+    # and an installed app, which offers a later build as an update, offers
+    # it. A second cut on one day over the same two days is refused at the
+    # upload, which keeps a name's bytes, and waits for a newer archive.
+    build="$planet"
+    [[ "$extras_day" < "$build" ]] || build="$extras_day"
     local outline_file region_file
     outline_file="$(natural_earth_file "$outlines_url" "$outlines_sha256")"
     region_file="$(natural_earth_file "$regions_url" "$regions_sha256")"
     r2_load_keys
     [[ -n "$planet_file" ]] || planet_file="$(archive_source "$basemap")"
-    [[ -n "$extras" ]] || extras="$(archive_source "$(archive_name extras)")"
-    echo "offline-countries: cutting from $planet_file and $extras"
+    [[ -n "$extras" ]] || extras="$(archive_source "$extras_name")"
+    echo "offline-countries: cutting build $build from $planet_file and $extras"
     prepare_tool
-    local arguments=(build --planet "$planet_file" --extras "$extras" --build "$planet"
+    local arguments=(build --planet "$planet_file" --extras "$extras" --build "$build"
         --outlines "$outline_file" --regions "$region_file"
         --countries "$repository_root/Scripts/lib/offline-countries.json"
         --out "$out" --margin-km "$margin"
