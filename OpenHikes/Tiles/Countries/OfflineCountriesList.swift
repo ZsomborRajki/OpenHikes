@@ -234,8 +234,10 @@ struct OfflineCountriesList: View {
                     .foregroundStyle(.secondary)
             }
             .accessibilityElement(children: .combine)
+            // On the label, not the group: a container's identifier reaches
+            // every row in it, and each region's row has its own.
+            .accessibilityIdentifier("offline-country-group-\(id)")
         }
-        .accessibilityIdentifier("offline-country-group-\(id)")
     }
 
     private func rows(_ list: [OfflineCountryManifest.Country]) -> some View {
