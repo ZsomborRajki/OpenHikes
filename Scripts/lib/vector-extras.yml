@@ -279,8 +279,8 @@ layers:
     id: &basemap_id '${ (feature.osm_type == "relation" ? 52776558133248 : 35184372088832) + feature.id }'
     min_zoom: 13
     min_size: 2
-    tolerance: 1
-    tolerance_at_max_zoom: 0.25
+    tolerance: 2
+    tolerance_at_max_zoom: 2
     include_when:
       __all__:
       - __any__:
@@ -295,8 +295,8 @@ layers:
     id: *basemap_id
     min_zoom: 10
     min_size: 2
-    tolerance: 1
-    tolerance_at_max_zoom: 0.25
+    tolerance: 2
+    tolerance_at_max_zoom: 2
     include_when:
       __all__:
       - natural: wetland
@@ -309,8 +309,8 @@ layers:
     id: *basemap_id
     min_zoom: 13
     min_size: 2
-    tolerance: 1
-    tolerance_at_max_zoom: 0.25
+    tolerance: 2
+    tolerance_at_max_zoom: 2
     include_when:
       __all__:
       - natural: beach
@@ -323,8 +323,8 @@ layers:
     id: *basemap_id
     min_zoom: 13
     min_size: 2
-    tolerance: 1
-    tolerance_at_max_zoom: 0.25
+    tolerance: 2
+    tolerance_at_max_zoom: 2
     include_when:
       __all__:
       - landuse: cemetery
