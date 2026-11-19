@@ -30,8 +30,8 @@ struct MapSheetHikes: View, Equatable {
     /// a tint on a card rather than a wash over a map, so it can be stronger
     /// without swallowing the title on top of it.
     private static let selectedHikeHighlightOpacity: Double = 0.28
-    private static let actionGlyphSize: CGFloat = 40
-    private static let sortCapsulePadding: CGFloat = 14
+    private static let actionGlyphSize: CGFloat = SortMenuMetrics.height
+    private static let sortCapsulePadding: CGFloat = SortMenuMetrics.horizontalPadding
     /// Every hike this hiker has, newest first.
     ///
     /// Internal rather than private so the community section can read it from
@@ -402,43 +402,22 @@ private extension MapSheetHikes {
     }
 
     func sortMenu(isCustom: Bool) -> some View {
-        Menu {
-            // The hand-made order is never offered here — a hiker makes it by
-            // dragging, not by picking it out of a list of orders it is not
-            // one of. While it is in force nothing is ticked at all, which is
-            // what keeps every entry a change: see ``sortSelection(isCustom:)``.
-            Picker("Order", selection: sortSelection(isCustom: isCustom)) {
-                ForEach(HikeListSort.menuOrder) { option in
-                    Label(option.title, systemImage: option.symbol)
-                        .tag(HikeListSort?.some(option))
-                }
-            }
-            .pickerStyle(.inline)
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "arrow.up.arrow.down")
-                Text(isCustom ? String(localized: "Your Order") : sort.title)
-                Image(systemName: "chevron.down")
-                    .font(.caption2.weight(.bold))
-            }
-            .font(.footnote.weight(.semibold))
-            .foregroundStyle(.tint)
-            .padding(.horizontal, Self.sortCapsulePadding)
-            .frame(height: Self.actionGlyphSize)
-            .glassSurface(.regular.interactive(), in: .capsule)
-            .minimumTapTarget()
-        }
-        // On the `Menu` and deliberately *not* on the `Picker` inside it.
-        // A menu's content closure is built into a platform menu and torn down
-        // the instant a row is tapped, so a `sensoryFeedback` declared in
-        // there has no view left to fire from by the time `sort` changes — the
-        // one control whose choice is worth confirming would have been the one
-        // that said nothing. The label out here reads `sort` already, so the
-        // trigger costs nothing new.
+        // The hand-made order is never offered here — a hiker makes it by
+        // dragging, not by picking it out of a list of orders it is not
+        // one of. While it is in force nothing is ticked at all, which is
+        // what keeps every entry a change: see ``sortSelection(isCustom:)``.
+        SortMenu(
+            options: HikeListSort.menuOrder.map { SortMenuOption(value: $0, title: $0.title, symbol: $0.symbol) },
+            selection: sortSelection(isCustom: isCustom),
+            title: isCustom ? String(localized: "Your Order") : sort.title,
+            label: "Sort hikes",
+            value: isCustom ? String(localized: "Your order") : sort.title,
+            identifier: "hike-order-button"
+        )
+        // On the menu and deliberately *not* on the `Picker` inside it — see
+        // ``SortMenu``. The capsule reads `sort` already, so the trigger
+        // costs nothing new.
         .sensoryFeedback(HapticMoment.choiceChanged.feedback, trigger: sort)
-        .accessibilityLabel("Sort hikes")
-        .accessibilityValue(isCustom ? String(localized: "Your order") : sort.title)
-        .accessibilityIdentifier("hike-order-button")
     }
 
     /// Picking an order also gives up a hand-made one — see ``HikeListOrder``,
