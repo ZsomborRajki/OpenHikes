@@ -5817,6 +5817,38 @@ if expect_status 0 \
     pass
 fi
 
+# An archive already first still drops one of its generation behind it,
+# which every build passes over for it: the manifest of an extras build kept
+# listed while the countries were cut from it.
+cat > "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST" <<'EOF'
+{
+  "version": 1,
+  "revision": 4,
+  "basemaps": [
+    { "name": "planet-20261118", "schema": 4, "maximumZoom": 15 },
+    { "name": "planet-20261001", "schema": 3, "maximumZoom": 14 }
+  ],
+  "extras": [
+    { "name": "extras-20261120", "generation": 2, "minimumZoom": 4 },
+    { "name": "extras-20261119", "generation": 2, "minimumZoom": 4 }
+  ]
+}
+EOF
+run_script "vector-archives use drops what no build draws behind an archive already first" \
+    "$vector_archives" use extras-20261120
+if expect_status 0 \
+    && expect_contains "$output" "extras-20261120 heads the extras at revision 4" "the output" \
+    && expect_absent "$(cat "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST")" "extras-20261119" "the manifest"; then
+    pass
+fi
+
+run_script "vector-archives use leaves a manifest alone where the archive is first and nothing is behind it" \
+    "$vector_archives" use extras-20261120
+if expect_status 0 \
+    && expect_contains "$output" "extras-20261120 is already the manifest's first of its extras" "the output"; then
+    pass
+fi
+
 STUB_MISSING_ARCHIVES="extras-20261121" \
     run_script "vector-archives use refuses an archive the tile server does not serve" \
     "$vector_archives" use extras-20261121

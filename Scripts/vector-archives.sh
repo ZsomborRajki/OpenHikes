@@ -21,13 +21,14 @@
 # holds under Protomaps' ETag is left as it is, and not downloaded.
 #
 # `use` puts an archive in the bucket at the head of its list in the manifest,
-# and raises `revision` above the server's, once however many archives it
-# names before the next publish: a basemap (`planet-…`) of the schema of the one it
-# replaces, extras (`extras-…`) of the generation of the ones they replace,
-# unless --schema or --generation says otherwise. It drops what no build would
-# draw from any more, the archives behind it of the same schema or of the same
-# or a later generation, and keeps the first of each other one for the builds
-# that read only that. Then `publish`, and commit the file.
+# or keeps it there, and raises `revision` above the server's, once however
+# many archives it names before the next publish: a basemap (`planet-…`) of
+# the schema of the one it replaces, extras (`extras-…`) of the generation of
+# the ones they replace, unless --schema or --generation says otherwise. It
+# drops what no build would draw from any more, the archives behind it of the
+# same schema or of the same or a later generation, and keeps the first of
+# each other one for the builds that read only that. Then `publish`, and
+# commit the file.
 #
 # `check` asks the server for every archive the manifest names, and fails on
 # any it does not have: an app told to draw from one would fall back to
@@ -250,8 +251,6 @@ use() {
   fi
   [[ "$name" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || die "'$name' is not a name the app reads"
   served "$name" || die "$SERVER does not serve $name; upload it first"
-  [[ "$(value "$list.0.name" "$MANIFEST")" != "$name" ]] \
-    || { echo "vector-archives: $name is already the manifest's first of its $list"; return; }
   local zoom_key=maximumZoom
   [[ "$list" == basemaps ]] || zoom_key=minimumZoom
   local level zoom
@@ -270,6 +269,12 @@ use() {
     seen+="$other_level "
     entries+=("$other$TAB$other_level$TAB$(value "$list.$index.$zoom_key" "$MANIFEST")")
   done
+  # An archive already first still drops what no build draws behind it.
+  if [[ "$(entry_lines "$list" "$key" "$zoom_key" "${entries[@]}")" \
+    == "$(current_lines "$list" "$key" "$zoom_key")" ]]; then
+    echo "vector-archives: $name is already the manifest's first of its $list"
+    return
+  fi
   local revision live_revision=0 basemaps extras
   revision="$(value revision "$MANIFEST")"
   case "$(curl -s -o "$SCRATCH/served.json" -w "%{http_code}" "$SERVER/manifest.json")" in
