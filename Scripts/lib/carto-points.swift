@@ -7,7 +7,8 @@
 //  `amenity-points.mss` and `stations.mss` draw, the style
 //  tile.openstreetmap.org is drawn in — and writes them out as the table the
 //  vector map draws points from, with every icon the table names copied into
-//  an asset catalog.
+//  an asset catalog, and beside them the pictures Carto fills an area with or
+//  lays along a line.
 //
 //  Carto is written in CartoCSS: nested blocks whose filters and zooms add
 //  up, where the more specific of two declarations wins and the later one
@@ -1329,6 +1330,61 @@ for shop in drawnShops {
     add(kind: shop, feature: "shop", shop: shop, lowPriority: false)
 }
 
+// MARK: - Patterns
+
+/// One of Carto's pattern pictures: a square of symbols it fills an area
+/// with, or lays along a line, over and over.
+struct Pattern {
+    /// Its name in the catalog: `carto-pattern-` and the file's own name.
+    let asset: String
+    /// `svg` or `png`.
+    let kind: String
+    /// The files, by the scale each is drawn for: Carto keeps a picture
+    /// twice the size beside some of its bitmaps.
+    let sources: [(scale: Int, path: String)]
+}
+
+/// The patterns the map draws nothing with: a flowerbed's, a prison's and a
+/// salt marsh's dots, whose areas the tiles have no kind for, and a cliff's
+/// and an embankment's teeth, which it draws along the line itself.
+let undrawnPatterns: Set<String> = [
+    "flowerbed_mid_zoom", "flowerbed_high_zoom", "grey_vertical_hatch", "salt-dots-2",
+    "cliff", "cliff2", "embankment",
+]
+
+/// Every picture `landcover.mss` and `water.mss` fill an area with or lay
+/// along a line, less the ``undrawnPatterns``.
+let patterns: [Pattern] = {
+    var found: [String: Pattern] = [:]
+    for sheet in ["landcover.mss", "water.mss"] {
+        let text = uncommented(read("style/\(sheet)"))
+        for part in text.components(separatedBy: "-pattern-file:").dropFirst() {
+            guard let open = part.range(of: "url('"), let close = part.range(of: "')") else {
+                fail("\(sheet) names a pattern this does not read: \(part.prefix(60))")
+            }
+            let path = String(part[open.upperBound..<close.lowerBound])
+            let file = path.split(separator: "/").last.map(String.init) ?? path
+            guard let dot = file.lastIndex(of: ".") else { fail("\(sheet) names a pattern with no type: \(path)") }
+            let name = String(file[..<dot])
+            let kind = String(file[file.index(after: dot)...])
+            guard !undrawnPatterns.contains(name), found[name] == nil else { continue }
+            guard FileManager.default.fileExists(atPath: cartoRoot.appending(path: path).path) else {
+                fail("\(sheet) names \(path), which the release does not have")
+            }
+            var sources = [(scale: 1, path: path)]
+            // Carto generates its bitmaps from drawings it keeps beside them,
+            // some at twice the size too; the plain wetland's is named apart.
+            let doubled = "symbols/generating_patterns/\(name == "wetland" ? "wetland_generic" : name)@2x.png"
+            if kind == "png", FileManager.default.fileExists(atPath: cartoRoot.appending(path: doubled).path) {
+                sources.append((scale: 2, path: doubled))
+            }
+            found[name] = Pattern(asset: "carto-pattern-\(name)", kind: kind, sources: sources)
+        }
+    }
+    guard !found.isEmpty else { fail("landcover.mss names no pattern") }
+    return found.values.sorted { $0.asset < $1.asset }
+}()
+
 // MARK: - Writing
 
 // The release, which `Scripts/carto-points.sh` names: a tarball has no tag.
@@ -1365,10 +1421,28 @@ do {
         """
         try Data(contents.utf8).write(to: set.appending(path: "Contents.json"))
     }
+    for pattern in patterns {
+        let set = catalogURL.appending(path: "\(pattern.asset).imageset")
+        try fileManager.createDirectory(at: set, withIntermediateDirectories: true)
+        var images: [String] = []
+        for (scale, source) in pattern.sources {
+            let file = "\(pattern.asset)\(scale == 1 ? "" : "@\(scale)x").\(pattern.kind)"
+            try fileManager.copyItem(at: cartoRoot.appending(path: source), to: set.appending(path: file))
+            // A bitmap is for one scale; a drawing is for them all.
+            let drawnFor = pattern.kind == "svg" ? "" : #","scale":"\#(scale)x""#
+            images.append(#"{"filename":"\#(file)","idiom":"universal"\#(drawnFor)}"#)
+        }
+        let vector = pattern.kind == "svg" ? #","properties":{"preserves-vector-representation":true}"# : ""
+        let contents = #"{"images":[\#(images.joined(separator: ","))],"info":{"author":"xcode","version":1}\#(vector)}"#
+        try Data((contents + "\n").utf8).write(to: set.appending(path: "Contents.json"))
+    }
 } catch {
     fail("cannot write \(catalogURL.path): \(error)")
 }
 
 let areaKinds = Set(entries.filter { $0.areas != nil }.map(\.kind)).sorted()
-print("carto-points: \(entries.count) kinds of point, \(usedIcons.count) icons, from \(table.source)")
+print(
+    "carto-points: \(entries.count) kinds of point, \(usedIcons.count) icons, \(patterns.count) patterns, "
+        + "from \(table.source)"
+)
 print("carto-points: drawn by their size: \(areaKinds.joined(separator: " "))")

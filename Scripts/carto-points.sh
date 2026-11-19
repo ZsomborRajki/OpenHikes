@@ -7,8 +7,10 @@
 # style tile.openstreetmap.org draws. This reads them out of a pinned Carto
 # release with Scripts/lib/carto-points.swift and writes the table the app
 # reads (OpenHikes/Tiles/Vector/VectorTilePoints.json) and the icons it names
-# (OpenHikes/Tiles/Vector/CartoIcons.xcassets, replaced whole). Carto's style
-# and icons are CC0.
+# (OpenHikes/Tiles/Vector/CartoIcons.xcassets, replaced whole), with the
+# pictures Carto fills an area with or lays along a line, as
+# `carto-pattern-…` (`VectorTilePatterns`). Carto's style, icons and patterns
+# are CC0.
 #
 # It is a *development* tool and is in no gate. Re-run it to move to a newer
 # Carto release: change CARTO_VERSION, run, and read the diff of the table.
