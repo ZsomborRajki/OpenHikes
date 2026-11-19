@@ -130,6 +130,23 @@ struct VectorTileAreaNamesTests {
         #expect(style.look(kind: "national_park", detail: nil, named: true, z: 8, pixels: 4000)?.text != nil)
     }
 
+    /// `Scripts/carto-points.sh` leaves a kind's `restrictedAreas` out where
+    /// a restricted area is drawn as an open one is, and writes them empty
+    /// where Carto draws a restricted area as its point at any size: left
+    /// out, that kind's restricted areas would take the open ones' sizes.
+    @Test("a restricted area takes the open area's sizes, unless the table gives it none")
+    func restrictedAreasFromTheTable() throws {
+        let table = try Self.restrictedStyle()
+        let marked = { (kind: String, z: Int) in
+            table.look(kind: kind, detail: nil, named: false, z: z, access: "private", pixels: 1000)
+        }
+
+        #expect(marked("alike", 14)?.icons.first?.opacity == 1, "the open area's bands")
+        #expect(marked("as_a_point", 14) == nil, "the restricted point's bands, which wait for zoom 17")
+        let point = try #require(marked("as_a_point", 17)?.icons.first?.opacity)
+        #expect(point < 1)
+    }
+
     // MARK: Choosing
 
     /// The basemap and the extras cut a named area's point with the same
@@ -178,6 +195,26 @@ struct VectorTileAreaNamesTests {
     }
 
     // MARK: Helpers
+
+    /// Two kinds marked from zoom 17 as points, faded where restricted, and
+    /// from zoom 14 as open areas past 750 pixels, as the table writes them:
+    /// one whose restricted areas are drawn as its open ones, and one whose
+    /// restricted areas are drawn as its restricted point at any size.
+    private static func restrictedStyle() throws -> VectorTilePointStyle {
+        let band = { (from: Int, opacity: Double) in
+            #"{"from": \#(from), "to": 19, "icons": [{"asset": "parking", "width": 12, "height": 12, "#
+                + #""opacity": \#(opacity)}]}"#
+        }
+        let entry = { (kind: String, restrictedAreas: String) in
+            #"{"kind": "\#(kind)", "feature": "amenity_\#(kind)", "lowPriority": false, "#
+                + #""bands": [\#(band(17, 1))], "restricted": [\#(band(17, 0.33))], "#
+                + #""areas": [{"above": 750, "bands": [\#(band(14, 1))]}]\#(restrictedAreas)}"#
+        }
+        let entries = [entry("alike", ""), entry("as_a_point", #", "restrictedAreas": []"#)].joined(separator: ",")
+        let json = #"{"source": "openstreetmap-carto test", "restrictedAccess": ["private"], "areaLimit": 768000, "#
+            + #""entries": [\#(entries)]}"#
+        return try VectorTilePointStyle(json: Data(json.utf8))
+    }
 
     /// The `area` the extras would give an area of `pixels` at zoom `z`,
     /// the suite's by default: its size on the whole world drawn as one

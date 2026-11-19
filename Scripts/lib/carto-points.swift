@@ -752,7 +752,9 @@ struct Entry: Codable {
     /// How an area of the kind is drawn, by its size, where Carto's rules
     /// look at the size.
     var areas: [AreaBands]?
-    /// The same where its access is restricted, where they are not `areas`.
+    /// The same where its access is restricted, where they are not `areas`:
+    /// empty where a restricted area is drawn as its point is at any size,
+    /// because a table without them reads `areas` here.
     var restrictedAreas: [AreaBands]?
 }
 
@@ -1231,7 +1233,7 @@ func add(
                 restricted: restricted == result ? nil : restricted,
                 bands: result,
                 areas: areas,
-                restrictedAreas: restrictedAreas == areas ? nil : restrictedAreas
+                restrictedAreas: restrictedAreas == areas ? nil : restrictedAreas ?? []
             ))
         }
     }
