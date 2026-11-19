@@ -125,7 +125,7 @@ readonly screenshot_frames=(
     "06:testCapturesTheTrailInThreeDimensions"
     "07:testCapturesChoosingTheMap"
     "08:testCapturesDrawingATrail"
-    "09:testCapturesAPlaceAndItsPhotos"
+    "09:testCapturesDownloadingACountry"
     "10:testCapturesSharingAHike"
 )
 
@@ -138,11 +138,12 @@ readonly screenshot_frames=(
 # away without that only because the prompt was answered *Allow Once*, which
 # lapses when the app quits. So the rest are shot first, with location reset
 # to never asked, and these after it is granted. Frame 04 is one of them
-# because a hiker on the trail is what it is of.
-readonly screenshot_location_frames=" 03 04 05 08 "
+# because a hiker on the trail is what it is of, and frame 09 because its list
+# of countries opens nearest the hiker.
+readonly screenshot_location_frames=" 03 04 05 08 09 "
 
 # The frames that import the stamped photographs, and skip without them.
-readonly screenshot_library_frames=" 01 02 06 09 10 "
+readonly screenshot_library_frames=" 01 02 06 10 "
 
 # How long `simctl addmedia` gets for the whole stamped library. It took 31s
 # for eight photographs on a freshly erased device, and once — one photograph

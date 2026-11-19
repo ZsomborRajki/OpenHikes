@@ -253,7 +253,7 @@ extension ScreenshotUITests {
         case terrain = "06-the-trail-in-3d"
         case mapModes = "07-choose-your-map"
         case trailMaker = "08-draw-your-own-trail"
-        case place = "09-a-place-and-its-photos"
+        case offlineMaps = "09-download-a-country"
         case share = "10-share-a-hike"
     }
 
@@ -806,9 +806,9 @@ extension ScreenshotUITests {
             settleScreenshotMapTiles(in: app, rejectSmallLoadingPatches: true)
         case .recording:
             settleScreenshotMapTiles(in: app, requireTerrain: true)
-        case .route, .following, .trailMaker:
+        case .route, .following, .trailMaker, .offlineMaps:
             settleScreenshotMapTiles(in: app)
-        case .terrain, .photos, .mapModes, .place, .share:
+        case .terrain, .photos, .mapModes, .share:
             break
         }
         attachScreenshotEvidence(named: frame.rawValue, in: app)
