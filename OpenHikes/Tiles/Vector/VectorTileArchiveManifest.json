@@ -1,10 +1,11 @@
 {
   "version": 1,
-  "revision": 1,
+  "revision": 4,
   "basemaps": [
-    { "name": "planet-20261117", "schema": 4, "maximumZoom": 15 }
+    { "name": "planet-20261118", "schema": 4, "maximumZoom": 15 }
   ],
   "extras": [
-    { "name": "extras-20261119", "generation": 2, "minimumZoom": 4 }
+    { "name": "extras-20261119-18", "generation": 2, "minimumZoom": 4 },
+    { "name": "extras-20261119-16", "generation": 2, "minimumZoom": 4 }
   ]
 }
