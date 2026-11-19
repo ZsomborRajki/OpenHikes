@@ -5,9 +5,10 @@
 # Its layers and attributes are named as the basemap's are — `landuse` and
 # `pois` with `kind`, `kind_detail` and `name:<language>` — so a tile of each
 # merges into one and is read by the same code. `barriers` and `oneways` are
-# the layers of its own, and an unnamed car park's `access` the one
-# attribute. Every feature waits for zoom 14 or 15: the map draws deeper
-# zooms from zoom 15, and Carto draws none of these wider.
+# the layers of its own, and a car park's `access` and an area's `area` the
+# attributes. Most features wait for zoom 14 or 15: the map draws deeper
+# zooms from zoom 15, and Carto draws none of these wider. The names of
+# areas come in from the zoom Carto could first name each, by its size.
 #
 # Scripts/lib/vector-extras.filter cuts the planet down to these tags first;
 # change both together. Built by Scripts/vector-extras.sh.
@@ -50,6 +51,15 @@ definitions:
   - &name_uk
     key: 'name:uk'
     tag_value: 'name:uk'
+  # An area's size, in the square pixels of the whole world drawn as one
+  # 256-pixel tile: times 4 to the power of a zoom, its size at that zoom,
+  # which Carto calls `way_pixels`. Web Mercator's, as Carto's is. Measured
+  # in z0 tiles: Planetiler 0.10.2 divides by 256 for a z0 pixel where it
+  # should multiply, so its square z0 pixel comes out 2^32 times too small.
+  - &area
+    key: area
+    value: '${ feature.area("z0 tile2") * 65536.0 }'
+    type: double
 layers:
 # Car parks, which the basemap has no fill for at all.
 - id: landuse
@@ -67,22 +77,342 @@ layers:
 
 - id: pois
   features:
-  # A car park mapped as an area with no name: the basemap keeps an area's
-  # point only when it is named, and keeps the named ones already. Its access
-  # is kept because Carto fades a car park that is private or for customers.
+  # A car park mapped as an area, at a point inside it, named or not: the
+  # basemap keeps an area's point only when it is named, and never its size,
+  # which Carto marks a car park by from zoom 14. Its access is kept because
+  # Carto fades a car park that is private or for customers.
   - source: osm
     geometry: polygon_point_on_surface
-    min_zoom: 14
+    min_zoom:
+    - if: '${ feature.area("z0 tile2") * 65536.0 * 268435456.0 > 750.0 }'
+      value: 14
+    - else: 15
     include_when:
       amenity: parking
     exclude_when:
-      name: __any__
       parking: underground
     attributes:
     - key: kind
       value: parking
     - key: access
       tag_value: access
+    - *area
+    - *name
+    - *name_en
+    - *name_de
+    - *name_fr
+    - *name_es
+    - *name_it
+    - *name_ru
+    - *name_pl
+    - *name_uk
+
+  # The names of areas — forests, parks, nature reserves, national parks,
+  # islands, meadows, schools — at a point inside each, with its size, which
+  # Carto names an area by: from a wider zoom and in a larger size the larger
+  # it is (`VectorTilePointStyle`). The basemap keeps a named area's point
+  # without its size, from a zoom of its own choosing.
+  #
+  # Carto files an area under the first of its tags its query tries, so each
+  # of the features below leaves out an area an earlier key of Carto's claims:
+  # a playground on grass is a playground, not grass. The kinds are those
+  # `Scripts/carto-points.sh` finds drawn by their size, less a shop or an
+  # office (`drawnBySize`), a car park (above) and a place of worship, which
+  # is mostly a building. A building is named by its own layer in Carto, not
+  # as land, so none is kept here.
+  #
+  # An area comes in at the first zoom it covers 3,000 square pixels, the
+  # least Carto names an area at, and at zoom 15 at the latest, which every
+  # deeper zoom is drawn from.
+  - source: osm
+    geometry: polygon_point_on_surface
+    min_zoom: &named_area_zoom
+    - if: '${ feature.area("z0 tile2") * 65536.0 * 256.0 > 3000.0 }'
+      value: 4
+    - if: '${ feature.area("z0 tile2") * 65536.0 * 1024.0 > 3000.0 }'
+      value: 5
+    - if: '${ feature.area("z0 tile2") * 65536.0 * 4096.0 > 3000.0 }'
+      value: 6
+    - if: '${ feature.area("z0 tile2") * 65536.0 * 16384.0 > 3000.0 }'
+      value: 7
+    - if: '${ feature.area("z0 tile2") * 65536.0 * 65536.0 > 3000.0 }'
+      value: 8
+    - if: '${ feature.area("z0 tile2") * 65536.0 * 262144.0 > 3000.0 }'
+      value: 9
+    - if: '${ feature.area("z0 tile2") * 65536.0 * 1048576.0 > 3000.0 }'
+      value: 10
+    - if: '${ feature.area("z0 tile2") * 65536.0 * 4194304.0 > 3000.0 }'
+      value: 11
+    - if: '${ feature.area("z0 tile2") * 65536.0 * 16777216.0 > 3000.0 }'
+      value: 12
+    - if: '${ feature.area("z0 tile2") * 65536.0 * 67108864.0 > 3000.0 }'
+      value: 13
+    - if: '${ feature.area("z0 tile2") * 65536.0 * 268435456.0 > 3000.0 }'
+      value: 14
+    - else: 15
+    include_when:
+      aeroway: [aerodrome, apron]
+    exclude_when: &unnamed_or_building
+      __any__:
+      - name: ''
+      - __all__:
+        - building: __any__
+        - __not__:
+            building: 'no'
+    attributes: &named_area
+    - key: kind
+      type: match_value
+    - *area
+    - *name
+    - *name_en
+    - *name_de
+    - *name_fr
+    - *name_es
+    - *name_it
+    - *name_ru
+    - *name_pl
+    - *name_uk
+  - source: osm
+    geometry: polygon_point_on_surface
+    min_zoom: *named_area_zoom
+    include_when:
+      tourism: [theme_park, zoo]
+    exclude_when:
+      __any__:
+      - *unnamed_or_building
+      - aeroway: &carto_aeroway [gate, apron, helipad, aerodrome]
+    attributes: *named_area
+  - source: osm
+    geometry: polygon_point_on_surface
+    min_zoom: *named_area_zoom
+    include_when:
+      amenity: [college, grave_yard, kindergarten, marketplace, school, university]
+    exclude_when:
+      __any__:
+      - *unnamed_or_building
+      - aeroway: *carto_aeroway
+      - tourism: &carto_tourism [alpine_hut, apartment, artwork, camp_site, caravan_site, chalet, gallery, guest_house, hostel, hotel, motel, museum, picnic_site, theme_park, wilderness_hut, zoo]
+    attributes: *named_area
+  - source: osm
+    geometry: polygon_point_on_surface
+    min_zoom: *named_area_zoom
+    include_when:
+      shop: mall
+    exclude_when:
+      __any__:
+      - *unnamed_or_building
+      - aeroway: *carto_aeroway
+      - tourism: *carto_tourism
+      - amenity: &carto_amenity [arts_centre, atm, bank, bar, bbq, bicycle_rental, bicycle_repair_station, biergarten, boat_rental, bureau_de_change, bus_station, cafe, car_rental, car_wash, casino, charging_station, childcare, cinema, clinic, college, community_centre, courthouse, dentist, doctors, drinking_water, driving_school, fast_food, ferry_terminal, fire_station, food_court, fountain, fuel, grave_yard, hospital, hunting_stand, ice_cream, internet_cafe, kindergarten, library, marketplace, nightclub, nursing_home, pharmacy, place_of_worship, police, post_box, post_office, prison, pub, public_bath, public_bookcase, recycling, restaurant, school, shelter, shower, social_facility, taxi, telephone, theatre, toilets, townhall, university, vehicle_inspection, veterinary, waste_disposal, parcel_locker]
+      - location: underground
+    attributes: *named_area
+  # A pitch's or a sports centre's sport, which Carto names a swimming
+  # centre's by, is its `kind_detail`.
+  - source: osm
+    geometry: polygon_point_on_surface
+    min_zoom: *named_area_zoom
+    include_when:
+      leisure: [garden, ice_rink, marina, park, pitch, sports_centre, stadium, swimming_pool, track]
+    exclude_when:
+      __any__:
+      - *unnamed_or_building
+      - aeroway: *carto_aeroway
+      - tourism: *carto_tourism
+      - amenity: *carto_amenity
+      - shop: __any__
+    attributes:
+    - key: kind
+      type: match_value
+    - key: kind_detail
+      tag_value: sport
+    - *area
+    - *name
+    - *name_en
+    - *name_de
+    - *name_fr
+    - *name_es
+    - *name_it
+    - *name_ru
+    - *name_pl
+    - *name_uk
+  - source: osm
+    geometry: polygon_point_on_surface
+    min_zoom: *named_area_zoom
+    include_when:
+      power: [generator, plant, substation]
+    exclude_when:
+      __any__:
+      - *unnamed_or_building
+      - aeroway: *carto_aeroway
+      - tourism: *carto_tourism
+      - amenity: *carto_amenity
+      - shop: __any__
+      - leisure: &carto_leisure [amusement_arcade, beach_resort, bird_hide, bowling_alley, dance, dog_park, firepit, fishing, fitness_centre, fitness_station, garden, golf_course, ice_rink, marina, miniature_golf, outdoor_seating, park, picnic_table, pitch, playground, sauna, slipway, sports_centre, stadium, swimming_area, swimming_pool, track, water_park]
+    attributes: *named_area
+  - source: osm
+    geometry: polygon_point_on_surface
+    min_zoom: *named_area_zoom
+    include_when:
+      man_made: [wastewater_plant, water_works, works]
+    exclude_when:
+      __any__:
+      - *unnamed_or_building
+      - aeroway: *carto_aeroway
+      - tourism: *carto_tourism
+      - amenity: *carto_amenity
+      - shop: __any__
+      - leisure: *carto_leisure
+      - power: &carto_power [plant, generator, substation]
+    attributes: *named_area
+  - source: osm
+    geometry: polygon_point_on_surface
+    min_zoom: *named_area_zoom
+    include_when:
+      landuse: [allotments, brownfield, cemetery, commercial, construction, farmland, farmyard, forest, garages, grass, greenhouse_horticulture, industrial, landfill, meadow, military, orchard, plant_nursery, quarry, railway, recreation_ground, residential, retail, salt_pond, village_green, vineyard]
+    exclude_when:
+      __any__:
+      - *unnamed_or_building
+      - aeroway: *carto_aeroway
+      - tourism: *carto_tourism
+      - amenity: *carto_amenity
+      - shop: __any__
+      - leisure: *carto_leisure
+      - power: *carto_power
+      - man_made: &carto_man_made [ceremonial_gate, chimney, communications_tower, crane, lighthouse, mast, obelisk, silo, storage_tank, telescope, tower, wastewater_plant, water_tower, water_works, windmill, works]
+    attributes: *named_area
+  - source: osm
+    geometry: polygon_point_on_surface
+    min_zoom: *named_area_zoom
+    include_when:
+      natural: [bare_rock, beach, grassland, heath, mud, reef, sand, scree, scrub, shingle, wetland, wood]
+    exclude_when:
+      __any__:
+      - *unnamed_or_building
+      - aeroway: *carto_aeroway
+      - tourism: *carto_tourism
+      - amenity: *carto_amenity
+      - shop: __any__
+      - leisure: *carto_leisure
+      - power: *carto_power
+      - man_made: *carto_man_made
+      - landuse: &carto_landuse [reservoir, basin, recreation_ground, village_green, quarry, vineyard, orchard, cemetery, residential, garages, meadow, grass, allotments, forest, farmyard, farmland, greenhouse_horticulture, retail, industrial, railway, commercial, brownfield, landfill, construction, salt_pond, military, plant_nursery]
+    attributes: *named_area
+  - source: osm
+    geometry: polygon_point_on_surface
+    min_zoom: *named_area_zoom
+    include_when:
+      place: [island, islet]
+    exclude_when:
+      __any__:
+      - *unnamed_or_building
+      - aeroway: *carto_aeroway
+      - tourism: *carto_tourism
+      - amenity: *carto_amenity
+      - shop: __any__
+      - leisure: *carto_leisure
+      - power: *carto_power
+      - man_made: *carto_man_made
+      - landuse: *carto_landuse
+      - natural: &carto_natural [wood, water, mud, wetland, bay, spring, scree, shingle, bare_rock, sand, heath, grassland, scrub, beach, glacier, tree, strait, cape, reef, peninsula]
+    attributes: *named_area
+  - source: osm
+    geometry: polygon_point_on_surface
+    min_zoom: *named_area_zoom
+    include_when:
+      military: danger_area
+    exclude_when:
+      __any__:
+      - *unnamed_or_building
+      - aeroway: *carto_aeroway
+      - tourism: *carto_tourism
+      - amenity: *carto_amenity
+      - shop: __any__
+      - leisure: *carto_leisure
+      - power: *carto_power
+      - man_made: *carto_man_made
+      - landuse: *carto_landuse
+      - natural: *carto_natural
+      - place: &carto_place [island, islet, square]
+      - historic: &carto_historic [memorial, monument, archaeological_site, fort, castle, manor, city_gate]
+    attributes: *named_area
+  - source: osm
+    geometry: polygon_point_on_surface
+    min_zoom: *named_area_zoom
+    include_when:
+      highway: [rest_area, services]
+    exclude_when:
+      __any__:
+      - *unnamed_or_building
+      - aeroway: *carto_aeroway
+      - tourism: *carto_tourism
+      - amenity: *carto_amenity
+      - shop: __any__
+      - leisure: *carto_leisure
+      - power: *carto_power
+      - man_made: *carto_man_made
+      - landuse: *carto_landuse
+      - natural: *carto_natural
+      - place: *carto_place
+      - historic: *carto_historic
+      - military: &carto_military [danger_area, bunker]
+    attributes: *named_area
+  # Carto names a protected area only of the classes it draws, which is its
+  # `kind_detail`.
+  - source: osm
+    geometry: polygon_point_on_surface
+    min_zoom: *named_area_zoom
+    include_when:
+      __any__:
+      - boundary: [aboriginal_lands, national_park]
+      - __all__:
+        - boundary: protected_area
+        - protect_class: &carto_protect_class ['1', '1a', '1b', '2', '3', '4', '5', '6']
+    exclude_when: &before_boundary
+      __any__:
+      - *unnamed_or_building
+      - aeroway: *carto_aeroway
+      - tourism: *carto_tourism
+      - amenity: *carto_amenity
+      - shop: __any__
+      - leisure: *carto_leisure
+      - power: *carto_power
+      - man_made: *carto_man_made
+      - landuse: *carto_landuse
+      - natural: *carto_natural
+      - place: *carto_place
+      - historic: *carto_historic
+      - military: *carto_military
+      - highway: [services, rest_area, bus_stop, elevator, traffic_signals]
+    attributes:
+    - key: kind
+      tag_value: boundary
+    - key: kind_detail
+      tag_value: protect_class
+      include_when:
+        boundary: protected_area
+    - *area
+    - *name
+    - *name_en
+    - *name_de
+    - *name_fr
+    - *name_es
+    - *name_it
+    - *name_ru
+    - *name_pl
+    - *name_uk
+  - source: osm
+    geometry: polygon_point_on_surface
+    min_zoom: *named_area_zoom
+    include_when:
+      leisure: nature_reserve
+    exclude_when:
+      __any__:
+      - *before_boundary
+      - boundary: [aboriginal_lands, national_park]
+      - __all__:
+        - boundary: protected_area
+        - protect_class: *carto_protect_class
+    attributes: *named_area
 
   - source: osm
     geometry: point

@@ -272,7 +272,7 @@ struct VectorTilePointsTests {
         """
         let entries = [fuel, peak, bench, station, entrance].joined(separator: ",")
         let json = #"{"source": "openstreetmap-carto test", "restrictedAccess": ["private", "customers"], "#
-            + #""entries": ["# + entries + "]}"
+            + #""areaLimit": 768000, "entries": ["# + entries + "]}"
         return try VectorTilePointStyle(json: Data(json.utf8))
     }
 

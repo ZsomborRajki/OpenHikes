@@ -1,0 +1,18 @@
+# The areas whose names the vector extras keep (Scripts/lib/vector-extras.yml),
+# as `osmium tags-filter` expressions. osmium cannot ask for a name and a kind
+# at once, and a planet's unnamed forests and fields are most of it, so
+# Scripts/vector-extras.sh cuts these first and keeps the named ones from
+# that cut. Change it with the schema's list of kinds.
+wr/aeroway=aerodrome,apron
+wr/tourism=theme_park,zoo
+wr/amenity=college,grave_yard,kindergarten,marketplace,school,university
+wr/shop=mall
+wr/leisure=garden,ice_rink,marina,park,pitch,sports_centre,stadium,swimming_pool,track,nature_reserve
+wr/power=generator,plant,substation
+wr/man_made=wastewater_plant,water_works,works
+wr/landuse=allotments,brownfield,cemetery,commercial,construction,farmland,farmyard,forest,garages,grass,greenhouse_horticulture,industrial,landfill,meadow,military,orchard,plant_nursery,quarry,railway,recreation_ground,residential,retail,salt_pond,village_green,vineyard
+wr/natural=bare_rock,beach,grassland,heath,mud,reef,sand,scree,scrub,shingle,wetland,wood
+wr/place=island,islet
+wr/military=danger_area
+wr/highway=rest_area,services
+wr/boundary=aboriginal_lands,national_park,protected_area

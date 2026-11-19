@@ -120,6 +120,16 @@ trap 'rm -rf "$SCRATCH"' EXIT
 
 osmium tags-filter "$PLANET" \
   --expressions="$REPO_ROOT/Scripts/lib/vector-extras.filter" \
+  --output="$SCRATCH/points.osm.pbf" --overwrite
+# The named areas: every area of the kinds whose names the extras keep, then
+# the named ones among them, which osmium cannot ask for in one pass.
+osmium tags-filter "$PLANET" \
+  --expressions="$REPO_ROOT/Scripts/lib/vector-extras-areas.filter" \
+  --output="$SCRATCH/areas.osm.pbf" --overwrite
+osmium tags-filter "$SCRATCH/areas.osm.pbf" wr/name \
+  --output="$SCRATCH/named-areas.osm.pbf" --overwrite
+rm "$SCRATCH/areas.osm.pbf"
+osmium merge "$SCRATCH/points.osm.pbf" "$SCRATCH/named-areas.osm.pbf" \
   --output="$WORK/extras.osm.pbf" --overwrite
 
 planetiler generate-custom \

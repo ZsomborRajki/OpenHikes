@@ -26,9 +26,14 @@ VECTOR="$REPO_ROOT/OpenHikes/Tiles/Vector"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
+mkdir "$WORK/carto"
 curl --fail --silent --show-error --location \
   "https://github.com/gravitystorm/openstreetmap-carto/archive/refs/tags/$CARTO_VERSION.tar.gz" \
-  | tar -xz -C "$WORK" --strip-components=1
+  | tar -xz -C "$WORK/carto" --strip-components=1
 
-CARTO_VERSION="$CARTO_VERSION" xcrun swift "$REPO_ROOT/Scripts/lib/carto-points.swift" \
-  "$WORK" "$VECTOR/VectorTilePoints.json" "$VECTOR/CartoIcons.xcassets"
+# Compiled rather than run as a script: evaluating every kind again for each
+# range of an area's size takes minutes compiled, and many times that
+# interpreted.
+xcrun swiftc -O -o "$WORK/carto-points" "$REPO_ROOT/Scripts/lib/carto-points.swift"
+CARTO_VERSION="$CARTO_VERSION" "$WORK/carto-points" \
+  "$WORK/carto" "$VECTOR/VectorTilePoints.json" "$VECTOR/CartoIcons.xcassets"
