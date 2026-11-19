@@ -660,6 +660,40 @@ nonisolated extension AppLaunchEnvironment {
 
 }
 
+// MARK: - A stand-in country list
+
+/// Parsed here rather than in ``AppLaunchEnvironment/Configuration``, for the
+/// room the extensions here were made for.
+nonisolated extension AppLaunchEnvironment {
+    private static let offlineCountriesPrefix = "--ui-test-offline-countries="
+
+    /// Which stand-in list of countries to download this launch asked for, or
+    /// `nil` for every launch that did not.
+    ///
+    /// The same shape as ``trailPointScenarioName``: a launch running tests
+    /// gets no tile server and no download session, so *Offline Maps* lists
+    /// nothing in any suite unless a scenario names this. Only the list is
+    /// stood in for; the session stays absent, so nothing downloads. See
+    /// ``SeededOfflineCountryServer``.
+    static let offlineCountriesScenarioName = offlineCountriesScenarioName(
+        askedFor: ProcessInfo.processInfo.arguments,
+        isUITesting: isUITesting
+    )
+
+    /// The scenario `--ui-test-offline-countries=` names, only alongside
+    /// `--ui-testing` in a `DEBUG` build, as every such argument is.
+    static func offlineCountriesScenarioName(askedFor arguments: [String], isUITesting: Bool) -> String? {
+        #if DEBUG
+        guard isUITesting,
+              let argument = arguments.first(where: { $0.hasPrefix(offlineCountriesPrefix) }) else { return nil }
+        let name = String(argument.dropFirst(offlineCountriesPrefix.count))
+        return name.isEmpty ? nil : name
+        #else
+        return nil
+        #endif
+    }
+}
+
 // MARK: - A shorter Auto-Pause stop
 
 /// Parsed here rather than in ``AppLaunchEnvironment/Configuration``, for the
