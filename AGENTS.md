@@ -1207,9 +1207,12 @@ a change to recording, the map, the sheet or the render path; the PR template,
       gives a named area's point without one, from a zoom of its own
       choosing, so where the extras give an area's point, the basemap's
       point of the same name at the same spot is left out. The extras file
-      an area under the first of its tags Carto's query tries. Carto names a
-      protected area too large for a point along its edge, from zoom 13; the
-      map does not, because the edges as areas tripled the extras.
+      an area under the first of its tags Carto's query tries, and below
+      zoom 10 under its low-zoom query's, which tries fewer keys in another
+      order: a national park that is also a park is a national park there.
+      Carto names a protected area too large for a point along its edge,
+      from zoom 13; the map does not, because the edges as areas tripled the
+      extras.
     - **Room is claimed in Carto's layer order**: place names, the stations
       (each one's icon, then its name), the points' icons, the names along
       streets and paths, then their one-way arrows, the points' names and

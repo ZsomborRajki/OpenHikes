@@ -121,24 +121,16 @@ layers:
   # is mostly a building. A building is named by its own layer in Carto, not
   # as land, so none is kept here.
   #
+  # Carto's points begin at zoom 10, and so do these. Below it Carto names
+  # areas from a query of its own, which tries fewer keys in another order,
+  # and the features after these file an area by that one through zoom 9.
+  #
   # An area comes in at the first zoom it covers 3,000 square pixels, the
   # least Carto names an area at, and at zoom 15 at the latest, which every
   # deeper zoom is drawn from.
   - source: osm
     geometry: polygon_point_on_surface
     min_zoom: &named_area_zoom
-    - if: '${ feature.area("z0 tile2") * 65536.0 * 256.0 > 3000.0 }'
-      value: 4
-    - if: '${ feature.area("z0 tile2") * 65536.0 * 1024.0 > 3000.0 }'
-      value: 5
-    - if: '${ feature.area("z0 tile2") * 65536.0 * 4096.0 > 3000.0 }'
-      value: 6
-    - if: '${ feature.area("z0 tile2") * 65536.0 * 16384.0 > 3000.0 }'
-      value: 7
-    - if: '${ feature.area("z0 tile2") * 65536.0 * 65536.0 > 3000.0 }'
-      value: 8
-    - if: '${ feature.area("z0 tile2") * 65536.0 * 262144.0 > 3000.0 }'
-      value: 9
     - if: '${ feature.area("z0 tile2") * 65536.0 * 1048576.0 > 3000.0 }'
       value: 10
     - if: '${ feature.area("z0 tile2") * 65536.0 * 4194304.0 > 3000.0 }'
@@ -383,7 +375,7 @@ layers:
       - historic: *carto_historic
       - military: *carto_military
       - highway: [services, rest_area, bus_stop, elevator, traffic_signals]
-    attributes:
+    attributes: &protected_area
     - key: kind
       tag_value: boundary
     - key: kind_detail
@@ -408,6 +400,106 @@ layers:
     exclude_when:
       __any__:
       - *before_boundary
+      - boundary: [aboriginal_lands, national_park]
+      - __all__:
+        - boundary: protected_area
+        - protect_class: *carto_protect_class
+    attributes: *named_area
+
+  # The same areas' names below zoom 10, filed as Carto's `text-poly-low-zoom`
+  # files them: by its own few keys, in its own order, and never a building's.
+  # It tries the forests, military land and farmland first, then a danger
+  # area, then the natural land, then an island, then a protected area, and
+  # last a nature reserve, and nothing else claims an area there: a national
+  # park that is also a park, or an island that is also grass, is named as
+  # the national park or the island, where from zoom 10 it is a park or grass.
+  # Farmland, a glacier and water claim their areas but are not kept: Carto
+  # names no farmland before zoom 10, and the basemap names glaciers and water.
+  - source: osm
+    geometry: polygon_point_on_surface
+    min_zoom: &low_zoom_named_area_zoom
+    - if: '${ feature.area("z0 tile2") * 65536.0 * 256.0 > 3000.0 }'
+      value: 4
+    - if: '${ feature.area("z0 tile2") * 65536.0 * 1024.0 > 3000.0 }'
+      value: 5
+    - if: '${ feature.area("z0 tile2") * 65536.0 * 4096.0 > 3000.0 }'
+      value: 6
+    - if: '${ feature.area("z0 tile2") * 65536.0 * 16384.0 > 3000.0 }'
+      value: 7
+    - if: '${ feature.area("z0 tile2") * 65536.0 * 65536.0 > 3000.0 }'
+      value: 8
+    - if: '${ feature.area("z0 tile2") * 65536.0 * 262144.0 > 3000.0 }'
+      value: 9
+    # Too small to name before zoom 10, where the features above take it.
+    - else: 10
+    max_zoom: 9
+    include_when:
+      landuse: [forest, military]
+    exclude_when: &unnamed_or_any_building
+      __any__:
+      - name: ''
+      - building: __any__
+    attributes: *named_area
+  - source: osm
+    geometry: polygon_point_on_surface
+    min_zoom: *low_zoom_named_area_zoom
+    max_zoom: 9
+    include_when:
+      military: danger_area
+    exclude_when:
+      __any__:
+      - *unnamed_or_any_building
+      - landuse: &low_zoom_landuse [forest, military, farmland]
+    attributes: *named_area
+  - source: osm
+    geometry: polygon_point_on_surface
+    min_zoom: *low_zoom_named_area_zoom
+    max_zoom: 9
+    include_when:
+      natural: [wood, sand, scree, shingle, bare_rock]
+    exclude_when:
+      __any__:
+      - *unnamed_or_any_building
+      - landuse: *low_zoom_landuse
+      - military: danger_area
+    attributes: *named_area
+  - source: osm
+    geometry: polygon_point_on_surface
+    min_zoom: *low_zoom_named_area_zoom
+    max_zoom: 9
+    include_when:
+      place: island
+    exclude_when: &low_zoom_before_place
+      __any__:
+      - *unnamed_or_any_building
+      - landuse: *low_zoom_landuse
+      - military: danger_area
+      - natural: [wood, glacier, sand, scree, shingle, bare_rock, water]
+    attributes: *named_area
+  - source: osm
+    geometry: polygon_point_on_surface
+    min_zoom: *low_zoom_named_area_zoom
+    max_zoom: 9
+    include_when:
+      __any__:
+      - boundary: [aboriginal_lands, national_park]
+      - __all__:
+        - boundary: protected_area
+        - protect_class: *carto_protect_class
+    exclude_when: &low_zoom_before_boundary
+      __any__:
+      - *low_zoom_before_place
+      - place: island
+    attributes: *protected_area
+  - source: osm
+    geometry: polygon_point_on_surface
+    min_zoom: *low_zoom_named_area_zoom
+    max_zoom: 9
+    include_when:
+      leisure: nature_reserve
+    exclude_when:
+      __any__:
+      - *low_zoom_before_boundary
       - boundary: [aboriginal_lands, national_park]
       - __all__:
         - boundary: protected_area
