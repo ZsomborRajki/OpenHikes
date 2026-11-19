@@ -293,6 +293,9 @@ final class SheetPresentation {
     @ObservationIgnored private var placesAroundSearches = SheetRetained<SheetRoute, HikePlacesAroundSearch>()
     /// The same, for *Places Nearby* — see ``HikePlacesNearbySession``.
     @ObservationIgnored private var placesNearbySessions = SheetRetained<SheetRoute, HikePlacesNearbySession>()
+    /// The same, for *Offline Maps*' search, order and open countries — see
+    /// ``OfflineCountriesListState``.
+    @ObservationIgnored private var offlineCountriesLists = SheetRetained<SheetRoute, OfflineCountriesListState>()
     /// The same, for a shared hike's preview: what it has loaded, the
     /// downloads still loading it and the import — see
     /// ``CommunityPreviewSession``.
@@ -506,6 +509,10 @@ final class SheetPresentation {
 
     func placesNearby(for route: SheetRoute) -> HikePlacesNearbySession {
         placesNearbySessions.value(for: route) { HikePlacesNearbySession() }
+    }
+
+    func offlineCountriesList(for route: SheetRoute) -> OfflineCountriesListState {
+        offlineCountriesLists.value(for: route) { OfflineCountriesListState() }
     }
 
     /// The visit to `listing`'s preview. Keyed on the route
@@ -741,6 +748,7 @@ final class SheetPresentation {
         // lets the map go.
         for search in placesAroundSearches.release(keeping: isOnPath) { search.cancel() }
         placesNearbySessions.release(keeping: isOnPath)
+        offlineCountriesLists.release(keeping: isOnPath)
         // And a preview's downloads, which go with its route rather than with
         // its screen: a turn of the phone takes the screen away and leaves the
         // route, and a preview taken off the stack from under its gallery is

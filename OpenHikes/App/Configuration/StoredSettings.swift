@@ -31,8 +31,10 @@ import OpenHikesData
 /// maker's route-layer switch keep their `@AppStorage` bindings — a screen
 /// that is only up while it is being used can afford them — and their writes
 /// reach this through the
-/// notification, as iCloud's copy does through ``SyncedSettingsMirror``. The
-/// list's order is the exception, written here by the list's own menu.
+/// notification, as iCloud's copy does through ``SyncedSettingsMirror``. Two
+/// are written here: the list's order, by the list's own menu, and the map,
+/// by the row on *Offline Maps* that goes back to the one its downloads are
+/// for.
 @Observable
 final class StoredSettings {
     /// The chosen map — see ``TileProvider/renderable(id:entitlement:)`` for
@@ -65,6 +67,13 @@ final class StoredSettings {
         preferenceObservation.observe(defaults: defaults) { [weak self] in
             self?.refresh()
         }
+    }
+
+    /// Chooses another map, as a card on *Map Modes* does.
+    func setTileProviderID(_ id: String) {
+        guard id != tileProviderID else { return }
+        tileProviderID = id
+        defaults.set(id, forKey: SettingsKey.tileProviderID)
     }
 
     /// Puts the hikes list in another order, and remembers it.

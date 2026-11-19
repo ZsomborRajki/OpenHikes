@@ -6,7 +6,9 @@
 //  over whatever the sheet shows, so it is pushed on top of that, with the
 //  sheet at its middle so the outlines behind it are in view; and opened
 //  again while it is already further down, it is come back to rather than
-//  pushed twice.
+//  pushed twice. Its search field takes the whole sheet, and what the list
+//  holds — the search, the order picked, the countries open — lasts through a
+//  turn of the phone and goes with the screen.
 //
 
 @testable import OpenHikes
@@ -49,5 +51,43 @@ struct SheetOfflineCountriesTests {
 
         presentation.showOfflineCountries()
         #expect(presentation.path == [.offlineCountries])
+    }
+
+    @Test("the list's search field raises the sheet to its full height")
+    func searching() {
+        let presentation = SheetPresentation(detent: .medium)
+        presentation.path = [.offlineCountries]
+
+        presentation.makeRoomToSearch()
+
+        #expect(presentation.detent == .large)
+        #expect(presentation.isFullHeight)
+    }
+
+    /// A turn moves the list between the sheet and the side panel, which
+    /// builds it again; as its own state, the search and the order went.
+    @Test("the list's search, order and open countries outlive a turn, and go with the screen")
+    func listOutlivesATurn() {
+        let presentation = SheetPresentation(detent: .medium)
+        presentation.path = [.offlineCountries]
+        let list = presentation.offlineCountriesList(for: .offlineCountries)
+        list.query = "Bav"
+        list.choose(.largest, over: .nearest)
+        list.expanded = ["US"]
+
+        for layout in [SheetLayout.sidePanel, .bottomSheet] {
+            presentation.layout = layout
+            #expect(presentation.offlineCountriesList(for: .offlineCountries) === list)
+            #expect(list.query == "Bav" && list.chosenSort == .largest && list.expanded == ["US"])
+        }
+
+        presentation.path.append(.totals)
+        #expect(presentation.offlineCountriesList(for: .offlineCountries) === list, "a screen pushed over it keeps it")
+
+        presentation.path = []
+        presentation.path = [.offlineCountries]
+        let next = presentation.offlineCountriesList(for: .offlineCountries)
+        #expect(next !== list, "the next visit opens afresh")
+        #expect(next.query.isEmpty && next.chosenSort == nil && next.expanded.isEmpty)
     }
 }

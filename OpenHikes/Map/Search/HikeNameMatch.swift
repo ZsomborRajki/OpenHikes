@@ -9,6 +9,8 @@
 //  ``HikeSearch`` ranks the hiker's own hikes against what they type into the
 //  sheet, and it is mostly a cache: when to rank again, and what to keep. This
 //  is the ranking it caches — the rule itself, apart from the bookkeeping.
+//  *Offline Maps* ranks its areas against its own field by the same rule
+//  (``OfflineCountryDirectory``).
 //
 //  ## What does not use it
 //

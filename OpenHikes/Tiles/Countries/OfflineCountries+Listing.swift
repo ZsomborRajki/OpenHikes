@@ -3,10 +3,10 @@
 //  OpenHikes
 //
 //  What *Offline Maps* and the hike screen read off ``OfflineCountries``: the
-//  areas to list, each named in the app's language, how they fall into the
-//  list's sections, with a split country's regions all under it, and which
-//  a line crosses or a hiker is near. Worked out here rather than in the
-//  views, so that a suite can hold each of them.
+//  areas to list, each named in the app's language, which of them the list
+//  puts first, which a line crosses and how far one is from a hiker. Worked
+//  out here rather than in the views, so that a suite can hold each of them.
+//  The order the list is in is ``OfflineCountryDirectory``'s.
 //
 
 import CoreLocation
@@ -16,12 +16,15 @@ import OpenHikesData
 extension OfflineCountries {
     /// Every area to list: those offered, and those downloaded that no
     /// longer are, by name in the app's language.
-    var listed: [Country] {
+    var listed: [Country] { Self.listed(offered: offered, installed: installed) }
+
+    /// The same, of what a caller has already read.
+    nonisolated static func listed(offered: [Country], installed: [String: Record]) -> [Country] {
         var byID = Dictionary(offered.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         for record in installed.values where byID[record.country.id] == nil {
             byID[record.country.id] = record.country
         }
-        return Self.sortedByName(Array(byID.values))
+        return sortedByName(Array(byID.values))
     }
 
     /// The bytes every downloaded area takes.
@@ -43,6 +46,18 @@ extension OfflineCountries {
     /// What downloading `country` costs, as *Extra Detail* stands.
     func byteCount(of country: Country) -> Int64 {
         country.byteCount(withDetail: includesDetail)
+    }
+
+    /// What `country` takes where it is downloaded, and costs where it is
+    /// not: the figure its row shows, and what largest first orders by.
+    func listedByteCount(of country: Country) -> Int64 {
+        installed[country.id]?.byteCount ?? byteCount(of: country)
+    }
+
+    /// Whether `provider` is a map the downloaded areas are drawn on: the
+    /// one drawn from the tiles they are cut from.
+    nonisolated static func areDrawn(on provider: TileProvider) -> Bool {
+        provider.vectorSource != nil
     }
 
     // MARK: - Names
@@ -77,26 +92,14 @@ extension OfflineCountries {
 
     // MARK: - Sections
 
-    /// *Offline Maps*' three sections: what is downloaded or coming down,
-    /// what is near `coordinate`, then every other country, with each
-    /// country split by region listed with all its regions under it.
-    func sections(of listed: [Country], near coordinate: CLLocationCoordinate2D?) -> OfflineCountrySections {
-        let held = listed.filter { isInstalled($0.id) || downloads[$0.id] != nil }
-        let heldIDs = Set(held.map(\.id))
-        let nearby = coordinate.map { self.nearby($0) }?.filter { !heldIDs.contains($0.id) } ?? []
-        let nearbyIDs = Set(nearby.map(\.id))
-        var rest: [OfflineCountryListing] = []
-        var groups: [String: [Country]] = [:]
-        for country in listed {
-            if let group = country.group {
-                groups[group, default: []].append(country)
-            } else if !heldIDs.contains(country.id), !nearbyIDs.contains(country.id) {
-                rest.append(.area(country))
-            }
-        }
-        rest += groups.map { .group(id: $0.key, regions: Self.sortedByName($0.value)) }
-        rest.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-        return OfflineCountrySections(held: held, nearby: nearby, rest: rest)
+    /// *Offline Maps*' list in `sort`'s order: what is downloaded or coming
+    /// down, then every other area as the order heads it.
+    func sections(of directory: OfflineCountryDirectory, by sort: OfflineCountrySort) -> OfflineCountrySections {
+        directory.sections(
+            by: sort,
+            isHeld: { isInstalled($0.id) || downloads[$0.id] != nil },
+            byteCount: { listedByteCount(of: $0) }
+        )
     }
 
     // MARK: - Where
@@ -124,28 +127,18 @@ extension OfflineCountries {
         }
         return found
     }
+}
 
-    /// The areas nearest `coordinate`: the one it is in first, then those
-    /// within `kilometers` of it.
+nonisolated extension OfflineCountryManifest.Country {
+    /// How far `coordinate` is from the outline, in kilometres: none inside
+    /// it. On a flat map round `coordinate`, near enough for the few hundred
+    /// kilometres *Nearby* reaches, and to order the areas beyond by.
     ///
     /// Measured to the outline, not the bounds. A box holds much that is not
     /// the area: France's runs from the Antilles to Réunion, and an area
     /// across the antimeridian — Alaska, Chukotka, Fiji, New Zealand — has a
     /// box round the whole globe, which would put it next to every hiker at
     /// its latitudes.
-    func nearby(_ coordinate: CLLocationCoordinate2D, within kilometers: Double = 250) -> [Country] {
-        let distances = listed.compactMap { country -> (Country, Double)? in
-            let distance = country.kilometers(from: coordinate)
-            return distance <= kilometers ? (country, distance) : nil
-        }
-        return distances.sorted { $0.1 < $1.1 }.map(\.0)
-    }
-}
-
-nonisolated extension OfflineCountryManifest.Country {
-    /// How far `coordinate` is from the outline, in kilometres: none inside
-    /// it. On a flat map round `coordinate`, near enough for the few hundred
-    /// kilometres *Nearby* reaches.
     func kilometers(from coordinate: CLLocationCoordinate2D) -> Double {
         if contains(longitude: coordinate.longitude, latitude: coordinate.latitude) { return 0 }
         let shrink = cos(coordinate.latitude * .pi / 180)
@@ -183,49 +176,5 @@ nonisolated extension OfflineCountryManifest.Country {
         let length = dx * dx + dy * dy
         let along = length > 0 ? min(max(-(start.0 * dx + start.1 * dy) / length, 0), 1) : 0
         return hypot(start.0 + along * dx, start.1 + along * dy)
-    }
-}
-
-/// What *Offline Maps* lists, in the order it lists it.
-struct OfflineCountrySections: Equatable {
-    var held: [OfflineCountryManifest.Country]
-    var nearby: [OfflineCountryManifest.Country]
-    var rest: [OfflineCountryListing]
-
-    /// Where the list goes to show `id`: its row in *Downloaded* or
-    /// *Nearby* if it has one there, else its line in *All Countries*,
-    /// opening the country a region is under.
-    func scrollTarget(for id: String) -> (rowID: String, opening: String?) {
-        if (held + nearby).contains(where: { $0.id == id }) { return (id, nil) }
-        for case let .group(group, regions) in rest where regions.contains(where: { $0.id == id }) {
-            return (Self.groupRowID(id), group)
-        }
-        return (id, nil)
-    }
-
-    /// A region's row under its country, apart from the same region's row in
-    /// *Downloaded* or *Nearby*.
-    static func groupRowID(_ id: String) -> String { "group-\(id)" }
-}
-
-/// A line of *All Countries*: an area, or a country split by region, which
-/// holds all its regions.
-enum OfflineCountryListing: Equatable, Identifiable {
-    case area(OfflineCountryManifest.Country)
-    case group(id: String, regions: [OfflineCountryManifest.Country])
-
-    var id: String {
-        switch self {
-        case let .area(country): country.id
-        case let .group(id, _): id
-        }
-    }
-
-    /// What the line is listed under, in the app's language.
-    var name: String {
-        switch self {
-        case let .area(country): OfflineCountries.name(of: country)
-        case let .group(id, _): OfflineCountries.name(ofCountry: id)
-        }
     }
 }

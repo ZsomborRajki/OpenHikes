@@ -453,7 +453,7 @@ private extension HikeDetailView {
                         claim: offlineDownloadClaim
                     )
                 }
-            } else if activeProvider.vectorSource != nil {
+            } else if OfflineCountries.areDrawn(on: activeProvider) {
                 // The OpenHikes map downloads whole countries — see
                 // ``HikeOfflineCountryTile``.
                 HikeOfflineCountryTile(line: line)

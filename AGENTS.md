@@ -988,6 +988,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
     `askToContinueInForeground(_:)` for an intent's foreground hand-off.
   - `trailStopsReorderable(_:move:)`, for the one iOS 27 API: `reorderable()`
     on 27, `onMove` below.
+  - `sectionIndexLetter(_:isShown:)`, for the letters down the edge of a
+    list by name, which SwiftUI draws from 26. Below it the sections keep
+    their headers and the list has no index.
 - **A fallback with logic in it is tested on the current simulator.** Each
   wrapper exposes its earlier form, so a suite can hold it to the same
   contract on a release that would never run it: `EarlierObservations`,
@@ -1252,7 +1255,7 @@ owner, on the main actor.
   no ISO code join the country `attach` names, or are left out.
 - **Zoom 14 always, zoom 15 with *Extra Detail*.** An area is four files:
   the basemap and the extras to zoom 14, which every download takes, and
-  both at zoom 15, which the switch at the foot of the list adds
+  both at zoom 15, which the switch at the head of the list adds
   (`SettingsKey.offlineCountriesDetail`, on by default). Zoom 15 is half an
   area's bytes, and it is where the buildings and most of the points are: a
   water tap, a toilet, a bench, an information board. Without it the map
@@ -1313,6 +1316,21 @@ owner, on the main actor.
   own area's code (`OfflineCountryManifest.File.hasSafeName`), and an area
   listing one that is not is left off whole, as is one cut from a planet
   schema the rasterizer does not draw.
+- **The list says which map the downloads are for.** Only the OpenHikes map
+  is cut by country, and the outlines are drawn over whichever map is up. So
+  the head of the list says it always, and while another map is selected a
+  row under that names the map and goes back to the OpenHikes one
+  (`OfflineCountries.areDrawn(on:)`, which the hike screen's tile asks too).
+- **The list is searched, and in one of three orders**
+  (`OfflineCountryDirectory`). It opens nearest first where the hiker's
+  position is known as it comes up, and by name where it is not; largest
+  first is the third (`OfflineCountrySort`). The choice lasts as long as the
+  list is up. By name the countries stand under their letters, in the app's
+  language, with the letters down the list's edge to jump by while the list
+  has its full height, and a split country is one line that holds its
+  regions. The other two orders and a
+  search are flat, a region named with its country. What is downloaded or
+  coming down is first in each order.
 - **Free.** Nothing on the download path checks an entitlement.
 - **No suite reaches the server or the session.**
   `OfflineCountries.forThisLaunch()` has neither under `isRunningTests`, and

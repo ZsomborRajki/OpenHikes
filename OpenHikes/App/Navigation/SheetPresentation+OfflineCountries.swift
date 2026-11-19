@@ -2,10 +2,11 @@
 //  SheetPresentation+OfflineCountries.swift
 //  OpenHikes
 //
-//  *Offline Maps* over whatever the sheet shows, from *Map Modes*.
+//  *Offline Maps* over whatever the sheet shows, from *Map Modes*, and the
+//  whole sheet for its search field.
 //
 
-import Foundation
+import SwiftUI
 
 extension SheetPresentation {
     /// Pushes *Offline Maps*, or comes back to it where it is already open
@@ -21,5 +22,13 @@ extension SheetPresentation {
             next.append(.offlineCountries)
         }
         path = next
+    }
+
+    /// Raises the sheet to its full height for the list's search field, as
+    /// the sheet's own field does: at the middle the keyboard would cover
+    /// what the search finds.
+    func makeRoomToSearch() {
+        guard detent != .large else { return }
+        withAnimation { detent = .large }
     }
 }

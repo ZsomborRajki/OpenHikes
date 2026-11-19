@@ -77,4 +77,17 @@ struct StoredSettingsTests {
         #expect(defaults.string(forKey: SettingsKey.hikeListSort) == HikeListSort.longest.rawValue)
         #expect(StoredSettings(defaults: defaults).hikeListSort == HikeListSort.longest.rawValue)
     }
+
+    @Test("a map chosen here is the one Map Modes and the next launch read")
+    func mapIsWrittenThrough() throws {
+        let defaults = try defaults()
+        defaults.set("stamen-terrain", forKey: SettingsKey.tileProviderID)
+        let settings = StoredSettings(defaults: defaults)
+
+        settings.setTileProviderID(TileProvider.openStreetMap.id)
+
+        #expect(settings.tileProviderID == TileProvider.openStreetMap.id)
+        #expect(defaults.string(forKey: SettingsKey.tileProviderID) == TileProvider.openStreetMap.id)
+        #expect(StoredSettings(defaults: defaults).tileProviderID == TileProvider.openStreetMap.id)
+    }
 }
