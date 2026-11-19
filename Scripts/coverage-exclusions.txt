@@ -229,7 +229,10 @@
 # and `OfflineCountrySort`'s (`OfflineCountryDirectoryTests`), which map the
 # downloads are drawn on is `OfflineCountries.areDrawn(on:)`'s
 # (`OfflineCountriesListingTests`), and the way back to it is
-# `StoredSettings.setTileProviderID(_:)`'s (`StoredSettingsTests`).
+# `StoredSettings.setTileProviderID(_:)`'s (`StoredSettingsTests`). The ✕
+# that empties a search field arrived with them too, shared by that bar and
+# the map sheet's own field (`ClearFieldButton`), body code with nothing to
+# decide.
 #
 # The UI suites still exist and still run locally:
 #
@@ -344,3 +347,4 @@ OpenHikes/Tiles/Countries/OfflineCountriesBar.swift
 OpenHikes/Tiles/Countries/OfflineCountriesHead.swift
 OpenHikes/General/SortMenu.swift
 OpenHikes/General/SectionIndex.swift
+OpenHikes/General/ClearFieldButton.swift

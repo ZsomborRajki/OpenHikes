@@ -57,16 +57,7 @@ struct OfflineCountriesBar: View {
                 .textInputAutocapitalization(.words)
                 #endif
             if !query.isEmpty {
-                Button {
-                    query = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
-                        .accessibilityHidden(true)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Clear search")
-                .accessibilityIdentifier("offline-maps-clear-search")
+                ClearFieldButton(identifier: "offline-maps-clear-search") { query = "" }
             }
         }
         .padding(Self.fieldPadding)

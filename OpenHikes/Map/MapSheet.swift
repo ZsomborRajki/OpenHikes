@@ -297,20 +297,11 @@ struct MapSheet: View {
                 #endif
 
             if !searchText.isEmpty {
-                Button {
+                ClearFieldButton(identifier: "clear-search-button") {
                     searchTask?.cancel()
                     searchTask = nil
                     searchText = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
-                        .accessibilityHidden(true)
                 }
-                .buttonStyle(.plain)
-                // The glyph above is the button's only content and is hidden,
-                // which left this announcing itself as an unnamed button.
-                .accessibilityLabel("Clear search")
-                .accessibilityIdentifier("clear-search-button")
             }
         }
         .padding(10)
