@@ -17,10 +17,12 @@
 //  otherwise left out, for the reason `MapSheetHikes` gives for its own
 //  closures: what each setter writes to outlives any one copy of its list.
 //  The hikes list's writes to `StoredSettings` and through its `@State` and
-//  `@Query`; *Offline Maps*' to its ``OfflineCountriesListState``. What each
-//  captures from its pass is the order in force, which this holds equal, and
-//  whether the hand-made order is, which ``title`` and ``value`` say. So an
-//  older binding does exactly what a newer one would.
+//  `@Query`, which an earlier copy of the list reads as it is now
+//  (`QueryEarlierCopyTests`); *Offline Maps*' to its
+//  ``OfflineCountriesListState``. What each captures from its pass is the
+//  order in force, which this holds equal, and whether the hand-made order
+//  is, which ``title`` and ``value`` say. So an older binding does exactly
+//  what a newer one would.
 //
 
 import SwiftUI
