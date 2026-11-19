@@ -16,6 +16,10 @@
 # their count. Cut in the parts its source was uploaded in, the same file
 # carries the source's ETag, which is what lets a copy of Protomaps' build be
 # held to Protomaps' own, end to end, without reading it back.
+#
+# OPENHIKES_R2_MIB_PER_SECOND caps how fast the bucket is sent to and read
+# from, in MiB a second, so a world of uploads leaves the connection usable.
+# Parts sent side by side share the cap.
 
 # The caller's own `die` reports, so a failure here reads as the caller's.
 r2_fail() {
@@ -33,6 +37,12 @@ r2_load_keys() {
     # shellcheck disable=SC1090
     . "$env_file"
     set +a
+    R2_RATE_BYTES=""
+    if [[ -n "${OPENHIKES_R2_MIB_PER_SECOND:-}" ]]; then
+        [[ "$OPENHIKES_R2_MIB_PER_SECOND" =~ ^[1-9][0-9]*$ ]] \
+            || r2_fail "OPENHIKES_R2_MIB_PER_SECOND is $OPENHIKES_R2_MIB_PER_SECOND, not a whole number of MiB"
+        R2_RATE_BYTES=$(( OPENHIKES_R2_MIB_PER_SECOND * 1024 * 1024 ))
+    fi
 }
 
 # The S3 URL of a key, or of the bucket itself for none.
@@ -41,8 +51,10 @@ r2_url() {
 }
 
 r2_curl() {
+    local rate=()
+    [[ -z "${R2_RATE_BYTES:-}" ]] || rate=(--limit-rate "$R2_RATE_BYTES")
     curl -s --aws-sigv4 "aws:amz:auto:s3" --user "$R2_ACCESS_KEY_ID:$R2_SECRET_ACCESS_KEY" \
-        -H "x-amz-content-sha256: UNSIGNED-PAYLOAD" "$@"
+        -H "x-amz-content-sha256: UNSIGNED-PAYLOAD" ${rate[@]+"${rate[@]}"} "$@"
 }
 
 # A PUT to the bucket, asked again when R2 answers a server error or the
@@ -139,9 +151,11 @@ r2_put_parts() {
     url="$url?uploadId=$(r2_encode "$upload_id")"
     work="$(mktemp -d "${TMPDIR:-/tmp}/r2-parts.XXXXXX")"
     echo "r2: sending $key in $parts parts of $part_mib MiB"
+    local parallel="${OPENHIKES_R2_PARALLEL:-8}" part_rate=""
+    [[ -z "${R2_RATE_BYTES:-}" ]] || part_rate=$(( R2_RATE_BYTES / parallel ))
     export -f r2_curl _r2_put_part
     export R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY OPENHIKES_R2_RETRY_SECONDS
-    if ! seq 1 "$parts" | xargs -P "${OPENHIKES_R2_PARALLEL:-8}" -I {} \
+    if ! seq 1 "$parts" | R2_RATE_BYTES="$part_rate" xargs -P "$parallel" -I {} \
         bash -c '_r2_put_part "$@" || exit 255' _ "$file" "$url" "$part_mib" {} "$work" "$parts"; then
         _r2_abandon "$url" "$work"
         r2_fail "the upload of $key stopped; nothing was written"

@@ -29,7 +29,8 @@
 # `publish`). It signs with R2's S3 keys, read from OPENHIKES_R2_ENV (default
 # ~/.config/openhikes/r2-openhikes-tiles.env: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID,
 # R2_SECRET_ACCESS_KEY, R2_BUCKET), and sends the file in one request, which
-# R2 takes up to 5 GiB.
+# R2 takes up to 5 GiB, no faster than OPENHIKES_R2_MIB_PER_SECOND MiB a second
+# where that is set (Scripts/lib/r2.sh).
 #
 # It is a development tool and is in no gate. It needs osmium and Planetiler
 # (`brew install osmium-tool planetiler`). On an M4 Max the planet took 23
@@ -76,8 +77,13 @@ upload() {
     200) echo "vector-extras: $key is already in $R2_BUCKET; build from a newer planet" >&2; exit 1 ;;
     *) echo "vector-extras: R2 answered $existing when asked for $key" >&2; exit 1 ;;
   esac
-  local status
-  status="$(curl -s -o /dev/null -w "%{http_code}" "${signing[@]}" -H "If-None-Match: *" \
+  local status rate=()
+  if [[ -n "${OPENHIKES_R2_MIB_PER_SECOND:-}" ]]; then
+    [[ "$OPENHIKES_R2_MIB_PER_SECOND" =~ ^[1-9][0-9]*$ ]] \
+      || { echo "vector-extras: OPENHIKES_R2_MIB_PER_SECOND is not a whole number of MiB" >&2; exit 1; }
+    rate=(--limit-rate "$(( OPENHIKES_R2_MIB_PER_SECOND * 1024 * 1024 ))")
+  fi
+  status="$(curl -s -o /dev/null -w "%{http_code}" "${signing[@]}" ${rate[@]+"${rate[@]}"} -H "If-None-Match: *" \
     -H "Content-Type: application/octet-stream" -T "$archive" "$url")"
   case "$status" in
     200) ;;

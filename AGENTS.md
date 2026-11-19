@@ -1285,6 +1285,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
        new archives and puts it up (*The offline countries*).
     5. `prune` in both scripts deletes what no manifest names, once the apps
        have read the new manifests.
+
+    `OPENHIKES_R2_MIB_PER_SECOND` caps how fast any of them sends to the
+    bucket, so a world of uploads leaves the connection usable.
   - **The app moves without a release** (`VectorTileArchives`). It reads the
     manifest when it comes to the front, at most hourly, and when an archive
     answers 410, the server's word for a name it does not have: the tile
@@ -1342,14 +1345,18 @@ owner, on the main actor.
   hours. It reads each cut back through the app's reader before listing it.
   `publish` builds and uploads every area a batch at a time, and goes on
   where a stopped run left off; `prune` then deletes the older build's
-  files. `upload` puts the files under
+  files.
+- **A build is named for the later of its archives' days**, the basemap's
+  and the extras', so new extras over the same basemap make a newer build,
+  which an installed app offers as an update. `upload` puts its files under
   `countries/` as `<area>-<build>.pmtiles`, `-extras-`, `-detail-` and
   `-detail-extras-`, each with its SHA-256 beside it, never over a file of
   the same name, and reuses one already there only for the same bytes,
   because the manifest it writes last (`countries/manifest.json`,
-  `OfflineCountryManifest`) promises them. The app keeps each file as it
-  arrived and reads tiles out of it (`PMTilesArchive`); nothing is unpacked
-  into the tile cache.
+  `OfflineCountryManifest`) promises them. A second cut over the same two
+  days is therefore refused, and waits for a newer archive. The app keeps
+  each file as it arrived and reads tiles out of it (`PMTilesArchive`);
+  nothing is unpacked into the tile cache.
 - **The tool compiles the app's format files as they stand**
   (`PMTilesFile.swift`, `PMTilesArchive.swift`, `OfflineCountryManifest.swift`
   and `PackedBytes.swift`), which import nothing of the app's, and

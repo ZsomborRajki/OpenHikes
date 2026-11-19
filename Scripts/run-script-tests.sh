@@ -5399,12 +5399,13 @@ cat > "$countries_work/out/manifest.json" <<EOF
 EOF
 cp "$extras_work/r2.env" "$countries_work/r2.env"
 
-OPENHIKES_R2_ENV="$countries_work/r2.env" \
-    run_script "offline-countries upload names a new archive's SHA-256 beside it" \
+OPENHIKES_R2_ENV="$countries_work/r2.env" OPENHIKES_R2_MIB_PER_SECOND=40 \
+    run_script "offline-countries upload names a new archive's SHA-256 beside it, no faster than it is told" \
     "$offline_countries" upload "$countries_work/out"
 if expect_status 0 \
     && expect_contains "$calls" "-H x-amz-meta-sha256: $country_sha256 -T $countries_work/out/SI-20261117.pmtiles" \
         "the upload" \
+    && expect_contains "$calls" "--limit-rate 41943040" "the upload" \
     && expect_contains "$output" "wrote countries/manifest.json" "the output"; then
     pass
 fi
@@ -5766,9 +5767,13 @@ fi
 # A copy that does not come to the source's ETag is abandoned before it is
 # completed, so the bucket never holds it under the name the manifest would
 # give it.
-run_script "vector-archives basemap abandons a copy that does not come to Protomaps' ETag" \
+# Parts sent side by side share the cap: eight parts at 16 MiB a second
+# are 2 MiB a second each.
+OPENHIKES_R2_MIB_PER_SECOND=16 \
+    run_script "vector-archives basemap abandons a copy that does not come to Protomaps' ETag" \
     "$vector_archives" basemap 20261117
 if expect_status 1 \
+    && expect_contains "$calls" "--limit-rate 2097152 -o /dev/null -D -" "a part's upload" \
     && expect_contains "$output" "not 00000000000000000000000000000000-1; nothing was written" "the error" \
     && expect_contains "$calls" "-X DELETE https://stub-account.r2.cloudflarestorage.com/stub-bucket/planet-20261117.pmtiles?uploadId=stub%2Bupload" \
         "the requests"; then
