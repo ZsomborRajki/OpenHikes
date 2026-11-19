@@ -21,7 +21,8 @@
 # holds under Protomaps' ETag is left as it is, and not downloaded.
 #
 # `use` puts an archive in the bucket at the head of its list in the manifest,
-# and raises `revision`: a basemap (`planet-…`) of the schema of the one it
+# and raises `revision` above the server's, once however many archives it
+# names before the next publish: a basemap (`planet-…`) of the schema of the one it
 # replaces, extras (`extras-…`) of the generation of the ones they replace,
 # unless --schema or --generation says otherwise. It drops what no build would
 # draw from any more, the archives behind it of the same schema or of the same
@@ -269,8 +270,14 @@ use() {
     seen+="$other_level "
     entries+=("$other$TAB$other_level$TAB$(value "$list.$index.$zoom_key" "$MANIFEST")")
   done
-  local revision basemaps extras
-  revision=$(( $(value revision "$MANIFEST") + 1 ))
+  local revision live_revision=0 basemaps extras
+  revision="$(value revision "$MANIFEST")"
+  case "$(curl -s -o "$SCRATCH/served.json" -w "%{http_code}" "$SERVER/manifest.json")" in
+    200) live_revision="$(value revision "$SCRATCH/served.json")" || die "the manifest on $SERVER has no revision" ;;
+    404) ;;
+    *) die "$SERVER would not give its manifest, whose revision this one must pass" ;;
+  esac
+  (( revision > live_revision )) || revision=$(( live_revision + 1 ))
   if [[ "$list" == basemaps ]]; then
     basemaps="$(entry_lines basemaps schema maximumZoom "${entries[@]}")"
     extras="$(current_lines extras generation minimumZoom)"

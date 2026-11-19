@@ -5788,7 +5788,9 @@ fi
 
 # `use` puts the new basemap first, drops the one of its schema behind it,
 # which no build would draw from any more, and keeps the first of another
-# schema for the builds that read only that.
+# schema for the builds that read only that. The server has this manifest's
+# revision, so the new one is one above it.
+cp "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST" "$STUB_SERVED_MANIFEST"
 run_script "vector-archives use heads the basemaps with an archive and keeps only another schema's behind it" \
     "$vector_archives" use planet-20261118
 if expect_status 0 \
@@ -5805,20 +5807,29 @@ if expect_status 0 \
     fi
 fi
 
-STUB_MISSING_ARCHIVES="extras-20261120" \
-    run_script "vector-archives use refuses an archive the tile server does not serve" \
+# A second archive named before the manifest is published goes out in the
+# same revision: apps only ever see the published ones.
+run_script "vector-archives use raises the revision once for every archive named before a publish" \
     "$vector_archives" use extras-20261120
+if expect_status 0 \
+    && expect_contains "$output" "extras-20261120 heads the extras at revision 4" "the output" \
+    && expect_absent "$(cat "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST")" "extras-20261119" "the manifest"; then
+    pass
+fi
+
+STUB_MISSING_ARCHIVES="extras-20261121" \
+    run_script "vector-archives use refuses an archive the tile server does not serve" \
+    "$vector_archives" use extras-20261121
 if expect_status 1 \
-    && expect_contains "$output" "does not serve extras-20261120; upload it first" "the error" \
-    && expect_absent "$(cat "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST")" "extras-20261120" "the manifest"; then
+    && expect_contains "$output" "does not serve extras-20261121; upload it first" "the error" \
+    && expect_absent "$(cat "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST")" "extras-20261121" "the manifest"; then
     pass
 fi
 
 # The bucket holds the archives both manifests name, one only this manifest
 # names (uploaded, not yet published), one neither names, the manifest and a
 # country, of which prune deletes the one neither names alone.
-cp "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST" "$STUB_SERVED_MANIFEST"
-sed 's/"extras-20261119"/"extras-20261120"/' "$STUB_SERVED_MANIFEST" > "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST"
+sed 's/"extras-20261120"/"extras-20261119"/' "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST" > "$STUB_SERVED_MANIFEST"
 mkdir -p "$STUB_BUCKET/countries"
 for key in planet-20261001.pmtiles planet-20261117.pmtiles extras-20261119.pmtiles extras-20261120.pmtiles \
     manifest.json countries/SI-20261117.pmtiles; do
