@@ -83,7 +83,7 @@ extension OfflineCountries {
     func sections(of listed: [Country], near coordinate: CLLocationCoordinate2D?) -> OfflineCountrySections {
         let held = listed.filter { isInstalled($0.id) || downloads[$0.id] != nil }
         let heldIDs = Set(held.map(\.id))
-        let nearby = coordinate.map { nearby($0) }?.filter { !heldIDs.contains($0.id) } ?? []
+        let nearby = coordinate.map { self.nearby($0) }?.filter { !heldIDs.contains($0.id) } ?? []
         let nearbyIDs = Set(nearby.map(\.id))
         var rest: [OfflineCountryListing] = []
         var groups: [String: [Country]] = [:]
