@@ -20,7 +20,7 @@
 import Foundation
 
 /// One archive on the tile server: `<archive>/<z>/<x>/<y>.mvt`.
-nonisolated struct VectorTileSource: Hashable, Sendable {
+nonisolated struct VectorTileSource: Codable, Hashable, Sendable {
     /// The archive's address, without a trailing slash.
     let archiveURL: URL
     /// The deepest zoom the archive holds. A deeper tile is drawn from the
@@ -31,7 +31,7 @@ nonisolated struct VectorTileSource: Hashable, Sendable {
     var extras: Extras?
 
     /// An archive of what the basemap leaves out, cut on the same grid.
-    struct Extras: Hashable, Sendable {
+    struct Extras: Codable, Hashable, Sendable {
         let archiveURL: URL
         /// The widest zoom it holds anything at: a wider tile does not ask.
         let minimumZ: Int
@@ -65,22 +65,11 @@ nonisolated struct VectorTileAddress: Hashable, Sendable {
 }
 
 nonisolated extension VectorTileSource {
-    /// Protomaps' basemap build of 17 November 2026: OpenStreetMap's data
-    /// under the ODbL, to zoom 15, on `tiles.openhikes.app`, with the extras
-    /// built from the planet of 19 November. The extras hold the names of
-    /// the largest areas from zoom 4, where Carto names an island.
-    ///
-    /// A new build goes up under a new name, and this changes with it. The
-    /// server's cache keeps a tile for a day, so a build overwritten in place
-    /// would be drawn from two builds at once.
-    static let openHikesPlanet = Self(
-        // swiftlint:disable:next force_unwrapping
-        archiveURL: URL(string: "https://tiles.openhikes.app/planet-20261117")!,
-        maximumZ: 15,
-        extras: Extras(
-            // swiftlint:disable:next force_unwrapping
-            archiveURL: URL(string: "https://tiles.openhikes.app/extras-20261119")!,
-            minimumZ: 4
-        )
-    )
+    /// The OpenHikes planet on `tiles.openhikes.app`, as the manifest this
+    /// build was made with names it: Protomaps' basemap, OpenStreetMap's data
+    /// under the ODbL, with the extras. The tile cache draws from what the
+    /// server's manifest names now (`VectorTileArchives`), which this is only
+    /// the first of; a provider asks this whether it is drawn from vector
+    /// tiles at all.
+    static let openHikesPlanet = VectorTileArchiveManifest.bundled?.source(on: VectorTileArchives.server)
 }

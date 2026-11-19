@@ -170,12 +170,12 @@ nonisolated final class OfflineCountryArchives: Sendable {
 
 /// Draws a provider's tile out of the downloaded countries.
 nonisolated final class OfflineCountryDrawing: Sendable {
-    private let sources: [String: VectorTileSource]
+    private let sources: VectorTileArchives
     private let archives: OfflineCountryArchives
     private let language: String
 
     init(
-        sources: [String: VectorTileSource],
+        sources: VectorTileArchives,
         archives: OfflineCountryArchives,
         language: String = VectorTileLabels.appLanguage
     ) {
@@ -190,7 +190,7 @@ nonisolated final class OfflineCountryDrawing: Sendable {
     func redraws(_ key: String, drawnAt storedAt: Date) -> Bool {
         guard !archives.isEmpty,
               let named = TileCacheKey.named(key),
-              sources[named.providerID] != nil
+              sources.source(for: named.providerID) != nil
         else { return false }
         return archives.redraws(VectorTileAddress(z: named.z, x: named.x, y: named.y), drawnAt: storedAt)
     }
@@ -201,7 +201,7 @@ nonisolated final class OfflineCountryDrawing: Sendable {
     func png(forKey key: String) -> Data? {
         guard !archives.isEmpty,
               let named = TileCacheKey.named(key),
-              let source = sources[named.providerID]
+              let source = sources.source(for: named.providerID)
         else { return nil }
         let target = VectorTileAddress(z: named.z, x: named.x, y: named.y)
         guard let found = archives.tile(

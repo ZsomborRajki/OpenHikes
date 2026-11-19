@@ -961,6 +961,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
     the app for, and `countries/manifest.json` with the names of the files it
     lists and the area codes they start with, which every installed build
     reads (*The offline countries*)
+  - the tile server's own `manifest.json`, its fields, and the 410 it gives
+    for an archive it does not have, which every build from the first that
+    reads it relies on (*Tiles*)
 
 ## Conventions
 
@@ -1174,7 +1177,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
     `extras-<planet date>.pmtiles`,
     named as the archive's layers are so a tile of each merges into one, and
     `Scripts/vector-extras.sh upload` puts them beside the basemap under a new
-    name each time, signing with R2 keys kept outside the repository. The app
+    name each time, signing with R2 keys kept outside the repository, and the
+    server's manifest then names them (below). The app
     asks for their tile beside the basemap's from zoom 4, where Carto names an
     island, unless the basemap's is already falling back. They add to the map and are never its
     reason to fall back: a tile they lack, fail to give or cannot read, or one
@@ -1253,10 +1257,30 @@ a change to recording, the map, the sheet or the render path; the PR template,
     compared. It goes once the transition is over, and a choice stored for it
     then reads as the default.
   - **No suite reaches the tile server.** `TileCache.shared` has no vector
-    source under `isRunningTests`, UI tests included.
-  - **A new build gets a new archive name**, carrying its date, and the app
-    changes with it. The server's cache holds a tile for a day, so a build
-    overwritten in place would mix two builds on screen.
+    source under `isRunningTests`, UI tests included
+    (`VectorTileArchives.forThisLaunch()`).
+  - **A new build gets a new archive name**, carrying its date, never the old
+    one's: the server's cache holds a tile for a day, so a build overwritten
+    in place would mix two builds on screen.
+  - **The server's manifest names the archives the app draws from**
+    (`VectorTileArchiveManifest`). It is `manifest.json` at the server's
+    root, a copy of `VectorTileArchiveManifest.json`, which the app bundles
+    and `Scripts/vector-archives.sh publish` puts there once every archive it
+    names answers. Each list is newest first. A build draws the first basemap
+    of the schema it reads and the first extras of a generation it reads, so
+    extras an installed app would draw wrong go up as the next generation,
+    and the last of the old one stays listed.
+  - **The app moves without a release** (`VectorTileArchives`). It reads the
+    manifest when it comes to the front, at most hourly, and when an archive
+    answers 410, the server's word for a name it does not have: the tile
+    that met it waits for that read and is drawn from what the manifest names
+    now. What was read is kept across launches and never traded for a lower
+    `revision`, and a tile drawn before a move is drawn again.
+  - **An archive leaves the manifest before it leaves the bucket**, and stays
+    in the bucket a while after, for apps that have not read the manifest
+    since. A build from before the manifest names its archives in code and
+    never moves: TestFlight 1.6 (1) asks for `planet-20261117` and
+    `extras-20261117`.
   - **The server is not in this repository.** It is a Worker and an R2
     bucket.
 

@@ -22,8 +22,7 @@ protocol OfflineCountryServing: Sendable {
 
 /// The OpenHikes tile server.
 nonisolated struct OfflineCountryServer: OfflineCountryServing {
-    // swiftlint:disable:next force_unwrapping
-    static let openHikes = Self(root: URL(string: "https://tiles.openhikes.app/")!)
+    static let openHikes = Self(root: VectorTileArchives.server)
     static let manifestPath = "countries/manifest.json"
     static let requestTimeout: TimeInterval = 20
 

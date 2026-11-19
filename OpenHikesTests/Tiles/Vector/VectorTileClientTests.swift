@@ -44,7 +44,7 @@ struct VectorTileClientTests {
         StubTileProtocol.reset()
         let now = clock
         return VectorTileClient(
-            sources: ["osm": source ?? self.source],
+            archives: VectorTileArchives(sources: ["osm": source ?? self.source]),
             session: URLSession(configuration: StubTileProtocol.sessionConfiguration()),
             language: "en",
             now: { now.now }
@@ -278,13 +278,14 @@ struct VectorTileClientTests {
         )
     }
 
-    @Test("a response is read as a tile, a missing tile, a refused one, or a server to pass over")
+    @Test("a response is read as a tile, a missing tile, a retired archive, a refused one, or a server to pass over")
     func outcomes() {
         let body = Data([1])
         #expect(VectorTileClient.outcome(status: 200, data: body) == .tile(body))
         #expect(VectorTileClient.outcome(status: 200, data: Data()) == .missing)
         #expect(VectorTileClient.outcome(status: 204, data: Data()) == .missing)
         #expect(VectorTileClient.outcome(status: 404, data: body) == .missing)
+        #expect(VectorTileClient.outcome(status: 410, data: body) == .retired)
         #expect(VectorTileClient.outcome(status: 403, data: body) == .refused)
         #expect(VectorTileClient.outcome(status: 429, data: body) == .unavailable(pause: VectorTileClient.failurePause))
         #expect(VectorTileClient.outcome(status: 502, data: body) == .unavailable(pause: VectorTileClient.failurePause))
