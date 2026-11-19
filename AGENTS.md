@@ -1195,8 +1195,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
     danger areas, a square mapped as a relation), parks and the borders of
     protected areas, every lift but
     the cable cars with its stations, the light railways before zoom 14,
-    power lines, dams and weirs, ridges, cliffs and embankments in the
-    direction they were mapped, the lines cut through a forest, trees and
+    power lines, dams and weirs, breakwaters and groynes, ridges, cliffs and
+    embankments in the direction they were mapped, the lines cut through a forest, trees and
     their rows, the names of buildings, and the points Carto draws before
     the basemap has them: huts and stations with the tags Carto files them
     by, summits, springs, passes and fords.

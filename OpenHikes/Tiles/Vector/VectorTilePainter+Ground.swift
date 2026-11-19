@@ -176,10 +176,16 @@ nonisolated extension VectorTilePainter {
     }
 
     /// What stands in the water, as Carto draws it after the water and
-    /// before the buildings and roads: piers, and the dams, weirs and lock
-    /// gates that hold it back.
+    /// before the buildings and roads: breakwaters and groynes, piers, and
+    /// the dams, weirs and lock gates that hold it back.
     func paintWaterStructures() {
         guard z >= VectorTileStyle.pierZ else { return }
+        for (feature, geometry) in features(in: VectorTileRasterizer.breakwatersLayer, type: .polygon) {
+            fill(geometry.path(of: feature), VectorTileStyle.breakwater.color)
+        }
+        for (feature, geometry) in features(in: VectorTileRasterizer.breakwatersLayer, type: .line) {
+            stroke(geometry.path(of: feature), VectorTileStyle.breakwater, cap: .butt)
+        }
         for (feature, geometry) in features(in: "landuse", type: .polygon) {
             switch feature.string("kind") {
             case VectorTileStyle.pierKind: fill(geometry.path(of: feature), VectorTileStyle.land)

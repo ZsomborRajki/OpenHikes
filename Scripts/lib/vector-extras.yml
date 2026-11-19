@@ -6,7 +6,7 @@
 # `roads` and `pois` with `kind`, `kind_detail` and `name:<language>` — so a
 # tile of each merges into one and is read by the same code. `parks`,
 # `protected_areas`, `area_details`, `barriers`, `oneways`, `power`, `dams`,
-# `ridges`, `cliffs`, `cutlines`, `trees`, `intermittent` and
+# `breakwaters`, `ridges`, `cliffs`, `cutlines`, `trees`, `intermittent` and
 # `building_names` are the layers of its own, and a car park's `access` and
 # an area's `area` the attributes. Most features wait for zoom 14 or 15: the
 # map draws deeper zooms from zoom 15, and Carto draws none of these wider.
@@ -1319,6 +1319,27 @@ layers:
     min_zoom: 13
     include_when:
       waterway: [dam, weir, lock_gate]
+    attributes:
+    - key: kind
+      type: match_value
+
+# Breakwaters and groynes, mapped as a line or as an area, which Carto draws
+# from zoom 12 and the basemap has no kind for.
+- id: breakwaters
+  features:
+  - source: osm
+    geometry: line
+    min_zoom: 12
+    include_when:
+      man_made: [breakwater, groyne]
+    attributes:
+    - key: kind
+      type: match_value
+  - source: osm
+    geometry: polygon
+    min_zoom: 12
+    include_when:
+      man_made: [breakwater, groyne]
     attributes:
     - key: kind
       type: match_value

@@ -335,6 +335,14 @@ nonisolated extension VectorTileStyle {
         }
     }
 
+    /// A breakwater or a groyne from the extras' `breakwaters` layer, as
+    /// Carto's `water-features.mss` draws one from zoom 12: an area filled,
+    /// or a line stroked, in one gray.
+    static let breakwater = Line(
+        color: color("#AAAAAA"),
+        width: ZoomCurve([(12, 1), (13, 2), (15, 2), (16, 4)])
+    )
+
     /// The line of a feature in the extras' `ridges` layer, from zoom 14,
     /// where Carto's dots for one (``VectorTilePatterns/ridge(kind:z:)``)
     /// are not to be had: a ridge broken, an arête unbroken, in the cliffs'

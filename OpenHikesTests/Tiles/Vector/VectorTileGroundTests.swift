@@ -287,8 +287,11 @@ struct VectorTileGroundTests {
         #expect(VectorTileStyle.landuseFills["military"] == nil)
     }
 
-    // MARK: Lines
+}
 
+// MARK: Lines and trees
+
+extension VectorTileGroundTests {
     @Test("a line cut through a forest is drawn in the grass's green from zoom 14")
     func cutlines() throws {
         let cut = VectorTileFixture.Layer(name: VectorTileRasterizer.cutlinesLayer, features: [line("cutline")])
@@ -344,6 +347,22 @@ struct VectorTileGroundTests {
         // Dots either side of the line, where a stroked line would be a
         // pixel or two wide.
         #expect(try colors([ridge], z: 14, in: band(reach: 16, from: 6)).count > 1)
+    }
+
+    @Test("a breakwater is drawn in Carto's gray from zoom 12, as an area and as a line")
+    func breakwaters() throws {
+        let gray = VectorTileFixture.color("#AAAAAA")
+        let mole = VectorTileFixture.Layer(name: VectorTileRasterizer.breakwatersLayer, features: [
+            area("breakwater"),
+        ])
+        let groyne = VectorTileFixture.Layer(name: VectorTileRasterizer.breakwatersLayer, features: [
+            line("groyne"),
+        ])
+
+        #expect(try colors([mole], z: 11, in: inside) == [land])
+        #expect(try colors([mole], z: 12, in: inside) == [gray])
+        #expect(try colors([groyne], z: 11, in: band(reach: 1)) == [land])
+        #expect(try colors([groyne], z: 13, in: band(reach: 1)) == [gray])
     }
 
     // MARK: Trees

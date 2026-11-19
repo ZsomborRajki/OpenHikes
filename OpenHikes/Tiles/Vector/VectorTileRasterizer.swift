@@ -38,18 +38,20 @@ nonisolated enum VectorTileRasterizer {
         // The vector extras' own layers.
         "barriers", VectorTileArrows.layerName, parksLayer, protectedAreasLayer, powerLayer, damsLayer, ridgesLayer,
         VectorTileAreaDetails.layerName, cliffsLayer, cutlinesLayer, treesLayer, intermittentLayer,
-        VectorTileBuildingNames.layerName,
+        VectorTileBuildingNames.layerName, breakwatersLayer,
     ]
 
     /// The vector extras' layers of their own that the rasterizer fills or
     /// strokes: the parks, the protected areas whose borders are drawn, the
-    /// power lines, the dams and weirs mapped as lines, the ridges, the
-    /// cliffs and embankments, the lines cut through a forest, the trees and
-    /// their rows, and the water that is not always there.
+    /// power lines, the dams and weirs mapped as lines, the breakwaters and
+    /// groynes, the ridges, the cliffs and embankments, the lines cut
+    /// through a forest, the trees and their rows, and the water that is
+    /// not always there.
     static let parksLayer = "parks"
     static let protectedAreasLayer = "protected_areas"
     static let powerLayer = "power"
     static let damsLayer = "dams"
+    static let breakwatersLayer = "breakwaters"
     static let ridgesLayer = "ridges"
     static let cliffsLayer = "cliffs"
     static let cutlinesLayer = "cutlines"
