@@ -1390,7 +1390,12 @@ owner, on the main actor.
 - **Free.** Nothing on the download path checks an entitlement.
 - **No suite reaches the server or the session.**
   `OfflineCountries.forThisLaunch()` has neither under `isRunningTests`, and
-  `TileCache.shared` has no areas there.
+  `TileCache.shared` has no areas there. The one way past the server is
+  `--ui-test-offline-countries=<seeded|refused>`, which hands the list ten
+  areas out of a bundled manifest, or a list that fails
+  (`SeededOfflineCountryServer`), and still no session: `OfflineMapsUITests`
+  goes as far as the download button and the hike tile's dialog, and never
+  further, because nothing would download.
 - **Deployment state, checked 2026-11-18.** The bucket holds every area cut
   from planet build `20261117`: 381 of them (234 countries, and the 51
   states, 13 provinces and 83 regions of the three split ones), 1,524 files

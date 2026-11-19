@@ -1,0 +1,528 @@
+{
+  "version": 1,
+  "countries": [
+    {
+      "id": "AT",
+      "names": {},
+      "build": "20261117",
+      "schema": 4,
+      "bounds": {
+        "west": 9.53,
+        "south": 46.43,
+        "east": 17.05,
+        "north": 49.0
+      },
+      "outline": [
+        [[9.53,47.53],[10.17,47.27],[10.45,47.55],[11.0,47.4],[11.6,47.58],[12.2,47.61],[12.78,47.63],[12.98,47.48],[13.08,47.65],[13.0,47.78],[12.95,47.95],[13.45,48.57],[13.8,48.75],[14.0,48.77],[14.7,48.6],[15.0,49.0],[16.0,48.75],[16.9,48.6],[17.05,48.1],[16.9,47.7],[16.5,47.5],[16.6,47.0],[16.1,46.85],[15.6,46.7],[14.6,46.43],[13.7,46.52],[12.4,46.68],[12.1,47.0],[11.2,46.95],[10.45,46.85],[9.6,47.05],[9.53,47.53]]
+      ],
+      "files": [
+        {
+          "role": "basemap",
+          "path": "countries/AT-20261117.pmtiles",
+          "bytes": 641221351,
+          "sha256": "360a7c0845ea74768c442380622a6a8e88e874c3005605adefad208ac21c9cf1",
+          "minimumZoom": 0,
+          "maximumZoom": 14
+        },
+        {
+          "role": "extras",
+          "path": "countries/AT-extras-20261117.pmtiles",
+          "bytes": 94152420,
+          "sha256": "25364fb16a76afbb8f16e244ec9e5bb6ab6aa76ed9d27d5aff58296d4b1fb666",
+          "minimumZoom": 0,
+          "maximumZoom": 14
+        },
+        {
+          "role": "detail",
+          "path": "countries/AT-detail-20261117.pmtiles",
+          "bytes": 662899641,
+          "sha256": "dba398e9a0511c4cdaeb2983a131a1c847dadc728df010ef2a7bf975a52f5b8e",
+          "minimumZoom": 15,
+          "maximumZoom": 15
+        },
+        {
+          "role": "detail-extras",
+          "path": "countries/AT-detail-extras-20261117.pmtiles",
+          "bytes": 68375168,
+          "sha256": "5b9802194580a6088f26e26d3d286eb6f313263fc5d3a0eba573b43a7da50f38",
+          "minimumZoom": 15,
+          "maximumZoom": 15
+        }
+      ]
+    },
+    {
+      "id": "CH",
+      "names": {},
+      "build": "20261117",
+      "schema": 4,
+      "bounds": {
+        "west": 5.97,
+        "south": 45.83,
+        "east": 10.45,
+        "north": 47.8
+      },
+      "outline": [
+        [[5.97,46.2],[6.15,46.6],[6.95,47.25],[7.55,47.58],[8.6,47.8],[9.53,47.53],[9.6,47.05],[10.45,46.85],[10.1,46.25],[9.0,45.83],[8.4,46.45],[7.0,45.9],[5.97,46.2]]
+      ],
+      "files": [
+        {
+          "role": "basemap",
+          "path": "countries/CH-20261117.pmtiles",
+          "bytes": 412037657,
+          "sha256": "09319effb899aa31bd3969ae04bd894a19afebcc80579e156a02245b68fcf5e3",
+          "minimumZoom": 0,
+          "maximumZoom": 14
+        },
+        {
+          "role": "extras",
+          "path": "countries/CH-extras-20261117.pmtiles",
+          "bytes": 58808527,
+          "sha256": "c564fce22c58ba061c6474461767909aead37dee3e985c787ff6aafe6d35a469",
+          "minimumZoom": 0,
+          "maximumZoom": 14
+        },
+        {
+          "role": "detail",
+          "path": "countries/CH-detail-20261117.pmtiles",
+          "bytes": 431473791,
+          "sha256": "73abfab5126a60236c8a90a2fb5f2fd57f5626bd6674b20d6841d9a2d04f8777",
+          "minimumZoom": 15,
+          "maximumZoom": 15
+        },
+        {
+          "role": "detail-extras",
+          "path": "countries/CH-detail-extras-20261117.pmtiles",
+          "bytes": 44847529,
+          "sha256": "ceea9b59c4db0b2028d63650087de02847f06d894abff9a93839f89300ad35b9",
+          "minimumZoom": 15,
+          "maximumZoom": 15
+        }
+      ]
+    },
+    {
+      "id": "DE",
+      "names": {},
+      "build": "20261117",
+      "schema": 4,
+      "bounds": {
+        "west": 6.0,
+        "south": 47.27,
+        "east": 15.0,
+        "north": 54.9
+      },
+      "outline": [
+        [[6.1,51.9],[6.8,52.2],[7.0,53.3],[8.5,53.6],[8.9,54.9],[10.0,54.75],[11.0,54.0],[12.5,54.45],[14.2,53.9],[14.4,53.3],[14.6,52.6],[14.75,51.5],[15.0,51.1],[14.3,51.0],[13.4,50.65],[12.2,50.3],[12.5,49.8],[13.3,49.2],[13.8,48.75],[13.45,48.57],[12.95,47.95],[13.0,47.78],[13.08,47.65],[12.98,47.48],[12.78,47.63],[12.2,47.61],[11.6,47.58],[11.0,47.4],[10.45,47.55],[10.17,47.27],[9.53,47.53],[8.6,47.8],[7.55,47.58],[8.2,49.0],[6.4,49.45],[6.0,50.8],[6.1,51.9]]
+      ],
+      "files": [
+        {
+          "role": "basemap",
+          "path": "countries/DE-20261117.pmtiles",
+          "bytes": 2352251971,
+          "sha256": "3d843ea27fc8d902e660fa6993a04d702885fea9fc869b1ead140f023cd7ced1",
+          "minimumZoom": 0,
+          "maximumZoom": 14
+        },
+        {
+          "role": "extras",
+          "path": "countries/DE-extras-20261117.pmtiles",
+          "bytes": 381844671,
+          "sha256": "ce37f9c39e060cd2090a76c6b4b872546c463336d36b7fb91a49a66a8dacde28",
+          "minimumZoom": 0,
+          "maximumZoom": 14
+        },
+        {
+          "role": "detail",
+          "path": "countries/DE-detail-20261117.pmtiles",
+          "bytes": 2497050356,
+          "sha256": "0c4b4d5ed5200019fca7c80142829713992d98a643fc401552d4759c2b7b2b1c",
+          "minimumZoom": 15,
+          "maximumZoom": 15
+        },
+        {
+          "role": "detail-extras",
+          "path": "countries/DE-detail-extras-20261117.pmtiles",
+          "bytes": 303073163,
+          "sha256": "11dcb5f278454483bc45c3eddd1e43fcc672191e111b60359a9cd3dc2fa41057",
+          "minimumZoom": 15,
+          "maximumZoom": 15
+        }
+      ]
+    },
+    {
+      "id": "FR",
+      "names": {},
+      "build": "20261117",
+      "schema": 4,
+      "bounds": {
+        "west": -4.7,
+        "south": 41.4,
+        "east": 9.55,
+        "north": 51.1
+      },
+      "outline": [
+        [[2.5,51.1],[4.2,49.95],[5.9,49.5],[6.4,49.45],[8.2,49.0],[7.55,47.58],[6.95,47.25],[6.15,46.6],[5.97,46.2],[7.0,45.9],[6.62,45.1],[7.5,43.8],[6.2,43.1],[4.0,43.5],[3.1,42.45],[1.7,42.5],[-1.8,43.35],[-1.2,46.1],[-2.5,47.3],[-4.7,48.4],[-1.6,48.6],[-1.3,49.7],[0.2,49.5],[1.6,50.2],[2.5,51.1]],
+        [[8.6,41.4],[8.6,42.5],[9.4,43.0],[9.55,42.1],[9.2,41.4],[8.6,41.4]]
+      ],
+      "files": [
+        {
+          "role": "basemap",
+          "path": "countries/FR-20261117.pmtiles",
+          "bytes": 2605029498,
+          "sha256": "fb57a3df92818da2005094e1cfadc3d0e6e24073c07aab50724635eb007648d3",
+          "minimumZoom": 0,
+          "maximumZoom": 14
+        },
+        {
+          "role": "extras",
+          "path": "countries/FR-extras-20261117.pmtiles",
+          "bytes": 418562028,
+          "sha256": "8936c77103baa9896e5a3fdaa6a59184ee31750ab07d9991f2f7512616975bd7",
+          "minimumZoom": 0,
+          "maximumZoom": 14
+        },
+        {
+          "role": "detail",
+          "path": "countries/FR-detail-20261117.pmtiles",
+          "bytes": 2795227004,
+          "sha256": "376bc6d67b636e1da24f0c36326522716988da82359c5d199384441664f1092a",
+          "minimumZoom": 15,
+          "maximumZoom": 15
+        },
+        {
+          "role": "detail-extras",
+          "path": "countries/FR-detail-extras-20261117.pmtiles",
+          "bytes": 331839989,
+          "sha256": "cd1359b2b8f564134e030beca34575e55afa55d74350650cc084584f0053bb1f",
+          "minimumZoom": 15,
+          "maximumZoom": 15
+        }
+      ]
+    },
+    {
+      "id": "IT",
+      "names": {},
+      "build": "20261117",
+      "schema": 4,
+      "bounds": {
+        "west": 6.62,
+        "south": 36.7,
+        "east": 18.5,
+        "north": 47.0
+      },
+      "outline": [
+        [[6.62,45.1],[7.0,45.9],[8.4,46.45],[9.0,45.83],[10.1,46.25],[10.45,46.85],[11.2,46.95],[12.1,47.0],[12.4,46.68],[13.7,46.52],[13.6,45.8],[12.3,45.2],[12.6,44.0],[13.6,43.5],[14.5,42.2],[16.1,41.4],[18.5,40.15],[17.0,39.0],[16.6,38.0],[15.6,38.0],[15.8,39.6],[14.3,40.9],[12.0,41.9],[10.5,42.9],[10.0,44.0],[8.5,44.3],[7.5,43.8],[6.62,45.1]],
+        [[12.4,37.8],[13.4,38.2],[15.6,38.3],[15.1,36.7],[12.4,37.8]],
+        [[8.4,39.0],[8.2,40.9],[9.2,41.25],[9.8,40.5],[9.6,39.1],[8.4,39.0]]
+      ],
+      "files": [
+        {
+          "role": "basemap",
+          "path": "countries/IT-20261117.pmtiles",
+          "bytes": 1847762860,
+          "sha256": "ba3ecdc246b67752935382e3410b2d420950a66c41ad421fce49766b3bd342ca",
+          "minimumZoom": 0,
+          "maximumZoom": 14
+        },
+        {
+          "role": "extras",
+          "path": "countries/IT-extras-20261117.pmtiles",
+          "bytes": 289851029,
+          "sha256": "cfc551628beb27cf03d55498a3a624aad47bef5d5653d47a91b5b5e7753d4083",
+          "minimumZoom": 0,
+          "maximumZoom": 14
+        },
+        {
+          "role": "detail",
+          "path": "countries/IT-detail-20261117.pmtiles",
+          "bytes": 1953419213,
+          "sha256": "6658d5d8a14950f9ac4023feab801b0de4e92ce5accc6b924982ebd2d69cd196",
+          "minimumZoom": 15,
+          "maximumZoom": 15
+        },
+        {
+          "role": "detail-extras",
+          "path": "countries/IT-detail-extras-20261117.pmtiles",
+          "bytes": 229034882,
+          "sha256": "fca824609fae296d015c7b76e46d4fb5d348a90bc3fe36e2402e5c21baa818e7",
+          "minimumZoom": 15,
+          "maximumZoom": 15
+        }
+      ]
+    },
+    {
+      "id": "NO",
+      "names": {},
+      "build": "20261117",
+      "schema": 4,
+      "bounds": {
+        "west": 4.9,
+        "south": 58.0,
+        "east": 31.0,
+        "north": 71.1
+      },
+      "outline": [
+        [[4.9,60.0],[5.0,62.0],[8.0,63.5],[12.0,66.0],[15.0,68.5],[19.0,70.0],[25.0,71.1],[31.0,70.3],[28.5,69.0],[25.0,68.6],[20.5,69.0],[17.0,68.0],[14.5,65.8],[12.0,63.0],[12.2,61.0],[11.5,59.0],[10.0,58.9],[7.5,58.0],[5.6,58.5],[4.9,60.0]]
+      ],
+      "files": [
+        {
+          "role": "basemap",
+          "path": "countries/NO-20261117.pmtiles",
+          "bytes": 903669597,
+          "sha256": "a379d9ae9ecdc1dc394d837db03a3304a88b2bef0d52d71ee0c7ed58021d05fb",
+          "minimumZoom": 0,
+          "maximumZoom": 14
+        },
+        {
+          "role": "extras",
+          "path": "countries/NO-extras-20261117.pmtiles",
+          "bytes": 117948583,
+          "sha256": "e79672c943b61d4b99721a490b06957a0ccd228caae82dcdea06ede471ba60b3",
+          "minimumZoom": 0,
+          "maximumZoom": 14
+        },
+        {
+          "role": "detail",
+          "path": "countries/NO-detail-20261117.pmtiles",
+          "bytes": 698717856,
+          "sha256": "af4206e0cfe8e9a3d4190c639169e0716ec4791d73399f7abc4687f21216f553",
+          "minimumZoom": 15,
+          "maximumZoom": 15
+        },
+        {
+          "role": "detail-extras",
+          "path": "countries/NO-detail-extras-20261117.pmtiles",
+          "bytes": 81035627,
+          "sha256": "08b2bc5c32be3c3861369a6e8890e4c8d90e6833fbaed6d11cc3ca82eda6049d",
+          "minimumZoom": 15,
+          "maximumZoom": 15
+        }
+      ]
+    },
+    {
+      "id": "SI",
+      "names": {},
+      "build": "20261117",
+      "schema": 4,
+      "bounds": {
+        "west": 13.6,
+        "south": 45.45,
+        "east": 16.6,
+        "north": 46.85
+      },
+      "outline": [
+        [[13.7,46.52],[14.6,46.43],[15.6,46.7],[16.1,46.85],[16.6,46.48],[15.4,45.8],[15.2,45.45],[14.1,45.48],[13.6,45.5],[13.6,45.8],[13.7,46.52]]
+      ],
+      "files": [
+        {
+          "role": "basemap",
+          "path": "countries/SI-20261117.pmtiles",
+          "bytes": 171079983,
+          "sha256": "1386f72470fd5c07435883125bbdffdac53ebd23698ed11d660360718ec67d90",
+          "minimumZoom": 0,
+          "maximumZoom": 14
+        },
+        {
+          "role": "extras",
+          "path": "countries/SI-extras-20261117.pmtiles",
+          "bytes": 26692148,
+          "sha256": "a8fb49080c024f722cfca738d5e1374d28dbf701b9d7e050b74ae8d0ee16b446",
+          "minimumZoom": 0,
+          "maximumZoom": 14
+        },
+        {
+          "role": "detail",
+          "path": "countries/SI-detail-20261117.pmtiles",
+          "bytes": 179562594,
+          "sha256": "895a2aef9b678d3df699a196426d175eec5017995e9188b713f925963509ac80",
+          "minimumZoom": 15,
+          "maximumZoom": 15
+        },
+        {
+          "role": "detail-extras",
+          "path": "countries/SI-detail-extras-20261117.pmtiles",
+          "bytes": 18966463,
+          "sha256": "ebf3faeb13e236ca693a1cd225b3b972d7e28d3c6f6c5d37ae4329927b621723",
+          "minimumZoom": 15,
+          "maximumZoom": 15
+        }
+      ]
+    },
+    {
+      "id": "US-CO",
+      "group": "US",
+      "names": {
+        "en": "Colorado",
+        "de": "Colorado",
+        "fr": "Colorado",
+        "es": "Colorado",
+        "it": "Colorado",
+        "pl": "Kolorado",
+        "ru": "Колорадо",
+        "uk": "Колорадо"
+      },
+      "build": "20261117",
+      "schema": 4,
+      "bounds": {
+        "west": -109.05,
+        "south": 37.0,
+        "east": -102.04,
+        "north": 41.0
+      },
+      "outline": [
+        [[-109.05,37.0],[-102.04,37.0],[-102.04,41.0],[-109.05,41.0],[-109.05,37.0]]
+      ],
+      "files": [
+        {
+          "role": "basemap",
+          "path": "countries/US-CO-20261117.pmtiles",
+          "bytes": 523994134,
+          "sha256": "f2b563ea0f9bef085a10e35a32bd9838578345fc4efd3b0eada4f201d0f51dfe",
+          "minimumZoom": 0,
+          "maximumZoom": 14
+        },
+        {
+          "role": "extras",
+          "path": "countries/US-CO-extras-20261117.pmtiles",
+          "bytes": 71076404,
+          "sha256": "12a74a289c58325542fa81a711f7c0d34806bafb0b3bd390ad6e8dfbcd29cbf8",
+          "minimumZoom": 0,
+          "maximumZoom": 14
+        },
+        {
+          "role": "detail",
+          "path": "countries/US-CO-detail-20261117.pmtiles",
+          "bytes": 559035767,
+          "sha256": "fcdf71a40e65bc2465ff1b78f37c14de486fffc63576dc0195452c5ac7a1f122",
+          "minimumZoom": 15,
+          "maximumZoom": 15
+        },
+        {
+          "role": "detail-extras",
+          "path": "countries/US-CO-detail-extras-20261117.pmtiles",
+          "bytes": 54583402,
+          "sha256": "8e6ea76a8eadb6ce2a5b1d8034dbb8c7113069757762b229442a1631d1a65fa0",
+          "minimumZoom": 15,
+          "maximumZoom": 15
+        }
+      ]
+    },
+    {
+      "id": "US-WA",
+      "group": "US",
+      "names": {
+        "en": "Washington",
+        "de": "Washington",
+        "fr": "Washington",
+        "es": "Washington",
+        "it": "Washington",
+        "pl": "Waszyngton",
+        "ru": "Вашингтон",
+        "uk": "Вашингтон"
+      },
+      "build": "20261117",
+      "schema": 4,
+      "bounds": {
+        "west": -124.7,
+        "south": 45.6,
+        "east": -117.03,
+        "north": 49.0
+      },
+      "outline": [
+        [[-124.7,48.4],[-123.2,49.0],[-117.03,49.0],[-117.03,46.0],[-119.0,45.95],[-121.2,45.6],[-122.8,45.6],[-124.0,46.3],[-124.7,48.4]]
+      ],
+      "files": [
+        {
+          "role": "basemap",
+          "path": "countries/US-WA-20261117.pmtiles",
+          "bytes": 608497498,
+          "sha256": "7975ae3c27c68e1702fb34249a4f041242c30d3d1e676b87eeb6b7fb0be498e8",
+          "minimumZoom": 0,
+          "maximumZoom": 14
+        },
+        {
+          "role": "extras",
+          "path": "countries/US-WA-extras-20261117.pmtiles",
+          "bytes": 86523281,
+          "sha256": "7fc11cf66befe74acdc77977697d79326a6f9f3785425caf16063fa42c2242da",
+          "minimumZoom": 0,
+          "maximumZoom": 14
+        },
+        {
+          "role": "detail",
+          "path": "countries/US-WA-detail-20261117.pmtiles",
+          "bytes": 652642930,
+          "sha256": "9cf72a7c3a69f5a9951049c968014172e1d25800154e0a2ac5dc7973a9f3cb08",
+          "minimumZoom": 15,
+          "maximumZoom": 15
+        },
+        {
+          "role": "detail-extras",
+          "path": "countries/US-WA-detail-extras-20261117.pmtiles",
+          "bytes": 63675312,
+          "sha256": "a4df0f1ff9e576988aeb8d2cdb7b9c904bc1c9f07608de5c40461c80ba25ff61",
+          "minimumZoom": 15,
+          "maximumZoom": 15
+        }
+      ]
+    },
+    {
+      "id": "US-WY",
+      "group": "US",
+      "names": {
+        "en": "Wyoming",
+        "de": "Wyoming",
+        "fr": "Wyoming",
+        "es": "Wyoming",
+        "it": "Wyoming",
+        "pl": "Wyoming",
+        "ru": "Вайоминг",
+        "uk": "Вайомінг"
+      },
+      "build": "20261117",
+      "schema": 4,
+      "bounds": {
+        "west": -111.05,
+        "south": 41.0,
+        "east": -104.05,
+        "north": 45.0
+      },
+      "outline": [
+        [[-111.05,41.0],[-104.05,41.0],[-104.05,45.0],[-111.05,45.0],[-111.05,41.0]]
+      ],
+      "files": [
+        {
+          "role": "basemap",
+          "path": "countries/US-WY-20261117.pmtiles",
+          "bytes": 297920886,
+          "sha256": "e0d3621a45ba8ff0140b3ef5900a0c8fb38e0ce55e6b5f69b8159edf0e7409aa",
+          "minimumZoom": 0,
+          "maximumZoom": 14
+        },
+        {
+          "role": "extras",
+          "path": "countries/US-WY-extras-20261117.pmtiles",
+          "bytes": 41443692,
+          "sha256": "6c52c6ac2883dbe1d3a484e71af6554a758ed66be3431be2edbdafe89651d791",
+          "minimumZoom": 0,
+          "maximumZoom": 14
+        },
+        {
+          "role": "detail",
+          "path": "countries/US-WY-detail-20261117.pmtiles",
+          "bytes": 289993020,
+          "sha256": "f26fc142ec2c09d47b53779274f40a640c743488ccd61dd06e3595f07588a5b1",
+          "minimumZoom": 15,
+          "maximumZoom": 15
+        },
+        {
+          "role": "detail-extras",
+          "path": "countries/US-WY-detail-extras-20261117.pmtiles",
+          "bytes": 31022995,
+          "sha256": "059d3da808ed83450cc2bf2895dc9113a576832d66b2ddae6f44bb7349420ddc",
+          "minimumZoom": 15,
+          "maximumZoom": 15
+        }
+      ]
+    }
+  ]
+}
