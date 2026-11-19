@@ -1174,7 +1174,7 @@ a change to recording, the map, the sheet or the render path; the PR template,
     `Scripts/lib/vector-extras.filter`, and the named areas through
     `Scripts/lib/vector-extras-areas.filter` and then a cut for a name, then
     Planetiler with `Scripts/lib/vector-extras.yml`) into
-    `extras-<planet date>.pmtiles`,
+    `extras-<planet day>-<hour>.pmtiles`,
     named as the archive's layers are so a tile of each merges into one, and
     `Scripts/vector-extras.sh upload` puts them beside the basemap under a new
     name each time, signing with R2 keys kept outside the repository, and the
@@ -1259,9 +1259,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
   - **No suite reaches the tile server.** `TileCache.shared` has no vector
     source under `isRunningTests`, UI tests included
     (`VectorTileArchives.forThisLaunch()`).
-  - **A new build gets a new archive name**, carrying its date, never the old
-    one's: the server's cache holds a tile for a day, so a build overwritten
-    in place would mix two builds on screen.
+  - **A new build gets a new archive name**, carrying its date, and the
+    extras the hour too, never the old one's: the server's cache holds a tile
+    for a day, so a build overwritten in place would mix two builds on screen.
   - **The server's manifest names the archives the app draws from**
     (`VectorTileArchiveManifest`). It is `manifest.json` at the server's
     root, a copy of `VectorTileArchiveManifest.json`, which the app bundles
@@ -1270,6 +1270,21 @@ a change to recording, the map, the sheet or the render path; the PR template,
     of the schema it reads and the first extras of a generation it reads, so
     extras an installed app would draw wrong go up as the next generation,
     and the last of the old one stays listed.
+  - **Refreshing the server is a run of commands, each safe to run again:**
+    1. `Scripts/trail-cells.sh update-planet <planet.osm.pbf>`, then
+       `Scripts/vector-extras.sh build <planet.osm.pbf>` and `upload`.
+    2. `Scripts/vector-archives.sh basemap` copies Protomaps' newest daily
+       build of the schema the app reads into the bucket as
+       `planet-<day>.pmtiles`, and keeps the download for the countries. It
+       sends the build up in Protomaps' own parts, so the bucket's ETag has
+       to come out as Protomaps' or nothing is written.
+    3. `Scripts/vector-archives.sh use` with each new name, which heads its
+       list in the manifest and drops what no build would draw any more,
+       then `publish`, and commit the manifest.
+    4. `Scripts/offline-countries.sh publish` cuts every area again from the
+       new archives and puts it up (*The offline countries*).
+    5. `prune` in both scripts deletes what no manifest names, once the apps
+       have read the new manifests.
   - **The app moves without a release** (`VectorTileArchives`). It reads the
     manifest when it comes to the front, at most hourly, and when an archive
     answers 410, the server's word for a name it does not have: the tile
@@ -1280,7 +1295,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
     in the bucket a while after, for apps that have not read the manifest
     since. A build from before the manifest names its archives in code and
     never moves: TestFlight 1.6 (1) asks for `planet-20261117` and
-    `extras-20261117`.
+    `extras-20261117`, which are gone, and draws openstreetmap.org's tiles
+    in their place.
   - **The server is not in this repository.** It is a Worker and an R2
     bucket.
 
@@ -1320,9 +1336,13 @@ owner, on the main actor.
   down; turning it off deletes it from them and keeps the areas.
 - **Cut on the server, read in place.** `Scripts/offline-countries.sh build`
   cuts each area out of the planet the map draws, along its outline grown by
-  3 km, from the bucket with signed ranges or, much faster for the whole
-  world, from local copies (`--planet`, `--extras`). It reads each cut back
-  through the app's reader before listing it. `upload` puts the files under
+  3 km, from the local copies `Scripts/vector-archives.sh basemap` and
+  `Scripts/vector-extras.sh build` leave, or from the bucket with signed
+  ranges where there are none, which takes a day for the world rather than
+  hours. It reads each cut back through the app's reader before listing it.
+  `publish` builds and uploads every area a batch at a time, and goes on
+  where a stopped run left off; `prune` then deletes the older build's
+  files. `upload` puts the files under
   `countries/` as `<area>-<build>.pmtiles`, `-extras-`, `-detail-` and
   `-detail-extras-`, each with its SHA-256 beside it, never over a file of
   the same name, and reuses one already there only for the same bytes,
