@@ -24,6 +24,7 @@
 //  joined.
 //
 
+import Algorithms
 import CoreGraphics
 import CoreText
 import Foundation
@@ -46,14 +47,9 @@ nonisolated enum VectorTileLineLabels {
             self.name = name
             self.points = points
             length = VectorTileLineLabels.length(of: points)
-            let xs = points.map(\.x)
-            let ys = points.map(\.y)
-            box = CGRect(
-                x: xs.min() ?? 0,
-                y: ys.min() ?? 0,
-                width: (xs.max() ?? 0) - (xs.min() ?? 0),
-                height: (ys.max() ?? 0) - (ys.min() ?? 0)
-            )
+            let across = points.lazy.map(\.x).minAndMax() ?? (0, 0)
+            let down = points.lazy.map(\.y).minAndMax() ?? (0, 0)
+            box = CGRect(x: across.min, y: down.min, width: across.max - across.min, height: down.max - down.min)
         }
     }
 
@@ -476,20 +472,21 @@ nonisolated struct MeasuredPath {
 
     init(_ points: [CGPoint]) {
         self.points = points
-        var running: [CGFloat] = [0]
-        for (from, to) in zip(points, points.dropFirst()) {
-            running.append((running.last ?? 0) + hypot(to.x - from.x, to.y - from.y))
+        distances = points.adjacentPairs().reductions(0) { distance, step in
+            let (from, to) = step
+            return distance + hypot(to.x - from.x, to.y - from.y)
         }
-        distances = running
     }
 
-    /// The point `distance` along the line, held to its ends.
+    /// The point `distance` along the line, held to its ends. Looked up by
+    /// bisection, which the distances allow because they never fall: a name
+    /// asks for a few points for each of its letters, along lines of
+    /// hundreds of points where a tile is drawn from a wider archive tile.
     func point(at distance: CGFloat) -> CGPoint {
         guard let first = points.first else { return .zero }
         guard distance > 0 else { return first }
-        guard let index = distances.firstIndex(where: { $0 >= distance }), index > 0 else {
-            return points.last ?? first
-        }
+        let index = distances.partitioningIndex { $0 >= distance }
+        guard index < distances.endIndex, index > 0 else { return points.last ?? first }
         let span = distances[index] - distances[index - 1]
         let fraction = span > 0 ? (distance - distances[index - 1]) / span : 0
         let from = points[index - 1]
