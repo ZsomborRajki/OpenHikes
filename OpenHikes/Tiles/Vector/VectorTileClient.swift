@@ -49,6 +49,7 @@
 
 import Foundation
 import OpenHikesData
+import OrderedCollections
 import os
 import Synchronization
 
@@ -77,8 +78,9 @@ nonisolated final class VectorTileClient: Sendable {
         var pausedUntil: [URL: ContinuousClock.Instant] = [:]
         /// By the archive tile's address on the server: its bytes, or the
         /// archive's answer that it has nothing there (``Fetch/missing``).
-        var kept: [URL: Fetch] = [:]
-        var keptOrder: [URL] = []
+        /// The one kept longest first, which goes first once more than
+        /// ``VectorTileClient/keptArchiveTiles`` are kept.
+        var kept: OrderedDictionary<URL, Fetch> = [:]
         var inFlight: [URL: Task<Fetch, Never>] = [:]
     }
 
@@ -305,11 +307,11 @@ nonisolated final class VectorTileClient: Sendable {
             state.inFlight[url] = nil
             switch fetched {
             case .tile, .missing:
+                // Kept again at the end, as the newest.
+                state.kept.removeValue(forKey: url)
                 state.kept[url] = fetched
-                state.keptOrder.removeAll { $0 == url }
-                state.keptOrder.append(url)
-                while state.keptOrder.count > Self.keptArchiveTiles {
-                    state.kept[state.keptOrder.removeFirst()] = nil
+                if state.kept.count > Self.keptArchiveTiles {
+                    state.kept.removeFirst(state.kept.count - Self.keptArchiveTiles)
                 }
             case let .unavailable(pause):
                 // Two requests can fail together, and the one that comes back
@@ -328,7 +330,6 @@ nonisolated final class VectorTileClient: Sendable {
         state.withLock { state in
             guard state.kept[served.url] == .tile(served.bytes) else { return }
             state.kept[served.url] = nil
-            state.keptOrder.removeAll { $0 == served.url }
         }
     }
 
