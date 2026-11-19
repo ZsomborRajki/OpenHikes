@@ -320,6 +320,9 @@ nonisolated final class TileSandbox: Sendable {
     ///   - vectorSources: the providers whose tiles the cache draws from a
     ///     vector archive. Empty by default, as every suite but the vector
     ///     tile ones wants: an `osm` key then fetches its raster tile alone.
+    ///   - vectorArchives: the same as a holder of its own, which a suite
+    ///     that reads the tile server's manifest builds; it wins over
+    ///     `vectorSources`.
     ///   - power: the power state the fetch policy sees. Fixed rather than
     ///     read from the process, so a suite that publishes Low Power Mode
     ///     cannot change what a tile suite running beside it decides.
@@ -332,6 +335,7 @@ nonisolated final class TileSandbox: Sendable {
         sessionConfiguration: URLSessionConfiguration? = nil,
         mutationKeyLimit: Int = TileCache.mutationKeyVersionLimit,
         vectorSources: [String: VectorTileSource] = [:],
+        vectorArchives: VectorTileArchives? = nil,
         power: PowerState = PowerState(),
         durableByteLimitScale: Double = 1,
         countryArchives: OfflineCountryArchives? = nil
@@ -343,7 +347,8 @@ nonisolated final class TileSandbox: Sendable {
             sessionConfiguration: sessionConfiguration,
             monitorsNetwork: false,
             mutationKeyLimit: mutationKeyLimit,
-            vectorSources: vectorSources,
+            vectorArchives: vectorArchives
+                ?? (vectorSources.isEmpty ? nil : VectorTileArchives(sources: vectorSources)),
             countryArchives: countryArchives,
             durableByteLimitScale: durableByteLimitScale
         ) { power }

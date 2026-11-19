@@ -63,12 +63,12 @@ nonisolated extension TileCache {
         // refetched tile is written back, and whether there is anything to
         // fall back on if it cannot be fetched at all.
         // A copy drawn before the downloaded country that holds it was
-        // installed is coverage past its age too: drawn while the load draws
-        // it again from the country, with no request.
+        // installed, or before its provider moved to other archives, is
+        // coverage past its age too: drawn while the load draws it again.
         let durableStoredAt = storedModificationDate(for: filePaths(forKey: key).durable, in: .durable)
         var lookup = StoredTileLookup(
             wasDurable: durableStoredAt != nil,
-            hasStaleCoverage: durableStoredAt.map { isExpired($0) || isRedrawnFromCountry(key, storedAt: $0) }
+            hasStaleCoverage: durableStoredAt.map { isExpired($0) || isRedrawn(key, storedAt: $0) }
                 ?? false
         )
 
@@ -94,15 +94,16 @@ nonisolated extension TileCache {
     /// deleted for age: a durable tile past its TTL is still on disk, and the
     /// point of not returning it here is that the load path gets a chance to
     /// refresh it before falling back to it. ``durableImage(forKey:)`` is that
-    /// fallback. A copy drawn before the country that holds it was installed
-    /// is not current either (``isRedrawnFromCountry(_:storedAt:)``).
+    /// fallback. A copy drawn before the country that holds it was installed,
+    /// or before its provider moved to other archives, is not current either
+    /// (``isRedrawn(_:storedAt:)``).
     func freshDiskImage(forKey key: String) -> (image: TileImage, storedAt: Date)? {
         let name = diskName(for: key)
         return [StorageTier.browsing, .durable].firstNonNil { tier in
             let file = directory(for: tier).appendingPathComponent(name)
             guard let storedAt = storedModificationDate(for: file, in: tier),
                   !isExpired(storedAt),
-                  !isRedrawnFromCountry(key, storedAt: storedAt),
+                  !isRedrawn(key, storedAt: storedAt),
                   let image = decodedTile(at: file)
             else { return nil }
             return (image, storedAt)

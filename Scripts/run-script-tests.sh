@@ -5487,6 +5487,103 @@ if expect_status 1 \
     pass
 fi
 
+# Scripts/vector-archives.sh puts the manifest the app reads on the tile
+# server, once every archive it names answers, and never one older than the
+# server's. `curl` is a stub again, standing for both the tile server and R2:
+# an archive's TileJSON answers 200 unless STUB_MISSING_ARCHIVES names it
+# (410), the server's manifest is the file at STUB_SERVED_MANIFEST (a 404
+# while there is none), and an upload with -T writes that file and answers
+# 200, as `-w "%{http_code}"` prints them.
+cat > "$stub_bin/curl" <<'STUB'
+#!/usr/bin/env bash
+printf 'curl %s\n' "$*" >> "$STUB_CALL_LOG"
+out=/dev/null upload="" url=""
+while (( $# )); do
+    case "$1" in
+        -o) out="$2"; shift 2 ;;
+        -w|-H|--user|--aws-sigv4) shift 2 ;;
+        -T) upload="$2"; shift 2 ;;
+        -*) shift ;;
+        *) url="$1"; shift ;;
+    esac
+done
+if [[ -n "$upload" ]]; then
+    cp "$upload" "$STUB_SERVED_MANIFEST"
+    printf '200'
+elif [[ "$url" == */manifest.json ]]; then
+    if [[ -f "$STUB_SERVED_MANIFEST" ]]; then cp "$STUB_SERVED_MANIFEST" "$out"; printf '200'; else printf '404'; fi
+elif [[ "$url" == *.json ]]; then
+    name="$(basename "$url" .json)"
+    if [[ " ${STUB_MISSING_ARCHIVES:-} " == *" $name "* ]]; then printf '410'; else printf '200'; fi
+else
+    echo "stub curl: no answer for '$url'" >&2
+    exit 64
+fi
+STUB
+chmod +x "$stub_bin/curl"
+vector_archives="$repository_root/Scripts/vector-archives.sh"
+archives_work="$work/vector-archives"
+mkdir -p "$archives_work"
+cp "$extras_work/r2.env" "$archives_work/r2.env"
+cat > "$archives_work/manifest.json" <<'EOF'
+{"version": 1, "revision": 2,
+ "basemaps": [{"name": "planet-20261117", "schema": 4, "maximumZoom": 15}],
+ "extras": [{"name": "extras-20261119", "generation": 2, "minimumZoom": 4}]}
+EOF
+export OPENHIKES_VECTOR_ARCHIVE_MANIFEST="$archives_work/manifest.json"
+export OPENHIKES_TILE_SERVER="https://tiles.example.invalid"
+export STUB_SERVED_MANIFEST="$archives_work/served.json"
+
+OPENHIKES_R2_ENV="$archives_work/r2.env" STUB_MISSING_ARCHIVES="extras-20261119" \
+    run_script "vector-archives publish refuses a manifest naming an archive the server does not have" \
+    "$vector_archives" publish
+if expect_status 1 \
+    && expect_contains "$output" "answered 410 for extras-20261119" "the error" \
+    && expect_absent "$calls" " -T " "the requests"; then
+    pass
+fi
+
+OPENHIKES_R2_ENV="$archives_work/r2.env" \
+    run_script "vector-archives publish puts the manifest in the bucket and reads it back through the server" \
+    "$vector_archives" publish
+if expect_status 0 \
+    && expect_contains "$calls" "-H Content-Type: application/json -T $archives_work/manifest.json" "the upload" \
+    && expect_contains "$calls" "stub-account.r2.cloudflarestorage.com/stub-bucket/manifest.json" "the upload" \
+    && expect_contains "$output" "published revision 2 to https://tiles.example.invalid" "the output"; then
+    pass
+fi
+
+OPENHIKES_R2_ENV="$archives_work/r2.env" \
+    run_script "vector-archives publish leaves alone a manifest the server already has" \
+    "$vector_archives" publish
+if expect_status 0 \
+    && expect_contains "$output" "already has revision 2" "the output" \
+    && expect_absent "$calls" " -T " "the requests"; then
+    pass
+fi
+
+# An app never moves to a lower revision than it has read, so a manifest that
+# is not above the server's would reach none of them.
+sed 's/"extras-20261119"/"extras-20261120"/' "$archives_work/manifest.json" > "$archives_work/next.json"
+OPENHIKES_R2_ENV="$archives_work/r2.env" OPENHIKES_VECTOR_ARCHIVE_MANIFEST="$archives_work/next.json" \
+    run_script "vector-archives publish refuses a revision no higher than the server's" \
+    "$vector_archives" publish
+if expect_status 1 \
+    && expect_contains "$output" "revision 2 is not above 2" "the error" \
+    && expect_absent "$calls" " -T " "the requests"; then
+    pass
+fi
+
+sed 's/"planet-20261117"/"Planet-20261117"/' "$archives_work/manifest.json" > "$archives_work/unsafe.json"
+OPENHIKES_VECTOR_ARCHIVE_MANIFEST="$archives_work/unsafe.json" \
+    run_script "vector-archives check refuses a name the app would not read" \
+    "$vector_archives" check
+if expect_status 1 \
+    && expect_contains "$output" "'Planet-20261117' is not a name the app reads" "the error"; then
+    pass
+fi
+unset OPENHIKES_VECTOR_ARCHIVE_MANIFEST OPENHIKES_TILE_SERVER STUB_SERVED_MANIFEST
+
 echo
 if (( failures > 0 )); then
     echo "$failures case(s) failed." >&2

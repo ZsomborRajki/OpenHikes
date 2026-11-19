@@ -106,9 +106,9 @@ nonisolated extension TileCache {
     /// after the phone has signal again.
     ///
     /// A current entry drawn before the downloaded country that holds it was
-    /// installed is turned away as an expired one is
-    /// (``isRedrawnFromCountry(_:storedAt:)``), so the load draws it again
-    /// from the build the hiker has now.
+    /// installed, or before its provider moved to other archives, is turned
+    /// away as an expired one is (``isRedrawn(_:storedAt:)``), so the load
+    /// draws it again from the build the hiker has now.
     ///
     /// `referenceDate` is defaulted for the same reason it is on
     /// ``removeExpiredTiles(referenceDate:)``: a test can't wait out a
@@ -123,7 +123,7 @@ nonisolated extension TileCache {
                 && referenceDate.timeIntervalSince(servedStaleAt) < Self.staleCoverageRecheckInterval
         } else {
             !isExpired(tile.storedAt, referenceDate: referenceDate)
-                && !isRedrawnFromCountry(key, storedAt: tile.storedAt)
+                && !isRedrawn(key, storedAt: tile.storedAt)
         }
         guard isUsable else {
             memory.removeObject(forKey: cacheKey)

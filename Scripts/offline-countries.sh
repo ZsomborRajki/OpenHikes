@@ -30,8 +30,9 @@
 #
 #   build     Cut every area, or only those --only names (a region's code, or a
 #             split country's for all its regions), into <dir> (default
-#             .build/offline-countries/out) with its manifest.json. The planet
-#             build is the one VectorTileSource.openHikesPlanet names; --planet
+#             .build/offline-countries/out) with its manifest.json. The basemap
+#             and the extras are the first the app's manifest names
+#             (OpenHikes/Tiles/Vector/VectorTileArchiveManifest.json); --planet
 #             and --extras read local copies rather than the bucket, which is
 #             what makes cutting the whole world take hours rather than a day.
 #             A 3 km margin by default.
@@ -110,12 +111,13 @@ load_keys() {
     set +a
 }
 
-# The planet build the app draws, read out of the app rather than spelled here.
-planet_build() {
-    local source="$repository_root/OpenHikes/Tiles/Vector/VectorTileSource.swift" build
-    build="$(sed -n 's|.*tiles.openhikes.app/planet-\([0-9]\{8\}\)".*|\1|p' "$source" | head -n 1)"
-    [[ -n "$build" ]] || die "could not read the planet build out of $source"
-    printf '%s\n' "$build"
+# The first of `list` (basemaps or extras) the app's manifest names, which is
+# what the app draws from, read out of the app rather than spelled here.
+archive_name() {
+    local list="$1" manifest="$repository_root/OpenHikes/Tiles/Vector/VectorTileArchiveManifest.json" name
+    name="$(plutil -extract "$list.0.name" raw -o - "$manifest" 2>/dev/null)" \
+        || die "could not read the first of $list out of $manifest"
+    printf '%s\n' "$name"
 }
 
 # A Natural Earth file, downloaded once and held to its pinned SHA-256.
@@ -144,10 +146,12 @@ build() {
             *) usage ;;
         esac
     done
-    local planet
-    planet="$(planet_build)"
-    [[ -n "$planet_file" ]] || planet_file="r2:planet-$planet.pmtiles"
-    [[ -n "$extras" ]] || extras="r2:extras-$planet.pmtiles"
+    local basemap planet
+    basemap="$(archive_name basemaps)"
+    planet="${basemap#planet-}"
+    [[ "$planet" =~ ^[0-9]{8}$ ]] || die "the basemap $basemap is not named planet-YYYYMMDD"
+    [[ -n "$planet_file" ]] || planet_file="r2:$basemap.pmtiles"
+    [[ -n "$extras" ]] || extras="r2:$(archive_name extras).pmtiles"
     local outline_file region_file
     outline_file="$(natural_earth_file "$outlines_url" "$outlines_sha256")"
     region_file="$(natural_earth_file "$regions_url" "$regions_sha256")"
@@ -157,7 +161,7 @@ build() {
         --outlines "$outline_file" --regions "$region_file"
         --countries "$repository_root/Scripts/lib/offline-countries.json"
         --out "$out" --margin-km "$margin"
-        --server "https://tiles.openhikes.app/planet-$planet")
+        --server "https://tiles.openhikes.app/$basemap")
     [[ -z "$only" ]] || arguments+=(--only "$only")
     "$tool" "${arguments[@]}"
     echo "offline-countries: built into $out"

@@ -46,6 +46,14 @@
 //  the extras can be asked for again, so an outage of a minute does not
 //  leave a week of tiles without their gates and car parks.
 //
+//  Which archives those are is the tile server's manifest's to say
+//  (``VectorTileArchives``), and an archive it no longer serves answers 410.
+//  A tile that meets one waits while the manifest is read again and is drawn
+//  from the archive it names now, rather than falling back: a 410 is a build
+//  retired since the manifest was last read, not a server in trouble. Where
+//  the manifest names nothing newer, the basemap's 410 falls back and the
+//  extras' leaves the drawing provisional, as any refusal does.
+//
 
 import Foundation
 import OpenHikesData
@@ -67,7 +75,9 @@ nonisolated final class VectorTileClient: Sendable {
     /// tens of kilobytes, so this is a few megabytes at most.
     static let keptArchiveTiles = 128
 
-    private let sources: [String: VectorTileSource]
+    /// What each provider is drawn from, which the tile server's manifest
+    /// moves.
+    let archives: VectorTileArchives
     private let session: URLSession
     private let language: String
     private let now: @Sendable () -> ContinuousClock.Instant
@@ -107,6 +117,9 @@ nonisolated final class VectorTileClient: Sendable {
         /// The server refused this one tile: the fallback draws it, and the
         /// server is still asked for the next.
         case refused
+        /// The server has no such archive any more. Neither kept nor a reason
+        /// to pass the archive over: the manifest is read again instead.
+        case retired
         /// The server is down or failing, and the archive is passed over for
         /// `pause`.
         case unavailable(pause: Duration)
@@ -138,19 +151,19 @@ nonisolated final class VectorTileClient: Sendable {
     }
 
     /// - Parameters:
-    ///   - sources: the vector source of each provider that has one, by
-    ///     provider id.
+    ///   - archives: what each provider that is drawn from vector tiles is
+    ///     drawn from.
     ///   - session: the cache's own, so the tile server is told who is asking
     ///     as every tile server is.
     ///   - language: the language whose names the map prefers.
     ///   - now: the clock ``failurePause`` is measured on, injected for tests.
     init(
-        sources: [String: VectorTileSource],
+        archives: VectorTileArchives,
         session: URLSession,
         language: String = VectorTileLabels.appLanguage,
         now: @escaping @Sendable () -> ContinuousClock.Instant = { .now }
     ) {
-        self.sources = sources
+        self.archives = archives
         self.session = session
         self.language = language
         self.now = now
@@ -158,7 +171,7 @@ nonisolated final class VectorTileClient: Sendable {
 
     /// Whether `key` names a tile of a provider this client draws.
     func draws(_ key: String) -> Bool {
-        TileCacheKey.named(key).map { sources[$0.providerID] != nil } ?? false
+        TileCacheKey.named(key).map { archives.source(for: $0.providerID) != nil } ?? false
     }
 
     /// The tile `key` names, drawn, or what to do instead: ``Drawing/fallBack``
@@ -168,7 +181,9 @@ nonisolated final class VectorTileClient: Sendable {
     /// milliseconds of work that must not land on whichever actor asked.
     @concurrent
     func drawing(forKey key: String) async -> Drawing {
-        guard let named = TileCacheKey.named(key), let source = sources[named.providerID] else { return .fallBack }
+        guard let named = TileCacheKey.named(key),
+              let source = archives.source(for: named.providerID)
+        else { return .fallBack }
         let target = VectorTileAddress(z: named.z, x: named.x, y: named.y)
         let dataTile = source.dataTile(for: target)
         // Both asked for before either is waited on, unless the basemap
@@ -184,11 +199,19 @@ nonisolated final class VectorTileClient: Sendable {
             // Whatever became of the extras, the basemap is drawn.
             guard var tile = decode(Served(url: basemapURL, bytes: bytes)) else { return .fallBack }
             let added = await extrasTile(extras)
+            if added.isRetired, await archives.moved(from: source, for: named.providerID) {
+                return await drawing(forKey: key)
+            }
             if let extrasTile = added.tile { tile = tile.merging(extrasTile) }
             guard let png = draw(tile, from: dataTile, as: target, key: key, url: basemapURL) else { return .fallBack }
             return added.isComplete ? .png(png) : .provisional(png)
         case .offline:
             return .offline
+        case .retired:
+            // Drawn again from the archive the manifest names now: once,
+            // because a move away from that one waits out a read just made.
+            guard await archives.moved(from: source, for: named.providerID) else { return .fallBack }
+            return await drawing(forKey: key)
         case nil:
             #if DEBUG
             Self.logger.debug("Vector tile \(key, privacy: .public): archive passed over after a failure")
@@ -210,21 +233,23 @@ nonisolated final class VectorTileClient: Sendable {
 
     /// The extras' tile to draw into the basemap's, read, and whether the
     /// drawing has all of them: not where the server failed to give them,
-    /// the device lost them, the archive is passed over or their bytes could
-    /// not be read, each of which the next request may put right. A tile
-    /// they have nothing at, or a tile too wide for them, is complete.
+    /// the device lost them, the archive is passed over or gone, or their
+    /// bytes could not be read, each of which the next request may put right.
+    /// A tile they have nothing at, or a tile too wide for them, is complete.
     private func extrasTile(
         _ extras: (url: URL, lookup: Lookup)?
-    ) async -> (tile: MapboxVectorTile?, isComplete: Bool) {
-        guard let extras else { return (nil, true) }
+    ) async -> (tile: MapboxVectorTile?, isComplete: Bool, isRetired: Bool) {
+        guard let extras else { return (nil, true, false) }
         switch await Self.result(of: extras.lookup) {
         case let .tile(bytes):
             let tile = decode(Served(url: extras.url, bytes: bytes))
-            return (tile, tile != nil)
+            return (tile, tile != nil, false)
         case .missing:
-            return (nil, true)
+            return (nil, true, false)
+        case .retired:
+            return (nil, false, true)
         case .refused, .unavailable, .offline, nil:
-            return (nil, false)
+            return (nil, false, false)
         }
     }
 
@@ -317,7 +342,7 @@ nonisolated final class VectorTileClient: Sendable {
                 // Two requests can fail together, and the one that comes back
                 // last must not cut short the longer wait the first was told.
                 state.pausedUntil[archive] = max(state.pausedUntil[archive] ?? instant, instant + pause)
-            case .refused, .offline:
+            case .refused, .retired, .offline:
                 break
             }
         }
@@ -392,11 +417,13 @@ nonisolated final class VectorTileClient: Sendable {
     ]
 
     /// A response read as the server's health and the tile's: a tile, a tile
-    /// the archive does not have, one refused, or a server to pass over, for
-    /// ``failurePause`` or the longer `retryAfter` it asked for.
+    /// the archive does not have, an archive the server no longer has, one
+    /// refused, or a server to pass over, for ``failurePause`` or the longer
+    /// `retryAfter` it asked for.
     static func outcome(status: Int, data: Data, retryAfter: Duration? = nil) -> Fetch {
         if status == httpOK, !data.isEmpty { return .tile(data) }
         if httpNothingThere.contains(status) { return .missing }
+        if status == httpGone { return .retired }
         if status == httpTooManyRequests || httpServerErrors.contains(status) {
             return .unavailable(pause: max(failurePause, retryAfter ?? .zero))
         }
@@ -410,6 +437,8 @@ nonisolated final class VectorTileClient: Sendable {
     private static let httpNothingThere: Set<Int> = [httpOK, httpNoContent, httpNotFound]
     private static let httpNoContent = 204
     private static let httpNotFound = 404
+    /// How the OpenHikes tile server says it has no archive of that name.
+    private static let httpGone = 410
     private static let httpTooManyRequests = 429
     private static let httpServerErrors = 500..<600
 }

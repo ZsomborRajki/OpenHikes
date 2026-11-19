@@ -23,11 +23,12 @@
 # first, so a name already taken costs no upload, and then sends the file on
 # condition that nothing is there (`If-None-Match: *`), which R2 checks as the
 # write commits: of two uploads to one name that both found it free, the
-# second is refused rather than written over the first. Then point
-# `VectorTileSource.openHikesPlanet` at it. It signs with R2's S3 keys,
-# read from OPENHIKES_R2_ENV (default ~/.config/openhikes/r2-openhikes-tiles.env:
-# R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET), and sends
-# the file in one request, which R2 takes up to 5 GiB.
+# second is refused rather than written over the first. Then name it in the
+# app's manifest and publish that (`Scripts/vector-archives.sh`). It signs
+# with R2's S3 keys, read from OPENHIKES_R2_ENV (default
+# ~/.config/openhikes/r2-openhikes-tiles.env: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID,
+# R2_SECRET_ACCESS_KEY, R2_BUCKET), and sends the file in one request, which
+# R2 takes up to 5 GiB.
 #
 # It is a development tool and is in no gate. It needs osmium and Planetiler
 # (`brew install osmium-tool planetiler`). On an M4 Max the planet took 23

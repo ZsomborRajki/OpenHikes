@@ -245,6 +245,7 @@ struct StubbedTileCache {
         reachable: Bool = true,
         mutationKeyLimit: Int = TileCache.mutationKeyVersionLimit,
         vectorSources: [String: VectorTileSource] = [:],
+        vectorArchives: VectorTileArchives? = nil,
         power: PowerState = PowerState(),
         countryArchives: OfflineCountryArchives? = nil
     ) {
@@ -254,6 +255,7 @@ struct StubbedTileCache {
             sessionConfiguration: StubTileProtocol.sessionConfiguration(),
             mutationKeyLimit: mutationKeyLimit,
             vectorSources: vectorSources,
+            vectorArchives: vectorArchives,
             power: power,
             countryArchives: countryArchives
         )

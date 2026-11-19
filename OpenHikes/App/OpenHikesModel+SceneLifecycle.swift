@@ -40,6 +40,8 @@ extension OpenHikesModel {
         autoSaveController.sceneDidBecomeActive()
         if !AppLaunchEnvironment.isRunningTests {
             backgroundTracker.refreshBasemaps()
+            // A new build of the map may have gone up while the app was away.
+            TileCache.shared.refreshVectorArchives()
         }
         // Armed here and taken down on the way out, which is the whole of what
         // keeps the weather badge's movement feed from becoming a background

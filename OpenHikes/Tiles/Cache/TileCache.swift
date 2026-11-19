@@ -55,7 +55,7 @@ nonisolated final class TileCache: @unchecked Sendable {
         // No suite reaches the tile server, UI tests included, as none reaches
         // the hiking-routes squares: a suite draws the raster tiles it always
         // has. See *Tiles* in `AGENTS.md`.
-        vectorSources: AppLaunchEnvironment.isRunningTests ? [:] : TileProvider.vectorSources,
+        vectorArchives: VectorTileArchives.forThisLaunch(),
         // The downloaded countries, which the countries' model opens into
         // this. A suite's cache has none, as it has no vector source.
         countryArchives: AppLaunchEnvironment.isRunningTests ? nil : .shared
@@ -313,9 +313,9 @@ nonisolated final class TileCache: @unchecked Sendable {
     ///     directly because that snapshot is process-wide: a suite that
     ///     published a Low Power Mode reading would otherwise change what
     ///     every other suite running beside it decided about the network.
-    ///   - vectorSources: the providers whose tiles are drawn from a vector
-    ///     archive, by provider id. Empty — the default, and every suite's
-    ///     unless it asks — fetches every tile from its raster template.
+    ///   - vectorArchives: what the providers whose tiles are drawn from a
+    ///     vector archive are drawn from. `nil` — the default, and every
+    ///     suite's unless it asks — fetches every tile from its raster template.
     ///   - countryArchives: the downloaded countries those providers' tiles
     ///     are drawn from before any server is asked. `nil` — the default —
     ///     draws nothing from them.
@@ -330,7 +330,7 @@ nonisolated final class TileCache: @unchecked Sendable {
         sessionConfiguration: URLSessionConfiguration? = nil,
         monitorsNetwork: Bool = true,
         mutationKeyLimit: Int = TileCache.mutationKeyVersionLimit,
-        vectorSources: [String: VectorTileSource] = [:],
+        vectorArchives: VectorTileArchives? = nil,
         countryArchives: OfflineCountryArchives? = nil,
         durableByteLimitScale: Double = 1,
         readPower: @escaping @Sendable () -> PowerState = { .current }
@@ -350,7 +350,7 @@ nonisolated final class TileCache: @unchecked Sendable {
 
         let config = Self.tileSessionConfiguration(from: sessionConfiguration)
         session = URLSession(configuration: config)
-        (vectorTiles, countryTiles) = Self.vectorDrawing(vectorSources, session, countryArchives)
+        (vectorTiles, countryTiles) = Self.vectorDrawing(vectorArchives, session, countryArchives)
 
         memory.totalCostLimit = Self.memoryByteLimit
         // A secondary backstop, kept for the pathological case of very small

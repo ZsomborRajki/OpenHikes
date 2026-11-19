@@ -7,9 +7,11 @@
 //  of it before the network policy is asked, so it draws with no signal, and
 //  before the tile server is, so a country costs the server nothing once it
 //  is down. See ``OfflineCountryDrawing``. And a copy the cache drew before
-//  the country that holds it was installed is not current, wherever it is
-//  kept, so the load draws it again from the build there is now. Out of
-//  `TileCache.swift`, which is at the length the linter allows.
+//  the country that holds it was installed, or before the tile server's
+//  manifest moved the provider to other archives (``VectorTileArchives``), is
+//  not current, wherever it is kept, so the load draws it again from the
+//  build there is now. Out of `TileCache.swift`, which is at the length the
+//  linter allows.
 //
 
 import Foundation
@@ -21,15 +23,22 @@ nonisolated extension TileCache {
     /// cache with no vector source, and no drawing for one given no
     /// countries.
     static func vectorDrawing(
-        _ sources: [String: VectorTileSource],
+        _ sources: VectorTileArchives?,
         _ session: URLSession,
         _ countries: OfflineCountryArchives?
     ) -> (VectorTileClient?, OfflineCountryDrawing?) {
-        guard !sources.isEmpty else { return (nil, nil) }
+        guard let sources else { return (nil, nil) }
         return (
-            VectorTileClient(sources: sources, session: session),
+            VectorTileClient(archives: sources, session: session),
             countries.map { OfflineCountryDrawing(sources: sources, archives: $0) }
         )
+    }
+
+    /// Reads the tile server's manifest, unless it was read in the last hour,
+    /// so a build of the map that went up while the app was away is drawn
+    /// from. Returns at once.
+    func refreshVectorArchives() {
+        vectorTiles?.archives.refresh()
     }
 
     /// Whether a load of `key` asks the OpenHikes tile server for a vector
@@ -39,11 +48,13 @@ nonisolated extension TileCache {
     }
 
     /// Whether the copy of `key` stored at `storedAt` was drawn before a
-    /// downloaded country holding it was installed, and so is not current.
-    /// The memory tier and the disk ask the same question, so a copy one
-    /// turns away the other never hands back. Safe in the draw pass.
-    func isRedrawnFromCountry(_ key: String, storedAt: Date) -> Bool {
-        countryTiles?.redraws(key, drawnAt: storedAt) ?? false
+    /// downloaded country holding it was installed, or before its provider
+    /// moved to other archives, and so is not current. The memory tier and
+    /// the disk ask the same question, so a copy one turns away the other
+    /// never hands back. Safe in the draw pass.
+    func isRedrawn(_ key: String, storedAt: Date) -> Bool {
+        vectorTiles?.archives.redraws(key, drawnAt: storedAt) == true
+            || countryTiles?.redraws(key, drawnAt: storedAt) == true
     }
 
     /// The tile `key` names, drawn out of a downloaded country and filed back
