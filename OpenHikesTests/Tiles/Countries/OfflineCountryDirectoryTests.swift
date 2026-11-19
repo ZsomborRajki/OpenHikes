@@ -163,6 +163,23 @@ struct OfflineCountryDirectoryTests {
         #expect(OfflineCountrySort.inForce(chosen: .nearest, hasPosition: false) == .name)
     }
 
+    /// The menu's haptic answers the hiker's choice, not the order in force,
+    /// which also turns from by name to nearest first as the position is read.
+    @Test("picking the order already in force chooses nothing, and another order is chosen")
+    func choosingAnOrder() {
+        let list = OfflineCountriesListState()
+
+        list.choose(.nearest, over: .nearest)
+        #expect(list.chosenSort == nil)
+
+        list.choose(.largest, over: .nearest)
+        #expect(list.chosenSort == .largest)
+        list.choose(.largest, over: .largest)
+        #expect(list.chosenSort == .largest)
+        list.choose(.nearest, over: .largest)
+        #expect(list.chosenSort == .nearest)
+    }
+
     // MARK: - A search
 
     @Test("a search lists a name that starts with it before one that contains it, marks and case aside")

@@ -28,8 +28,19 @@ final class OfflineCountriesListState {
     /// What is typed in the search field.
     var query = ""
     /// The order the hiker picked, or `nil` for the one the list opens in —
-    /// see ``OfflineCountrySort/inForce(chosen:hasPosition:)``.
-    var chosenSort: OfflineCountrySort?
+    /// see ``OfflineCountrySort/inForce(chosen:hasPosition:)``. Changed only
+    /// by the hiker, so it is what the menu's haptic answers: the order in
+    /// force also moves as the hiker's position is first read, which is no
+    /// choice of theirs.
+    private(set) var chosenSort: OfflineCountrySort?
     /// The split countries open in the list.
     var expanded: Set<String> = []
+
+    /// Puts the list in `sort`. Picking the order already in force, `current`,
+    /// chooses nothing, so a menu that hands its selection back unchanged is
+    /// not felt as a change.
+    func choose(_ sort: OfflineCountrySort, over current: OfflineCountrySort) {
+        guard sort != current else { return }
+        chosenSort = sort
+    }
 }

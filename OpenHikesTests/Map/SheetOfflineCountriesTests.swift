@@ -72,7 +72,7 @@ struct SheetOfflineCountriesTests {
         presentation.path = [.offlineCountries]
         let list = presentation.offlineCountriesList(for: .offlineCountries)
         list.query = "Bav"
-        list.chosenSort = .largest
+        list.choose(.largest, over: .nearest)
         list.expanded = ["US"]
 
         for layout in [SheetLayout.sidePanel, .bottomSheet] {

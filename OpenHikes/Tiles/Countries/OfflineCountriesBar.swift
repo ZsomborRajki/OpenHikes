@@ -20,6 +20,10 @@ struct OfflineCountriesBar: View {
     var isSearchFocused: FocusState<Bool>.Binding
     /// The order the list is in, and the ones to offer.
     let sort: OfflineCountrySort
+    /// The order the hiker picked, which the haptic answers rather than
+    /// ``sort``: the list opens by name and turns nearest first as the
+    /// hiker's position is read, a pass later, and that is no choice to feel.
+    let chosenSort: OfflineCountrySort?
     let orders: [OfflineCountrySort]
     let onSort: (OfflineCountrySort) -> Void
 
@@ -82,7 +86,7 @@ struct OfflineCountriesBar: View {
             label: "Sort offline maps",
             identifier: "offline-maps-order-button"
         )
-        .sensoryFeedback(HapticMoment.choiceChanged.feedback, trigger: sort)
+        .sensoryFeedback(HapticMoment.choiceChanged.feedback, trigger: chosenSort)
         .transition(.opacity)
     }
 }

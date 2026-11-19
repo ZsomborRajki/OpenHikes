@@ -92,8 +92,9 @@ struct OfflineCountriesList: View {
                 query: $state.query,
                 isSearchFocused: $isSearchFocused,
                 sort: sort,
+                chosenSort: state.chosenSort,
                 orders: OfflineCountrySort.offered(hasPosition: directory.hasPosition)
-            ) { state.chosenSort = $0 }
+            ) { state.choose($0, over: sort) }
             if asked.isEmpty {
                 list(countries.sections(of: directory, by: sort), by: sort)
             } else {
