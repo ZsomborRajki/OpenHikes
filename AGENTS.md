@@ -1391,8 +1391,9 @@ owner, on the main actor.
 - **No suite reaches the server or the session.**
   `OfflineCountries.forThisLaunch()` has neither under `isRunningTests`, and
   `TileCache.shared` has no areas there. The one way past the server is
-  `--ui-test-offline-countries=<seeded|refused>`, which hands the list ten
-  areas out of a bundled manifest, or a list that fails
+  `--ui-test-offline-countries=<seeded|showcase|refused>`, which hands the
+  list ten areas out of a bundled manifest, a bundled copy of the server's
+  whole manifest for the App Store frame, or a list that fails
   (`SeededOfflineCountryServer`), and still no session: `OfflineMapsUITests`
   goes as far as the download button and the hike tile's dialog, and never
   further, because nothing would download.
