@@ -15,7 +15,10 @@ import SwiftUI
 import TipKit
 
 struct MapModesOfflineMapsRow: View {
-    static let symbolName = "arrow.down.circle"
+    /// The row's glyph. `nonisolated` because the first-run tip over the row
+    /// draws it too — see ``OfflineMapsTip`` — and a tip is not main-actor
+    /// isolated.
+    nonisolated static let symbolName = "arrow.down.circle"
 
     let countries: OfflineCountries
     let onOpen: () -> Void
