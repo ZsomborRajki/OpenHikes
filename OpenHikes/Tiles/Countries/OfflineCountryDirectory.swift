@@ -265,6 +265,24 @@ struct OfflineCountrySections: Equatable {
     /// A region's row under its country, apart from the same region's row in
     /// *Downloaded*.
     static func groupRowID(_ id: String) -> String { "group-\(id)" }
+
+    /// The list's next step towards showing an area.
+    enum Reveal: Equatable {
+        /// Open the country the area is under. Its regions join the list on
+        /// the pass after, and a scroll asked for before then finds no row to
+        /// go to, so the scroll waits for them.
+        case open(String)
+        /// Go to the row.
+        case scroll(to: String)
+    }
+
+    /// What the list does next to show `id`, with `expanded` the split
+    /// countries already open in it.
+    func reveal(_ id: String, expanded: Set<String>) -> Reveal {
+        let target = scrollTarget(for: id)
+        if let group = target.opening, !expanded.contains(group) { return .open(group) }
+        return .scroll(to: target.rowID)
+    }
 }
 
 /// A line of the list: an area, or a country split by region, which holds

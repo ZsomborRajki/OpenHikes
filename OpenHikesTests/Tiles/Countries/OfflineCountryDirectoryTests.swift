@@ -179,6 +179,21 @@ struct OfflineCountryDirectoryTests {
         #expect(directory(everything).areas(matching: "united") == [california, colorado])
     }
 
+    // MARK: - Going to an area
+
+    /// A region's row joins the list only on the pass after its country
+    /// opens, so a scroll asked for with the opening went nowhere.
+    @Test("a region in a closed country opens it first, and is gone to once it is open")
+    func revealOpensTheCountryFirst() {
+        let byName = sections(directory(everything), by: .name)
+
+        #expect(byName.reveal("US-CO", expanded: []) == .open("US"))
+        #expect(byName.reveal("US-CO", expanded: ["US"]) == .scroll(to: OfflineCountrySections.groupRowID("US-CO")))
+        #expect(byName.reveal("AT", expanded: []) == .scroll(to: "AT"))
+        let nearest = sections(directory(everything, near: ljubljana), by: .nearest)
+        #expect(nearest.reveal("US-CO", expanded: []) == .scroll(to: "US-CO"), "a region is a row of its own there")
+    }
+
     // MARK: - Kept across passes
 
     @Test("the directory is built when the list or the position changes, and kept otherwise")

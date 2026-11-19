@@ -137,13 +137,26 @@ struct OfflineCountriesList: View {
             .scrollDismissesKeyboard(.immediately)
             // As the list comes up too: a search gives way to it with the
             // area it owes a scroll to already chosen.
-            .onChange(of: revealing, initial: true) { _, id in
-                guard let id else { return }
-                revealing = nil
-                let target = sections.scrollTarget(for: id)
-                if let group = target.opening { expanded.insert(group) }
-                withAnimation { scroller.scrollTo(target.rowID, anchor: .center) }
+            .onChange(of: revealing, initial: true) {
+                reveal(in: sections, with: scroller)
             }
+            // A region's row is in the list only once its country is open.
+            .onChange(of: expanded) {
+                reveal(in: sections, with: scroller)
+            }
+        }
+    }
+
+    /// Goes to the area the list owes a scroll to, or first opens the
+    /// country it is under (``OfflineCountrySections/reveal(_:expanded:)``).
+    private func reveal(in sections: OfflineCountrySections, with scroller: ScrollViewProxy) {
+        guard let id = revealing else { return }
+        switch sections.reveal(id, expanded: expanded) {
+        case let .open(group):
+            expanded.insert(group)
+        case let .scroll(rowID):
+            revealing = nil
+            withAnimation { scroller.scrollTo(rowID, anchor: .center) }
         }
     }
 
@@ -184,12 +197,22 @@ struct OfflineCountriesList: View {
         if found.isEmpty {
             ContentUnavailableView.search(text: asked)
         } else {
-            List {
-                rows(found)
+            ScrollViewReader { scroller in
+                List {
+                    rows(found)
+                }
+                .contentMargins(.top, 0, for: .scrollContent)
+                .fitsSidePanel()
+                .scrollDismissesKeyboard(.immediately)
+                // An area chosen on the map that the search holds is gone to
+                // here; one it does not hold has cleared the search, and the
+                // list it gave way to goes to it.
+                .onChange(of: revealing, initial: true) { _, id in
+                    guard let id, found.contains(where: { $0.id == id }) else { return }
+                    revealing = nil
+                    withAnimation { scroller.scrollTo(id, anchor: .center) }
+                }
             }
-            .contentMargins(.top, 0, for: .scrollContent)
-            .fitsSidePanel()
-            .scrollDismissesKeyboard(.immediately)
         }
     }
 
