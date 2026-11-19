@@ -35,10 +35,29 @@ nonisolated enum VectorTileLabelStyle {
             .locality,
         ]
 
-        /// Whether the name waits until the points have claimed their room.
-        /// Carto writes a locality's name with the points' own, so a summit
-        /// or a hut keeps its name where a gully's would cover it.
-        var isPlacedAfterPoints: Bool { self == .locality }
+        /// When a name claims its room.
+        enum Turn: Sendable {
+            /// After every point's name.
+            case afterPoints
+            /// After the names of the summits and passes, before any other
+            /// point's.
+            case afterSummits
+            /// Before everything else on the tile.
+            case first
+        }
+
+        /// A place's name comes first. Carto writes a lake's, a bay's or a
+        /// glacier's with the points' own, where it orders the summits by
+        /// height ahead of every area, and a locality's after them all: so
+        /// a summit keeps its name where a lake's would cover it, and a hut
+        /// where a gully's would.
+        var turn: Turn {
+            switch self {
+            case .water, .glacier: .afterSummits
+            case .locality: .afterPoints
+            default: .first
+            }
+        }
 
         static func < (lhs: Self, rhs: Self) -> Bool {
             (importance.firstIndex(of: lhs) ?? importance.count) < (importance.firstIndex(of: rhs) ?? importance.count)

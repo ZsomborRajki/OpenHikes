@@ -47,6 +47,9 @@ nonisolated extension VectorTileStyle {
         if kind == "minor_road", detail == "service", let service, minorServices.contains(service) {
             road = Road(line: minorService, order: listed.order)
         }
+        if kind == "rail", let service, sidingServices.contains(service), let detail, let siding = sidings[detail] {
+            road = Road(line: siding, order: listed.order)
+        }
         guard let access, closingAccess.contains(access), let closed = road.closed else { return road }
         return Road(line: closed, order: road.order)
     }
@@ -54,6 +57,24 @@ nonisolated extension VectorTileStyle {
     /// The `service` values of a service road Carto draws as a minor one:
     /// narrower, and not before zoom 16.
     static let minorServices: Set<String> = ["parking_aisle", "driveway", "drive-through"]
+
+    /// The `service` values of a railway's minor trackage, which Carto draws
+    /// lighter and thinner than the line it serves, and not before zoom 13:
+    /// a station's sidings, a yard, the spur into a works.
+    static let sidingServices: Set<String> = ["spur", "siding", "yard"]
+
+    /// The look of each class of railway's minor trackage: a main line's
+    /// keeps its dashes, in a paler gray; every other class shares one thin
+    /// line, a tram's from zoom 15 and the rest from 14.
+    private static let sidings: [String: Line] = [
+        "rail": railSiding,
+        "tram": tramSiding,
+        "light_rail": minorTrackage,
+        "funicular": minorTrackage,
+        "narrow_gauge": minorTrackage,
+        "monorail": minorTrackage,
+        "subway": subwaySiding,
+    ]
 
     /// Carto draws a closed path from this zoom, and an open one before it.
     static let closedPathZ = 15
@@ -225,6 +246,26 @@ nonisolated private extension VectorTileStyle {
         )
     )
     static let tram = Line(color: color("#6E6E6E"), width: ZoomCurve([(12, 0.75), (14, 1), (z17, 2)]))
+    /// A main line's sidings: paler, a pixel narrower, the dashes kept.
+    static let railSiding = Line(
+        color: color("#AAAAAA"),
+        width: ZoomCurve([(13, 2), (z17, 2), (z18, 3)]),
+        center: Center(
+            color: color("#FFFFFF"),
+            width: ZoomCurve([(13, sidingCenter), (z17, sidingCenter), (z18, 1)]),
+            dash: [10, 10]
+        )
+    )
+    static let sidingCenter: CGFloat = 0.8
+    static let tramSidingZ = 15
+    static let minorTrackageWidth = ZoomCurve([(14, 0.5), (16, 0.5), (z17, 1), (z18, minorTrackageZ18), (z19, 2)])
+    static let minorTrackageZ18: CGFloat = 1.5
+    static let minorTrackage = Line(color: color("#6E6E6E"), width: minorTrackageWidth)
+    static let tramSiding = Line(color: color("#6E6E6E"), width: minorTrackageWidth.starting(at: tramSidingZ))
+    static let subwaySiding = Line(
+        color: color("#999999"),
+        width: ZoomCurve([(14, 0.75), (16, 0.75), (z17, 1), (z18, minorTrackageZ18), (z19, 2)])
+    )
     /// Carto draws an unused line light and broken, and only up close.
     static let disusedRailway = Line(color: color("#AAAAAA"), width: ZoomCurve([(15, 2)]), dash: [1, 2])
     static let ferry = Line(color: color("#6666FF"), width: ZoomCurve([(8, 0.5), (12, 1), (16, 2)]), dash: [6, 4])

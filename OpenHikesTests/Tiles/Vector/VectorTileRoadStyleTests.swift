@@ -39,6 +39,39 @@ struct VectorTileRoadStyleTests {
         #expect(VectorTileStyle.road(kind: "rail", detail: "disused") != nil)
     }
 
+    /// A marshalling yard drawn as main line was a black slab beside its
+    /// station.
+    @Test("a railway's sidings are drawn paler and narrower than its line, from zoom 13", arguments: [
+        "spur", "siding", "yard",
+    ])
+    func sidings(service: String) throws {
+        let mainLine = try #require(VectorTileStyle.road(kind: "rail", detail: "rail"))
+        let siding = try #require(VectorTileStyle.road(kind: "rail", detail: "rail", service: service))
+
+        #expect(siding.line.width.value(at: 12) == 0)
+        #expect(siding.line.width.value(at: 13) > 0)
+        #expect(siding.line.width.value(at: 13) < mainLine.line.width.value(at: 13))
+        #expect(siding.line.color != mainLine.line.color)
+        #expect(siding.line.center != nil, "the dashes are kept")
+        #expect(siding.order == mainLine.order)
+    }
+
+    @Test("a tram's sidings wait for zoom 15 and a light railway's for 14; any other service is the line itself")
+    func minorTrackage() throws {
+        let depot = try #require(VectorTileStyle.road(kind: "rail", detail: "tram", service: "yard"))
+        let loop = try #require(VectorTileStyle.road(kind: "rail", detail: "light_rail", service: "siding"))
+        let lightRail = try #require(VectorTileStyle.road(kind: "rail", detail: "light_rail"))
+        let crossover = try #require(VectorTileStyle.road(kind: "rail", detail: "light_rail", service: "crossover"))
+
+        #expect(depot.line.width.value(at: 14) == 0)
+        #expect(depot.line.width.value(at: 15) > 0)
+        #expect(loop.line.width.value(at: 13) == 0)
+        #expect(loop.line.width.value(at: 14) > 0)
+        #expect(loop.line.width.value(at: 14) < lightRail.line.width.value(at: 14))
+        #expect(crossover.line.width.value(at: 14) == lightRail.line.width.value(at: 14))
+        #expect(VectorTileStyle.road(kind: "rail", detail: "station", service: "yard") == nil)
+    }
+
     @Test("a runway and a taxiway are drawn from zoom 11, the runway wider, both over the roads")
     func aeroways() throws {
         let runway = try #require(VectorTileStyle.road(kind: "aeroway", detail: "runway"))

@@ -36,6 +36,10 @@ nonisolated struct MapboxVectorTile: Sendable {
         /// The geometry's command integers as encoded; ``VectorTileGeometry``
         /// reads them.
         let geometry: [UInt32]
+        /// The id the tile gives it, where it gives one. The basemap's is
+        /// the feature's own in OpenStreetMap, which the vector extras name
+        /// an area by to say more of it (``VectorTileAreaDetails``).
+        var id: UInt64?
         /// Whether the vector extras gave it, rather than the basemap: the
         /// two name their layers and kinds alike, and where both have a
         /// point for one thing the extras' is the one filed as Carto files
@@ -164,10 +168,12 @@ nonisolated struct MapboxVectorTile: Sendable {
     ) throws -> Feature {
         var reader = message
         var type = GeometryType.unknown
+        var id: UInt64?
         var tags: [UInt32] = []
         var geometry: [UInt32] = []
         while let field = try reader.nextField() {
             switch field.number {
+            case 1 where field.wireType == .varint: id = try reader.varint()
             case 2: try reader.appendVarints(to: &tags, wireType: field.wireType)
             case 3: type = GeometryType(rawValue: try reader.varint()) ?? .unknown
             case 4: try reader.appendVarints(to: &geometry, wireType: field.wireType)
@@ -183,7 +189,7 @@ nonisolated struct MapboxVectorTile: Sendable {
             guard kept[key], let decoded = values[value] else { continue }
             properties[keys[key]] = decoded
         }
-        return Feature(type: type, properties: properties, geometry: geometry)
+        return Feature(type: type, properties: properties, geometry: geometry, id: id)
     }
 
     /// A value message, or `nil` for one of a kind this reader does not keep.

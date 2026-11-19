@@ -14,9 +14,11 @@
 //  the basemap leaves out — car parks with no name, barriers, towers and
 //  crosses, offices, an information point's type, one-way ways, the size of
 //  each named area, the scree and heath of open mountains, parks and the
-//  borders of protected areas, lifts and their stations, and the huts,
-//  stations and summits Carto shows from a wider zoom — built from the
-//  planet by `Scripts/vector-extras.sh`. Its tile is drawn into the
+//  borders of protected areas, lifts and their stations, cliffs with the
+//  side they fall away on, trees, the water that is not always there, what
+//  picks a wood's or a wetland's symbols, the names of buildings, and the
+//  huts, stations and summits Carto shows from a wider zoom — built from
+//  the planet by `Scripts/vector-extras.sh`. Its tile is drawn into the
 //  basemap's, where there is one.
 //
 

@@ -10,6 +10,12 @@
 //  `marker-fill`, every part of it in the one color, unless the point keeps
 //  the icon's own colors.
 //
+//  The pictures Carto fills an area with (``VectorTilePatterns``) are in the
+//  same catalog, and are made the same way, each at its own size. One is a
+//  megabyte or four where an icon is a kilobyte, so they are kept apart, in
+//  a cache that lets go of the ones not drawn lately once it holds more than
+//  a couple of dozen megabytes, or when memory runs short.
+//
 
 import CoreGraphics
 import Foundation
@@ -23,6 +29,11 @@ nonisolated protocol VectorTileIconDrawing: Sendable {
     /// The icon `asset`, `size` pixels, in `fill` or, where that is `nil`, in
     /// its own colors; `nil` where there is no such icon.
     func image(asset: String, fill: CGColor?, size: CGSize) -> CGImage?
+
+    /// The pattern `asset` in its own colors, `unit` pixels for each of the
+    /// 256-pixel tile's it is drawn for; `nil` where there is no such
+    /// pattern.
+    func pattern(asset: String, unit: CGFloat) -> CGImage?
 }
 
 /// The icons the app ships, from its asset catalog.
@@ -30,6 +41,17 @@ nonisolated final class CatalogIcons: VectorTileIconDrawing, @unchecked Sendable
     static let shared = CatalogIcons()
 
     private let made = Mutex<[Key: CGImage]>([:])
+    // swiftlint:disable:next legacy_objc_type
+    private let patterns: NSCache<NSString, CGImage> = {
+        // swiftlint:disable:next legacy_objc_type
+        let cache = NSCache<NSString, CGImage>()
+        cache.totalCostLimit = patternByteLimit
+        return cache
+    }()
+
+    /// The most the patterns kept may take, in bytes: half a dozen of the
+    /// largest, or every one a mountain tile draws.
+    static let patternByteLimit = 24 * 1024 * 1024
 
     private struct Key: Hashable {
         let asset: String
@@ -45,6 +67,25 @@ nonisolated final class CatalogIcons: VectorTileIconDrawing, @unchecked Sendable
         guard let image = Self.render(asset: asset, fill: fill, size: size) else { return nil }
         made.withLock { $0[key] = image }
         return image
+    }
+
+    func pattern(asset: String, unit: CGFloat) -> CGImage? {
+        #if canImport(UIKit)
+        // swiftlint:disable:next legacy_objc_type
+        let key = "\(asset)@\(unit)" as NSString
+        if let kept = patterns.object(forKey: key) { return kept }
+        guard let size = UIImage(named: asset, in: .main, with: nil)?.size,
+              let pattern = Self.render(
+                  asset: asset,
+                  fill: nil,
+                  size: CGSize(width: size.width * unit, height: size.height * unit)
+              )
+        else { return nil }
+        patterns.setObject(pattern, forKey: key, cost: pattern.bytesPerRow * pattern.height)
+        return pattern
+        #else
+        return nil
+        #endif
     }
 
     /// Draws through UIKit into a context of its own, rather than through

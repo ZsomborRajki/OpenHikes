@@ -77,6 +77,10 @@ nonisolated enum VectorTilePoints {
         let x: CGFloat
         let y: CGFloat
 
+        /// Whether the point is one Carto orders by height, and has one: a
+        /// summit, a volcano, a saddle or a pass.
+        var isByHeight: Bool { height > -.infinity }
+
         static func < (lhs: Self, rhs: Self) -> Bool {
             let (left, right) = ((lhs.order, -lhs.height, -lhs.pixels), (rhs.order, -rhs.height, -rhs.pixels))
             guard left == right else { return left < right }
@@ -256,10 +260,11 @@ nonisolated enum VectorTilePoints {
             }
         }
 
-        /// The candidate's icons centred on its point, where they find room.
-        mutating func place(_ candidate: Candidate, unit: CGFloat, room: inout Room) {
-            guard !candidate.look.icons.isEmpty else { return }
-            let iconFrames = candidate.look.icons.map { icon in
+        /// Where the candidate's icons stand centred on its point, before
+        /// the tile's edge moves them in, and the room they take together;
+        /// `nil` for a point with no icon.
+        static func frames(of candidate: Candidate, unit: CGFloat) -> (icons: [CGRect], whole: CGRect)? {
+            let standing = candidate.look.icons.map { icon in
                 CGRect(
                     x: candidate.anchor.x - icon.size.width * unit / 2,
                     y: candidate.anchor.y - icon.size.height * unit / 2,
@@ -267,8 +272,15 @@ nonisolated enum VectorTilePoints {
                     height: icon.size.height * unit
                 )
             }
-            let whole = iconFrames.dropFirst().reduce(iconFrames[0]) { $0.union($1) }
-            guard let moved = room.inside(whole) else { return }
+            guard let first = standing.first else { return nil }
+            return (standing, standing.dropFirst().reduce(first) { $0.union($1) })
+        }
+
+        /// The candidate's icons centred on its point, where they find room.
+        mutating func place(_ candidate: Candidate, unit: CGFloat, room: inout Room) {
+            guard let (iconFrames, whole) = Self.frames(of: candidate, unit: unit),
+                  let moved = room.inside(whole)
+            else { return }
             let shift = CGPoint(x: moved.minX - whole.minX, y: moved.minY - whole.minY)
             let lead = candidate.look.icons[0]
             guard lead.allowsOverlap || room.isFree(moved) else { return }
@@ -337,6 +349,13 @@ nonisolated enum VectorTilePoints {
         /// tile beside cannot finish a halo cut at the edge, and its own
         /// names cannot see this one, so the margin keeps two names either
         /// side of the edge apart, as the names along lines keep theirs.
+        ///
+        /// A name the edge would move back over its own point goes on the
+        /// point's other side instead, where it fits there: a summit near
+        /// the foot of its tile is named above its triangle, which would
+        /// otherwise take the room and leave it unnamed until a zoom whose
+        /// tiles are cut elsewhere. It stands as far from the icon there as
+        /// it would have here, the icon having been moved in too.
         mutating func place(
             _ candidate: Candidate,
             unit: CGFloat,
@@ -346,19 +365,47 @@ nonisolated enum VectorTilePoints {
         ) {
             guard !candidate.lines.isEmpty, let style = candidate.look.text else { return }
             let block = NameBlock(candidate.lines, style: style, unit: unit, fonts: &fonts)
-            let size = block.size
-            let offset = style.offset * unit
-            let top = offset > 0 ? candidate.anchor.y + offset
-                : offset < 0 ? candidate.anchor.y + offset - size.height
-                : candidate.anchor.y - size.height / 2
-            let left = candidate.anchor.x - size.width / 2
-            let frame = CGRect(x: left, y: top, width: size.width, height: size.height)
             let reach = style.haloRadius * unit + margin
-            guard let fitted = room.inside(frame.insetBy(dx: -reach, dy: -reach)) else { return }
-            let moved = fitted.insetBy(dx: reach, dy: reach)
-            guard room.isFree(moved.insetBy(dx: -margin, dy: -margin)) else { return }
-            room.take(moved)
-            placed.append((block, moved))
+            let offset = style.offset * unit
+            let size = block.size
+            guard let styled = Self.fitted(size, at: candidate.anchor, offset: offset, reach: reach, in: room) else {
+                return
+            }
+            var frame = styled.frame
+            if styled.isPushedBack {
+                let icons = Icons.frames(of: candidate, unit: unit)?.whole
+                let lift = icons.flatMap { whole in room.inside(whole).map { $0.minY - whole.minY } } ?? 0
+                let icon = CGPoint(x: candidate.anchor.x, y: candidate.anchor.y + lift)
+                if let other = Self.fitted(size, at: icon, offset: -offset, reach: reach, in: room),
+                   !other.isPushedBack, room.isFree(other.frame.insetBy(dx: -margin, dy: -margin)) {
+                    frame = other.frame
+                }
+            }
+            guard room.isFree(frame.insetBy(dx: -margin, dy: -margin)) else { return }
+            room.take(frame)
+            placed.append((block, frame))
+        }
+
+        /// Where a name of `size` stands by the point at `anchor`, moved
+        /// inside the tile with `reach` to spare, or `nil` for one larger
+        /// than the tile: its top `offset` below the point, its foot that
+        /// far above it where the offset is negative, and centred on the
+        /// point where there is none. And whether the edge pushed it back
+        /// towards its point.
+        private static func fitted(
+            _ size: CGSize,
+            at anchor: CGPoint,
+            offset: CGFloat,
+            reach: CGFloat,
+            in room: Room
+        ) -> (frame: CGRect, isPushedBack: Bool)? {
+            let top = offset > 0 ? anchor.y + offset
+                : offset < 0 ? anchor.y + offset - size.height
+                : anchor.y - size.height / 2
+            let frame = CGRect(x: anchor.x - size.width / 2, y: top, width: size.width, height: size.height)
+            guard let inside = room.inside(frame.insetBy(dx: -reach, dy: -reach)) else { return nil }
+            let moved = inside.insetBy(dx: reach, dy: reach)
+            return (moved, offset > 0 ? moved.minY < frame.minY : offset < 0 && moved.maxY > frame.maxY)
         }
 
         func draw(into context: CGContext) {

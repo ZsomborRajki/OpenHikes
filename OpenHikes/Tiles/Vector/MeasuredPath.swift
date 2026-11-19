@@ -41,6 +41,16 @@ nonisolated struct MeasuredPath {
         return CGPoint(x: from.x + (to.x - from.x) * fraction, y: from.y + (to.y - from.y) * fraction)
     }
 
+    /// The line as far as `distance` along it: its points up to there, and
+    /// the point there. The whole line where it is no longer than that, and
+    /// nothing for no distance at all.
+    func prefix(_ distance: CGFloat) -> [CGPoint] {
+        guard distance > 0 else { return [] }
+        guard distance < length else { return points }
+        let index = distances.partitioningIndex { $0 >= distance }
+        return Array(points[..<index]) + [point(at: distance)]
+    }
+
     /// The line `distance` to the side of `points`: to the right of the way
     /// they run on a picture whose y runs down, which is below a name that
     /// reads along them. Each corner is moved out along the two sides'

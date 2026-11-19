@@ -39,7 +39,10 @@ nonisolated enum VectorTileStyle {
     /// Landcover is the archive's low-zoom picture of the ground; landuse
     /// takes over above it.
     static let deepestLandcoverZ = 7
-    static let cliffZ = 13
+    /// The basemap's kinds for a wetland, in its `landuse` layer, and for a
+    /// reef, which it files as water.
+    static let wetlandKind = "wetland"
+    static let reefKind = "reef"
     /// Carto fills a park from this zoom, and a dam from ``damZ``.
     static let parkZ = 10
     static let damZ = 13
@@ -61,7 +64,10 @@ nonisolated enum VectorTileStyle {
     /// The fill of each kind in the `landuse` layer. A park is not among
     /// them: the basemap files most national parks as one, so the parks
     /// filled are the vector extras' own (``park``), and a kind the basemap
-    /// never sends is the extras'.
+    /// never sends is the extras'. Nor is a wetland, which Carto fills by
+    /// its kind (``wetlandFill(detail:)``) and otherwise only marks, nor mud
+    /// (``mud``), nor military land, which it tints over whatever is there
+    /// (``restricted(kind:z:)``).
     static let landuseFills = fills([
         (["forest", "wood"], "#ADD19E"),
         (["village_green", "dog_park"], "#C8FACC"),
@@ -88,26 +94,113 @@ nonisolated enum VectorTileStyle {
         (["aerodrome"], "#E9E7E2"),
         (["apron"], "#DADAE0"),
         (["rest_area"], "#EFC8C8"),
-        (["military"], "#F3E3DD"),
         (["religious"], "#D0D0D0"),
-        (["beach"], "#FFF1BA"),
+        (["beach", "shoal"], "#FFF1BA"),
         (["sand"], "#F5E9C6"),
         (["bare_rock", "scree", "shingle"], "#EEE5DC"),
-        (["mud"], "#E6DCD1"),
         (["glacier", "ice_rink"], "#DDECEC"),
-        (["wetland"], "#DDE8D3"),
+        (["salt_pond"], "#AAD3DF"),
         (["quarry"], "#C5C3C3"),
         (["landfill"], "#B6B592"),
         (["construction", "brownfield"], "#C7C7B4"),
     ])
 
+    /// How wide each kind of waterway is drawn, by zoom: Carto's widths
+    /// (`water.mss`), a river's from zoom 8 and a stream's from 12, a canal
+    /// as a river until zoom 12 and then somewhat wider than a stream, and
+    /// a ditch or a drain as a stream that stops widening at zoom 14.
     static let waterLineWidths: [String: ZoomCurve] = {
-        let river = ZoomCurve([(9, 0.5), (10, 0.75), (12, 1), (14, 3), (16, 6), (20, 24)])
-        let stream = ZoomCurve([(12, 0.5), (14, 1), (16, 2), (20, 4)])
-        return ["river": river, "canal": river, "stream": stream, "drain": stream, "ditch": stream]
+        let wide: [(z: Int, value: CGFloat)] = [(8, riverZ8), (9, riverZ9), (10, riverZ10), (11, riverZ10)]
+        let narrow: [(z: Int, value: CGFloat)] = [
+            (12, streamZ12), (13, streamZ13), (14, 2), (15, streamZ15), (16, 3), (z17, streamZ17), (z18, 4),
+        ]
+        let deep: [(z: Int, value: CGFloat)] = [
+            (12, riverZ12), (13, 3), (14, riverZ14), (15, 6), (16, 8), (z17, 10), (z18, 12),
+        ]
+        let ditch = ZoomCurve(narrow.prefix(3) + [(16, 2), (z17, 3)])
+        let canal = ZoomCurve(wide + narrow.map { (z: $0.z, value: $0.value * canalScale) })
+        return [
+            "river": ZoomCurve(wide + deep),
+            "canal": canal,
+            "stream": ZoomCurve(narrow),
+            "drain": ditch,
+            "ditch": ditch,
+        ]
     }()
 
+    /// The pale glow Carto draws under a narrow waterway from zoom 13 to 17
+    /// (under a canal to 14), which keeps a stream readable through a wood:
+    /// white, a little wider than the water. `nil` for a river, and for any
+    /// kind outside those zooms.
+    static func waterGlow(kind: String, z: Int) -> Line? {
+        let deepest = kind == "canal" ? canalGlowZ : z17
+        guard glowing.contains(kind), z >= glowZ, z <= deepest, let width = waterLineWidths[kind]?.value(at: z) else {
+            return nil
+        }
+        let alpha = switch z {
+        case glowZ: glowFaint
+        case glowZ + 1, glowZ + 2: glowStrong
+        case glowZ + 3: 0.75
+        default: glowFaintest
+        }
+        return Line(
+            color: color("#FFFFFF"),
+            width: ZoomCurve([(z, width + glowMargin)]),
+            alpha: kind == "canal" ? glowStrong : alpha
+        )
+    }
+
+    /// Carto's widths that are no round figure, by the zoom each begins at.
+    private static let riverZ8: CGFloat = 0.7
+    private static let riverZ9: CGFloat = 1.2
+    private static let riverZ10: CGFloat = 1.5
+    private static let riverZ12: CGFloat = 2.3
+    private static let riverZ14: CGFloat = 4.5
+    private static let streamZ12: CGFloat = 0.8
+    private static let streamZ13: CGFloat = 1.4
+    private static let streamZ15: CGFloat = 2.5
+    private static let streamZ17: CGFloat = 3.5
+    private static let canalScale: CGFloat = 1.4
+    private static let glowing: Set<String> = ["stream", "ditch", "drain", "canal"]
+    private static let glowZ = 13
+    private static let canalGlowZ = 14
+    /// How much wider than its water a glow is, and how strong: at zoom 13,
+    /// at 14 and 15, and at 17, with three quarters at 16.
+    private static let glowMargin: CGFloat = 0.6
+    private static let glowFaint: CGFloat = 0.7
+    private static let glowStrong: CGFloat = 0.85
+    private static let glowFaintest: CGFloat = 0.6
+
     static let cliffWidth = ZoomCurve([(13, 0.5), (16, 1), (20, 2)])
+
+    /// The fill of a wetland whose `wetland` tag is `detail`, as Carto fills
+    /// one: a swamp as a wood, a mangrove as scrub, a bog as heath, a marsh
+    /// or a reed bed as grass. A wetland of no kind it knows has no fill,
+    /// only its marks (``VectorTilePatterns``), and a tidal flat is mud.
+    static func wetlandFill(detail: String?) -> CGColor? {
+        detail.flatMap { wetlandGround[$0] }.flatMap { landuseFills[$0] }
+    }
+
+    /// The kind of ground each kind of wetland is filled as.
+    private static let wetlandGround: [String: String] = [
+        "swamp": "wood",
+        "mangrove": "scrub",
+        "bog": "heath", "string_bog": "heath",
+        "reedbed": "grass", "wet_meadow": "grass", "fen": "grass", "saltmarsh": "grass", "marsh": "grass",
+    ]
+
+    /// Mud and tidal flats, which Carto tints after the water is drawn, from
+    /// zoom 9: most lie in the sea, which would cover a fill drawn with the
+    /// ground. Thin enough to show what it lies on.
+    static let mud = color("#CBB19A", alpha: mudAlpha)
+    static let mudZ = 9
+    private static let mudAlpha: CGFloat = 0.3
+
+    /// Whether an area of `kind` in the `landuse` layer is mud: the extras'
+    /// own kind for it, or a wetland the extras say is a tidal flat.
+    static func isMud(kind: String, detail: String?) -> Bool {
+        kind == "mud" || (kind == wetlandKind && detail == "tidalflat")
+    }
 
     /// A pier, as Carto's `water-features.mss` draws one from zoom 12: an
     /// area filled and a line stroked square-ended in the land's color, over
@@ -242,14 +335,61 @@ nonisolated extension VectorTileStyle {
         }
     }
 
-    /// The style of a feature in the extras' `ridges` layer, from zoom 14:
-    /// a ridge broken, an arête unbroken. Carto draws both with a pattern of
-    /// its own; the map draws a line in the cliffs' gray.
+    /// The line of a feature in the extras' `ridges` layer, from zoom 14,
+    /// where Carto's dots for one (``VectorTilePatterns/ridge(kind:z:)``)
+    /// are not to be had: a ridge broken, an arête unbroken, in the cliffs'
+    /// gray.
     static func ridge(kind: String?) -> Line {
         kind == "arete" ? arete : ridgeLine
     }
 
     static let ridgeZ = 14
+
+    /// Military land or a danger area, as Carto's `landuse-overlay` draws
+    /// one over the ground and the buildings on it: a faint red tint, a red
+    /// hatch (``VectorTilePatterns/hatch(kind:)``) and a line just inside
+    /// its edge.
+    struct Restricted: Sendable {
+        let tint: CGColor
+        /// The line inside the edge: its color, how wide, how strong.
+        let line: Line
+    }
+
+    /// How an area of `kind` in the `landuse` layer is marked as closed to
+    /// the public at zoom `z`, or `nil` for any other kind and below the
+    /// zoom Carto first marks it: 8 for military land, 9 for a danger area.
+    static func restricted(kind: String, z: Int) -> Restricted? {
+        if kind == dangerAreaKind { return z >= dangerAreaZ ? dangerArea : nil }
+        return militaryKinds.contains(kind) && z >= militaryZ ? military : nil
+    }
+
+    /// A line cut through a forest, in the grass's color, from zoom 14
+    /// (`landcover-line`).
+    static let cutline = Line(
+        color: color("#CDEBB0"),
+        width: ZoomCurve([(14, 3), (15, 3), (16, 6), (z17, 6), (z18, 12)])
+    )
+
+    /// Trees, as Carto draws them from zoom 16 (`#trees`): a row as a line
+    /// and a tree as a dot of the same width, in a darker green than the
+    /// woods', all at ``treeOpacity``, and from zoom 18 each tree's trunk.
+    static let treeZ = 16
+    static let treeCanopy = color("#90C17B")
+    static let treeOpacity: CGFloat = 0.6
+    static let treeWidth = ZoomCurve([(16, treeWidthZ16), (z17, 5), (z18, 10), (z19, 15), (20, 30)])
+    static let treeTrunk = color("#6B8D5E", alpha: VectorTilePatterns.woodOpacity)
+    static let treeTrunkWidth = ZoomCurve([(z18, 2), (z19, 3), (20, 6)])
+
+    /// How Carto breaks a waterway that is not always there: the lengths of
+    /// a dash and of the gap after it at zoom `z`, in the pixels of a
+    /// 256-pixel tile (`water.mss`).
+    static func intermittentDash(z: Int) -> (dash: CGFloat, gap: CGFloat) {
+        z >= intermittentDeepZ ? (dash: 4, gap: 3) : (dash: 8, gap: 4)
+    }
+
+    /// How much wider than a waterway the gaps rubbed out of it are: the
+    /// basemap's line is not to the pixel where the extras' is.
+    static let intermittentMargin: CGFloat = 2
 }
 
 // MARK: - The figures
@@ -320,6 +460,27 @@ nonisolated private extension VectorTileStyle {
     static let weirGray = color("#AAAAAA")
     static let weir = Line(color: weirGray, width: ZoomCurve([(13, 2)]), dash: [1, 1])
     static let lockGate = Line(color: weirGray, width: ZoomCurve([(13, 2), (z17, 3)]))
+
+    static let militaryKinds: Set<String> = ["military", "naval_base", "airfield"]
+    static let dangerAreaKind = "danger_area"
+    static let militaryZ = 8
+    static let dangerAreaZ = 9
+    static let militaryRed = "#FF5555"
+    static let militaryTint: CGFloat = 0.08
+    static let militaryLine: CGFloat = 0.24
+    static let dangerTint: CGFloat = 0.1
+    static let dangerLine: CGFloat = 0.2
+    static let military = Restricted(
+        tint: color(militaryRed, alpha: militaryTint),
+        line: Line(color: color(militaryRed), width: ZoomCurve([(8, 1), (14, 1), (15, 2)]), alpha: militaryLine)
+    )
+    static let dangerArea = Restricted(
+        tint: color(militaryRed, alpha: dangerTint),
+        line: Line(color: color(militaryRed), width: ZoomCurve([(9, 2)]), alpha: dangerLine)
+    )
+
+    static let treeWidthZ16: CGFloat = 2.5
+    static let intermittentDeepZ = 12
 
     static let ridgeWidth = ZoomCurve([(14, 0.75), (16, 1), (20, 2)])
     static let ridgeLine = Line(color: cliff, width: ridgeWidth, dash: [2, 3])

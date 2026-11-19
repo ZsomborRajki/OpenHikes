@@ -97,6 +97,20 @@ struct MeasuredPathTests {
         #expect(zip(beside, beside.dropFirst()).allSatisfy { $0.x <= $1.x }, "never back toward the west")
     }
 
+    @Test("the line as far as a distance along it ends at the point there, and is whole past its end")
+    func prefix() {
+        let line = [CGPoint.zero, CGPoint(x: 10, y: 0), CGPoint(x: 10, y: 10)]
+        let path = MeasuredPath(line)
+
+        #expect(path.prefix(4) == [.zero, CGPoint(x: 4, y: 0)])
+        #expect(path.prefix(10) == [.zero, CGPoint(x: 10, y: 0)])
+        #expect(path.prefix(15) == [.zero, CGPoint(x: 10, y: 0), CGPoint(x: 10, y: 5)])
+        #expect(path.prefix(20) == line)
+        #expect(path.prefix(25) == line)
+        #expect(path.prefix(0).isEmpty)
+        #expect(path.prefix(-1).isEmpty)
+    }
+
     @Test("no offset, or a line of one point, is the line as it was")
     func offsetOfNothing() {
         let line = [CGPoint.zero, CGPoint(x: 10, y: 0)]

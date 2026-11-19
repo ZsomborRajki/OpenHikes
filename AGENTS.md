@@ -1173,28 +1173,36 @@ a change to recording, the map, the sheet or the render path; the PR template,
     differently for an `access` its queries count as restricted — a private
     car park faded, a private toilet a zoom later — the table holds that look
     too, for whichever points the tile carries an `access` on.
+  - **Patterns are Carto's pictures, laid from the corner of the world**
+    (`VectorTilePatterns`). `Scripts/carto-points.sh` also copies every
+    picture Carto's `landcover.mss` and `water.mss` fill an area with, or lay
+    along a line, into the catalog as `carto-pattern-…`: a wood's trees by
+    their leaves, a
+    wetland's marks, scree, a quarry, a cemetery's graves, the red hatch over
+    military land, a ridge's dots. A tile draws the part of a pattern that
+    falls on its own ground, so two tiles carry one pattern across their
+    edge. Carto lays most patterns straight over the area's fill, where a
+    smaller area drawn after covers them, and the woods', wetlands' and
+    beaches' after all the ground and the water; the map keeps both orders.
+    A cliff's and an embankment's teeth are drawn along the line itself.
   - **The extras fill in what the archive leaves out** (`VectorTileSource.Extras`):
     car parks with their `access`, barriers and the fences, walls and hedges
     Carto draws, `man_made` points, offices, an information point's type, a
     vending machine's goods, waterfalls, every one-way street and path as a
     line of its own (`oneways`), and each named area's point with its size
     (`area`). And what a hiker's map is read by: the ground the basemap has
-    no kind for (scree, heath, shingle, quarries, vineyards, camp sites),
-    parks and the borders of protected areas, every lift but the cable cars
-    with its stations, the light railways before zoom 14, power lines, dams
-    and weirs, ridges, and the points Carto draws before the basemap has
-    them: huts and stations with the tags Carto files them by, summits,
-    springs, passes and fords.
-  - **Where both archives have a point for one thing, the extras' is drawn.**
-    The basemap files a hut tagged as a restaurant as the restaurant, and a
-    castle tagged as an attraction as the attraction; the extras file each as
-    Carto does, and the basemap's point of the same name at the same spot is
-    left out (`VectorTilePoints.supersedingKinds`). A feature merged from the
-    extras says so (`MapboxVectorTile.Feature.isFromExtras`).
+    no kind for (scree, heath, shingle, quarries, vineyards, camp sites,
+    danger areas), parks and the borders of protected areas, every lift but
+    the cable cars with its stations, the light railways before zoom 14,
+    power lines, dams and weirs, ridges, cliffs and embankments in the
+    direction they were mapped, the lines cut through a forest, trees and
+    their rows, the names of buildings, and the points Carto draws before
+    the basemap has them: huts and stations with the tags Carto files them
+    by, summits, springs, passes and fords.
     `Scripts/vector-extras.sh` builds them from the planet (`osmium` with
-    `Scripts/lib/vector-extras.filter`, and the named areas through
-    `Scripts/lib/vector-extras-areas.filter` and then a cut for a name, then
-    Planetiler with `Scripts/lib/vector-extras.yml`) into
+    `Scripts/lib/vector-extras.filter`, and the named areas and buildings
+    through `Scripts/lib/vector-extras-areas.filter` and then a cut for a
+    name, then Planetiler with `Scripts/lib/vector-extras.yml`) into
     `extras-<planet date>.pmtiles`,
     named as the archive's layers are so a tile of each merges into one, and
     `Scripts/vector-extras.sh upload` puts them beside the basemap under a new
@@ -1207,6 +1215,35 @@ a change to recording, the map, the sheet or the render path; the PR template,
     extras it failed to get, a tile is provisional
     (`VectorTileClient.Drawing.provisional`): held in memory alone, as stale
     coverage is, and drawn again after that, never filed for a week.
+  - **Where both archives have a point for one thing, the extras' is drawn.**
+    The basemap files a hut tagged as a restaurant as the restaurant, and a
+    castle tagged as an attraction as the attraction; the extras file each as
+    Carto does, and the basemap's point of the same name at the same spot is
+    left out (`VectorTilePoints.supersedingKinds`). A feature merged from the
+    extras says so (`MapboxVectorTile.Feature.isFromExtras`).
+  - **What the basemap drops of an area comes back by its id**
+    (`VectorTileAreaDetails`). Carto picks a wood's trees by its `leaf_type`,
+    a wetland's fill and marks by its `wetland`, a beach's dots by its
+    `surface` and a cemetery's graves by its `religion`, none of which the
+    basemap keeps. Sending the areas again made the extras five times the
+    size, for the woods alone. The basemap gives every feature the id
+    OpenStreetMap does, with a 2 for a way or a 3 for a relation above bit
+    44, so the extras' `area_details` layer gives the same id with the tag's
+    value, on an area cut rough that only carries the id to the tile and is
+    never drawn. An area the extras say nothing of is drawn as Carto draws
+    one with no such tag.
+  - **Water that is not always there is rubbed out of the basemap's.** The
+    basemap draws an intermittent stream or lake as any water, and joins a
+    stream's pieces whether or not each runs all year, so no feature of its
+    own can be drawn broken. The extras' `intermittent` layer has the ways
+    and lakes that are, and the map rubs the gaps of Carto's dashes out of
+    the waterways, and the lakes out of the water, each in a layer of its
+    own so the ground under them stays, then lays Carto's lines over the
+    lakes.
+  - **A cliff's teeth need the extras' line.** They go down the side that
+    falls away, the right of the way the cliff was mapped, and the basemap's
+    build may turn a line around. The basemap's cliff is drawn, plain, only
+    on a tile the extras gave no cliffs for.
   - **Names are drawn into the tile.**
     - **Place names** (`VectorTileLabels`): places, lakes and glaciers.
       Summits, passes and huts are points, named under their icons with their
@@ -1235,6 +1272,11 @@ a change to recording, the map, the sheet or the render path; the PR template,
       spaced as Mapnik spaces a line's text, so a short one-way path has one.
     - **House numbers** (`VectorTileHouseNumbers`) from zoom 17, from the
       archive's address points, which carry `addr_housenumber` alone.
+    - **Names of buildings** (`VectorTileBuildingNames`) from zoom 14 once a
+      building covers 3,000 square pixels, and every one from zoom 17, from
+      the extras' point inside each named building. Most are named for the
+      shop or the hut in them, whose own point is named already: a building
+      leaves its name to a point of the same name standing by it.
     - **Names of areas** (`VectorTilePoints`) by the area's size, as Carto
       names them: a forest or a national park from zoom 8 once it covers
       3,000 square pixels, a park from 10, an island from 4, larger the
@@ -1255,9 +1297,11 @@ a change to recording, the map, the sheet or the render path; the PR template,
     - **Room is claimed in Carto's layer order**: place names, the stations
       (each one's icon, then its name), the points' icons, the road numbers,
       the names along streets and paths, then their one-way arrows, the
-      points' names and the areas', the localities', the house numbers, the
-      names along water and ridges, and last the low-priority icons and
-      names (benches, bins, wayside crosses).
+      names of the summits and passes by their height, the lakes', bays' and
+      glaciers', every other point's and the areas', the localities', the
+      buildings', the house numbers, the names along water and ridges, and
+      last the low-priority icons and names (benches, bins, wayside
+      crosses). So a summit keeps its name where a lake's would cover it.
     - **A place's name comes in at Carto's zoom**: a hamlet's from 14, a
       farm's from 15, and a locality's, a spot nobody lives at, from 16 and
       after the points, so a gully's name never takes a summit's room.
@@ -1265,7 +1309,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
       the local one where not.
     - **A name never crosses its tile's edge**, because the tile beside it
       could not finish it. It moves inward, moves along its line, or waits
-      for a deeper zoom.
+      for a deeper zoom. A point's name that the edge would move back over
+      the point's own icon is written on the icon's other side, above a
+      summit at the foot of its tile, where Carto would write it below.
     - **Every tile ranks names the same way** (`VectorTileLabelStyle.Category`,
       then the archive's own ranking), so a zoom reads alike wherever it is
       drawn.

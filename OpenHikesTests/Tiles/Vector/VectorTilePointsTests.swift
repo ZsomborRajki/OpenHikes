@@ -146,6 +146,39 @@ struct VectorTilePointsTests {
         #expect(abs(name.midX - icon.midX) < 1)
     }
 
+    /// Moved in from the foot of the tile, a name would stand on its own
+    /// icon, which has the room already: every point in the last tenth of a
+    /// tile went unnamed.
+    @Test("a name the tile's foot would push back over its point is written above the point")
+    func nameAboveAtTheFoot() throws {
+        let points = try candidates([poi(["kind": .string("fuel"), "name": .string("MOL")], at: (grid / 2, grid - 2))])
+        var room = VectorTilePoints.Room(bounds: bounds, taken: [])
+        var fonts = LabelFonts(language: "en")
+
+        let icons = VectorTilePoints.Icons(points, unit: unit, room: &room)
+        let names = VectorTilePoints.Names(points, unit: unit, room: &room, fonts: &fonts)
+
+        let icon = try #require(icons.frames.first)
+        let name = try #require(names.frames.first)
+        #expect(name.maxY < icon.midY)
+        #expect(!name.intersects(icon))
+        #expect(abs(name.midX - icon.midX) < 1)
+    }
+
+    @Test("with no room above the point either, the name at the tile's foot is left out")
+    func noRoomAboveEither() throws {
+        let points = try candidates([poi(["kind": .string("fuel"), "name": .string("MOL")], at: (grid / 2, grid - 2))])
+        var room = VectorTilePoints.Room(bounds: bounds, taken: [])
+        var fonts = LabelFonts(language: "en")
+
+        let icons = VectorTilePoints.Icons(points, unit: unit, room: &room)
+        let icon = try #require(icons.frames.first)
+        room.take(CGRect(x: 0, y: icon.minY - 2 * icon.height, width: side, height: icon.height))
+        let names = VectorTilePoints.Names(points, unit: unit, room: &room, fonts: &fonts)
+
+        #expect(names.frames.isEmpty)
+    }
+
     @Test("a bench waits for every other point, and finds no room where one stands")
     func lowPriorityComesLast() throws {
         let points = try candidates([
@@ -293,6 +326,10 @@ struct VectorTilePointsTests {
             context.setFillColor(fill ?? VectorTileStyle.color("#000000"))
             context.fill(CGRect(origin: .zero, size: size))
             return context.makeImage()
+        }
+
+        func pattern(asset: String, unit: CGFloat) -> CGImage? {
+            nil
         }
     }
 

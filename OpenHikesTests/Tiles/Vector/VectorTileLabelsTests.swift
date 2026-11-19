@@ -391,11 +391,13 @@ extension VectorTileLabelsTests {
         #expect(try categories(at: 16) == [.hamlet, .dwelling, .locality])
     }
 
-    @Test("only a locality waits for the points to claim their room")
-    func localitiesAreLate() {
-        #expect(VectorTileLabelStyle.Category.locality.isPlacedAfterPoints)
-        #expect(!VectorTileLabelStyle.Category.hamlet.isPlacedAfterPoints)
-        #expect(!VectorTileLabelStyle.Category.water.isPlacedAfterPoints)
+    @Test("a locality waits for every point's name, a lake and a glacier for the summits', and a place for nothing")
+    func whenANameClaimsItsRoom() {
+        #expect(VectorTileLabelStyle.Category.locality.turn == .afterPoints)
+        #expect(VectorTileLabelStyle.Category.water.turn == .afterSummits)
+        #expect(VectorTileLabelStyle.Category.glacier.turn == .afterSummits)
+        #expect(VectorTileLabelStyle.Category.hamlet.turn == .first)
+        #expect(VectorTileLabelStyle.Category.town.turn == .first)
     }
 
     @Test("a name keeps clear of the room taken before it")
