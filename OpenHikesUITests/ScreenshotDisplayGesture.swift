@@ -28,29 +28,50 @@ enum ScreenshotDisplayGesture {
     private static let holdBeforeLift = 0.2
     private static let tapDuration = 0.1
     private static let fingerSpacing: CGFloat = 30
+    /// When the second touch of a one-finger zoom goes down after the first:
+    /// past the first one's lift, and well inside a double tap's interval.
+    private static let secondTouchDelay = 0.2
+
+    /// One finger's part in a gesture: down at the first point at `start`
+    /// seconds in, across to the last, and up.
+    private struct Stroke {
+        var start = 0.0
+        let points: [CGPoint]
+    }
 
     static func tapWithTwoFingers(at point: CGPoint, on display: ScreenshotDisplay) -> Bool {
-        send(on: display, paths: [
-            [CGPoint(x: point.x - fingerSpacing, y: point.y)],
-            [CGPoint(x: point.x + fingerSpacing, y: point.y)],
+        send(on: display, strokes: [
+            Stroke(points: [CGPoint(x: point.x - fingerSpacing, y: point.y)]),
+            Stroke(points: [CGPoint(x: point.x + fingerSpacing, y: point.y)]),
         ])
     }
 
     static func drag(from start: CGPoint, to end: CGPoint, on display: ScreenshotDisplay) -> Bool {
-        send(on: display, paths: [[start, end]])
+        send(on: display, strokes: [Stroke(points: [start, end])])
+    }
+
+    /// MapKit's one-finger zoom: a tap, then the same spot pressed again at
+    /// once, held and drawn `distance` points down — up, for a negative one.
+    /// Unlike a pinch it zooms by any amount, and never turns the map.
+    static func zoomWithOneFinger(at point: CGPoint, drawing distance: CGFloat, on display: ScreenshotDisplay) -> Bool {
+        send(on: display, strokes: [
+            Stroke(points: [point]),
+            Stroke(start: secondTouchDelay, points: [point, CGPoint(x: point.x, y: point.y + distance)]),
+        ])
     }
 
     /// Two fingers side by side, moved together: what tilts a map. XCTest has
     /// no element gesture for it on any display.
     static func dragWithTwoFingers(from start: CGPoint, to end: CGPoint, on display: ScreenshotDisplay) -> Bool {
-        send(on: display, paths: [-fingerSpacing, fingerSpacing].map { offset in
-            [CGPoint(x: start.x + offset, y: start.y), CGPoint(x: end.x + offset, y: end.y)]
+        send(on: display, strokes: [-fingerSpacing, fingerSpacing].map { offset in
+            Stroke(points: [CGPoint(x: start.x + offset, y: start.y), CGPoint(x: end.x + offset, y: end.y)])
         })
     }
 
-    /// Sends one finger along each of `paths`, all at once: down at a path's
-    /// first point, across to its last, and up. A path of one point is a tap.
-    private static func send(on display: ScreenshotDisplay, paths: [[CGPoint]]) -> Bool {
+    /// Sends one finger along each of `strokes`, from its own start: down at
+    /// its first point, across to its last, and up. A stroke of one point is
+    /// a tap.
+    private static func send(on display: ScreenshotDisplay, strokes: [Stroke]) -> Bool {
         let screen = display.screen
         let recordSelector = NSSelectorFromString("initWithName:displayID:interfaceOrientation:")
         let touchSelector = NSSelectorFromString("initForTouchAtPoint:offset:")
@@ -78,16 +99,19 @@ enum ScreenshotDisplayGesture {
         let makeTouch = unsafeBitCast(method_getImplementation(touchMethod), to: TouchInit.self)
         let move = unsafeBitCast(method_getImplementation(moveMethod), to: Move.self)
         let lift = unsafeBitCast(method_getImplementation(liftMethod), to: Lift.self)
-        for path in paths {
+        for stroke in strokes {
+            let path = stroke.points
             guard let start = path.first,
                   let allocatedTouch = class_createInstance(touchClass, 0),
-                  let touch = makeTouch(allocatedTouch as AnyObject, touchSelector, display.natural(start), 0) else {
+                  let touch = makeTouch(
+                      allocatedTouch as AnyObject, touchSelector, display.natural(start), stroke.start
+                  ) else {
                 return false
             }
             if path.count > 1, let end = path.last {
-                move(touch, moveSelector, display.natural(end), dragDuration)
+                move(touch, moveSelector, display.natural(end), stroke.start + dragDuration)
             }
-            lift(touch, liftSelector, path.count > 1 ? dragDuration + holdBeforeLift : tapDuration)
+            lift(touch, liftSelector, stroke.start + (path.count > 1 ? dragDuration + holdBeforeLift : tapDuration))
             object.perform(NSSelectorFromString("addPointerEventPath:"), with: touch)
         }
         var error: NSError?

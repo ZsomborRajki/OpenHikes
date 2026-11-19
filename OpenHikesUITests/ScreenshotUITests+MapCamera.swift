@@ -62,6 +62,28 @@ extension ScreenshotUITests {
         return width * height
     }
 
+    /// How far down the window each of `latitudes` is drawn, from one
+    /// reading of the camera, or none where the map does not say what it
+    /// covers.
+    ///
+    /// Read off the region the whole view covers, whose north and south are
+    /// the map's top and bottom edges on a map lying flat and facing north,
+    /// which is how the frames that ask leave it. Measured in Mercator's
+    /// latitude, which is what the map draws evenly down the screen.
+    @MainActor
+    func screenY(ofLatitudes latitudes: [Double], in app: XCUIApplication) -> [CGFloat] {
+        guard let region = settledMapCamera(in: app)?.fullRegion else { return [] }
+        let map = mapElement(in: app).frame
+        let top = Self.mercator(region.north)
+        let bottom = Self.mercator(region.south)
+        guard top > bottom else { return [] }
+        return latitudes.map { map.minY + map.height * CGFloat((top - Self.mercator($0)) / (top - bottom)) }
+    }
+
+    private static func mercator(_ latitude: Double) -> Double {
+        log(tan(.pi / 4 + latitude * .pi / 360))
+    }
+
     /// The camera once it has stopped moving: the same description twice
     /// running. A zoom and a tilt both ease to rest after the fingers lift,
     /// and a reading taken on the way is not where the map ends up.
