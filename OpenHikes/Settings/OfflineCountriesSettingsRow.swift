@@ -45,6 +45,7 @@ private struct SettingsOfflineCountries: View {
     let locationManager: LocationManager
 
     @State private var near: CLLocationCoordinate2D?
+    @State private var list = OfflineCountriesListState()
 
     private static let ground: Color = {
         #if os(macOS)
@@ -55,7 +56,7 @@ private struct SettingsOfflineCountries: View {
     }()
 
     var body: some View {
-        OfflineCountriesList(countries: countries, near: near)
+        OfflineCountriesList(countries: countries, state: list, near: near)
             // The list's own ground, under the bar that stands over it too:
             // in the map's sheet both are on its glass, and here there is
             // none.

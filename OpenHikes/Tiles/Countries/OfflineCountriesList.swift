@@ -15,7 +15,9 @@
 //  and the query, which change a few times a visit or once a keystroke. What
 //  it orders and finds the areas by is kept across those passes
 //  (``OfflineCountryDirectoryCache``). A download's progress is read by its
-//  row alone.
+//  row alone. The query, the order and the countries open are kept outside
+//  it (``OfflineCountriesListState``), because under the map a turn of the
+//  phone builds the list again.
 //
 
 import CoreLocation
@@ -23,6 +25,8 @@ import SwiftUI
 
 struct OfflineCountriesList: View {
     let countries: OfflineCountries
+    /// The search, the order picked and the countries open.
+    @Bindable var state: OfflineCountriesListState
     /// Where the hiker is, read once as the list comes up, for the order it
     /// opens in.
     let near: CLLocationCoordinate2D?
@@ -35,11 +39,6 @@ struct OfflineCountriesList: View {
     var onSearch: () -> Void = { /* No sheet to raise. */ }
     var onSelect: (OfflineCountryManifest.Country) -> Void = { _ in /* No map to show it on. */ }
 
-    /// The split countries open in the list.
-    @State private var expanded: Set<String> = []
-    @State private var query = ""
-    /// The order the hiker picked, or `nil` for the one the list opens in.
-    @State private var chosenSort: OfflineCountrySort?
     @State private var directories = OfflineCountryDirectoryCache()
     /// The area the list owes a scroll to, chosen by a row or on the map,
     /// until a list that holds its row has gone to it.
@@ -86,15 +85,15 @@ struct OfflineCountriesList: View {
     }
 
     private func content(_ directory: OfflineCountryDirectory) -> some View {
-        let sort = OfflineCountrySort.inForce(chosen: chosenSort, hasPosition: directory.hasPosition)
-        let asked = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sort = OfflineCountrySort.inForce(chosen: state.chosenSort, hasPosition: directory.hasPosition)
+        let asked = state.query.trimmingCharacters(in: .whitespacesAndNewlines)
         return VStack(spacing: 0) {
             OfflineCountriesBar(
-                query: $query,
+                query: $state.query,
                 isSearchFocused: $isSearchFocused,
                 sort: sort,
                 orders: OfflineCountrySort.offered(hasPosition: directory.hasPosition)
-            ) { chosenSort = $0 }
+            ) { state.chosenSort = $0 }
             if asked.isEmpty {
                 list(countries.sections(of: directory, by: sort), by: sort)
             } else {
@@ -112,7 +111,9 @@ struct OfflineCountriesList: View {
             revealing = id
             // An area chosen on the map is shown in the list, which a search
             // that does not hold it would hide.
-            if !asked.isEmpty, !directory.areas(matching: asked).contains(where: { $0.id == id }) { query = "" }
+            if !asked.isEmpty, !directory.areas(matching: asked).contains(where: { $0.id == id }) {
+                state.query = ""
+            }
         }
     }
 
@@ -141,7 +142,7 @@ struct OfflineCountriesList: View {
                 reveal(in: sections, with: scroller)
             }
             // A region's row is in the list only once its country is open.
-            .onChange(of: expanded) {
+            .onChange(of: state.expanded) {
                 reveal(in: sections, with: scroller)
             }
         }
@@ -151,9 +152,9 @@ struct OfflineCountriesList: View {
     /// country it is under (``OfflineCountrySections/reveal(_:expanded:)``).
     private func reveal(in sections: OfflineCountrySections, with scroller: ScrollViewProxy) {
         guard let id = revealing else { return }
-        switch sections.reveal(id, expanded: expanded) {
+        switch sections.reveal(id, expanded: state.expanded) {
         case let .open(group):
-            expanded.insert(group)
+            state.expanded.insert(group)
         case let .scroll(rowID):
             revealing = nil
             withAnimation { scroller.scrollTo(rowID, anchor: .center) }
@@ -218,9 +219,9 @@ struct OfflineCountriesList: View {
 
     private func group(_ id: String, _ regions: [OfflineCountryManifest.Country]) -> some View {
         DisclosureGroup(isExpanded: Binding(
-            get: { expanded.contains(id) },
+            get: { state.expanded.contains(id) },
             set: { isOpen in
-                if isOpen { expanded.insert(id) } else { expanded.remove(id) }
+                if isOpen { state.expanded.insert(id) } else { state.expanded.remove(id) }
             }
         )) {
             ForEach(regions) { region in

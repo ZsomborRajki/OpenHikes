@@ -22,6 +22,9 @@ struct OfflineCountriesScreen: View {
     /// show an area on the map, and the whole of it to search in. Only the
     /// coarse flag is read here, so a drag re-runs this once it settles.
     let presentation: SheetPresentation
+    /// What the list holds, kept by ``presentation`` so a turn of the phone
+    /// keeps it — see ``OfflineCountriesListState``.
+    let list: OfflineCountriesListState
 
     @State private var token: Int?
     @State private var selectedID: String?
@@ -30,6 +33,7 @@ struct OfflineCountriesScreen: View {
     var body: some View {
         OfflineCountriesList(
             countries: countries,
+            state: list,
             near: near,
             selectedID: selectedID,
             hasFullHeight: presentation.isFullHeight,
