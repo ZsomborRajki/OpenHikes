@@ -162,7 +162,7 @@ struct VectorTileArrowsTests {
             geometry: VectorTileFixture.line([(corner, 64 * pixel), (corner, (64 + 105) * pixel)])
         )
 
-        let layout = try layout([across, down])
+        let layout = try laidOut([across, down])
 
         #expect(layout.placements.count == 2)
         #expect(layout.placements.contains { $0.center.y.isApproximatelyEqual(to: 64 * unit, absoluteTolerance: 1) })
@@ -171,7 +171,7 @@ struct VectorTileArrowsTests {
 
     @Test("an arrow points the way its line is travelled")
     func arrowsPointAlongTheirLine() throws {
-        let layout = try layout([way(oneway: "yes", y: grid / 4), way(oneway: "-1", y: grid / 2)])
+        let layout = try laidOut([way(oneway: "yes", y: grid / 4), way(oneway: "-1", y: grid / 2)])
 
         let along = layout.placements.filter { $0.center.y.isApproximatelyEqual(to: side / 4, absoluteTolerance: 1) }
         let against = layout.placements.filter { $0.center.y.isApproximatelyEqual(to: side / 2, absoluteTolerance: 1) }
@@ -209,7 +209,7 @@ struct VectorTileArrowsTests {
         let start = -Int(VectorTileArrows.spacing / 2 * CGFloat(grid) / VectorTileRasterizer.styleTileSize)
         let street = way(oneway: "yes", y: grid / 2, from: start)
 
-        let layout = try layout([street])
+        let layout = try laidOut([street])
 
         #expect(!layout.placements.isEmpty)
         #expect(layout.placements.allSatisfy { bounds.contains($0.frame) })
@@ -275,7 +275,7 @@ struct VectorTileArrowsTests {
         return VectorTileArrows.lines(in: decoded, source: tile, target: tile)
     }
 
-    private func layout(_ features: [VectorTileFixture.Feature]) throws -> VectorTileArrows.Layout {
+    private func laidOut(_ features: [VectorTileFixture.Feature]) throws -> VectorTileArrows.Layout {
         var room = VectorTilePoints.Room(bounds: bounds, taken: [])
         return VectorTileArrows.Layout(try oneWay(features), unit: unit, room: &room)
     }

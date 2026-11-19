@@ -41,7 +41,7 @@ nonisolated enum VectorTileHouseNumbers {
         let side = CGFloat(VectorTileRasterizer.pixelSize)
         let bounds = CGRect(x: 0, y: 0, width: side, height: side)
         let geometry = VectorTileGeometry(extent: layer.extent, source: source, target: target)
-        let look = look(z: target.z)
+        let written = look(z: target.z)
         var found: [VectorTilePoints.Candidate] = []
         for feature in layer.features where feature.type == .point && feature.string("kind") == "address" {
             guard let number = feature.string("addr_housenumber").map(shortened), !number.isEmpty else { continue }
@@ -49,7 +49,7 @@ nonisolated enum VectorTileHouseNumbers {
                 found.append(VectorTilePoints.Candidate(
                     anchor: point,
                     lines: [number],
-                    look: look,
+                    look: written,
                     rank: VectorTilePoints.Rank(
                         order: 0,
                         height: -.infinity,
