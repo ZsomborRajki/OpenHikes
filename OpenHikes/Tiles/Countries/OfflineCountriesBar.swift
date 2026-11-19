@@ -77,6 +77,9 @@ struct OfflineCountriesBar: View {
             label: "Sort offline maps",
             identifier: "offline-maps-order-button"
         )
+        // A pass of the list that leaves the order as it was leaves the
+        // capsule as it was — see `SortMenu+Equatable.swift`.
+        .equatable()
         .sensoryFeedback(HapticMoment.choiceChanged.feedback, trigger: chosenSort)
         .transition(.opacity)
     }

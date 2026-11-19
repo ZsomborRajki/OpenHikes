@@ -414,6 +414,9 @@ private extension MapSheetHikes {
             value: isCustom ? String(localized: "Your order") : sort.title,
             identifier: "hike-order-button"
         )
+        // A pass of this list that leaves the order as it was leaves the
+        // capsule as it was — see `SortMenu+Equatable.swift`.
+        .equatable()
         // On the menu and deliberately *not* on the `Picker` inside it — see
         // ``SortMenu``. The capsule reads `sort` already, so the trigger
         // costs nothing new.
