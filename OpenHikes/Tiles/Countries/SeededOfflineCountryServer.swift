@@ -51,7 +51,7 @@
 //  The App Store frame of *Offline Maps* is of the list a hiker gets: every
 //  country and region, with its real outline and what it really costs. So
 //  `showcase` reads `OfflineCountriesShowcase.json`, a copy of the server's
-//  `countries/manifest.json` byte for byte, taken from build `20261117`. Its
+//  `countries/manifest.json` byte for byte, taken from build `20261120`. Its
 //  digests are the real files', and its addresses reach nowhere as the ten's
 //  do. The suites keep the ten, whose orders and regions they can predict.
 //
