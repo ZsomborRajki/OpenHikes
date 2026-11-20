@@ -27,10 +27,10 @@ struct RecordingCard: View {
     @State private var showDiscardConfirmation = false
     @State private var showStopAlert = false
     @State private var stopNameDraft = ""
-    /// The name a blank field saves, taken once when the hiker asks to stop:
-    /// the trail the walk mostly followed, else the town it started in, else
-    /// the draft's own name — the time of day and the date. The field's
-    /// placeholder, and handed to the recorder with whatever is typed — see
+    /// The name the alert's field opens with, taken once when the hiker asks
+    /// to stop: the walk's town, trail and day where it has them, else the
+    /// draft's own name — the time of day and the date. Handed to the
+    /// recorder with whatever the field says by then — see
     /// ``HikeRecorder/stop(customName:offeredTitle:)``.
     ///
     /// Held here rather than read in `body`, which is the whole reason it is
@@ -39,6 +39,16 @@ struct RecordingCard: View {
     /// action is not a body, so reading it there costs one look and creates
     /// no dependency.
     @State private var offeredTitle: String?
+
+    /// The discard question as the name alert's *Discard Recording* asks it:
+    /// a second alert, rather than the dialog the paused card's button opens.
+    ///
+    /// A dialog raised from an alert's button is never presented. Measured on
+    /// iOS 27.2: the button's action runs while the alert is still on its way
+    /// down, the dialog's flag reads true in the pass after it, and nothing
+    /// comes up — the alert closed and the recording went on, with the flag
+    /// left standing. An alert raised the same way does follow the first.
+    @State private var showDiscardAlert = false
 
     /// Reads `phase`, the recovery state and whether a save can be retried —
     /// each of which moves a handful of times a session. Everything that moves
@@ -69,24 +79,22 @@ struct RecordingCard: View {
             isPresented: $showDiscardConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Discard Recording", role: .destructive) {
-                Task {
-                    let hikeID = recorder.currentHike?.id
-                    await recorder.discard()
-                    if recorder.phase == .idle {
-                        onDiscarded(hikeID)
-                    }
-                }
-            }
-            Button("Cancel", role: .cancel) { /* no-op */ }
+            discardChoices
         } message: {
-            Text("The recorded track cannot be recovered after it is discarded.")
+            discardWarning
+        }
+        .alert("Discard this recording?", isPresented: $showDiscardAlert) {
+            discardChoices
+        } message: {
+            discardWarning
         }
         .alert("Name Your Hike", isPresented: $showStopAlert) {
-            // A placeholder is a promise about what happens if the hiker types
-            // nothing, so this is the name the save writes in that case rather
-            // than one asked for again when the save comes. By then the town
-            // may have answered, and the walk gone on under the alert.
+            // The offered name is the field's text, and under it the field's
+            // placeholder: a hiker who clears the field and saves is still
+            // shown what the hike will be called. Either way it is the name
+            // the save writes rather than one asked for again when the save
+            // comes. By then the town may have answered, and the walk gone on
+            // under the alert.
             TextField(
                 offeredTitle ?? String(localized: "Hike name"),
                 text: $stopNameDraft
@@ -94,10 +102,34 @@ struct RecordingCard: View {
             Button("Save") {
                 Task { await stopAndSave() }
             }
-            Button("Cancel", role: .cancel) { /* no-op */ }
+            // The other way a recording ends, beside the one that keeps it,
+            // so that throwing a walk away does not take a pause first. It
+            // still asks, as a paused recording's button does.
+            Button("Discard Recording", role: .destructive) {
+                showDiscardAlert = true
+            }
+            Button("Keep Recording", role: .cancel) { /* no-op */ }
         } message: {
-            Text("Give this hike a name, or leave it blank to keep the default.")
+            Text("Save the hike under this name, or type another.")
         }
+        // The offered name opens selected, so the first key typed replaces
+        // it and a tap in the field keeps it to be edited. Asked of the
+        // field itself, because an alert does not hear a `selection:`
+        // binding — see ``AlertTextSelection``.
+        .selectsAlertText(offeredTitle, while: showStopAlert)
+    }
+
+    /// The discard question's two answers, for the dialog and the alert that
+    /// ask it.
+    @ViewBuilder private var discardChoices: some View {
+        Button("Discard Recording", role: .destructive) {
+            Task { await discard() }
+        }
+        Button("Cancel", role: .cancel) { /* no-op */ }
+    }
+
+    private var discardWarning: Text {
+        Text("The recorded track cannot be recovered after it is discarded.")
     }
 
     /// What the title row's trailing edge offers in each phase. A phase that
@@ -197,22 +229,29 @@ struct RecordingCard: View {
 
     private var stopButton: some View {
         Button("Stop", systemImage: "stop.fill") {
-            // Deliberately blank rather than pre-filled with the default
-            // title. The alert's own copy says "leave it blank to keep the
-            // default" and the field's placeholder already shows that default,
-            // so pre-filling made the field impossible to leave blank —
-            // tapping Stop → Save without typing sent the default through as
-            // `customName`, and `normalizedCustomName` only nils out an
-            // *empty* string, so the hike was permanently flagged user-named.
-            // The rendered name was identical, which is why nothing looked
-            // wrong; the state was just no longer true.
-            stopNameDraft = ""
-            offeredTitle = recorder.suggestedTitle ?? recorder.currentHike?.title
-            showStopAlert = true
+            switch recorder.stopStep {
+            case .askName: askForName()
+            case .confirmDiscard: showDiscardConfirmation = true
+            case .endEmpty: Task { await discard() }
+            }
         }
         .prominentGlassButtonStyle()
         .tint(.red)
         .placeCardControl()
+    }
+
+    /// Opens the name alert holding the offered name.
+    ///
+    /// The field was once prefilled and then emptied again, because Save
+    /// without typing sent the default through as a typed name and the hike
+    /// was flagged user-named for good. The text is back, and what keeps that
+    /// from coming back with it is the save reading the field against what it
+    /// opened with — see ``RecordingStopName``.
+    private func askForName() {
+        let offered = recorder.suggestedTitle ?? recorder.currentHike?.title
+        offeredTitle = offered
+        stopNameDraft = offered ?? ""
+        showStopAlert = true
     }
 
     private var discardButton: some View {
@@ -223,10 +262,16 @@ struct RecordingCard: View {
         .frame(maxWidth: .infinity)
     }
 
+    private func discard() async {
+        let hikeID = recorder.currentHike?.id
+        await recorder.discard()
+        if recorder.phase == .idle {
+            onDiscarded(hikeID)
+        }
+    }
+
     private func stopAndSave() async {
-        let customName = stopNameDraft.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        )
+        let customName = RecordingStopName.typed(stopNameDraft, over: offeredTitle)
         do {
             let outcome = try await recorder.stop(customName: customName, offeredTitle: offeredTitle)
             if case .saved(let hike) = outcome {

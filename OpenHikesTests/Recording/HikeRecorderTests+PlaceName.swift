@@ -2,10 +2,10 @@
 //  HikeRecorderTests+PlaceName.swift
 //  OpenHikesTests
 //
-//  What a recording no trail named is called: the town it started in, asked
+//  The town a recording's name begins with: the one it started in, asked
 //  about once, at the walk's first fix — see `HikeRecorder+PlaceName.swift`.
-//  A blank stop alert still saves the name it showed, however late the town
-//  answers.
+//  A stop alert left as it opened still saves the name it showed, however
+//  late the town answers.
 //
 //  The geocoder is a stub that answers with the town it is given and writes
 //  down every coordinate it was asked about, for the reason every transport
@@ -69,7 +69,13 @@ extension HikeRecorderTests {
         }
     }
 
-    /// The placeholder the stop alert shows, and the promise it makes: a hiker
+    /// What a name begins with, and the day it ends with: a town and the day
+    /// is the name of a walk no trail named.
+    private func name(_ beginning: String, on date: Date) -> String {
+        beginning + RecordingTitle.separator + RecordingTitle.day(date)
+    }
+
+    /// The name the stop alert opens with, and the promise it makes: a hiker
     /// who types nothing gets the town's name, in `title`.
     @Test("a walk no trail named is named for the town it started in")
     func aWalkIsNamedForTheTownItStartedIn() async throws {
@@ -81,7 +87,7 @@ extension HikeRecorderTests {
         await settleStartPlace(of: recorder)
 
         let startedAt = try #require(recorder.sessionStartedAt)
-        let townsName = try #require(HikeRecorder.placeTitle(city: "Budapest", for: startedAt))
+        let townsName = name("Budapest", on: startedAt)
         #expect(recorder.suggestedTitle == townsName)
         // Held, not written: the draft is renamed when the hike is saved.
         let draft = try #require(recorder.currentHike)
@@ -93,35 +99,24 @@ extension HikeRecorderTests {
         #expect(hike.customName == nil, "nobody typed this name")
     }
 
-    /// Today's name with the town where the time of day was, so a list of
-    /// walks named either way reads by the same date.
-    @Test("the town takes the place of the time of day in the name")
-    func theTownTakesTheTimeOfDaysPlace() throws {
-        let date = clock.now
-        let timeOfDayName = HikeRecorder.defaultTitle(for: date)
-        let day = try #require(timeOfDayName.components(separatedBy: " – ").last)
-
-        #expect(HikeRecorder.placeTitle(city: "Budapest", for: date) == "Budapest – \(day)")
-        #expect(HikeRecorder.placeTitle(city: " Szentendre\n", for: date) == "Szentendre – \(day)")
-        #expect(HikeRecorder.placeTitle(city: "  ", for: date) == nil)
-    }
-
-    /// The trail is the more particular name: every walk from the town's
-    /// station starts in the town, and this one went along the ridge.
-    @Test("the trail a walk followed outranks the town it started in")
-    func theTrailOutranksTheTown() async throws {
+    /// Every walk from the town's station starts in the town, and this one
+    /// went along the ridge: the name says both, the town first.
+    @Test("the trail a walk followed stands after the town it started in")
+    func theTrailStandsAfterTheTown() async throws {
         let recorder = makeRecorder(placeNames: StubRecordingPlaceNaming(city: "Budapest"))
         await recorder.start()
         walk(recorder, to: 47.63, on: "Ridge Path")
         walk(recorder, to: 47.631, on: "Ridge Path")
         walk(recorder, to: 47.632, on: "Ridge Path")
         await settleDelegateHop(until: "the town to answer") {
-            recorder.startPlaceTitle != nil
+            recorder.startPlaceName != nil
         }
 
-        #expect(recorder.suggestedTitle == "Ridge Path")
+        let startedAt = try #require(recorder.sessionStartedAt)
+        let offered = name("Budapest – Ridge Path", on: startedAt)
+        #expect(recorder.suggestedTitle == offered)
         let hike = try savedHike(from: await recorder.stop())
-        #expect(hike.title == "Ridge Path")
+        #expect(hike.title == offered)
     }
 
     @Test("a name the hiker typed outranks the town's")
@@ -136,7 +131,7 @@ extension HikeRecorderTests {
         let hike = try savedHike(from: await recorder.stop(customName: "Sunday Walk"))
 
         #expect(hike.displayTitle == "Sunday Walk")
-        #expect(hike.title == HikeRecorder.placeTitle(city: "Budapest", for: hike.date))
+        #expect(hike.title == name("Budapest", on: hike.date))
     }
 
     /// A trailhead with no signal, or somewhere MapKit has no name for: the
@@ -212,7 +207,7 @@ extension HikeRecorderTests {
         await settleStartPlace(of: recorder)
 
         let startedAt = try #require(recorder.sessionStartedAt)
-        #expect(recorder.suggestedTitle == HikeRecorder.placeTitle(city: "Szentendre", for: startedAt))
+        #expect(recorder.suggestedTitle == name("Szentendre", on: startedAt))
         #expect(places.askedCoordinates.count == 2)
     }
 
@@ -246,7 +241,7 @@ extension HikeRecorderTests {
         let hike = try savedHike(from: await recorder.stop())
 
         #expect(places.askedCoordinates.count == 1, "the fix after a recovered start is not another start")
-        #expect(hike.title == HikeRecorder.placeTitle(city: "Budapest", for: hike.date))
+        #expect(hike.title == name("Budapest", on: hike.date))
     }
 
     /// A walk stopped and then closed during its route review comes back to
@@ -278,15 +273,15 @@ extension HikeRecorderTests {
         #expect(asked.latitude.isApproximatelyEqual(to: 47.63, absoluteTolerance: 1e-7))
         #expect(asked.longitude.isApproximatelyEqual(to: 12.86, absoluteTolerance: 1e-7))
         let hike = try await recorder.saveReviewedRecording()
-        #expect(hike.title == HikeRecorder.placeTitle(city: "Budapest", for: hike.date))
+        #expect(hike.title == name("Budapest", on: hike.date))
     }
 
-    /// The stop alert's placeholder is a promise about what a blank field
-    /// saves. A hiker shown the time of day gets the time of day, even when
-    /// the town answers while the alert is up, as it can at a trailhead with
-    /// poor signal.
-    @Test("a blank stop alert saves the name it showed, though the town answers while it is up")
-    func aBlankStopAlertSavesTheNameItShowed() async throws {
+    /// The name the stop alert opens with is a promise about what a field
+    /// left alone saves. A hiker shown the time of day gets the time of day,
+    /// even when the town answers while the alert is up, as it can at a
+    /// trailhead with poor signal.
+    @Test("a stop alert left as it opened saves the name it showed, though the town answers while it is up")
+    func anUntouchedStopAlertSavesTheNameItShowed() async throws {
         let places = StubRecordingPlaceNaming(city: "Budapest")
         places.holdsAnswers = true
         let recorder = makeRecorder(placeNames: places)
@@ -304,7 +299,14 @@ extension HikeRecorderTests {
 
         places.releaseAnswers()
         await settleStartPlace(of: recorder)
-        let hike = try savedHike(from: await recorder.stop(customName: "", offeredTitle: shown))
+        // The field still says what it opened with, which is how the alert
+        // hands it over — see ``RecordingStopName``.
+        let hike = try savedHike(
+            from: await recorder.stop(
+                customName: RecordingStopName.typed(shown, over: shown),
+                offeredTitle: shown
+            )
+        )
 
         #expect(hike.title == shown)
         #expect(hike.customName == nil, "nobody typed this name")
@@ -338,7 +340,7 @@ extension HikeRecorderTests {
         }
         places.releaseAnswers()
         await settleDelegateHop(until: "the town to answer during the review") {
-            recorder.startPlaceTitle != nil
+            recorder.startPlaceName != nil
         }
         let hike = try await recorder.saveReviewedRecording()
 

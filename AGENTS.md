@@ -629,6 +629,18 @@ a change to recording, the map, the sheet or the render path; the PR template,
     difficulty or steepness stretch is measured across it.
   - A recording that the matcher moved or found ambiguous stops in
     `.reviewing`, and only `saveReviewedRecording()` writes it.
+- **Stop is where a recording ends, kept or not** (`RecordingStop.swift`).
+  It asks for a name, beside *Discard Recording* and *Keep Recording*. A
+  recording with no line to save is not asked for one: Stop ends it, and
+  asks first only when a photograph or a place is on it.
+  - **The name is offered as the field's text, selected**, by the owner's
+    decision, so one key replaces it and a tap keeps it to be edited. A field
+    left as it opened is not a typed name (`RecordingStopName`).
+  - **The offered name is the town, the trail, a word for a loop and the
+    day**, in that order, by the owner's decision (`RecordingTitle`). A part
+    the walk does not have is left out. A loop is a walk that came back by
+    other ground than it went out on (`RouteShape`), so there and back is
+    not one.
 - **The map is imperative MapKit behind `MapView`.** `MapView.Coordinator`
   observes stable controllers and updates `MKMapView` directly. Tiles flow
   through `CachingTileOverlayRenderer` into `TileCache`, auto-saves through
@@ -1076,6 +1088,11 @@ a change to recording, the map, the sheet or the render path; the PR template,
     (`presentsMapControlsOverCard()`), and anything new a map control opens
     joins them there. So has the one alert no control opens: a fix raises a
     walk's off-trail question at any moment, a card's included.
+  - **What follows an alert is an alert.** A `confirmationDialog` raised
+    from an alert's button is never presented, so the question the
+    recording's stop alert leads to is a second alert (`RecordingCard`). And
+    an alert's text field ignores a `selection:` binding: one that opens
+    holding text to type over is asked to select it (`AlertTextSelection`).
 - **The map is chosen on the map.** *Map Modes* (`MapModesView`) is a sheet
   as tall as its cards, opened from the pill the "my location" button stands
   in, so the map above it turns over as a card is tapped. It holds the cards,

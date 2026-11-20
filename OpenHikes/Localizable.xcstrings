@@ -959,6 +959,52 @@
         }
       }
     },
+    "%@ Loop" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rundweg %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (circular)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ en boucle"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ad anello"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (pętla)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (кольцо)"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (кільце)"
+          }
+        }
+      }
+    },
     "%@ of %@" : {
       "localizations" : {
         "de" : {
@@ -22173,52 +22219,6 @@
         }
       }
     },
-    "Give this hike a name, or leave it blank to keep the default." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gib dieser Wanderung einen Namen oder lass das Feld leer, um den Standardnamen zu behalten."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ponle un nombre a esta excursión o déjalo en blanco para mantener el predeterminado."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Donnez un nom à cette randonnée, ou laissez le champ vide pour garder le nom par défaut."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dai un nome a questa escursione, oppure lascia vuoto per mantenere quello predefinito."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nadaj tej wędrówce nazwę albo pozostaw pole puste, aby zachować domyślną."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Дайте этому походу название или оставьте поле пустым, чтобы сохранить название по умолчанию."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Дайте цьому походу назву або залиште поле порожнім, щоб назва була типовою."
-          }
-        }
-      }
-    },
     "Give this trail a name, or leave it blank to keep the default." : {
       "localizations" : {
         "de" : {
@@ -25749,6 +25749,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Залишити фото %lld"
+          }
+        }
+      }
+    },
+    "Keep Recording" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weiter aufzeichnen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seguir grabando"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continuer à enregistrer"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continua a registrare"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nagrywaj dalej"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Продолжить запись"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Продовжити запис"
           }
         }
       }
@@ -46016,6 +46062,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Зберегти перевірений похід"
+          }
+        }
+      }
+    },
+    "Save the hike under this name, or type another." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speichere die Wanderung unter diesem Namen oder gib einen anderen ein."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guarda la excursión con este nombre o escribe otro."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrez la randonnée sous ce nom, ou saisissez-en un autre."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salva l’escursione con questo nome oppure scrivine un altro."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zapisz wędrówkę pod tą nazwą albo wpisz inną."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сохраните поход под этим названием или введите другое."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Збережіть похід під цією назвою або введіть іншу."
           }
         }
       }

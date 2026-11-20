@@ -177,8 +177,12 @@ extension HikeRecorder {
         // the watch, a recovered walk — measured against the prepared distance
         // rather than the live one: this is the last word on how long the
         // walk was, and the share the floor is applied to should be a share
-        // of it.
-        let suggestedTitle = offeredTitle ?? suggestedTitle(forDistance: prepared.distanceMeters)
+        // of it. Its shape is read off the prepared line for the same reason.
+        let suggestedTitle = offeredTitle ?? suggestedTitle(
+            forDistance: prepared.distanceMeters,
+            along: prepared.route.map(\.clCoordinate),
+            startedAt: prepared.startedAt
+        )
         if let existing = try existingHike(sessionID: hikeID) {
             guard existing.isRecording else { return existing }
             let finalized = try finalizeDraft(
@@ -555,7 +559,7 @@ extension HikeRecorder {
         acceptedFixRevision = 0
         liveMatchWindow = []
         trailNames = RecordingTrailNames()
-        startPlaceTitle = nil
+        startPlaceName = nil
         hasAskedForStartPlace = false
         offeredTitle = nil
         liveMatchingTask?.cancel()
@@ -589,38 +593,9 @@ extension HikeRecorder {
         case Self.afternoonEndHour..<Self.eveningEndHour: timeOfDay = String(localized: "Evening Hike")
         default: timeOfDay = String(localized: "Hike")
         }
-        return "\(timeOfDay) – \(titleDate(date, calendar: calendar))"
-    }
-
-    /// The name a walk takes from the town it started in: the shape of
-    /// ``defaultTitle(for:calendar:)``, with the town where the time of day
-    /// was — "Budapest – Oct 26, 2026". `nil` for a city that is only
-    /// whitespace, which would leave nothing but the date.
-    ///
-    /// Bounded through ``HikeTitle``, like every name this app did not get
-    /// from a keyboard: the city is MapKit's text, arriving over the network.
-    nonisolated static func placeTitle(
-        city: String,
-        for date: Date,
-        calendar: Calendar = .current
-    ) -> String? {
-        let name = city.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else { return nil }
-        return HikeTitle.bounded("\(name) – \(titleDate(date, calendar: calendar))")
-    }
-
-    /// The date both default titles end with.
-    ///
-    /// `Date.FormatStyle` rather than `DateFormatter`: the old formatter is an
-    /// `NSObject` that had to be built and configured on every call, and this
-    /// runs once per saved recording. A format style is a `Sendable` value,
-    /// which is also what lets this stay `nonisolated` without parking a
-    /// shared mutable formatter somewhere.
-    ///
-    /// `.abbreviated` is `DateFormatter`'s `.medium`. Locale and time zone stay
-    /// at the system's, as they were.
-    nonisolated private static func titleDate(_ date: Date, calendar: Calendar) -> String {
-        date.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted, calendar: calendar))
+        // The shape every offered name has, with the time of day where the
+        // town and the trail would be — see ``RecordingTitle``.
+        return timeOfDay + RecordingTitle.separator + RecordingTitle.day(date, calendar: calendar)
     }
 
     // MARK: Session lifecycle helpers
