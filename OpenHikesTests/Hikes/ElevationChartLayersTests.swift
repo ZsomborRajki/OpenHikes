@@ -29,7 +29,9 @@
 //  The marks have an equality of their own, which is what leaves them alone
 //  while the chart only moves on screen: they are handed where the plot area
 //  sits rather than the chart's proxy, which Swift Charts hands their overlay
-//  anew on every frame of a scroll.
+//  anew on every frame of a scroll. And they are handed it rounded, because a
+//  frame read while a sheet drag scales the chart differs in its last bits
+//  from the same frame read a moment before.
 //
 //  Whether the plot is then left alone during a scrub is a question for
 //  `Scripts/render-trace.sh`, which is where it was answered. A window hosted
@@ -160,6 +162,30 @@ struct ElevationChartLayersTests {
         #expect(base != marks(profile, domain: 0...1200))
         #expect(base != marks(profile, tint: .red))
         #expect(base != marks(RouteProfile(route: Array(Fixture.ridgeRoute.dropLast()))))
+    }
+
+    /// What the overlay reads while a sheet drag scales the chart on screen:
+    /// one plot area, with a different last bit on every frame. These three
+    /// were read in a single drag on a simulator. Exact comparisons
+    /// throughout, because the last bit is what is being held.
+    @Test("a plot frame that only differs by the noise of reading it is the same frame")
+    func plotFrameReadWithNoiseIsTheSameFrame() {
+        let atRest = CGRect(x: 0, y: 0, width: 323, height: 182)
+        let read = [
+            CGRect(x: 0, y: -5.684341886080802e-14, width: 323, height: 182.0000000000001),
+            CGRect(x: 3.552713678800501e-15, y: 1.1368683772161603e-13, width: 323, height: 181.9999999999999),
+            CGRect(x: -7.105427357601002e-15, y: -1.1368683772161603e-13, width: 322.99999999999994, height: 182),
+        ]
+        #expect(read.allSatisfy { $0 != atRest }, "precondition: as read, each is a frame of its own")
+
+        #expect(read.allSatisfy { ElevationChartMarks.settled($0) == atRest })
+        #expect(ElevationChartMarks.settled(atRest) == atRest, "a frame on the grid is handed on as it is")
+
+        // A move is still a move: by a pixel at three to the point, and by a
+        // hundredth of a point, which is less than any display shows.
+        let pixel: CGFloat = 1 / 3
+        #expect(ElevationChartMarks.settled(atRest.offsetBy(dx: pixel, dy: 0)) != atRest)
+        #expect(ElevationChartMarks.settled(atRest.insetBy(dx: 0, dy: 0.01)) != atRest)
     }
 
     // MARK: The view around the plot
