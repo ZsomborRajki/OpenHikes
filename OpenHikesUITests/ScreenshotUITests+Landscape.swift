@@ -87,18 +87,6 @@ extension ScreenshotUITests {
         ))
     }
 
-    /// Use the app's free system map for the Duo's nearby frame. The raster
-    /// map can leave its new top row blank after the landscape camera move.
-    ///
-    /// The open Duo on its side and nothing else: an iPad's hit test is as
-    /// unreliable, and its nearby frame keeps the map every other frame has.
-    @MainActor
-    func prepareNearbyLandscapeMap(in app: XCUIApplication) {
-        guard XCUIScreen.screens.count > 1,
-              hitTestIsUnreliable(in: app, window: windowFrame(of: app)) else { return }
-        selectMap("apple_maps", in: app)
-    }
-
     /// Observe rendered tiles and their final redraw, including replacement
     /// of lower-resolution fallback tiles after the camera move.
     ///

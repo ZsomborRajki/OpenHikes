@@ -47,6 +47,12 @@ summary, and an orange or green draw sank the photo pins into the route's own
 steepness colours. `--ui-test-route-hue=0.68` hands every frame the same indigo
 from the same palette, a hue none of the steepness colours come near.
 
+**Every frame draws the OpenHikes map from the tile server.** A test launch
+reaches no tile server, so the default map falls back to openstreetmap.org's
+raster tiles, which is not the map a hiker gets. `--ui-test-tile-server` gives
+the frames the vector archives the server's manifest names, so a run needs a
+connection to `tiles.openhikes.app`, and shows whatever build it names.
+
 **Every frame is shot in dark appearance, and only in that.** It reads as dark
 only where the sheet covers the map: the map's tiles do not turn over with the
 appearance, so a dark sheet resting at its middle detent is grey glass over a
@@ -485,8 +491,6 @@ The gallery is positioned inside the panel’s scrolling viewport, and the
 share editor’s figures are moved beside its route. The hero opens the next
 photo pin down: a callout on the topmost one makes MapKit push the trail’s
 finish off the bottom on this display.
-The nearby frame selects the free Apple Maps style through Map Modes on this
-display, avoiding the raster map’s stalled top row after the camera move.
 
 **Three things XCTest does differently on a Duo**, each answered in the test
 class or the export rather than worked around in a frame:
@@ -533,13 +537,10 @@ the open iPhone Duo is shot on its side.
 
 **Upright is the side panel**, since an iPad is wide enough for a map beside
 it (*The map screen* in `AGENTS.md`). The frames come out in the shape the
-open Duo's landscape set has, with two differences:
-
-- Upright, the panel is tall enough to show the chart and the gallery at
-  once, so frame 02 is left as it stands rather than scrolled until the
-  gallery meets the panel's bottom edge, which nothing could bring it to.
-- The nearby frame keeps OpenStreetMap. The open Duo's switches to Apple Maps
-  for a raster row that stalls there, and an iPad's has not stalled.
+open Duo's landscape set has, with one difference: upright, the panel is
+tall enough to show the chart and the gallery at once, so frame 02 is left as
+it stands rather than scrolled until the gallery meets the panel's bottom
+edge, which nothing could bring it to.
 
 `isHittable` answers no for everything in the panel on an iPad, as on the
 open Duo on its side, so the shared helpers take a centre in the window as

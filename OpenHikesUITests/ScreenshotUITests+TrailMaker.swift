@@ -43,6 +43,7 @@ extension ScreenshotUITests {
             "--ui-test-enable-location",
             "--ui-test-live-maker",
             "--ui-test-entitled",
+            Self.tileServerArgument,
         ])
         // No `resetAuthorizationStatus`: the script grants location before the
         // run, so no prompt lands on this frame's first gesture. The monitor

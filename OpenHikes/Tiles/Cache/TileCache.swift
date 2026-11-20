@@ -54,7 +54,8 @@ nonisolated final class TileCache: @unchecked Sendable {
         monitorsNetwork: !AppLaunchEnvironment.simulatesOffline,
         // No suite reaches the tile server, UI tests included, as none reaches
         // the hiking-routes squares: a suite draws the raster tiles it always
-        // has. See *Tiles* in `AGENTS.md`.
+        // has. The App Store frames alone ask for it by name. See *Tiles* in
+        // `AGENTS.md`.
         vectorArchives: VectorTileArchives.forThisLaunch(),
         // The downloaded countries, which the countries' model opens into
         // this. A suite's cache has none, as it has no vector source.

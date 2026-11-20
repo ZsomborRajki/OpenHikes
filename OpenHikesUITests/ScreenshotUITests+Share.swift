@@ -31,6 +31,7 @@ extension ScreenshotUITests {
             "--ui-test-import-gpx=\(Self.routeFixture)",
             "--ui-test-seed-walks=FullLoop,HalfLoop",
             Self.routeHueArgument,
+            Self.tileServerArgument,
         ])
         openHikeDetail(in: app, titled: Self.routeTitle)
         try importDiscoveredPhotos(in: app)

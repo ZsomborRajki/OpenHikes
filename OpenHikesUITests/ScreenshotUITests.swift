@@ -108,6 +108,7 @@ nonisolated final class ScreenshotUITests: XCTestCase {
             "--ui-test-import-gpx=\(Self.routeFixture)",
             "--ui-test-weather",
             Self.routeHueArgument,
+            Self.tileServerArgument,
         ])
         openHikeDetail(in: app, titled: Self.routeTitle)
         try importDiscoveredPhotos(in: app, selecting: Self.pinnedPhotoIndexes)
@@ -147,6 +148,7 @@ nonisolated final class ScreenshotUITests: XCTestCase {
             "--ui-test-import-gpx=\(Self.routeFixture)",
             "--ui-test-weather",
             Self.routeHueArgument,
+            Self.tileServerArgument,
         ])
         openHikeDetail(in: app, titled: Self.routeTitle)
         try importDiscoveredPhotos(in: app)
@@ -182,12 +184,12 @@ nonisolated final class ScreenshotUITests: XCTestCase {
             "--ui-test-expanded-sheet",
             "--ui-test-enable-location",
             "--ui-test-community=\(SeededCommunityScenario.showcase.rawValue)",
+            Self.tileServerArgument,
         ])
         addLocationPermissionMonitor()
         setSimulatedLocation(Self.schoenau)
         defer { XCUIDevice.shared.location = nil }
         launch(app)
-        prepareNearbyLandscapeMap(in: app)
         selectCommunityTab(in: app)
         let anyRow = app.descendants(matching: .any)
             .matching(identifier: "community-hike-row")
@@ -214,6 +216,7 @@ nonisolated final class ScreenshotUITests: XCTestCase {
             "--ui-test-expanded-sheet",
             "--ui-test-import-gpx=\(Self.routeFixture)",
             Self.routeHueArgument,
+            Self.tileServerArgument,
         ])
         openHikeDetail(in: app, titled: Self.routeTitle)
         showRouteUnderMapModes(in: app)
@@ -263,6 +266,12 @@ extension ScreenshotUITests {
     /// steepness colours come near, from green through red to black, so the
     /// photo pins and the start dot stand off the line rather than into it.
     static let routeHueArgument = "--ui-test-route-hue=0.68"
+
+    /// The OpenHikes map as a hiker gets it, drawn from the tile server's
+    /// vector archives, in every frame — see
+    /// `AppLaunchEnvironment.asksTileServer`. Without it a test launch draws
+    /// openstreetmap.org's raster tiles in its place.
+    static let tileServerArgument = "--ui-test-tile-server"
 
     /// The middle of Schönau am Königssee, where the frames that need a hiker
     /// somewhere put them: beside the landing, at the foot of the walk.

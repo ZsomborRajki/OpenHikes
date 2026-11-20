@@ -24,6 +24,7 @@ extension ScreenshotUITests {
         let app = launchApp(arguments: [
             "--ui-test-expanded-sheet",
             "--ui-test-import-gpx=\(Self.routeFixture)",
+            Self.tileServerArgument,
         ])
         openHikeDetail(in: app, titled: Self.routeTitle)
         let chart = element("elevation-chart", in: app)

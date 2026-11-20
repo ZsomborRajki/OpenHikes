@@ -388,9 +388,11 @@ a change to recording, the map, the sheet or the render path; the PR template,
   isolated `UserDefaults`. Further `DEBUG`-only `--ui-test-…` arguments seed
   data, force failures or replace a network source; each takes effect only
   alongside `--ui-testing`. `AppLaunchEnvironment` is the list, and a new
-  argument goes there. One does the reverse: `--ui-test-live-maker` lets the
-  trail maker ask Apple Maps and the billed Stadia elevation for real, and
-  belongs to the App Store frame of a drawn trail alone.
+  argument goes there. Two do the reverse, and belong to the App Store
+  frames alone: `--ui-test-live-maker` lets the trail maker ask Apple Maps
+  and the billed Stadia elevation for real, for the frame of a drawn trail,
+  and `--ui-test-tile-server` draws the OpenHikes map from the tile server,
+  for every frame.
 - **No UI launch shows a first-run tip unless it passes `--ui-test-tips`**,
   which starts them from an empty store of their own (`TipLaunch`). Only
   `FirstRunTipsUITests` does, so no other suite and no screenshot meets one.
@@ -1361,7 +1363,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
     then reads as the default.
   - **No suite reaches the tile server.** `TileCache.shared` has no vector
     source under `isRunningTests`, UI tests included
-    (`VectorTileArchives.forThisLaunch()`).
+    (`VectorTileArchives.forThisLaunch()`), except a launch that passes
+    `--ui-test-tile-server`, which only the App Store frames do.
   - **A new build gets a new archive name**, carrying its date, and the
     extras the hour too, never the old one's: the server's cache holds a tile
     for a day, so a build overwritten in place would mix two builds on screen.

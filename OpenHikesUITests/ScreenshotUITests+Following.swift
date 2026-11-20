@@ -39,6 +39,7 @@ extension ScreenshotUITests {
             "--ui-test-import-gpx=\(Self.routeFixture)",
             "--ui-test-weather",
             Self.routeHueArgument,
+            Self.tileServerArgument,
         ])
         // No `resetAuthorizationStatus`: the script grants location before the
         // run, so no prompt lands on this frame's first gesture. The monitor
