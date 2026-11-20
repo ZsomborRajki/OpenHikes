@@ -105,7 +105,7 @@ struct OfflineCountryRow: View {
             }
         } else if download?.hasFailed == true {
             glyphButton("Try Again", systemImage: "arrow.clockwise") {
-                countries.retry(country.id)
+                Task { await countries.retry(country.id) }
             }
         } else if let update = countries.update(for: country.id) {
             Button("Update") { countries.download(update) }

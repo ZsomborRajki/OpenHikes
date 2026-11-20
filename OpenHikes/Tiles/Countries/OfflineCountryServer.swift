@@ -43,7 +43,7 @@ nonisolated struct OfflineCountryServer: OfflineCountryServing {
         let (data, response) = try await URLSession.shared.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard status == Self.httpOK else { throw Failure.status(status) }
-        return try JSONDecoder().decode(OfflineCountryManifest.self, from: data)
+        return try OfflineCountryManifest.catalog(from: data)
     }
 
     /// Where `file` is: under `countries/`, by its name, which is the only

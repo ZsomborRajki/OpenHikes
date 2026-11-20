@@ -130,7 +130,14 @@ nonisolated enum OfflineCountryFixture {
 nonisolated final class StubCountryServer: OfflineCountryServing {
     struct Unreachable: Error {}
 
+    /// Whether it keeps requests waiting, and those it keeps.
+    private struct Hold {
+        var isOn = false
+        var waiting: [CheckedContinuation<Void, Never>] = []
+    }
+
     private let answer: Mutex<OfflineCountryManifest?>
+    private let held = Mutex(Hold())
 
     init(_ manifest: OfflineCountryManifest?) {
         answer = Mutex(manifest)
@@ -140,8 +147,29 @@ nonisolated final class StubCountryServer: OfflineCountryServing {
         answer.withLock { $0 = manifest }
     }
 
+    /// Keeps every request waiting until ``release()``: a read still out.
+    func hold() {
+        held.withLock { $0.isOn = true }
+    }
+
+    /// Answers every request waiting, with what it serves now.
+    func release() {
+        let waiting = held.withLock { hold in
+            defer { hold = Hold() }
+            return hold.waiting
+        }
+        for request in waiting { request.resume() }
+    }
+
     @concurrent
     func manifest() async throws -> OfflineCountryManifest {
+        await withCheckedContinuation { request in
+            let isHeld = held.withLock { hold in
+                if hold.isOn { hold.waiting.append(request) }
+                return hold.isOn
+            }
+            if !isHeld { request.resume() }
+        }
         guard let manifest = answer.withLock({ $0 }) else { throw Unreachable() }
         return manifest
     }

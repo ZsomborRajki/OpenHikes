@@ -1484,17 +1484,19 @@ owner, on the main actor.
   refuses cellular, expensive and constrained paths, so it waits for Wi-Fi by
   itself. Low Power Mode or heat refuse it outright (`TileNetworkPolicy`),
   and so does a volume without room for what has yet to come down, of it and
-  of the areas coming down beside it, and `OfflineCountries.spareBytes`
-  besides. A refusal keeps what has come down. A file that stopped resumes
-  from the session's resume data, and trying again asks only for the files
-  no transfer is still out for.
+  of the areas coming down beside it (a failed one's transfers still out
+  among them), and `OfflineCountries.spareBytes` besides. A refusal keeps
+  what has come down. A file that stopped resumes from the session's resume
+  data, and one that stopped with none counts whole again. Trying again asks
+  only for the files no transfer is still out for.
 - **Trying again goes by what the server offers now**
   (`OfflineCountries.retry`). The server deletes a build it has moved past,
   so a download left waiting across a refresh fails for good, and its row
-  comes back at every launch. Trying again starts the newer build where the
-  list has one, and *Extra Detail* asks for no zoom 15 of an older build
-  than the list's: the update brings it. A row whose download stopped can
-  be cancelled.
+  comes back at every launch. Trying again reads the list at the tap, or
+  waits for the read already out, and starts the newer build where it has
+  one, and *Extra Detail* asks for no zoom 15 of an older build than the
+  list's: the update brings it. A row whose download stopped can be
+  cancelled.
 - **Checked before it is used.** Each file is staged and moved into place
   only once its size and SHA-256 match the manifest's
   (`OfflineCountryStore.isWhole`), hashed a chunk at a time: a country's
@@ -1514,9 +1516,13 @@ owner, on the main actor.
   delete files and read none, and a later build's index may not decode. So
   a launch that cannot read the index, or the list of downloads under way,
   opens, resumes and sweeps nothing (`OfflineCountryStore.List`), and starts
-  again when a scene is next active. A change to `OfflineCountryStore.Record`,
-  or to the manifest's `Country` inside it, has to keep reading the index an
-  installed build wrote, or that build's downloads are lost to their owner.
+  again when a scene is next active. Until it reads both, nothing downloads
+  and *Offline Maps* says it is not available (`OfflineCountries.Holdings`):
+  a download writes both lists, and written over one that could not be read,
+  it would leave what that one names to the sweep. A change to
+  `OfflineCountryStore.Record`, or to the manifest's `Country` inside it, has
+  to keep reading the index an installed build wrote, or that build's
+  downloads are lost to their owner.
 - **A name off the network never reaches a path.** The manifest's file names
   are held to the shape the server's route serves, each starting with its
   own area's code (`OfflineCountryManifest.File.hasSafeName`), and an area
@@ -1525,11 +1531,15 @@ owner, on the main actor.
 - **The list is read to leave the server room to move**
   (`OfflineCountryManifest`), because every installed build keeps reading
   it. A file of a role a build does not know is left out, where reading it
-  strictly would refuse the whole list. An area says which generation of the
-  extras it was cut from (*Tiles*), and a build leaves off one it would draw
-  wrong. An area may be listed more than once, and each build takes the
-  newest it draws, so the last cut for older apps can stand beside the
-  newest. The tool lists one build an area today.
+  strictly would refuse the whole list. Only the list a download is chosen
+  from is read that way (`OfflineCountryManifest.catalog(from:)`): the index
+  on the device and the cutting tool refuse such a file, because one left
+  out of what owns it would be swept, and one left out of a list the tool
+  writes back would be gone from the server's. An area says which
+  generation of the extras it was cut from (*Tiles*), and a build leaves off
+  one it would draw wrong. An area may be listed more than once, and each
+  build takes the newest it draws, so the last cut for older apps can stand
+  beside the newest. The tool lists one build an area today.
 - **The list says which map the downloads are for.** Only the OpenHikes map
   is cut by country, and the outlines are drawn over whichever map is up. So
   the head of the list says it always, and while another map is selected a

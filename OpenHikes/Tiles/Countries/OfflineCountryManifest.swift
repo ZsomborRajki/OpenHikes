@@ -25,6 +25,11 @@
 //  area may be listed more than once, the last build cut for older apps
 //  beside the newest: each app takes the newest it draws.
 //
+//  Only the list a build chooses a download from is read that way
+//  (``catalog(from:)``). The device's index and the tool keep an area too,
+//  and read strictly: a file left out of what owns it would be swept, and
+//  one left out of a list the tool writes back would be gone from it.
+//
 
 import Foundation
 
@@ -191,10 +196,27 @@ nonisolated extension OfflineCountryManifest {
     }
 }
 
+nonisolated extension OfflineCountryManifest {
+    // swiftlint:disable force_unwrapping
+    /// Set on a decoder's `userInfo` to read the server's list as a catalog,
+    /// leaving out every file of a role this build does not know.
+    static let readsCatalog = CodingUserInfoKey(rawValue: "OfflineCountryManifest.readsCatalog")!
+    // swiftlint:enable force_unwrapping
+
+    /// The server's list as a build chooses a download from it, which no
+    /// file of a later role refuses. A list read any other way refuses one,
+    /// because it is a list of what is kept.
+    static func catalog(from data: Data) throws -> Self {
+        let decoder = JSONDecoder()
+        decoder.userInfo[readsCatalog] = true
+        return try decoder.decode(Self.self, from: data)
+    }
+}
+
 nonisolated extension OfflineCountryManifest.Country {
-    /// Reads an area as the list gives it, leaving out any file of a role
-    /// this build does not know. Read as the compiler would write it, one
-    /// such file refused the whole list.
+    /// Reads an area, and in a catalog leaves out any file of a role this
+    /// build does not know: read as the compiler would write it, one such
+    /// file refused the whole list.
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
@@ -208,14 +230,15 @@ nonisolated extension OfflineCountryManifest.Country {
         files = try container.decode([ListedFile].self, forKey: .files).compactMap(\.file)
     }
 
-    /// A file as the list gives it, or nothing for one of a role this build
-    /// does not know.
+    /// A file as the list gives it, or, in a catalog, nothing for one of a
+    /// role this build does not know.
     private struct ListedFile: Decodable {
         let file: OfflineCountryManifest.File?
 
         init(from decoder: any Decoder) throws {
             let role = try decoder.container(keyedBy: RoleKey.self).decode(String.self, forKey: .role)
-            file = OfflineCountryManifest.Role(rawValue: role) == nil
+            let isCatalog = decoder.userInfo[OfflineCountryManifest.readsCatalog] as? Bool == true
+            file = isCatalog && OfflineCountryManifest.Role(rawValue: role) == nil
                 ? nil
                 : try OfflineCountryManifest.File(from: decoder)
         }

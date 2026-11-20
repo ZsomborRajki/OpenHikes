@@ -5565,6 +5565,27 @@ if expect_status 1; then
     fi
 fi
 
+# The app reads a file of a role it does not know out of the list, but the
+# tool writes the list back: read that way, the merge of one area would drop
+# that file from every other.
+routes_file='{"role": "routes", "path": "countries\/SI-routes-20261117.pmtiles", "bytes": 5,'
+routes_file+=' "sha256": "9f86d081", "minimumZoom": 0, "maximumZoom": 14}'
+sed "s/\"files\": \\[{/\"files\": [$routes_file, {/" \
+    "$countries_work/out/manifest.json" > "$countries_work/routes.json"
+sed 's/"SI"/"AT"/; s/SI-20261117/AT-20261117/' "$countries_work/out/manifest.json" > "$countries_work/austria.json"
+run_script "offline-countries merge refuses a server manifest with a file of a role it does not know" \
+    "$OPENHIKES_OFFLINE_COUNTRIES_BUILD/offline-countries" merge --server "$countries_work/routes.json" \
+    --build "$countries_work/austria.json" --out "$countries_work/dropped.json"
+if ! grep -q '"role": "routes"' "$countries_work/routes.json"; then
+    fail "the server manifest the case reads has no routes file" "$(cat "$countries_work/routes.json")"
+elif expect_status 1; then
+    if [[ -f "$countries_work/dropped.json" ]]; then
+        fail "a merged manifest was written" "$(cat "$countries_work/dropped.json")"
+    else
+        pass
+    fi
+fi
+
 rm -f "$countries_work/merged.json"
 run_script "offline-countries merge refuses a build earlier than the server's" \
     "$OPENHIKES_OFFLINE_COUNTRIES_BUILD/offline-countries" merge --server "$countries_work/later.json" \

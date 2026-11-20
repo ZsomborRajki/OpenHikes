@@ -213,11 +213,13 @@ build() {
     region_file="$(natural_earth_file "$regions_url" "$regions_sha256")"
     r2_load_keys
     [[ -n "$planet_file" ]] || planet_file="$(archive_source "$basemap")"
-    # Extras named by hand are of no generation this knows; the manifest's
-    # own are of the one it gives them.
-    local generation=""
-    if [[ -z "$extras" ]]; then
-        extras="$(archive_source "$extras_name")"
+    [[ -n "$extras" ]] || extras="$(archive_source "$extras_name")"
+    # The manifest's first extras are of the generation it gives them,
+    # whether they were found here or named, as `publish` names them, and an
+    # archive's name is never given to another build. Any other extras are
+    # of no generation this knows.
+    local generation="" extras_file_name="${extras#r2:}"
+    if [[ "${extras_file_name##*/}" == "$extras_name.pmtiles" ]]; then
         generation="$(extras_generation)"
     fi
     echo "offline-countries: cutting build $build from $planet_file and $extras"

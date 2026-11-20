@@ -20,8 +20,10 @@
 //  A list that is there and cannot be read is not an empty one. The device
 //  may not have been unlocked since it restarted, when a launch the system
 //  makes for a location or a finished download can list and delete files and
-//  read none; or the list may be a later build's. So reading says which
-//  (``List``), and a launch that cannot read sweeps nothing.
+//  read none; or the list may be a later build's, with a file of a role this
+//  one does not know, which is read strictly here because it is on the
+//  device. So reading says which (``List``), and a launch that cannot read
+//  sweeps nothing and writes over neither.
 //
 
 import CryptoKit
@@ -125,7 +127,8 @@ nonisolated struct OfflineCountryStore: Sendable {
 
     /// The manifest last fetched, so the list is there with no signal.
     func cachedManifest() -> OfflineCountryManifest? {
-        read(OfflineCountryManifest.self, from: manifestURL)
+        guard let data = try? Data(contentsOf: manifestURL) else { return nil }
+        return try? OfflineCountryManifest.catalog(from: data)
     }
 
     func cache(_ manifest: OfflineCountryManifest) throws {
