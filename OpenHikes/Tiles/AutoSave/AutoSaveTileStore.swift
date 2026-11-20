@@ -54,7 +54,9 @@ nonisolated final class AutoSaveTileStore: Sendable {
         var pendingKeys: Set<String>
         /// Keys the draw pass has queued from memory for this hike, so a tile
         /// ``considerPersisting(key:z:x:y:)`` turns down — a country's, or one
-        /// held in memory alone — is not queued again on every pass.
+        /// held in memory alone — is not queued again on every pass. Emptied
+        /// when the hike takes claims again after a suspension, which turns
+        /// down whatever the worker reaches meanwhile.
         var offeredFromMemory: Set<String> = []
     }
 
@@ -76,6 +78,16 @@ nonisolated final class AutoSaveTileStore: Sendable {
     private struct PersistenceClaim {
         let hikeID: UUID
         let isNewKey: Bool
+    }
+
+    /// What a claim on a tile would come to, as the state lock answers it
+    /// before anything slower is asked.
+    private enum Prospect {
+        case refused
+        /// The hike has it already, so a claim only re-promotes its bytes.
+        case known
+        /// It would be new to the hike, which is under its cap.
+        case new
     }
 
     private let state = Mutex<ActiveHike?>(nil)
@@ -169,9 +181,14 @@ nonisolated final class AutoSaveTileStore: Sendable {
     func considerPersisting(key: String, z: Int, x: Int, y: Int) {
         assertOffMainThread("considerPersisting moves a file on disk — call it off the main thread")
         // Asked before the claim, so a tile a country holds is never one the
-        // hike was told it had, and after the cheap question, so a map nobody
-        // is saving costs each tile one lock and no outline.
-        guard isAccepting(z: z, x: x, y: y), !tileCache.isHeldByDownloadedCountry(key) else { return }
+        // hike was told it had, and only of a tile that would be new to it:
+        // a map nobody is saving, a tile the hike has already and a hike at
+        // its cap cost one lock and no outline or archive.
+        switch prospect(forKey: key, z: z, x: x, y: y) {
+        case .refused: return
+        case .known: break
+        case .new: guard !tileCache.isHeldByDownloadedCountry(key) else { return }
+        }
         // Claim the tile up front so two threads drawing it at once don't both
         // try to move it; `releaseClaim` undoes that if the bytes never land.
         let claim = state.withLock { state -> PersistenceClaim? in
@@ -282,13 +299,17 @@ nonisolated final class AutoSaveTileStore: Sendable {
         }
     }
 
-    /// Whether a tile at these indices could be claimed at all: a hike is
-    /// active, taking claims, and the tile falls in its corridor. The claim
-    /// itself asks again under its own lock, where the answer is acted on.
-    private func isAccepting(z: Int, x: Int, y: Int) -> Bool {
+    /// Whether a tile could be claimed at all — a hike is active, taking
+    /// claims, the tile falls in its corridor, and a key the hike does not
+    /// know is under its cap — and whether it would be new. The claim itself
+    /// asks again under its own lock, where the answer is acted on.
+    private func prospect(forKey key: String, z: Int, x: Int, y: Int) -> Prospect {
         state.withLock { state in
-            guard let hike = state else { return false }
-            return hike.acceptsNewClaims && hike.corridor.overlaps(z: z, x: x, y: y)
+            guard let hike = state, hike.acceptsNewClaims, hike.corridor.overlaps(z: z, x: x, y: y) else {
+                return .refused
+            }
+            if hike.knownKeys.contains(key) { return .known }
+            return hike.knownKeys.count < Self.tileCap ? .new : .refused
         }
     }
 
@@ -391,6 +412,7 @@ nonisolated final class AutoSaveTileStore: Sendable {
         state.withLock { state in
             guard var hike = state, hike.id == hikeID else { return }
             hike.acceptsNewClaims = true
+            hike.offeredFromMemory.removeAll()
             state = hike
         }
     }
