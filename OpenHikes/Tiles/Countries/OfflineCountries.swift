@@ -303,8 +303,14 @@ final class OfflineCountries {
         }
     }
 
+    /// The download a transfer is for: of its area and build, and asking
+    /// for its file. A try that replaced a failed one with fewer files, once
+    /// *Extra Detail* was turned off, leaves the earlier try's other
+    /// transfers running, and they are no part of it.
     private func download(for key: OfflineCountryDownloadKey) -> OfflineCountryDownload? {
-        guard let download = downloads[key.country], download.country.build == key.build else { return nil }
+        guard let download = downloads[key.country], download.country.build == key.build,
+              download.files.contains(where: { $0.role == key.role })
+        else { return nil }
         return download
     }
 
