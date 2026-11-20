@@ -137,10 +137,13 @@ final class OfflineCountries {
 
     /// Brings every area down, and not coming down, to *Extra Detail*'s
     /// setting. A download under way is left to finish, and brought to it
-    /// then.
+    /// then. An area the server has a newer build of is left for its update
+    /// to bring zoom 15: the server deletes a build it has moved past, and
+    /// asking for that build's files failed at every launch.
     private func reconcile() {
         for record in installed.values where downloads[record.country.id] == nil {
             if includesDetail, !record.hasDetail {
+                guard update(for: record.country.id) == nil else { continue }
                 download(record.country)
             } else if !includesDetail, record.hasDetail {
                 let before = installed
@@ -179,22 +182,26 @@ final class OfflineCountries {
         let files = filesToFetch(for: country)
         guard !files.isEmpty else { return }
         let decision = networkDecision()
-        if decision.reason == "low-power-mode" || decision.reason == "thermal" {
-            downloads[country.id] = OfflineCountryDownload(country: country, files: files, phase: .failed(.conserving))
-            return
-        }
-        let byteCount = files.reduce(0) { $0 + $1.byteCount }
-        if let free = freeSpace(), free < byteCount + Self.spareBytes {
-            downloads[country.id] = OfflineCountryDownload(country: country, files: files, phase: .failed(.space))
-            return
-        }
         let download = OfflineCountryDownload(
             country: country,
             files: files,
             phase: decision.isAllowed ? .downloading : .waitingForWiFi
         )
+        // Before either refusal, so that one keeps what an earlier try got
+        // down and the next try asks only for the rest.
         if let previous = downloads[country.id] { download.resume(from: previous) }
         downloads[country.id] = download
+        if decision.reason == "low-power-mode" || decision.reason == "thermal" {
+            download.set(.failed(.conserving))
+            return
+        }
+        // Room for what has not come down, of this area and of the others
+        // coming down beside it: what has is on the volume already.
+        let needed = download.remainingBytes + bytesOwed(besides: country.id) + Self.spareBytes
+        if let free = freeSpace(), free < needed {
+            download.set(.failed(.space))
+            return
+        }
         writePending { pending in
             pending.removeAll { $0.country.id == country.id }
             pending.append(OfflineCountryStore.Pending(country: country, roles: files.map(\.role)))

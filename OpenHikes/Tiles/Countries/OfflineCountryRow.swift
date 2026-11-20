@@ -44,18 +44,24 @@ struct OfflineCountryRow: View {
             action(download)
         }
         .listRowBackground(background.map { Rectangle().fill($0) })
-        .swipeActions {
-            if countries.isInstalled(country.id) {
-                Button("Delete", systemImage: "trash", role: .destructive) {
-                    countries.delete(country.id)
-                }
+        .swipeActions { removal(of: download) }
+        .contextMenu { removal(of: download) }
+    }
+
+    /// What takes the row's area off the device: *Delete* for one that is
+    /// downloaded, and for a download that stopped, the cancel its ring
+    /// offered while it ran. Without the second a download that can never
+    /// finish stayed on its row for good.
+    @ViewBuilder
+    private func removal(of download: OfflineCountryDownload?) -> some View {
+        if download?.hasFailed == true {
+            Button("Cancel Download", systemImage: "xmark", role: .destructive) {
+                countries.cancel(country.id)
             }
         }
-        .contextMenu {
-            if countries.isInstalled(country.id) {
-                Button("Delete", systemImage: "trash", role: .destructive) {
-                    countries.delete(country.id)
-                }
+        if countries.isInstalled(country.id) {
+            Button("Delete", systemImage: "trash", role: .destructive) {
+                countries.delete(country.id)
             }
         }
     }
@@ -99,7 +105,7 @@ struct OfflineCountryRow: View {
             }
         } else if download?.hasFailed == true {
             glyphButton("Try Again", systemImage: "arrow.clockwise") {
-                countries.download(download?.country ?? country)
+                countries.retry(country.id)
             }
         } else if let update = countries.update(for: country.id) {
             Button("Update") { countries.download(update) }
