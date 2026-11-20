@@ -8,6 +8,7 @@
 //  for goes, and a record whose file has gone reads as not downloaded.
 //
 
+import CryptoKit
 import Foundation
 @testable import OpenHikes
 import Testing
@@ -116,6 +117,44 @@ struct OfflineCountryStoreTests {
             #expect(!FileManager.default.fileExists(atPath: store.fileURL(for: oldBasemap).path))
             #expect(FileManager.default.fileExists(atPath: store.fileURL(for: shared).path))
         }
+    }
+
+    /// A country's file is gigabytes. Read into memory whole, Germany's would
+    /// have the system end the app while its row said *Checking…*, and the
+    /// next launch would start on the same file again.
+    @Test("hashing a file holds a chunk of it in memory, not the file")
+    func hashesAChunkAtATime() async throws {
+        try await OfflineCountryFixture.withDirectory { directory in
+            let chunks = 6
+            let url = directory.appending(path: "large.pmtiles")
+            FileManager.default.createFile(atPath: url.path, contents: nil)
+            let handle = try FileHandle(forWritingTo: url)
+            try handle.truncate(atOffset: UInt64(OfflineCountryDigest.chunkBytes * chunks))
+            try handle.close()
+            var expected = SHA256()
+            let empty = Data(count: OfflineCountryDigest.chunkBytes)
+            for _ in 0..<chunks { expected.update(data: empty) }
+
+            let before = Self.memoryFootprint()
+            let digest = try OfflineCountryDigest.sha256(of: url)
+            let grown = Int64(Self.memoryFootprint()) - Int64(before)
+
+            #expect(digest == expected.finalize().map { String(format: "%02x", $0) }.joined())
+            #expect(grown < Int64(OfflineCountryDigest.chunkBytes) * 2)
+        }
+    }
+
+    /// What the system charges the process with, which is what it ends an
+    /// app for.
+    private static func memoryFootprint() -> UInt64 {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
+        let result = withUnsafeMutablePointer(to: &info) { pointer in
+            pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { rebound in
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), rebound, &count)
+            }
+        }
+        return result == KERN_SUCCESS ? info.phys_footprint : 0
     }
 
     @Test("the directories are kept out of the backup")
