@@ -1471,8 +1471,9 @@ layers:
 # and drive-throughs from the roads that serve a place: Carto draws those
 # three narrower and only from zoom 16, and the basemap keeps no `service`
 # on a road. Where a tile has these, the map draws its service roads from
-# them and none of the basemap's. The rest from zoom 14, where Carto first
-# draws one.
+# them and none of the basemap's, so every one is here from zoom 14, where
+# Carto first draws a service road: a tile whose only service roads are
+# driveways would otherwise have none here, and draw the basemap's.
 - id: service_roads
   features:
   - source: osm
@@ -1489,7 +1490,7 @@ layers:
     - *is_tunnel
   - source: osm
     geometry: line
-    min_zoom: 15
+    min_zoom: 14
     include_when:
       __all__:
       - highway: service
