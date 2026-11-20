@@ -47,11 +47,11 @@ summary, and an orange or green draw sank the photo pins into the route's own
 steepness colours. `--ui-test-route-hue=0.68` hands every frame the same indigo
 from the same palette, a hue none of the steepness colours come near.
 
-**The dark set reads as dark only where the sheet covers the map.** The map's
-tiles do not turn over with the appearance, so a dark sheet resting at its
-middle detent is grey glass over a light map. Frame 02, whose sheet covers the
-map, is the one whose dark copy is a different picture rather than a muddier
-one; frame 10 is a photograph and comes out the same in both.
+**Every frame is shot in dark appearance, and only in that.** It reads as dark
+only where the sheet covers the map: the map's tiles do not turn over with the
+appearance, so a dark sheet resting at its middle detent is grey glass over a
+light map. Frame 02, whose sheet covers the map, is the darkest of them, and
+frame 10 is a photograph.
 
 ### What some of the frames are staged with
 
@@ -133,8 +133,7 @@ the band above it with MapKit's one-finger zoom — a tap, then the same spot
 held and drawn up — which zooms by any amount and, unlike a pinch, never turns
 the map. Where the walk is drawn is read from the region MapKit reports for the
 map and the fixture's own latitudes, since the line is no accessibility
-element. The closed iPhone Duo's *Map Modes* leaves no band at all, and is shot
-as it stands.
+element.
 
 **08, the drawn trail**, is the walk frame 1 is of, planned rather than
 imported: *Schönau am Königssee*, *Kühroint* and *St. Bartholomä*, picked from
@@ -177,13 +176,20 @@ first, so the card’s single title line can show the whole name.
 ## Capturing
 
 ```sh
-Scripts/screenshots-light.sh             # the light set
-Scripts/screenshots-dark.sh              # the dark set, files suffixed -dark
-Scripts/screenshots.sh                   # both, one after the other
-Scripts/screenshots-dark.sh --frame 03   # one frame, while debugging it
+Scripts/screenshots.sh                                         # the 6.9" iPhone set
+Scripts/screenshots.sh --device-type "iPad Pro 13-inch (M5)"   # the iPad's
+Scripts/screenshots.sh --device-type "iPhone Duo"              # the open iPhone Duo's
+Scripts/watch-screenshots.sh                                   # the watch's
+
+Scripts/screenshots.sh --frame 03         # one frame, while debugging it
 Scripts/screenshots.sh --locale de_DE     # add the German set
-Scripts/screenshots.sh --clean            # replace previously marked sets
+Scripts/screenshots.sh --clean            # delete every marked set first
 ```
+
+One script shoots the phone's, the iPad's and the iPhone Duo's sets, one
+`--device-type` a run, and takes the same options for each (*The iPad set*,
+*The iPhone Duo set*). The watch's is a script of its own (*The Apple Watch
+set*).
 
 To use a simulator claimed from the pool, acquire a fresh owner for each batch
 and pass its UDID with `--prepared-device`. This keeps the clean clone the
@@ -195,7 +201,7 @@ export OPENHIKES_SIM_POOL_DEVICE_TYPE='iPhone 18 Pro Max'
 owner="screenshots-$$"
 udid="$(Scripts/sim-pool.sh acquire --owner "$owner" --owner-pid "$$")"
 trap 'Scripts/sim-pool.sh release --owner "$owner"' EXIT
-Scripts/screenshots-light.sh --prepared-device "$udid" --pool-owner "$owner"
+Scripts/screenshots.sh --prepared-device "$udid" --pool-owner "$owner"
 ```
 
 The caller releases that claim, including on failure. `--prepared-device`
@@ -206,16 +212,14 @@ refused before preparation. The caller also shuts the device down by releasing
 the claim. Only `iPhone 18 Pro Max`, `iPhone Duo` and `iPad Pro 13-inch (M5)`
 are accepted; another type is rejected before a build instead of retrying
 images with unsupported sizes.
-When capturing both appearances on one prepared device, run each appearance
-on its own fresh claim so the stamped photographs are added only once.
 
-Each appearance has a script, a simulator (`OpenHikes Screenshots Light` /
-`… Dark`, both `iPhone 18 Pro Max`), a derived-data directory and a set of
-logs of its own. The two used to be one script run twice over one device, and
-a dark pass that hung did so twenty minutes in, on a simulator the light pass
-had just worked, with both passes in one log. Split, a dark failure is
-reproduced with the dark script alone, and `--frame` narrows it to the one
-test. The shared machinery is `Scripts/lib/screenshots.sh`.
+Each device type has a simulator of its own (`OpenHikes Screenshots`,
+`OpenHikes Screenshots iPad` and `OpenHikes Screenshots Duo`), so one type's
+run never replaces the device another's is on. They share a derived-data
+directory, `DerivedData/Screenshots`, and each run has its own logs there;
+`--frame` narrows a failure to the one test. Run the sets one after the other:
+two simulators driving MapKit at once slow the machine enough for the frames'
+waits to start losing. The capture itself is `Scripts/lib/screenshots.sh`.
 
 A run starts its simulator clean — a fresh clone of a settled template rather
 than an erase, so its first boot downloads nothing (an erased iOS 27 simulator
@@ -223,28 +227,29 @@ fetches 1.4 GB of system models; see `Scripts/lib/simulator-templates.sh`), and
 a device passed by UDID is the one exception, erased in place — pins the
 status bar to 9:41 with a full battery
 and full bars — *discharging*, since `charged` is a phone on a cable and draws
-a green battery with a bolt through it — pins the locale, grants location and
-photo access, adds the
+a green battery with a bolt through it — pins the locale, sets dark
+appearance, grants location and photo access, adds the
 stamped photographs, runs `ScreenshotUITests`, and writes the PNGs to
-`Screenshots/Output/`. Only raw PNGs are exported, organized as
-`iphone_18_pro_max_en_ie_YYYY_MM_DD/light/` and `…/dark/`; a Duo directory also
-names its pose and orientation, such as
-`iphone_duo_open_landscape_de_de_YYYY_MM_DD/`. The date is UTC, pinned once for
-both appearances. Set `OPENHIKES_SCREENSHOT_DATE=YYYY-MM-DD` to keep a longer
-batch of separate device or language runs under one date.
+`Screenshots/Output/`. Only raw PNGs are exported, into a folder named for the
+device, the locale and the date, such as `iphone_18_pro_max_en_ie_YYYY_MM_DD/`
+or `iphone_duo_de_de_YYYY_MM_DD/`. The date is UTC. Set
+`OPENHIKES_SCREENSHOT_DATE=YYYY-MM-DD` to keep a longer batch of separate
+device or language runs under one date.
 
 Map captures wait for loaded tiles to stay unchanged for three seconds. The
 animated location marker is excluded from that pixel comparison; moving its
 center still restarts the wait.
 
 Other sets and unrequested frames are preserved by default. `--frame 03`
-replaces only frame 03 in that appearance's selected UTC date. To repair a set
+replaces only frame 03 in the selected UTC date's set. To repair a set
 on a later day, pin its original date, for example
-`OPENHIKES_SCREENSHOT_DATE=2026-10-27 Scripts/screenshots-dark.sh --frame 03`.
+`OPENHIKES_SCREENSHOT_DATE=2026-10-27 Scripts/screenshots.sh --frame 03`.
 Without that date, the capture starts a set for today. Cleanup happens after the build and
 installation succeed; a skipped set or a failed preparation keeps prior
 captures. `--append` remains an alias for this default and cancels `--clean`.
-Use `--clean` to remove prior sets marked by these scripts. If requested frames
+Use `--clean` to remove prior sets marked by these scripts: every one in the
+output root, another device's and the watch's too, so a batch of several
+devices passes it to its first run alone. If requested frames
 are skipped because the stamped library is missing, earlier sets are kept.
 Unmarked folders,
 summary images and other personal files are left alone, including with a
@@ -252,7 +257,7 @@ custom `--output`. Filesystem root, home, the checkout and its input directories
 are refused as output roots. Older unmarked capture sets can be removed by hand.
 The raw `xcodebuild` log and result bundle of
 the last five completed runs stay under
-`DerivedData/Screenshots-<appearance>/ScreenshotRuns-<appearance>/`, and the run
+`DerivedData/Screenshots/ScreenshotRuns/`, and the run
 prints the path. Active runs are never pruned. A failing group still exports
 frames from tests whose structured result is `Passed`; failed and crashed
 tests contribute no images, and only missing frames are retried.
@@ -267,8 +272,8 @@ one time it was.
 
 **Dark appearance loses the first tap on a segmented picker.** Frames 03 and 08
 used to be blamed on the location alert; with the alert gone, both still took
-one tap in light and two in dark, every run. `tapUntilSelected` is the one
-place that answers it. Whether a hiker's finger meets the same thing is not
+two taps in dark, every run, where the light set that was shot then took one.
+`tapUntilSelected` is the one place that answers it. Whether a hiker's finger meets the same thing is not
 known yet — this machine has no `Simulator.app` to tap by hand.
 
 Frames that did not come out are re-run once, and only those. That is not
@@ -435,38 +440,33 @@ a gesture known to disturb the screen and correct afterwards.
 ## The iPhone Duo set
 
 ```sh
-# Closed: the cover display, 1398 × 2034
-Scripts/screenshots.sh --device "OpenHikes Screenshots Duo" --device-type "iPhone Duo" \
-    --pose closed --append
 # Open the way it unfolds: the inner display in landscape, 2853 × 2007
-Scripts/screenshots.sh --device "OpenHikes Screenshots Duo" --device-type "iPhone Duo" \
-    --pose open --append
+Scripts/screenshots.sh --device-type "iPhone Duo"
 ```
 
 App Store Connect takes an iPhone Duo frame of either display, either way up:
 1398 × 2034 or 2034 × 1398 from the cover, 2007 × 2853 or 2853 × 2007 from the
-inner one. Two of those are shot: the cover upright, and the inner display on
-its side. The inner display upright used to be shot too, and dropped, for the
-reason the iPad's landscape set was (*The iPad set*): one device's frames are
-one gallery, and two orientations in it looked wrong. The cover's set is
-upright and the open one is not, so upload one or the other to the Duo slot,
-not both. The same ten frames are shot on each, from the same test class, so a
-frame that breaks on the Duo is a frame that breaks — the Duo is the same app
-in a window of another shape, which is the point of shooting it. Their named
-output directories keep them separate from the 6.9" set, whose file names they
-share. Add `--locale de_DE` for German.
+inner one. One of those is shot: the inner display on its side, the way the
+device opens. The inner display upright used to be shot too, and dropped, for
+the reason the iPad's landscape set was (*The iPad set*): one device's frames
+are one gallery, and two orientations in it looked wrong. The cover's set was
+dropped after it, as a second gallery for one slot. The same ten frames are
+shot as on the 6.9" phone, from the same test class, so a frame that breaks on
+the Duo is a frame that breaks — the Duo is the same app in a window of
+another shape, which is the point of shooting it. Its output directory,
+`iphone_duo_en_ie_YYYY_MM_DD/`, keeps the set apart from the 6.9" one, whose
+file names it shares. Add `--locale de_DE` for German.
 
-The device type needs the iOS 27.1 runtime — which, as Xcode 27.1 installs
-it, runs no other device — and its template, `OpenHikes Template (iPhone Duo,
-iOS 27.1)`, is built the first time like any other: one download of the
-system's models, then clones.
+The device type needs a runtime of its own (*The iPhone Duo* in `AGENTS.md`),
+and its template, `OpenHikes Template (iPhone Duo, …)`, is built the first
+time like any other: one download of the system's models, then clones.
 
-**Opening it.** A simulator boots closed, and Xcode 27.1 opens a Duo only by
-hand, in Device Hub. `--pose open` runs `Scripts/duo-pose.sh` on the clean
+**Opening it.** A simulator boots closed, and Xcode opens a Duo only by
+hand, in Device Hub. The capture runs `Scripts/duo-pose.sh open` on the clean
 device, which has hinge post the event Device Hub's hinge slider posts and
 reads the display state back: open, with the inner display on its side, the
 way it unfolds, or the run stops. hinge is an optional tool (*The iPhone Duo* in `AGENTS.md`), and on a
-machine without it an open set is skipped, with a message saying so, before a
+machine without it the set is skipped, with a message saying so, before a
 simulator is touched. One unfold from cold is what that script can be relied
 on for; see its header for the one that did not take, and what folding back
 and forth did.
@@ -503,28 +503,19 @@ class or the export rather than worked around in a frame:
   it as reachable where the hit test is wrong — see
   `OpenHikesUITests/WindowSupport.swift`.
 
-Two-finger element gestures can resolve against the inactive display even
-when the cover is showing. The recording’s zoom and the gallery/card drags use
+Two-finger element gestures can resolve against the Duo's inactive display,
+the folded-away cover. The recording’s zoom and the gallery/card drags use
 `ScreenshotDisplayGesture`, which sends touch paths to the screenshot’s
 explicit display ID and converts points using its image orientation. These
 private XCTest selectors are checked before use and live only in the UI
 test target. After zooming, the recording waits for colored map terrain to
 replace the placeholder grid before capture.
 
-**The cover display is 678 points tall**, against 956 on the 6.9" phone, and a
-swipe flings content further than that screen shows: *Find Photos* went from
-below the hike screen's fold to under its pinned header in one swipe. The
-shared `scrollIntoView` draws a target that has gone past back down with a
-drag that does not fling. The gallery frame aligns its footer with the bottom
-of the cover’s viewport, keeping the photo strip and action row whole. The
-maker returns to its middle detent after searching so its route stays visible.
-
 ## The iPad set
 
 ```sh
 # Upright, 2064 × 2752
-Scripts/screenshots.sh --device "OpenHikes Screenshots iPad" \
-    --device-type "iPad Pro 13-inch (M5)" --append
+Scripts/screenshots.sh --device-type "iPad Pro 13-inch (M5)"
 ```
 
 App Store Connect takes a 13-inch iPad frame at 2064 × 2752, which is what an
@@ -554,7 +545,7 @@ reachable there (`OpenHikesUITests/WindowSupport.swift`).
 ## The Apple Watch set
 
 ```sh
-Scripts/watch-screenshots.sh --append
+Scripts/watch-screenshots.sh
 ```
 
 That creates a dedicated `Apple Watch Ultra 4 (49mm)` simulator and a companion
@@ -602,9 +593,9 @@ afterwards.
 - **The status bar cannot be pinned to 9:41.** `simctl status_bar override`
   answers "Status bar overrides not supported on this platform" on every
   watchOS device. The time in the frames is the time they were taken.
-- **There is no light appearance.** `simctl ui … appearance` answers "Runtime
-  does not support userInterfaceStyle", because watchOS has no light mode. One
-  set, no `-dark` suffix.
+- **The appearance is not set.** `simctl ui … appearance` answers "Runtime
+  does not support userInterfaceStyle", because watchOS has no light mode: the
+  system draws dark and the app draws on it.
 - **The locale is pinned, to `en_IE`.** A simulator inherits the Mac's region,
   which here produced "4,2 km" and "2026. Sep 7.". `en_IE` is the English
   locale that is also metric — `en_US` is imperial and `en_GB` prints miles,
@@ -654,8 +645,10 @@ because the app is genuinely gone.
 ## The home page
 
 The site's home page, `docs/index.html`, shows five of the iPhone frames —
-04, 05, 08, 03 and 07, from the English light set — and watch frames 03 and
-04, as WebP copies in `docs/images/`. Frames 01, 02, 06 and 10 are not
+04, 05, 08, 03 and 07, from the English set — and watch frames 03 and
+04, as WebP copies in `docs/images/`. The five on the page are from a set shot
+in light appearance, so remake all five together, never one beside the
+others. Frames 01, 02, 06 and 10 are not
 among them: they carry the stock photographs, which stay out of this
 repository's history (*Photographs*). Frame 08 shows a Pro feature, the drawn
 trail's climb, so the page's Pro paragraph has to keep naming elevation.
@@ -666,7 +659,7 @@ After a reshoot, remake the copies from the new sets with `cwebp`, from
 Homebrew's `webp`:
 
 ```sh
-phone=Screenshots/Output/iphone_18_pro_max_en_ie_YYYY_MM_DD/light
+phone=Screenshots/Output/iphone_18_pro_max_en_ie_YYYY_MM_DD
 for frame in 03-nearby-trails 04-following-the-trail 05-recording-a-hike \
     07-choose-your-map 08-draw-your-own-trail; do
   cwebp -q 82 -m 6 -sharp_yuv -resize 600 0 "$phone/$frame.png" -o "docs/images/$frame.webp"

@@ -29,7 +29,6 @@ extension ScreenshotUITests {
 
     @MainActor
     func positionScreenshotGallery(in app: XCUIApplication) {
-        if positionCompactScreenshotGallery(in: app) { return }
         let strip = element("hike-photo-strip", in: app)
         guard element("map-side-panel", in: app).exists else {
             XCTAssertTrue(scrollIntoView(strip, in: app))
@@ -71,9 +70,9 @@ extension ScreenshotUITests {
         XCTAssertLessThan(stats.frame.maxX, route.frame.midX, "the figures should sit beside the route")
     }
 
-    /// Element gestures can miss either Duo display: even on its closed
-    /// cover, ten zooms left the measured stroke unchanged. Target the
-    /// capture's display explicitly whenever the device has two screens.
+    /// Element gestures can miss a Duo's display: ten zooms left the
+    /// measured stroke unchanged. Target the capture's display explicitly
+    /// whenever the device has two screens.
     @MainActor
     func zoomRecordingMapOut(in app: XCUIApplication) {
         let map = mapElement(in: app)

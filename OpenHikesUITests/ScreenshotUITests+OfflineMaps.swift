@@ -135,16 +135,15 @@ extension ScreenshotUITests {
     ///
     /// The list goes to the row chosen on the map by putting it in its
     /// middle, which at the sheet's middle stops wherever that falls: across
-    /// the sentence over *Extra Detail* on the 6.9" iPhone, and across the
-    /// one under it on the closed iPhone Duo, whose list has room for little
-    /// more than the row. So the frame draws the list down until the line
-    /// the edge cuts stands whole under it.
+    /// the sentence over *Extra Detail* on the 6.9" iPhone. So the frame
+    /// draws the list down until the line the edge cuts stands whole under
+    /// it.
     ///
     /// A line is cut only where the edge falls inside its padding
     /// (``linePadding``): the lines' frames touch, so a line drawn whole
     /// leaves the frame over it reaching a few points past the edge, and
-    /// counting that as cut drew the closed Duo's list back to its head a
-    /// line at a time, and Germany's row off the bottom. The drag is slow,
+    /// counting that as cut drew a short list back to its head a line at a
+    /// time, and Germany's row off the bottom. The drag is slow,
     /// starts on the chosen row, and is measured and drawn again rather than
     /// overshot: the list spends six to ten points of a drag telling it from
     /// a tap, so each is lengthened by what the last fell short of. Only ever

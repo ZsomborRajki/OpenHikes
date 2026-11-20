@@ -23,7 +23,7 @@ screenshot_canonical_directory() {
 }
 
 screenshot_output_directory() {
-    local root="$1" device="$2" locale="$3" layout="$4" appearance="$5" checkout
+    local root="$1" device="$2" locale="$3" checkout
     if [[ -L "$root" ]]; then
         echo "The screenshot output must be a directory, not a symbolic link: $root" >&2
         return 2
@@ -49,10 +49,10 @@ screenshot_output_directory() {
         echo "OPENHIKES_SCREENSHOT_DATE must be YYYY-MM-DD." >&2
         return 2
     fi
-    name="$(printf '%s' "${device}${layout:+_$layout}_${locale}_${capture_date}" \
+    name="$(printf '%s' "${device}_${locale}_${capture_date}" \
         | LC_ALL=C tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/_/g; s/_$//')"
-    local directory="$root/$name${appearance:+/$appearance}"
-    if [[ -L "$root/$name" || -L "$directory" ]]; then
+    local directory="$root/$name"
+    if [[ -L "$directory" ]]; then
         echo "The screenshot result must not be a symbolic link: $directory" >&2
         return 2
     fi
@@ -63,14 +63,12 @@ screenshot_output_directory() {
 # A targeted re-shoot replaces only its requested frame numbers. Neither path
 # ever empties an unmarked directory or follows a result-directory symlink.
 screenshot_prepare_output() {
-    local root="$1" directory="$2" clean="$3" set candidate frame shot
+    local root="$1" directory="$2" clean="$3" candidate frame shot
     shift 3
     root="$(screenshot_canonical_directory "$root")" || return 2
     while [[ "$root" == //* ]]; do root="${root#/}"; done
-    set="$directory"
-    case "${directory##*/}" in light|dark) set="${directory%/*}" ;; esac
-    if [[ "$set" != "$root/"* || "${set#"$root/"}" == */* || -L "$set" || -L "$directory" \
-        || -L "$set/.openhikes-screenshot-set" ]]; then
+    if [[ "$directory" != "$root/"* || "${directory#"$root/"}" == */* || -L "$directory" \
+        || -L "$directory/.openhikes-screenshot-set" ]]; then
         echo "Refusing an unsafe screenshot result directory: $directory" >&2
         return 2
     fi
@@ -84,7 +82,7 @@ screenshot_prepare_output() {
         done
     fi
     mkdir -p "$directory" || return 1
-    touch "$set/.openhikes-screenshot-set" || return 1
+    touch "$directory/.openhikes-screenshot-set" || return 1
     for frame in "$@"; do
         for shot in "$directory/$frame"-*.png; do
             [[ -f "$shot" || -L "$shot" ]] || continue

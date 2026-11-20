@@ -12,7 +12,7 @@ scheme="OpenHikesUI"
 bundle="OpenHikesUITests"
 # Every functional class in the bundle. `ScreenshotUITests` is the one
 # `XCTestCase` deliberately absent — it produces files rather than verdicts, and
-# Scripts/screenshots-light.sh and Scripts/screenshots-dark.sh name it — and
+# Scripts/screenshots.sh names it — and
 # Scripts/run-script-tests.sh fails when any other class is missing, because a
 # class left off this list is never run by --all and nothing says so.
 suites=(

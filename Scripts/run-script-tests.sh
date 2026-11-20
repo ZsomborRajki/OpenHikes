@@ -136,7 +136,9 @@ mkdir -p "$stub_bin"
 # STUB_CREATED_UDID, when set, is what `simctl create` answers, and the device
 # it made is appended to the fixture — under its last runtime, so a fixture
 # that should grow ends with an iOS one. STUB_CLONED_UDID is the same for
-# `simctl clone`. `delete` and `rename` edit the fixture as the real ones edit
+# `simctl clone`, and STUB_CLONED_STATE the state the clone is listed in,
+# Shutdown unless a case says otherwise: the fixture does not follow `boot`.
+# `delete` and `rename` edit the fixture as the real ones edit
 # the machine, `list runtimes` answers from STUB_RUNTIMES and `list
 # devicetypes` from STUB_DEVICE_TYPES. The iOS Simulator SDK's version is
 # STUB_IOS_SDK_VERSION, and unset there is no such SDK.
@@ -240,7 +242,8 @@ case "${1:-}" in
         ;;
     clone)
         if [[ -n "${STUB_CLONED_UDID:-}" ]]; then
-            printf '    %s (%s) (Shutdown) \n' "$3" "$STUB_CLONED_UDID" >> "$STUB_DEVICES"
+            printf '    %s (%s) (%s) \n' "$3" "$STUB_CLONED_UDID" "${STUB_CLONED_STATE:-Shutdown}" \
+                >> "$STUB_DEVICES"
             printf '%s\n' "$STUB_CLONED_UDID"
         fi
         ;;
@@ -2613,14 +2616,23 @@ fi
 
 echo "App Store screenshots"
 
-# Scripts/screenshots-light.sh and -dark.sh are run by hand, never by CI, and
-# what they decide is invisible until a frame comes out wrong: which frames
-# get the location grant, and whether the grant lands after the install that
-# would otherwise discard it. The stubbed xcodebuild writes no result bundle,
-# so every frame a case asks for comes out "not shot" — which is also what
-# exercises the retry.
-screenshots_light="$repository_root/Scripts/screenshots-light.sh"
-screenshots_dark="$repository_root/Scripts/screenshots-dark.sh"
+# Scripts/screenshots.sh is run by hand, never by CI, and what it decides is
+# invisible until a frame comes out wrong: which frames get the location
+# grant, and whether the grant lands after the install that would otherwise
+# discard it. The stubbed xcodebuild writes no result bundle, so every frame a
+# case asks for comes out "not shot" — which is also what exercises the retry.
+screenshots="$repository_root/Scripts/screenshots.sh"
+# What the stubbed devicectl says of a Duo's two displays: whether the cover
+# and the inner one are active, and which way up they are. An iPhone Duo's set
+# opens the device before it is shot, so these cases need them too.
+export OPENHIKES_DUO_POSE_SETTLE_SECONDS=1
+export OPENHIKES_DUO_POSE_TURN_SECONDS=1
+duo_displays() {
+    printf '{"result":{"displays":[%s,%s]}}\n' \
+        "{\"name\":\"LCD\",\"displayId\":1,\"primary\":true,\"active\":$1,\"currentOrientation\":\"$3\"}" \
+        "{\"name\":\"LCD-1\",\"displayId\":3,\"primary\":false,\"active\":$2,\"currentOrientation\":\"$3\"}"
+}
+duo_displays false true rot90 > "$work/displays-sideways.json"
 screens_dd="$work/screens-dd"
 mkdir -p "$screens_dd/Build/Products/Debug-iphonesimulator/OpenHikes.app" "$work/screens-out"
 export STUB_DEVICES="$work/devices-two-booted.txt"
@@ -2633,7 +2645,7 @@ call_line() {
 }
 
 run_script "screenshots refuses a frame it does not know, before touching a device" \
-    "$screenshots_light" --frame 12 --device "$pro_udid"
+    "$screenshots" --frame 12 --device "$pro_udid"
 if expect_status 2 \
     && expect_contains "$output" "Unknown frame: 12" "the error" \
     && expect_absent "$calls" "simctl erase" "the recorded calls"; then
@@ -2641,7 +2653,7 @@ if expect_status 2 \
 fi
 
 run_script "screenshots grants location to a location frame, after the install" \
-    "$screenshots_dark" --frame 3 --no-photos --no-retry --device "$pro_udid" \
+    "$screenshots" --frame 3 --no-photos --no-retry --device "$pro_udid" \
     --derived-data "$screens_dd" --output "$work/screens-out"
 install_at="$(call_line "simctl install $pro_udid")"
 grant_at="$(call_line "simctl privacy $pro_udid grant location-always")"
@@ -2660,7 +2672,7 @@ if expect_status 1 \
 fi
 
 run_script "screenshots shoots map frames without location, and retries only what did not come out" \
-    "$screenshots_light" --frame 7 --frame 3 --no-photos --device "$pro_udid" \
+    "$screenshots" --frame 7 --frame 3 --no-photos --device "$pro_udid" \
     --derived-data "$screens_dd" --output "$work/screens-out"
 reset_at="$(call_line "simctl privacy $pro_udid reset location")"
 plain_at="$(call_line "testCapturesChoosingTheMap")"
@@ -2669,7 +2681,7 @@ located_at="$(call_line "testCapturesNearbyTrails")"
 runs="$(printf '%s\n' "$calls" | grep -c "xcodebuild test-without-building" || true)"
 if expect_status 1 \
     && expect_contains "$output" "not shot: 07 03 — retrying those once" "the output" \
-    && expect_contains "$calls" "simctl ui $pro_udid appearance light" "the recorded calls"; then
+    && expect_contains "$calls" "simctl ui $pro_udid appearance dark" "the recorded calls"; then
     if (( reset_at > 0 && reset_at < plain_at && plain_at < grant_at && grant_at < located_at )) \
         && [[ "$runs" == 4 ]]; then
         pass
@@ -2680,7 +2692,7 @@ if expect_status 1 \
 fi
 
 run_script "screenshots skips the library frames when there is no library" \
-    "$screenshots_light" --frame 1 --no-photos --device "$pro_udid" \
+    "$screenshots" --frame 1 --no-photos --device "$pro_udid" \
     --derived-data "$screens_dd" --output "$work/screens-out"
 if expect_status 0 \
     && expect_contains "$output" "nothing left to shoot" "the output" \
@@ -2689,7 +2701,7 @@ if expect_status 0 \
 fi
 
 run_script "screenshots refuses unsupported dimensions before preparing or building" \
-    "$screenshots_dark" --frame 3 --device-type 'iPhone 18 Pro'
+    "$screenshots" --frame 3 --device-type 'iPhone 18 Pro'
 if expect_status 2 \
     && expect_contains "$output" "Unsupported screenshot device type" "the error" \
     && expect_absent "$calls" "simctl" "the recorded calls" \
@@ -2712,11 +2724,11 @@ printf '{"deviceType":"com.apple.CoreSimulator.SimDeviceType.iPhone-18-Pro-Max"}
 export STUB_DEVICES="$screens_prepared"
 
 run_script "screenshots uses an acquired pool device without erasing it" \
-    "$screenshots_light" --frame 7 --no-photos --no-retry --prepared-device "$pro_udid" \
+    "$screenshots" --frame 7 --no-photos --no-retry --prepared-device "$pro_udid" \
     --pool-owner screenshot-tests --derived-data "$screens_dd" --output "$work/screens-out"
 if expect_status 1 \
     && expect_contains "$calls" "simctl bootstatus $pro_udid -b" "the recorded calls" \
-    && expect_contains "$calls" "simctl ui $pro_udid appearance light" "the recorded calls" \
+    && expect_contains "$calls" "simctl ui $pro_udid appearance dark" "the recorded calls" \
     && expect_contains "$calls" "-skipPackagePluginValidation" "the recorded calls" \
     && expect_absent "$calls" "simctl erase" "the recorded calls" \
     && expect_absent "$calls" "simctl shutdown" "the recorded calls" \
@@ -2725,7 +2737,7 @@ if expect_status 1 \
 fi
 
 run_script "screenshots refuses a template as a prepared device" \
-    "$screenshots_light" --prepared-device "$screens_template_udid" --pool-owner screenshot-tests
+    "$screenshots" --prepared-device "$screens_template_udid" --pool-owner screenshot-tests
 if expect_status 2 \
     && expect_contains "$output" "is not a device in the" "the error" \
     && expect_absent "$calls" "simctl bootstatus" "the recorded calls"; then pass; fi
@@ -2735,7 +2747,7 @@ mkdir -p "$screens_german"
 printf '{"Zoom":"Test translation"}' > "$screens_german/Localizable.strings"
 /usr/bin/plutil -convert binary1 "$screens_german/Localizable.strings"
 run_script "screenshots pins German and forwards the built app's translations to its runner" \
-    "$screenshots_light" --frame 7 --no-photos --no-retry --prepared-device "$pro_udid" \
+    "$screenshots" --frame 7 --no-photos --no-retry --prepared-device "$pro_udid" \
     --pool-owner screenshot-tests --locale de_DE --derived-data "$screens_dd" --output "$work/screens-out"
 if expect_status 1 \
     && expect_contains "$calls" "AppleLocale -string de_DE" "the recorded calls" \
@@ -2745,19 +2757,19 @@ if expect_status 1 \
     && expect_contains "$calls" '"Zoom":"Test translation"' "the runner translations"; then pass; fi
 
 run_script "a language-only screenshot locale does not invent a region" \
-    "$screenshots_light" --frame 7 --no-photos --no-retry --prepared-device "$pro_udid" \
+    "$screenshots" --frame 7 --no-photos --no-retry --prepared-device "$pro_udid" \
     --pool-owner screenshot-tests --locale en --derived-data "$screens_dd" --output "$work/screens-out"
 if expect_status 1 && expect_contains "$calls" "-testLanguage en" "the recorded calls" \
     && expect_absent "$calls" "-testRegion" "the recorded calls"; then pass; fi
 
 run_script "screenshots refuses another owner's prepared device" \
-    "$screenshots_light" --prepared-device "$pro_udid" --pool-owner another-session
+    "$screenshots" --prepared-device "$pro_udid" --pool-owner another-session
 if expect_status 2 \
     && expect_contains "$output" "needs an active pool claim" "the error" \
     && expect_absent "$calls" "simctl bootstatus" "the recorded calls"; then pass; fi
 
 run_script "screenshots refuses a prepared device with the wrong type" \
-    "$screenshots_light" --prepared-device "$pro_udid" --device-type 'iPhone Duo' --pool-owner screenshot-tests
+    "$screenshots" --prepared-device "$pro_udid" --device-type 'iPhone Duo' --pool-owner screenshot-tests
 if expect_status 2 \
     && expect_contains "$output" "expected iPhone Duo" "the error" \
     && expect_absent "$calls" "simctl bootstatus" "the recorded calls"; then pass; fi
@@ -2767,7 +2779,7 @@ if expect_status 2 \
 printf '{"deviceType":"com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB"}' \
     > "$OPENHIKES_SIM_DEVICES_DIR/$pro_udid/device.plist"
 run_script "screenshots takes a pool iPad, whose type identifier is not its name" \
-    "$screenshots_light" --frame 7 --no-photos --no-retry --prepared-device "$pro_udid" \
+    "$screenshots" --frame 7 --no-photos --no-retry --prepared-device "$pro_udid" \
     --device-type 'iPad Pro 13-inch (M5)' --pool-owner screenshot-tests \
     --derived-data "$screens_dd" --output "$work/screens-out"
 if expect_status 1 \
@@ -2777,7 +2789,7 @@ if expect_status 1 \
 printf '{"deviceType":"com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-16GB"}' \
     > "$OPENHIKES_SIM_DEVICES_DIR/$pro_udid/device.plist"
 run_script "screenshots refuses the 16 GB iPad for the one whose name it begins with" \
-    "$screenshots_light" --prepared-device "$pro_udid" --device-type 'iPad Pro 13-inch (M5)' \
+    "$screenshots" --prepared-device "$pro_udid" --device-type 'iPad Pro 13-inch (M5)' \
     --pool-owner screenshot-tests
 if expect_status 2 \
     && expect_contains "$output" "expected iPad Pro 13-inch (M5)" "the error" \
@@ -2787,36 +2799,28 @@ printf '{"deviceType":"com.apple.CoreSimulator.SimDeviceType.iPhone-18-Pro-Max"}
 
 STUB_DEVICE_TYPES=/dev/null \
     run_script "screenshots refuses a prepared device when simctl names no such device type" \
-    "$screenshots_light" --prepared-device "$pro_udid" --pool-owner screenshot-tests
+    "$screenshots" --prepared-device "$pro_udid" --pool-owner screenshot-tests
 if expect_status 2 \
     && expect_contains "$output" "no device type named iPhone 18 Pro Max" "the error" \
     && expect_absent "$calls" "simctl bootstatus" "the recorded calls"; then pass; fi
 
 printf 'owner=screenshot-tests\nreleased=1\n' > "$OPENHIKES_SIM_POOL_DIR/$pro_udid.claim"
 run_script "screenshots refuses a released pool claim" \
-    "$screenshots_light" --prepared-device "$pro_udid" --pool-owner screenshot-tests
+    "$screenshots" --prepared-device "$pro_udid" --pool-owner screenshot-tests
 if expect_status 2 \
     && expect_contains "$output" "needs an active pool claim" "the error" \
     && expect_absent "$calls" "simctl bootstatus" "the recorded calls"; then pass; fi
 printf 'owner=screenshot-tests\npid=\nstarted=\nclaimed=0\n' > "$OPENHIKES_SIM_POOL_DIR/$pro_udid.claim"
 
 run_script "screenshots refuses a prepared device that is not a UDID" \
-    "$screenshots_light" --prepared-device 'OpenHikes Pool 1'
+    "$screenshots" --prepared-device 'OpenHikes Pool 1'
 if expect_status 2 \
     && expect_contains "$output" "--prepared-device needs a pool device’s UDID" "the error"; then
     pass
 fi
 
-run_script "screenshots requires separate prepared libraries for the two appearances" \
-    "$repository_root/Scripts/screenshots.sh" --prepared-device "$pro_udid"
-if expect_status 2 \
-    && expect_contains "$output" "separate fresh pool claims" "the error" \
-    && expect_absent "$calls" "simctl" "the recorded calls"; then
-    pass
-fi
-
 run_script "screenshots refuses an unavailable prepared device before changing a simulator" \
-    "$screenshots_light" --prepared-device FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF
+    "$screenshots" --prepared-device FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF
 if expect_status 2 \
     && expect_contains "$output" "No available prepared iOS simulator" "the error" \
     && expect_absent "$calls" "simctl bootstatus" "the recorded calls" \
@@ -2825,7 +2829,7 @@ if expect_status 2 \
 fi
 
 run_script "screenshots selects a repeated frame only once" \
-    "$screenshots_light" --frame 7 --frame 07 --no-photos --no-retry --prepared-device "$pro_udid" \
+    "$screenshots" --frame 7 --frame 07 --no-photos --no-retry --prepared-device "$pro_udid" \
     --pool-owner screenshot-tests --derived-data "$screens_dd" --output "$work/screens-out"
 selections="$(printf '%s\n' "$calls" | grep -o 'only-testing:OpenHikesUITests/ScreenshotUITests/testCapturesChoosingTheMap' \
     | wc -l | tr -d ' ')"
@@ -2835,7 +2839,7 @@ fi
 
 STUB_XCODEBUILD_TEST_STATUS=65 \
     run_script "screenshots rejects a failed process even when its summary says passed" \
-    "$screenshots_light" --frame 7 --no-photos --no-retry --prepared-device "$pro_udid" \
+    "$screenshots" --frame 7 --no-photos --no-retry --prepared-device "$pro_udid" \
     --pool-owner screenshot-tests --derived-data "$screens_dd" --output "$work/screens-out"
 if expect_status 1 \
     && expect_contains "$output" "failed (xcodebuild 65, log 0)" "the error" \
@@ -2861,7 +2865,7 @@ asset_jobs_table "$screens_template" 0
 STUB_DEVICES="$work/devices-screens.txt" \
 STUB_CREATED_UDID="$screens_template" STUB_CLONED_UDID="$screens_clone" \
     run_script "screenshots starts a named device clean as a clone of its template" \
-    "$screenshots_light" --frame 1 --no-photos --device "OpenHikes Screenshots Test" \
+    "$screenshots" --frame 1 --no-photos --device "OpenHikes Screenshots Test" \
     --derived-data "$screens_dd" --output "$work/screens-out"
 template_name="OpenHikes Template (iPhone 18 Pro Max, iOS 27.0)"
 if expect_status 0 \
@@ -2872,7 +2876,7 @@ if expect_status 0 \
         "the recorded calls" \
     && expect_contains "$calls" "simctl delete $screens_old" "the recorded calls" \
     && expect_contains "$calls" "simctl rename $screens_clone OpenHikes Screenshots Test" "the recorded calls" \
-    && expect_contains "$calls" "simctl ui $screens_clone appearance light" "the recorded calls" \
+    && expect_contains "$calls" "simctl ui $screens_clone appearance dark" "the recorded calls" \
     && expect_contains "$output" "Simulator: OpenHikes Screenshots Test ($screens_clone)" "the output" \
     && expect_absent "$calls" "simctl erase" "the recorded calls"; then
     pass
@@ -2895,7 +2899,7 @@ rm -rf "$OPENHIKES_SIM_TEMPLATE_DIR"
 STUB_RUNTIMES="$work/runtimes-duo.json" STUB_DEVICES="$work/devices-screens.txt" \
 STUB_CREATED_UDID="$screens_template" STUB_CLONED_UDID="$screens_clone" \
     run_script "screenshots builds its template on the newest runtime that runs the device" \
-    "$screenshots_light" --frame 1 --no-photos --device "OpenHikes Screenshots Test" \
+    "$screenshots" --frame 1 --no-photos --device "OpenHikes Screenshots Test" \
     --derived-data "$screens_dd" --output "$work/screens-out"
 if expect_status 0 \
     && expect_contains "$calls" \
@@ -2905,6 +2909,8 @@ if expect_status 0 \
     pass
 fi
 
+# An iPhone Duo's set opens the device, and Scripts/duo-pose.sh opens only a
+# booted one, so the clone is listed as it stands once the run has booted it.
 cat > "$work/devices-screens.txt" <<EOF
 == Devices ==
 -- iOS 27.1 --
@@ -2912,27 +2918,53 @@ cat > "$work/devices-screens.txt" <<EOF
 EOF
 rm -rf "$OPENHIKES_SIM_TEMPLATE_DIR"
 STUB_RUNTIMES="$work/runtimes-duo.json" STUB_DEVICES="$work/devices-screens.txt" \
-STUB_CREATED_UDID="$screens_template" STUB_CLONED_UDID="$screens_clone" \
+STUB_CREATED_UDID="$screens_template" STUB_CLONED_UDID="$screens_clone" STUB_CLONED_STATE=Booted \
+STUB_DISPLAYS="$work/displays-sideways.json" \
     run_script "screenshots builds an iPhone Duo's template on the runtime that runs one" \
-    "$screenshots_light" --frame 1 --no-photos --device "OpenHikes Screenshots Test" \
+    "$screenshots" --frame 1 --no-photos --device "OpenHikes Screenshots Test" \
     --device-type "iPhone Duo" --derived-data "$screens_dd" --output "$work/screens-out"
 if expect_status 0 \
     && expect_contains "$calls" \
         "simctl create OpenHikes Template (iPhone Duo, iOS 27.1) iPhone Duo com.apple.CoreSimulator.SimRuntime.iOS-27-1" \
-        "the recorded calls"; then
+        "the recorded calls" \
+    && expect_contains "$output" "open, the inner display showing, landscape" "the output"; then
     pass
 fi
 
-run_script "screenshots refuses a pose it does not know, before touching a device" \
-    "$screenshots_light" --pose ajar --device "$pro_udid"
+# Each device type's set claims a simulator of its own when --device names
+# none, so one type's run never replaces the device another's is on.
+screens_duo="C0000000-0000-4000-8000-000000000004"
+cat > "$work/devices-screens.txt" <<EOF
+== Devices ==
+-- iOS 27.1 --
+    OpenHikes Screenshots ($screens_old) (Shutdown)
+    OpenHikes Screenshots Duo ($screens_duo) (Shutdown)
+EOF
+rm -rf "$OPENHIKES_SIM_TEMPLATE_DIR"
+STUB_RUNTIMES="$work/runtimes-duo.json" STUB_DEVICES="$work/devices-screens.txt" \
+STUB_CREATED_UDID="$screens_template" STUB_CLONED_UDID="$screens_clone" STUB_CLONED_STATE=Booted \
+STUB_DISPLAYS="$work/displays-sideways.json" \
+    run_script "screenshots claims the iPhone Duo's own simulator when none is named" \
+    "$screenshots" --frame 1 --no-photos --device-type "iPhone Duo" \
+    --derived-data "$screens_dd" --output "$work/screens-out"
+if expect_status 0 \
+    && expect_contains "$calls" "simctl delete $screens_duo" "the recorded calls" \
+    && expect_contains "$calls" "simctl rename $screens_clone OpenHikes Screenshots Duo" "the recorded calls" \
+    && expect_contains "$output" "Simulator: OpenHikes Screenshots Duo ($screens_clone)" "the output" \
+    && expect_absent "$calls" "simctl delete $screens_old" "the recorded calls"; then
+    pass
+fi
+
+run_script "screenshots takes no pose: an iPhone Duo's set is shot open, and no other" \
+    "$screenshots" --pose closed --device-type "iPhone Duo" --device "$pro_udid"
 if expect_status 2 \
-    && expect_contains "$output" "Unknown pose: ajar" "the error" \
+    && expect_contains "$output" "Unknown option: --pose" "the error" \
     && expect_absent "$calls" "simctl erase" "the recorded calls"; then
     pass
 fi
 
 run_script "screenshots takes no orientation: an open Duo is on its side, every other set upright" \
-    "$screenshots_light" --pose open --orientation portrait --device-type "iPhone Duo" --device "$pro_udid"
+    "$screenshots" --orientation portrait --device-type "iPhone Duo" --device "$pro_udid"
 if expect_status 2 \
     && expect_contains "$output" "Unknown option: --orientation" "the error" \
     && expect_absent "$calls" "simctl erase" "the recorded calls"; then
@@ -2943,19 +2975,20 @@ fi
 # one looked wrong in the App Store's gallery. See *The iPad* at the top of
 # Scripts/lib/screenshots.sh.
 run_script "screenshots shoots an iPad upright, into a set named for the device alone" \
-    "$screenshots_light" --frame 7 --no-photos --no-retry --device "$pro_udid" \
+    "$screenshots" --frame 7 --no-photos --no-retry --device "$pro_udid" \
     --device-type 'iPad Pro 13-inch (M5)' --derived-data "$screens_dd" --output "$work/screens-out"
 if expect_status 1 \
     && expect_contains "$calls" "xcodebuild test-without-building" "the recorded calls" \
-    && expect_contains "$output" "ipad_pro_13_inch_m5_en_ie_$screenshot_test_date/light" "the output"; then
+    && expect_contains "$output" "ipad_pro_13_inch_m5_en_ie_$screenshot_test_date" "the output" \
+    && expect_absent "$calls" "hinge -d" "the recorded calls"; then
     pass
 fi
 
 # The stubbed devicectl lists no displays unless a case gives it some, which is
-# what a phone looks like to Scripts/duo-pose.sh — and a pose that cannot be
-# taken must stop the run before a set is shot on the wrong display.
-run_script "screenshots stops before building when the device cannot take the pose" \
-    "$screenshots_light" --frame 7 --pose open --no-photos --device "$pro_udid" \
+# what a phone looks like to Scripts/duo-pose.sh — and a Duo that cannot be
+# opened must stop the run before a set is shot on the wrong display.
+run_script "screenshots stops before building when the device cannot be opened" \
+    "$screenshots" --frame 7 --device-type "iPhone Duo" --no-photos --device "$pro_udid" \
     --derived-data "$screens_dd" --output "$work/screens-out"
 if expect_status 1 \
     && expect_contains "$output" "it is not an iPhone Duo" "the output" \
@@ -2972,14 +3005,7 @@ echo "iPhone Duo pose"
 # say whether the angle or the display is what failed. The stubbed hinge
 # records what it is asked, so nothing here builds or spawns anything real.
 duo_pose="$repository_root/Scripts/duo-pose.sh"
-export OPENHIKES_DUO_POSE_SETTLE_SECONDS=1
-export OPENHIKES_DUO_POSE_TURN_SECONDS=1
 export STUB_DEVICES="$work/devices-two-booted.txt"
-duo_displays() {
-    printf '{"result":{"displays":[%s,%s]}}\n' \
-        "{\"name\":\"LCD\",\"displayId\":1,\"primary\":true,\"active\":$1,\"currentOrientation\":\"$3\"}" \
-        "{\"name\":\"LCD-1\",\"displayId\":3,\"primary\":false,\"active\":$2,\"currentOrientation\":\"$3\"}"
-}
 
 run_script "duo-pose refuses to guess a device" "$duo_pose" open
 if expect_status 2 && expect_contains "$output" "--device is required" "the error"; then
@@ -3097,7 +3123,6 @@ fi
 # Open, but on its side: every device orientation is tried, and the run fails
 # when none of them stands the interface upright, rather than reporting the
 # pose it asked for.
-duo_displays false true rot90 > "$work/displays-sideways.json"
 STUB_DISPLAYS="$work/displays-sideways.json" \
     run_script "duo-pose fails when the display never turns the way it was asked" \
     "$duo_pose" open --device "$pro_udid"
@@ -3122,12 +3147,12 @@ if expect_status 0 \
     pass
 fi
 
-# Open and upright, where an open set is shot on its side: the orientation has
+# Open and upright, where the set is shot on its side: the orientation has
 # to reach Scripts/duo-pose.sh, whose read-back then stops the run before it
 # builds, rather than a landscape set coming out upright.
 STUB_DISPLAYS="$work/displays-open.json" \
     run_script "screenshots opens the Duo on its side, and stops when it does not turn" \
-    "$screenshots_light" --frame 7 --pose open --no-photos --device "$pro_udid" \
+    "$screenshots" --frame 7 --device-type "iPhone Duo" --no-photos --device "$pro_udid" \
     --derived-data "$screens_dd" --output "$work/screens-out"
 if expect_status 1 \
     && expect_contains "$output" "The inner display did not turn to landscape" "the output" \
@@ -3135,11 +3160,11 @@ if expect_status 1 \
     pass
 fi
 
-# Opening needs hinge, and a machine without it skips an open set: saying so,
-# and before a device is erased or anything is built.
+# Opening needs hinge, and a machine without it skips the Duo's set: saying
+# so, and before a device is erased or anything is built.
 OPENHIKES_HINGE="$work/no-hinge" \
-    run_script "screenshots skips an open Duo set without hinge, before touching a device" \
-    "$screenshots_light" --frame 7 --pose open --no-photos --device "$pro_udid" \
+    run_script "screenshots skips the Duo's set without hinge, before touching a device" \
+    "$screenshots" --frame 7 --device-type "iPhone Duo" --no-photos --device "$pro_udid" \
     --derived-data "$screens_dd" --output "$work/screens-out"
 if expect_status 0 \
     && expect_contains "$output" "skipped, the open iPhone Duo needs hinge: hinge is not installed" \
@@ -3437,7 +3462,7 @@ EOF
 STUB_DEVICES="$screens_prepared" STUB_SCREENSHOT_RESULTS="$work/screens-results.json" \
 STUB_SCREENSHOT_ATTACHMENTS="$screens_attachments" STUB_XCODEBUILD_TEST_STATUS=65 \
     run_script "screenshots keeps passing frames from a failing group and retries only the failed frame" \
-    "$screenshots_light" --frame 3 --frame 5 --no-photos --prepared-device "$pro_udid" \
+    "$screenshots" --frame 3 --frame 5 --no-photos --prepared-device "$pro_udid" \
     --pool-owner screenshot-tests --derived-data "$screens_dd" --output "$work/screens-out"
 passed_selections="$(printf '%s\n' "$calls" | grep -o 'only-testing:OpenHikesUITests/ScreenshotUITests/testCapturesNearbyTrails' \
     | wc -l | tr -d ' ')"
@@ -3447,8 +3472,8 @@ if expect_status 1 \
     && expect_contains "$output" "FAILED — not shot: 05" "the output" \
     && expect_absent "$output" "not shot: 03" "the output"; then
     if [[ "$passed_selections" == 1 && "$failed_selections" == 2 \
-        && -f "$work/screens-out/iphone_18_pro_max_en_ie_${screenshot_test_date}/light/03-nearby-trails.png" \
-        && ! -f "$work/screens-out/iphone_18_pro_max_en_ie_${screenshot_test_date}/light/05-recording-a-hike.png" ]]; then
+        && -f "$work/screens-out/iphone_18_pro_max_en_ie_${screenshot_test_date}/03-nearby-trails.png" \
+        && ! -f "$work/screens-out/iphone_18_pro_max_en_ie_${screenshot_test_date}/05-recording-a-hike.png" ]]; then
         pass
     else
         fail "expected one passing-frame selection and two failed-frame selections; got $passed_selections/$failed_selections" \
@@ -3457,16 +3482,17 @@ if expect_status 1 \
 fi
 
 STUB_SCREENSHOT_RESULTS="$work/screens-results.json" STUB_SCREENSHOT_ATTACHMENTS="$screens_attachments" \
-    run_script "screenshots keeps both appearances in separate directories of one clean run" \
-    "$repository_root/Scripts/screenshots.sh" --frame 3 --no-photos --no-retry --device "$pro_udid" \
+    run_script "screenshots writes a frame under its own name, straight into its marked set" \
+    "$screenshots" --frame 3 --no-photos --no-retry --device "$pro_udid" \
     --derived-data "$screens_dd" --output "$work/screens-out"
 screens_set="$work/screens-out/iphone_18_pro_max_en_ie_${screenshot_test_date}"
-if expect_status 0; then
-    if [[ -f "$screens_set/light/03-nearby-trails.png" \
-        && -f "$screens_set/dark/03-nearby-trails-dark.png" ]]; then
+if expect_status 0 \
+    && expect_contains "$calls" "simctl ui $pro_udid appearance dark" "the recorded calls"; then
+    if [[ -f "$screens_set/03-nearby-trails.png" && -f "$screens_set/.openhikes-screenshot-set" \
+        && ! -e "$screens_set/dark" && ! -e "$screens_set/light" ]]; then
         pass
     else
-        fail "expected separate light and dark PNGs from the combined capture" "$output"
+        fail "expected the frame and the set's marker in one folder, with none inside it" "$output"
     fi
 fi
 
@@ -3485,14 +3511,13 @@ STUB
 chmod +x "$stub_bin/date"
 OPENHIKES_SCREENSHOT_DATE='' STUB_SCREENSHOT_DATE_COUNTER="$work/date-count" \
 STUB_SCREENSHOT_RESULTS="$work/screens-results.json" STUB_SCREENSHOT_ATTACHMENTS="$screens_attachments" \
-    run_script "both screenshot appearances share the batch date across UTC midnight" \
-    "$repository_root/Scripts/screenshots.sh" --frame 3 --no-photos --no-retry --device "$pro_udid" \
+    run_script "a screenshot run asks the date once, and keeps it across UTC midnight" \
+    "$screenshots" --frame 3 --no-photos --no-retry --device "$pro_udid" \
     --derived-data "$screens_dd" --output "$work/midnight-out"
 midnight_set="$work/midnight-out/iphone_18_pro_max_en_ie_2026_10_27"
 if expect_status 0; then
-    if [[ "$(cat "$work/date-count")" == 1 && -f "$midnight_set/light/03-nearby-trails.png" \
-        && -f "$midnight_set/dark/03-nearby-trails-dark.png" ]]; then pass
-    else fail "expected one UTC date query and both appearances under that date" "$output"; fi
+    if [[ "$(cat "$work/date-count")" == 1 && -f "$midnight_set/03-nearby-trails.png" ]]; then pass
+    else fail "expected one UTC date query and the frame under that date" "$output"; fi
 fi
 
 # Capture destinations may also hold photographs and other personal files.
@@ -3502,35 +3527,35 @@ mkdir -p "$screens_output/old-set"
 screens_output="$(cd "$screens_output" && pwd -P)"
 touch "$screens_output/summary.png" "$screens_output/old-set/old.png"
 run_script "screenshot path planning preserves unrelated files and creates no capture directory" \
-    bash -c 'source "$1"; repository_root="$2"; screenshot_output_directory "$3" "iPhone Duo" de_DE open_landscape light' _ \
+    bash -c 'source "$1"; repository_root="$2"; screenshot_output_directory "$3" "iPhone Duo" de_DE' _ \
     "$repository_root/Scripts/lib/screenshot-output.sh" "$repository_root" "$screens_output"
-german_set="$screens_output/iphone_duo_open_landscape_de_de_${screenshot_test_date}"
+german_set="$screens_output/iphone_duo_de_de_${screenshot_test_date}"
 if expect_status 0; then
-    if [[ "$output" == "$german_set/light" && ! -e "$output" \
+    if [[ "$output" == "$german_set" && ! -e "$output" \
         && -f "$screens_output/summary.png" && -f "$screens_output/old-set/old.png" ]]; then pass
     else fail "path planning changed existing output" "$output"; fi
 fi
-mkdir -p "$german_set/light" "$german_set/dark"
-touch "$german_set/light/01-current.png" "$german_set/dark/02-current.png" \
-    "$german_set/dark/03-stale.png" "$german_set/dark/notes.txt"
+mkdir -p "$german_set"
+touch "$german_set/01-current.png" "$german_set/02-current.png" \
+    "$german_set/03-stale.png" "$german_set/notes.txt"
 run_script "targeted screenshot preparation replaces its frame and keeps the rest of the batch" \
     bash -c 'source "$1"; screenshot_prepare_output "$2" "$3" false 03' _ \
-    "$repository_root/Scripts/lib/screenshot-output.sh" "$screens_output" "$german_set/dark"
+    "$repository_root/Scripts/lib/screenshot-output.sh" "$screens_output" "$german_set"
 if expect_status 0; then
-    if [[ -f "$german_set/light/01-current.png" && -f "$german_set/dark/02-current.png" \
-        && -f "$german_set/dark/notes.txt" && ! -e "$german_set/dark/03-stale.png" ]]; then pass
+    if [[ -f "$german_set/01-current.png" && -f "$german_set/02-current.png" \
+        && -f "$german_set/notes.txt" && ! -e "$german_set/03-stale.png" ]]; then pass
     else fail "targeted preparation changed other frames or personal files"; fi
 fi
 run_script "screenshot paths keep English and German in different directories" \
-    bash -c 'source "$1"; repository_root="$2"; screenshot_output_directory "$3" "iPhone Duo" en_IE open_landscape light' _ \
+    bash -c 'source "$1"; repository_root="$2"; screenshot_output_directory "$3" "iPhone Duo" en_IE' _ \
     "$repository_root/Scripts/lib/screenshot-output.sh" "$repository_root" "$screens_output"
 if expect_status 0; then
-    if [[ "$output" == "$screens_output/iphone_duo_open_landscape_en_ie_${screenshot_test_date}/light" \
-        && -f "$german_set/light/01-current.png" ]]; then pass
+    if [[ "$output" == "$screens_output/iphone_duo_en_ie_${screenshot_test_date}" \
+        && -f "$german_set/01-current.png" ]]; then pass
     else fail "expected a separate English directory with the German frame preserved" "$output"; fi
 fi
 run_script "explicit screenshot cleanup removes marked sets and preserves unowned output" \
-    bash -c 'source "$1"; screenshot_prepare_output "$2" "$2/iphone_en_ie_2026_10_28/light" true 01' _ \
+    bash -c 'source "$1"; screenshot_prepare_output "$2" "$2/iphone_en_ie_2026_10_28" true 01' _ \
     "$repository_root/Scripts/lib/screenshot-output.sh" "$screens_output"
 if expect_status 0; then
     if [[ ! -e "$german_set" && -f "$screens_output/summary.png" \
@@ -3538,14 +3563,14 @@ if expect_status 0; then
     else fail "explicit cleanup removed unowned output or left a marked set"; fi
 fi
 # Recreate an input for the following refusal checks.
-mkdir -p "$german_set/light"
-touch "$german_set/light/01-current.png"
+mkdir -p "$german_set"
+touch "$german_set/01-current.png"
 fake_checkout="$work/output-safety-checkout"
 mkdir -p "$fake_checkout/Screenshots/Photos"
 touch "$fake_checkout/keep" "$fake_checkout/Screenshots/Photos/keep.jpg"
 for unsafe in / // "$HOME" "$fake_checkout" "$fake_checkout/Screenshots/Photos" "$work"; do
     run_script "screenshot output refuses root, home, a checkout, its inputs and its parent" \
-        bash -c 'source "$1"; repository_root="$2"; screenshot_output_directory "$3" iPhone en_IE "" light' _ \
+        bash -c 'source "$1"; repository_root="$2"; screenshot_output_directory "$3" iPhone en_IE' _ \
         "$repository_root/Scripts/lib/screenshot-output.sh" "$fake_checkout" "$unsafe"
     if expect_status 2; then
         if [[ -f "$fake_checkout/keep" && -f "$fake_checkout/Screenshots/Photos/keep.jpg" ]]; then pass
@@ -3553,14 +3578,14 @@ for unsafe in / // "$HOME" "$fake_checkout" "$fake_checkout/Screenshots/Photos" 
     fi
 done
 run_script "refused output planning does not create a missing source directory" \
-    bash -c 'source "$1"; repository_root="$2"; screenshot_output_directory "$2/OpenHikes/Shots/Nested" iPhone en_IE "" light' _ \
+    bash -c 'source "$1"; repository_root="$2"; screenshot_output_directory "$2/OpenHikes/Shots/Nested" iPhone en_IE' _ \
     "$repository_root/Scripts/lib/screenshot-output.sh" "$fake_checkout"
 if expect_status 2; then
     if [[ ! -e "$fake_checkout/OpenHikes" ]]; then pass
     else fail "refused planning created a source directory"; fi
 fi
 run_script "valid output planning also leaves missing parents untouched" \
-    bash -c 'source "$1"; repository_root="$2"; screenshot_output_directory "$3/missing/nested" iPhone en_IE "" light' _ \
+    bash -c 'source "$1"; repository_root="$2"; screenshot_output_directory "$3/missing/nested" iPhone en_IE' _ \
     "$repository_root/Scripts/lib/screenshot-output.sh" "$fake_checkout" "$screens_output"
 if expect_status 0; then
     if [[ ! -e "$screens_output/missing" ]]; then pass
@@ -3568,32 +3593,32 @@ if expect_status 0; then
 fi
 ln -s "$german_set" "$work/capture-link"
 run_script "screenshot output refuses a symbolic link before cleaning it" \
-    bash -c 'source "$1"; repository_root="$2"; screenshot_output_directory "$3" iPhone en_IE "" light' _ \
+    bash -c 'source "$1"; repository_root="$2"; screenshot_output_directory "$3" iPhone en_IE' _ \
     "$repository_root/Scripts/lib/screenshot-output.sh" "$repository_root" "$work/capture-link"
 if expect_status 2; then
-    if [[ -f "$german_set/light/01-current.png" ]]; then pass
+    if [[ -f "$german_set/01-current.png" ]]; then pass
     else fail "a linked capture was cleaned"; fi
 fi
 
-preserved_set="$work/screens-out/iphone_18_pro_max_en_ie_${screenshot_test_date}/light"
+preserved_set="$work/screens-out/iphone_18_pro_max_en_ie_${screenshot_test_date}"
 mkdir -p "$preserved_set"
 touch "$preserved_set/03-prior.png"
 preserved_library_set="$work/screens-out/iphone_18_pro_max_en_ie_2026_10_26"
-mkdir -p "$preserved_library_set/light"
-touch "$preserved_library_set/.openhikes-screenshot-set" "$preserved_library_set/light/01-prior.png"
+mkdir -p "$preserved_library_set"
+touch "$preserved_library_set/.openhikes-screenshot-set" "$preserved_library_set/01-prior.png"
 STUB_DEVICES="$screens_prepared" \
 STUB_SCREENSHOT_RESULTS="$work/screens-results.json" STUB_SCREENSHOT_ATTACHMENTS="$screens_attachments" \
     run_script "partial screenshot cleanup preserves earlier stamped-library captures" \
-    "$screenshots_light" --frame 1 --frame 3 --clean --no-photos --no-retry --prepared-device "$pro_udid" \
+    "$screenshots" --frame 1 --frame 3 --clean --no-photos --no-retry --prepared-device "$pro_udid" \
     --pool-owner screenshot-tests --derived-data "$screens_dd" --output "$work/screens-out"
 if expect_status 0 && expect_contains "$output" "Keeping earlier captures" "the cleanup decision"; then
-    if [[ -f "$preserved_library_set/light/01-prior.png" ]]; then pass
+    if [[ -f "$preserved_library_set/01-prior.png" ]]; then pass
     else fail "a partial clean run deleted a skipped library frame"; fi
 fi
 touch "$preserved_set/03-prior.png"
 STUB_DEVICES="$screens_prepared" STUB_XCODEBUILD_STATUS=65 \
     run_script "a failed screenshot build preserves earlier captures even with --clean" \
-    "$screenshots_light" --frame 3 --clean --no-photos --no-retry --prepared-device "$pro_udid" \
+    "$screenshots" --frame 3 --clean --no-photos --no-retry --prepared-device "$pro_udid" \
     --pool-owner screenshot-tests --derived-data "$screens_dd" --output "$work/screens-out"
 if expect_status 1; then
     if [[ -f "$preserved_set/03-prior.png" ]]; then pass
@@ -3601,7 +3626,7 @@ if expect_status 1; then
 fi
 STUB_DEVICES="$screens_prepared" \
     run_script "a screenshot run with nothing to shoot preserves earlier output" \
-    "$screenshots_light" --frame 1 --clean --no-photos --prepared-device "$pro_udid" \
+    "$screenshots" --frame 1 --clean --no-photos --prepared-device "$pro_udid" \
     --pool-owner screenshot-tests --derived-data "$screens_dd" --output "$work/screens-out"
 if expect_status 0 && expect_contains "$output" "nothing left to shoot" "the skip"; then
     if [[ -f "$preserved_set/03-prior.png" ]]; then pass
@@ -3614,7 +3639,7 @@ sed 's/"Passed"/"Failed"/g' "$work/screens-results.json" > "$work/screens-crashe
 STUB_DEVICES="$screens_prepared" STUB_SCREENSHOT_RESULTS="$work/screens-crashed.json" \
 STUB_SCREENSHOT_ATTACHMENTS="$screens_attachments" \
     run_script "screenshots rejects attachments from tests that did not pass despite a green process" \
-    "$screenshots_light" --frame 3 --no-photos --no-retry --prepared-device "$pro_udid" \
+    "$screenshots" --frame 3 --no-photos --no-retry --prepared-device "$pro_udid" \
     --pool-owner screenshot-tests --derived-data "$screens_dd" --output "$work/screens-out"
 if expect_status 1 \
     && expect_contains "$output" "FAILED — not shot: 03" "the output" \

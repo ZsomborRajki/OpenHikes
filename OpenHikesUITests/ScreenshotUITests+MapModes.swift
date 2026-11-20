@@ -45,8 +45,8 @@ extension ScreenshotUITests {
     /// Close enough to the band's middle to leave alone, in points.
     private static let walkCenteringTolerance: CGFloat = 8
     /// The least of the window a band has to be, as a share of its height,
-    /// for the walk to be drawn into it. The closed iPhone Duo's *Map Modes*
-    /// stands nearly as tall as its cover display, and leaves none.
+    /// for the walk to be drawn into it. A *Map Modes* nearly as tall as
+    /// its window leaves none.
     private static let leastBandShare: CGFloat = 0.2
 
     /// Frames the walk, lowers the map sheet out of the way, and opens *Map

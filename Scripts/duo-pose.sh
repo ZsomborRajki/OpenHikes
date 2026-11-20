@@ -10,7 +10,8 @@
 # reach the inner display at all. It is an optional tool, found the way
 # Scripts/lib/hinge.sh says, and only opening needs it: a simulator boots
 # closed, so without hinge a closed pose is read back rather than posted.
-# Scripts/lib/screenshots.sh calls this for `--pose`.
+# Scripts/lib/screenshots.sh calls this to open an iPhone Duo before its set
+# is shot.
 #
 # **Every change is read back.** The event goes through undocumented
 # interfaces, and the failure they have when a release moves them is the silent
@@ -24,7 +25,7 @@
 # screen.
 #
 # **One fold from a fresh boot is the move to rely on.** A simulator boots
-# closed, and a screenshot run starts from a fresh clone, so `--pose open` is
+# closed, and a screenshot run starts from a fresh clone, so opening it is
 # a single unfold from cold. That took on every clone but one, where the
 # displays never swapped and posting 180° again changed nothing, minutes
 # later as straight away; moving the hinge to 90° first did. So a post that
