@@ -293,6 +293,8 @@ final class SheetPresentation {
     @ObservationIgnored private var placesAroundSearches = SheetRetained<SheetRoute, HikePlacesAroundSearch>()
     /// The same, for *Places Nearby* — see ``HikePlacesNearbySession``.
     @ObservationIgnored private var placesNearbySessions = SheetRetained<SheetRoute, HikePlacesNearbySession>()
+    /// The same, for *Edit Route*'s cuts — see ``RouteTrimSession``.
+    @ObservationIgnored private var routeTrims = SheetRetained<SheetRoute, RouteTrimSession>()
     /// The same, for *Offline Maps*' search, order and open countries — see
     /// ``OfflineCountriesListState``.
     @ObservationIgnored private var offlineCountriesLists = SheetRetained<SheetRoute, OfflineCountriesListState>()
@@ -509,6 +511,10 @@ final class SheetPresentation {
 
     func placesNearby(for route: SheetRoute) -> HikePlacesNearbySession {
         placesNearbySessions.value(for: route) { HikePlacesNearbySession() }
+    }
+
+    func routeTrim(for route: SheetRoute) -> RouteTrimSession {
+        routeTrims.value(for: route) { RouteTrimSession() }
     }
 
     func offlineCountriesList(for route: SheetRoute) -> OfflineCountriesListState {
@@ -749,6 +755,9 @@ final class SheetPresentation {
         for search in placesAroundSearches.release(keeping: isOnPath) { search.cancel() }
         placesNearbySessions.release(keeping: isOnPath)
         offlineCountriesLists.release(keeping: isOnPath)
+        // Back takes a trim's handles off the map, which its screen going
+        // does not: a turn of the phone takes the screen and leaves the route.
+        for trim in routeTrims.release(keeping: isOnPath) { trim.end() }
         // And a preview's downloads, which go with its route rather than with
         // its screen: a turn of the phone takes the screen away and leaves the
         // route, and a preview taken off the stack from under its gallery is

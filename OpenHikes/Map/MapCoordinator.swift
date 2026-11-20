@@ -313,6 +313,8 @@ extension MapView {
         var placesAroundMap = PlacesAroundMapState()
         /// *Offline Maps*' outlines. See `MapCoordinator+CountryOutlines.swift`.
         var countryOutlineMap = CountryOutlineMapState()
+        /// *Edit Route*'s handles and covers. See `MapRouteTrim.swift`.
+        var routeTrimMap = RouteTrimMapState()
         /// The first-run tips' half: the card a tip about one of this map's
         /// own buttons is drawn in. See `MapTipCards.swift`.
         var tipCards = MapTipCardState()
@@ -970,13 +972,12 @@ extension MapView.Coordinator {
             return libraryLinesRenderer(for: library)
         }
         if let polyline = overlay as? MKPolyline {
-            if let renderer = walkHighlightRenderer(for: polyline) {
-                return renderer
-            }
-            // Before every style below, which all describe the hiker's own
-            // route: a shared hike's line is not it and must not be drawn in
+            // A walk's stretches and a trim's covers, then — before every
+            // style below, which all describe the hiker's own route — a
+            // shared hike's line, which is not it and must not be drawn in
             // the colour and width they chose for theirs.
-            if let renderer = communityRouteRenderer(for: polyline) {
+            if let renderer = walkHighlightRenderer(for: polyline) ?? routeTrimRenderer(for: polyline)
+                ?? communityRouteRenderer(for: polyline) {
                 return renderer
             }
             // And the trail being drawn, which is not a hike at all yet, the

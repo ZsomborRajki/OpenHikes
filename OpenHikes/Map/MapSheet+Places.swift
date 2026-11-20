@@ -29,7 +29,8 @@ extension MapSheet {
         case let .placesNearby(hike):
             placesNearbyDestination(of: hike, session: presentation.placesNearby(for: route))
         case .commonsGallery, .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto, .hike, .pendingPhotos,
-            .offlineCountries, .pendingSubmission, .photo, .recording, .routeStyle, .totals, .trailDraft, .walk:
+            .offlineCountries, .pendingSubmission, .photo, .recording, .routeEdit, .routeStyle, .totals,
+            .trailDraft, .walk:
             EmptyView()
         }
     }

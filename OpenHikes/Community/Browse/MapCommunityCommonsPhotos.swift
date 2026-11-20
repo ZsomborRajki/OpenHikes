@@ -98,6 +98,8 @@ extension MapView.Coordinator {
     /// delegate in `MapCoordinator.swift` asks it once.
     func ownedAnnotationView(for annotation: any MKAnnotation, on mapView: MKMapView) -> MKAnnotationView? {
         if let maker = makerAnnotationView(for: annotation, on: mapView) { return maker }
+        // *Edit Route*'s two handles — see `MapRouteTrim.swift`.
+        if let handle = routeTrimHandleView(for: annotation, on: mapView) { return handle }
         if let group = annotation as? MKClusterAnnotation {
             return communityCommonsPhotoGroupView(for: group, on: mapView)
         }

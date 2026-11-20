@@ -108,22 +108,22 @@ nonisolated public struct ElevationSample: Identifiable, Equatable, Sendable {
 
 /// How a fix was moving, where Core Motion judged it was not on foot.
 ///
-/// **Collected but not yet read.** ``RecordingPoint/routeCoordinate`` tags a
-/// fix `.nonPedestrian` when Core Motion reports automotive, cycling or an
-/// otherwise non-walking activity, and it is persisted with the route — but no
-/// statistic, chart, breakdown or export consults it today.
+/// ``RecordingPoint/routeCoordinate`` tags a fix `.nonPedestrian` when Core
+/// Motion reports automotive, cycling or an otherwise non-walking activity,
+/// and it is persisted with the route.
 ///
-/// That is deliberate rather than an oversight. The intended use is flagging
-/// or excluding vehicle-assisted segments (a chairlift, a shuttle bus, the
-/// drive to a second trailhead), which distorts distance, speed and ascent
-/// figures for anyone whose walk included one. Recording it now means the
-/// feature can be built against hikes people have *already* recorded, where
-/// dropping the field would make every existing route permanently unusable
-/// for it — Core Motion's judgement cannot be reconstructed after the fact.
+/// **Read by one thing so far**: ``RouteCarriedEnds``, which finds the drive
+/// a recording was left running through so *Edit Route* can offer to cut it
+/// off. No statistic, chart, breakdown or export consults it.
 ///
-/// One `String?` per track point is a cheap option to hold open. Do not remove
-/// it as unused: an unused-symbol sweep is right about the reads and wrong
-/// about the reason.
+/// It was collected long before it was read, on purpose. A vehicle-assisted
+/// stretch (a chairlift, a shuttle bus, the drive to a second trailhead)
+/// distorts distance, speed and ascent for anyone whose walk included one,
+/// and Core Motion's judgement cannot be reconstructed after the fact: a
+/// hike recorded without the tag is unusable for anything built on it. So
+/// the readers still to come, a stretch in the middle of a walk among them,
+/// find it on every recording already made. Do not remove it as little
+/// used.
 nonisolated public enum RouteMotion: String, Codable, Hashable, Sendable {
     case nonPedestrian = "nonPedestrian"
 }
@@ -180,8 +180,8 @@ nonisolated public struct RouteCoordinate: Codable, Hashable, Sendable {
     public var longitude: Double
     public var elevation: Double?
     public var timestamp: Date?
-    /// Recorded for a future feature, read by nothing today — see
-    /// ``RouteMotion``.
+    /// How the fix was moving, where it was not on foot — see
+    /// ``RouteMotion`` for what reads it.
     public var motion: RouteMotion?
     /// `nil` for a measured point — see ``RouteProvenance``.
     public var provenance: RouteProvenance?

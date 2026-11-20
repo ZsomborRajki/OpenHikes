@@ -63,6 +63,7 @@ struct SheetRouteTests {
             .placesAround(deleted),
             .placesNearby(deleted),
             .routeStyle(deleted),
+            .routeEdit(deleted),
             .hike(survivor),
         ]
 
@@ -191,14 +192,18 @@ struct SheetRouteTests {
             .hike(hike),
             .routeStyle(hike),
             .routeStyle(hike),
+            .routeEdit(hike),
+            .routeEdit(hike),
             .recording,
             .trailDraft,
             .placesAround(hike),
             .placesNearby(hike),
             .placesNearby(hike),
         ]
-        #expect(routes.count == 8)
+        #expect(routes.count == 9)
         #expect(SheetRoute.placesAround(hike) != .placesNearby(hike))
+        #expect(SheetRoute.routeEdit(hike) != .routeStyle(hike))
+        #expect(!routes.contains(.routeEdit(Fixture.hike(in: context))))
         #expect(routes.contains(.routeStyle(hike)))
         #expect(!routes.contains(.routeStyle(Fixture.hike(in: context))))
         #expect(routes.contains(.place(hike, id)))
