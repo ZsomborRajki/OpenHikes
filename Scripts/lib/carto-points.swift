@@ -7,7 +7,8 @@
 //  `amenity-points.mss` and `stations.mss` draw, the style
 //  tile.openstreetmap.org is drawn in — and writes them out as the table the
 //  vector map draws points from, with every icon the table names copied into
-//  an asset catalog.
+//  an asset catalog, and beside them the pictures Carto fills an area with or
+//  lays along a line.
 //
 //  Carto is written in CartoCSS: nested blocks whose filters and zooms add
 //  up, where the more specific of two declarations wins and the later one
@@ -999,7 +1000,7 @@ func rules(of feature: String, shop: String?, test key: String) -> Bool {
 /// alone where there is no name (`project.mml`'s amenity-points query).
 let featuresWithElevation: Set<String> = [
     "natural_peak", "natural_volcano", "natural_saddle", "tourism_alpine_hut", "tourism_wilderness_hut",
-    "amenity_shelter",
+    "amenity_shelter", "mountain_pass",
 ]
 
 /// Whether Carto writes the height of `feature` with `detail`: of the
@@ -1241,10 +1242,11 @@ func add(
 
 /// The stops Carto draws in its `stations` layer, by the `railway` value the
 /// archive files each under, and where the layer's `ORDER BY CASE railway`
-/// places each: stations first, subway entrances last. The archive keeps no
-/// `station` tag, so every station is drawn as one that is not a subway's;
-/// no `ref`, which Carto writes by an entrance from zoom 19; and no aerialway
-/// station.
+/// places each: stations first, subway entrances last. The basemap keeps no
+/// `station` tag, so its station is drawn as one that is not a subway's; the
+/// vector extras keep it as the `kind_detail`, and bring a lift's station as
+/// a `station` whose detail is `aerialway`. Neither keeps a `ref`, which
+/// Carto writes by an entrance from zoom 19.
 let stationOrders: [(kind: String, order: Int)] = {
     let source = layerSource("stations")
     let kinds = source.matches(of: #/railway (?:IN \(([^)]*)\)|= '([a-z_]+)')/#).flatMap { match in
@@ -1270,6 +1272,42 @@ for (kind, order) in stationOrders {
     guard !result.isEmpty else { fail("stations.mss draws no \(kind)") }
     entries.append(Entry(kind: kind, feature: "railway_\(kind)", lowPriority: false, station: order, bands: result))
 }
+// A subway's station, which Carto holds back a zoom, and a lift's, which it
+// draws from a zoom of its own and names in a lighter face: both a `station`
+// to the archive, told apart by the detail the vector extras give.
+let stationVariants: [(detail: String, feature: String, attributes: [String: Literal])] = [
+    ("subway", "railway_station", ["railway": .text("station"), "station": .text("subway")]),
+    ("aerialway", "aerialway_station", ["aerialway": .text("station")]),
+]
+for variant in stationVariants {
+    guard let order = stationOrders.first(where: { $0.kind == "station" })?.order else { fail("no station's order") }
+    let attributes = variant.attributes.merging(["name": .text("name")]) { own, _ in own }
+    let point = Point(layer: "stations", attributes: attributes)
+    let result = bands(of: point, textLayer: "stations", iconLayerZoom: stationsZoom, textLayerZoom: stationsZoom)
+    guard !result.isEmpty else { fail("stations.mss draws no \(variant.feature) of \(variant.detail)") }
+    entries.append(Entry(
+        kind: "station",
+        detail: variant.detail,
+        feature: variant.feature,
+        lowPriority: false,
+        // A lift's station is none of the layer's three railway stops, which
+        // its order places with the halts.
+        station: variant.detail == "aerialway" ? order + 1 : order,
+        bands: result
+    ))
+}
+// A level crossing, which Carto draws in a layer of its own with no name:
+// the kind the basemap files a `railway=level_crossing` under.
+let crossingsZoom = minimumZoom(of: "railway-crossings")
+let crossing = Point(
+    layer: "railway-crossings",
+    attributes: ["railway": .text("level_crossing"), "int_isminor": .text("no")]
+)
+let crossingBands = bands { zoom in (zoom < crossingsZoom ? [] : icons(of: crossing, at: zoom), nil) }
+guard !crossingBands.isEmpty, seenKinds.insert("level_crossing").inserted else {
+    fail("amenity-points.mss draws no level crossing")
+}
+entries.append(Entry(kind: "level_crossing", feature: "railway_level_crossing", lowPriority: false, bands: crossingBands))
 // Where two keys share a value, the first here wins. The low-priority
 // layer's go first, because the vector extras bring barriers, and a `gate`
 // on a path is far likelier than an airport's; then Carto's own order of keys.
@@ -1282,11 +1320,70 @@ for feature in mainFeatures {
     add(kind: feature.value, feature: name, shop: nil, lowPriority: false, requires: feature.requires)
 }
 // The vector extras file every office as `office`, as Carto draws them all
-// alike, ahead of the `shop=office` Carto also knows.
+// alike, ahead of the `shop=office` Carto also knows; a pass marked on a road
+// as `mountain_pass`, the name Carto's query gives one; and a ford on a path
+// as `ford`.
 add(kind: "office", feature: "office", shop: nil, lowPriority: false)
+add(kind: "mountain_pass", feature: "mountain_pass", shop: nil, lowPriority: false)
+add(kind: "ford", feature: "highway_ford", shop: nil, lowPriority: false)
 for shop in drawnShops {
     add(kind: shop, feature: "shop", shop: shop, lowPriority: false)
 }
+
+// MARK: - Patterns
+
+/// One of Carto's pattern pictures: a square of symbols it fills an area
+/// with, or lays along a line, over and over.
+struct Pattern {
+    /// Its name in the catalog: `carto-pattern-` and the file's own name.
+    let asset: String
+    /// `svg` or `png`.
+    let kind: String
+    /// The files, by the scale each is drawn for: Carto keeps a picture
+    /// twice the size beside some of its bitmaps.
+    let sources: [(scale: Int, path: String)]
+}
+
+/// The patterns the map draws nothing with: a flowerbed's, a prison's and a
+/// salt marsh's dots, whose areas the tiles have no kind for, and a cliff's
+/// and an embankment's teeth, which it draws along the line itself.
+let undrawnPatterns: Set<String> = [
+    "flowerbed_mid_zoom", "flowerbed_high_zoom", "grey_vertical_hatch", "salt-dots-2",
+    "cliff", "cliff2", "embankment",
+]
+
+/// Every picture `landcover.mss` and `water.mss` fill an area with or lay
+/// along a line, less the ``undrawnPatterns``.
+let patterns: [Pattern] = {
+    var found: [String: Pattern] = [:]
+    for sheet in ["landcover.mss", "water.mss"] {
+        let text = uncommented(read("style/\(sheet)"))
+        for part in text.components(separatedBy: "-pattern-file:").dropFirst() {
+            guard let open = part.range(of: "url('"), let close = part.range(of: "')") else {
+                fail("\(sheet) names a pattern this does not read: \(part.prefix(60))")
+            }
+            let path = String(part[open.upperBound..<close.lowerBound])
+            let file = path.split(separator: "/").last.map(String.init) ?? path
+            guard let dot = file.lastIndex(of: ".") else { fail("\(sheet) names a pattern with no type: \(path)") }
+            let name = String(file[..<dot])
+            let kind = String(file[file.index(after: dot)...])
+            guard !undrawnPatterns.contains(name), found[name] == nil else { continue }
+            guard FileManager.default.fileExists(atPath: cartoRoot.appending(path: path).path) else {
+                fail("\(sheet) names \(path), which the release does not have")
+            }
+            var sources = [(scale: 1, path: path)]
+            // Carto generates its bitmaps from drawings it keeps beside them,
+            // some at twice the size too; the plain wetland's is named apart.
+            let doubled = "symbols/generating_patterns/\(name == "wetland" ? "wetland_generic" : name)@2x.png"
+            if kind == "png", FileManager.default.fileExists(atPath: cartoRoot.appending(path: doubled).path) {
+                sources.append((scale: 2, path: doubled))
+            }
+            found[name] = Pattern(asset: "carto-pattern-\(name)", kind: kind, sources: sources)
+        }
+    }
+    guard !found.isEmpty else { fail("landcover.mss names no pattern") }
+    return found.values.sorted { $0.asset < $1.asset }
+}()
 
 // MARK: - Writing
 
@@ -1324,10 +1421,28 @@ do {
         """
         try Data(contents.utf8).write(to: set.appending(path: "Contents.json"))
     }
+    for pattern in patterns {
+        let set = catalogURL.appending(path: "\(pattern.asset).imageset")
+        try fileManager.createDirectory(at: set, withIntermediateDirectories: true)
+        var images: [String] = []
+        for (scale, source) in pattern.sources {
+            let file = "\(pattern.asset)\(scale == 1 ? "" : "@\(scale)x").\(pattern.kind)"
+            try fileManager.copyItem(at: cartoRoot.appending(path: source), to: set.appending(path: file))
+            // A bitmap is for one scale; a drawing is for them all.
+            let drawnFor = pattern.kind == "svg" ? "" : #","scale":"\#(scale)x""#
+            images.append(#"{"filename":"\#(file)","idiom":"universal"\#(drawnFor)}"#)
+        }
+        let vector = pattern.kind == "svg" ? #","properties":{"preserves-vector-representation":true}"# : ""
+        let contents = #"{"images":[\#(images.joined(separator: ","))],"info":{"author":"xcode","version":1}\#(vector)}"#
+        try Data((contents + "\n").utf8).write(to: set.appending(path: "Contents.json"))
+    }
 } catch {
     fail("cannot write \(catalogURL.path): \(error)")
 }
 
 let areaKinds = Set(entries.filter { $0.areas != nil }.map(\.kind)).sorted()
-print("carto-points: \(entries.count) kinds of point, \(usedIcons.count) icons, from \(table.source)")
+print(
+    "carto-points: \(entries.count) kinds of point, \(usedIcons.count) icons, \(patterns.count) patterns, "
+        + "from \(table.source)"
+)
 print("carto-points: drawn by their size: \(areaKinds.joined(separator: " "))")

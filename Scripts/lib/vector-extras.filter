@@ -23,3 +23,54 @@ n/waterway=waterfall
 # one-way; the schema keeps the highways among them.
 w/oneway=yes,-1
 w/junction=roundabout
+# Aerial lifts other than the cable cars the basemap keeps, and their stations.
+w/aerialway=gondola,mixed_lift,goods,chair_lift,drag_lift,t-bar,j-bar,platter,rope_tow,zip_line
+nw/aerialway=station
+# The railways the basemap keeps only from zoom 14.
+w/railway=narrow_gauge,light_rail,funicular,tram,subway
+# The stops, huts and summits Carto draws from a wider zoom than the basemap
+# keeps them at, and the passes and fords the basemap has no kind for.
+nw/railway=station,halt,tram_stop
+nw/tourism=alpine_hut,wilderness_hut
+n/natural=peak,volcano,spring,cape
+n/mountain_pass=yes
+n/ford=yes,stepping_stones
+# Carto's historic points, for those also tagged as an attraction.
+nw/historic=castle,fort,manor,monument,memorial,archaeological_site,city_gate,wayside_cross,wayside_shrine
+# Ground the basemap has no kind for, named or not.
+wr/natural=scree,heath,shingle,mud
+wr/landuse=retail,quarry,vineyard,orchard,plant_nursery,farmyard,construction,brownfield,landfill,garages,greenhouse_horticulture,religious
+wr/tourism=camp_site,caravan_site,picnic_site
+wr/amenity=grave_yard
+wr/leisure=stadium,sports_centre,track,ice_rink,miniature_golf,fitness_station,fitness_centre,water_park
+wr/power=plant,generator,substation
+wr/aeroway=apron
+wr/highway=services,rest_area
+# Squares and pedestrian streets mapped as relations, which the basemap
+# passes over.
+r/highway=pedestrian,footway
+# Every park and protected area, for its fill or its border.
+wr/leisure=park,nature_reserve
+wr/boundary=aboriginal_lands,national_park,protected_area
+# Lines of their own: power lines, dams and weirs, ridges.
+w/power=line,minor_line
+w/waterway=dam,weir,lock_gate
+wr/man_made=breakwater,groyne
+w/natural=ridge,arete
+# What Carto picks an area's symbols by and the basemap drops: a wood's
+# leaves, a wetland's kind, a beach's surface, a cemetery's religion. The
+# first two are asked for by the tag itself, because the woods and wetlands
+# without one are most of them and the schema keeps none.
+wr/leaf_type=broadleaved,needleleaved,mixed,leafless
+wr/wetland=marsh,saltmarsh,wet_meadow,reedbed,mangrove,swamp,bog,fen,string_bog,tidalflat
+wr/natural=beach,shoal
+wr/landuse=cemetery,salt_pond
+wr/military=danger_area
+# Cliffs and embankments in their own direction, the lines cut through a
+# forest, and trees alone or in a row.
+w/natural=cliff,tree_row
+w/man_made=embankment,cutline
+n/natural=tree
+# Water that is not always there.
+wr/intermittent=yes
+wr/seasonal=yes,spring,summer,autumn,winter,wet_season,dry_season

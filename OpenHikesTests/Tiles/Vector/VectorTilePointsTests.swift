@@ -146,6 +146,39 @@ struct VectorTilePointsTests {
         #expect(abs(name.midX - icon.midX) < 1)
     }
 
+    /// Moved in from the foot of the tile, a name would stand on its own
+    /// icon, which has the room already: every point in the last tenth of a
+    /// tile went unnamed.
+    @Test("a name the tile's foot would push back over its point is written above the point")
+    func nameAboveAtTheFoot() throws {
+        let points = try candidates([poi(["kind": .string("fuel"), "name": .string("MOL")], at: (grid / 2, grid - 2))])
+        var room = VectorTilePoints.Room(bounds: bounds, taken: [])
+        var fonts = LabelFonts(language: "en")
+
+        let icons = VectorTilePoints.Icons(points, unit: unit, room: &room)
+        let names = VectorTilePoints.Names(points, unit: unit, room: &room, fonts: &fonts)
+
+        let icon = try #require(icons.frames.first)
+        let name = try #require(names.frames.first)
+        #expect(name.maxY < icon.midY)
+        #expect(!name.intersects(icon))
+        #expect(abs(name.midX - icon.midX) < 1)
+    }
+
+    @Test("with no room above the point either, the name at the tile's foot is left out")
+    func noRoomAboveEither() throws {
+        let points = try candidates([poi(["kind": .string("fuel"), "name": .string("MOL")], at: (grid / 2, grid - 2))])
+        var room = VectorTilePoints.Room(bounds: bounds, taken: [])
+        var fonts = LabelFonts(language: "en")
+
+        let icons = VectorTilePoints.Icons(points, unit: unit, room: &room)
+        let icon = try #require(icons.frames.first)
+        room.take(CGRect(x: 0, y: icon.minY - 2 * icon.height, width: side, height: icon.height))
+        let names = VectorTilePoints.Names(points, unit: unit, room: &room, fonts: &fonts)
+
+        #expect(names.frames.isEmpty)
+    }
+
     @Test("a bench waits for every other point, and finds no room where one stands")
     func lowPriorityComesLast() throws {
         let points = try candidates([
@@ -294,6 +327,10 @@ struct VectorTilePointsTests {
             context.fill(CGRect(origin: .zero, size: size))
             return context.makeImage()
         }
+
+        func pattern(asset: String, unit: CGFloat) -> CGImage? {
+            nil
+        }
     }
 
     private var land: VectorTileFixture.Layer {
@@ -308,10 +345,11 @@ struct VectorTilePointsTests {
 
     private func poi(
         _ properties: [String: VectorTileFixture.Value],
-        at position: (Int, Int)? = nil
+        at position: (Int, Int)? = nil,
+        id: UInt64? = nil
     ) -> VectorTileFixture.Feature {
         let spot = position ?? (grid / 2, grid / 2)
-        return .init(type: .point, properties: properties, geometry: VectorTileFixture.points([spot]))
+        return .init(type: .point, properties: properties, geometry: VectorTileFixture.points([spot]), id: id)
     }
 
     private func candidates(_ features: [VectorTileFixture.Feature]) throws -> [VectorTilePoints.Candidate] {
@@ -345,5 +383,153 @@ struct VectorTilePointsTests {
         }
         let index = (y * width + x) * 4
         return [Int(bytes[index]), Int(bytes[index + 1]), Int(bytes[index + 2])]
+    }
+}
+
+// MARK: The extras' points in the basemap's place
+
+extension VectorTilePointsTests {
+    /// The basemap's tile with the extras' merged into it, as the client
+    /// merges them, drawn with the table the app ships.
+    private func merged(
+        basemap: [VectorTileFixture.Feature],
+        extras: [VectorTileFixture.Feature] = []
+    ) throws -> [VectorTilePoints.Candidate] {
+        let tile = try VectorTileFixture.decoded([.init(name: "pois", features: basemap)])
+            .merging(try VectorTileFixture.decoded([.init(name: "pois", features: extras)]))
+        return VectorTilePoints.candidates(
+            in: tile,
+            source: self.tile,
+            target: self.tile,
+            language: "en",
+            height: VectorTileFixture.height,
+            style: .bundled
+        )
+    }
+
+    /// The Wimbachgrieshütte is tagged as a hut and as a restaurant: the
+    /// basemap files it by its `amenity`, Carto by its `tourism`.
+    @Test("a hut the basemap files as a restaurant is drawn as the hut the extras file it as")
+    func hutInTheRestaurantsPlace() throws {
+        let name = VectorTileFixture.Value.string("Wimbachgrieshütte")
+        let points = try merged(
+            basemap: [poi(["kind": .string("restaurant"), "name": name])],
+            extras: [poi(["kind": .string("alpine_hut"), "name": name, "elevation": .double(1327)])]
+        )
+
+        #expect(points.map(\.lines) == [["Wimbachgrieshütte", "1327 m"]])
+    }
+
+    @Test("a castle the basemap files as an attraction is drawn as the castle")
+    func castleInTheAttractionsPlace() throws {
+        let points = try merged(
+            basemap: [poi(["kind": .string("attraction"), "name": .string("Burg Hohenwerfen")])],
+            extras: [poi(["kind": .string("castle"), "name": .string("Burg Hohenwerfen")])]
+        )
+
+        #expect(points.count == 1)
+        #expect(points.first?.look.icons.isEmpty == false, "with a castle's icon, which an attraction has none of")
+    }
+
+    /// The Watzmannhaus is way 1435198912: the basemap gives its point the
+    /// way's id with a 2 above it from bit 44, the extras the way's id times
+    /// ten plus 2. Unnamed, nothing else says the two are one hut, and the
+    /// restaurant, offered from a nearer zoom, would take the hut's room.
+    @Test("an unnamed hut stands in the place of the basemap's point for the same element, and no other")
+    func unnamedHutByItsElement() throws {
+        let restaurant = poi(["kind": .string("restaurant"), "min_zoom": .double(16)], id: 35_185_807_287_744)
+        let hut = poi(["kind": .string("alpine_hut")], id: 14_351_989_122)
+        let nodeOfTheSameNumber = poi(["kind": .string("alpine_hut")], id: 14_351_989_121)
+
+        let same = try merged(basemap: [restaurant], extras: [hut])
+        let other = try merged(basemap: [restaurant], extras: [nodeOfTheSameNumber])
+
+        #expect(same.count == 1)
+        #expect(same.first?.look.icons.map(\.asset) == ["carto-tourism-alpinehut"])
+        #expect(other.count == 2)
+    }
+
+    @Test("only the same thing gives way: another name, another spot, or a kind the extras do not vouch for")
+    func whatDoesNotGiveWay() throws {
+        let hut = poi(["kind": .string("alpine_hut"), "name": .string("Blaueishütte")])
+
+        let otherName = try merged(
+            basemap: [poi(["kind": .string("restaurant"), "name": .string("Schärtenalm")])],
+            extras: [hut]
+        )
+        let otherSpot = try merged(
+            basemap: [poi(["kind": .string("restaurant"), "name": .string("Blaueishütte")], at: (grid / 4, grid / 4))],
+            extras: [hut]
+        )
+        let office = try merged(
+            basemap: [poi(["kind": .string("bank"), "name": .string("Sparkasse")])],
+            extras: [poi(["kind": .string("office"), "name": .string("Sparkasse")])]
+        )
+
+        #expect(otherName.count == 2)
+        #expect(otherSpot.count == 2)
+        let isBank = { (point: VectorTilePoints.Candidate) in
+            point.look.icons.contains { $0.asset?.contains("bank") == true }
+        }
+        #expect(office.contains(where: isBank), "the bank stays a bank")
+    }
+
+    @Test("every kind that stands in the basemap's place is one the table draws")
+    func supersedingKindsAreDrawn() {
+        for kind in VectorTilePoints.supersedingKinds.sorted() {
+            #expect(VectorTilePointStyle.bundled.look(kind: kind, detail: nil, named: true, z: 19) != nil, "\(kind)")
+        }
+    }
+
+    /// Without the merge nothing says which archive a point came from, and a
+    /// hut in the basemap's own tile is no reason to drop a restaurant.
+    @Test("a point of the basemap's own never stands in another's place")
+    func basemapPointsDoNotSupersede() throws {
+        let points = try merged(basemap: [
+            poi(["kind": .string("restaurant"), "name": .string("Watzmannhaus")]),
+            poi(["kind": .string("alpine_hut"), "name": .string("Watzmannhaus")]),
+        ])
+
+        #expect(points.count == 2)
+    }
+
+    // MARK: Squares
+
+    @Test("a named square is written from zoom 17, or from 15 where the archive offers it early for its size")
+    func squares() {
+        #expect(VectorTilePointStyle.square(z: 17, firstZoom: 16)?.text != nil)
+        #expect(VectorTilePointStyle.square(z: 16, firstZoom: 16) == nil)
+        #expect(VectorTilePointStyle.square(z: 15, firstZoom: 14)?.text != nil)
+        #expect(VectorTilePointStyle.square(z: 14, firstZoom: 13) == nil)
+        #expect(VectorTilePointStyle.square(z: 16, firstZoom: nil) == nil)
+        #expect(VectorTilePointStyle.square(z: 17, firstZoom: nil)?.icons.isEmpty == true)
+    }
+
+    @Test("a square is named inside it, with no icon; an unnamed one is nothing")
+    func squareIsNamed() throws {
+        let points = try candidates([
+            poi(["kind": .string("pedestrian"), "name": .string("Marienplatz"), "min_zoom": .double(14)]),
+            poi(["kind": .string("pedestrian")], at: (grid / 4, grid / 4)),
+        ])
+
+        #expect(points.map(\.lines) == [["Marienplatz"]])
+        #expect(points.first?.look.icons.isEmpty == true)
+    }
+
+    @Test("a lift's station, a pass on a road and a level crossing have Carto's looks")
+    func extrasKinds() throws {
+        let style = VectorTilePointStyle.bundled
+
+        let lift = try #require(style.look(kind: "station", detail: "aerialway", named: true, z: 14))
+        let railway = try #require(style.look(kind: "station", detail: nil, named: true, z: 14))
+        #expect(lift.isStation)
+        #expect(lift.text?.face == .regular, "a lift's station in the lighter face")
+        #expect(railway.text?.face == .bold)
+        #expect(style.look(kind: "station", detail: "aerialway", named: true, z: 12) == nil)
+        let subway = style.look(kind: "station", detail: "subway", named: true, z: 14)
+        #expect(subway?.text == nil, "a subway station's name a zoom later")
+        #expect(style.look(kind: "mountain_pass", detail: nil, named: true, z: 15)?.showsElevation == true)
+        #expect(style.look(kind: "level_crossing", detail: nil, named: false, z: 14)?.icons.isEmpty == false)
+        #expect(style.look(kind: "ford", detail: nil, named: false, z: 16)?.icons.isEmpty == false)
     }
 }

@@ -16,3 +16,6 @@ wr/place=island,islet
 wr/military=danger_area
 wr/highway=rest_area,services
 wr/boundary=aboriginal_lands,national_park,protected_area
+# Buildings, for their names: most of the planet's ways, of which the cut for
+# a name keeps one in seventy.
+wr/building

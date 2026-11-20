@@ -6,12 +6,17 @@
 # which leaves out much of what OpenStreetMap Carto draws: car parks mapped
 # as areas with no name, barriers, towers and crosses, offices, the type of
 # an information point and the goods of a vending machine, waterfalls,
-# one-way ways in their own direction, and the size of each named area. The
-# extras are those, as a second PMTiles archive the app draws into the
+# one-way ways in their own direction, the size of each named area, the
+# ground it has no kind for (scree, heath, quarries, vineyards), parks and
+# protected areas, lifts and their stations, power lines, dams and ridges,
+# cliffs in their own direction, trees, the water that is not always there,
+# what picks the symbols of a wood or a wetland, the names of buildings, and
+# the huts, stations and summits Carto shows before the basemap has them.
+# The extras are those, as a second PMTiles archive the app draws into the
 # basemap's tiles (`VectorTileSource.extras`).
 #
 # It cuts the planet down with `osmium tags-filter` and
-# Scripts/lib/vector-extras.filter, and the named areas with
+# Scripts/lib/vector-extras.filter, and the named areas and buildings with
 # Scripts/lib/vector-extras-areas.filter and a second cut for a name, then
 # builds the archive with Planetiler from Scripts/lib/vector-extras.yml. Bring the planet up to date first with
 # `Scripts/trail-cells.sh update-planet`. The archive is named for the date
@@ -31,10 +36,11 @@
 # R2 takes up to 5 GiB.
 #
 # It is a development tool and is in no gate. It needs osmium and Planetiler
-# (`brew install osmium-tool planetiler`). On an M4 Max the planet took 23
-# minutes to cut, and the cut's 7.2 GB two minutes to build into 3.3 GB. The
-# areas of the named areas' kinds, named or not, pass through the work
-# directory on the way: in Slovenia's extract they were three fifths of it.
+# (`brew install osmium-tool planetiler`). On an M4 Max the planet took 35
+# minutes to cut, and the cut's 14.6 GB eleven minutes to build into 16.1 GB.
+# The buildings and the areas of the named areas' kinds, named or not, pass
+# through the work directory on the way: 48 GB of the planet, of which the
+# named are 3.6 GB.
 #
 # Usage:
 #   Scripts/vector-extras.sh build <planet.osm.pbf> [<work-dir>]
@@ -125,8 +131,9 @@ trap 'rm -rf "$SCRATCH"' EXIT
 osmium tags-filter "$PLANET" \
   --expressions="$REPO_ROOT/Scripts/lib/vector-extras.filter" \
   --output="$SCRATCH/points.osm.pbf" --overwrite
-# The named areas: every area of the kinds whose names the extras keep, then
-# the named ones among them, which osmium cannot ask for in one pass.
+# The named areas and buildings: every area of the kinds whose names the
+# extras keep and every building, then the named ones among them, which
+# osmium cannot ask for in one pass.
 osmium tags-filter "$PLANET" \
   --expressions="$REPO_ROOT/Scripts/lib/vector-extras-areas.filter" \
   --output="$SCRATCH/areas.osm.pbf" --overwrite

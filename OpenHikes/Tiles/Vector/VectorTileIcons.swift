@@ -10,6 +10,12 @@
 //  `marker-fill`, every part of it in the one color, unless the point keeps
 //  the icon's own colors.
 //
+//  The pictures Carto fills an area with (``VectorTilePatterns``) are in the
+//  same catalog, and are made the same way, each at its own size. One is a
+//  megabyte or four where an icon is a kilobyte, so they are kept apart, in
+//  a cache that lets go of the ones not drawn lately once it holds more than
+//  a couple of dozen megabytes, or when memory runs short.
+//
 
 import CoreGraphics
 import Foundation
@@ -23,6 +29,11 @@ nonisolated protocol VectorTileIconDrawing: Sendable {
     /// The icon `asset`, `size` pixels, in `fill` or, where that is `nil`, in
     /// its own colors; `nil` where there is no such icon.
     func image(asset: String, fill: CGColor?, size: CGSize) -> CGImage?
+
+    /// The pattern `asset` in its own colors, `unit` pixels for each of the
+    /// 256-pixel tile's it is drawn for; `nil` where there is no such
+    /// pattern.
+    func pattern(asset: String, unit: CGFloat) -> CGImage?
 }
 
 /// The icons the app ships, from its asset catalog.
@@ -32,8 +43,20 @@ nonisolated final class CatalogIcons: VectorTileIconDrawing, @unchecked Sendable
     /// Draws an icon that is not kept yet: the catalog's, or a suite's stand-in.
     private let render: @Sendable (_ asset: String, _ fill: CGColor?, _ size: CGSize) -> CGImage?
     private let made = Mutex<[Key: CGImage]>([:])
-    /// Held while an icon is drawn, so one tile at a time reads the asset
-    /// catalog off the main thread.
+    // swiftlint:disable:next legacy_objc_type
+    private let patterns: NSCache<NSString, CGImage> = {
+        // swiftlint:disable:next legacy_objc_type
+        let cache = NSCache<NSString, CGImage>()
+        cache.totalCostLimit = patternByteLimit
+        return cache
+    }()
+
+    /// The most the patterns kept may take, in bytes: half a dozen of the
+    /// largest, or every one a mountain tile draws.
+    static let patternByteLimit = 24 * 1024 * 1024
+
+    /// Held while an icon or a pattern is drawn, so one tile at a time reads
+    /// the asset catalog off the main thread.
     ///
     /// CoreUI, which keeps the catalog's SVG renditions, is not safe to read
     /// from two threads at once: tiles drawn side by side released one of its
@@ -73,6 +96,27 @@ nonisolated final class CatalogIcons: VectorTileIconDrawing, @unchecked Sendable
             made.withLock { $0[key] = image }
             return image
         }
+    }
+
+    func pattern(asset: String, unit: CGFloat) -> CGImage? {
+        #if canImport(UIKit)
+        // swiftlint:disable:next legacy_objc_type
+        let key = "\(asset)@\(unit)" as NSString
+        if let kept = patterns.object(forKey: key) { return kept }
+        // Under the icons' lock: a pattern is read out of the same catalog.
+        return drawing.withLock { _ in
+            if let kept = patterns.object(forKey: key) { return kept }
+            let pattern = autoreleasepool { () -> CGImage? in
+                guard let size = UIImage(named: asset, in: .main, with: nil)?.size else { return nil }
+                return render(asset, nil, CGSize(width: size.width * unit, height: size.height * unit))
+            }
+            guard let pattern else { return nil }
+            patterns.setObject(pattern, forKey: key, cost: pattern.bytesPerRow * pattern.height)
+            return pattern
+        }
+        #else
+        return nil
+        #endif
     }
 
     /// Draws through UIKit into a context of its own, rather than through
