@@ -164,4 +164,60 @@ struct OfflineCountryManifestTests {
         #expect(country.byteCount(withDetail: true) == 460_284_649)
         #expect(country.files.first?.fileName == "SI-20261117.pmtiles")
     }
+
+    /// One area as the server lists it, with `fields` after its build and
+    /// `files` after its basemap.
+    private static func listing(fields: String = "", files: String = "") -> Data {
+        Data(
+            """
+            {"version": 1, "countries": [{"id": "SI", "names": {}, "build": "20261117", "schema": 4, \(fields)
+            "bounds": {"west": 13.3, "south": 45.4, "east": 16.6, "north": 46.9},
+            "outline": [[[13.3, 45.4], [16.6, 45.4], [16.6, 46.9], [13.3, 45.4]]],
+            "files": [{"role": "basemap", "path": "countries/SI-20261117.pmtiles", "bytes": 10,
+            "sha256": "57253cc4", "minimumZoom": 0, "maximumZoom": 14}\(files)]}]}
+            """.utf8
+        )
+    }
+
+    /// A later server may list a file this build has no use for, an area's
+    /// hiking routes, say. Read strictly, that one file would cost every
+    /// installed copy of this build its whole list.
+    @Test("a file of a role this build does not know is left out, and its area is still offered")
+    func unknownRole() throws {
+        let json = Self.listing(
+            files: """
+            , {"role": "routes", "path": "countries/SI-routes-20261117.pmtiles", "bytes": 5,
+            "sha256": "9f86d081", "minimumZoom": 0, "maximumZoom": 14}
+            """
+        )
+        let manifest = try JSONDecoder().decode(OfflineCountryManifest.self, from: json)
+        #expect(manifest.readableCountries.first?.files.map(\.role) == [.basemap])
+    }
+
+    /// The extras' layers change by generation, as the tile server's own
+    /// manifest counts them, and a build draws a later one wrong.
+    @Test("an area cut from extras of a later generation is left off")
+    func laterExtras() throws {
+        let later = OfflineCountryManifest.readableExtrasGeneration + 1
+        let json = Self.listing(fields: "\"extrasGeneration\": \(later),")
+        #expect(try JSONDecoder().decode(OfflineCountryManifest.self, from: json).readableCountries.isEmpty)
+
+        let known = Self.listing(fields: "\"extrasGeneration\": \(OfflineCountryManifest.readableExtrasGeneration),")
+        #expect(try JSONDecoder().decode(OfflineCountryManifest.self, from: known).readableCountries.count == 1)
+    }
+
+    /// What lets the server keep an area's last build for the apps that
+    /// read only that, beside the one cut from newer extras.
+    @Test("of several builds of an area, the newest this build draws is the one offered")
+    func newestBuildItDraws() {
+        let first = OfflineCountryFixture.country(bytes: Data("SI".utf8), build: "20261117")
+        let second = OfflineCountryFixture.country(bytes: Data("SI".utf8), build: "20261201")
+        var later = OfflineCountryFixture.country(bytes: Data("SI".utf8), build: "20270115")
+        later.extrasGeneration = OfflineCountryManifest.readableExtrasGeneration + 1
+        let austria = OfflineCountryFixture.country(bytes: Data("AT".utf8), id: "AT")
+
+        let manifest = OfflineCountryFixture.manifest([later, first, austria, second])
+
+        #expect(manifest.readableCountries == [second, austria])
+    }
 }

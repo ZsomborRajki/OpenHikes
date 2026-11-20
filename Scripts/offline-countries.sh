@@ -139,6 +139,17 @@ archive_name() {
     printf '%s\n' "$name"
 }
 
+# The generation of the first extras the app's manifest names, which an area
+# cut from them carries, so that a build which draws only earlier ones leaves
+# it off its list.
+extras_generation() {
+    local manifest="$repository_root/OpenHikes/Tiles/Vector/VectorTileArchiveManifest.json" generation
+    generation="$(plutil -extract "extras.0.generation" raw -o - "$manifest" 2>/dev/null)" \
+        || die "could not read the first extras' generation out of $manifest"
+    [[ "$generation" =~ ^[1-9][0-9]*$ ]] || die "the first extras' generation in $manifest is '$generation'"
+    printf '%s\n' "$generation"
+}
+
 # The archive to cut from: a local copy where there is a whole one, as large
 # as the bucket's, and the bucket's where there is none. A copy of another
 # size is a download or a build cut short, which nothing should be cut from.
@@ -202,7 +213,13 @@ build() {
     region_file="$(natural_earth_file "$regions_url" "$regions_sha256")"
     r2_load_keys
     [[ -n "$planet_file" ]] || planet_file="$(archive_source "$basemap")"
-    [[ -n "$extras" ]] || extras="$(archive_source "$extras_name")"
+    # Extras named by hand are of no generation this knows; the manifest's
+    # own are of the one it gives them.
+    local generation=""
+    if [[ -z "$extras" ]]; then
+        extras="$(archive_source "$extras_name")"
+        generation="$(extras_generation)"
+    fi
     echo "offline-countries: cutting build $build from $planet_file and $extras"
     prepare_tool
     local arguments=(build --planet "$planet_file" --extras "$extras" --build "$build"
@@ -211,6 +228,7 @@ build() {
         --out "$out" --margin-km "$margin"
         --server "https://tiles.openhikes.app/$basemap")
     [[ -z "$only" ]] || arguments+=(--only "$only")
+    [[ -z "$generation" ]] || arguments+=(--extras-generation "$generation")
     "$tool" "${arguments[@]}"
     echo "offline-countries: built into $out"
 }

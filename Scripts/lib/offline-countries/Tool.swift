@@ -110,6 +110,14 @@ extension Tool {
         let output = URL(fileURLWithPath: options.required("out"), isDirectory: true)
         let margin = Double(options.optional("margin-km") ?? "3") ?? 3
         let server = options.optional("server").flatMap(URL.init(string:))
+        // Which builds of the app draw the extras, where the caller knows:
+        // an area says so, and a build that does not leaves it off its list.
+        let extrasGeneration = options.optional("extras-generation").map { text -> Int in
+            guard let generation = Int(text), generation >= 1 else {
+                fail("--extras-generation is \(text), not a generation")
+            }
+            return generation
+        }
         let plan = try JSONDecoder().decode(
             AreaPlan.self,
             from: Data(contentsOf: URL(fileURLWithPath: options.required("countries")))
@@ -137,7 +145,8 @@ extension Tool {
                 choice,
                 Cut(
                     planet: planet, extras: extras, build: build, output: output,
-                    margin: margin, server: server, metadata: metadata, extrasMetadata: extrasMetadata
+                    margin: margin, server: server, metadata: metadata, extrasMetadata: extrasMetadata,
+                    extrasGeneration: extrasGeneration
                 )
             )
             manifest.countries.removeAll { $0.id == country.id && $0.build == country.build }
@@ -156,6 +165,7 @@ extension Tool {
         let server: URL?
         let metadata: [UInt8]
         let extrasMetadata: [UInt8]
+        let extrasGeneration: Int?
     }
 
     /// The four files of an area: which archive each is cut from, between
@@ -217,6 +227,7 @@ extension Tool {
             names: choice.names,
             build: cut.build,
             schema: OfflineCountryManifest.readableSchema,
+            extrasGeneration: cut.extrasGeneration,
             bounds: OfflineCountryManifest.Bounds(
                 west: bounds.west, south: bounds.south, east: bounds.east, north: bounds.north
             ),
