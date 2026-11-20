@@ -60,9 +60,8 @@ extension ScreenshotUITests {
         chooseWalking(in: app)
 
         for (index, stop) in Self.searchedStops.enumerated() {
-            // Scrolled to rather than tapped where it stands: on the closed
-            // iPhone Duo, two stops push *Add Stop* below the middle detent.
-            expandCompactMakerForSearch(in: app)
+            // Scrolled to rather than tapped where it stands: two stops can
+            // push *Add Stop* out of the part of the sheet that shows.
             scrollToTap(element(stop.row, in: app), in: app)
             pickSearchResult(stop, in: app)
             XCTAssertTrue(
@@ -72,7 +71,6 @@ extension ScreenshotUITests {
             )
         }
         waitForTheWalkedRoute(in: app)
-        restoreCompactMakerDetent(in: app)
         capture(as: .trailMaker, of: app)
     }
 

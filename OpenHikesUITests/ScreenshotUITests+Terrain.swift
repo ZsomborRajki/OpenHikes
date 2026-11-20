@@ -32,8 +32,8 @@ extension ScreenshotUITests {
     /// map.
     private static let tiltReach: CGFloat = 0.6
     private static let tiltMargin: CGFloat = 0.2
-    /// How many drags a tilt gets. A display as short as the iPhone Duo's
-    /// cover needs more than one to reach the pitch.
+    /// How many drags a tilt gets. A short display needs more than one to
+    /// reach the pitch.
     private static let tiltPasses = 3
     /// The shortest drag worth making, in points. MapKit does not read a
     /// short one as a tilt: 28 points up from 25° laid the open iPhone Duo's

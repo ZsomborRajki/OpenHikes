@@ -268,8 +268,8 @@ either: the second run waits silently on the first run's build lock.
   `app.windows.firstMatch.frame` turns. There `isHittable` also answers no for
   everything in the side panel, so the shared helpers measure the window and
   skip it (`OpenHikesUITests/WindowSupport.swift`).
-- The screenshot set shoots on it with `--device-type "iPhone Duo"` and
-  `--pose`, closed or open on its side; see `Screenshots/README.md`.
+- The screenshot set shoots on it open, on its side, with `--device-type
+  "iPhone Duo"`; see `Screenshots/README.md`.
 
 ### The iPad
 

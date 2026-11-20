@@ -33,9 +33,7 @@
 #
 # **There is no light appearance to capture.** `simctl ui <udid> appearance`
 # answers "Runtime does not support userInterfaceStyle", because watchOS has no
-# light mode to switch to — the system draws dark and an app draws on it. So
-# there is no `--appearance` here and no `-dark` suffix on anything; the set is
-# the set.
+# light mode to switch to — the system draws dark and an app draws on it.
 #
 # **Location is granted, not answered.** A watchOS permission alert cannot be
 # dismissed by anything in `simctl`, and once one is up the only way out is an
@@ -202,8 +200,7 @@ if [[ ! "$map_settle_seconds" =~ ^[0-9]+$ || ! "$settle_seconds" =~ ^[0-9]+$ ]];
     exit 2
 fi
 
-output_dir="$(screenshot_output_directory "$output_root" "$device_type" "$locale_id" \
-    '' '')" || exit $?
+output_dir="$(screenshot_output_directory "$output_root" "$device_type" "$locale_id")" || exit $?
 
 # The frames, in upload order: "<name>|<settle seconds or map>|<launch arguments>".
 #

@@ -23,7 +23,7 @@ extension ScreenshotUITests {
     private static let placeholderTolerance = 2
     // Stadia Outdoors has pale terrain near the loading-grid color. The
     // nearby frame's OSM/Apple palette does not, so it can reject the 2%
-    // missing corner tile that passed the general 4% limit on the Duo cover.
+    // missing corner tile that passes the general 4% limit.
     private static let maximumPlaceholderFraction = 0.04
     private static let maximumSmallPatchFraction = 0.01
     private static let mapSampleInset: CGFloat = 12

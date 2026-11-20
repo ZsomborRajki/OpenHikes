@@ -17,10 +17,9 @@
 //  **This class is deliberately absent from `suites` in
 //  `Scripts/run-ui-tests.sh`,** for the reason `measurement_tests` is excluded
 //  from `--all`: it asserts almost nothing and exists to produce files.
-//  `Scripts/screenshots-light.sh` and `Scripts/screenshots-dark.sh` name it
-//  explicitly, and they are the only things that should run it — they set the
-//  status bar, the device, the photo library and the location grant the
-//  frames below assume.
+//  `Scripts/screenshots.sh` names it explicitly, and is the only thing that
+//  should run it — it sets the status bar, the device, its dark appearance,
+//  the photo library and the location grant the frames below assume.
 //
 //  ## Why the assertions are thin but not absent
 //
@@ -436,10 +435,9 @@ extension ScreenshotUITests {
     ///
     /// Ground rather than a count of steps, because the map opens on the
     /// same ground whatever it is drawn on, and a display with more points
-    /// draws it closer. Measured: one step takes the 6.9" phone to 33 km²,
-    /// the closed iPhone Duo to 25 and an iPad held upright to 40. One step
-    /// further on the phone put the whole valley on screen and the lines
-    /// went thin.
+    /// draws it closer. Measured: one step takes the 6.9" phone to 33 km²
+    /// and an iPad held upright to 40. One step further on the phone put the
+    /// whole valley on screen and the lines went thin.
     static let nearbyGround = 15.0
     /// The most steps out it takes to get there, on any display.
     static let nearbyZoomOutLimit = 3

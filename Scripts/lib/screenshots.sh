@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 #
-# The App Store screenshot capture, sourced by Scripts/screenshots-light.sh and
-# Scripts/screenshots-dark.sh. Not executable on its own: each of those sets
-# `screenshot_appearance` and calls `screenshots_main "$@"`.
+# The App Store screenshot capture, sourced by Scripts/screenshots.sh, which
+# calls `screenshots_main "$@"`. Not executable on its own.
 #
 # App Store Connect wants one iPhone set at 6.9" — it scales every smaller
 # iPhone size from it — so this pins itself to an iPhone 18 Pro Max,
@@ -12,16 +11,16 @@
 #
 # ## The iPhone Duo
 #
-# The Duo has a slot of its own, and takes a frame of either display:
-# 1398 × 2034 from the cover, 2007 × 2853 from the inner one, either way up.
-# `--device-type "iPhone Duo"` shoots the set on one, and `--pose open` opens
-# it first, through Scripts/duo-pose.sh — a simulator boots closed, and only
-# Device Hub can open it by hand. Opening needs hinge, an optional tool
-# (Scripts/lib/hinge.sh): on a machine without it an open set is skipped, and
-# said to be, before a device is touched. The open Duo is shot the way it
-# opens, on its side, which is where the map screen puts its panel beside the
-# map; its inner display upright is not shot, for the reason the iPad's other
-# way up is not (below). XCTest captures the inner display a
+# The Duo has a slot of its own, and takes a frame of either display. The set
+# is shot on the inner one, 2853 × 2007: `--device-type "iPhone Duo"` opens the
+# device first, through Scripts/duo-pose.sh — a simulator boots closed, and
+# only Device Hub can open it by hand. Opening needs hinge, an optional tool
+# (Scripts/lib/hinge.sh): on a machine without it the set is skipped, and said
+# to be, before a device is touched. The open Duo is shot the way it opens, on
+# its side, which is where the map screen puts its panel beside the map. Its
+# inner display upright is not shot, for the reason the iPad's other way up is
+# not (below), and neither is its cover: the slot is one gallery, and the
+# cover's frames were a second one for it. XCTest captures the inner display a
 # pixel short each way, and a landscape frame stored on its side, so every
 # exported frame goes through Scripts/lib/fit-screenshot.swift. That turns a
 # frame upright in its pixels and puts the pixel back on one that is that
@@ -37,24 +36,20 @@
 # ones looked wrong in it. The map screen draws its side panel on an iPad
 # upright too.
 #
-# ## One appearance per script, and one device per appearance
+# ## Dark appearance, and only that
 #
-# The light and dark passes used to be one script run twice over one device.
-# A dark pass that hung then did so after twenty minutes of light frames, on a
-# simulator the light pass had just worked, with the two passes' output
-# interleaved in one log — so "which pass, which frame, and in what state did
-# the light pass leave the device" was the first thing every investigation had
-# to reconstruct. Each appearance now has its own entry point, its own
-# simulator, its own derived data and its own logs, which also means the two
-# can run side by side.
+# The set is shot in dark appearance: `simctl ui … appearance dark` on the
+# clean device, before the first launch. A light set used to be shot beside
+# it, on a simulator of its own, which doubled every run and every frame to
+# look over, for a slot that shows one gallery.
 #
 # ## Why a device of its own
 #
 # A simulator that has been used is a simulator with history: a tile cache from
 # an earlier browse, a photo library somebody dragged something into, a
 # location left over from `simulate-hike.sh`. All three show up in a
-# screenshot, and none of them is reproducible. So each appearance creates its
-# own device, named below, and starts it clean before every run — as a fresh
+# screenshot, and none of them is reproducible. So the capture creates its own
+# device, named below, and starts it clean before every run — as a fresh
 # clone of a settled template rather than an erase, which costs 1.4 GB of
 # downloads on the next boot (see Scripts/lib/simulator-templates.sh). Only a
 # device passed by UDID is erased in place instead: that one was named as
@@ -107,10 +102,20 @@ readonly screenshot_scheme="OpenHikesUI"
 readonly screenshot_suite="OpenHikesUITests/ScreenshotUITests"
 readonly screenshot_bundle_id="tappium.com.OpenHikes"
 
-# Set by the entry script before `screenshots_main`:
-#   screenshot_appearance      light | dark — `simctl ui … appearance`
-#   screenshot_suffix          appended to every frame's file name
-#   screenshot_default_device  the simulator this appearance claims
+# The device types a set is shot on beside the 6.9" iPhone, one for each slot.
+readonly screenshot_duo_type='iPhone Duo'
+readonly screenshot_tablet_type='iPad Pro 13-inch (M5)'
+
+# The simulator a set claims, unless --device names another: one for each
+# device type, so shooting one type's set never replaces the device another
+# type's is being shot on.
+screenshot_default_device() {
+    case "$1" in
+        "$screenshot_duo_type") echo "OpenHikes Screenshots Duo" ;;
+        "$screenshot_tablet_type") echo "OpenHikes Screenshots iPad" ;;
+        *) echo "OpenHikes Screenshots" ;;
+    esac
+}
 
 # Frame number to the test that shoots it. The number is the file name's
 # prefix and the listing's order; `--frame 03` is how one frame is re-shot on
@@ -153,18 +158,14 @@ readonly screenshot_library_frames=" 01 02 06 10 "
 readonly addmedia_timeout_seconds=180
 
 # The sizes App Store Connect takes for a frame, each way up: the 6.9" iPhone
-# slot, the iPhone Duo's cover and inner displays, then the 13-inch iPad slot.
+# slot, the iPhone Duo's inner display, then the 13-inch iPad slot.
 # Handed to Scripts/lib/fit-screenshot.swift, which only ever adds the pixel a
 # capture came out short of one of them.
 readonly screenshot_store_sizes=(
     1320x2868 2868x1320
-    1398x2034 2034x1398
     2007x2853 2853x2007
     2064x2752 2752x2064
 )
-
-# The device types a set is shot on, one for each slot above.
-readonly screenshot_tablet_type='iPad Pro 13-inch (M5)'
 
 # How long one frame may run before XCTest kills it and moves on. The slowest,
 # the routed walk, waits on Apple and Stadia and takes under a minute; a frame
@@ -177,33 +178,32 @@ screenshots_usage() {
     cat <<EOF
 Usage: $(basename "$0") [options]
 
-Captures the App Store screenshot set in $screenshot_appearance appearance on a
-dedicated simulator: the 6.9" iPhone unless --device-type names another.
+Captures the App Store screenshot set, in dark appearance, on a dedicated
+simulator: the 6.9" iPhone unless --device-type names another.
 
 Options:
   --frame <nn>       Shoot only this frame (01-10); repeat for more.
   --output <dir>     Output root (default: Screenshots/Output). Raw PNGs
-                     go in device/layout/locale/date and appearance folders.
+                     go in a folder named for the device, locale and date.
   --clean            Remove previously marked capture sets after installation.
   --append           Keep other capture sets (the default; cancels --clean).
   --photos <dir>     JPEGs to put in the simulator's photo library first
                      (default: Screenshots/Stamped; skipped when empty).
                      Stamp them with Scripts/stamp-hike-photos.swift so the
                      app's matcher can place them on the trail.
-  --device <name>    Simulator name to create and reuse
-                     (default: "$screenshot_default_device")
+  --device <name>    Simulator name to create and reuse (default:
+                     "$(screenshot_default_device '')", with Duo or iPad
+                     after it for those device types)
   --prepared-device <udid>
                     Use a freshly acquired pool device without erasing it.
                     The caller owns its pool claim and releases it afterwards.
   --pool-owner <id>  Owner passed to sim-pool acquire (default: session/checkout)
-  --device-type <t>  iPhone 18 Pro Max (default), iPhone Duo or
-                     $screenshot_tablet_type
-  --pose <p>         For an iPhone Duo: closed (its inner display folded away,
-                     as it boots, 1398 x 2034) or open (unfolded, the inner
-                     display on its side the way it opens, 2853 x 2007). See
-                     Scripts/duo-pose.sh. open needs hinge, and is skipped on
-                     a machine without it.
-  --derived-data <p> Build directory (default: DerivedData/Screenshots-$screenshot_appearance)
+  --device-type <t>  iPhone 18 Pro Max (default), $screenshot_tablet_type
+                     or $screenshot_duo_type. A Duo is opened first and shot on its
+                     inner display, on its side the way it opens, 2853 x 2007
+                     (Scripts/duo-pose.sh). That needs hinge, and the set is
+                     skipped on a machine without it.
+  --derived-data <p> Build directory (default: DerivedData/Screenshots)
   --locale <id>      Locale to pin the simulator to (default: en_IE). This is
                      what decides "2.4 km" against "2,4 km" and "6.6 mi", so
                      it is a property of the listing rather than of the Mac.
@@ -304,14 +304,14 @@ prepare_screenshot_device() {
         -array "${locale_id//_/-}"
     export TEST_RUNNER_OPENHIKES_SCREENSHOT_LOCALE="$locale_id"
 
-    xcrun simctl ui "$udid" appearance "$screenshot_appearance"
+    xcrun simctl ui "$udid" appearance dark
 
-    # Whether the three frames that drive the real photo library have
-    # anything to drive it with. Handed to the tests rather than guessed at by
-    # them: they skip on 0 and assert on 1, so this script is the only thing
-    # that can make them run — and a machine without `Screenshots/Stamped`,
-    # which the repository does not carry, skips those three instead of
-    # failing them. `TEST_RUNNER_` is xcodebuild's own prefix for passing a
+    # Whether the frames that drive the real photo library
+    # (`screenshot_library_frames`) have anything to drive it with. Handed to
+    # the tests rather than guessed at by them: they skip on 0 and assert on
+    # 1, so this script is the only thing that can make them run — and a
+    # machine without `Screenshots/Stamped`, which the repository does not
+    # carry, skips those frames instead of failing them. `TEST_RUNNER_` is xcodebuild's own prefix for passing a
     # variable through to the test runner.
     export TEST_RUNNER_OPENHIKES_STAMPED_LIBRARY=0
     [[ "$skip_photos" == false && -d "$photo_dir" ]] || return 0
@@ -336,7 +336,7 @@ prepare_screenshot_device() {
 # Builds the app and its UI tests once, for every attempt that follows.
 build_screenshot_tests() {
     local raw_log="$screenshot_log_dir/build.log"
-    echo "[$screenshot_appearance] building…" >&2
+    echo "[screenshots] building…" >&2
     set +e
     xcodebuild build-for-testing \
         -project "$screenshot_project" \
@@ -348,7 +348,7 @@ build_screenshot_tests() {
     local statuses=("${PIPESTATUS[@]}")
     set -e
     if [[ ${statuses[0]} -ne 0 || ${statuses[1]} -ne 0 ]]; then
-        echo "[$screenshot_appearance] the build failed — see $raw_log" >&2
+        echo "[screenshots] the build failed — see $raw_log" >&2
         exit 1
     fi
 }
@@ -441,7 +441,7 @@ export_screenshot_frames() {
             frame="${readable%%_*}"
             if [[ -f "$staging/$exported" && "$frame" =~ ^[0-9][0-9]- ]]; then
                 if fit_screenshot_frame "$staging/$exported"; then
-                    mv -f "$staging/$exported" "$output_dir/$frame$screenshot_suffix.png"
+                    mv -f "$staging/$exported" "$output_dir/$frame.png"
                     printf '%s\n' "${frame%%-*}"
                 fi
             fi
@@ -485,7 +485,7 @@ run_screenshot_group() {
     local raw_log="$screenshot_log_dir/$attempt.log"
     rm -rf "$result_bundle"
 
-    echo "[$screenshot_appearance] $attempt: frames ${frames[*]}" >&2
+    echo "[screenshots] $attempt: frames ${frames[*]}" >&2
     # No diagnostics, as Scripts/run-ui-tests.sh collects none: a group with a
     # failed frame otherwise ends in Xcode 27's `simctl diagnose`, which held
     # the result bundle — the frames that did come out with it — for ten
@@ -509,7 +509,7 @@ run_screenshot_group() {
     set -e
 
     if [[ ${statuses[0]} -ne 0 || ${statuses[1]} -ne 0 ]]; then
-        echo "[$screenshot_appearance] $attempt failed (xcodebuild ${statuses[0]}, log ${statuses[1]}) — see $raw_log" >&2
+        echo "[screenshots] $attempt failed (xcodebuild ${statuses[0]}, log ${statuses[1]}) — see $raw_log" >&2
         # Exit 65 includes ordinary test failures. Export only frames whose
         # own tests passed, never one attached by a failed or crashed test.
         if [[ ${statuses[0]} -ne 65 || ${statuses[1]} -ne 0 ]]; then return 0; fi
@@ -555,14 +555,14 @@ run_screenshot_attempt() {
 }
 
 screenshots_main() {
-    device_name="${OPENHIKES_SCREENSHOT_DEVICE:-$screenshot_default_device}"
+    device_name="${OPENHIKES_SCREENSHOT_DEVICE:-}"
     screenshot_run_id="$(date -u +%Y%m%dT%H%M%SZ)-$$"
     device_type="${OPENHIKES_SCREENSHOT_DEVICE_TYPE:-iPhone 18 Pro Max}"
     output_root="$repository_root/Screenshots/Output"
     clean_output=false
     export OPENHIKES_SCREENSHOT_DATE="${OPENHIKES_SCREENSHOT_DATE:-$(date -u +%F)}"
     photo_dir="$repository_root/Screenshots/Stamped"
-    derived_data="$repository_root/DerivedData/Screenshots-$screenshot_appearance"
+    derived_data="$repository_root/DerivedData/Screenshots"
     keep_device=false
     prepared_device=false
     pool_owner=""
@@ -577,8 +577,6 @@ screenshots_main() {
     # is the point: one listing, one set of conventions. `--locale en_US` is
     # the right call for a US listing and will print miles.
     locale_id="${OPENHIKES_SCREENSHOT_LOCALE:-en_IE}"
-    pose=""
-    orientation=""
     local requested=()
 
     while [[ $# -gt 0 ]]; do
@@ -600,14 +598,6 @@ screenshots_main() {
                 ;;
             --device-type) device_type="${2:?--device-type needs a type}"; shift 2 ;;
             --pool-owner) pool_owner="${2:?--pool-owner needs an owner}"; shift 2 ;;
-            --pose)
-                pose="${2:?--pose needs open or closed}"
-                if [[ "$pose" != open && "$pose" != closed ]]; then
-                    echo "Unknown pose: $pose (open or closed)" >&2
-                    exit 2
-                fi
-                shift 2
-                ;;
             --derived-data) derived_data="${2:?--derived-data needs a path}"; shift 2 ;;
             --locale) locale_id="${2:?--locale needs an identifier}"; shift 2 ;;
             --no-photos) skip_photos=true; shift ;;
@@ -619,21 +609,21 @@ screenshots_main() {
     done
 
     case "$device_type" in
-        'iPhone 18 Pro Max'|'iPhone Duo'|"$screenshot_tablet_type") ;;
+        'iPhone 18 Pro Max'|"$screenshot_duo_type"|"$screenshot_tablet_type") ;;
         *)
             echo "Unsupported screenshot device type: $device_type" \
-                "(iPhone 18 Pro Max, iPhone Duo or $screenshot_tablet_type)." >&2
+                "(iPhone 18 Pro Max, $screenshot_duo_type or $screenshot_tablet_type)." >&2
             exit 2
             ;;
     esac
-    # Every set is upright but the open Duo's: see *The iPad* and *The iPhone
-    # Duo* at the top of this file.
-    if [[ "$pose" == open ]]; then orientation=landscape; fi
-    # Before any device is touched: an open Duo needs hinge, and a machine
-    # without it skips the set rather than failing the run or shooting it closed.
+    device_name="${device_name:-$(screenshot_default_device "$device_type")}"
+    # A Duo's set is shot open and on its side, and every other set upright:
+    # see *The iPhone Duo* and *The iPad* at the top of this file. Before any
+    # device is touched: opening one needs hinge, and a machine without it
+    # skips the set rather than failing the run or shooting it closed.
     local without_hinge
-    if [[ "$pose" == open ]] && ! without_hinge="$(hinge_command)"; then
-        echo "[$screenshot_appearance] skipped, the open iPhone Duo needs hinge: $without_hinge"
+    if [[ "$device_type" == "$screenshot_duo_type" ]] && ! without_hinge="$(hinge_command)"; then
+        echo "[screenshots] skipped, the open iPhone Duo needs hinge: $without_hinge"
         return 0
     fi
 
@@ -661,10 +651,7 @@ screenshots_main() {
         OPENHIKES_SIM_POOL_DEVICE_TYPE="$device_type" "$repository_root/Scripts/sim-pool.sh" \
             validate "$udid" ${pool_owner:+--owner "$pool_owner"} || exit 2
     fi
-    local layout="${pose:+$pose${orientation:+_$orientation}}"
-    if [[ "$device_type" == 'iPhone Duo' && -z "$pose" ]]; then layout="closed"; fi
-    output_dir="$(screenshot_output_directory "$output_root" "$device_type" "$locale_id" \
-        "$layout" "$screenshot_appearance")" || exit $?
+    output_dir="$(screenshot_output_directory "$output_root" "$device_type" "$locale_id")" || exit $?
     device_pinned=false
     if [[ "$device_name" =~ ^[0-9A-Fa-f]{8}(-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$ ]]; then
         device_pinned=true
@@ -682,15 +669,14 @@ screenshots_main() {
     # opened once, from cold, which is the fold Scripts/duo-pose.sh can be
     # relied on for — and a pose that did not happen stops the run rather
     # than shooting a set on the wrong display.
-    if [[ -n "$pose" ]]; then
-        "$repository_root/Scripts/duo-pose.sh" "$pose" --device "$udid" \
-            ${orientation:+--orientation "$orientation"}
+    if [[ "$device_type" == "$screenshot_duo_type" ]]; then
+        "$repository_root/Scripts/duo-pose.sh" open --device "$udid" --orientation landscape
     fi
     # After the device is clean, since a clean device is a new UDID.
-    echo "Simulator: $device_name ($udid), $screenshot_appearance${pose:+, $pose}${orientation:+, $orientation}"
+    echo "Simulator: $device_name ($udid)"
 
-    # Without the stamped library the three frames that import it would only
-    # skip, so they are not run — nor retried as though they had failed.
+    # Without the stamped library the frames that import it would only skip,
+    # so they are not run — nor retried as though they had failed.
     local skipped=()
     if [[ "$TEST_RUNNER_OPENHIKES_STAMPED_LIBRARY" == 0 ]]; then
         local kept=()
@@ -704,7 +690,7 @@ screenshots_main() {
         frames=(${kept[@]+"${kept[@]}"})
     fi
     if [[ ${#frames[@]} -eq 0 ]]; then
-        echo "[$screenshot_appearance] skipped, no stamped library: ${skipped[*]} — nothing left to shoot."
+        echo "[screenshots] skipped, no stamped library: ${skipped[*]} — nothing left to shoot."
         return 0
     fi
     if [[ ${#skipped[@]} -gt 0 && "$clean_output" == true ]]; then
@@ -713,7 +699,7 @@ screenshots_main() {
     fi
 
     mkdir -p "$derived_data"
-    screenshot_runs_dir="$derived_data/ScreenshotRuns-$screenshot_appearance"
+    screenshot_runs_dir="$derived_data/ScreenshotRuns"
     screenshot_log_dir="$screenshot_runs_dir/$screenshot_run_id"
     mkdir -p "$screenshot_log_dir"
     trap finish_screenshot_run EXIT
@@ -736,15 +722,14 @@ screenshots_main() {
         if [[ ${#missing[@]} -eq 0 || "$retry" == false || $attempt -eq 2 ]]; then
             break
         fi
-        echo "[$screenshot_appearance] not shot: ${missing[*]} — retrying those once." >&2
+        echo "[screenshots] not shot: ${missing[*]} — retrying those once." >&2
     done
 
     echo
-    echo "[$screenshot_appearance] $output_dir"
+    echo "[screenshots] $output_dir"
     for frame in "${frames[@]}"; do
-        for entry in "$output_dir/$frame"-*"$screenshot_suffix".png; do
+        for entry in "$output_dir/$frame"-*.png; do
             [[ -f "$entry" ]] || continue
-            if [[ -z "$screenshot_suffix" && "$entry" == *-dark.png ]]; then continue; fi
             local size
             size="$(/usr/bin/sips -g pixelWidth -g pixelHeight "$entry" 2>/dev/null \
                 | awk '$1 ~ /^pixel(Width|Height):$/ { printf "%s ", $2 }')"
@@ -758,11 +743,11 @@ screenshots_main() {
     fi
 
     if [[ ${#skipped[@]} -gt 0 ]]; then
-        echo "[$screenshot_appearance] skipped, no stamped library: ${skipped[*]}" >&2
+        echo "[screenshots] skipped, no stamped library: ${skipped[*]}" >&2
     fi
     if [[ ${#missing[@]} -gt 0 ]]; then
-        echo "[$screenshot_appearance] FAILED — not shot: ${missing[*]}" >&2
+        echo "[screenshots] FAILED — not shot: ${missing[*]}" >&2
         return 1
     fi
-    echo "[$screenshot_appearance] ${#shot[@]} of ${#frames[@]} frame(s) shot."
+    echo "[screenshots] ${#shot[@]} of ${#frames[@]} frame(s) shot."
 }
