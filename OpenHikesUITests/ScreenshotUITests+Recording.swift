@@ -106,7 +106,7 @@ extension ScreenshotUITests {
     private func frameRecordedLine(in app: XCUIApplication) {
         let window = windowFrame(of: app)
         let original = openMapArea(in: app)
-        let panel = element("map-side-panel", in: app).exists
+        let panel = isPanelBesideTheMap(in: app)
         let margin = min(original.width, original.height) * Self.recordingFrameMargin
         let weather = element("weather-badge", in: app)
         let top = max(original.minY + margin, weather.exists ? weather.frame.maxY + margin : original.minY)

@@ -44,10 +44,6 @@ extension ScreenshotUITests {
     private static let walkFitTolerance: CGFloat = 0.06
     /// Close enough to the band's middle to leave alone, in points.
     private static let walkCenteringTolerance: CGFloat = 8
-    /// The least of the window a band has to be, as a share of its height,
-    /// for the walk to be drawn into it. A *Map Modes* nearly as tall as
-    /// its window leaves none.
-    private static let leastBandShare: CGFloat = 0.2
 
     /// Frames the walk, lowers the map sheet out of the way, and opens *Map
     /// Modes* over the map once its tiles have settled, then waits for the
@@ -99,17 +95,15 @@ extension ScreenshotUITests {
     /// The open map *Map Modes* leaves above itself, down the window: from
     /// under the status bar to above the sheet, with room to spare at both.
     /// `nil` beside the side panel, where *Map Modes* is a card in the
-    /// middle and the walk stands beside it, and where the band is too
-    /// short for a walk to be drawn into it.
+    /// middle and the walk stands beside it.
     @MainActor
     private func openBandAboveMapModes(in app: XCUIApplication) -> (top: CGFloat, bottom: CGFloat)? {
-        guard !element("map-side-panel", in: app).exists else { return nil }
+        guard !isPanelBesideTheMap(in: app) else { return nil }
         let close = element("map-modes-close", in: app)
         guard close.waitForExistence(timeout: UITestTimeout.navigation) else { return nil }
         let window = windowFrame(of: app)
         let top = window.minY + window.height * Self.statusBarShare + Self.walkClearance
         let bottom = close.frame.minY - Self.mapModesEdgeAboveClose - Self.walkClearance
-        guard bottom - top >= window.height * Self.leastBandShare else { return nil }
         return (top: top, bottom: bottom)
     }
 

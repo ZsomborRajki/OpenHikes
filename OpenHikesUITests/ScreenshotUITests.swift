@@ -122,7 +122,7 @@ nonisolated final class ScreenshotUITests: XCTestCase {
         XCTAssertFalse(pins.isEmpty, "the map should be showing photo pins")
         // The topmost callout makes MapKit pan a landscape Duo's route off
         // the bottom. The next photograph has room above it in that layout.
-        let chosen = element("map-side-panel", in: app).exists ? pins.dropFirst().first ?? pins[0] : pins[0]
+        let chosen = isPanelBesideTheMap(in: app) ? pins.dropFirst().first ?? pins[0] : pins[0]
         chosen.tap()
         XCTAssertTrue(
             element("photo-pin-preview", in: app)
@@ -134,13 +134,8 @@ nonisolated final class ScreenshotUITests: XCTestCase {
 
     /// The photographs, pinned where they were taken.
     ///
-    /// Through the real library and the real matcher, not
-    /// `--ui-test-seed-photos`: that fixture draws gradients and scattered
-    /// shapes on purpose — it was built to give a decode something
-    /// incompressible to measure — and a store listing needs photographs of a
-    /// mountain. `Scripts/screenshots.sh` puts stamped JPEGs in the
-    /// simulator's library and grants access to it before this runs, so what
-    /// the sheet offers here is what `LibraryPhotoMatch` made of them.
+    /// Through the real library and the real matcher: see
+    /// ``importDiscoveredPhotos(in:selecting:)``.
     ///
     /// Deliberately no `--ui-test-photo-library`: that argument installs the
     /// stand-in library, which is the right thing for every other suite in
@@ -243,7 +238,7 @@ extension ScreenshotUITests {
     /// the `.xcresult` by name. Numbered because App Store Connect orders
     /// screenshots by upload order, and the first three are the ones that
     /// appear in search results.
-    enum Frame: String, CaseIterable {
+    enum Frame: String {
         case route = "01-trail-and-its-photos"
         case photos = "02-photos-along-the-trail"
         case nearby = "03-nearby-trails"
@@ -291,8 +286,8 @@ extension ScreenshotUITests {
     /// Told rather than discovered, and the telling is the point.
     /// `Screenshots/Stamped` holds the hiker's own photographs and is
     /// deliberately not in the repository — see `.gitignore` and
-    /// `Screenshots/README.md` — so the three frames that drive the real
-    /// library have a fixture that most machines running this bundle do not
+    /// `Screenshots/README.md` — so the frames that drive the real library
+    /// have a fixture that most machines running this bundle do not
     /// have. Without this they failed there: a bare `xcodebuild test`, or
     /// ⌘U in Xcode, went red on a missing photograph rather than on
     /// anything the branch had done.
@@ -554,10 +549,11 @@ extension ScreenshotUITests {
         return CGRect(x: window.minX, y: window.minY, width: window.width, height: sheetTop - window.minY)
     }
 
-    /// Whether the sheet's contents stand beside the map, as a panel at the
-    /// window's full height, rather than over it as a sheet with detents.
+    /// Whether the sheet's contents stand beside the map, as a panel, rather
+    /// than over it as a sheet with detents: on the open iPhone Duo and on an
+    /// iPad.
     @MainActor
-    private func isPanelBesideTheMap(in app: XCUIApplication) -> Bool {
+    func isPanelBesideTheMap(in app: XCUIApplication) -> Bool {
         element("map-side-panel", in: app).exists
     }
 

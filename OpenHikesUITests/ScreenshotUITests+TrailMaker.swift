@@ -8,7 +8,6 @@
 //  one suite name it runs.
 //
 
-import CoreLocation
 import XCTest
 
 extension ScreenshotUITests {
@@ -33,9 +32,10 @@ extension ScreenshotUITests {
     /// from the tap. A name lands on the place.
     ///
     /// The simulator is put where the walk starts, so the search is answered
-    /// near Königssee rather than wherever the simulator thinks it is — and at
-    /// the Schönau stop rather than the fixture's trailhead, 700 m north,
-    /// where the location dot read as a second start.
+    /// near Königssee rather than wherever the simulator thinks it is — and in
+    /// Schönau, where Apple's search puts the first stop, rather than at the
+    /// fixture's trailhead, 700 m north, where the location dot read as a
+    /// second start.
     @MainActor
     func testCapturesDrawingATrail() {
         let app = makeApp(arguments: [
@@ -48,7 +48,7 @@ extension ScreenshotUITests {
         // run, so no prompt lands on this frame's first gesture. The monitor
         // stays for a run started some other way.
         addLocationPermissionMonitor()
-        setSimulatedLocation(Self.walkStart)
+        setSimulatedLocation(Self.schoenau)
         defer { XCUIDevice.shared.location = nil }
 
         launch(app)
@@ -60,8 +60,8 @@ extension ScreenshotUITests {
         chooseWalking(in: app)
 
         for (index, stop) in Self.searchedStops.enumerated() {
-            // Scrolled to rather than tapped where it stands: two stops can
-            // push *Add Stop* out of the part of the sheet that shows.
+            // Scrolled to rather than tapped where it stands, so *Add Stop*
+            // is reached where two stops have pushed it out of sight.
             scrollToTap(element(stop.row, in: app), in: app)
             pickSearchResult(stop, in: app)
             XCTAssertTrue(
@@ -108,15 +108,6 @@ extension ScreenshotUITests {
         SearchedStop(row: "trail-draft-open-destination", query: "Kuhroint", title: "Kühroint"),
         SearchedStop(row: "trail-draft-add-stop", query: "St Bartholoma", title: "St. Bartholomä"),
     ]
-
-    /// Where Apple's search puts *Schönau am Königssee*: the village by the
-    /// boat landing, where the first stop goes down.
-    private static let walkStartLatitude = 47.592975
-    private static let walkStartLongitude = 12.987199
-    private static let walkStart = CLLocationCoordinate2D(
-        latitude: walkStartLatitude,
-        longitude: walkStartLongitude
-    )
 
     /// How long the walked route has to arrive in: two Apple directions
     /// answers, the maker's two-second settle, and one Stadia call.
