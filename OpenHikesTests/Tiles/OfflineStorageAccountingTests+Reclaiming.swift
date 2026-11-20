@@ -27,12 +27,11 @@ extension StorageAccountingTests {
         controller.hikeSelectionChanged(to: selected)
 
         // `SettingsView.deleteAllTiles`, minus the SwiftUI.
-        let announced = controller.selectedHike
-        controller.reannounceSelection(nil)
+        controller.beginStorageAction()
         selected.offlineDownloads.removeAll()
         selected.autoSavedTileKeys.removeAll()
-        controller.reannounceSelection(announced)
         await removeAllTiles()
+        controller.endStorageAction()
 
         #expect(controller.currentHike == nil, "a storage action is not the hiker asking for auto-save")
 
@@ -55,13 +54,12 @@ extension StorageAccountingTests {
         let before = key(16, 31, 31)
         try await persist(key: before, tile: tile())
 
-        let announced = controller.selectedHike
-        controller.reannounceSelection(nil)
+        controller.beginStorageAction()
         selected.offlineDownloads.removeAll()
         selected.autoSavedTileKeys.removeAll()
-        controller.reannounceSelection(announced)
-        await controller.waitForActivation()
         await removeAllTiles()
+        controller.endStorageAction()
+        await controller.waitForActivation()
 
         // A tile browsed after the delete is saved against the hike again,
         // which only happens if the store still has it active.
@@ -71,6 +69,36 @@ extension StorageAccountingTests {
 
         #expect(selected.autoSavedTileKeys.contains(after), "auto-save picked up where it left off")
         #expect(!selected.autoSavedTileKeys.contains(before), "and the manifest really was cleared")
+    }
+
+    /// The manifests are emptied at once and the tiles deleted a moment
+    /// later, off the main actor. A tile claimed in between — the map is
+    /// still drawn under Settings — would be moved to durable storage, folded
+    /// into the emptied manifest and then deleted, leaving the hike naming a
+    /// tile it does not have, known and so never saved again. So nothing is
+    /// armed until the deletion is done, a selection made meanwhile included,
+    /// and the hike selected by then is armed after.
+    @Test("deleting every saved tile arms nothing until the tiles are gone")
+    func deleteAllArmsNothingUntilTheTilesAreGone() async throws {
+        let controller = makeController()
+        let first = Fixture.hike(in: context, title: "First")
+        let second = Fixture.hike(in: context, title: "Second")
+        controller.hikeSelectionChanged(to: first)
+        await controller.waitForActivation()
+
+        controller.beginStorageAction()
+        first.offlineDownloads.removeAll()
+        first.autoSavedTileKeys.removeAll()
+        let during = key(16, 33, 33)
+        try await persist(key: during, tile: tile())
+        controller.hikeSelectionChanged(to: second)
+        #expect(controller.currentHike == nil, "nothing is saved for while the deletion is under way")
+        #expect(!sandbox.isSaved(during), "so a tile drawn meanwhile is not claimed")
+
+        await removeAllTiles()
+        controller.endStorageAction()
+        await controller.waitForActivation()
+        #expect(controller.isSaving(for: second), "and the hike selected by then is saved for once it is done")
     }
 
     // MARK: - Bounding the cache

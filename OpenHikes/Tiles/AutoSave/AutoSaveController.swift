@@ -36,6 +36,9 @@ final class AutoSaveController {
     /// saved for until the map selects a hike anew — see ``holdDown(_:)``.
     /// An ID rather than a hike, so a hold outlives nothing but itself.
     @ObservationIgnored private var heldHikeID: UUID?
+    /// Storage actions under way — see ``beginStorageAction()``. While one
+    /// is, nothing is armed.
+    @ObservationIgnored private var storageActions = 0
     /// The read of the line ``activeHike``'s corridor was last asked for.
     /// Edit Route saves into the same hike, so its ID alone cannot tell a
     /// re-selection from a new route — the same reason the hike's screen
@@ -160,17 +163,41 @@ final class AutoSaveController {
     }
 
     /// Called when the selection has not changed but what auto-save makes of
-    /// it may have: the selected map source changed, the hike's screen read
-    /// its line again, or a storage action in Settings is done with the
-    /// manifests. Unlike a selection, this leaves a hold in place, so none
-    /// of them starts saving again a map the hiker just deleted.
+    /// it may have: the selected map source changed, or the hike's screen
+    /// read its line again. Unlike a selection, this leaves a hold in place,
+    /// so neither starts saving again a map the hiker just deleted.
     func reannounceSelection(_ hike: Hike?) {
         announce(hike)
     }
 
+    /// Stands auto-save down for a storage action that empties every hike's
+    /// manifest and deletes the tiles they named once it has, off the main
+    /// actor — Settings' delete-all. Standing down first folds in what was
+    /// saved since the last drain, which would otherwise land in a manifest
+    /// emptied a moment later and claim tiles that are about to go.
+    ///
+    /// Nothing is armed until ``endStorageAction()``, a selection made
+    /// meanwhile included, which is only recorded: a tile claimed before the
+    /// deletion lands would be claimed, then deleted, and its key left in the
+    /// manifest, known and so never considered again.
+    func beginStorageAction() {
+        storageActions += 1
+        announce(selectedHike)
+    }
+
+    /// Ends what ``beginStorageAction()`` began, arming the hike the map has
+    /// selected by then, with an empty manifest and a fresh cap, by the rule
+    /// a re-announcement follows — a hold stays in place. Called on the path
+    /// where nothing was cleared at all, too.
+    func endStorageAction() {
+        storageActions = max(storageActions - 1, 0)
+        guard storageActions == 0 else { return }
+        announce(selectedHike.flatMap { $0.isAttached ? $0 : nil })
+    }
+
     private func announce(_ hike: Hike?) {
         selectedHike = hike
-        let eligibleHike = hike.flatMap { isEligible && $0.id != heldHikeID ? $0 : nil }
+        let eligibleHike = hike.flatMap { isEligible && storageActions == 0 && $0.id != heldHikeID ? $0 : nil }
         guard !isSuspended else {
             deferredHike = eligibleHike
             hasDeferredSelectionChange = true
@@ -191,10 +218,16 @@ final class AutoSaveController {
     /// at its next selection. Going off folds in what was saved since the
     /// last drain, as deselecting does.
     ///
+    /// The hiker moving the switch is asking about auto-save, so it ends a
+    /// hold too: it is the way back to saving a hike whose saved map was
+    /// deleted, as that hike's own switch was when there was one on every
+    /// hike.
+    ///
     /// A hike deleted since it was announced is not announced again: the
     /// selection moves off it in the same breath, and reading its line would
-    /// read a row that is gone. A hike held down stays down.
+    /// read a row that is gone.
     func switchDidChange() {
+        heldHikeID = nil
         announce(selectedHike.flatMap { $0.isAttached ? $0 : nil })
     }
 
@@ -226,12 +259,10 @@ final class AutoSaveController {
 
     /// The hike auto-save is currently running for, if any.
     ///
-    /// A caller that has to stop it briefly and then put it back — Settings'
-    /// delete-all, which flushes through a deactivation before clearing the
-    /// manifests it would otherwise write into — re-announces
-    /// ``selectedHike`` instead (``reannounceSelection(_:)``), which arms this
-    /// one or nothing by the same rule a selection does, and leaves a hold
-    /// in place.
+    /// A caller that has to stop it while it empties the manifests and then
+    /// put it back — Settings' delete-all — brackets the work with
+    /// ``beginStorageAction()`` and ``endStorageAction()`` instead, which
+    /// arm whatever ``selectedHike`` is by then.
     var currentHike: Hike? { activeHike }
 
     /// Stops background tile work from creating new ownership after the final
@@ -304,18 +335,18 @@ final class AutoSaveController {
     }
 
     /// What deleting a hike's saved map stands auto-save down with: as
-    /// ``standDown(for:)``, and kept down until the map selects a hike anew.
-    /// The hike is still selected and the switch may still be on, so
-    /// without the hold the next announcement — a change of map, the hike's
-    /// screen reading its line, a storage action in Settings, the switch —
-    /// would start saving again the map the hiker just deleted, and a tile
-    /// claimed while the deletion's plan is spent would be claimed and then
-    /// deleted.
+    /// ``standDown(for:)``, and kept down until the map selects a hike anew
+    /// or the hiker moves the switch in Settings. The hike is still selected
+    /// and the switch may still be on, so without the hold the next
+    /// announcement — a change of map, the hike's screen reading its line, a
+    /// storage action in Settings — would start saving again the map the
+    /// hiker just deleted, and a tile claimed while the deletion's plan is
+    /// spent would be claimed and then deleted.
     ///
     /// Held whether or not the hike was being saved for, so a map that
-    /// draws tiles, or the switch, coming on a moment later does not save
-    /// it either. Only the selected hike is held: another one is saved for
-    /// only once it is selected, which ends a hold anyway.
+    /// draws tiles coming on a moment later does not save it either. Only
+    /// the selected hike is held: another one is saved for only once it is
+    /// selected, which ends a hold anyway.
     ///
     /// - Returns: what ``releaseHold(on:restoring:)`` needs if the store
     ///   refuses the deletion, as ``standDown(for:)`` returns it.
