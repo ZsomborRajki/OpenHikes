@@ -2,12 +2,13 @@
 
 [![Download on the App Store](docs/images/app-store-badge.svg)](https://apps.apple.com/app/openhikes/id6787467479)
 
-OpenHikes is a local-first hiking app for iPhone, iPad and Apple Watch, built with SwiftUI, SwiftData and MapKit. Record a hike, import a GPX file or draw a trail, then walk it, read its elevation profile and keep its map for when there is no signal.
+OpenHikes is a private, local-first hiking app for iPhone, iPad and Apple Watch, built with SwiftUI, SwiftData and MapKit. Record a hike, import a GPX file or draw a trail, then walk it and read its elevation profile. Download the offline map of any country before you go, free and with no account, and the map is there with no signal.
 
 There is no OpenHikes account and no server holding your hikes: they live on the device and sync through your own private iCloud database. The one exception is sharing a hike, which publishes it to a public database that other hikers browse. [The privacy policy](https://zsomborrajki.github.io/OpenHikes/privacy/) says exactly what that sends.
 
 ## Features
 
+- **Offline maps of any country**, free and with no account: download a whole country for the OpenHikes map, or a state, province or region of the United States, Canada and Russia. It comes down over Wi-Fi, stays on the device and is drawn from there, so every path and summit is on the map with no signal. *Extra Detail* adds buildings and small places such as water taps.
 - **Recording** in the background, with crash recovery and barometric elevation. Pause and resume by hand, or let Auto-Pause do it when you stop somewhere. The track is matched to OpenStreetMap's paths, and any stretch the matcher moved waits for your review before the hike is saved.
 - **GPX import and export**: open files from Files, AirDrop or any share sheet, one hike per track, and share any hike back as GPX, with its places as waypoints.
 - **Drawing a trail**: press and hold to drop stops, or search for them by name. Each leg follows the paths OpenStreetMap has mapped.
@@ -15,7 +16,7 @@ There is no OpenHikes account and no server holding your hikes: they live on the
 - **Walking a saved trail**, with progress along it, the time left shown on the line ahead, a history of past walks and a shareable photo card.
 - **Junction warnings** while you follow a trail: the phone says which way to go before each fork, and the watch taps. Off until you turn them on from the map.
 - **Statistics**: an interactive elevation profile, the segments between a hike's stops, overall and moving average speed, surface and Swiss Alpine Club difficulty from OpenStreetMap, and yearly and all-time totals.
-- **Maps**: OpenStreetMap, Apple's standard and satellite maps, Stadia Outdoors, Stamen Terrain and Thunderforest Outdoors, with OpenStreetMap's marked hiking routes as a layer you can switch off and every hike in your library drawn faintly on top. Tilting the map raises the terrain in 3D under the satellite map and the tile styles. Any country, or a state or province of the largest, can be downloaded for the OpenHikes map, a route's map can be downloaded where the provider allows it, and a switch in Settings saves the tiles you browse around a hike.
+- **Maps**: the OpenHikes map, drawn on the device from OpenStreetMap's data, openstreetmap.org's own tiles, Apple's standard and satellite maps, Stadia Outdoors, Stamen Terrain and Thunderforest Outdoors, with OpenStreetMap's marked hiking routes as a layer you can switch off and every hike in your library drawn faintly on top. Tilting the map raises the terrain in 3D under the satellite map and the tile styles. A route's map can be downloaded where the provider allows it, and a switch in Settings saves the tiles you browse around a hike.
 - **Photos** taken on a walk or picked from the library, pinned to where on the trail they were taken.
 - **Weather** from WeatherKit: now, the next twelve hours and the week ahead.
 - **Widget and Live Activity**: the trail, or the recording in progress, on the Home Screen, the Lock Screen and in the Dynamic Island.

@@ -17,8 +17,8 @@
   marketing guidelines require.
 -->
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OpenHikes — hiking app for iPhone, iPad and Apple Watch</title>
-<meta name="description" content="Record hikes, plan trails on offline OpenStreetMap maps and open any GPX file. Free for iPhone, iPad and Apple Watch, open source, with no account and no tracking.">
+<title>OpenHikes — private hiking app with offline maps of any country</title>
+<meta name="description" content="Download the offline map of any country, free and with no account. Record hikes, plan trails and open GPX files on iPhone, iPad and Apple Watch. Open source, with no tracking.">
 <link rel="canonical" href="https://zsomborrajki.github.io/OpenHikes/">
 <link rel="icon" type="image/png" href="images/apple-touch-icon.png">
 <link rel="apple-touch-icon" href="images/apple-touch-icon.png">
@@ -27,8 +27,8 @@
 <meta name="theme-color" content="#0c0f0d" media="(prefers-color-scheme: dark)">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="OpenHikes">
-<meta property="og:title" content="OpenHikes — hiking app for iPhone, iPad and Apple Watch">
-<meta property="og:description" content="Record hikes, plan trails on offline OpenStreetMap maps and open any GPX file. Free for iPhone, iPad and Apple Watch, open source, with no account and no tracking.">
+<meta property="og:title" content="OpenHikes — private hiking app with offline maps of any country">
+<meta property="og:description" content="Download the offline map of any country, free and with no account. Record hikes, plan trails and open GPX files on iPhone, iPad and Apple Watch. Open source, with no tracking.">
 <meta property="og:url" content="https://zsomborrajki.github.io/OpenHikes/">
 <meta property="og:image" content="https://zsomborrajki.github.io/OpenHikes/images/icon-512.jpg">
 <meta property="og:image:width" content="512">
@@ -40,7 +40,21 @@
   "@context": "https://schema.org",
   "@type": "MobileApplication",
   "name": "OpenHikes",
-  "description": "Record hikes, plan trails on offline OpenStreetMap maps and open any GPX file, with no account and no server holding your hikes.",
+  "description": "A private hiking app for iPhone, iPad and Apple Watch. Download the offline map of any country, free, then record hikes, plan trails and open any GPX file, with no account and no server holding your hikes.",
+  "featureList": [
+    "Offline maps of any country, free: a whole country, or a state, province or region of the United States, Canada and Russia, downloaded over Wi-Fi and drawn from the device",
+    "Hike recording with the screen off, matched to OpenStreetMap's trails, with barometric elevation",
+    "Trail planning along the paths OpenStreetMap has mapped",
+    "GPX import and export",
+    "Elevation profiles, hike statistics and yearly totals",
+    "Spoken junction warnings while following a trail",
+    "Apple Watch app that follows a trail or records a hike on its own",
+    "Photos pinned to where on the trail they were taken",
+    "Sync through the hiker's own private iCloud, with no account, no analytics and no tracking",
+    "Open source under the MIT license"
+  ],
+  "keywords": "offline hiking maps, offline country maps, download country map, private hiking app, hiking app without account, GPS hike tracker, GPX, OpenStreetMap, iPhone, iPad, Apple Watch, open source",
+  "inLanguage": ["en", "de", "fr", "es", "it", "ru", "pl", "uk"],
   "url": "https://zsomborrajki.github.io/OpenHikes/",
   "image": "https://zsomborrajki.github.io/OpenHikes/images/icon-512.jpg",
   "screenshot": [
@@ -193,8 +207,10 @@
   .card h3 { margin: 0 0 0.375rem; font-size: 1.0625rem; line-height: 1.3; }
   .card p { margin: 0; }
 
-  .watch { display: grid; gap: 2rem; align-items: center; }
-  .watch p { margin: 0 0 1rem; }
+  .watch, .offline { display: grid; gap: 2rem; align-items: center; }
+  .watch p, .offline p { margin: 0 0 1rem; }
+  .facts { margin: 0; padding-left: 2.5rem; }
+  .facts li + li { margin-top: 0.5rem; }
   .watch .note { color: var(--muted); font-size: 0.9375rem; }
   .watch-shots { display: flex; gap: 1rem; justify-content: center; }
   .watch-shots img {
@@ -213,7 +229,7 @@
   .trio p { margin: 0 0 0.75rem; }
 
   @media (min-width: 52rem) {
-    .watch { grid-template-columns: 1fr 1fr; }
+    .watch, .offline { grid-template-columns: 1fr 1fr; }
     .trio { grid-template-columns: repeat(3, 1fr); }
   }
 
@@ -239,8 +255,8 @@
 <section class="hero wrap">
   <img class="icon" src="images/icon-512.jpg" width="512" height="512" alt="">
   <h1>OpenHikes</h1>
-  <p class="tagline">A hiking app for iPhone, iPad and Apple&nbsp;Watch.</p>
-  <p class="lead">Record your hikes, plan trails on offline maps and open any GPX file&nbsp;— with no account to make and no server holding your hikes. They live on your phone, and follow you between your own devices through your own iCloud.</p>
+  <p class="tagline">A private hiking app for iPhone, iPad and Apple&nbsp;Watch, with offline maps of any country.</p>
+  <p class="lead">Record your hikes, plan trails, open any GPX file and download the map of a whole country for when there is no signal&nbsp;— with no account to make and no server holding your hikes. They live on your phone, and follow you between your own devices through your own iCloud.</p>
   <div class="cta">
     <a class="badge" href="https://apps.apple.com/app/openhikes/id6787467479"><img src="images/app-store-badge.svg" width="160" height="53" alt="Download on the App Store"></a>
     <a class="button" href="https://github.com/ZsomborRajki/OpenHikes">Open source on GitHub</a>
@@ -294,6 +310,20 @@
   </div>
 </section>
 
+<section class="wrap offline" aria-labelledby="offline-title">
+  <div>
+    <h2 id="offline-title">Offline maps of any country, free</h2>
+    <p>Before a trip, download the OpenHikes map of a whole country: every path, track and summit OpenStreetMap has, ready for the valley with no bars. The United States, Canada and Russia come by state, province or region, so you take only the part you need.</p>
+    <p>It comes down over Wi-Fi, by itself in the background, stays on your iPhone or iPad, and the map is drawn from there rather than asked of a server. There is no account to make and no subscription to pay.</p>
+  </div>
+  <ul class="card facts">
+    <li>Search for a country by name, or list them nearest first or largest first.</li>
+    <li><em>Extra Detail</em> adds buildings and small places such as water taps, for about twice the space.</li>
+    <li>A hike’s own screen offers the countries its trail crosses.</li>
+    <li>When a newer map of a country is ready, it is offered as an update.</li>
+  </ul>
+</section>
+
 <section class="wrap" aria-labelledby="features-title">
   <h2 id="features-title">What it does</h2>
   <div class="grid">
@@ -306,8 +336,8 @@
       <p>Put stops on the map and each leg is routed along real paths, so the length is the length of the walk. Reorder the stops like directions in Apple Maps, then save the trail and hike it.</p>
     </article>
     <article class="card">
-      <h3>Maps that work with no signal</h3>
-      <p>OpenStreetMap is the default, and free. Areas you browse are kept automatically, so the map you looked at last night is still there in the valley with no bars. Color the route by steepness or by difficulty.</p>
+      <h3>A map made for hiking</h3>
+      <p>The OpenHikes map is drawn on your phone from OpenStreetMap, with the paths, huts, springs and summits a hike is read by, and OpenStreetMap’s marked hiking routes over it. Color the route by steepness or by difficulty.</p>
     </article>
     <article class="card">
       <h3>Bring the GPX you already have</h3>
@@ -355,12 +385,12 @@
   <div class="trio">
     <section aria-labelledby="privacy-title">
       <h2 id="privacy-title">Your hikes stay yours</h2>
-      <p>There is no OpenHikes account and no server holding your hikes. They sync through your own private iCloud, while photographs and saved maps stay on the device they came from. The app contains no analytics, no advertising and no tracking of any kind.</p>
+      <p>There is no OpenHikes account and no server holding your hikes. They sync through your own private iCloud, while photographs and downloaded maps stay on the device they came from. The app contains no analytics, no advertising and no tracking of any kind.</p>
       <p>Nothing you record reaches other people unless you publish it. The <a href="privacy/">Privacy Policy</a> describes exactly what the app sends, and where.</p>
     </section>
     <section aria-labelledby="pro-title">
       <h2 id="pro-title">Free, with an optional Pro</h2>
-      <p>Recording, the OpenStreetMap map, GPX, photos, community trails, the widget, the Live Activity, the Apple Watch app and iCloud sync are all free.</p>
+      <p>Recording, the OpenHikes map and its downloads of whole countries, GPX, photos, community trails, the widget, the Live Activity, the Apple Watch app and iCloud sync are all free.</p>
       <p>OpenHikes Pro is a monthly subscription with a free trial. It adds commercial map styles with hillshading and contour lines, a whole route’s map downloaded before you leave, and elevation for trails that have none. Those services bill OpenHikes for every use, and paying for them is what keeps the free map free.</p>
     </section>
     <section aria-labelledby="source-title">
