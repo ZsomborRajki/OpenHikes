@@ -19,21 +19,23 @@
 # Scripts/lib/vector-extras.filter, and the named areas and buildings with
 # Scripts/lib/vector-extras-areas.filter and a second cut for a name, then
 # builds the archive with Planetiler from Scripts/lib/vector-extras.yml. Bring the planet up to date first with
-# `Scripts/trail-cells.sh update-planet`. The archive is named for the date
-# the planet is current to, `extras-YYYYMMDD.pmtiles`.
+# `Scripts/trail-cells.sh update-planet`. The archive is named for the day and
+# the hour (UTC) the planet is current to, `extras-YYYYMMDD-HH.pmtiles`, so a
+# second build on one day goes up under a name of its own.
 #
 # `upload` puts it under that name in the R2 bucket `openhikes-tiles`, beside
 # the basemap, and refuses a name already there: the tile server's cache keeps
 # a tile for a day, so a file replaced in place would mix two builds. It asks
-# first, so a name already taken costs no upload, and then sends the file on
-# condition that nothing is there (`If-None-Match: *`), which R2 checks as the
-# write commits: of two uploads to one name that both found it free, the
-# second is refused rather than written over the first. Then name it in the
-# app's manifest and publish that (`Scripts/vector-archives.sh`). It signs
-# with R2's S3 keys, read from OPENHIKES_R2_ENV (default
+# first, so a name already taken costs no upload, and then sends the file in
+# parts, completed on condition that nothing is there (`If-None-Match: *`),
+# which R2 checks as the write commits: of two uploads to one name that both
+# found it free, the second is refused rather than written over the first.
+# Then name it in the app's manifest and publish that
+# (`Scripts/vector-archives.sh use`, then `publish`). It signs with R2's S3
+# keys, read from OPENHIKES_R2_ENV (default
 # ~/.config/openhikes/r2-openhikes-tiles.env: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID,
-# R2_SECRET_ACCESS_KEY, R2_BUCKET), and sends the file in one request, which
-# R2 takes up to 5 GiB.
+# R2_SECRET_ACCESS_KEY, R2_BUCKET), no faster than OPENHIKES_R2_MIB_PER_SECOND
+# MiB a second where that is set (Scripts/lib/r2.sh).
 #
 # It is a development tool and is in no gate. It needs osmium and Planetiler
 # (`brew install osmium-tool planetiler`). On an M4 Max the planet took 35
@@ -44,7 +46,7 @@
 #
 # Usage:
 #   Scripts/vector-extras.sh build <planet.osm.pbf> [<work-dir>]
-#   Scripts/vector-extras.sh upload <extras-YYYYMMDD.pmtiles>
+#   Scripts/vector-extras.sh upload <extras-YYYYMMDD-HH.pmtiles>
 #
 set -euo pipefail
 
@@ -52,44 +54,30 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 usage() {
   echo "usage: Scripts/vector-extras.sh build <planet.osm.pbf> [<work-dir>]" >&2
-  echo "       Scripts/vector-extras.sh upload <extras-YYYYMMDD.pmtiles>" >&2
+  echo "       Scripts/vector-extras.sh upload <extras-YYYYMMDD-HH.pmtiles>" >&2
   exit 2
 }
 
+# shellcheck source=lib/r2.sh
+source "$REPO_ROOT/Scripts/lib/r2.sh"
+
+die() {
+  echo "vector-extras: $*" >&2
+  exit 1
+}
+
+# The extras passed the 5 GiB R2 takes in one request with extras-20261119-18,
+# so they go up in parts of 256 MiB: some sixty for 16 GB, eight of them on
+# disk at a time.
 upload() {
-  local archive="$1"
-  local env_file="${OPENHIKES_R2_ENV:-$HOME/.config/openhikes/r2-openhikes-tiles.env}"
-  [[ -f "$archive" ]] || { echo "vector-extras: no archive at $archive" >&2; exit 1; }
-  [[ -f "$env_file" ]] || { echo "vector-extras: no R2 keys at $env_file" >&2; exit 1; }
-  # shellcheck disable=SC1090
-  set -a; . "$env_file"; set +a
-  local key
+  local archive="$1" key existing
+  [[ -f "$archive" ]] || die "no archive at $archive"
+  r2_load_keys
   key="$(basename "$archive")"
-  local size
-  size="$(stat -f %z "$archive")"
-  if (( size > 5 * 1024 * 1024 * 1024 )); then
-    echo "vector-extras: $key is over the 5 GiB R2 takes in one request" >&2
-    exit 1
-  fi
-  local url="https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com/$R2_BUCKET/$key"
-  local signing=(--aws-sigv4 "aws:amz:auto:s3" --user "$R2_ACCESS_KEY_ID:$R2_SECRET_ACCESS_KEY"
-    -H "x-amz-content-sha256: UNSIGNED-PAYLOAD")
-  local existing
-  existing="$(curl -s -o /dev/null -w "%{http_code}" -I "${signing[@]}" "$url")"
-  case "$existing" in
-    404) ;;
-    200) echo "vector-extras: $key is already in $R2_BUCKET; build under a new date" >&2; exit 1 ;;
-    *) echo "vector-extras: R2 answered $existing when asked for $key" >&2; exit 1 ;;
-  esac
-  local status
-  status="$(curl -s -o /dev/null -w "%{http_code}" "${signing[@]}" -H "If-None-Match: *" \
-    -H "Content-Type: application/octet-stream" -T "$archive" "$url")"
-  case "$status" in
-    200) ;;
-    412) echo "vector-extras: $key reached $R2_BUCKET from another upload first; build under a new date" >&2; exit 1 ;;
-    *) echo "vector-extras: R2 answered $status to the upload" >&2; exit 1 ;;
-  esac
-  echo "vector-extras: uploaded $key ($size bytes) to $R2_BUCKET"
+  existing="$(r2_etag "$key")"
+  [[ -z "$existing" ]] || die "$key is already in $R2_BUCKET; build from a newer planet"
+  r2_put_parts "$archive" "$key" 256
+  echo "vector-extras: next, Scripts/vector-archives.sh use ${key%.pmtiles}"
 }
 
 [[ $# -ge 1 ]] || usage
@@ -113,14 +101,14 @@ for tool in osmium planetiler; do
   command -v "$tool" >/dev/null || { echo "vector-extras: $tool is not installed" >&2; exit 1; }
 done
 
-# The date the planet is current to, from the replication timestamp
-# pyosmium writes into its header.
+# The hour the planet is current to, from the replication timestamp pyosmium
+# writes into its header.
 STAMP="$(osmium fileinfo --get header.option.osmosis_replication_timestamp "$PLANET")"
-[[ "$STAMP" =~ ^([0-9]{4})-([0-9]{2})-([0-9]{2})T ]] || {
+[[ "$STAMP" =~ ^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}) ]] || {
   echo "vector-extras: the planet's header has no replication timestamp" >&2
   exit 1
 }
-NAME="extras-${BASH_REMATCH[1]}${BASH_REMATCH[2]}${BASH_REMATCH[3]}"
+NAME="extras-${BASH_REMATCH[1]}${BASH_REMATCH[2]}${BASH_REMATCH[3]}-${BASH_REMATCH[4]}"
 mkdir -p "$WORK"
 # Planetiler's scratch files go in a directory this build makes for itself,
 # and only that one is removed, however the build ends: a work directory

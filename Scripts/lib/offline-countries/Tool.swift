@@ -298,17 +298,29 @@ extension Tool {
     /// `merge --server <manifest.json> --build <manifest.json> --out <file>`:
     /// the server's manifest with every country of the build's put in it,
     /// replacing the same country of an older build, which an installed app
-    /// then offers as an update.
+    /// then offers as an update. A build earlier than the one the server
+    /// lists is refused: `Scripts/offline-countries.sh prune` deletes the
+    /// files of a build the server has moved past, so a country's build only
+    /// ever rises.
     static func merge(_ options: Options) throws {
         let decoder = JSONDecoder()
         let built = try decoder.decode(
             OfflineCountryManifest.self,
             from: Data(contentsOf: URL(fileURLWithPath: options.required("build")))
         )
+        // No file is a server with no manifest yet. One that does not read is
+        // an error: taken as empty, the merge would write back this build's
+        // countries alone, and drop every other one from the server's list.
         let serverPath = options.required("server")
-        var merged = (try? decoder.decode(OfflineCountryManifest.self, from: Data(contentsOf: URL(fileURLWithPath: serverPath))))
-            ?? OfflineCountryManifest(version: OfflineCountryManifest.currentVersion, countries: [])
+        var merged = if FileManager.default.fileExists(atPath: serverPath) {
+            try decoder.decode(OfflineCountryManifest.self, from: Data(contentsOf: URL(fileURLWithPath: serverPath)))
+        } else {
+            OfflineCountryManifest(version: OfflineCountryManifest.currentVersion, countries: [])
+        }
         for country in built.countries {
+            if let listed = merged.countries.first(where: { $0.id == country.id }), listed.build > country.build {
+                fail("the server lists build \(listed.build) of \(country.id), later than this \(country.build)")
+            }
             merged.countries.removeAll { $0.id == country.id }
             merged.countries.append(country)
         }

@@ -113,6 +113,23 @@ struct PMTilesFileTests {
         }
     }
 
+    /// Planetiler writes a tile whose features all clip away as gzip of
+    /// nothing, and the extras hold such tiles: Bulgaria's zoom 15 has one.
+    @Test("gzip of an empty tile unpacks to nothing, and a stream with more in it is refused")
+    func emptyGzip() throws {
+        // `gzip.compress(b"", mtime=0)`.
+        let empty: [UInt8] = [
+            0x1F, 0x8B, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x03, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ]
+        #expect(try PMTilesGzip.unpacked(empty, compression: PMTilesCompression.gzip.rawValue).isEmpty)
+        // `hello`'s stream behind an empty tile's trailer.
+        let saidEmpty = Array(empty.prefix(10)) + [0xCB, 0x48, 0xCD, 0xC9, 0xC9, 0x07, 0x00] + Array(empty.suffix(8))
+        #expect(throws: PMTilesError.corrupt) {
+            try PMTilesGzip.unpacked(saidEmpty, compression: PMTilesCompression.gzip.rawValue)
+        }
+    }
+
     @Test("brotli and zstd are refused rather than misread")
     func otherCompressions() {
         for compression in [PMTilesCompression.brotli, .zstd] {

@@ -1204,7 +1204,7 @@ a change to recording, the map, the sheet or the render path; the PR template,
     `Scripts/lib/vector-extras.filter`, and the named areas and buildings
     through `Scripts/lib/vector-extras-areas.filter` and then a cut for a
     name, then Planetiler with `Scripts/lib/vector-extras.yml`) into
-    `extras-<planet date>.pmtiles`,
+    `extras-<planet day>-<hour>.pmtiles`,
     named as the archive's layers are so a tile of each merges into one, and
     `Scripts/vector-extras.sh upload` puts them beside the basemap under a new
     name each time, signing with R2 keys kept outside the repository, and the
@@ -1340,9 +1340,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
   - **No suite reaches the tile server.** `TileCache.shared` has no vector
     source under `isRunningTests`, UI tests included
     (`VectorTileArchives.forThisLaunch()`).
-  - **A new build gets a new archive name**, carrying its date, never the old
-    one's: the server's cache holds a tile for a day, so a build overwritten
-    in place would mix two builds on screen.
+  - **A new build gets a new archive name**, carrying its date, and the
+    extras the hour too, never the old one's: the server's cache holds a tile
+    for a day, so a build overwritten in place would mix two builds on screen.
   - **The server's manifest names the archives the app draws from**
     (`VectorTileArchiveManifest`). It is `manifest.json` at the server's
     root, a copy of `VectorTileArchiveManifest.json`, which the app bundles
@@ -1351,6 +1351,27 @@ a change to recording, the map, the sheet or the render path; the PR template,
     of the schema it reads and the first extras of a generation it reads, so
     extras an installed app would draw wrong go up as the next generation,
     and the last of the old one stays listed.
+  - **Refreshing the server is a run of commands, each safe to run again:**
+    1. `Scripts/trail-cells.sh update-planet <planet.osm.pbf>`, then
+       `Scripts/vector-extras.sh build <planet.osm.pbf>` and `upload`.
+    2. `Scripts/vector-archives.sh basemap` copies Protomaps' newest daily
+       build of the schema the app reads into the bucket as
+       `planet-<day>.pmtiles`, and keeps the download for the countries. It
+       sends the build up in Protomaps' own parts, so the bucket's ETag has
+       to come out as Protomaps' or nothing is written.
+    3. `Scripts/vector-archives.sh use` with each new name, which heads its
+       list in the manifest and drops what no build would draw any more,
+       then `publish`, and commit the manifest.
+    4. `Scripts/offline-countries.sh publish` cuts every area again from the
+       new archives and puts it up (*The offline countries*).
+    5. `prune` in both scripts deletes what the server has moved past, once
+       the apps have read the new manifests: an archive neither manifest
+       names that is earlier than the latest of its kind the server names,
+       and a country file of a build earlier than the one listed for its
+       area. Anything later may be an upload on its way, so it stays.
+
+    `OPENHIKES_R2_MIB_PER_SECOND` caps how fast any of them sends to the
+    bucket, so a world of uploads leaves the connection usable.
   - **The app moves without a release** (`VectorTileArchives`). It reads the
     manifest when it comes to the front, at most hourly, and when an archive
     answers 410, the server's word for a name it does not have: the tile
@@ -1361,7 +1382,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
     in the bucket a while after, for apps that have not read the manifest
     since. A build from before the manifest names its archives in code and
     never moves: TestFlight 1.6 (1) asks for `planet-20261117` and
-    `extras-20261117`.
+    `extras-20261117`, which are gone, and draws openstreetmap.org's tiles
+    in their place.
   - **The server is not in this repository.** It is a Worker and an R2
     bucket.
 
@@ -1401,16 +1423,24 @@ owner, on the main actor.
   down; turning it off deletes it from them and keeps the areas.
 - **Cut on the server, read in place.** `Scripts/offline-countries.sh build`
   cuts each area out of the planet the map draws, along its outline grown by
-  3 km, from the bucket with signed ranges or, much faster for the whole
-  world, from local copies (`--planet`, `--extras`). It reads each cut back
-  through the app's reader before listing it. `upload` puts the files under
+  3 km, from the local copies `Scripts/vector-archives.sh basemap` and
+  `Scripts/vector-extras.sh build` leave, or from the bucket with signed
+  ranges where there are none, which takes a day for the world rather than
+  hours. It reads each cut back through the app's reader before listing it.
+  `publish` builds and uploads every area a batch at a time, and goes on
+  where a stopped run left off; `prune` then deletes the older build's
+  files.
+- **A build is named for the later of its archives' days**, the basemap's
+  and the extras', so new extras over the same basemap make a newer build,
+  which an installed app offers as an update. `upload` puts its files under
   `countries/` as `<area>-<build>.pmtiles`, `-extras-`, `-detail-` and
   `-detail-extras-`, each with its SHA-256 beside it, never over a file of
   the same name, and reuses one already there only for the same bytes,
   because the manifest it writes last (`countries/manifest.json`,
-  `OfflineCountryManifest`) promises them. The app keeps each file as it
-  arrived and reads tiles out of it (`PMTilesArchive`); nothing is unpacked
-  into the tile cache.
+  `OfflineCountryManifest`) promises them. A second cut over the same two
+  days is therefore refused, and waits for a newer archive. The app keeps
+  each file as it arrived and reads tiles out of it (`PMTilesArchive`);
+  nothing is unpacked into the tile cache.
 - **The tool compiles the app's format files as they stand**
   (`PMTilesFile.swift`, `PMTilesArchive.swift`, `OfflineCountryManifest.swift`
   and `PackedBytes.swift`), which import nothing of the app's, and
@@ -1478,11 +1508,16 @@ owner, on the main actor.
   (`SeededOfflineCountryServer`), and still no session: `OfflineMapsUITests`
   goes as far as the download button and the hike tile's dialog, and never
   further, because nothing would download.
-- **Deployment state, checked 2026-11-18.** The bucket holds every area cut
-  from planet build `20261117`: 381 of them (234 countries, and the 51
-  states, 13 provinces and 83 regions of the three split ones), 1,524 files
-  and 147.6 GB, each at the size and SHA-256 the manifest lists. The Worker
-  on `tiles.openhikes.app` serves the manifest and the files, with ranges.
+- **Deployment state, checked 2026-11-20.** The bucket holds every area of
+  build `20261120`, cut from `planet-20261118` and `extras-20261120-00`: 381
+  of them (234 countries, and the 51 states, 13 provinces and 83 regions of
+  the three split ones), 1,524 files and 162.6 GB, each at the size the
+  manifest lists and uploaded under the SHA-256 it lists. Build `20261119`'s
+  1,524 files, 155.6 GB, are still beside them, listed by no manifest, until
+  `Scripts/offline-countries.sh prune` is run. Beside the areas the bucket
+  holds those two archives and the map's manifest at revision 7, which names
+  them, and nothing else. The Worker on `tiles.openhikes.app` serves the
+  manifests, the archives and the files, with ranges.
 
 ### Accessibility
 

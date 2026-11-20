@@ -5228,57 +5228,18 @@ if expect_status 2 && expect_contains "$output" "unknown command 'deploy'" "the 
     pass
 fi
 
-# Scripts/vector-extras.sh uploads the extras under a name the tile server's
-# cache keeps for a day. It asks R2 whether the name is free, then sends the
-# file on condition that it still is, and only that condition stops a second
-# upload that also found the name free from replacing the first: without it,
-# an upload made alone goes exactly as it does with it. `curl` is a stub from
-# here on, recording each request and answering a HEAD with STUB_CURL_HEAD and
-# a PUT with STUB_CURL_PUT as `-w "%{http_code}"` would print them. The keys are
-# a fixture's, so nothing here could sign for the real bucket.
-cat > "$stub_bin/curl" <<'STUB'
-#!/usr/bin/env bash
-printf 'curl %s\n' "$*" >> "$STUB_CALL_LOG"
-if [[ " $* " == *" -I "* ]]; then
-    printf '%s' "${STUB_CURL_HEAD:-404}"
-elif [[ " $* " == *" -T "* ]]; then
-    printf '%s' "${STUB_CURL_PUT:-200}"
-else
-    echo "stub curl: no answer for '$*'" >&2
-    exit 64
-fi
-STUB
-chmod +x "$stub_bin/curl"
+# Scripts/vector-extras.sh builds the extras, and uploads them with the rest of
+# the bucket's life further down. The R2 keys are a fixture's, shared by every
+# script that signs for the bucket, so nothing here could sign for the real one.
 vector_extras="$repository_root/Scripts/vector-extras.sh"
 extras_work="$work/vector-extras"
 mkdir -p "$extras_work"
-extras_archive="$extras_work/extras-20261117.pmtiles"
-printf 'archive' > "$extras_archive"
 cat > "$extras_work/r2.env" <<'EOF'
 R2_ACCOUNT_ID=stub-account
 R2_ACCESS_KEY_ID=stub-key
 R2_SECRET_ACCESS_KEY=stub-secret
 R2_BUCKET=stub-bucket
 EOF
-
-OPENHIKES_R2_ENV="$extras_work/r2.env" \
-    run_script "vector-extras upload sends the archive on condition that its name is still free" \
-    "$vector_extras" upload "$extras_archive"
-if expect_status 0 \
-    && expect_contains "$calls" "-H If-None-Match: * -H Content-Type: application/octet-stream -T $extras_archive" \
-        "the upload" \
-    && expect_contains "$output" "uploaded extras-20261117.pmtiles (7 bytes) to stub-bucket" "the output"; then
-    pass
-fi
-
-OPENHIKES_R2_ENV="$extras_work/r2.env" STUB_CURL_PUT=412 \
-    run_script "vector-extras upload refuses a name another upload took after it was found free" \
-    "$vector_extras" upload "$extras_archive"
-if expect_status 1 \
-    && expect_contains "$output" "extras-20261117.pmtiles reached stub-bucket from another upload first" "the error" \
-    && expect_absent "$output" "uploaded" "the output"; then
-    pass
-fi
 
 # The build cuts the planet twice in its scratch directory — the points and
 # lines once, the areas whose names it keeps once and then the named ones among
@@ -5318,7 +5279,7 @@ osmium tags-filter $extras_scratch/areas.osm.pbf wr/name --output=$extras_scratc
 osmium merge $extras_scratch/points.osm.pbf $extras_scratch/named-areas.osm.pbf \
 --output=$extras_build/extras.osm.pbf --overwrite"
 if expect_status 0 \
-    && expect_contains "$output" "built $extras_build/extras-20261117.pmtiles" "the output" \
+    && expect_contains "$output" "built $extras_build/extras-20261117-21.pmtiles" "the output" \
     && expect_contains "$calls" "--tmpdir=$extras_build/tmp." "the recorded calls" \
     && expect_contains "$calls" "--osm_path=$extras_build/extras.osm.pbf" "the recorded calls"; then
     if [[ "$(grep '^osmium ' <<< "$calls")" != "$extras_steps" ]]; then
@@ -5399,12 +5360,13 @@ cat > "$countries_work/out/manifest.json" <<EOF
 EOF
 cp "$extras_work/r2.env" "$countries_work/r2.env"
 
-OPENHIKES_R2_ENV="$countries_work/r2.env" \
-    run_script "offline-countries upload names a new archive's SHA-256 beside it" \
+OPENHIKES_R2_ENV="$countries_work/r2.env" OPENHIKES_R2_MIB_PER_SECOND=40 \
+    run_script "offline-countries upload names a new archive's SHA-256 beside it, no faster than it is told" \
     "$offline_countries" upload "$countries_work/out"
 if expect_status 0 \
     && expect_contains "$calls" "-H x-amz-meta-sha256: $country_sha256 -T $countries_work/out/SI-20261117.pmtiles" \
         "the upload" \
+    && expect_contains "$calls" "--limit-rate 41943040" "the upload" \
     && expect_contains "$output" "wrote countries/manifest.json" "the output"; then
     pass
 fi
@@ -5484,6 +5446,96 @@ OPENHIKES_R2_ENV="$countries_work/r2.env" OPENHIKES_R2_RETRY_SECONDS=0 STUB_CURL
 if expect_status 1 \
     && expect_contains "$output" "R2 answered 500 to the upload of countries/SI-20261117.pmtiles" "the error" \
     && expect_absent "$calls" "manifest.json" "the requests"; then
+    pass
+fi
+
+# The upload merges its build into the server's manifest, where an area's
+# build only ever rises: prune deletes the files of a build the manifest has
+# moved past, so a manifest that went back to one would list deleted files.
+sed 's/20261117/20261118/g' "$countries_work/out/manifest.json" > "$countries_work/later.json"
+run_script "offline-countries merge puts a later build over the server's" \
+    "$OPENHIKES_OFFLINE_COUNTRIES_BUILD/offline-countries" merge --server "$countries_work/out/manifest.json" \
+    --build "$countries_work/later.json" --out "$countries_work/merged.json"
+if expect_status 0 \
+    && expect_contains "$(cat "$countries_work/merged.json")" '"build":"20261118"' "the merged manifest"; then
+    pass
+fi
+
+head -c 40 "$countries_work/later.json" > "$countries_work/cut-short.json"
+run_script "offline-countries merge refuses a server manifest it cannot read, rather than starting from none" \
+    "$OPENHIKES_OFFLINE_COUNTRIES_BUILD/offline-countries" merge --server "$countries_work/cut-short.json" \
+    --build "$countries_work/later.json" --out "$countries_work/unread.json"
+if expect_status 1; then
+    if [[ -f "$countries_work/unread.json" ]]; then
+        fail "a merged manifest was written" "$(cat "$countries_work/unread.json")"
+    else
+        pass
+    fi
+fi
+
+rm -f "$countries_work/merged.json"
+run_script "offline-countries merge refuses a build earlier than the server's" \
+    "$OPENHIKES_OFFLINE_COUNTRIES_BUILD/offline-countries" merge --server "$countries_work/later.json" \
+    --build "$countries_work/out/manifest.json" --out "$countries_work/merged.json"
+if expect_status 1 \
+    && expect_contains "$output" "the server lists build 20261118 of SI, later than this 20261117" "the error"; then
+    if [[ -f "$countries_work/merged.json" ]]; then
+        fail "a merged manifest was written"
+    else
+        pass
+    fi
+fi
+
+# `publish` goes on from the areas it has listed done, so every run of one list
+# has to cut from the same files along the same margin into the same bucket,
+# or one build would mix two. Each case stops before it cuts anything: the
+# list's settings are refused, or the tool, built into a directory of its own,
+# fails to compile, which must stop the run rather than read as no areas left.
+publish_build="$work/offline-countries-publish"
+bundled_manifest="$repository_root/OpenHikes/Tiles/Vector/VectorTileArchiveManifest.json"
+publish_list="$publish_build/publish-$(plutil -extract basemaps.0.name raw -o - "$bundled_manifest")"
+publish_list+="-$(plutil -extract extras.0.name raw -o - "$bundled_manifest")"
+mkdir -p "$publish_list"
+printf 'planet' > "$publish_build/planet.pmtiles"
+printf 'extras' > "$publish_build/extras.pmtiles"
+printf 'AT\n' > "$publish_list/done.txt"
+publish_settings="$(printf '%s\n' "planet $publish_build/planet.pmtiles, 6 bytes" \
+    "extras $publish_build/extras.pmtiles, 6 bytes" "margin 3 km" "bucket stub-account/stub-bucket")"
+printf '%s\n' "$publish_settings" > "$publish_list/settings.txt"
+
+OPENHIKES_R2_ENV="$countries_work/r2.env" OPENHIKES_OFFLINE_COUNTRIES_BUILD="$publish_build" \
+    run_script "offline-countries publish refuses to go on with another margin than the list was started with" \
+    "$offline_countries" publish --planet "$publish_build/planet.pmtiles" --extras "$publish_build/extras.pmtiles" \
+    --margin-km 5
+if expect_status 1 \
+    && expect_contains "$output" "lists areas put up with other settings than these" "the error" \
+    && expect_contains "$output" "margin 5 km" "the error" \
+    && expect_contains "$output" "margin 3 km" "the error" \
+    && expect_absent "$output" "areas to publish" "the output"; then
+    pass
+fi
+
+rm "$publish_list/settings.txt"
+OPENHIKES_R2_ENV="$countries_work/r2.env" OPENHIKES_OFFLINE_COUNTRIES_BUILD="$publish_build" \
+    run_script "offline-countries publish refuses a list of areas with no settings beside it" \
+    "$offline_countries" publish --planet "$publish_build/planet.pmtiles" --extras "$publish_build/extras.pmtiles"
+if expect_status 1 \
+    && expect_contains "$output" "(none recorded)" "the error" \
+    && expect_absent "$output" "areas to publish" "the output"; then
+    pass
+fi
+
+printf '%s\n' "$publish_settings" > "$publish_list/settings.txt"
+printf '#!/bin/sh\nexit 1\n' > "$stub_bin/swiftc"
+chmod +x "$stub_bin/swiftc"
+OPENHIKES_R2_ENV="$countries_work/r2.env" OPENHIKES_OFFLINE_COUNTRIES_BUILD="$publish_build" \
+    run_script "offline-countries publish stops when it cannot list the areas" \
+    "$offline_countries" publish --planet "$publish_build/planet.pmtiles" --extras "$publish_build/extras.pmtiles"
+rm "$stub_bin/swiftc"
+if expect_status 1 \
+    && expect_contains "$output" "the tool did not compile" "the error" \
+    && expect_contains "$output" "could not list the areas; nothing was published" "the error" \
+    && expect_absent "$output" "every area is up" "the output"; then
     pass
 fi
 
@@ -5583,6 +5635,540 @@ if expect_status 1 \
     pass
 fi
 unset OPENHIKES_VECTOR_ARCHIVE_MANIFEST OPENHIKES_TILE_SERVER STUB_SERVED_MANIFEST
+
+# The rest of the bucket's life: Scripts/vector-archives.sh copies Protomaps'
+# build in, `use` names an archive in the manifest, and both scripts' `prune`
+# delete what no manifest names. `curl` is a stub once more, standing for
+# Protomaps, the tile server and R2 at once. The bucket is a directory,
+# STUB_BUCKET, a file a key, listed, read, written and deleted as R2 would,
+# multipart uploads included, whose ETag is S3's: the MD5 of the parts' MD5s
+# and their count. A multipart upload sent `If-None-Match: *` is refused with a
+# 412 when its key holds an object by the time it is completed, and
+# STUB_LANDS_FIRST names a key another upload fills while one is under way.
+# Protomaps is STUB_PROTOMAPS, its builds and their index,
+# each build's ETag in a file beside it; the tile server serves the manifest
+# at STUB_SERVED_MANIFEST, and an archive's TileJSON unless
+# STUB_MISSING_ARCHIVES names it.
+cat > "$stub_bin/curl" <<'STUB'
+#!/usr/bin/env bash
+printf 'curl %s\n' "$*" >> "$STUB_CALL_LOG"
+out="" url="" method=GET upload="" dump="" code=false head=false fail=false if_none_match=false
+while (( $# )); do
+    case "$1" in
+        -o) out="$2"; shift 2 ;;
+        -D) dump="$2"; shift 2 ;;
+        -X) method="$2"; shift 2 ;;
+        -T) upload="$2"; method=PUT; shift 2 ;;
+        -w) code=true; shift 2 ;;
+        -H) [[ "$2" != "If-None-Match: *" ]] || if_none_match=true; shift 2 ;;
+        --data-binary|-C|--user|--aws-sigv4) shift 2 ;;
+        --*) shift ;;
+        -*)
+            [[ "$1" != *f* ]] || fail=true
+            [[ "$1" != *I* ]] || { head=true; method=HEAD; }
+            shift
+            ;;
+        *) url="$1"; shift ;;
+    esac
+done
+status=200 headers="" body="$STUB_CALL_LOG.body"
+: > "$body"
+etag_of() {
+    if [[ -f "$STUB_BUCKET.etags/$1" ]]; then cat "$STUB_BUCKET.etags/$1"; else md5 -q "$STUB_BUCKET/$1"; fi
+}
+bucket="https://stub-account.r2.cloudflarestorage.com/stub-bucket"
+query=""
+[[ "$url" != *\?* ]] || query="${url#*\?}"
+path="${url%%\?*}"
+case "$path" in
+    "$bucket"|"$bucket/")
+        prefix="$(sed -nE 's/.*prefix=([^&]*).*/\1/p' <<< "$query" | sed 's/%2F/\//g')"
+        {
+            printf '<ListBucketResult><IsTruncated>false</IsTruncated>'
+            ( cd "$STUB_BUCKET" && find . -type f | sed 's|^\./||' | sort ) | while IFS= read -r key; do
+                [[ "$key" == "$prefix"* ]] || continue
+                [[ "$query" != *delimiter=* || "${key#"$prefix"}" != */* ]] || continue
+                printf '<Contents><Key>%s</Key><LastModified>2026-11-19T00:00:00.000Z</LastModified>' "$key"
+                printf '<Size>%s</Size></Contents>' "$(stat -f %z "$STUB_BUCKET/$key")"
+            done
+            printf '</ListBucketResult>'
+        } > "$body"
+        ;;
+    "$bucket"/*)
+        key="${path#"$bucket"/}"
+        uploads="$STUB_BUCKET.uploads"
+        case "$method:$query" in
+            POST:uploads)
+                mkdir -p "$uploads"
+                [[ "$key" != "${STUB_LANDS_FIRST:-}" ]] || printf 'another' > "$STUB_BUCKET/$key"
+                printf '<InitiateMultipartUploadResult><UploadId>stub+upload</UploadId></InitiateMultipartUploadResult>' > "$body"
+                ;;
+            PUT:uploadId=*partNumber=*)
+                number="${query##*partNumber=}"
+                cp "$upload" "$uploads/$number"
+                headers="ETag: \"$(md5 -q "$upload")\"\r\n"
+                ;;
+            POST:uploadId=*)
+                if $if_none_match && [[ -f "$STUB_BUCKET/$key" ]]; then
+                    status=412
+                    printf '<Error><Code>PreconditionFailed</Code></Error>' > "$body"
+                else
+                    mkdir -p "$(dirname "$STUB_BUCKET/$key")" "$(dirname "$STUB_BUCKET.etags/$key")"
+                    parts="$(ls "$uploads" | sort -n)"
+                    for part in $parts; do cat "$uploads/$part"; done > "$STUB_BUCKET/$key"
+                    for part in $parts; do md5 -q "$uploads/$part"; done | tr -d '\n' | xxd -r -p | md5 -q \
+                        | sed "s/\$/-$(wc -w <<< "$parts" | tr -d ' ')/" > "$STUB_BUCKET.etags/$key"
+                    rm -rf "$uploads"
+                fi
+                ;;
+            DELETE:uploadId=*) rm -rf "$uploads"; status=204 ;;
+            DELETE:) rm -f "$STUB_BUCKET/$key" "$STUB_BUCKET.etags/$key"; status=204 ;;
+            PUT:) mkdir -p "$(dirname "$STUB_BUCKET/$key")"; cp "$upload" "$STUB_BUCKET/$key" ;;
+            GET:|HEAD:)
+                if [[ -f "$STUB_BUCKET/$key" ]]; then
+                    headers="Content-Length: $(stat -f %z "$STUB_BUCKET/$key")\r\nETag: \"$(etag_of "$key")\"\r\n"
+                    [[ "$method" == HEAD ]] || cp "$STUB_BUCKET/$key" "$body"
+                else
+                    status=404
+                fi
+                ;;
+            *) echo "stub curl: no answer for $method $url" >&2; exit 64 ;;
+        esac
+        ;;
+    "$OPENHIKES_PROTOMAPS_INDEX") cp "$STUB_PROTOMAPS/builds.json" "$body" ;;
+    "$OPENHIKES_PROTOMAPS_BUILDS"/*)
+        file="$STUB_PROTOMAPS/$(basename "$path")"
+        headers="Content-Length: $(stat -f %z "$file")\r\nETag: \"$(cat "$file.etag")\"\r\n"
+        [[ "$method" == HEAD ]] || cp "$file" "$body"
+        ;;
+    "$OPENHIKES_TILE_SERVER"/manifest.json)
+        if [[ -f "$STUB_SERVED_MANIFEST" ]]; then cp "$STUB_SERVED_MANIFEST" "$body"; else status=404; fi
+        ;;
+    "$OPENHIKES_TILE_SERVER"/*.json)
+        [[ " ${STUB_MISSING_ARCHIVES:-} " != *" $(basename "$path" .json) "* ]] || status=410
+        ;;
+    *) echo "stub curl: no answer for $method $url" >&2; exit 64 ;;
+esac
+(( status < 400 )) || ! $fail || exit 22
+response="HTTP/1.1 $status\r\n$headers\r\n"
+if $head; then
+    printf '%b' "$response"
+elif [[ "$dump" == - ]]; then
+    printf '%b' "$response"
+fi
+if ! $head; then
+    if [[ -n "$out" ]]; then cat "$body" > "$out"; else cat "$body"; fi
+fi
+! $code || printf '%s' "$status"
+STUB
+chmod +x "$stub_bin/curl"
+bucket_work="$work/bucket"
+export STUB_BUCKET="$bucket_work/bucket" STUB_PROTOMAPS="$bucket_work/protomaps"
+export STUB_SERVED_MANIFEST="$bucket_work/served.json"
+export OPENHIKES_VECTOR_ARCHIVE_MANIFEST="$bucket_work/manifest.json"
+export OPENHIKES_TILE_SERVER="https://tiles.example.invalid"
+export OPENHIKES_PROTOMAPS_BUILDS="https://protomaps.example.invalid"
+export OPENHIKES_PROTOMAPS_INDEX="https://protomaps.example.invalid/builds.json"
+export OPENHIKES_VECTOR_ARCHIVES_CACHE="$bucket_work/archives"
+export OPENHIKES_R2_ENV="$extras_work/r2.env" OPENHIKES_R2_RETRY_SECONDS=0
+mkdir -p "$STUB_BUCKET" "$STUB_PROTOMAPS"
+cat > "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST" <<'EOF'
+{
+  "version": 1,
+  "revision": 3,
+  "basemaps": [
+    { "name": "planet-20261117", "schema": 4, "maximumZoom": 15 },
+    { "name": "planet-20261001", "schema": 3, "maximumZoom": 14 }
+  ],
+  "extras": [
+    { "name": "extras-20261119", "generation": 2, "minimumZoom": 4 }
+  ]
+}
+EOF
+# Protomaps' index lists a build of a schema the app does not read after the
+# one it does, and each build's ETag is what S3 gives a file sent in one part.
+printf 'archive' > "$STUB_PROTOMAPS/20261118.pmtiles"
+printf 'archive' > "$STUB_PROTOMAPS/20261117.pmtiles"
+printf 'newer!!!!' > "$STUB_PROTOMAPS/20261119.pmtiles"
+basemap_etag="$(md5 -q "$STUB_PROTOMAPS/20261118.pmtiles" | xxd -r -p | md5 -q)-1"
+printf '%s' "$basemap_etag" > "$STUB_PROTOMAPS/20261118.pmtiles.etag"
+printf '%s' "00000000000000000000000000000000-1" > "$STUB_PROTOMAPS/20261117.pmtiles.etag"
+printf '%s' "$basemap_etag" > "$STUB_PROTOMAPS/20261119.pmtiles.etag"
+# Two parts of 3 MiB and a byte could have been cut at 2 MiB or at 3.
+head -c $(( 3 * 1024 * 1024 + 1 )) /dev/zero > "$STUB_PROTOMAPS/20261116.pmtiles"
+printf '%s' "00000000000000000000000000000000-2" > "$STUB_PROTOMAPS/20261116.pmtiles.etag"
+printf 'archive' > "$STUB_PROTOMAPS/20261115.pmtiles"
+printf '%s' "$(md5 -q "$STUB_PROTOMAPS/20261115.pmtiles" | xxd -r -p | md5 -q)-1" \
+    > "$STUB_PROTOMAPS/20261115.pmtiles.etag"
+cat > "$STUB_PROTOMAPS/builds.json" <<EOF
+[{"key": "20261115.pmtiles", "size": 7, "version": "4.15.2"},
+ {"key": "20261116.pmtiles", "size": $(( 3 * 1024 * 1024 + 1 )), "version": "4.15.2"},
+ {"key": "20261117.pmtiles", "size": 7, "version": "4.15.2"},
+ {"key": "20261118.pmtiles", "size": 7, "version": "4.15.2"},
+ {"key": "20261119.pmtiles", "size": 9, "version": "5.0.0"}]
+EOF
+
+# One attempt is all the download is given, and the build arrives whole on
+# it: a file is taken as whole after the transfer that finished it, the last
+# one included.
+OPENHIKES_DOWNLOAD_ATTEMPTS=1 \
+    run_script "vector-archives basemap copies Protomaps' newest build of the app's schema in under Protomaps' own ETag" \
+    "$vector_archives" basemap
+if expect_status 0 \
+    && expect_contains "$output" "Protomaps' 20261118 build, basemaps 4.15.2, 7 bytes" "the output" \
+    && expect_contains "$output" "uploaded planet-20261118.pmtiles (7 bytes) as $basemap_etag" "the output" \
+    && expect_contains "$calls" "?uploads" "the requests"; then
+    if ! cmp -s "$STUB_BUCKET/planet-20261118.pmtiles" "$STUB_PROTOMAPS/20261118.pmtiles"; then
+        fail "the bucket does not hold Protomaps' bytes"
+    elif ! cmp -s "$OPENHIKES_VECTOR_ARCHIVES_CACHE/planet-20261118.pmtiles" "$STUB_PROTOMAPS/20261118.pmtiles"; then
+        fail "no whole local copy was kept for the countries"
+    else
+        pass
+    fi
+fi
+
+rm -rf "$OPENHIKES_VECTOR_ARCHIVES_CACHE"
+run_script "vector-archives basemap leaves alone a build the bucket holds under Protomaps' ETag, and downloads nothing" \
+    "$vector_archives" basemap
+if expect_status 0 \
+    && expect_contains "$output" "already has planet-20261118 as $basemap_etag" "the output" \
+    && expect_absent "$calls" "-C -" "the requests" \
+    && expect_absent "$calls" "?uploads" "the requests"; then
+    pass
+fi
+
+# A copy that does not come to the source's ETag is abandoned before it is
+# completed, so the bucket never holds it under the name the manifest would
+# give it.
+# Parts sent side by side share the cap: eight parts at 16 MiB a second
+# are 2 MiB a second each. A part is given up only once it stalls, never at a
+# deadline, which a part held to its share of a low cap would never meet.
+OPENHIKES_R2_MIB_PER_SECOND=16 \
+    run_script "vector-archives basemap abandons a copy that does not come to Protomaps' ETag" \
+    "$vector_archives" basemap 20261117
+if expect_status 1 \
+    && expect_contains "$calls" "--limit-rate 2097152 -o /dev/null -D - --speed-limit 1024 --speed-time 60 -T" \
+        "a part's upload" \
+    && expect_absent "$calls" "--max-time" "a part's upload" \
+    && expect_contains "$output" "not 00000000000000000000000000000000-1; nothing was written" "the error" \
+    && expect_contains "$calls" "-X DELETE https://stub-account.r2.cloudflarestorage.com/stub-bucket/planet-20261117.pmtiles?uploadId=stub%2Bupload" \
+        "the requests"; then
+    if [[ -f "$STUB_BUCKET/planet-20261117.pmtiles" ]]; then
+        fail "the bucket holds the copy"
+    else
+        pass
+    fi
+fi
+
+run_script "vector-archives basemap refuses a build whose parts could have been cut at more than one size" \
+    "$vector_archives" basemap 20261116
+if expect_status 1 \
+    && expect_contains "$output" "parts could each be 2 to 3 MiB" "the error" \
+    && expect_absent "$calls" "-C -" "the requests" \
+    && expect_absent "$calls" "?uploads" "the requests"; then
+    pass
+fi
+
+# The bucket already holds that day's name with other bytes, which would
+# refuse the copy only once it was downloaded.
+printf 'others' > "$STUB_BUCKET/planet-20261115.pmtiles"
+run_script "vector-archives basemap refuses a name the bucket holds other bytes under, before downloading" \
+    "$vector_archives" basemap 20261115
+if expect_status 1 \
+    && expect_contains "$output" "already has planet-20261115 as $(md5 -q "$STUB_BUCKET/planet-20261115.pmtiles")" \
+        "the error" \
+    && expect_absent "$calls" "-C -" "the requests" \
+    && expect_absent "$calls" "?uploads" "the requests"; then
+    pass
+fi
+rm "$STUB_BUCKET/planet-20261115.pmtiles"
+
+run_script "vector-archives basemap refuses a day Protomaps built in a schema the app does not read" \
+    "$vector_archives" basemap 20261119
+if expect_status 1 \
+    && expect_contains "$output" "Protomaps built 20261119 with basemaps 5.0.0, and the app reads schema 4" "the error"; then
+    pass
+fi
+
+# Scripts/vector-extras.sh uploads the extras in parts too, into a bucket of
+# their own here, under a name the tile server's cache keeps for a day. It
+# asks whether the name is free, then completes the upload on condition that
+# it still is, and only that condition stops a second upload that also found
+# the name free from replacing the first: without it, an upload made alone
+# goes exactly as it does with it.
+extras_bucket="$bucket_work/extras-bucket"
+mkdir -p "$extras_bucket"
+extras_archive="$extras_work/extras-20261120-00.pmtiles"
+printf 'archive' > "$extras_archive"
+STUB_BUCKET="$extras_bucket" \
+    run_script "vector-extras upload sends the extras in parts, completed on condition that the name is still free" \
+    "$vector_extras" upload "$extras_archive"
+if expect_status 0 \
+    && expect_contains "$calls" "?uploads" "the requests" \
+    && expect_contains "$calls" "-X POST -H If-None-Match: * -H Content-Type: application/xml" "the completion" \
+    && expect_contains "$output" "uploaded extras-20261120-00.pmtiles (7 bytes) as" "the output" \
+    && expect_contains "$output" "next, Scripts/vector-archives.sh use extras-20261120-00" "the output"; then
+    if cmp -s "$extras_bucket/extras-20261120-00.pmtiles" "$extras_archive"; then
+        pass
+    else
+        fail "the bucket does not hold the extras"
+    fi
+fi
+
+STUB_BUCKET="$extras_bucket" \
+    run_script "vector-extras upload refuses a name already in the bucket, before sending anything" \
+    "$vector_extras" upload "$extras_archive"
+if expect_status 1 \
+    && expect_contains "$output" "extras-20261120-00.pmtiles is already in stub-bucket; build from a newer planet" \
+        "the error" \
+    && expect_absent "$calls" "?uploads" "the requests"; then
+    pass
+fi
+
+extras_archive="$extras_work/extras-20261120-01.pmtiles"
+printf 'archive' > "$extras_archive"
+STUB_BUCKET="$extras_bucket" STUB_LANDS_FIRST=extras-20261120-01.pmtiles \
+    run_script "vector-extras upload refuses a name another upload took after it was found free" \
+    "$vector_extras" upload "$extras_archive"
+if expect_status 1 \
+    && expect_contains "$output" "extras-20261120-01.pmtiles reached stub-bucket from another upload first" "the error" \
+    && expect_contains "$calls" \
+        "-X DELETE https://stub-account.r2.cloudflarestorage.com/stub-bucket/extras-20261120-01.pmtiles?uploadId=stub%2Bupload" \
+        "the requests"; then
+    if [[ "$(cat "$extras_bucket/extras-20261120-01.pmtiles")" == another ]]; then
+        pass
+    else
+        fail "the upload was written over the one that landed first"
+    fi
+fi
+
+# `use` puts the new basemap first, drops the one of its schema behind it,
+# which no build would draw from any more, and keeps the first of another
+# schema for the builds that read only that. The server has this manifest's
+# revision, so the new one is one above it.
+cp "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST" "$STUB_SERVED_MANIFEST"
+run_script "vector-archives use heads the basemaps with an archive and keeps only another schema's behind it" \
+    "$vector_archives" use planet-20261118
+if expect_status 0 \
+    && expect_contains "$output" "planet-20261118 heads the basemaps at revision 4" "the output"; then
+    expected_basemaps="$(printf '%s\n' \
+        '    { "name": "planet-20261118", "schema": 4, "maximumZoom": 15 },' \
+        '    { "name": "planet-20261001", "schema": 3, "maximumZoom": 14 }')"
+    manifest_now="$(cat "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST")"
+    if expect_contains "$manifest_now" "\"revision\": 4," "the manifest" \
+        && expect_contains "$manifest_now" "$expected_basemaps" "the manifest" \
+        && expect_contains "$manifest_now" '"name": "extras-20261119", "generation": 2, "minimumZoom": 4' "the manifest" \
+        && expect_absent "$manifest_now" "planet-20261117" "the manifest"; then
+        pass
+    fi
+fi
+
+# A second archive named before the manifest is published goes out in the
+# same revision: apps only ever see the published ones.
+run_script "vector-archives use raises the revision once for every archive named before a publish" \
+    "$vector_archives" use extras-20261120
+if expect_status 0 \
+    && expect_contains "$output" "extras-20261120 heads the extras at revision 4" "the output" \
+    && expect_absent "$(cat "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST")" "extras-20261119" "the manifest"; then
+    pass
+fi
+
+# Naming an archive the list already has, as a step back would, keeps its
+# own schema and zoom: given the head's, it would be drawn by builds of a
+# schema it is not, in place of the one they read.
+run_script "vector-archives use keeps the schema of an archive the list already has" \
+    "$vector_archives" use planet-20261001
+if expect_status 0 \
+    && expect_contains "$output" "planet-20261001 heads the basemaps at revision 4" "the output"; then
+    expected_basemaps="$(printf '%s\n' \
+        '    { "name": "planet-20261001", "schema": 3, "maximumZoom": 14 },' \
+        '    { "name": "planet-20261118", "schema": 4, "maximumZoom": 15 }')"
+    if expect_contains "$(cat "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST")" "$expected_basemaps" "the manifest"; then
+        pass
+    fi
+fi
+
+# An archive already first still drops one of its generation behind it,
+# which every build passes over for it: the manifest of an extras build kept
+# listed while the countries were cut from it.
+cat > "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST" <<'EOF'
+{
+  "version": 1,
+  "revision": 4,
+  "basemaps": [
+    { "name": "planet-20261118", "schema": 4, "maximumZoom": 15 },
+    { "name": "planet-20261001", "schema": 3, "maximumZoom": 14 }
+  ],
+  "extras": [
+    { "name": "extras-20261120", "generation": 2, "minimumZoom": 4 },
+    { "name": "extras-20261119", "generation": 2, "minimumZoom": 4 }
+  ]
+}
+EOF
+run_script "vector-archives use drops what no build draws behind an archive already first" \
+    "$vector_archives" use extras-20261120
+if expect_status 0 \
+    && expect_contains "$output" "extras-20261120 heads the extras at revision 4" "the output" \
+    && expect_absent "$(cat "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST")" "extras-20261119" "the manifest"; then
+    pass
+fi
+
+run_script "vector-archives use leaves a manifest alone where the archive is first and nothing is behind it" \
+    "$vector_archives" use extras-20261120
+if expect_status 0 \
+    && expect_contains "$output" "extras-20261120 is already the manifest's first of its extras" "the output"; then
+    pass
+fi
+
+STUB_MISSING_ARCHIVES="extras-20261121" \
+    run_script "vector-archives use refuses an archive the tile server does not serve" \
+    "$vector_archives" use extras-20261121
+if expect_status 1 \
+    && expect_contains "$output" "does not serve extras-20261121; upload it first" "the error" \
+    && expect_absent "$(cat "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST")" "extras-20261121" "the manifest"; then
+    pass
+fi
+
+# Another checkout has since published newer extras as revision 5. Naming a
+# basemap here would keep this checkout's extras and publish them over the
+# server's, so `use` refuses until the checkout has the server's manifest.
+sed -e 's/"revision": 4/"revision": 5/' -e 's/"extras-20261120"/"extras-20261121"/' \
+    "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST" > "$STUB_SERVED_MANIFEST"
+cp "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST" "$bucket_work/before.json"
+run_script "vector-archives use refuses a manifest behind the server's" \
+    "$vector_archives" use planet-20261119
+if expect_status 1 \
+    && expect_contains "$output" "has revision 5, and $OPENHIKES_VECTOR_ARCHIVE_MANIFEST is revision 4" "the error"; then
+    if cmp -s "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST" "$bucket_work/before.json"; then
+        pass
+    else
+        fail "the manifest was edited" "$(cat "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST")"
+    fi
+fi
+cp "$bucket_work/before.json" "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST"
+
+# The bucket holds the archives both manifests name, one only this manifest
+# names (uploaded, not yet published), one neither names, the manifest and a
+# country, of which prune deletes the one neither names alone.
+sed 's/"extras-20261120"/"extras-20261119"/' "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST" > "$STUB_SERVED_MANIFEST"
+mkdir -p "$STUB_BUCKET/countries"
+# A later basemap neither manifest names yet is an upload on its way to a
+# `use`, perhaps in another checkout, and is kept with it.
+for key in planet-20261001.pmtiles planet-20261117.pmtiles planet-20261125.pmtiles extras-20261118.pmtiles \
+    extras-20261119.pmtiles extras-20261120.pmtiles manifest.json countries/SI-20261117.pmtiles; do
+    printf 'bytes' > "$STUB_BUCKET/$key"
+done
+run_script "vector-archives prune --dry-run deletes nothing" "$vector_archives" prune --dry-run
+if expect_status 0 \
+    && expect_contains "$output" "would delete planet-20261117.pmtiles (5 bytes)" "the output" \
+    && expect_absent "$calls" "-X DELETE" "the requests"; then
+    pass
+fi
+
+run_script "vector-archives prune deletes the archives the server has moved past that neither manifest names" \
+    "$vector_archives" prune
+if expect_status 0 \
+    && expect_contains "$output" "deleted planet-20261117.pmtiles" "the output" \
+    && expect_contains "$output" "deleted extras-20261118.pmtiles" "the output" \
+    && expect_contains "$output" "kept planet-20261125.pmtiles (5 bytes): the server names no later archive of its kind" \
+        "the output"; then
+    remaining="$(cd "$STUB_BUCKET" && find . -type f | sed 's|^\./||' | LC_ALL=C sort | tr '\n' ' ')"
+    kept="countries/SI-20261117.pmtiles extras-20261119.pmtiles extras-20261120.pmtiles manifest.json"
+    if [[ "$remaining" != "$kept planet-20261001.pmtiles planet-20261118.pmtiles planet-20261125.pmtiles " ]]; then
+        fail "the bucket holds the wrong archives afterwards" "$remaining"
+    else
+        pass
+    fi
+fi
+
+rm "$STUB_BUCKET/planet-20261118.pmtiles"
+run_script "vector-archives prune deletes nothing while the server's manifest names an archive the bucket lacks" \
+    "$vector_archives" prune
+if expect_status 1 \
+    && expect_contains "$output" "names planet-20261118, which stub-bucket does not hold" "the error" \
+    && expect_absent "$calls" "-X DELETE" "the requests"; then
+    pass
+fi
+
+# The server's manifest names extras this checkout's does not, and the server
+# answers with a manifest cut short, or with one that has lost its extras.
+# Read as naming nothing, either would have prune delete the extras the apps
+# are drawing.
+printf 'bytes' > "$STUB_BUCKET/planet-20261118.pmtiles"
+printf 'bytes' > "$STUB_BUCKET/extras-20261121.pmtiles"
+for broken in "cut short" "without its extras"; do
+    if [[ "$broken" == "cut short" ]]; then
+        sed 's/"extras-20261120"/"extras-20261121"/' "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST" | head -c 60 \
+            > "$STUB_SERVED_MANIFEST"
+        reason="is not a version 1 manifest"
+    else
+        printf '%s\n' '{"version": 1, "revision": 4,' \
+            '"basemaps": [{"name": "planet-20261118", "schema": 4, "maximumZoom": 15}]}' > "$STUB_SERVED_MANIFEST"
+        reason="has no extras"
+    fi
+    run_script "vector-archives prune deletes nothing when the server's manifest is $broken" "$vector_archives" prune
+    if expect_status 1 \
+        && expect_contains "$output" "the manifest on https://tiles.example.invalid $reason" "the error" \
+        && expect_contains "$output" "prune nothing without it" "the error" \
+        && expect_absent "$calls" "-X DELETE" "the requests"; then
+        if [[ -f "$STUB_BUCKET/extras-20261121.pmtiles" ]]; then
+            pass
+        else
+            fail "the server's extras were deleted"
+        fi
+    fi
+done
+rm -f "$STUB_BUCKET/planet-20261118.pmtiles" "$STUB_BUCKET/extras-20261121.pmtiles"
+
+# Scripts/offline-countries.sh prune deletes the countries' archives of a
+# build earlier than the one the server's manifest lists for their area, a
+# region's and a detail file's included, and only those. An upload puts its
+# files up before the manifest that lists them, so a later build's file the
+# manifest does not list yet, and an area it does not list at all, are kept.
+cat > "$STUB_BUCKET/countries/manifest.json" <<EOF
+{"version": 1, "countries": [
+ {"id": "SI", "build": "20261118", "schema": 4, "names": {},
+  "bounds": {"west": 13.3, "south": 45.4, "east": 16.6, "north": 46.9},
+  "outline": [[[13.3, 45.4], [16.6, 45.4], [16.6, 46.9], [13.3, 46.9], [13.3, 45.4]]],
+  "files": [{"role": "basemap", "path": "countries/SI-20261118.pmtiles", "bytes": 7,
+    "sha256": "$country_sha256", "minimumZoom": 0, "maximumZoom": 15}]},
+ {"id": "US-CO", "group": "US", "build": "20261118", "schema": 4, "names": {"en": "Colorado"},
+  "bounds": {"west": -109.1, "south": 37.0, "east": -102.0, "north": 41.0},
+  "outline": [[[-109.1, 37.0], [-102.0, 37.0], [-102.0, 41.0], [-109.1, 41.0], [-109.1, 37.0]]],
+  "files": [{"role": "basemap", "path": "countries/US-CO-20261118.pmtiles", "bytes": 7,
+    "sha256": "$country_sha256", "minimumZoom": 0, "maximumZoom": 15}]}]}
+EOF
+for key in SI-20261118 SI-detail-extras-20261117 SI-20261119 US-CO-20261118 US-CO-detail-20261117 \
+    AT-20261118; do
+    printf 'archive' > "$STUB_BUCKET/countries/$key.pmtiles"
+done
+run_script "offline-countries prune deletes only the countries' archives of builds the manifest has moved past" \
+    "$offline_countries" prune
+if expect_status 0 \
+    && expect_contains "$output" "deleted countries/SI-20261117.pmtiles" "the output" \
+    && expect_contains "$output" "deleted countries/US-CO-detail-20261117.pmtiles" "the output" \
+    && expect_contains "$output" "kept countries/SI-20261119.pmtiles (7 bytes): no later build of its area is listed" \
+        "the output" \
+    && expect_contains "$output" "3 archives of builds the manifest has moved past, and 2 it does not list kept" \
+        "the output"; then
+    remaining="$(cd "$STUB_BUCKET/countries" && ls | LC_ALL=C sort | tr '\n' ' ')"
+    if [[ "$remaining" != "AT-20261118.pmtiles SI-20261118.pmtiles SI-20261119.pmtiles US-CO-20261118.pmtiles manifest.json " ]]; then
+        fail "the bucket holds the wrong countries afterwards" "$remaining"
+    else
+        pass
+    fi
+fi
+
+rm "$STUB_BUCKET/countries/SI-20261118.pmtiles"
+run_script "offline-countries prune deletes nothing while the manifest lists an archive the bucket lacks" \
+    "$offline_countries" prune
+if expect_status 1 \
+    && expect_contains "$output" "lists countries/SI-20261118.pmtiles, which the bucket does not hold" "the error"; then
+    pass
+fi
+unset STUB_BUCKET STUB_PROTOMAPS STUB_SERVED_MANIFEST OPENHIKES_VECTOR_ARCHIVE_MANIFEST OPENHIKES_TILE_SERVER \
+    OPENHIKES_PROTOMAPS_BUILDS OPENHIKES_PROTOMAPS_INDEX OPENHIKES_VECTOR_ARCHIVES_CACHE OPENHIKES_R2_ENV \
+    OPENHIKES_R2_RETRY_SECONDS
 
 echo
 if (( failures > 0 )); then

@@ -77,6 +77,9 @@ nonisolated enum PackedEnvelope {
         let packed = envelope.remainder
         switch method {
         case .deflate:
+            // ``file(magic:version:body:)`` packs only a body packing makes
+            // smaller, so never an empty one.
+            guard length > 0 else { throw PackedFileError.corrupt }
             return try PackedDeflate.decompressed(packed, count: length)
 
         case .stored:
@@ -239,7 +242,8 @@ nonisolated enum PackedDeflate {
 
     /// `packed` unpacked to exactly `count` bytes, which is what the envelope
     /// said it would be, and to the end of its stream. Anything else is not a
-    /// body this format wrote.
+    /// body this format wrote. A `count` of none takes a stream that ends
+    /// before its first byte, which gzip makes of an empty tile.
     ///
     /// A buffer filled to `count` proves neither: a file that understates its
     /// body leaves the rest unread and passes its first bytes off as the
@@ -248,7 +252,7 @@ nonisolated enum PackedDeflate {
     /// byte more than it was said to hold, and taken only when the decoder
     /// says it ended there, `count` bytes in.
     static func decompressed(_ packed: [UInt8], count: Int) throws -> [UInt8] {
-        guard count > 0, !packed.isEmpty else { throw PackedFileError.corrupt }
+        guard count >= 0, !packed.isEmpty else { throw PackedFileError.corrupt }
         var body = [UInt8](repeating: 0, count: count + 1)
         let written = try packed.withUnsafeBufferPointer { source in
             try body.withUnsafeMutableBufferPointer { buffer in try unpacked(source, into: buffer) }

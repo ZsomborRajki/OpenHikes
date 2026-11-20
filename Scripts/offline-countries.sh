@@ -9,9 +9,11 @@
 # PMTiles archives, cut along its outline grown by a margin: the Protomaps
 # basemap's tiles and the extras' (Scripts/vector-extras.sh) to zoom 14, which
 # every download takes, and both at zoom 15, which the app's Extra Detail adds.
-# They are read out of the archives in the R2 bucket `openhikes-tiles` with
-# signed HTTP ranges, or out of local copies of them, and each is read back
-# through the app's own reader and held to the source before it is listed.
+# They are read out of local copies of the archives the app's manifest names
+# first, where Scripts/vector-archives.sh basemap and Scripts/vector-extras.sh
+# build leave them, or out of the R2 bucket `openhikes-tiles` with signed HTTP
+# ranges where there is none, and each is read back through the app's own
+# reader and held to the source before it is listed.
 # `countries/manifest.json` lists them, with each file's size and SHA-256 and
 # the outline the map draws; the app reads it from tiles.openhikes.app.
 # *The offline countries* in AGENTS.md is the procedure, and
@@ -21,26 +23,45 @@
 # Scripts/run-script-tests.sh builds the tool and runs `selftest`.
 #
 # Usage:
+#   Scripts/offline-countries.sh publish [--only AT,US] [--batch <n>] [--planet <file>]
+#                                        [--extras <file>] [--margin-km <km>]
 #   Scripts/offline-countries.sh build [--only AT,US] [--out <dir>] [--planet <file>]
 #                                      [--extras <file>] [--margin-km <km>]
 #   Scripts/offline-countries.sh upload <dir> [--dry-run]
+#   Scripts/offline-countries.sh prune [--dry-run]
 #   Scripts/offline-countries.sh areas
 #   Scripts/offline-countries.sh inspect <file.pmtiles>...
 #   Scripts/offline-countries.sh selftest
 #
+#   publish   Build and upload every area, or only those --only names, a batch
+#             of --batch (20) at a time, deleting each batch once it is up, so
+#             the disk holds no more than a batch beside the planet. It lists
+#             the areas it has put up under .build/offline-countries, one list
+#             for each basemap and extras, and a run after a stop goes on from
+#             there, given the same files, margin and bucket as the run that
+#             started the list, which it writes down beside it. Takes build's
+#             options.
 #   build     Cut every area, or only those --only names (a region's code, or a
 #             split country's for all its regions), into <dir> (default
 #             .build/offline-countries/out) with its manifest.json. The basemap
 #             and the extras are the first the app's manifest names
-#             (OpenHikes/Tiles/Vector/VectorTileArchiveManifest.json); --planet
-#             and --extras read local copies rather than the bucket, which is
-#             what makes cutting the whole world take hours rather than a day.
-#             A 3 km margin by default.
+#             (OpenHikes/Tiles/Vector/VectorTileArchiveManifest.json), read
+#             from the local copies where there are whole ones, which is what
+#             makes cutting the whole world take hours rather than a day, and
+#             from the bucket where not; --planet and --extras name other
+#             files. The build is named for the later of the two archives'
+#             days. A 3 km margin by default.
 #   upload    Put <dir>'s files in the bucket under countries/, each with its
 #             SHA-256 beside it, skipping any already there with the same bytes
 #             and refusing one there with others, then merge its manifest into
 #             the server's and write that last, so the app never lists a file
 #             that is not there yet.
+#   prune     Delete every archive under countries/ of a build earlier than
+#             the one the server's manifest lists for its area, keeping any
+#             other the manifest does not list, since an upload puts its files
+#             up before the manifest. An app that already has the manifest
+#             that listed one and asks for it fails that download, and tries
+#             again from the manifest it reads next.
 #   areas     Print every area build cuts, its code and a region's country.
 #   inspect   Print an archive's header.
 #   selftest  Cut a made-up archive and read it back.
@@ -49,7 +70,7 @@
 #   OPENHIKES_R2_ENV  The bucket's S3 keys (default
 #                     ~/.config/openhikes/r2-openhikes-tiles.env: R2_ACCOUNT_ID,
 #                     R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET), as for
-#                     Scripts/vector-extras.sh.
+#                     Scripts/vector-extras.sh (Scripts/lib/r2.sh).
 #   OPENHIKES_OFFLINE_COUNTRIES_BUILD  Where the tool is compiled to.
 #
 set -euo pipefail
@@ -58,6 +79,13 @@ repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 build_dir="${OPENHIKES_OFFLINE_COUNTRIES_BUILD:-$repository_root/.build/offline-countries}"
 tool="$build_dir/offline-countries"
 cache="$HOME/Library/Caches/OpenHikes/offline-countries"
+# Where Scripts/vector-archives.sh basemap and Scripts/vector-extras.sh build
+# leave their archives.
+archives_cache="${OPENHIKES_VECTOR_ARCHIVES_CACHE:-$HOME/Library/Caches/OpenHikes/vector-archives}"
+extras_cache="${OPENHIKES_VECTOR_EXTRAS_CACHE:-$HOME/Library/Caches/OpenHikes/vector-extras}"
+
+# shellcheck source=lib/r2.sh
+source "$repository_root/Scripts/lib/r2.sh"
 
 # Natural Earth's 1:50m countries and 1:10m states and provinces, public
 # domain, pinned to a release.
@@ -102,15 +130,6 @@ prepare_tool() {
         || die "the tool did not compile."
 }
 
-load_keys() {
-    local env_file="${OPENHIKES_R2_ENV:-$HOME/.config/openhikes/r2-openhikes-tiles.env}"
-    [[ -f "$env_file" ]] || die "no R2 keys at $env_file"
-    set -a
-    # shellcheck disable=SC1090
-    . "$env_file"
-    set +a
-}
-
 # The first of `list` (basemaps or extras) the app's manifest names, which is
 # what the app draws from, read out of the app rather than spelled here.
 archive_name() {
@@ -118,6 +137,23 @@ archive_name() {
     name="$(plutil -extract "$list.0.name" raw -o - "$manifest" 2>/dev/null)" \
         || die "could not read the first of $list out of $manifest"
     printf '%s\n' "$name"
+}
+
+# The archive to cut from: a local copy where there is a whole one, as large
+# as the bucket's, and the bucket's where there is none. A copy of another
+# size is a download or a build cut short, which nothing should be cut from.
+archive_source() {
+    local name="$1" directory size remote
+    for directory in "$archives_cache" "$extras_cache"; do
+        [[ -f "$directory/$name.pmtiles" ]] || continue
+        size="$(stat -f %z "$directory/$name.pmtiles")"
+        remote="$(r2_list "$name.pmtiles" / | awk -F '\t' -v key="$name.pmtiles" '$1 == key { print $2 }')"
+        [[ "$size" == "$remote" ]] \
+            || die "$directory/$name.pmtiles is $size bytes and the bucket's ${remote:-is missing}; delete it, or name the file to cut from"
+        printf '%s\n' "$directory/$name.pmtiles"
+        return
+    done
+    printf 'r2:%s.pmtiles\n' "$name"
 }
 
 # A Natural Earth file, downloaded once and held to its pinned SHA-256.
@@ -146,18 +182,30 @@ build() {
             *) usage ;;
         esac
     done
-    local basemap planet
+    local basemap planet extras_name extras_day build
     basemap="$(archive_name basemaps)"
     planet="${basemap#planet-}"
     [[ "$planet" =~ ^[0-9]{8}$ ]] || die "the basemap $basemap is not named planet-YYYYMMDD"
-    [[ -n "$planet_file" ]] || planet_file="r2:$basemap.pmtiles"
-    [[ -n "$extras" ]] || extras="r2:$(archive_name extras).pmtiles"
+    extras_name="$(archive_name extras)"
+    [[ "$extras_name" =~ ^extras-([0-9]{8})(-[0-9]{2})?$ ]] \
+        || die "the extras $extras_name are not named extras-YYYYMMDD-HH"
+    extras_day="${BASH_REMATCH[1]}"
+    # A build is named for the later of its two archives' days, so a cut
+    # over new extras on the same basemap goes up under names of its own,
+    # and an installed app, which offers a later build as an update, offers
+    # it. A second cut on one day over the same two days is refused at the
+    # upload, which keeps a name's bytes, and waits for a newer archive.
+    build="$planet"
+    [[ "$extras_day" < "$build" ]] || build="$extras_day"
     local outline_file region_file
     outline_file="$(natural_earth_file "$outlines_url" "$outlines_sha256")"
     region_file="$(natural_earth_file "$regions_url" "$regions_sha256")"
-    load_keys
+    r2_load_keys
+    [[ -n "$planet_file" ]] || planet_file="$(archive_source "$basemap")"
+    [[ -n "$extras" ]] || extras="$(archive_source "$extras_name")"
+    echo "offline-countries: cutting build $build from $planet_file and $extras"
     prepare_tool
-    local arguments=(build --planet "$planet_file" --extras "$extras" --build "$planet"
+    local arguments=(build --planet "$planet_file" --extras "$extras" --build "$build"
         --outlines "$outline_file" --regions "$region_file"
         --countries "$repository_root/Scripts/lib/offline-countries.json"
         --out "$out" --margin-km "$margin"
@@ -167,36 +215,18 @@ build() {
     echo "offline-countries: built into $out"
 }
 
-r2_curl() {
-    curl -s --aws-sigv4 "aws:amz:auto:s3" --user "$R2_ACCESS_KEY_ID:$R2_SECRET_ACCESS_KEY" \
-        -H "x-amz-content-sha256: UNSIGNED-PAYLOAD" "$@"
-}
-
-# A PUT to the bucket, asked again when R2 answers a server error or the
-# connection fails: across a world of uploads, a 500 now and then is R2's.
-# Prints the last status. A retry after an attempt that did land meets
-# If-None-Match and answers 412, which the caller settles by the digest.
-r2_put() {
-    local attempt status
-    for attempt in 1 2 3 4; do
-        status="$(r2_curl -o /dev/null -w "%{http_code}" "$@")"
-        case "$status" in
-            5??|000) sleep $(( attempt * ${OPENHIKES_R2_RETRY_SECONDS:-2} )) ;;
-            *) break ;;
-        esac
-    done
-    printf '%s\n' "$status"
-}
-
 upload() {
     [[ $# -ge 1 ]] || usage
     local dir="$1" dry_run=false
     shift
     [[ "${1:-}" != "--dry-run" ]] || dry_run=true
     [[ -f "$dir/manifest.json" ]] || die "no manifest.json in $dir"
-    load_keys
+    r2_load_keys
     prepare_tool
-    local base="https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com/$R2_BUCKET"
+    local base listing
+    base="$(r2_url)"
+    listing="$("$tool" files "$dir/manifest.json")" || die "could not read $dir/manifest.json"
+    [[ -n "$listing" ]] || die "$dir/manifest.json lists no files"
     local path bytes sha256 name local_size head status remote_size remote_sha256
     while IFS=$'\t' read -r path bytes sha256; do
         name="$(basename "$path")"
@@ -248,7 +278,7 @@ upload() {
         fi
         [[ "$status" == 200 ]] || die "R2 answered $status to the upload of $path"
         echo "offline-countries: uploaded $path ($local_size bytes)"
-    done < <("$tool" files "$dir/manifest.json")
+    done <<< "$listing"
 
     local server_manifest="$dir/.server-manifest.json" merged="$dir/.merged-manifest.json"
     status="$(r2_curl -o "$server_manifest" -w "%{http_code}" "$base/countries/manifest.json")"
@@ -267,18 +297,166 @@ upload() {
     echo "offline-countries: wrote countries/manifest.json"
 }
 
+# What a cut reads an archive from, as `publish` records it: a file and its
+# size, or the bucket's key.
+source_identity() {
+    if [[ -f "$1" ]]; then
+        printf '%s, %s bytes\n' "$1" "$(stat -f %z "$1")"
+    else
+        printf '%s\n' "$1"
+    fi
+}
+
+# `publish`: build and upload a batch at a time, as Usage says.
+publish() {
+    local only="" batch_size=20 planet_file="" extras_file="" margin=3
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --only) only="$2"; shift 2 ;;
+            --batch) batch_size="$2"; shift 2 ;;
+            --planet) planet_file="$2"; shift 2 ;;
+            --extras) extras_file="$2"; shift 2 ;;
+            --margin-km) margin="$2"; shift 2 ;;
+            *) usage ;;
+        esac
+    done
+    [[ "$batch_size" =~ ^[1-9][0-9]*$ ]] || usage
+    local basemap extras work
+    basemap="$(archive_name basemaps)"
+    extras="$(archive_name extras)"
+    work="$build_dir/publish-$basemap-$extras"
+    # The areas listed done are one build, so every batch of it is cut from
+    # the same two files along the same margin and goes to the same bucket.
+    # The first run of a list writes down what it was given, and a run given
+    # anything else is refused rather than mixed into the build.
+    r2_load_keys
+    [[ -n "$planet_file" ]] || planet_file="$(archive_source "$basemap")"
+    [[ -n "$extras_file" ]] || extras_file="$(archive_source "$extras")"
+    local settings
+    settings="$(printf 'planet %s\nextras %s\nmargin %s km\nbucket %s/%s' \
+        "$(source_identity "$planet_file")" "$(source_identity "$extras_file")" "$margin" \
+        "$R2_ACCOUNT_ID" "$R2_BUCKET")"
+    mkdir -p "$work"
+    touch "$work/done.txt"
+    if [[ ! -s "$work/done.txt" ]]; then
+        printf '%s\n' "$settings" > "$work/settings.txt"
+    elif [[ "$(cat "$work/settings.txt" 2>/dev/null)" != "$settings" ]]; then
+        die "$work lists areas put up with other settings than these:
+$settings
+Go on with the ones it was started with, or delete it to start over:
+$(cat "$work/settings.txt" 2>/dev/null || echo "(none recorded)")"
+    fi
+    # The list is read whole before it is used, so a tool that fails to
+    # build or to read the outlines stops the run rather than reading as no
+    # areas left to publish.
+    local area_list id group wanted=",$only," remaining=()
+    area_list="$(areas)" || die "could not list the areas; nothing was published"
+    [[ -n "$area_list" ]] || die "the tool listed no areas; nothing was published"
+    while IFS=$'\t' read -r id group; do
+        [[ -z "$only" || "$wanted" == *",$id,"* || ( -n "$group" && "$wanted" == *",$group,"* ) ]] || continue
+        grep -qx "$id" "$work/done.txt" || remaining+=("$id")
+    done <<< "$area_list"
+    echo "offline-countries: ${#remaining[@]} areas to publish, $(wc -l < "$work/done.txt" | tr -d ' ') already up"
+    local start batch
+    for (( start = 0; start < ${#remaining[@]}; start += batch_size )); do
+        batch=("${remaining[@]:start:batch_size}")
+        rm -rf "$work/batch"
+        build --only "$(IFS=,; echo "${batch[*]}")" --out "$work/batch" \
+            --planet "$planet_file" --extras "$extras_file" --margin-km "$margin"
+        upload "$work/batch"
+        printf '%s\n' "${batch[@]}" >> "$work/done.txt"
+        rm -rf "$work/batch"
+        echo "offline-countries: $(( start + ${#batch[@]} )) of ${#remaining[@]} published"
+    done
+    echo "offline-countries: every area is up; Scripts/offline-countries.sh prune deletes the older builds' files"
+}
+
+# `prune [--dry-run]`: the files of builds the server's manifest has moved
+# past, deleted.
+prune() {
+    local dry_run=false
+    [[ $# -eq 0 ]] || { [[ $# -eq 1 && "$1" == --dry-run ]] || usage; dry_run=true; }
+    r2_load_keys
+    prepare_tool
+    mkdir -p "$build_dir"
+    local manifest="$build_dir/.server-manifest.json" status
+    status="$(r2_curl -o "$manifest" -w "%{http_code}" "$(r2_url countries/manifest.json)")"
+    [[ "$status" == 200 ]] || die "R2 answered $status for countries/manifest.json; prune nothing without it"
+    local listed objects keys path
+    listed="$("$tool" files "$manifest" | cut -f 1)"
+    [[ -n "$listed" ]] || die "countries/manifest.json lists no files; prune nothing without them"
+    objects="$(r2_list countries/)"
+    keys="$(cut -f 1 <<< "$objects")"
+    while IFS= read -r path; do
+        grep -qxF "$path" <<< "$keys" \
+            || die "the manifest lists $path, which the bucket does not hold; prune nothing until it does"
+    done <<< "$listed"
+    # An upload puts an area's files in the bucket before the manifest that
+    # lists them, so a file the manifest does not list may be on its way into
+    # it. Only one of a build earlier than the one listed for its area goes:
+    # an area's listed build only rises (`merge` refuses an earlier one), so
+    # nothing lists that file again. A file of the listed build or a later
+    # one, of an area not listed at all, or of a name no build gives is kept.
+    # A file's area and build are read off its name,
+    # `countries/<area>[-detail][-extras]-<build>.pmtiles`.
+    local verdicts
+    verdicts="$({ awk '{ print "listed\t" $0 }' <<< "$listed"; awk '{ print "object\t" $0 }' <<< "$objects"; } \
+        | awk -F '\t' '
+        function area_build(key,    stem, parts, count, i) {
+            if (key !~ /^countries\/[^\/]+\.pmtiles$/) return 0
+            stem = substr(key, 11, length(key) - 18)
+            count = split(stem, parts, "-")
+            if (count < 2 || parts[count] !~ /^[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]$/) return 0
+            build = parts[count--]
+            if (count > 1 && parts[count] == "extras") count--
+            if (count > 1 && parts[count] == "detail") count--
+            area = parts[1]
+            for (i = 2; i <= count; i++) area = area "-" parts[i]
+            return 1
+        }
+        $1 == "listed" { isListed[$2] = 1; if (area_build($2)) listedBuild[area] = build; next }
+        $2 !~ /\.pmtiles$/ || ($2 in isListed) { next }
+        area_build($2) && (area in listedBuild) && build < listedBuild[area] { print "retired\t" $2 "\t" $3; next }
+        { print "kept\t" $2 "\t" $3 }
+    ')"
+    local verdict key bytes doomed=0 spared=0
+    while IFS=$'\t' read -r verdict key bytes; do
+        case "$verdict" in
+            retired)
+                doomed=$(( doomed + 1 ))
+                if [[ "$dry_run" == true ]]; then
+                    echo "offline-countries: would delete $key ($bytes bytes)"
+                else
+                    r2_delete "$key"
+                    echo "offline-countries: deleted $key ($bytes bytes)"
+                fi
+                ;;
+            kept)
+                spared=$(( spared + 1 ))
+                echo "offline-countries: kept $key ($bytes bytes): no later build of its area is listed"
+                ;;
+        esac
+    done <<< "$verdicts"
+    echo "offline-countries: $doomed archives of builds the manifest has moved past$([[ "$dry_run" == true ]] \
+        && echo ", none deleted"), and $spared it does not list kept"
+}
+
+areas() {
+    prepare_tool
+    "$tool" areas --countries "$repository_root/Scripts/lib/offline-countries.json" \
+        --outlines "$(natural_earth_file "$outlines_url" "$outlines_sha256")" \
+        --regions "$(natural_earth_file "$regions_url" "$regions_sha256")"
+}
+
 [[ $# -ge 1 ]] || usage
 command="$1"
 shift
 case "$command" in
+    publish) publish "$@" ;;
     build) build "$@" ;;
-    areas)
-        prepare_tool
-        "$tool" areas --countries "$repository_root/Scripts/lib/offline-countries.json" \
-            --outlines "$(natural_earth_file "$outlines_url" "$outlines_sha256")" \
-            --regions "$(natural_earth_file "$regions_url" "$regions_sha256")"
-        ;;
+    areas) areas ;;
     upload) upload "$@" ;;
+    prune) prune "$@" ;;
     inspect) prepare_tool; "$tool" inspect "$@" ;;
     selftest) prepare_tool; "$tool" selftest ;;
     *) usage ;;
