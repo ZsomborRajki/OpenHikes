@@ -90,9 +90,6 @@ nonisolated enum VectorTileStyle {
         (["recreation_ground", "dog_park"], "#DFFCE2"),
         (["golf_course", "miniature_golf", "camp_site", "caravan_site", "picnic_site"], "#DEF6C0"),
         (["pedestrian", "platform"], "#DDDDE8"),
-        // A bridge mapped as an area, from the extras: the basemap files it
-        // as a pedestrian square, and this is drawn over that.
-        (["bridge"], "#B8B8B8"),
         (["parking"], "#EEEEEE"),
         (["garages"], "#DFDDCE"),
         (["aerodrome"], "#E9E7E2"),
@@ -134,7 +131,8 @@ nonisolated enum VectorTileStyle {
     }()
 
     /// A waterway through a tunnel or a culvert, as Carto draws one
-    /// (`water.mss`): a pale line `outer` pixels wide, the water broken into
+    /// (`water.mss`), along the vector extras' `culverts` layer, which has
+    /// the waterways Carto calls tunnels: a pale line `outer` pixels wide, the water broken into
     /// dashes over it, and a pale line `inner` wide down the middle, which
     /// leaves the dashes as an edge either side. `nil` before Carto draws a
     /// tunnel so: a river's from zoom 12, and any other waterway's from 14.
@@ -161,8 +159,9 @@ nonisolated enum VectorTileStyle {
 
     static let waterTunnelFill = color("#F3F7F7")
     static let waterTunnelDash: [CGFloat] = [4, 2]
-    /// The `tunnel` values Carto draws a waterway as a tunnel for.
-    static let waterTunnels: Set<String> = ["yes", "culvert"]
+    /// How long the pieces are that a waterway is judged in for whether it
+    /// runs along a culvert, in pixels: short, as a culvert under a road is.
+    static let waterTunnelPiece: CGFloat = 1
     private static let riverTunnelZ = 12
     private static let streamTunnelZ = 14
     private static let tunnelStep: CGFloat = 1.5
@@ -257,6 +256,13 @@ nonisolated enum VectorTileStyle {
     static let pierZ = 12
     static let pierKind = "pier"
     static let pier = Line(color: land, width: ZoomCurve([(12, 0.5), (13, 1), (14, 1), (15, 2), (16, 2), (z17, 4)]))
+
+    /// A bridge mapped as an area, which the extras file under `landuse`
+    /// from zoom 12: Carto's gray (`buildings.mss`), drawn after the water
+    /// it crosses and the piers, and before the buildings. The basemap
+    /// files it as a pedestrian square, which this is drawn over.
+    static let bridgeKind = "bridge"
+    static let bridgeArea = color("#B8B8B8")
 
     /// Whether a feature of the `roads` layer is a pier, which is drawn with
     /// the water rather than as a road.

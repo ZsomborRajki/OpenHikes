@@ -39,7 +39,7 @@ nonisolated enum VectorTileRasterizer {
         "barriers", VectorTileArrows.layerName, parksLayer, protectedAreasLayer, powerLayer, damsLayer, ridgesLayer,
         VectorTileAreaDetails.layerName, cliffsLayer, cutlinesLayer, treesLayer, intermittentLayer,
         VectorTileBuildingNames.layerName, breakwatersLayer, pathsLayer, serviceRoadsLayer, constructionLayer,
-        powerPointsLayer,
+        powerPointsLayer, culvertsLayer,
     ]
 
     /// The vector extras' layers of their own that the rasterizer fills or
@@ -66,12 +66,15 @@ nonisolated enum VectorTileRasterizer {
     static let serviceRoadsLayer = "service_roads"
     static let constructionLayer = "construction"
     static let powerPointsLayer = "power_points"
+    /// And the stretches of waterways through a tunnel or a culvert, which
+    /// the basemap draws as open water (`VectorTilePainter+Ground.swift`).
+    static let culvertsLayer = "culverts"
 
     /// The properties read, the names in `language` among them.
     static func propertyKeys(language: String) -> Set<String> {
         VectorTileLabels.propertyKeys(language: language).union([
             "kind", "kind_detail", "is_tunnel", "is_bridge", "disputed", "access", "oneway", "addr_housenumber",
-            "service", "surface", "tracktype", "tunnel", VectorTileShields.refKey, VectorTilePoints.sizeKey,
+            "service", "surface", "tracktype", VectorTileShields.refKey, VectorTilePoints.sizeKey,
         ])
     }
 

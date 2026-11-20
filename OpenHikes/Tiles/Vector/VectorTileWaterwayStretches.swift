@@ -1,29 +1,29 @@
 //
-//  VectorTileSeasonalStretches.swift
+//  VectorTileWaterwayStretches.swift
 //  OpenHikes
 //
-//  Which stretches of the basemap's waterways the vector extras say are not
-//  always there. The basemap joins a stream's pieces whether or not each runs
-//  all year, and the extras' `intermittent` layer gives only the pieces that
-//  do not, so a waterway is parted where it runs along one of those lines:
-//  that stretch is drawn broken, and the rest whole. A river a seasonal stream
-//  crosses lies across the band its gaps are rubbed out over, not along it,
-//  and so stays whole.
+//  Which stretches of the basemap's waterways run along one of the vector
+//  extras' lines. The basemap joins a stream's pieces into one line, and keeps
+//  neither whether a piece runs all year nor whether it goes underground, so
+//  the extras give those pieces again: the `intermittent` layer the ones that
+//  do not always run, drawn broken, and the `culverts` layer the ones through
+//  a tunnel or a culvert, drawn as Carto draws a tunnel. A waterway is parted
+//  where it runs along one of those lines, and the rest is drawn whole. A
+//  river a seasonal stream or a culvert crosses lies across the line's band,
+//  not along it, and so stays whole.
 //
-//  A waterway is judged a short piece at a time, as long as one dash and one
-//  gap, since the basemap may run one straight line through where a stream
-//  stops running all year. A piece runs along a seasonal line where both its
-//  ends lie within that band, and its middle too, beside a piece of the line
-//  running the same way. The two archives simplify a line apart, so
-//  neither's points are the other's, but each lies within the band of the
-//  other's line.
+//  A waterway is judged a short piece at a time, since the basemap may run one
+//  straight line through where a stream stops running all year or goes into a
+//  culvert. A piece runs along a line where both its ends lie within that
+//  line's band, and its middle too, beside a piece of the line running the
+//  same way. The two archives simplify a line apart, so neither's points are
+//  the other's, but each lies within the band of the other's line.
 //
 
 import CoreGraphics
 
-nonisolated struct VectorTileSeasonalStretches {
-    /// One piece of a seasonal line, and half the band its gaps are rubbed
-    /// out over.
+nonisolated struct VectorTileWaterwayStretches {
+    /// One piece of one of the extras' lines, and half its band.
     private struct Segment {
         let start: CGPoint
         let end: CGPoint
@@ -40,12 +40,12 @@ nonisolated struct VectorTileSeasonalStretches {
             return hypot(point.x - (start.x + along * line.dx), point.y - (start.y + along * line.dy))
         }
 
-        /// Whether `other` runs within ``VectorTileSeasonalStretches/turn``
+        /// Whether `other` runs within ``VectorTileWaterwayStretches/turn``
         /// of this piece, either way along it.
         func runs(as other: CGVector) -> Bool {
             let lengths = hypot(run.dx, run.dy) * hypot(other.dx, other.dy)
             let sine = abs(run.dx * other.dy - run.dy * other.dx)
-            return lengths > 0 && sine <= VectorTileSeasonalStretches.turn * lengths
+            return lengths > 0 && sine <= VectorTileWaterwayStretches.turn * lengths
         }
     }
 
@@ -54,8 +54,8 @@ nonisolated struct VectorTileSeasonalStretches {
         let y: Int
     }
 
-    /// The sine of the widest angle a stretch may make with the seasonal
-    /// line and still run along it: 30°.
+    /// The sine of the widest angle a stretch may make with one of the
+    /// lines and still run along it: 30°.
     private static let turn: CGFloat = 0.5
     /// How many squares the pieces are filed in along each side of the
     /// archive's tile.
@@ -71,8 +71,8 @@ nonisolated struct VectorTileSeasonalStretches {
     private let bounds: CGRect
 
     /// - Parameters:
-    ///   - lines: each seasonal line's parts in the picture's pixels, with
-    ///     half the band its gaps are rubbed out over.
+    ///   - lines: each of the extras' lines' parts in the picture's pixels,
+    ///     with half the band a waterway along it lies within.
     ///   - frame: the archive's tile on the picture. A piece is filed only
     ///     within it and a square's width around it, which holds the buffer
     ///     the archive draws past its edge, so a tile off the network that
@@ -111,27 +111,36 @@ nonisolated struct VectorTileSeasonalStretches {
         self.bounds = bounds
     }
 
-    /// `parts` divided into the stretches along a seasonal line and the
+    /// `parts` divided into the stretches along one of the lines and the
     /// rest, or `nil` where no stretch runs along one.
-    func split(_ parts: [[CGPoint]]) -> (seasonal: CGPath, perennial: CGPath?)? {
+    func split(_ parts: [[CGPoint]]) -> (along: [[CGPoint]], rest: [[CGPoint]])? {
         guard !cells.isEmpty else { return nil }
-        let seasonal = CGMutablePath()
-        let perennial = CGMutablePath()
+        var along: [[CGPoint]] = []
+        var rest: [[CGPoint]] = []
         for part in parts {
-            var current: CGMutablePath?
+            var current: [CGPoint] = []
+            var isAlong = false
+            func finish() {
+                guard current.count > 1 else { return }
+                if isAlong { along.append(current) } else { rest.append(current) }
+            }
             for (start, end) in zip(part, part.dropFirst()) {
                 for (from, to) in pieces(from: start, to: end) {
-                    let path = runsAlong(from: from, to: to) ? seasonal : perennial
-                    guard path !== current else { continue }
-                    current?.addLine(to: from)
-                    path.move(to: from)
-                    current = path
+                    let runs = runsAlong(from: from, to: to)
+                    guard current.isEmpty || runs != isAlong else { continue }
+                    if !current.isEmpty {
+                        current.append(from)
+                        finish()
+                    }
+                    current = [from]
+                    isAlong = runs
                 }
-                current?.addLine(to: end)
+                current.append(end)
             }
+            finish()
         }
-        guard !seasonal.isEmpty else { return nil }
-        return (seasonal, perennial.isEmpty ? nil : perennial)
+        guard !along.isEmpty else { return nil }
+        return (along, rest)
     }
 
     /// The line from `start` to `end` in pieces of about ``piece``, or
@@ -160,7 +169,7 @@ nonisolated struct VectorTileSeasonalStretches {
             .intersects(bounds)
     }
 
-    /// Whether `point` lies within the band of a seasonal line, beside a
+    /// Whether `point` lies within the band of one of the lines, beside a
     /// piece of it running as `run` does where one is given.
     private func lies(_ point: CGPoint, running run: CGVector? = nil) -> Bool {
         let cell = Cell(x: Self.index(point.x, side), y: Self.index(point.y, side))
