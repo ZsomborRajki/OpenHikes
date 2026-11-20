@@ -123,7 +123,10 @@ is on, and with no location granted that is `TilePreviewFrame`'s fallback,
 which is this valley, so each card is a picture of the ground under it. The
 frame is shot without `--ui-test-entitled`, so the paid maps carry their locks
 and the sheet says they need OpenHikes Pro, rather than the frame showing
-every map as included. It replaced the summary of a finished walk, which frame
+every map as included. The 6.9" phone's row shows four cards, and while
+openstreetmap.org's card stands fourth (*Tiles* in `AGENTS.md`) the first
+locked one is out of its picture; the iPad's and the open Duo's rows reach it.
+It replaced the summary of a finished walk, which frame
 10 still passes through on its way to the share card.
 
 *Map Modes* grew a row for *Offline Maps*, and on a phone it came up over the
