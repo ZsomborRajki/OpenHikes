@@ -174,8 +174,9 @@ nonisolated enum VectorTilePoints {
     /// to tell the basemap's point for the same thing: an area the extras
     /// give with its size, and a point of one of the ``supersedingKinds``.
     /// The same OpenStreetMap element is the same thing, named or not; the
-    /// same name at the same spot is too, for a point either archive gives
-    /// without its id.
+    /// same name at the same spot is too, which on the live tiles has only
+    /// ever paired a point with its own element, and holds for a point
+    /// either archive gives without its id.
     private struct Superseded {
         private let elements: Set<UInt64>
         private let spots: [String: [CGPoint]]
@@ -504,15 +505,7 @@ nonisolated private struct NameBlock {
             )
         }
         let width = style.wrapWidth * unit
-        let key = NSAttributedString.Key(kCTFontAttributeName as String)
-        let measure = { (line: String) in
-            CGFloat(CTLineGetTypographicBounds(
-                CTLineCreateWithAttributedString(NSAttributedString(string: line, attributes: [key: font])),
-                nil,
-                nil,
-                nil
-            ))
-        }
+        let measure = { (line: String) in InkedText.width(of: line, font: font) }
         lines = text.flatMap { VectorTilePoints.wrapped($0, width: width, measure: measure) }.map(set)
         lineSpacing = style.lineSpacing * unit
         opacity = style.opacity
