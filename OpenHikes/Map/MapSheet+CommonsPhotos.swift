@@ -62,7 +62,8 @@ extension MapSheet {
             // `HikeDetailView+Equatable.swift`.
             .equatable()
         case .communityHike, .communityPhoto, .hike, .newPlace, .pendingPhotos, .pendingSubmission, .photo, .place,
-            .offlineCountries, .placesAround, .placesNearby, .recording, .routeStyle, .totals, .trailDraft, .walk:
+            .offlineCountries, .placesAround, .placesNearby, .recording, .routeEdit, .routeStyle, .totals,
+            .trailDraft, .walk:
             EmptyView()
         }
     }

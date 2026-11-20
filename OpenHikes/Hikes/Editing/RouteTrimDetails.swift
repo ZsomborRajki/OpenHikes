@@ -1,0 +1,97 @@
+//
+//  RouteTrimDetails.swift
+//  OpenHikes
+//
+//  What *Edit Route* says under its chart: what a save would leave, and the
+//  stretches it offers to take off in one tap.
+//
+//  Each is a view of its own because each reads the cuts, which move at drag
+//  frequency — see ``RouteTrimView`` for what its body may read.
+//
+
+import OpenHikesData
+import SwiftUI
+
+/// What the hike would be with the cuts where they stand: its distance, its
+/// clock where the line has one, and how much comes off.
+struct RouteTrimFigures: View {
+    let session: RouteTrimSession
+    /// ``Hike/distanceMeters`` as it is now. A save takes what is cut off
+    /// this figure rather than measuring the kept line again — see
+    /// ``RouteEditSave`` — and so does this.
+    let hikeDistanceMeters: Double
+
+    var body: some View {
+        let total = session.totalMeters
+        let kept = max(session.endMeters - session.startMeters, 0)
+        let removed = max(total - kept, 0)
+        StatStrip {
+            StatFigure(
+                label: "Distance",
+                value: RouteTrimFormat.length(max(0, min(kept, hikeDistanceMeters - removed)))
+            )
+            if let seconds = keptSeconds {
+                StatFigure(label: "Duration", value: HikeFormat.duration(seconds))
+            }
+            StatFigure(label: "Removed", value: RouteTrimFormat.length(removed))
+        }
+        .accessibilityIdentifier("route-trim-figures")
+    }
+
+    /// From the kept line's first moment to its last, as a hike's *Duration*
+    /// is — ``HikeRouteStatistics/duration`` — or `nil` for a line with no
+    /// clock.
+    private var keptSeconds: TimeInterval? {
+        guard let line = session.line,
+              let began = line.timestamp(of: .start, at: session.startMeters),
+              let ended = line.timestamp(of: .end, at: session.endMeters),
+              ended > began
+        else { return nil }
+        return ended.timeIntervalSince(began)
+    }
+}
+
+/// The ends of the line that were not walked, each with the tap that takes it
+/// off — see ``RouteCarriedEnds`` for how they are found. Nothing is drawn
+/// for a line with none, or once a cut already stands at or inside one.
+struct RouteTrimOffers: View {
+    let session: RouteTrimSession
+
+    var body: some View {
+        // A new line has its own ends.
+        _ = session.lineRevision
+        let ends = session.line?.carriedEnds ?? RouteCarriedEnds()
+        let leading = ends.leading.flatMap { session.startMeters < $0.range.upperBound ? $0 : nil }
+        let trailing = ends.trailing.flatMap { session.endMeters > $0.range.lowerBound ? $0 : nil }
+        return Group {
+            if leading != nil || trailing != nil {
+                PlaceCardList(title: String(localized: "Not on Foot")) {
+                    if let leading {
+                        offer(
+                            String(localized: "Remove \(RouteTrimFormat.length(leading.carriedMeters)) at the Start"),
+                            identifier: "route-trim-remove-start"
+                        ) {
+                            session.move(.start, to: leading.range.upperBound)
+                        }
+                    }
+                    if let trailing {
+                        offer(
+                            String(localized: "Remove \(RouteTrimFormat.length(trailing.carriedMeters)) at the End"),
+                            identifier: "route-trim-remove-end"
+                        ) {
+                            session.move(.end, to: trailing.range.lowerBound)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func offer(_ title: String, identifier: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            PlaceCardActionLabel(title: title, systemImage: "car")
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(identifier)
+    }
+}

@@ -523,6 +523,12 @@ a change to recording, the map, the sheet or the render path; the PR template,
   The maker routes legs one at a time through one worker, since nineteen
   parallel Overpass requests earn a `429`, and nothing on that path may block
   drawing.
+- **A line somebody walked is trimmed, never re-routed** (`RouteTrim`,
+  `RouteEditSave`). *Edit Route* on a recording or an import cuts its ends and
+  keeps every other point as it was saved. The line it had goes to
+  `Hike.originalRoute`, written by the first edit and by no later one, which
+  is what *Revert to Original* puts back. A drawn trail is edited by its
+  stops, in the maker, and carries neither.
 - **Places** (`Hikes/Places/`): `TrailPlace` is the value and `TrailPoint` the
   mirrored row. The owner's rule: a place from OpenStreetMap takes photographs
   and nothing else, and a place the hiker made can also be renamed, re-kinded
@@ -1288,8 +1294,8 @@ in its source header. Do not weaken one without a measurement.
   once before promoting. An `@Attribute(.externalStorage)` column, such as
   `Hike.route`, also mirrors through a `CD_<name>_ckAsset` asset field: check
   that the development export has it, and promote both.
-- **Deployment state, checked 2026-11-13.** Development and production both
-  export `md5 e2fd4f7c500b3911fae3d86a9b9d3f9c`. Both have the two
+- **Deployment state, checked 2026-11-21.** Development and production both
+  export `md5 74a5b5d91372f08c92c3af7402df7892`. Both have the two
   trail-square record types, `CuratedTrailCell` and `CuratedTrailManifest`,
   neither with an index. Both hold the same build of all four sets of
   squares, from OpenStreetMap as of 2026-11-17 23:00 UTC, each marked as the
@@ -1298,10 +1304,10 @@ in its source header. Do not weaken one without a measurement.
   column for every attribute in `MirroredCloudKitSchema.recordTypes`. The
   only live columns the contract does not name are SwiftData's own
   `CD_entityName`, the to-one reference columns that the contract lists as
-  relationships, and the `CD_route_ckAsset` and `CD_rawRoute_ckAsset` asset
-  fields of the two external-storage attributes. Re-export before believing
-  these numbers, and update this paragraph when they move. Deployment facts
-  live here, not in code.
+  relationships, and the `CD_route_ckAsset`, `CD_rawRoute_ckAsset` and
+  `CD_originalRoute_ckAsset` asset fields of the three external-storage
+  attributes. Re-export before believing these numbers, and update this
+  paragraph when they move. Deployment facts live here, not in code.
 
 ## The community feature
 
@@ -1732,7 +1738,6 @@ Reopening one needs new evidence, not a fresh reading of the same code.
   - The widget deep link needs no `CFBundleURLTypes`, because the system routes
     a `widgetURL` straight to the owning app.
   - A trim cannot delete a tile that was just promoted.
-  - `RouteMotion` really is read only by tests.
   - A synced `tileProviderID` cannot blank a keyless device
     (`TileProvider.renderable(id:)` falls back).
   - The two copies of `Color+Hex` are the widget's cost, and `ColorHexTests`

@@ -20,8 +20,9 @@
 //  `CD_drawnRouteData` field and a later addition to it costs no schema
 //  change. `nil` for every hike that was not drawn in the maker — a recording
 //  or an import has no stops to reopen, and re-routing a line somebody
-//  actually walked would replace it with a guess (the owner's decision: Edit
-//  Route is for maker-born hikes only).
+//  actually walked would replace it with a guess (the owner's decision: the
+//  maker reopens maker-born hikes only). *Edit Route* on any other hike trims
+//  its line and re-routes none of it — see ``RouteTrimView``.
 //
 //  ## A field, not an asset, so the chosen ways are bounded
 //
@@ -123,9 +124,11 @@ extension Hike {
     }
 
     /// Whether the shared copy of this trail shows a route it has since been
-    /// edited away from — see ``DrawnRoute/editedUnderSubmissionID``.
+    /// edited away from — see ``DrawnRoute/editedUnderSubmissionID``, and
+    /// ``RouteEdit/editedUnderSubmissionID`` for a hike that was not drawn.
     var isSharedCopyOutOfDate: Bool {
         guard let submission = communitySubmissionID else { return false }
         return drawnRoute?.editedUnderSubmissionID == submission
+            || routeEdit?.editedUnderSubmissionID == submission
     }
 }

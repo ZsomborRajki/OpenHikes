@@ -7,7 +7,8 @@
 //
 //  Drawn only for a hike that carries a ``DrawnRoute``. A recording or an
 //  import has no stops, and re-routing a line somebody walked would replace
-//  it with a guess — the owner's decision.
+//  it with a guess — the owner's decision. Its *Edit Route* is the row below,
+//  ``HikeRouteTrimLink``, which trims the line and re-routes none of it.
 //
 //  The maker holds one drawing at a time, so a half-drawn *other* trail is
 //  asked about before it is replaced, the way the maker's own ✕ asks before a
@@ -50,5 +51,21 @@ struct HikeRouteEditButton: View {
         } else {
             maker.edit(hike)
         }
+    }
+}
+
+/// *Edit Route* on a hike that was recorded or imported: the way to the
+/// screen that trims its line — see ``RouteTrimView``. The same row and the
+/// same words as the maker's, because to the hiker it is the same thing to
+/// want.
+struct HikeRouteTrimLink: View {
+    let hike: Hike
+
+    var body: some View {
+        NavigationLink(value: SheetRoute.routeEdit(hike)) {
+            PlaceCardActionLabel(title: String(localized: "Edit Route"), systemImage: "scribble.variable")
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("hike-edit-route")
     }
 }
