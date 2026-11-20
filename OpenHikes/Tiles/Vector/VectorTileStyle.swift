@@ -510,9 +510,6 @@ nonisolated struct ZoomCurve: Sendable {
         self.stops = stops
     }
 
-    /// The first zoom the curve has a size at.
-    var firstZ: Int? { stops.first?.z }
-
     /// The same sizes from `z` on, and none below it.
     func starting(at z: Int) -> Self {
         guard let first = stops.first, z > first.z else { return self }

@@ -18,7 +18,6 @@ import Testing
 struct VectorTileGroundTests {
     private let grid = VectorTileFixture.grid
     private let side = CGFloat(VectorTileRasterizer.pixelSize)
-    private let unit = CGFloat(VectorTileRasterizer.pixelSize) / VectorTileRasterizer.styleTileSize
 
     private let land = VectorTileFixture.color("#F2EFE9")
     private let water = VectorTileFixture.color("#AAD3DF")
