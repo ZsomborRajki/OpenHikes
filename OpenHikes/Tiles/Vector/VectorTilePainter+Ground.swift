@@ -47,6 +47,23 @@ nonisolated extension VectorTilePainter {
             if let color = area.color { fill(path, color) }
             if let pattern = area.pattern { fill(path, with: pattern) }
         }
+        paintGlacierEdges()
+    }
+
+    /// The edge Carto draws round a glacier, over whatever ground it lies
+    /// on.
+    private func paintGlacierEdges() {
+        guard z >= VectorTileStyle.glacierEdgeZ else { return }
+        let isBroken = z >= VectorTileStyle.brokenGlacierEdgeZ
+        for (feature, geometry) in features(in: "landuse", type: .polygon)
+        where feature.string("kind") == VectorTileStyle.glacierKind {
+            strokePixels(
+                geometry.path(of: feature),
+                VectorTileStyle.glacierEdge,
+                width: isBroken ? VectorTileStyle.brokenGlacierEdgeWidth : 1,
+                dash: isBroken ? VectorTileStyle.glacierEdgeDash : []
+            )
+        }
     }
 
     /// The lines cut through a forest, over the ground and under the water.
@@ -79,8 +96,14 @@ nonisolated extension VectorTilePainter {
         }
         var perennial: [(kind: String, path: CGPath)] = []
         var broken: [(kind: String, path: CGPath)] = []
+        var tunnels: [(path: CGPath, outer: CGFloat, inner: CGFloat)] = []
         for (feature, geometry) in features(in: "water", type: .line) {
             guard let kind = feature.string("kind") else { continue }
+            if feature.string("tunnel").map(VectorTileStyle.waterTunnels.contains) == true,
+               let tunnel = VectorTileStyle.waterTunnel(kind: kind, z: z) {
+                tunnels.append((geometry.path(of: feature), tunnel.outer, tunnel.inner))
+                continue
+            }
             guard let split = stretches?.split(geometry.lines(of: feature)) else {
                 perennial.append((kind, geometry.path(of: feature)))
                 continue
@@ -99,6 +122,17 @@ nonisolated extension VectorTilePainter {
             context.endTransparencyLayer()
         }
         strokeWaterways(perennial, glow: false)
+        // The tunnels after the open water, as Carto orders them.
+        for tunnel in tunnels {
+            strokePixels(tunnel.path, VectorTileStyle.waterTunnelFill, width: tunnel.outer)
+            strokePixels(
+                tunnel.path,
+                VectorTileStyle.water,
+                width: tunnel.outer,
+                dash: VectorTileStyle.waterTunnelDash
+            )
+            strokePixels(tunnel.path, VectorTileStyle.waterTunnelFill, width: tunnel.inner)
+        }
         paintLakes()
     }
 

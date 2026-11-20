@@ -201,18 +201,20 @@ struct VectorTileRasterizerTests {
         #expect(pixel(image, x: middle, y: middle, is: "#FCD6A4"))
     }
 
-    /// The casing is drawn from zoom 12, a service road and a pedestrian
-    /// street from 13. A casing with no road inside it would be a gray line
-    /// of its own, two pixels wide, where the road is not drawn at all.
+    /// The casing is drawn from zoom 12, a pedestrian street from 13 and a
+    /// service road from 14. A casing with no road inside it would be a
+    /// gray line of its own, two pixels wide, where the road is not drawn
+    /// at all.
     @Test(
         "a road not yet drawn at its zoom has no casing either",
-        arguments: [("minor_road", "service", "#BBBBBB"), ("path", "pedestrian", "#999999")]
+        arguments: [("minor_road", "service", "#BBBBBB", 14), ("path", "pedestrian", "#999999", 13)]
     )
-    func noCasingBeforeTheRoad(kind: String, detail: String, casing: String) throws {
+    func noCasingBeforeTheRoad(kind: String, detail: String, casing: String, firstZ: Int) throws {
         let layers = [land, roads([street(kind: kind, detail: detail, across: true)])]
+        let address = { (z: Int) in VectorTileAddress(z: z, x: 2200 << (z - 12), y: 1425 << (z - 12)) }
 
-        let wide = try draw(layers, at: VectorTileAddress(z: 12, x: 2200, y: 1425))
-        let near = try draw(layers, at: VectorTileAddress(z: 13, x: 4400, y: 2850))
+        let wide = try draw(layers, at: address(firstZ - 1))
+        let near = try draw(layers, at: address(firstZ))
 
         #expect(pixel(wide, x: middle, y: middle, is: "#F2EFE9"))
         #expect(!row(wide, y: middle, has: casing))
@@ -239,7 +241,12 @@ struct VectorTileRasterizerTests {
         #expect(!row(openNear, y: middle, has: "#BBBBBB"))
         #expect(!row(closedWide, y: middle, has: "#BBBBBB"), "a closed path waits for zoom 15")
         #expect(!row(closedWide, y: middle, has: "#FA8072"), "and is never drawn as an open one")
-        #expect(row(openWide, y: middle, has: "#FA8072"), "where an open one is drawn")
+        // Carto's steps are 0.7 pixels wide at zoom 14: a mark on the land,
+        // and no pixel of their own color.
+        #expect(
+            (0..<openWide.width).contains { !pixel(openWide, x: $0, y: middle, is: "#F2EFE9") },
+            "where an open one is drawn"
+        )
     }
 
     /// The vector extras bring fences, walls and hedges, which Carto draws

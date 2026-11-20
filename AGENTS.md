@@ -1173,6 +1173,25 @@ a change to recording, the map, the sheet or the render path; the PR template,
     drawn largest first**, as Carto orders them, because the archive gives
     every area the same `sort_rank` too, and a residential area listed last
     would cover the parks inside it.
+  - **A path is drawn by what it is made of and who it is for**
+    (`VectorTilePathStyle`), in Carto's own figures: a track's grade by how
+    broken its line is, a path's surface by its dashes, a way closed to
+    those it is for in a paler color and only from zoom 15, a pale band
+    under every one from there, and a casing round its bridge and its
+    tunnel. A path's dashes are in pixels and its width a step of the zoom,
+    so neither is a `ZoomCurve`.
+  - **Paths, service roads and roads being built are the extras', where a
+    tile has them** (`VectorTilePainter+Roads.swift`). The basemap keeps
+    none of a track's grade, a path's surface, who a path is for or a road's
+    `service`, and it joins a road's ways into one line, so nothing can be
+    said of them by their ids as it is of the areas. The extras give each
+    way again, in `paths` and `service_roads`, with what Carto draws it by,
+    and a tile that has a layer draws that kind from it and none of the
+    basemap's; `construction` has the roads the basemap leaves out. A
+    driveway or a parking aisle is then a minor road, narrower and not
+    before zoom 16. A tile whose extras did not arrive draws the basemap's
+    paths, as far as it describes them: the kind and its own `access`.
+    Names still come from the basemap's lines.
   - **Only track is drawn as a railway.** The archive files every way with a
     `railway` tag under `rail`, a station's outline and a turntable among
     them, so the style lists the details that are track and draws no other.
@@ -1217,7 +1236,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
     danger areas, a square mapped as a relation), parks and the borders of
     protected areas, every lift but
     the cable cars with its stations, the light railways before zoom 14,
-    power lines, dams and weirs, breakwaters and groynes, ridges, cliffs and
+    power lines with their towers and poles, every path, track and service
+    road with what Carto draws it by, the roads being built, a bridge mapped
+    as an area, dams and weirs, breakwaters and groynes, ridges, cliffs and
     embankments in the direction they were mapped, the lines cut through a forest, trees and
     their rows, the names of buildings, and the points Carto draws before
     the basemap has them: huts and stations with the tags Carto files them
@@ -1272,7 +1293,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
       Summits, passes and huts are points, named under their icons with their
       heights (`VectorTilePoints`).
     - **Names along lines** (`VectorTileLineLabels`): streets, paths, lifts,
-      waterways, ridges and cliffs, letter by letter, upright, following
+      waterways, ridges and cliffs, and the number of a minor road or a
+      track, which Carto writes along it where a main road's is on a plate,
+      letter by letter, upright, following
       bends no sharper than Mapnik follows them (22.5 degrees from one letter
       to the next, 15 for water). Pieces with the same name are joined end to
       end first. A repeat stands on marks measured from the line's middle, so
@@ -1319,11 +1342,11 @@ a change to recording, the map, the sheet or the render path; the PR template,
       again, for names few of the tiles an edge crosses had room for.
     - **Room is claimed in Carto's layer order**: place names, the stations
       (each one's icon, then its name), the points' icons, the road numbers,
-      the names along streets and paths, then their one-way arrows, the
-      names of the summits and passes by their height, the lakes', bays' and
-      glaciers', every other point's and the areas', the localities', the
-      buildings', the house numbers, the names along water and ridges, and
-      last the low-priority icons and names (benches, bins, wayside
+      the names along streets, paths, ridges and cliffs, then the one-way
+      arrows, the names of the summits and passes by their height, the
+      lakes', bays' and glaciers', every other point's and the areas', the
+      localities', the buildings', the house numbers, the names along water,
+      and last the low-priority icons and names (benches, bins, wayside
       crosses). So a summit keeps its name where a lake's would cover it.
     - **A place's name comes in at Carto's zoom**: a hamlet's from 14, a
       farm's from 15, and a locality's, a spot nobody lives at, from 16 and

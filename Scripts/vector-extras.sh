@@ -8,7 +8,9 @@
 # an information point and the goods of a vending machine, waterfalls,
 # one-way ways in their own direction, the size of each named area, the
 # ground it has no kind for (scree, heath, quarries, vineyards), parks and
-# protected areas, lifts and their stations, power lines, dams and ridges,
+# protected areas, lifts and their stations, power lines with their towers,
+# every path, track and service road with what Carto draws it by, the roads
+# being built, dams and ridges,
 # cliffs in their own direction, trees, the water that is not always there,
 # what picks the symbols of a wood or a wetland, the names of buildings, and
 # the huts, stations and summits Carto shows before the basemap has them.

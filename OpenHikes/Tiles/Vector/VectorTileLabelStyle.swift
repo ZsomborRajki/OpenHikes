@@ -100,7 +100,9 @@ nonisolated enum VectorTileLabelStyle {
         /// Carto does not name.
         static func water(kind: String?, detail: String?) -> Self? {
             switch kind {
-            case "bay", "strait": .water
+            // A reservoir mapped as `landuse`, a basin and a dock are kinds
+            // of their own in the archive, and Carto names all three.
+            case "bay", "strait", "lake", "basin", "dock": .water
             case "water":
                 switch detail {
                 case "river", "canal", "stream", "ditch", "drain": nil
@@ -216,25 +218,43 @@ nonisolated extension VectorTileLabelStyle {
         case ditch
         case majorRoad
         case minorRoad
+        /// The number of a residential or an unclassified road.
+        case minorRoadNumber
         case path
         /// A ridge, an arête or a cliff.
         case ridge
         case river
         case stream
         case tertiaryRoad
+        /// The number of a track: a forest road's, mostly.
+        case trackNumber
 
         /// Most important first: the name that keeps its room where two
         /// would overlap.
         private static let importance: [Self] = [
-            .majorRoad, .tertiaryRoad, .minorRoad, .path, .aerialway, .river, .canal, .stream, .ditch, .ridge,
+            .majorRoad, .tertiaryRoad, .minorRoad, .minorRoadNumber, .path, .trackNumber, .aerialway, .ridge,
+            .river, .canal, .stream, .ditch,
         ]
 
         /// Whether the line's name is placed after every point's, as Carto
-        /// places water's and a ridge's, where streets' come before.
+        /// places a waterway's (`water-lines-text`), where the streets' and
+        /// a ridge's or a cliff's (`text-line`) come before the points.
         var isPlacedAfterPoints: Bool {
             switch self {
-            case .river, .canal, .stream, .ditch, .ridge: true
-            case .majorRoad, .tertiaryRoad, .minorRoad, .path, .aerialway: false
+            case .river, .canal, .stream, .ditch: true
+            case .majorRoad, .tertiaryRoad, .minorRoad, .minorRoadNumber, .path, .trackNumber, .aerialway, .ridge: false
+            }
+        }
+
+        /// The category a road's number is written along it under, for the
+        /// roads Carto numbers so and not with a plate
+        /// (`roads-text-ref-minor`): a residential or an unclassified road,
+        /// and a track.
+        static func number(kind: String?, detail: String?) -> Self? {
+            switch (kind, detail) {
+            case ("minor_road", "residential"), ("minor_road", "unclassified"): .minorRoadNumber
+            case ("path", "track"): .trackNumber
+            default: nil
             }
         }
 
@@ -273,6 +293,12 @@ nonisolated extension VectorTileLabelStyle {
         /// How far the name stands beside the line rather than on it, below
         /// it as the name reads: a stream's, which would hide the stream.
         var offset: CGFloat = 0
+        /// The same where it changes with the zoom, as a path's does.
+        var offsets: ZoomCurve?
+
+        func offset(at z: Int) -> CGFloat {
+            offsets?.value(at: z) ?? offset
+        }
         /// The least distance between two of the same name along a line; its
         /// marks stand one and a half of this apart.
         var repeatDistance: CGFloat = lineNameRepeat
@@ -302,14 +328,23 @@ nonisolated extension VectorTileLabelStyle {
         case .minorRoad:
             LineLook(size: minorRoadSize, color: roadInk, face: .regular, minimumZ: 15)
         case .path:
-            LineLook(size: pathSize, color: placeInk, face: .regular, minimumZ: 15)
+            LineLook(size: pathSize, color: placeInk, face: .regular, minimumZ: 15, offsets: pathNameOffsets)
+        case .minorRoadNumber, .trackNumber:
+            LineLook(
+                size: pathSize,
+                color: roadInk,
+                face: .italic,
+                minimumZ: 15,
+                offset: category == .trackNumber ? trackNumberOffset : 0,
+                repeatDistance: roadNumberRepeat
+            )
         case .aerialway:
             LineLook(
                 size: ZoomCurve([(z17, 10), (z18, 10), (z19, 11)]),
                 color: liftInk,
                 face: .regular,
                 minimumZ: z17,
-                offset: liftNameOffset,
+                offsets: ZoomCurve([(z17, 4), (z18, 4), (z19, 5)]),
                 repeatDistance: liftNameRepeat
             )
         case .river, .canal:
@@ -334,10 +369,18 @@ nonisolated extension VectorTileLabelStyle {
         }
     }
 
-    /// A lift's name every 900 pixels and 6 beside its line, from zoom 17
-    /// (`aerialways.mss`): until then its stations' names say which it is.
+    /// A lift's name every 900 pixels and 4 beside its line, 5 from zoom
+    /// 19, from zoom 17 (`aerialways.mss`): until then its stations' names
+    /// say which it is.
     static let liftNameRepeat: CGFloat = 600
-    private static let liftNameOffset: CGFloat = 6
+    /// A path's name beside its line, further the closer the map
+    /// (`roads.mss`'s `text-dy` for `paths-text-name`).
+    private static let pathNameOffsets = ZoomCurve([(15, 5), (16, 7), (z17, 9)])
+    /// A road's number along it about every 760 pixels, Carto's
+    /// `text-spacing` for one, and a track's 5 beside it
+    /// (`roads-text-ref-minor`).
+    static let roadNumberRepeat: CGFloat = 500
+    private static let trackNumberOffset: CGFloat = 5
     /// A waterway's name every 500 pixels, Carto's `text-spacing` for one.
     static let waterNameRepeat: CGFloat = 1000 / 3
     /// Carto's `text-dy` for a stream's, a ditch's or a drain's name.

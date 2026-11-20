@@ -30,8 +30,9 @@ nonisolated enum VectorTileStyle {
     static let park = color("#C8FACC")
     static let dam = color("#ADADAD")
 
-    /// Buildings are drawn from this zoom, and outlined from ``outlinedBuildingZ``.
-    static let buildingZ = 13
+    /// Buildings are drawn from this zoom, as Carto draws them, and outlined
+    /// from ``outlinedBuildingZ``.
+    static let buildingZ = 14
     static let outlinedBuildingZ = 15
     /// The archive's kind for a part of a building, which Carto does not
     /// draw: the building it is part of is drawn whole.
@@ -70,8 +71,7 @@ nonisolated enum VectorTileStyle {
     /// (``restricted(kind:z:)``).
     static let landuseFills = fills([
         (["forest", "wood"], "#ADD19E"),
-        (["village_green", "dog_park"], "#C8FACC"),
-        (["grass", "meadow", "grassland", "recreation_ground", "garden"], "#CDEBB0"),
+        (["grass", "meadow", "grassland", "village_green", "garden"], "#CDEBB0"),
         (["scrub"], "#C8D7AB"),
         (["heath"], "#D6D99F"),
         (["farmland", "greenhouse_horticulture"], "#EEF0D5"),
@@ -87,8 +87,12 @@ nonisolated enum VectorTileStyle {
         (["hospital", "school", "university", "college", "kindergarten"], "#FFFFE5"),
         (["pitch", "track"], "#88E0BE"),
         (["playground", "stadium", "sports_centre", "fitness_station", "fitness_centre", "water_park"], "#DFFCE2"), // swiftlint:disable:this american_spelling_in_copy line_length
+        (["recreation_ground", "dog_park"], "#DFFCE2"),
         (["golf_course", "miniature_golf", "camp_site", "caravan_site", "picnic_site"], "#DEF6C0"),
         (["pedestrian", "platform"], "#DDDDE8"),
+        // A bridge mapped as an area, from the extras: the basemap files it
+        // as a pedestrian square, and this is drawn over that.
+        (["bridge"], "#B8B8B8"),
         (["parking"], "#EEEEEE"),
         (["garages"], "#DFDDCE"),
         (["aerodrome"], "#E9E7E2"),
@@ -107,8 +111,9 @@ nonisolated enum VectorTileStyle {
 
     /// How wide each kind of waterway is drawn, by zoom: Carto's widths
     /// (`water.mss`), a river's from zoom 8 and a stream's from 12, a canal
-    /// as a river until zoom 12 and then somewhat wider than a stream, and
-    /// a ditch or a drain as a stream that stops widening at zoom 14.
+    /// from zoom 12 too, somewhat wider than a stream, and a ditch or a
+    /// drain as a stream that stops widening at zoom 14. Before zoom 12
+    /// Carto draws the rivers and nothing else.
     static let waterLineWidths: [String: ZoomCurve] = {
         let wide: [(z: Int, value: CGFloat)] = [(8, riverZ8), (9, riverZ9), (10, riverZ10), (11, riverZ10)]
         let narrow: [(z: Int, value: CGFloat)] = [
@@ -118,7 +123,7 @@ nonisolated enum VectorTileStyle {
             (12, riverZ12), (13, 3), (14, riverZ14), (15, 6), (16, 8), (z17, 10), (z18, 12),
         ]
         let ditch = ZoomCurve(narrow.prefix(3) + [(16, 2), (z17, 3)])
-        let canal = ZoomCurve(wide + narrow.map { (z: $0.z, value: $0.value * canalScale) })
+        let canal = ZoomCurve(narrow.map { (z: $0.z, value: $0.value * canalScale) })
         return [
             "river": ZoomCurve(wide + deep),
             "canal": canal,
@@ -127,6 +132,49 @@ nonisolated enum VectorTileStyle {
             "ditch": ditch,
         ]
     }()
+
+    /// A waterway through a tunnel or a culvert, as Carto draws one
+    /// (`water.mss`): a pale line `outer` pixels wide, the water broken into
+    /// dashes over it, and a pale line `inner` wide down the middle, which
+    /// leaves the dashes as an edge either side. `nil` before Carto draws a
+    /// tunnel so: a river's from zoom 12, and any other waterway's from 14.
+    static func waterTunnel(kind: String, z: Int) -> (outer: CGFloat, inner: CGFloat)? {
+        guard let width = waterLineWidths[kind]?.value(at: z), width > 0 else { return nil }
+        if kind == "river" {
+            guard z >= riverTunnelZ else { return nil }
+            let inset: CGFloat = switch z {
+            case riverTunnelZ: tunnelStep
+            case riverTunnelZ + 1: 2
+            case z18...: 4
+            default: 3
+            }
+            return (width, max(width - inset, 0))
+        }
+        guard z >= streamTunnelZ else { return nil }
+        let inset: CGFloat = switch z {
+        case streamTunnelZ: 0.5
+        case streamTunnelZ + 1: 1
+        default: tunnelStep
+        }
+        return (width + (z == streamTunnelZ + 1 ? tunnelStep : 1), max(width - inset, 0))
+    }
+
+    static let waterTunnelFill = color("#F3F7F7")
+    static let waterTunnelDash: [CGFloat] = [4, 2]
+    /// The `tunnel` values Carto draws a waterway as a tunnel for.
+    static let waterTunnels: Set<String> = ["yes", "culvert"]
+    private static let riverTunnelZ = 12
+    private static let streamTunnelZ = 14
+    private static let tunnelStep: CGFloat = 1.5
+
+    /// A glacier's edge (`water.mss`): a pale blue line from zoom 5, broken
+    /// and half as wide again from zoom 10.
+    static let glacierKind = "glacier"
+    static let glacierEdge = color("#99CCFF")
+    static let glacierEdgeZ = 5
+    static let brokenGlacierEdgeZ = 10
+    static let brokenGlacierEdgeWidth: CGFloat = 1.5
+    static let glacierEdgeDash: [CGFloat] = [4, 2]
 
     /// The pale glow Carto draws under a narrow waterway from zoom 13 to 17
     /// (under a canal to 14), which keeps a stream readable through a wood:
@@ -425,13 +473,38 @@ nonisolated private extension VectorTileStyle {
     )
 
     static let boundaryPurple = color("#8D618B")
-    static let country = Line(color: boundaryPurple, width: ZoomCurve([(2, 0.5), (5, 1), (12, 2), (16, 4)]), alpha: 0.5)
+    /// The darker line Carto draws down the middle of a border's band.
+    static let boundaryInk = color("#845283")
+    /// A country's border as Carto draws it (`admin.mss`): a pale band that
+    /// widens from a line at zoom 4 to eight pixels at 14, and from zoom 8 a
+    /// darker broken line down its middle. The band's width is Carto's at
+    /// zooms 4, 8 and 14, and within a few tenths of it between.
+    static let country = Line(
+        color: boundaryPurple,
+        width: ZoomCurve([(2, 0.5), (4, countryBandZ4), (8, 3), (14, 8)]),
+        alpha: 0.5,
+        center: Center(
+            color: boundaryInk,
+            width: ZoomCurve([(8, borderInkFirst), (10, 1), (14, countryInkZ14)]),
+            dash: [16, 1, 4, 1]
+        )
+    )
+    /// A state's or a province's, narrower, its middle line from zoom 10.
     static let region = Line(
         color: boundaryPurple,
-        width: ZoomCurve([(5, 0.25), (8, 0.75), (12, 1), (16, 2)]),
-        dash: [3, 2],
-        alpha: 0.5
+        width: ZoomCurve([(4, regionBandZ4), (8, 1), (10, 2), (14, 4)]),
+        alpha: 0.5,
+        center: Center(
+            color: boundaryInk,
+            width: ZoomCurve([(10, borderInkFirst), (12, 1), (14, regionInkZ14)]),
+            dash: [12, 3, 2, 3, 2, 3]
+        )
     )
+    static let countryBandZ4: CGFloat = 1.2
+    static let regionBandZ4: CGFloat = 0.4
+    static let borderInkFirst: CGFloat = 0.6
+    static let countryInkZ14: CGFloat = 1.8
+    static let regionInkZ14: CGFloat = 1.4
     static let localBoundary = Line(
         color: boundaryPurple,
         width: ZoomCurve([(10, 0.5), (14, 0.75)]),

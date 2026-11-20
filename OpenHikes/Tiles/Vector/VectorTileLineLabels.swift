@@ -77,6 +77,14 @@ nonisolated enum VectorTileLineLabels {
             for feature in layer.features where feature.type == .line {
                 let kind = feature.string("kind")
                 let detail = feature.string("kind_detail")
+                // A minor road's or a track's number, which Carto writes
+                // along it as it writes a name.
+                if layerName == "roads",
+                   let numbered = VectorTileLabelStyle.LineCategory.number(kind: kind, detail: detail),
+                   target.z >= VectorTileLabelStyle.look(of: numbered).minimumZ,
+                   let number = roadNumber(of: feature) {
+                    pieces[NamedLineKey(category: numbered, name: number), default: []] += geometry.lines(of: feature)
+                }
                 guard let category = VectorTileLabelStyle.LineCategory.line(in: layerName, kind: kind, detail: detail),
                       target.z >= VectorTileLabelStyle.look(of: category).minimumZ,
                       let name = VectorTileLabels.name(of: feature, language: language)
@@ -88,6 +96,14 @@ nonisolated enum VectorTileLineLabels {
             joined(parts).map { NamedLine(category: key.category, name: key.name, points: $0) }
         }
         return lines.sorted(by: precedes)
+    }
+
+    /// The first of a road's numbers, where it has several.
+    static func roadNumber(of feature: MapboxVectorTile.Feature) -> String? {
+        let first = feature.string(VectorTileShields.refKey)?
+            .split(separator: ";").first?
+            .trimmingCharacters(in: .whitespaces)
+        return first?.isEmpty == false ? first : nil
     }
 
     /// `parts` joined wherever one ends where another begins or ends, which
@@ -331,7 +347,7 @@ nonisolated extension VectorTileLineLabels {
                 // A name written beside its line is set along the line that
                 // runs beside it, on the side below the name whichever way it
                 // reads.
-                let offset = look.offset * unit
+                let offset = look.offset(at: z) * unit
                 let forward = MeasuredPath(MeasuredPath.offset(line.points, by: offset))
                 let backward = MeasuredPath(MeasuredPath.offset(line.points.reversed(), by: offset))
                 let marks = VectorTileLineLabels.marks(

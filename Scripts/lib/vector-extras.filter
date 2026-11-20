@@ -23,6 +23,15 @@ n/waterway=waterfall
 # one-way; the schema keeps the highways among them.
 w/oneway=yes,-1
 w/junction=roundabout
+# Every path and track, for the grade, the surface and the access Carto
+# draws each by, and the service roads, to tell a driveway from the rest.
+w/highway=path,footway,cycleway,bridleway,track,steps,service
+# Roads being built.
+w/highway=construction
+# The towers and poles of power lines.
+n/power=tower,pole
+# Bridges mapped as areas.
+wr/man_made=bridge
 # Aerial lifts other than the cable cars the basemap keeps, and their stations.
 w/aerialway=gondola,mixed_lift,goods,chair_lift,drag_lift,t-bar,j-bar,platter,rope_tow,zip_line
 nw/aerialway=station
