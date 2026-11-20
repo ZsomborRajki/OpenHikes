@@ -1424,15 +1424,16 @@ owner, on the main actor.
   (`SeededOfflineCountryServer`), and still no session: `OfflineMapsUITests`
   goes as far as the download button and the hike tile's dialog, and never
   further, because nothing would download.
-- **Deployment state, checked 2026-11-19.** The bucket holds every area of
+- **Deployment state, checked 2026-11-20.** The bucket holds every area of
   build `20261119`, cut from `planet-20261118` and `extras-20261119-18`: 381
   of them (234 countries, and the 51 states, 13 provinces and 83 regions of
   the three split ones), 1,524 files and 155.6 GB, each at the size the
   manifest lists and uploaded under the SHA-256 it lists, and no other
-  country file. Beside them it holds those two archives and the map's
-  manifest at revision 5, and nothing else. The Worker on
-  `tiles.openhikes.app` serves the manifests, the archives and the files,
-  with ranges.
+  country file. Beside them it holds those two archives, `extras-20261120-00`,
+  and the map's manifest at revision 6, which names the newer extras first,
+  and nothing else. So the areas are one extras build behind the map. The
+  Worker on `tiles.openhikes.app` serves the manifests, the archives and the
+  files, with ranges.
 
 ### Accessibility
 
