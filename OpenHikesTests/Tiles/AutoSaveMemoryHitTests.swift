@@ -119,6 +119,27 @@ struct AutoSaveMemoryHitTests {
         #expect(sandbox.isSaved(key), "a hike taken on anew is offered it again")
     }
 
+    /// A suspension turns down whatever the worker reaches meanwhile, and
+    /// the draw pass goes on finding those tiles in memory, so taking claims
+    /// again offers them again.
+    @Test("a hike that takes claims again after a suspension is offered its memory tiles again")
+    func resumingOffersMemoryTilesAgain() async throws {
+        let (z, x, y) = Self.tile
+        let key = "osm/\(z)/\(x)/\(y)"
+        activate()
+        store.offerTileDrawnFromMemory(z: z, x: x, y: y) { key }
+        await store.waitForMemoryOffers()
+        try #require(!sandbox.isSaved(key), "precondition: no bytes on disk, so nothing to move")
+
+        _ = store.suspendAndSnapshotPendingKeys(for: hikeID)
+        store.resumePersisting(for: hikeID)
+        try sandbox.browse(key: key)
+        store.offerTileDrawnFromMemory(z: z, x: x, y: y) { key }
+        await store.waitForMemoryOffers()
+
+        #expect(sandbox.isSaved(key))
+    }
+
     /// The draw pass's cost with auto-save off, which is the default: one
     /// lock, and the key never made.
     @Test("with no hike being saved for, the draw pass makes no key and queues nothing")
