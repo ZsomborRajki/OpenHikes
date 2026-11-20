@@ -367,11 +367,13 @@ struct ElevationChartPlot: View, Equatable {
         .chartOverlay { proxy in
             // The proxy is read here and not handed on: Swift Charts runs this
             // again with a new one whenever the chart moves on screen — see
-            // ``ElevationChartMarks/==(_:_:)``.
+            // ``ElevationChartMarks/==(_:_:)``. Nor is the frame handed on as
+            // it is read, which leaves noise in its last bits while the chart
+            // is scaled on screen — see ``ElevationChartMarks/settled(_:)``.
             GeometryReader { geometry in
                 if let plotFrame = proxy.plotFrame {
                     ElevationChartMarks(
-                        plot: geometry[plotFrame],
+                        plot: ElevationChartMarks.settled(geometry[plotFrame]),
                         profile: profile,
                         tint: tint,
                         domain: domain,
@@ -551,7 +553,8 @@ private struct ElevationScrubRelay: View {
 /// coordinates. Laid over the plot area with the same x-domain, it selects the
 /// same distance at every position as the plot did, past either end included.
 struct ElevationChartMarks: View, Equatable {
-    /// Where the plot area sits, in this view's own space.
+    /// Where the plot area sits, in this view's own space, as
+    /// ``settled(_:)`` hands it on.
     let plot: CGRect
     let profile: RouteProfile
     let tint: Color
@@ -583,6 +586,38 @@ struct ElevationChartMarks: View, Equatable {
     private static let liveFillSymbolSize: CGFloat = 110
     /// Opacity for the callout shadow.
     private static let shadowOpacity: Double = 0.15
+    /// How finely a plot area's frame is kept: to a 1024th of a point. A power
+    /// of two, so scaling by it and back is exact, and the rounding in between
+    /// is the only change made.
+    private static let plotFrameSteps: CGFloat = 1024
+
+    /// A plot area's frame without the noise of reading it.
+    ///
+    /// `geometry[plotFrame]` works the frame out through the window's
+    /// coordinates. While the chart is scaled on screen, as a sheet's contents
+    /// are for as long as it is dragged between its detents or another screen
+    /// comes up over it, that arithmetic ends in a different last bit on every
+    /// frame: a height of 182.0000000000001, then 181.9999999999999, for a
+    /// plot area that has not moved. Compared as read, each was a new frame,
+    /// and the marks ran on every frame of a sheet drag after all, about fifty
+    /// times.
+    ///
+    /// Rounded here rather than compared within a tolerance in ``==(_:_:)``,
+    /// because a tolerance is not transitive: moves each too small to count
+    /// would add up to one that is not, and never be drawn. A rounded frame is
+    /// equal to another or it is not, and it is never further than a 2048th of
+    /// a point from the one that was read.
+    static func settled(_ frame: CGRect) -> CGRect {
+        func settled(_ value: CGFloat) -> CGFloat {
+            (value * plotFrameSteps).rounded() / plotFrameSteps
+        }
+        return CGRect(
+            x: settled(frame.origin.x),
+            y: settled(frame.origin.y),
+            width: settled(frame.width),
+            height: settled(frame.height)
+        )
+    }
 
     // What the marks draw and where, compared as ``ElevationChartPlot``
     // compares its own: the samples in full, the scales, and the plot area's
@@ -596,7 +631,8 @@ struct ElevationChartMarks: View, Equatable {
     // every time, so the marks ran on every frame of a scroll down the hike's
     // card or a drag of the sheet, about 140 times a swipe, and laid out both
     // of their charts again for a picture that had not changed. The frame, in
-    // this view's own space, stays where it is.
+    // this view's own space and rounded as ``settled(_:)`` rounds it, stays
+    // where it is.
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.plot == rhs.plot
             && lhs.tint == rhs.tint
