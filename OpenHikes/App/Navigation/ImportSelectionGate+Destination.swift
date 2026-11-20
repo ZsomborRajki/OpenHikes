@@ -32,7 +32,7 @@ extension ImportSelectionGate {
         case .commonsPhotos(let photos): return .commonsPhotos(photos.map(\.credit.license.sourceURL))
         // Answered by the two above.
         case .hike, .newPlace, .offlineCountries, .photo, .place, .placesAround, .placesNearby, .recording,
-            .routeStyle, .totals, .trailDraft, .walk:
+            .routeEdit, .routeStyle, .totals, .trailDraft, .walk:
             return .root
         }
     }
@@ -48,7 +48,7 @@ extension ImportSelectionGate {
         case .totals: .totals
         case .offlineCountries: .offlineCountries
         case .commonsGallery, .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto, .hike, .newPlace,
-            .pendingPhotos, .pendingSubmission, .photo, .place, .placesAround, .routeStyle, .walk:
+            .pendingPhotos, .pendingSubmission, .photo, .place, .placesAround, .routeEdit, .routeStyle, .walk:
             nil
         }
     }
@@ -63,7 +63,7 @@ extension ImportSelectionGate {
         case .place(let hike, _): hike.id
         case .newPlace(let hike, _): hike.id
         case .placesAround(let hike): hike.id
-        case .routeStyle(let hike): hike.id
+        case .routeEdit(let hike), .routeStyle(let hike): hike.id
         case .walk(let walk): walk.hikeID
         case .commonsGallery, .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto, .pendingPhotos,
             .offlineCountries, .pendingSubmission, .placesNearby, .recording, .totals, .trailDraft:

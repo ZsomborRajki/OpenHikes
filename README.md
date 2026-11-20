@@ -12,6 +12,7 @@ There is no OpenHikes account and no server holding your hikes: they live on the
 - **Recording** in the background, with crash recovery and barometric elevation. Pause and resume by hand, or let Auto-Pause do it when you stop somewhere. The track is matched to OpenStreetMap's paths, and any stretch the matcher moved waits for your review before the hike is saved.
 - **GPX import and export**: open files from Files, AirDrop or any share sheet, one hike per track, and share any hike back as GPX, with its places as waypoints.
 - **Drawing a trail**: press and hold to drop stops, or search for them by name. Each leg follows the paths OpenStreetMap has mapped.
+- **Editing a route**: cut the ends off a recorded or imported hike, such as the drive a recording was left running through, and revert to the original whenever you like. A drawn trail reopens on its stops.
 - **Places** along a trail: huts, springs and waterfalls from OpenStreetMap, or places of your own, with your photographs and, where OpenStreetMap links one, the start of the place's Wikipedia article.
 - **Walking a saved trail**, with progress along it, the time left shown on the line ahead, a history of past walks and a shareable photo card.
 - **Junction warnings** while you follow a trail: the phone says which way to go before each fork, and the watch taps. Off until you turn them on from the map.

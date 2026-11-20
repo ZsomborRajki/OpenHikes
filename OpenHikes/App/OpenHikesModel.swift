@@ -118,6 +118,10 @@ final class OpenHikesModel {
     /// its scratch defaults rather than the developer's. See
     /// ``TrailPlacePinController``.
     let placePins: TrailPlacePinController
+    /// The trim *Edit Route* has under way, observed directly by the map.
+    /// Owned here because the screen that makes one is inside the sheet and
+    /// the map that draws it is behind it — see ``RouteTrimPreview``.
+    let routeTrim = RouteTrimPreview()
     /// The selected hike's line colours, observed directly by the map.
     /// Owned here for the reasons ``placePins`` is — it keeps a setting the
     /// hiker chose, and it needs ``trailGraphProvider`` — see

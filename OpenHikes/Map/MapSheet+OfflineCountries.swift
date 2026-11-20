@@ -30,7 +30,7 @@ extension MapSheet {
             )
         case .commonsGallery, .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto, .hike, .newPlace,
             .pendingPhotos, .pendingSubmission, .photo, .place, .placesAround, .placesNearby, .recording,
-            .routeStyle, .trailDraft, .walk:
+            .routeEdit, .routeStyle, .trailDraft, .walk:
             EmptyView()
         }
     }

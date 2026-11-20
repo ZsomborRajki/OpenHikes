@@ -63,6 +63,10 @@ struct MapCoordinatorTests {
     /// `MapCoordinatorTests+LocationAccess.swift`.
     let locationAccessPrompt = LocationAccessPrompt()
     let mapModes = MapModesPresentation()
+    /// The trim *Edit Route* has under way, held here as the app's model
+    /// holds it: the map observes it and keeps no reference of its own — see
+    /// `MapCoordinatorTests+RouteTrim.swift`.
+    let routeTrim = RouteTrimPreview()
     private let routeStyle = RouteStyle()
     /// Driven by a clock the test owns: `SheetMetrics` tells a resting sheet
     /// from a moving one by the gap between reports, so it would otherwise
@@ -160,6 +164,7 @@ struct MapCoordinatorTests {
             searchCompleter: searchCompleter,
             libraryLines: libraryLines ?? LibraryLines(openRequests: openRequests),
             walk: walk,
+            routeTrim: routeTrim,
             sidePanelInset: sidePanelInset,
             isCoveredByPanel: isCoveredByPanel
         )
