@@ -27,8 +27,10 @@ nonisolated struct VectorTileArchiveManifest: Codable, Equatable, Sendable {
     static let currentVersion = 1
     /// The newest layout of the extras this build draws. It draws every
     /// earlier one too, which only lacks what later ones added. Extras an
-    /// older build would draw wrong go up as the next generation.
-    static let extrasGeneration = 2
+    /// older build would draw wrong go up as the next generation. One
+    /// figure with the countries cut from them, which the countries' list
+    /// keeps because the cutting tool compiles that file and not this one.
+    static let extrasGeneration = OfflineCountryManifest.readableExtrasGeneration
 
     var version: Int
     /// Raised by every publish, so that of two manifests the newer is known:

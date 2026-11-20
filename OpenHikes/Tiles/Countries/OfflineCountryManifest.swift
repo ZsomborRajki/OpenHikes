@@ -18,6 +18,13 @@
 //  from its ISO code (`Locale.localizedString(forRegionCode:)`). A region's
 //  is, in each of the app's languages, from Natural Earth.
 //
+//  Every installed build reads this list, so it is read to leave the server
+//  room to move. A file of a role a build does not know is left out, not
+//  refused with the whole list. An area says which generation of the extras
+//  it was cut from, and a build leaves off one it would draw wrong. And an
+//  area may be listed more than once, the last build cut for older apps
+//  beside the newest: each app takes the newest it draws.
+//
 
 import Foundation
 
@@ -29,21 +36,34 @@ nonisolated struct OfflineCountryManifest: Codable, Equatable, Sendable {
     /// ``VectorTileRasterizer`` draws. A country cut from a build of another
     /// is left off the list, because it would draw wrong or not at all.
     static let readableSchema = 4
+    /// The newest layout of the extras' layers that ``VectorTileRasterizer``
+    /// draws, as the tile server's own manifest counts them
+    /// (`VectorTileArchiveManifest`). It draws every earlier one too. An
+    /// area cut from later extras is left off the list, as one of another
+    /// schema is.
+    static let readableExtrasGeneration = 2
 
     var version: Int
     /// The countries, by ISO code.
     var countries: [Country]
 
-    /// The areas this app can draw: of its schema, with a basemap, and with
-    /// names the device can keep them under, each of them the area's own.
+    /// The areas this app can draw: of its schema and of extras it reads,
+    /// with a basemap, and with names the device can keep them under, each
+    /// of them the area's own. Of an area listed more than once, the newest
+    /// build among those, where the first of them stands.
     var readableCountries: [Country] {
         guard version == Self.currentVersion else { return [] }
-        return countries.filter { country in
-            country.schema == Self.readableSchema
-                && country.hasAreaCode
-                && country.files.contains { $0.role == .basemap }
-                && country.files.allSatisfy { $0.hasSafeName && $0.fileName.hasPrefix(country.id + "-") }
+        var readable: [Country] = []
+        var places: [String: Int] = [:]
+        for country in countries where country.isReadable {
+            if let place = places[country.id] {
+                if country.build > readable[place].build { readable[place] = country }
+            } else {
+                places[country.id] = readable.count
+                readable.append(country)
+            }
         }
+        return readable
     }
 
     /// An area to download: a whole country, or a region of one.
@@ -61,6 +81,9 @@ nonisolated struct OfflineCountryManifest: Codable, Equatable, Sendable {
         /// build of a country already downloaded is an update.
         var build: String
         var schema: Int
+        /// The generation of the extras its files were cut from. `nil` for
+        /// an area listed before the list said, which every build draws.
+        var extrasGeneration: Int?
         var bounds: Bounds
         /// The outline the files were cut along: each polygon's outer ring,
         /// as longitude and latitude pairs. What the map draws and a tap or a
@@ -169,6 +192,49 @@ nonisolated extension OfflineCountryManifest {
 }
 
 nonisolated extension OfflineCountryManifest.Country {
+    /// Reads an area as the list gives it, leaving out any file of a role
+    /// this build does not know. Read as the compiler would write it, one
+    /// such file refused the whole list.
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        group = try container.decodeIfPresent(String.self, forKey: .group)
+        names = try container.decode([String: String].self, forKey: .names)
+        build = try container.decode(String.self, forKey: .build)
+        schema = try container.decode(Int.self, forKey: .schema)
+        extrasGeneration = try container.decodeIfPresent(Int.self, forKey: .extrasGeneration)
+        bounds = try container.decode(OfflineCountryManifest.Bounds.self, forKey: .bounds)
+        outline = try container.decode([[[Double]]].self, forKey: .outline)
+        files = try container.decode([ListedFile].self, forKey: .files).compactMap(\.file)
+    }
+
+    /// A file as the list gives it, or nothing for one of a role this build
+    /// does not know.
+    private struct ListedFile: Decodable {
+        let file: OfflineCountryManifest.File?
+
+        init(from decoder: any Decoder) throws {
+            let role = try decoder.container(keyedBy: RoleKey.self).decode(String.self, forKey: .role)
+            file = OfflineCountryManifest.Role(rawValue: role) == nil
+                ? nil
+                : try OfflineCountryManifest.File(from: decoder)
+        }
+
+        private enum RoleKey: String, CodingKey {
+            case role = "role"
+        }
+    }
+
+    /// Whether this app can draw the area and keep its files: see
+    /// ``OfflineCountryManifest/readableCountries``.
+    var isReadable: Bool {
+        schema == OfflineCountryManifest.readableSchema
+            && (1...OfflineCountryManifest.readableExtrasGeneration).contains(extrasGeneration ?? 1)
+            && hasAreaCode
+            && files.contains { $0.role == .basemap }
+            && files.allSatisfy { $0.hasSafeName && $0.fileName.hasPrefix(id + "-") }
+    }
+
     /// Whether the id is a country's code with no group, or a region's
     /// under the group its code starts with.
     var hasAreaCode: Bool {

@@ -1505,6 +1505,14 @@ owner, on the main actor.
   own area's code (`OfflineCountryManifest.File.hasSafeName`), and an area
   listing one that is not is left off whole, as is one cut from a planet
   schema the rasterizer does not draw.
+- **The list is read to leave the server room to move**
+  (`OfflineCountryManifest`), because every installed build keeps reading
+  it. A file of a role a build does not know is left out, where reading it
+  strictly would refuse the whole list. An area says which generation of the
+  extras it was cut from (*Tiles*), and a build leaves off one it would draw
+  wrong. An area may be listed more than once, and each build takes the
+  newest it draws, so the last cut for older apps can stand beside the
+  newest. The tool lists one build an area today.
 - **The list says which map the downloads are for.** Only the OpenHikes map
   is cut by country, and the outlines are drawn over whichever map is up. So
   the head of the list says it always, and while another map is selected a
