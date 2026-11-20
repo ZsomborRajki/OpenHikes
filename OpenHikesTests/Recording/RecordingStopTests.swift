@@ -46,7 +46,8 @@ struct RecordingStopTests {
         #expect(throws: RecordingFailure.tooShort) {
             try RecordingPreparation.prepare(points: onePoint, startedAt: start)
         }
-        #expect(RecordingStopStep.savablePointCount == onePoint.count + 1)
+        #expect(RecordingPreparation.minimumPointCount == onePoint.count + 1)
+        #expect(RecordingStopStep(pointCount: onePoint.count, holdsKeepsakes: false) == .endEmpty)
     }
 
     @Test("a field left as it opened is not a name anybody typed")

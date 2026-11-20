@@ -177,11 +177,11 @@ extension HikeRecorder {
         // the watch, a recovered walk — measured against the prepared distance
         // rather than the live one: this is the last word on how long the
         // walk was, and the share the floor is applied to should be a share
-        // of it. Its shape is read off the prepared route for the same
-        // reason, with the pauses it carries.
+        // of it. Its shape is the prepared route's for the same reason, read
+        // off the main thread when it was prepared.
         let suggestedTitle = offeredTitle ?? suggestedTitle(
             forDistance: prepared.distanceMeters,
-            shape: RouteShape.of(route: prepared.route),
+            shape: prepared.shape,
             startedAt: prepared.startedAt
         )
         if let existing = try existingHike(sessionID: hikeID) {

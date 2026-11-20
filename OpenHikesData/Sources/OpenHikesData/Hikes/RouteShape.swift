@@ -35,6 +35,17 @@
 //  under three at the farthest, which takes in two passes along one path
 //  under trees and leaves out a path on the other side of a stream.
 //
+//  ## Back, not round again
+//
+//  Ground alone cannot tell a walk back down a path from a second lap round
+//  a loop: either way the second half is on the first half's ground. What
+//  tells them apart is the way it is walked. So each sample also notes which
+//  of eight compass sectors the line heads in there, and a sample of the
+//  second half is retraced only where the first half went the other way:
+//  three sectors, so a hundred and eighty degrees give or take one sector's
+//  worth of GPS. Where a loop crosses itself, the two passes are a sector or
+//  two apart, and that is no return either.
+//
 //  ## A pause that moved the walk
 //
 //  A pause is not distance and not trail (`RouteBoundary`), and a hiker can
@@ -147,9 +158,25 @@ nonisolated public enum RouteShape: Hashable, Sendable {
         guard !wayBack.isEmpty else { return nil }
 
         let cellSize = spacing * cellSpacings
-        let covered = Set(wayOut.map { Cell($0, size: cellSize) })
-        let retraced = wayBack.count { Cell($0, size: cellSize).neighborhood.contains(where: covered.contains) }
+        var covered: [Cell: Headings] = [:]
+        for index in wayOut.indices {
+            covered[Cell(samples[index], size: cellSize), default: []].insert(heading(at: index, in: samples))
+        }
+        let retraced = wayBack.indices.count { index in
+            let against = heading(at: index, in: samples).against
+            return Cell(samples[index], size: cellSize).anyInNeighborhood { cell in
+                covered[cell].map { !$0.isDisjoint(with: against) } ?? false
+            }
+        }
         return Double(retraced) >= Double(wayBack.count) * retracedShare ? .outAndBack : .loop
+    }
+
+    /// The way the line heads at one of its samples: from the sample before
+    /// it to the sample after, so one wandering sample turns it less.
+    private static func heading(at index: Int, in samples: [(x: Double, y: Double)]) -> Headings {
+        let from = samples[max(index - 1, samples.startIndex)]
+        let to = samples[min(index + 1, samples.endIndex - 1)]
+        return Headings(angle: atan2(to.y - from.y, to.x - from.x))
     }
 
     /// One point every `spacing` meters of the line's own length, its first
@@ -178,6 +205,41 @@ nonisolated public enum RouteShape: Hashable, Sendable {
         return samples
     }
 
+    /// Compass sectors a line heads in, eighths of a turn.
+    private struct Headings: OptionSet {
+        private static let sectors = 8
+        /// The sectors either side of the opposite one, and that one: what a
+        /// way back runs in.
+        private static let againstSteps = 3...5
+
+        let rawValue: UInt8
+
+        init(rawValue: UInt8) {
+            self.rawValue = rawValue
+        }
+
+        /// The one sector `angle`, in radians from east, falls in.
+        init(angle: Double) {
+            let turn = (angle + .pi) / (2 * .pi)
+            let sector = Int((turn * Double(Self.sectors)).rounded(.down))
+            self.init(sector: sector)
+        }
+
+        private init(sector: Int) {
+            let wrapped = (sector % Self.sectors + Self.sectors) % Self.sectors
+            self.init(rawValue: 1 << UInt8(wrapped))
+        }
+
+        /// The sectors a line heading this way meets a line coming back in.
+        /// Read of a single sector.
+        var against: Self {
+            let sector = rawValue.trailingZeroBitCount
+            return Self.againstSteps.reduce(into: []) { headings, step in
+                headings.insert(Self(sector: sector + step))
+            }
+        }
+    }
+
     /// One square of the grid the way out is filed in.
     private struct Cell: Hashable {
         let column: Int
@@ -192,11 +254,16 @@ nonisolated public enum RouteShape: Hashable, Sendable {
             self.init(column: Int((point.x / size).rounded(.down)), row: Int((point.y / size).rounded(.down)))
         }
 
-        /// This cell and the eight around it.
-        var neighborhood: [Self] {
-            (-1...1).flatMap { columnStep in
-                (-1...1).map { rowStep in Self(column: column + columnStep, row: row + rowStep) }
+        /// Whether this cell, or one of the eight around it, is one
+        /// `isMatch` holds for. Stops at the first, and builds no list of
+        /// them: it is asked once a sample.
+        func anyInNeighborhood(where isMatch: (Self) -> Bool) -> Bool {
+            for columnStep in -1...1 {
+                for rowStep in -1...1 where isMatch(Self(column: column + columnStep, row: row + rowStep)) {
+                    return true
+                }
             }
+            return false
         }
     }
 }

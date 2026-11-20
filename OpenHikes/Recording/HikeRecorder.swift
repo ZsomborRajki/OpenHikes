@@ -545,11 +545,9 @@ extension HikeRecorder {
         customName: String? = nil,
         offeredTitle: String? = nil
     ) async throws -> RecordingStopOutcome {
-        guard phase == .waitingForFix
-            || phase == .recording
-            || phase == .paused else { throw RecordingFailure.save(String(
-                localized: "No active recording is ready to stop."
-            )) }
+        guard isStoppable else { throw RecordingFailure.save(String(
+            localized: "No active recording is ready to stop."
+        )) }
         self.offeredTitle = HikeTitle.bounded(offeredTitle)
         guard let journal, sessionStartedAt != nil else {
             let failure = RecordingFailure.storageUnavailable

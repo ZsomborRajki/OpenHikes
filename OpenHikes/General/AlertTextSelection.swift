@@ -42,18 +42,24 @@ extension View {
     }
 }
 
-private struct AlertTextSelection: ViewModifier {
+struct AlertTextSelection: ViewModifier {
     let text: String?
     let isPresented: Bool
+
+    /// Whether a field that has begun editing holding `fieldText` is the
+    /// alert's, as it opened: the alert is up, it opened with some text, and
+    /// the field still holds that and nothing else.
+    static func selects(_ fieldText: String?, opening text: String?, isPresented: Bool) -> Bool {
+        isPresented && text != nil && fieldText == text
+    }
 
     func body(content: Content) -> some View {
         #if canImport(UIKit)
         content.onReceive(
             NotificationCenter.default.publisher(for: UITextField.textDidBeginEditingNotification)
         ) { notification in
-            guard isPresented,
-                  let field = notification.object as? UITextField,
-                  field.text == text else { return }
+            guard let field = notification.object as? UITextField,
+                  Self.selects(field.text, opening: text, isPresented: isPresented) else { return }
             field.selectAll(nil)
         }
         #else

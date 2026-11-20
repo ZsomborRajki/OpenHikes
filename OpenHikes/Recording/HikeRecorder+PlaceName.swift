@@ -96,13 +96,31 @@ extension HikeRecorder {
     /// *not* read from inside a `body`: it reads
     /// ``RecordingStats/distanceMeters``, which changes on every accepted fix,
     /// and a body that observed it would re-run at fix rate. It also copies
-    /// the line drawn so far, which is once a tap and never once a fix.
-    var suggestedTitle: String? {
-        suggestedTitle(
-            forDistance: stats.distanceMeters,
-            shape: RouteShape.of(trace.recordedCoordinates, pausedLegs: accumulator.pausedLegs),
-            startedAt: sessionStartedAt
-        )
+    /// the line drawn so far, which is once a tap and never once a fix, and
+    /// reads its shape off the main thread — see ``shapeOffMain(of:pausedLegs:)``.
+    func suggestedTitle() async -> String? {
+        let distance = stats.distanceMeters
+        // Only a walk a trail names is said to be a loop, so only then is the
+        // line read.
+        let shape = trailNames.dominantName(of: distance) == nil
+            ? nil
+            : await Self.shapeOffMain(of: trace.recordedCoordinates, pausedLegs: accumulator.pausedLegs)
+        return suggestedTitle(forDistance: distance, shape: shape, startedAt: sessionStartedAt)
+    }
+
+    /// The shape of the live line, without occupying the main actor.
+    ///
+    /// A long walk's line is twenty thousand samples filed in a grid, and the
+    /// alert it names waits on it. `@concurrent` as
+    /// ``RecordingPreparation/normalizedPointsOffMain(_:)`` is, so the work
+    /// stays in the caller's task.
+    @concurrent
+    nonisolated static func shapeOffMain(
+        of line: [CLLocationCoordinate2D],
+        pausedLegs: [RouteShape.PausedLeg]
+    ) async -> RouteShape? {
+        assertOffMainThread("A recording's shape must be read off the main thread")
+        return RouteShape.of(line, pausedLegs: pausedLegs)
     }
 
     /// Asks what town this recording started in, the first time it is called

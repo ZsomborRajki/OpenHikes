@@ -112,7 +112,7 @@ extension HikeRecorderTests {
         walk(recorder, to: 47.632, on: "Ridge Path")
         let offered = try name("Ridge Path", of: recorder)
 
-        #expect(recorder.suggestedTitle == offered)
+        #expect(await recorder.suggestedTitle() == offered)
     }
 
     /// The draft keeps the name it was created with for the length of the
@@ -129,7 +129,7 @@ extension HikeRecorderTests {
 
         let draft = try #require(recorder.currentHike)
         let offered = try name("Ridge Path", of: recorder)
-        #expect(recorder.suggestedTitle == offered)
+        #expect(await recorder.suggestedTitle() == offered)
         #expect(draft.title == HikeRecorder.defaultTitle(for: draft.date))
     }
 
@@ -184,7 +184,7 @@ extension HikeRecorderTests {
         walk(recorder, to: 47.633, on: nil)
         walk(recorder, to: 47.635, on: nil)
 
-        #expect(recorder.suggestedTitle == nil)
+        #expect(await recorder.suggestedTitle() == nil)
         let hike = try savedHike(from: await recorder.stop())
         #expect(hike.title == HikeRecorder.defaultTitle(for: hike.date))
     }
@@ -200,7 +200,7 @@ extension HikeRecorderTests {
         clock.advance(by: 60)
         source.deliver(fix(latitude: 47.631))
 
-        #expect(recorder.suggestedTitle == nil)
+        #expect(await recorder.suggestedTitle() == nil)
         let hike = try savedHike(from: await recorder.stop())
         #expect(hike.title == HikeRecorder.defaultTitle(for: hike.date))
     }
@@ -214,7 +214,7 @@ extension HikeRecorderTests {
         walkRoundABlock(recorder, on: "Ridge Path")
         let offered = try name("Ridge Path Loop", of: recorder)
 
-        #expect(recorder.suggestedTitle == offered)
+        #expect(await recorder.suggestedTitle() == offered)
     }
 
     /// The two ends of this walk meet as a loop's do. What it came back
@@ -226,7 +226,7 @@ extension HikeRecorderTests {
         walkThereAndBack(recorder, on: "Ridge Path")
         let offered = try name("Ridge Path", of: recorder)
 
-        #expect(recorder.suggestedTitle == offered)
+        #expect(await recorder.suggestedTitle() == offered)
     }
 
     /// Up the trail, carried two blocks east while paused, and down another
@@ -246,7 +246,7 @@ extension HikeRecorderTests {
         }
         let offered = try name("Ridge Path", of: recorder)
 
-        #expect(recorder.suggestedTitle == offered)
+        #expect(await recorder.suggestedTitle() == offered)
         let hike = try savedHike(from: await recorder.stop())
         #expect(hike.title == offered, "nor from its saved line")
     }

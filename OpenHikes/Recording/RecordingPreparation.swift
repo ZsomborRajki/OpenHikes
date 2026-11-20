@@ -54,9 +54,18 @@ nonisolated struct PreparedRecording: Sendable {
     let startedAt: Date
     let matchedTrailName: String?
     let matchResult: TrailMatchResult?
+    /// What kind of line the saved route is — see ``RouteShape`` — for a
+    /// name made at the save. Read here, off the main thread with the rest of
+    /// the walk, rather than in ``HikeRecorder/persist(_:prepared:customName:)``.
+    let shape: RouteShape?
 }
 
 nonisolated enum RecordingPreparation {
+    /// The fewest points a recording is saved with, once normalized: one
+    /// point is a place, not a line. Stop asks this before it offers a
+    /// name — see ``RecordingStopStep``.
+    static let minimumPointCount = 2
+
     /// Prepares without occupying the main actor.
     ///
     /// `@concurrent` rather than a detached task: the matching and distance
@@ -94,7 +103,7 @@ nonisolated enum RecordingPreparation {
         routeChoices: [Int: TrailRouteChoice] = [:]
     ) throws(RecordingFailure) -> PreparedRecording {
         let deduplicated = normalizedPoints(points)
-        guard deduplicated.count > 1 else { throw .tooShort }
+        guard deduplicated.count >= minimumPointCount else { throw .tooShort }
 
         let match = graph.map { trailGraph in
             TrailMatcher.match(
@@ -138,7 +147,7 @@ nonisolated enum RecordingPreparation {
         choices: [Int: TrailRouteChoice]
     ) throws(RecordingFailure) -> PreparedRecording {
         let deduplicated = normalizedPoints(points)
-        guard deduplicated.count > 1 else { throw .tooShort }
+        guard deduplicated.count >= minimumPointCount else { throw .tooShort }
         return preparedRecording(
             points: deduplicated,
             startedAt: startedAt,
@@ -189,8 +198,9 @@ nonisolated enum RecordingPreparation {
             }
             previousCoordinate = point.coordinate
         }
+        let route = preparedPoints.map(\.routeCoordinate)
         return PreparedRecording(
-            route: preparedPoints.map(\.routeCoordinate),
+            route: route,
             // No match means `route` already is the raw trace; a second copy
             // would double the row without preserving any additional fact.
             rawRoute: usesMatchedRoute ? rawRoute : [],
@@ -201,7 +211,8 @@ nonisolated enum RecordingPreparation {
             matchedTrailName: usesMatchedRoute
                 ? match?.matchedTrailName
                 : nil,
-            matchResult: match
+            matchResult: match,
+            shape: RouteShape.of(route: route)
         )
     }
 

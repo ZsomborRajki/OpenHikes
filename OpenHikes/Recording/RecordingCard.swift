@@ -233,7 +233,7 @@ struct RecordingCard: View {
                 // Settled first, because a recording the live figures call
                 // empty can still have fixes on their way to its journal.
                 switch await recorder.settledStopStep() {
-                case .askName: askForName()
+                case .askName: await askForName()
                 case .confirmDiscard: showDiscardConfirmation = true
                 case .endEmpty: await discard()
                 case nil: break
@@ -252,8 +252,8 @@ struct RecordingCard: View {
     /// was flagged user-named for good. The text is back, and what keeps that
     /// from coming back with it is the save reading the field against what it
     /// opened with — see ``RecordingStopName``.
-    private func askForName() {
-        let offered = recorder.suggestedTitle ?? recorder.currentHike?.title
+    private func askForName() async {
+        let offered = await recorder.suggestedTitle() ?? recorder.currentHike?.title
         offeredTitle = offered
         stopNameDraft = offered ?? ""
         showStopAlert = true

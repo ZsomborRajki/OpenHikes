@@ -34,8 +34,10 @@
 //  loop's word and the day with it, so two walks of the same trail on two
 //  days were offered one name. So the day, the loop's word and the
 //  separators take their room first, and the town and the trail share what
-//  is left: the town as much as it needs up to half of it, and the trail the
-//  rest, since the trail's name is the one that runs long.
+//  is left. A title that fits is cut nowhere. One that does not cuts the
+//  town only to leave the trail what it needs, or half the room when the
+//  trail needs more, and then cuts the trail, whose name is the one that
+//  runs long.
 //
 
 import Foundation
@@ -70,9 +72,10 @@ nonisolated enum RecordingTitle {
         calendar: Calendar = .current
     ) -> String? {
         let trailName = named(trail)
-        // A trail named for its town says the town once.
+        // A trail named for its town, or whose name says it, says the town
+        // once.
         let town = named(city).flatMap { town in
-            trailName?.caseInsensitiveCompare(town) == .orderedSame ? nil : town
+            trailName.map { says($0, town) } == true ? nil : town
         }
         guard town != nil || trailName != nil else { return nil }
         let isLoop = shape == .loop && trailName.map { !saysLoop($0) } ?? false
@@ -83,7 +86,7 @@ nonisolated enum RecordingTitle {
         room.take(separator)
         if town != nil, trailName != nil { room.take(separator) }
         if isLoop { room.take(loop("")) }
-        let fittedTown = town.flatMap { room.fit($0, sharing: trailName == nil ? 1 : 2) }
+        let fittedTown = town.flatMap { room.fit($0, leavingRoomFor: trailName) }
         let fittedTrail = trailName.flatMap { room.fit($0) }
         guard fittedTown != nil || fittedTrail != nil else { return nil }
         let trailPart = fittedTrail.map { isLoop ? loop($0) : $0 }
@@ -118,14 +121,20 @@ nonisolated enum RecordingTitle {
             utf8Bytes -= text.utf8.count
         }
 
-        /// As much of `name` as fits in one `share`-th of the room left,
-        /// trimmed, and `nil` when none of it does. Whatever it takes is taken.
+        /// As much of `name` as fits, trimmed, and `nil` when none of it
+        /// does. Whatever it takes is taken.
+        ///
+        /// - Parameter other: The part still to come, which is left what it
+        ///   needs, or half the room when it needs more: a short name never
+        ///   cuts a long one, and a long one never crowds a short one out.
         ///
         /// Cut by ``BoundedText``, as every title is, to a bound whose bytes
         /// fit too: a bound allows each character
         /// ``bytesPerCharacter``, so it is held to the bytes left as well.
-        mutating func fit(_ name: String, sharing share: Int = 1) -> String? {
-            let allowed = min(characters, utf8Bytes / Self.bytesPerCharacter) / share
+        mutating func fit(_ name: String, leavingRoomFor other: String? = nil) -> String? {
+            let characterRoom = other.map { max(characters / 2, characters - $0.count) } ?? characters
+            let byteRoom = other.map { max(utf8Bytes / 2, utf8Bytes - $0.utf8.count) } ?? utf8Bytes
+            let allowed = min(characterRoom, byteRoom / Self.bytesPerCharacter)
             let fitted = BoundedText.bounded(name, to: TextBound(characters: max(0, allowed)))
             if let fitted { take(fitted) }
             return fitted
@@ -146,6 +155,18 @@ nonisolated enum RecordingTitle {
         date.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted, calendar: calendar))
     }
 
+    /// Whether a trail's name says `town` in it, as whole words —
+    /// "Zermatt Höhenweg", "Bad Ischl Soleweg" — and not inside another
+    /// word, as "Au" is in "Aurach".
+    static func says(_ trail: String, _ town: String) -> Bool {
+        let townWords = words(of: town)
+        let trailWords = words(of: trail)
+        guard !townWords.isEmpty, townWords.count <= trailWords.count else { return false }
+        return (0...(trailWords.count - townWords.count)).contains { start in
+            trailWords[start..<(start + townWords.count)].elementsEqual(townWords)
+        }
+    }
+
     /// Whether a trail's own name already says it is a loop.
     static func saysLoop(_ name: String) -> Bool {
         folded(name)
@@ -153,6 +174,11 @@ nonisolated enum RecordingTitle {
             .contains { word in
                 loopWords.contains(String(word)) || loopStems.contains { word.contains($0) }
             }
+    }
+
+    /// A name's words, folded as the lists below are compared.
+    private static func words(of text: String) -> [Substring] {
+        folded(text).split { !$0.isLetter && !$0.isNumber }
     }
 
     /// A part with something in it, trimmed.

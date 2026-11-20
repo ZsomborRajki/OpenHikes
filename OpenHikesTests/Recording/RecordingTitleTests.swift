@@ -95,6 +95,27 @@ struct RecordingTitleTests {
         #expect(title == "HALLSTATT – \(Self.day)")
     }
 
+    @Test("a trail whose name says its town says the town once")
+    func aTrailThatSaysItsTown() {
+        #expect(
+            RecordingTitle.title(city: "Zermatt", trail: "Zermatt Höhenweg", shape: .loop, date: Self.date)
+                == "Zermatt Höhenweg Loop – \(Self.day)"
+        )
+        #expect(
+            RecordingTitle.title(city: "Bad Ischl", trail: "Soleweg Bad Ischl", shape: nil, date: Self.date)
+                == "Soleweg Bad Ischl – \(Self.day)"
+        )
+    }
+
+    /// A town's name inside another word is not the town.
+    @Test("a trail whose name holds the town inside a word still has the town beside it")
+    func aTownInsideAWordIsNotSaid() {
+        #expect(
+            RecordingTitle.title(city: "Au", trail: "Aurach Trail", shape: nil, date: Self.date)
+                == "Au – Aurach Trail – \(Self.day)"
+        )
+    }
+
     /// So a list of walks named either way reads by the same date.
     @Test("the day is the one the time-of-day name ends with")
     func theDayIsTheDefaultNamesDay() {
@@ -138,6 +159,17 @@ struct RecordingTitleTests {
         #expect(second.hasSuffix(" Loop" + RecordingTitle.separator + RecordingTitle.day(nextDay)))
         #expect(first.count <= HikeTitle.maximumCharacters)
         #expect(first.hasPrefix("Berchtesgaden – Höhenweg"))
+    }
+
+    /// Under the bound whole, so nothing is cut: the room the trail's short
+    /// name leaves is the town's.
+    @Test("a long town in a title that fits is not cut")
+    func aLongTownThatFitsIsWhole() {
+        let town = String(repeating: "Unterwössen ", count: 6).trimmingCharacters(in: .whitespaces)
+
+        let title = RecordingTitle.title(city: town, trail: "Ridge Path", shape: nil, date: Self.date)
+
+        #expect(title == "\(town) – Ridge Path – \(Self.day)")
     }
 
     /// The trail is the name that runs long, so a town that does takes no

@@ -51,17 +51,12 @@ nonisolated enum RecordingStopStep: Equatable {
     /// Nothing recorded and nothing attached: end it.
     case endEmpty
 
-    /// The fewest points a recording can be saved with — the line
-    /// ``RecordingPreparation`` refuses to go below, as
-    /// ``RecordingFailure/tooShort``.
-    static let savablePointCount = 2
-
     /// - Parameters:
     ///   - pointCount: The points the recording has kept.
     ///   - holdsKeepsakes: Whether its draft carries anything the hiker put
     ///     there: a photograph or a place.
     init(pointCount: Int, holdsKeepsakes: Bool) {
-        if pointCount >= Self.savablePointCount {
+        if pointCount >= RecordingPreparation.minimumPointCount {
             self = .askName
         } else {
             self = holdsKeepsakes ? .confirmDiscard : .endEmpty
@@ -145,8 +140,9 @@ extension HikeRecorder {
         return stopStep(pointCount: max(stats.pointCount, journaled))
     }
 
-    /// The phases Stop is offered in.
-    private var isStoppable: Bool {
+    /// The phases Stop is offered in, and the ones
+    /// ``stop(customName:offeredTitle:)`` accepts.
+    var isStoppable: Bool {
         phase == .waitingForFix || phase == .recording || phase == .paused
     }
 

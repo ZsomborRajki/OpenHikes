@@ -64,8 +64,8 @@ final class StubRecordingPlaceNaming: RecordingPlaceNaming {
 extension HikeRecorderTests {
     /// Waits for the town's answer to become the name the walk is offered.
     private func settleStartPlace(of recorder: HikeRecorder) async {
-        await settleDelegateHop(until: "the town the walk started in to name it") {
-            recorder.suggestedTitle != nil
+        await settleDelegateHop(until: "the town the walk started in to answer") {
+            recorder.startPlaceName != nil
         }
     }
 
@@ -88,7 +88,7 @@ extension HikeRecorderTests {
 
         let startedAt = try #require(recorder.sessionStartedAt)
         let townsName = name("Budapest", on: startedAt)
-        #expect(recorder.suggestedTitle == townsName)
+        #expect(await recorder.suggestedTitle() == townsName)
         // Held, not written: the draft is renamed when the hike is saved.
         let draft = try #require(recorder.currentHike)
         #expect(draft.title == HikeRecorder.defaultTitle(for: draft.date))
@@ -114,7 +114,7 @@ extension HikeRecorderTests {
 
         let startedAt = try #require(recorder.sessionStartedAt)
         let offered = name("Budapest – Ridge Path", on: startedAt)
-        #expect(recorder.suggestedTitle == offered)
+        #expect(await recorder.suggestedTitle() == offered)
         let hike = try savedHike(from: await recorder.stop())
         #expect(hike.title == offered)
     }
@@ -150,7 +150,7 @@ extension HikeRecorderTests {
             places.answerCount > 0
         }
 
-        #expect(recorder.suggestedTitle == nil)
+        #expect(await recorder.suggestedTitle() == nil)
         let hike = try savedHike(from: await recorder.stop())
         #expect(hike.title == HikeRecorder.defaultTitle(for: hike.date))
     }
@@ -198,7 +198,7 @@ extension HikeRecorderTests {
         await settleDelegateHop(until: "the late answer to land") {
             places.answerCount == 1
         }
-        #expect(recorder.suggestedTitle == nil)
+        #expect(await recorder.suggestedTitle() == nil)
 
         places.holdsAnswers = false
         places.city = "Szentendre"
@@ -207,7 +207,7 @@ extension HikeRecorderTests {
         await settleStartPlace(of: recorder)
 
         let startedAt = try #require(recorder.sessionStartedAt)
-        #expect(recorder.suggestedTitle == name("Szentendre", on: startedAt))
+        #expect(await recorder.suggestedTitle() == name("Szentendre", on: startedAt))
         #expect(places.askedCoordinates.count == 2)
     }
 
@@ -294,7 +294,7 @@ extension HikeRecorderTests {
         }
         // What the alert shows when Stop is tapped now: with no trail and no
         // town yet, the draft's own name.
-        #expect(recorder.suggestedTitle == nil)
+        #expect(await recorder.suggestedTitle() == nil)
         let shown = try #require(recorder.currentHike?.title)
 
         places.releaseAnswers()
@@ -331,7 +331,7 @@ extension HikeRecorderTests {
         await settleDelegateHop(until: "the town to be asked about") {
             places.askedCoordinates.count == 1
         }
-        #expect(recorder.suggestedTitle == nil)
+        #expect(await recorder.suggestedTitle() == nil)
         let shown = try #require(recorder.currentHike?.title)
 
         guard case .needsReview = try await recorder.stop(offeredTitle: shown) else {

@@ -349,4 +349,3 @@ OpenHikes/Tiles/Countries/OfflineCountriesHead.swift
 OpenHikes/General/SortMenu.swift
 OpenHikes/General/SectionIndex.swift
 OpenHikes/General/ClearFieldButton.swift
-OpenHikes/General/AlertTextSelection.swift

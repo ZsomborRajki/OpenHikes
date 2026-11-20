@@ -98,6 +98,16 @@ struct RouteShapeTests {
         #expect(RouteShape.of(downTheRoad) == .pointToPoint)
     }
 
+    /// The second lap is on the first lap's ground from end to end, walked
+    /// the same way round.
+    @Test("round a loop twice is a loop")
+    func twoLapsAreALoop() {
+        let lap: [(east: Double, north: Double)] = [(0, 1000), (1000, 1000), (1000, 0), (0, 0)]
+        let walk = Self.line([(0, 0)] + lap + lap)
+
+        #expect(RouteShape.of(walk) == .loop)
+    }
+
     @Test("a loop with a short path to it is a loop")
     func aShortWayInLeavesALoop() {
         let walk = Self.line([
