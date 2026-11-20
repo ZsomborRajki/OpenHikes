@@ -66,8 +66,12 @@ extension View {
     /// those translucent: on ``MapSidePanel``, which is no presentation, they
     /// were opaque white, or near black in dark, beside a glass panel whose
     /// other cards — this file's — let the map through.
-    func placeCardRows() -> some View {
-        listRowBackground(Rectangle().fill(.quaternary))
+    ///
+    /// - Parameter isShown: `false` leaves the system's cards, for a list
+    ///   that stands over the map in one place and on an opaque ground in
+    ///   another, as *Offline Maps* does in Settings.
+    func placeCardRows(_ isShown: Bool = true) -> some View {
+        listRowBackground(isShown ? Rectangle().fill(.quaternary) : nil)
     }
 }
 
