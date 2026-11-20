@@ -5228,57 +5228,18 @@ if expect_status 2 && expect_contains "$output" "unknown command 'deploy'" "the 
     pass
 fi
 
-# Scripts/vector-extras.sh uploads the extras under a name the tile server's
-# cache keeps for a day. It asks R2 whether the name is free, then sends the
-# file on condition that it still is, and only that condition stops a second
-# upload that also found the name free from replacing the first: without it,
-# an upload made alone goes exactly as it does with it. `curl` is a stub from
-# here on, recording each request and answering a HEAD with STUB_CURL_HEAD and
-# a PUT with STUB_CURL_PUT as `-w "%{http_code}"` would print them. The keys are
-# a fixture's, so nothing here could sign for the real bucket.
-cat > "$stub_bin/curl" <<'STUB'
-#!/usr/bin/env bash
-printf 'curl %s\n' "$*" >> "$STUB_CALL_LOG"
-if [[ " $* " == *" -I "* ]]; then
-    printf '%s' "${STUB_CURL_HEAD:-404}"
-elif [[ " $* " == *" -T "* ]]; then
-    printf '%s' "${STUB_CURL_PUT:-200}"
-else
-    echo "stub curl: no answer for '$*'" >&2
-    exit 64
-fi
-STUB
-chmod +x "$stub_bin/curl"
+# Scripts/vector-extras.sh builds the extras, and uploads them with the rest of
+# the bucket's life further down. The R2 keys are a fixture's, shared by every
+# script that signs for the bucket, so nothing here could sign for the real one.
 vector_extras="$repository_root/Scripts/vector-extras.sh"
 extras_work="$work/vector-extras"
 mkdir -p "$extras_work"
-extras_archive="$extras_work/extras-20261117.pmtiles"
-printf 'archive' > "$extras_archive"
 cat > "$extras_work/r2.env" <<'EOF'
 R2_ACCOUNT_ID=stub-account
 R2_ACCESS_KEY_ID=stub-key
 R2_SECRET_ACCESS_KEY=stub-secret
 R2_BUCKET=stub-bucket
 EOF
-
-OPENHIKES_R2_ENV="$extras_work/r2.env" \
-    run_script "vector-extras upload sends the archive on condition that its name is still free" \
-    "$vector_extras" upload "$extras_archive"
-if expect_status 0 \
-    && expect_contains "$calls" "-H If-None-Match: * -H Content-Type: application/octet-stream -T $extras_archive" \
-        "the upload" \
-    && expect_contains "$output" "uploaded extras-20261117.pmtiles (7 bytes) to stub-bucket" "the output"; then
-    pass
-fi
-
-OPENHIKES_R2_ENV="$extras_work/r2.env" STUB_CURL_PUT=412 \
-    run_script "vector-extras upload refuses a name another upload took after it was found free" \
-    "$vector_extras" upload "$extras_archive"
-if expect_status 1 \
-    && expect_contains "$output" "extras-20261117.pmtiles reached stub-bucket from another upload first" "the error" \
-    && expect_absent "$output" "uploaded" "the output"; then
-    pass
-fi
 
 # The build cuts the planet twice in its scratch directory — the points and
 # lines once, the areas whose names it keeps once and then the named ones among
@@ -5591,14 +5552,17 @@ unset OPENHIKES_VECTOR_ARCHIVE_MANIFEST OPENHIKES_TILE_SERVER STUB_SERVED_MANIFE
 # Protomaps, the tile server and R2 at once. The bucket is a directory,
 # STUB_BUCKET, a file a key, listed, read, written and deleted as R2 would,
 # multipart uploads included, whose ETag is S3's: the MD5 of the parts' MD5s
-# and their count. Protomaps is STUB_PROTOMAPS, its builds and their index,
+# and their count. A multipart upload sent `If-None-Match: *` is refused with a
+# 412 when its key holds an object by the time it is completed, and
+# STUB_LANDS_FIRST names a key another upload fills while one is under way.
+# Protomaps is STUB_PROTOMAPS, its builds and their index,
 # each build's ETag in a file beside it; the tile server serves the manifest
 # at STUB_SERVED_MANIFEST, and an archive's TileJSON unless
 # STUB_MISSING_ARCHIVES names it.
 cat > "$stub_bin/curl" <<'STUB'
 #!/usr/bin/env bash
 printf 'curl %s\n' "$*" >> "$STUB_CALL_LOG"
-out="" url="" method=GET upload="" dump="" code=false head=false fail=false
+out="" url="" method=GET upload="" dump="" code=false head=false fail=false if_none_match=false
 while (( $# )); do
     case "$1" in
         -o) out="$2"; shift 2 ;;
@@ -5606,7 +5570,8 @@ while (( $# )); do
         -X) method="$2"; shift 2 ;;
         -T) upload="$2"; method=PUT; shift 2 ;;
         -w) code=true; shift 2 ;;
-        --data-binary|-C|-H|--user|--aws-sigv4) shift 2 ;;
+        -H) [[ "$2" != "If-None-Match: *" ]] || if_none_match=true; shift 2 ;;
+        --data-binary|-C|--user|--aws-sigv4) shift 2 ;;
         --*) shift ;;
         -*)
             [[ "$1" != *f* ]] || fail=true
@@ -5645,6 +5610,7 @@ case "$path" in
         case "$method:$query" in
             POST:uploads)
                 mkdir -p "$uploads"
+                [[ "$key" != "${STUB_LANDS_FIRST:-}" ]] || printf 'another' > "$STUB_BUCKET/$key"
                 printf '<InitiateMultipartUploadResult><UploadId>stub+upload</UploadId></InitiateMultipartUploadResult>' > "$body"
                 ;;
             PUT:uploadId=*partNumber=*)
@@ -5653,12 +5619,17 @@ case "$path" in
                 headers="ETag: \"$(md5 -q "$upload")\"\r\n"
                 ;;
             POST:uploadId=*)
-                mkdir -p "$(dirname "$STUB_BUCKET/$key")" "$(dirname "$STUB_BUCKET.etags/$key")"
-                parts="$(ls "$uploads" | sort -n)"
-                for part in $parts; do cat "$uploads/$part"; done > "$STUB_BUCKET/$key"
-                for part in $parts; do md5 -q "$uploads/$part"; done | tr -d '\n' | xxd -r -p | md5 -q \
-                    | sed "s/\$/-$(wc -w <<< "$parts" | tr -d ' ')/" > "$STUB_BUCKET.etags/$key"
-                rm -rf "$uploads"
+                if $if_none_match && [[ -f "$STUB_BUCKET/$key" ]]; then
+                    status=412
+                    printf '<Error><Code>PreconditionFailed</Code></Error>' > "$body"
+                else
+                    mkdir -p "$(dirname "$STUB_BUCKET/$key")" "$(dirname "$STUB_BUCKET.etags/$key")"
+                    parts="$(ls "$uploads" | sort -n)"
+                    for part in $parts; do cat "$uploads/$part"; done > "$STUB_BUCKET/$key"
+                    for part in $parts; do md5 -q "$uploads/$part"; done | tr -d '\n' | xxd -r -p | md5 -q \
+                        | sed "s/\$/-$(wc -w <<< "$parts" | tr -d ' ')/" > "$STUB_BUCKET.etags/$key"
+                    rm -rf "$uploads"
+                fi
                 ;;
             DELETE:uploadId=*) rm -rf "$uploads"; status=204 ;;
             DELETE:) rm -f "$STUB_BUCKET/$key" "$STUB_BUCKET.etags/$key"; status=204 ;;
@@ -5789,6 +5760,58 @@ run_script "vector-archives basemap refuses a day Protomaps built in a schema th
 if expect_status 1 \
     && expect_contains "$output" "Protomaps built 20261119 with basemaps 5.0.0, and the app reads schema 4" "the error"; then
     pass
+fi
+
+# Scripts/vector-extras.sh uploads the extras in parts too, into a bucket of
+# their own here, under a name the tile server's cache keeps for a day. It
+# asks whether the name is free, then completes the upload on condition that
+# it still is, and only that condition stops a second upload that also found
+# the name free from replacing the first: without it, an upload made alone
+# goes exactly as it does with it.
+extras_bucket="$bucket_work/extras-bucket"
+mkdir -p "$extras_bucket"
+extras_archive="$extras_work/extras-20261120-00.pmtiles"
+printf 'archive' > "$extras_archive"
+STUB_BUCKET="$extras_bucket" \
+    run_script "vector-extras upload sends the extras in parts, completed on condition that the name is still free" \
+    "$vector_extras" upload "$extras_archive"
+if expect_status 0 \
+    && expect_contains "$calls" "?uploads" "the requests" \
+    && expect_contains "$calls" "-X POST -H If-None-Match: * -H Content-Type: application/xml" "the completion" \
+    && expect_contains "$output" "uploaded extras-20261120-00.pmtiles (7 bytes) as" "the output" \
+    && expect_contains "$output" "next, Scripts/vector-archives.sh use extras-20261120-00" "the output"; then
+    if cmp -s "$extras_bucket/extras-20261120-00.pmtiles" "$extras_archive"; then
+        pass
+    else
+        fail "the bucket does not hold the extras"
+    fi
+fi
+
+STUB_BUCKET="$extras_bucket" \
+    run_script "vector-extras upload refuses a name already in the bucket, before sending anything" \
+    "$vector_extras" upload "$extras_archive"
+if expect_status 1 \
+    && expect_contains "$output" "extras-20261120-00.pmtiles is already in stub-bucket; build from a newer planet" \
+        "the error" \
+    && expect_absent "$calls" "?uploads" "the requests"; then
+    pass
+fi
+
+extras_archive="$extras_work/extras-20261120-01.pmtiles"
+printf 'archive' > "$extras_archive"
+STUB_BUCKET="$extras_bucket" STUB_LANDS_FIRST=extras-20261120-01.pmtiles \
+    run_script "vector-extras upload refuses a name another upload took after it was found free" \
+    "$vector_extras" upload "$extras_archive"
+if expect_status 1 \
+    && expect_contains "$output" "extras-20261120-01.pmtiles reached stub-bucket from another upload first" "the error" \
+    && expect_contains "$calls" \
+        "-X DELETE https://stub-account.r2.cloudflarestorage.com/stub-bucket/extras-20261120-01.pmtiles?uploadId=stub%2Bupload" \
+        "the requests"; then
+    if [[ "$(cat "$extras_bucket/extras-20261120-01.pmtiles")" == another ]]; then
+        pass
+    else
+        fail "the upload was written over the one that landed first"
+    fi
 fi
 
 # `use` puts the new basemap first, drops the one of its schema behind it,

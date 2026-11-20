@@ -21,16 +21,16 @@
 # `upload` puts it under that name in the R2 bucket `openhikes-tiles`, beside
 # the basemap, and refuses a name already there: the tile server's cache keeps
 # a tile for a day, so a file replaced in place would mix two builds. It asks
-# first, so a name already taken costs no upload, and then sends the file on
-# condition that nothing is there (`If-None-Match: *`), which R2 checks as the
-# write commits: of two uploads to one name that both found it free, the
-# second is refused rather than written over the first. Then name it in the
-# app's manifest and publish that (`Scripts/vector-archives.sh use`, then
-# `publish`). It signs with R2's S3 keys, read from OPENHIKES_R2_ENV (default
+# first, so a name already taken costs no upload, and then sends the file in
+# parts, completed on condition that nothing is there (`If-None-Match: *`),
+# which R2 checks as the write commits: of two uploads to one name that both
+# found it free, the second is refused rather than written over the first.
+# Then name it in the app's manifest and publish that
+# (`Scripts/vector-archives.sh use`, then `publish`). It signs with R2's S3
+# keys, read from OPENHIKES_R2_ENV (default
 # ~/.config/openhikes/r2-openhikes-tiles.env: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID,
-# R2_SECRET_ACCESS_KEY, R2_BUCKET), and sends the file in one request, which
-# R2 takes up to 5 GiB, no faster than OPENHIKES_R2_MIB_PER_SECOND MiB a second
-# where that is set (Scripts/lib/r2.sh).
+# R2_SECRET_ACCESS_KEY, R2_BUCKET), no faster than OPENHIKES_R2_MIB_PER_SECOND
+# MiB a second where that is set (Scripts/lib/r2.sh).
 #
 # It is a development tool and is in no gate. It needs osmium and Planetiler
 # (`brew install osmium-tool planetiler`). On an M4 Max the planet took 23
@@ -52,45 +52,26 @@ usage() {
   exit 2
 }
 
+# shellcheck source=lib/r2.sh
+source "$REPO_ROOT/Scripts/lib/r2.sh"
+
+die() {
+  echo "vector-extras: $*" >&2
+  exit 1
+}
+
+# The extras passed the 5 GiB R2 takes in one request with extras-20261119-18,
+# so they go up in parts of 256 MiB: some sixty for 16 GB, eight of them on
+# disk at a time.
 upload() {
-  local archive="$1"
-  local env_file="${OPENHIKES_R2_ENV:-$HOME/.config/openhikes/r2-openhikes-tiles.env}"
-  [[ -f "$archive" ]] || { echo "vector-extras: no archive at $archive" >&2; exit 1; }
-  [[ -f "$env_file" ]] || { echo "vector-extras: no R2 keys at $env_file" >&2; exit 1; }
-  # shellcheck disable=SC1090
-  set -a; . "$env_file"; set +a
-  local key
+  local archive="$1" key existing
+  [[ -f "$archive" ]] || die "no archive at $archive"
+  r2_load_keys
   key="$(basename "$archive")"
-  local size
-  size="$(stat -f %z "$archive")"
-  if (( size > 5 * 1024 * 1024 * 1024 )); then
-    echo "vector-extras: $key is over the 5 GiB R2 takes in one request" >&2
-    exit 1
-  fi
-  local url="https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com/$R2_BUCKET/$key"
-  local signing=(--aws-sigv4 "aws:amz:auto:s3" --user "$R2_ACCESS_KEY_ID:$R2_SECRET_ACCESS_KEY"
-    -H "x-amz-content-sha256: UNSIGNED-PAYLOAD")
-  local existing
-  existing="$(curl -s -o /dev/null -w "%{http_code}" -I "${signing[@]}" "$url")"
-  case "$existing" in
-    404) ;;
-    200) echo "vector-extras: $key is already in $R2_BUCKET; build from a newer planet" >&2; exit 1 ;;
-    *) echo "vector-extras: R2 answered $existing when asked for $key" >&2; exit 1 ;;
-  esac
-  local status rate=()
-  if [[ -n "${OPENHIKES_R2_MIB_PER_SECOND:-}" ]]; then
-    [[ "$OPENHIKES_R2_MIB_PER_SECOND" =~ ^[1-9][0-9]*$ ]] \
-      || { echo "vector-extras: OPENHIKES_R2_MIB_PER_SECOND is not a whole number of MiB" >&2; exit 1; }
-    rate=(--limit-rate "$(( OPENHIKES_R2_MIB_PER_SECOND * 1024 * 1024 ))")
-  fi
-  status="$(curl -s -o /dev/null -w "%{http_code}" "${signing[@]}" ${rate[@]+"${rate[@]}"} -H "If-None-Match: *" \
-    -H "Content-Type: application/octet-stream" -T "$archive" "$url")"
-  case "$status" in
-    200) ;;
-    412) echo "vector-extras: $key reached $R2_BUCKET from another upload first; build from a newer planet" >&2; exit 1 ;;
-    *) echo "vector-extras: R2 answered $status to the upload" >&2; exit 1 ;;
-  esac
-  echo "vector-extras: uploaded $key ($size bytes) to $R2_BUCKET"
+  existing="$(r2_etag "$key")"
+  [[ -z "$existing" ]] || die "$key is already in $R2_BUCKET; build from a newer planet"
+  r2_put_parts "$archive" "$key" 256
+  echo "vector-extras: next, Scripts/vector-archives.sh use ${key%.pmtiles}"
 }
 
 [[ $# -ge 1 ]] || usage

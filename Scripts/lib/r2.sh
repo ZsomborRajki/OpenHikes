@@ -11,11 +11,11 @@
 # signs its upload.
 #
 # A file of up to 5 GiB goes up in one request (`r2_put`). A larger one, a
-# basemap of the planet, goes up in parts (`r2_put_parts`), and comes out
-# under the ETag S3 gives a multipart object: the MD5 of its parts' MD5s and
-# their count. Cut in the parts its source was uploaded in, the same file
-# carries the source's ETag, which is what lets a copy of Protomaps' build be
-# held to Protomaps' own, end to end, without reading it back.
+# basemap of the planet or the extras, goes up in parts (`r2_put_parts`), and
+# comes out under the ETag S3 gives a multipart object: the MD5 of its parts'
+# MD5s and their count. Cut in the parts its source was uploaded in, the same
+# file carries the source's ETag, which is what lets a copy of Protomaps' build
+# be held to Protomaps' own, end to end, without reading it back.
 #
 # OPENHIKES_R2_MIB_PER_SECOND caps how fast the bucket is sent to and read
 # from, in MiB a second, so a world of uploads leaves the connection usable.
@@ -128,10 +128,14 @@ r2_encode() {
 # to its own MD5 as it lands. With an ETag, the parts' own must come to it
 # before the upload is completed, or the upload is abandoned and nothing is
 # written. A key already holding that ETag is left as it is; one holding
-# anything else is refused, since an archive is never replaced in place.
+# anything else is refused, since an archive is never replaced in place. The
+# upload is completed on condition that the key is still free
+# (`If-None-Match: *`), which R2 checks as the write commits, so of two
+# uploads to one key that both found it free, the second is refused rather
+# than written over the first.
 r2_put_parts() {
     local file="$1" key="$2" part_mib="$3" expected="${4:-}"
-    local size part_bytes parts existing url created upload_id work etag combined body number
+    local size part_bytes parts existing url created upload_id work etag combined body number status
     [[ -f "$file" ]] || r2_fail "no file at $file"
     size="$(stat -f %z "$file")"
     part_bytes=$(( part_mib * 1024 * 1024 ))
@@ -171,9 +175,12 @@ r2_put_parts() {
         body+="<Part><PartNumber>$number</PartNumber><ETag>\"$(cat "$work/$number.md5")\"</ETag></Part>"
     done
     body+="</CompleteMultipartUpload>"
-    if ! r2_curl -f -o /dev/null -X POST -H "Content-Type: application/xml" --data-binary "$body" "$url"; then
+    status="$(r2_curl -o /dev/null -w "%{http_code}" -X POST -H "If-None-Match: *" \
+        -H "Content-Type: application/xml" --data-binary "$body" "$url")"
+    if [[ "$status" != 200 ]]; then
         _r2_abandon "$url" "$work"
-        r2_fail "R2 would not complete the upload of $key"
+        [[ "$status" != 412 ]] || r2_fail "$key reached $R2_BUCKET from another upload first; upload under a new name"
+        r2_fail "R2 answered $status to completing the upload of $key"
     fi
     rm -rf "$work"
     etag="$(r2_etag "$key")"
