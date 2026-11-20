@@ -438,3 +438,33 @@ extension VectorTileGroundTests {
         #expect(try colors([stream, seasonal], z: 14, in: right) == [water])
     }
 }
+
+// MARK: A boundary filed as a forest
+
+extension VectorTileGroundTests {
+    /// The basemap files a United States National Forest's boundary as a
+    /// forest, and filled as one it painted trees over tundra and towns.
+    /// Carto draws such a boundary as a border and no ground.
+    @Test("a forest that is a protected area's boundary is neither filled nor given trees")
+    func boundaryIsNoForest() throws {
+        // Relation 91938915, as the basemap names it and as the extras' own layers do.
+        let relation: UInt64 = 52_776_650_072_163
+        let outlined: UInt64 = 919_389_153
+        let forest = VectorTileFixture.Layer(name: "landuse", features: [area("forest", id: relation)])
+        let outline = { (id: UInt64) in
+            VectorTileFixture.Layer(name: VectorTileRasterizer.protectedAreasLayer, features: [
+                VectorTileFixture.Feature(
+                    type: .polygon,
+                    properties: ["kind": .string("protected_area")],
+                    geometry: VectorTileFixture.rectangle(x: 0...8, y: 0...8),
+                    id: id
+                ),
+            ])
+        }
+
+        #expect(try colors([forest, outline(outlined)], z: 13, in: inside) == [land])
+        let another = try colors([forest, outline(outlined + 10)], z: 13, in: inside)
+        #expect(another.contains(wood))
+        #expect(another.count > 1, "the trees")
+    }
+}

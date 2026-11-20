@@ -93,7 +93,80 @@ struct VectorTileAreaDetailsTests {
         #expect(VectorTileAreaDetails(odd).detail(of: wood) == nil)
     }
 
+    // MARK: A boundary filed as a forest
+
+    /// Relation 91938915 and way 91938915 as the extras' own layers name
+    /// them: Planetiler's id for an element, ten times OpenStreetMap's plus
+    /// 3 for a relation or 2 for a way.
+    private let outlinedRelation: UInt64 = 919_389_153
+    private let outlinedWay: UInt64 = 919_389_152
+
+    private func decoded(
+        forests: [VectorTileFixture.Feature],
+        outlined ids: [UInt64]
+    ) throws -> MapboxVectorTile {
+        try VectorTileFixture.decoded([
+            .init(name: "landuse", features: forests),
+            .init(
+                name: VectorTileRasterizer.protectedAreasLayer,
+                features: ids.map { area("protected_area", id: $0) }
+            ),
+        ])
+    }
+
+    /// The basemap files a United States National Forest's boundary under
+    /// the kind of a mapped forest; the extras outline the same relation.
+    @Test("a forest whose element the extras outline as protected is that area's boundary")
+    func boundaryFiledAsForest() throws {
+        let tile = try decoded(
+            forests: [
+                area("forest", id: relation), area("forest", id: way),
+                area("wood", id: relation), area("forest"),
+            ],
+            outlined: [outlinedRelation]
+        )
+        let details = VectorTileAreaDetails(tile)
+        let areas = try #require(tile.layers["landuse"]?.features)
+
+        #expect(details.isBoundary(areas[0]))
+        #expect(!details.isBoundary(areas[1]), "a way of the same number is another thing")
+        #expect(!details.isBoundary(areas[2]), "only a forest is filed so")
+        #expect(!details.isBoundary(areas[3]), "an area with no id is nobody's")
+    }
+
+    @Test("on a tile with no such outline, a forest is a forest")
+    func forestWithNoOutline() throws {
+        let tile = try decoded(forests: [area("forest", id: relation)], outlined: [outlinedWay])
+        let forest = try #require(tile.layers["landuse"]?.features.first)
+
+        #expect(!VectorTileAreaDetails(tile).isBoundary(forest))
+    }
+
+    @Test("the id Planetiler gives an element reads as the basemap's for it")
+    func extrasIDs() {
+        #expect(VectorTileAreaDetails.basemapID(ofExtras: outlinedRelation) == relation)
+        #expect(VectorTileAreaDetails.basemapID(ofExtras: outlinedWay) == way)
+        #expect(VectorTileAreaDetails.basemapID(ofExtras: outlinedWay - 2) == nil, "no element is of type 0")
+    }
+
     // MARK: The extras' schema
+
+    /// A protected area is matched by the id Planetiler gives a feature the
+    /// schema gives none, so its layer has to go on giving none.
+    @Test("the extras give a protected area's outline no id of their own")
+    func schemaLeavesTheOutlinesId() throws {
+        let schema = try String(
+            contentsOf: StringCatalogTests.sourceRoot.appending(path: "Scripts/lib/vector-extras.yml"),
+            encoding: .utf8
+        )
+        let layer = try #require(
+            schema.components(separatedBy: "- id: \(VectorTileRasterizer.protectedAreasLayer)\n").last
+        )
+        .components(separatedBy: "\n- id: ")[0]
+
+        #expect(layer.contains("boundary: protected_area"))
+        #expect(!layer.contains("\n    id:"))
+    }
 
     /// The join is only as good as the two archives agreeing on an id. The
     /// basemap's is the OpenStreetMap id with 2 for a way or 3 for a relation
