@@ -321,6 +321,7 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
 
                 if let image = overlay.cachedImage(at: path) {
                     drawImage(image, in: drawRect, context: context)
+                    overlay.offerTileDrawnFromMemory(at: path)
                 } else {
                     let fallback = fallback(for: path, in: overlay)
                     if let fallback {

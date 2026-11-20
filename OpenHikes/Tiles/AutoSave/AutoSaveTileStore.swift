@@ -14,6 +14,11 @@
 //  already, out of the country's own files, so a copy kept here would be the
 //  same ground on disk twice, counted against the hike's cap.
 //
+//  A tile the map draws out of memory is offered too, though no load found
+//  it: one drawn before the switch went on, or before the hike was selected,
+//  is still there when the hiker pans back over it. The draw pass only asks
+//  and queues; one worker off it does the disk work.
+//
 
 import CoreLocation
 import Foundation
@@ -47,6 +52,25 @@ nonisolated final class AutoSaveTileStore: Sendable {
         /// Subset of `knownKeys` persisted this session but not yet drained back
         /// into the `Hike`'s SwiftData manifest.
         var pendingKeys: Set<String>
+        /// Keys the draw pass has queued from memory for this hike, so a tile
+        /// ``considerPersisting(key:z:x:y:)`` turns down — a country's, or one
+        /// held in memory alone — is not queued again on every pass.
+        var offeredFromMemory: Set<String> = []
+    }
+
+    /// A tile the draw pass drew out of memory, waiting to be offered.
+    private struct MemoryOffer: Sendable {
+        let key: String
+        let z: Int
+        let x: Int
+        let y: Int
+    }
+
+    /// The tiles waiting, and the one worker offering them, which is `nil`
+    /// once the queue is empty.
+    private struct MemoryOffers {
+        var queue: [MemoryOffer] = []
+        var worker: Task<Void, Never>?
     }
 
     private struct PersistenceClaim {
@@ -55,6 +79,7 @@ nonisolated final class AutoSaveTileStore: Sendable {
     }
 
     private let state = Mutex<ActiveHike?>(nil)
+    private let memoryOffers = Mutex(MemoryOffers())
 
     /// Consumers waiting to hear that a tile has been claimed, keyed so a
     /// finished one drops out of its own accord.
@@ -181,6 +206,80 @@ nonisolated final class AutoSaveTileStore: Sendable {
         #if DEBUG
         Self.logger.debug("Auto-saved tile \(key, privacy: .public)")
         #endif
+    }
+
+    /// Called by the map's draw pass for a tile it found in memory and drew as
+    /// it was, which no load offers. A tile drawn before *Auto-Save Tiles*
+    /// went on, or before its hike was selected, is still in memory when the
+    /// hiker pans back over it; without this it stayed in the purgeable cache
+    /// while the hike's screen said it was being saved for.
+    ///
+    /// The draw pass must not wait on the disk, so this asks only what the
+    /// state lock answers — a hike is taking claims, the tile is in its
+    /// corridor, under its cap, and neither known to it nor queued from
+    /// memory for it before — and queues the tile. `key` is made only once
+    /// those pass, so a map nobody is saving costs each drawn tile one lock.
+    /// One worker off the draw path hands the queue to
+    /// ``considerPersisting(key:z:x:y:)`` a tile at a time, which asks the
+    /// rest as it does for a tile a load found.
+    func offerTileDrawnFromMemory(z: Int, x: Int, y: Int, key: () -> String) {
+        let offer = state.withLock { state -> MemoryOffer? in
+            let mayClaim = state.map { hike in
+                hike.acceptsNewClaims
+                    && hike.knownKeys.count < Self.tileCap
+                    && hike.corridor.overlaps(z: z, x: x, y: y)
+            }
+            guard mayClaim == true else { return nil }
+            let tileKey = key()
+            // In place, through the optional: a binding of the hike would
+            // hold a second reference to its sets and copy one to insert.
+            guard state.map({ !$0.knownKeys.contains(tileKey) }) == true,
+                  state?.offeredFromMemory.insert(tileKey).inserted == true
+            else { return nil }
+            return MemoryOffer(key: tileKey, z: z, x: x, y: y)
+        }
+        guard let offer else { return }
+        memoryOffers.withLock { offers in
+            offers.queue.append(offer)
+            guard offers.worker == nil else { return }
+            offers.worker = Task(priority: .utility) { [weak self] in
+                await self?.offerQueuedTiles()
+            }
+        }
+    }
+
+    /// The worker behind ``offerTileDrawnFromMemory(z:x:y:key:)``: one at a
+    /// time, so a screenful of tiles queued in one pass is a few file moves
+    /// in a row rather than a task each on the cooperative pool.
+    @concurrent
+    private func offerQueuedTiles() async {
+        var batch = nextMemoryOffers()
+        while !batch.isEmpty {
+            for offer in batch {
+                considerPersisting(key: offer.key, z: offer.z, x: offer.x, y: offer.y)
+            }
+            batch = nextMemoryOffers()
+        }
+    }
+
+    /// What is queued, taken in one go: empty, with the worker gone in the
+    /// same lock, once nothing is.
+    private func nextMemoryOffers() -> [MemoryOffer] {
+        memoryOffers.withLock { offers in
+            if offers.queue.isEmpty { offers.worker = nil }
+            let batch = offers.queue
+            offers.queue.removeAll()
+            return batch
+        }
+    }
+
+    /// Waits until every tile the draw pass queued from memory has been
+    /// offered. A test seam, waiting on the worker itself rather than on a
+    /// duration.
+    func waitForMemoryOffers() async {
+        while let worker = memoryOffers.withLock({ $0.worker }) {
+            await worker.value
+        }
     }
 
     /// Whether a tile at these indices could be claimed at all: a hike is
