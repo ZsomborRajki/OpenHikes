@@ -568,16 +568,18 @@ private extension SettingsView {
         // it saved since the last drain, which would otherwise land in a
         // manifest emptied a line later and claim tiles that are about to go.
         // The selection is held onto so it can be announced again below —
-        // this is a storage action, not a change to which hike is selected.
+        // this is a storage action, not a change to which hike is selected,
+        // so neither announcement ends the hold on a hike whose saved map
+        // was just deleted.
         let selected = autoSave.selectedHike
-        autoSave.hikeSelectionChanged(to: nil)
+        autoSave.reannounceSelection(nil)
 
         let sweep = OfflineStorageActions.deleteAllTiles(in: .shared, fetchingHikes: fetchHikes)
 
         // Back on, with an empty manifest and a fresh cap, for whatever was
         // selected before, where the switch has it on — including on the path
         // where the fetch failed and nothing was cleared at all.
-        autoSave.hikeSelectionChanged(to: selected)
+        autoSave.reannounceSelection(selected)
 
         guard let sweep else { return }
         reportingUsage(after: sweep)

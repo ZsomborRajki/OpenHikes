@@ -28,10 +28,10 @@ extension StorageAccountingTests {
 
         // `SettingsView.deleteAllTiles`, minus the SwiftUI.
         let announced = controller.selectedHike
-        controller.hikeSelectionChanged(to: nil)
+        controller.reannounceSelection(nil)
         selected.offlineDownloads.removeAll()
         selected.autoSavedTileKeys.removeAll()
-        controller.hikeSelectionChanged(to: announced)
+        controller.reannounceSelection(announced)
         await removeAllTiles()
 
         #expect(controller.currentHike == nil, "a storage action is not the hiker asking for auto-save")
@@ -56,10 +56,10 @@ extension StorageAccountingTests {
         try await persist(key: before, tile: tile())
 
         let announced = controller.selectedHike
-        controller.hikeSelectionChanged(to: nil)
+        controller.reannounceSelection(nil)
         selected.offlineDownloads.removeAll()
         selected.autoSavedTileKeys.removeAll()
-        controller.hikeSelectionChanged(to: announced)
+        controller.reannounceSelection(announced)
         await controller.waitForActivation()
         await removeAllTiles()
 

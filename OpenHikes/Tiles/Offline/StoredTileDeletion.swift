@@ -85,11 +85,12 @@ nonisolated enum StoredTileDeletion {
     ///   snapshotted. Standing down folds the tiles saved since the last
     ///   drain into the manifest; a claim read ahead of that would be up to
     ///   two seconds stale, and everything saved since would be stranded on
-    ///   durable storage with nothing left pointing at it. It stays down
-    ///   until the hike is next announced as the selection, whatever the
-    ///   switch in Settings says: a map the hiker just deleted must not be
-    ///   saved again by the next pan, and a tile claimed while the plan
-    ///   below is being spent would be claimed and then deleted.
+    ///   durable storage with nothing left pointing at it. It is held down
+    ///   until the map selects a hike anew, whatever the switch in Settings
+    ///   or the map on *Map Modes* says: a map the hiker just deleted must
+    ///   not be saved again by the next pan, and a tile claimed while the
+    ///   plan below is being spent would be claimed and then deleted — see
+    ///   ``AutoSaveController/holdDown(_:)``.
     /// - The manifests are emptied, and the commit is the point of no return.
     ///   A refusal puts the whole thing back — manifests, the fold and the
     ///   arming — and deletes nothing.
@@ -166,7 +167,7 @@ nonisolated enum StoredTileDeletion {
         // stand-down's own keys added on top by ``AutoSaveController``.
         let previousDownloads = hike.offlineDownloads
         let previousKeys = hike.autoSavedTileKeys
-        let standDown = autoSave.standDown(for: hike)
+        let standDown = autoSave.holdDown(hike)
         let plan = StoredTileDeletionPlan(doomed: TileOwnership(hike), survivors: survivors)
 
         hike.offlineDownloads.removeAll()
@@ -194,9 +195,7 @@ nonisolated enum StoredTileDeletion {
             // refused.
             hike.offlineDownloads = previousDownloads
             hike.autoSavedTileKeys = previousKeys
-            if let standDown {
-                autoSave.restoreAfterRefusal(standDown, for: hike)
-            }
+            autoSave.releaseHold(on: hike, restoring: standDown)
             logger.error(
                 """
                 Offline tiles were not deleted for hike \(hike.id, privacy: .public): \

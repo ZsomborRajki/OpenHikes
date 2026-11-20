@@ -1150,8 +1150,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
   - A tile a downloaded country draws is never kept: the country draws it
     with no signal already. One its archive lacks, which the map fetched
     instead, is kept as any other (`OfflineCountryArchives.holds(_:deepest:)`).
-  - Deleting a hike's saved map stands auto-save down for that hike until it
-    is next selected, whatever the switch says.
+  - Deleting a hike's saved map holds auto-save down for that hike until the
+    map selects a hike anew, whatever the switch or the map says
+    (`AutoSaveController.holdDown(_:)`).
 - **A tile is identified by provider plus z/x/y**, never by scale
   (`TileCacheKey`).
 - **Never turn a render miss into synchronous disk or network work**, and never

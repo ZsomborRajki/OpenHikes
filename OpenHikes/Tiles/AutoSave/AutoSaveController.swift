@@ -32,6 +32,10 @@ final class AutoSaveController {
     /// not it is being saved for: what the switch arms when it goes on, and
     /// what a storage action puts back. Weak for the reason ``activeHike`` is.
     @ObservationIgnored private(set) weak var selectedHike: Hike?
+    /// The selected hike whose saved map the hiker deleted, kept from being
+    /// saved for until the map selects a hike anew — see ``holdDown(_:)``.
+    /// An ID rather than a hike, so a hold outlives nothing but itself.
+    @ObservationIgnored private var heldHikeID: UUID?
     /// The read of the line ``activeHike``'s corridor was last asked for.
     /// Edit Route saves into the same hike, so its ID alone cannot tell a
     /// re-selection from a new route — the same reason the hike's screen
@@ -147,12 +151,26 @@ final class AutoSaveController {
         activationTask?.cancel()
     }
 
-    /// Called whenever the map's selected hike changes — or whenever the
-    /// selected map source changes — so auto-save follows whatever is actually
-    /// being drawn on screen.
+    /// Called whenever the map's selected hike changes, so auto-save follows
+    /// whatever is actually being drawn on screen. A selection is what ends a
+    /// hold — see ``holdDown(_:)``.
     func hikeSelectionChanged(to hike: Hike?) {
+        heldHikeID = nil
+        announce(hike)
+    }
+
+    /// Called when the selection has not changed but what auto-save makes of
+    /// it may have: the selected map source changed, the hike's screen read
+    /// its line again, or a storage action in Settings is done with the
+    /// manifests. Unlike a selection, this leaves a hold in place, so none
+    /// of them starts saving again a map the hiker just deleted.
+    func reannounceSelection(_ hike: Hike?) {
+        announce(hike)
+    }
+
+    private func announce(_ hike: Hike?) {
         selectedHike = hike
-        let eligibleHike = isEligible ? hike : nil
+        let eligibleHike = hike.flatMap { isEligible && $0.id != heldHikeID ? $0 : nil }
         guard !isSuspended else {
             deferredHike = eligibleHike
             hasDeferredSelectionChange = true
@@ -175,9 +193,9 @@ final class AutoSaveController {
     ///
     /// A hike deleted since it was announced is not announced again: the
     /// selection moves off it in the same breath, and reading its line would
-    /// read a row that is gone.
+    /// read a row that is gone. A hike held down stays down.
     func switchDidChange() {
-        hikeSelectionChanged(to: selectedHike.flatMap { $0.isAttached ? $0 : nil })
+        announce(selectedHike.flatMap { $0.isAttached ? $0 : nil })
     }
 
     /// Whether the selected hike should be auto-saving right now: the hiker
@@ -210,9 +228,10 @@ final class AutoSaveController {
     ///
     /// A caller that has to stop it briefly and then put it back — Settings'
     /// delete-all, which flushes through a deactivation before clearing the
-    /// manifests it would otherwise write into — announces ``selectedHike``
-    /// again instead, which arms this one or nothing by the same rule a
-    /// selection does.
+    /// manifests it would otherwise write into — re-announces
+    /// ``selectedHike`` instead (``reannounceSelection(_:)``), which arms this
+    /// one or nothing by the same rule a selection does, and leaves a hold
+    /// in place.
     var currentHike: Hike? { activeHike }
 
     /// Stops background tile work from creating new ownership after the final
@@ -284,6 +303,35 @@ final class AutoSaveController {
         )
     }
 
+    /// What deleting a hike's saved map stands auto-save down with: as
+    /// ``standDown(for:)``, and kept down until the map selects a hike anew.
+    /// The hike is still selected and the switch may still be on, so
+    /// without the hold the next announcement — a change of map, the hike's
+    /// screen reading its line, a storage action in Settings, the switch —
+    /// would start saving again the map the hiker just deleted, and a tile
+    /// claimed while the deletion's plan is spent would be claimed and then
+    /// deleted.
+    ///
+    /// Held whether or not the hike was being saved for, so a map that
+    /// draws tiles, or the switch, coming on a moment later does not save
+    /// it either. Only the selected hike is held: another one is saved for
+    /// only once it is selected, which ends a hold anyway.
+    ///
+    /// - Returns: what ``releaseHold(on:restoring:)`` needs if the store
+    ///   refuses the deletion, as ``standDown(for:)`` returns it.
+    func holdDown(_ hike: Hike) -> StandDown? {
+        if selectedHike?.id == hike.id { heldHikeID = hike.id }
+        return standDown(for: hike)
+    }
+
+    /// Undoes ``holdDown(_:)`` for a deletion the store refused: the hike
+    /// keeps its map, so it is saved for again as it was, with the keys the
+    /// stand-down folded in.
+    func releaseHold(on hike: Hike, restoring standDown: StandDown?) {
+        if heldHikeID == hike.id { heldHikeID = nil }
+        if let standDown { restoreAfterRefusal(standDown, for: hike) }
+    }
+
     /// Puts auto-save back on a hike whose deletion the store would not
     /// accept — of the hike, or of the tiles it had saved.
     ///
@@ -303,7 +351,7 @@ final class AutoSaveController {
         hike.autoSavedTileKeys.append(contentsOf: standDown.foldedKeys.filter { !held.contains($0) })
         // The path a re-selection takes, so eligibility and a suspended scene
         // are answered here the way they are answered there.
-        hikeSelectionChanged(to: hike)
+        announce(hike)
     }
 
     private func applySelection(_ hike: Hike?) {
@@ -366,7 +414,7 @@ final class AutoSaveController {
     /// ``standDownShortLine()`` follows too.
     private func lineDidChange(_ write: SelectedLine.Write) {
         guard write === lineWrite, let hike = activeHike, !hasDeferredSelectionChange else { return }
-        hikeSelectionChanged(to: hike)
+        announce(hike)
     }
 
     /// What a corridor build came back with.

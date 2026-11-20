@@ -808,9 +808,11 @@ private extension HikeDetailView {
         // Auto-save follows the hike the map draws. When that is no longer
         // this one — an import or a recording took the selection with this
         // screen up — announcing it would point auto-save at the wrong tiles
-        // and take the map's read of the line for this hike.
+        // and take the map's read of the line for this hike. Coming back
+        // from a pushed screen lands here too, and is no selection, so a
+        // hike whose saved map was deleted stays held down.
         if lineStoreWatch.follows(hike) {
-            autoSave.hikeSelectionChanged(to: hike)
+            autoSave.reannounceSelection(hike)
         }
         // The maker's save lands here, and a hiker standing still sends
         // no fix to notice the edit by: a walk along the old line must not

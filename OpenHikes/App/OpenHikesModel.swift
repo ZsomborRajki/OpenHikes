@@ -389,9 +389,10 @@ final class OpenHikesModel {
     ///
     /// Only auto-save: the widget's background matching and the stored
     /// selection have nothing to do with which map is drawn, and republishing
-    /// them here would spend a widget reload on a settings tap.
+    /// them here would spend a widget reload on a settings tap. Nor is it a
+    /// selection, so a hike whose saved map was deleted stays held down.
     func tileProviderDidChange(selectedHike hike: Hike?) {
-        autoSaveController.hikeSelectionChanged(to: browsableHike(hike))
+        autoSaveController.reannounceSelection(browsableHike(hike))
     }
 
     /// An active recording is selected in the list, but it is not a finished
