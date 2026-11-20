@@ -28,7 +28,9 @@
 # drops what no build would draw from any more, the archives behind it of the
 # same schema or of the same or a later generation, and keeps the first of
 # each other one for the builds that read only that. Then `publish`, and
-# commit the file.
+# commit the file. It edits the manifest this checkout has, so it refuses one
+# behind the server's: one of the server's revision that is not the server's
+# file, or of a lower one.
 #
 # `check` asks the server for every archive the manifest names, and fails on
 # any it does not have: an app told to draw from one would fall back to
@@ -38,11 +40,12 @@
 #
 # `prune` deletes every archive at the bucket's root that neither the server's
 # manifest nor this one names, so an archive uploaded and not yet published is
-# kept. An archive leaves the manifest before it leaves the bucket: an app
-# that asks for a deleted one gets a 410, reads the manifest again and moves,
-# so prune once the apps have had the publish, or at once while no build
-# that reads the server is in anybody's hands. A build from before the
-# manifest (TestFlight 1.6 (1)) names its archives in code and never moves.
+# kept, and deletes nothing unless both read whole. An archive leaves the
+# manifest before it leaves the bucket: an app that asks for a deleted one
+# gets a 410, reads the manifest again and moves, so prune once the apps have
+# had the publish, or at once while no build that reads the server is in
+# anybody's hands. A build from before the manifest (TestFlight 1.6 (1)) names
+# its archives in code and never moves.
 #
 # It signs with R2's S3 keys (Scripts/lib/r2.sh), read from OPENHIKES_R2_ENV
 # (default ~/.config/openhikes/r2-openhikes-tiles.env). It is a development
@@ -86,13 +89,21 @@ value() {
   plutil -extract "$1" raw -o - "$2" 2>/dev/null
 }
 
-# Each archive a manifest names, a line each.
-archive_names() {
-  local list count index
+# `manifest_names <file> <what it is>`: each archive a manifest names, a line
+# each. A file that is not a whole manifest fails rather than naming nothing,
+# since `prune` deletes whatever no manifest names.
+manifest_names() {
+  local file="$1" what="$2" list count index name
+  [[ -f "$file" ]] || die "no manifest at $file"
+  [[ "$(value version "$file")" == 1 ]] || die "$what is not a version 1 manifest"
+  [[ "$(value revision "$file")" =~ ^[1-9][0-9]*$ ]] || die "$what has no revision"
   for list in basemaps extras; do
-    count="$(value "$list" "$1")" || continue
+    count="$(value "$list" "$file")" && [[ "$count" =~ ^[0-9]+$ ]] || die "$what has no $list"
+    [[ "$list" == extras ]] || (( count > 0 )) || die "$what names no basemap"
     for (( index = 0; index < count; index++ )); do
-      value "$list.$index.name" "$1"
+      name="$(value "$list.$index.name" "$file")" || die "$list $index in $what has no name"
+      [[ "$name" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || die "'$name' is not a name the app reads, in $what"
+      printf '%s\n' "$name"
     done
   done
 }
@@ -103,21 +114,10 @@ served() {
 }
 
 check() {
-  [[ -f "$MANIFEST" ]] || die "no manifest at $MANIFEST"
-  [[ "$(value version "$MANIFEST")" == 1 ]] || die "$MANIFEST is not a version 1 manifest"
-  [[ "$(value revision "$MANIFEST")" =~ ^[1-9][0-9]*$ ]] || die "$MANIFEST has no revision"
-  local names=() list count index name
-  for list in basemaps extras; do
-    count="$(value "$list" "$MANIFEST")" || die "$MANIFEST has no $list"
-    for (( index = 0; index < count; index++ )); do
-      name="$(value "$list.$index.name" "$MANIFEST")" || die "$list $index in $MANIFEST has no name"
-      [[ "$name" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || die "'$name' is not a name the app reads"
-      names+=("$name")
-    done
-  done
-  (( $(value basemaps "$MANIFEST") > 0 )) || die "$MANIFEST names no basemap"
-  local status missing=0
-  for name in "${names[@]}"; do
+  local names
+  names="$(manifest_names "$MANIFEST" "$MANIFEST")" || exit 1
+  local status missing=0 name
+  for name in $names; do
     status="$(curl -s -o /dev/null -w "%{http_code}" "$SERVER/$name.json")"
     if [[ "$status" == 200 ]]; then
       echo "vector-archives: $SERVER has $name"
@@ -223,15 +223,18 @@ download() {
   for attempt in $(seq 1 "${OPENHIKES_DOWNLOAD_ATTEMPTS:-40}"); do
     have="$(stat -f %z "$partial" 2>/dev/null || echo 0)"
     (( have <= size )) || { rm -f "$partial"; have=0; }
-    if (( have == size )); then
+    if (( have < size )); then
+      echo "vector-archives: downloading $url from byte $have (attempt $attempt)"
+      # A connection that stalls is dropped after a minute under 1 KB/s, and
+      # the next attempt resumes where it was.
+      curl -sSf -C - --speed-limit 1024 --speed-time 60 -o "$partial" "$url" || sleep 2
+    fi
+    # Whole after this attempt's transfer, the last attempt's included.
+    if [[ "$(stat -f %z "$partial" 2>/dev/null)" == "$size" ]]; then
       mv "$partial" "$file"
       echo "vector-archives: downloaded $file"
       return
     fi
-    echo "vector-archives: downloading $url from byte $have (attempt $attempt)"
-    # A connection that stalls is dropped after a minute under 1 KB/s, and
-    # the next attempt resumes where it was.
-    curl -sSf -C - --speed-limit 1024 --speed-time 60 -o "$partial" "$url" || sleep 2
   done
   die "could not download $url whole"
 }
@@ -251,6 +254,23 @@ use() {
   fi
   [[ "$name" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || die "'$name' is not a name the app reads"
   served "$name" || die "$SERVER does not serve $name; upload it first"
+  # Only one list is edited and the other is kept as this checkout has it, so
+  # a checkout behind the server would publish its older list over the
+  # server's. It has to be the server's revision, or one past it not yet
+  # published.
+  local revision live_revision=0
+  revision="$(value revision "$MANIFEST")" && [[ "$revision" =~ ^[1-9][0-9]*$ ]] || die "$MANIFEST has no revision"
+  case "$(curl -s -o "$SCRATCH/served.json" -w "%{http_code}" "$SERVER/manifest.json")" in
+    200)
+      live_revision="$(value revision "$SCRATCH/served.json")" && [[ "$live_revision" =~ ^[1-9][0-9]*$ ]] \
+        || die "the manifest on $SERVER has no revision"
+      (( revision > live_revision )) || cmp -s "$MANIFEST" "$SCRATCH/served.json" \
+        || die "$SERVER has revision $live_revision, and $MANIFEST is revision $revision and not the same; \
+bring it up to the server's (curl -o '$MANIFEST' $SERVER/manifest.json), then use $name again"
+      ;;
+    404) ;;
+    *) die "$SERVER would not give its manifest, whose revision this one must pass" ;;
+  esac
   local zoom_key=maximumZoom
   [[ "$list" == basemaps ]] || zoom_key=minimumZoom
   local level zoom
@@ -275,13 +295,7 @@ use() {
     echo "vector-archives: $name is already the manifest's first of its $list"
     return
   fi
-  local revision live_revision=0 basemaps extras
-  revision="$(value revision "$MANIFEST")"
-  case "$(curl -s -o "$SCRATCH/served.json" -w "%{http_code}" "$SERVER/manifest.json")" in
-    200) live_revision="$(value revision "$SCRATCH/served.json")" || die "the manifest on $SERVER has no revision" ;;
-    404) ;;
-    *) die "$SERVER would not give its manifest, whose revision this one must pass" ;;
-  esac
+  local basemaps extras
   (( revision > live_revision )) || revision=$(( live_revision + 1 ))
   if [[ "$list" == basemaps ]]; then
     basemaps="$(entry_lines basemaps schema maximumZoom "${entries[@]}")"
@@ -324,12 +338,14 @@ prune() {
   local served_manifest="$SCRATCH/served.json" status
   status="$(curl -s -o "$served_manifest" -w "%{http_code}" "$SERVER/manifest.json")"
   [[ "$status" == 200 ]] || die "$SERVER answered $status for manifest.json; prune nothing without it"
-  local kept name
-  kept=" $(archive_names "$served_manifest" | tr '\n' ' ') $(archive_names "$MANIFEST" | tr '\n' ' ') "
+  local live_names local_names kept name
+  live_names="$(manifest_names "$served_manifest" "the manifest on $SERVER")" || die "prune nothing without it"
+  local_names="$(manifest_names "$MANIFEST" "$MANIFEST")" || die "prune nothing without it"
+  kept=" $(tr '\n' ' ' <<< "$live_names") $(tr '\n' ' ' <<< "$local_names") "
   r2_load_keys
   local objects key bytes doomed=0
   objects="$(r2_list "" /)"
-  for name in $(archive_names "$served_manifest"); do
+  for name in $live_names; do
     grep -q "^$name\.pmtiles$TAB" <<< "$objects" \
       || die "$SERVER's manifest names $name, which $R2_BUCKET does not hold; prune nothing until it does"
   done

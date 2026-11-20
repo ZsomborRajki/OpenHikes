@@ -38,7 +38,9 @@
 #             the disk holds no more than a batch beside the planet. It lists
 #             the areas it has put up under .build/offline-countries, one list
 #             for each basemap and extras, and a run after a stop goes on from
-#             there. Takes build's options.
+#             there, given the same files, margin and bucket as the run that
+#             started the list, which it writes down beside it. Takes build's
+#             options.
 #   build     Cut every area, or only those --only names (a region's code, or a
 #             split country's for all its regions), into <dir> (default
 #             .build/offline-countries/out) with its manifest.json. The basemap
@@ -54,11 +56,12 @@
 #             and refusing one there with others, then merge its manifest into
 #             the server's and write that last, so the app never lists a file
 #             that is not there yet.
-#   prune     Delete every archive under countries/ that the server's manifest
-#             does not list: an older build's, once every area has a newer
-#             one. An app that already has the manifest that listed one and
-#             asks for it fails that download, and tries again from the
-#             manifest it reads next.
+#   prune     Delete every archive under countries/ of a build earlier than
+#             the one the server's manifest lists for its area, keeping any
+#             other the manifest does not list, since an upload puts its files
+#             up before the manifest. An app that already has the manifest
+#             that listed one and asks for it fails that download, and tries
+#             again from the manifest it reads next.
 #   areas     Print every area build cuts, its code and a region's country.
 #   inspect   Print an archive's header.
 #   selftest  Cut a made-up archive and read it back.
@@ -220,8 +223,10 @@ upload() {
     [[ -f "$dir/manifest.json" ]] || die "no manifest.json in $dir"
     r2_load_keys
     prepare_tool
-    local base
+    local base listing
     base="$(r2_url)"
+    listing="$("$tool" files "$dir/manifest.json")" || die "could not read $dir/manifest.json"
+    [[ -n "$listing" ]] || die "$dir/manifest.json lists no files"
     local path bytes sha256 name local_size head status remote_size remote_sha256
     while IFS=$'\t' read -r path bytes sha256; do
         name="$(basename "$path")"
@@ -273,7 +278,7 @@ upload() {
         fi
         [[ "$status" == 200 ]] || die "R2 answered $status to the upload of $path"
         echo "offline-countries: uploaded $path ($local_size bytes)"
-    done < <("$tool" files "$dir/manifest.json")
+    done <<< "$listing"
 
     local server_manifest="$dir/.server-manifest.json" merged="$dir/.merged-manifest.json"
     status="$(r2_curl -o "$server_manifest" -w "%{http_code}" "$base/countries/manifest.json")"
@@ -292,14 +297,26 @@ upload() {
     echo "offline-countries: wrote countries/manifest.json"
 }
 
+# What a cut reads an archive from, as `publish` records it: a file and its
+# size, or the bucket's key.
+source_identity() {
+    if [[ -f "$1" ]]; then
+        printf '%s, %s bytes\n' "$1" "$(stat -f %z "$1")"
+    else
+        printf '%s\n' "$1"
+    fi
+}
+
 # `publish`: build and upload a batch at a time, as Usage says.
 publish() {
-    local only="" batch_size=20 build_options=()
+    local only="" batch_size=20 planet_file="" extras_file="" margin=3
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --only) only="$2"; shift 2 ;;
             --batch) batch_size="$2"; shift 2 ;;
-            --planet|--extras|--margin-km) build_options+=("$1" "$2"); shift 2 ;;
+            --planet) planet_file="$2"; shift 2 ;;
+            --extras) extras_file="$2"; shift 2 ;;
+            --margin-km) margin="$2"; shift 2 ;;
             *) usage ;;
         esac
     done
@@ -308,19 +325,44 @@ publish() {
     basemap="$(archive_name basemaps)"
     extras="$(archive_name extras)"
     work="$build_dir/publish-$basemap-$extras"
+    # The areas listed done are one build, so every batch of it is cut from
+    # the same two files along the same margin and goes to the same bucket.
+    # The first run of a list writes down what it was given, and a run given
+    # anything else is refused rather than mixed into the build.
+    r2_load_keys
+    [[ -n "$planet_file" ]] || planet_file="$(archive_source "$basemap")"
+    [[ -n "$extras_file" ]] || extras_file="$(archive_source "$extras")"
+    local settings
+    settings="$(printf 'planet %s\nextras %s\nmargin %s km\nbucket %s/%s' \
+        "$(source_identity "$planet_file")" "$(source_identity "$extras_file")" "$margin" \
+        "$R2_ACCOUNT_ID" "$R2_BUCKET")"
     mkdir -p "$work"
     touch "$work/done.txt"
-    local id group wanted=",$only," remaining=()
+    if [[ ! -s "$work/done.txt" ]]; then
+        printf '%s\n' "$settings" > "$work/settings.txt"
+    elif [[ "$(cat "$work/settings.txt" 2>/dev/null)" != "$settings" ]]; then
+        die "$work lists areas put up with other settings than these:
+$settings
+Go on with the ones it was started with, or delete it to start over:
+$(cat "$work/settings.txt" 2>/dev/null || echo "(none recorded)")"
+    fi
+    # The list is read whole before it is used, so a tool that fails to
+    # build or to read the outlines stops the run rather than reading as no
+    # areas left to publish.
+    local area_list id group wanted=",$only," remaining=()
+    area_list="$(areas)" || die "could not list the areas; nothing was published"
+    [[ -n "$area_list" ]] || die "the tool listed no areas; nothing was published"
     while IFS=$'\t' read -r id group; do
         [[ -z "$only" || "$wanted" == *",$id,"* || ( -n "$group" && "$wanted" == *",$group,"* ) ]] || continue
         grep -qx "$id" "$work/done.txt" || remaining+=("$id")
-    done < <(areas)
+    done <<< "$area_list"
     echo "offline-countries: ${#remaining[@]} areas to publish, $(wc -l < "$work/done.txt" | tr -d ' ') already up"
     local start batch
     for (( start = 0; start < ${#remaining[@]}; start += batch_size )); do
         batch=("${remaining[@]:start:batch_size}")
         rm -rf "$work/batch"
-        build --only "$(IFS=,; echo "${batch[*]}")" --out "$work/batch" ${build_options[@]+"${build_options[@]}"}
+        build --only "$(IFS=,; echo "${batch[*]}")" --out "$work/batch" \
+            --planet "$planet_file" --extras "$extras_file" --margin-km "$margin"
         upload "$work/batch"
         printf '%s\n' "${batch[@]}" >> "$work/done.txt"
         rm -rf "$work/batch"
@@ -329,7 +371,8 @@ publish() {
     echo "offline-countries: every area is up; Scripts/offline-countries.sh prune deletes the older builds' files"
 }
 
-# `prune [--dry-run]`: what the server's manifest does not list, deleted.
+# `prune [--dry-run]`: the files of builds the server's manifest has moved
+# past, deleted.
 prune() {
     local dry_run=false
     [[ $# -eq 0 ]] || { [[ $# -eq 1 && "$1" == --dry-run ]] || usage; dry_run=true; }
@@ -339,26 +382,63 @@ prune() {
     local manifest="$build_dir/.server-manifest.json" status
     status="$(r2_curl -o "$manifest" -w "%{http_code}" "$(r2_url countries/manifest.json)")"
     [[ "$status" == 200 ]] || die "R2 answered $status for countries/manifest.json; prune nothing without it"
-    local listed objects keys path key bytes doomed=0
+    local listed objects keys path
     listed="$("$tool" files "$manifest" | cut -f 1)"
+    [[ -n "$listed" ]] || die "countries/manifest.json lists no files; prune nothing without them"
     objects="$(r2_list countries/)"
     keys="$(cut -f 1 <<< "$objects")"
     while IFS= read -r path; do
         grep -qxF "$path" <<< "$keys" \
             || die "the manifest lists $path, which the bucket does not hold; prune nothing until it does"
     done <<< "$listed"
-    while IFS=$'\t' read -r key bytes; do
-        [[ "$key" == *.pmtiles ]] || continue
-        ! grep -qxF "$key" <<< "$listed" || continue
-        doomed=$(( doomed + 1 ))
-        if [[ "$dry_run" == true ]]; then
-            echo "offline-countries: would delete $key ($bytes bytes)"
-        else
-            r2_delete "$key"
-            echo "offline-countries: deleted $key ($bytes bytes)"
-        fi
-    done <<< "$objects"
-    echo "offline-countries: $doomed archives the manifest does not list$([[ "$dry_run" == true ]] && echo ", none deleted")"
+    # An upload puts an area's files in the bucket before the manifest that
+    # lists them, so a file the manifest does not list may be on its way into
+    # it. Only one of a build earlier than the one listed for its area goes:
+    # an area's listed build only rises (`merge` refuses an earlier one), so
+    # nothing lists that file again. A file of the listed build or a later
+    # one, of an area not listed at all, or of a name no build gives is kept.
+    # A file's area and build are read off its name,
+    # `countries/<area>[-detail][-extras]-<build>.pmtiles`.
+    local verdicts
+    verdicts="$({ awk '{ print "listed\t" $0 }' <<< "$listed"; awk '{ print "object\t" $0 }' <<< "$objects"; } \
+        | awk -F '\t' '
+        function area_build(key,    stem, parts, count, i) {
+            if (key !~ /^countries\/[^\/]+\.pmtiles$/) return 0
+            stem = substr(key, 11, length(key) - 18)
+            count = split(stem, parts, "-")
+            if (count < 2 || parts[count] !~ /^[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]$/) return 0
+            build = parts[count--]
+            if (count > 1 && parts[count] == "extras") count--
+            if (count > 1 && parts[count] == "detail") count--
+            area = parts[1]
+            for (i = 2; i <= count; i++) area = area "-" parts[i]
+            return 1
+        }
+        $1 == "listed" { isListed[$2] = 1; if (area_build($2)) listedBuild[area] = build; next }
+        $2 !~ /\.pmtiles$/ || ($2 in isListed) { next }
+        area_build($2) && (area in listedBuild) && build < listedBuild[area] { print "retired\t" $2 "\t" $3; next }
+        { print "kept\t" $2 "\t" $3 }
+    ')"
+    local verdict key bytes doomed=0 spared=0
+    while IFS=$'\t' read -r verdict key bytes; do
+        case "$verdict" in
+            retired)
+                doomed=$(( doomed + 1 ))
+                if [[ "$dry_run" == true ]]; then
+                    echo "offline-countries: would delete $key ($bytes bytes)"
+                else
+                    r2_delete "$key"
+                    echo "offline-countries: deleted $key ($bytes bytes)"
+                fi
+                ;;
+            kept)
+                spared=$(( spared + 1 ))
+                echo "offline-countries: kept $key ($bytes bytes): no later build of its area is listed"
+                ;;
+        esac
+    done <<< "$verdicts"
+    echo "offline-countries: $doomed archives of builds the manifest has moved past$([[ "$dry_run" == true ]] \
+        && echo ", none deleted"), and $spared it does not list kept"
 }
 
 areas() {

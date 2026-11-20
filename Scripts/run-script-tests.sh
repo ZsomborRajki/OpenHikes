@@ -5449,6 +5449,84 @@ if expect_status 1 \
     pass
 fi
 
+# The upload merges its build into the server's manifest, where an area's
+# build only ever rises: prune deletes the files of a build the manifest has
+# moved past, so a manifest that went back to one would list deleted files.
+sed 's/20261117/20261118/g' "$countries_work/out/manifest.json" > "$countries_work/later.json"
+run_script "offline-countries merge puts a later build over the server's" \
+    "$OPENHIKES_OFFLINE_COUNTRIES_BUILD/offline-countries" merge --server "$countries_work/out/manifest.json" \
+    --build "$countries_work/later.json" --out "$countries_work/merged.json"
+if expect_status 0 \
+    && expect_contains "$(cat "$countries_work/merged.json")" '"build":"20261118"' "the merged manifest"; then
+    pass
+fi
+
+rm -f "$countries_work/merged.json"
+run_script "offline-countries merge refuses a build earlier than the server's" \
+    "$OPENHIKES_OFFLINE_COUNTRIES_BUILD/offline-countries" merge --server "$countries_work/later.json" \
+    --build "$countries_work/out/manifest.json" --out "$countries_work/merged.json"
+if expect_status 1 \
+    && expect_contains "$output" "the server lists build 20261118 of SI, later than this 20261117" "the error"; then
+    if [[ -f "$countries_work/merged.json" ]]; then
+        fail "a merged manifest was written"
+    else
+        pass
+    fi
+fi
+
+# `publish` goes on from the areas it has listed done, so every run of one list
+# has to cut from the same files along the same margin into the same bucket,
+# or one build would mix two. Each case stops before it cuts anything: the
+# list's settings are refused, or the tool, built into a directory of its own,
+# fails to compile, which must stop the run rather than read as no areas left.
+publish_build="$work/offline-countries-publish"
+bundled_manifest="$repository_root/OpenHikes/Tiles/Vector/VectorTileArchiveManifest.json"
+publish_list="$publish_build/publish-$(plutil -extract basemaps.0.name raw -o - "$bundled_manifest")"
+publish_list+="-$(plutil -extract extras.0.name raw -o - "$bundled_manifest")"
+mkdir -p "$publish_list"
+printf 'planet' > "$publish_build/planet.pmtiles"
+printf 'extras' > "$publish_build/extras.pmtiles"
+printf 'AT\n' > "$publish_list/done.txt"
+publish_settings="$(printf '%s\n' "planet $publish_build/planet.pmtiles, 6 bytes" \
+    "extras $publish_build/extras.pmtiles, 6 bytes" "margin 3 km" "bucket stub-account/stub-bucket")"
+printf '%s\n' "$publish_settings" > "$publish_list/settings.txt"
+
+OPENHIKES_R2_ENV="$countries_work/r2.env" OPENHIKES_OFFLINE_COUNTRIES_BUILD="$publish_build" \
+    run_script "offline-countries publish refuses to go on with another margin than the list was started with" \
+    "$offline_countries" publish --planet "$publish_build/planet.pmtiles" --extras "$publish_build/extras.pmtiles" \
+    --margin-km 5
+if expect_status 1 \
+    && expect_contains "$output" "lists areas put up with other settings than these" "the error" \
+    && expect_contains "$output" "margin 5 km" "the error" \
+    && expect_contains "$output" "margin 3 km" "the error" \
+    && expect_absent "$output" "areas to publish" "the output"; then
+    pass
+fi
+
+rm "$publish_list/settings.txt"
+OPENHIKES_R2_ENV="$countries_work/r2.env" OPENHIKES_OFFLINE_COUNTRIES_BUILD="$publish_build" \
+    run_script "offline-countries publish refuses a list of areas with no settings beside it" \
+    "$offline_countries" publish --planet "$publish_build/planet.pmtiles" --extras "$publish_build/extras.pmtiles"
+if expect_status 1 \
+    && expect_contains "$output" "(none recorded)" "the error" \
+    && expect_absent "$output" "areas to publish" "the output"; then
+    pass
+fi
+
+printf '%s\n' "$publish_settings" > "$publish_list/settings.txt"
+printf '#!/bin/sh\nexit 1\n' > "$stub_bin/swiftc"
+chmod +x "$stub_bin/swiftc"
+OPENHIKES_R2_ENV="$countries_work/r2.env" OPENHIKES_OFFLINE_COUNTRIES_BUILD="$publish_build" \
+    run_script "offline-countries publish stops when it cannot list the areas" \
+    "$offline_countries" publish --planet "$publish_build/planet.pmtiles" --extras "$publish_build/extras.pmtiles"
+rm "$stub_bin/swiftc"
+if expect_status 1 \
+    && expect_contains "$output" "the tool did not compile" "the error" \
+    && expect_contains "$output" "could not list the areas; nothing was published" "the error" \
+    && expect_absent "$output" "every area is up" "the output"; then
+    pass
+fi
+
 # Scripts/vector-archives.sh puts the manifest the app reads on the tile
 # server, once every archive it names answers, and never one older than the
 # server's. `curl` is a stub again, standing for both the tile server and R2:
@@ -5710,7 +5788,11 @@ cat > "$STUB_PROTOMAPS/builds.json" <<'EOF'
  {"key": "20261119.pmtiles", "size": 9, "version": "5.0.0"}]
 EOF
 
-run_script "vector-archives basemap copies Protomaps' newest build of the app's schema in under Protomaps' own ETag" \
+# One attempt is all the download is given, and the build arrives whole on
+# it: a file is taken as whole after the transfer that finished it, the last
+# one included.
+OPENHIKES_DOWNLOAD_ATTEMPTS=1 \
+    run_script "vector-archives basemap copies Protomaps' newest build of the app's schema in under Protomaps' own ETag" \
     "$vector_archives" basemap
 if expect_status 0 \
     && expect_contains "$output" "Protomaps' 20261118 build, basemaps 4.15.2, 7 bytes" "the output" \
@@ -5739,12 +5821,15 @@ fi
 # completed, so the bucket never holds it under the name the manifest would
 # give it.
 # Parts sent side by side share the cap: eight parts at 16 MiB a second
-# are 2 MiB a second each.
+# are 2 MiB a second each. A part is given up only once it stalls, never at a
+# deadline, which a part held to its share of a low cap would never meet.
 OPENHIKES_R2_MIB_PER_SECOND=16 \
     run_script "vector-archives basemap abandons a copy that does not come to Protomaps' ETag" \
     "$vector_archives" basemap 20261117
 if expect_status 1 \
-    && expect_contains "$calls" "--limit-rate 2097152 -o /dev/null -D -" "a part's upload" \
+    && expect_contains "$calls" "--limit-rate 2097152 -o /dev/null -D - --speed-limit 1024 --speed-time 60 -T" \
+        "a part's upload" \
+    && expect_absent "$calls" "--max-time" "a part's upload" \
     && expect_contains "$output" "not 00000000000000000000000000000000-1; nothing was written" "the error" \
     && expect_contains "$calls" "-X DELETE https://stub-account.r2.cloudflarestorage.com/stub-bucket/planet-20261117.pmtiles?uploadId=stub%2Bupload" \
         "the requests"; then
@@ -5886,6 +5971,24 @@ if expect_status 1 \
     pass
 fi
 
+# Another checkout has since published newer extras as revision 5. Naming a
+# basemap here would keep this checkout's extras and publish them over the
+# server's, so `use` refuses until the checkout has the server's manifest.
+sed -e 's/"revision": 4/"revision": 5/' -e 's/"extras-20261120"/"extras-20261121"/' \
+    "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST" > "$STUB_SERVED_MANIFEST"
+cp "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST" "$bucket_work/before.json"
+run_script "vector-archives use refuses a manifest behind the server's" \
+    "$vector_archives" use planet-20261119
+if expect_status 1 \
+    && expect_contains "$output" "has revision 5, and $OPENHIKES_VECTOR_ARCHIVE_MANIFEST is revision 4" "the error"; then
+    if cmp -s "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST" "$bucket_work/before.json"; then
+        pass
+    else
+        fail "the manifest was edited" "$(cat "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST")"
+    fi
+fi
+cp "$bucket_work/before.json" "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST"
+
 # The bucket holds the archives both manifests name, one only this manifest
 # names (uploaded, not yet published), one neither names, the manifest and a
 # country, of which prune deletes the one neither names alone.
@@ -5924,16 +6027,69 @@ if expect_status 1 \
     pass
 fi
 
-# Scripts/offline-countries.sh prune deletes the countries' archives the
-# server's manifest no longer lists, an older build's, and only those.
-printf 'archive' > "$STUB_BUCKET/countries/SI-20261118.pmtiles"
-sed 's/20261117/20261118/g' "$countries_work/out/manifest.json" > "$STUB_BUCKET/countries/manifest.json"
-run_script "offline-countries prune deletes the countries' archives the server's manifest does not list" \
+# The server's manifest names extras this checkout's does not, and the server
+# answers with a manifest cut short, or with one that has lost its extras.
+# Read as naming nothing, either would have prune delete the extras the apps
+# are drawing.
+printf 'bytes' > "$STUB_BUCKET/planet-20261118.pmtiles"
+printf 'bytes' > "$STUB_BUCKET/extras-20261121.pmtiles"
+for broken in "cut short" "without its extras"; do
+    if [[ "$broken" == "cut short" ]]; then
+        sed 's/"extras-20261120"/"extras-20261121"/' "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST" | head -c 60 \
+            > "$STUB_SERVED_MANIFEST"
+        reason="is not a version 1 manifest"
+    else
+        printf '%s\n' '{"version": 1, "revision": 4,' \
+            '"basemaps": [{"name": "planet-20261118", "schema": 4, "maximumZoom": 15}]}' > "$STUB_SERVED_MANIFEST"
+        reason="has no extras"
+    fi
+    run_script "vector-archives prune deletes nothing when the server's manifest is $broken" "$vector_archives" prune
+    if expect_status 1 \
+        && expect_contains "$output" "the manifest on https://tiles.example.invalid $reason" "the error" \
+        && expect_contains "$output" "prune nothing without it" "the error" \
+        && expect_absent "$calls" "-X DELETE" "the requests"; then
+        if [[ -f "$STUB_BUCKET/extras-20261121.pmtiles" ]]; then
+            pass
+        else
+            fail "the server's extras were deleted"
+        fi
+    fi
+done
+rm -f "$STUB_BUCKET/planet-20261118.pmtiles" "$STUB_BUCKET/extras-20261121.pmtiles"
+
+# Scripts/offline-countries.sh prune deletes the countries' archives of a
+# build earlier than the one the server's manifest lists for their area, a
+# region's and a detail file's included, and only those. An upload puts its
+# files up before the manifest that lists them, so a later build's file the
+# manifest does not list yet, and an area it does not list at all, are kept.
+cat > "$STUB_BUCKET/countries/manifest.json" <<EOF
+{"version": 1, "countries": [
+ {"id": "SI", "build": "20261118", "schema": 4, "names": {},
+  "bounds": {"west": 13.3, "south": 45.4, "east": 16.6, "north": 46.9},
+  "outline": [[[13.3, 45.4], [16.6, 45.4], [16.6, 46.9], [13.3, 46.9], [13.3, 45.4]]],
+  "files": [{"role": "basemap", "path": "countries/SI-20261118.pmtiles", "bytes": 7,
+    "sha256": "$country_sha256", "minimumZoom": 0, "maximumZoom": 15}]},
+ {"id": "US-CO", "group": "US", "build": "20261118", "schema": 4, "names": {"en": "Colorado"},
+  "bounds": {"west": -109.1, "south": 37.0, "east": -102.0, "north": 41.0},
+  "outline": [[[-109.1, 37.0], [-102.0, 37.0], [-102.0, 41.0], [-109.1, 41.0], [-109.1, 37.0]]],
+  "files": [{"role": "basemap", "path": "countries/US-CO-20261118.pmtiles", "bytes": 7,
+    "sha256": "$country_sha256", "minimumZoom": 0, "maximumZoom": 15}]}]}
+EOF
+for key in SI-20261118 SI-detail-extras-20261117 SI-20261119 US-CO-20261118 US-CO-detail-20261117 \
+    AT-20261118; do
+    printf 'archive' > "$STUB_BUCKET/countries/$key.pmtiles"
+done
+run_script "offline-countries prune deletes only the countries' archives of builds the manifest has moved past" \
     "$offline_countries" prune
 if expect_status 0 \
-    && expect_contains "$output" "deleted countries/SI-20261117.pmtiles" "the output"; then
+    && expect_contains "$output" "deleted countries/SI-20261117.pmtiles" "the output" \
+    && expect_contains "$output" "deleted countries/US-CO-detail-20261117.pmtiles" "the output" \
+    && expect_contains "$output" "kept countries/SI-20261119.pmtiles (7 bytes): no later build of its area is listed" \
+        "the output" \
+    && expect_contains "$output" "3 archives of builds the manifest has moved past, and 2 it does not list kept" \
+        "the output"; then
     remaining="$(cd "$STUB_BUCKET/countries" && ls | LC_ALL=C sort | tr '\n' ' ')"
-    if [[ "$remaining" != "SI-20261118.pmtiles manifest.json " ]]; then
+    if [[ "$remaining" != "AT-20261118.pmtiles SI-20261118.pmtiles SI-20261119.pmtiles US-CO-20261118.pmtiles manifest.json " ]]; then
         fail "the bucket holds the wrong countries afterwards" "$remaining"
     else
         pass

@@ -196,8 +196,10 @@ _r2_abandon() {
 }
 
 # One part: copied out of the file, sent until R2 names it by the MD5 it has
-# here, and its MD5 kept for the whole's. A send that stalls is given up
-# after a quarter of an hour and sent again.
+# here, and its MD5 kept for the whole's. A send that stalls, a minute under
+# 1 KB/s, is given up and sent again. A slow one is not: a part takes as long
+# as the connection or the cap makes it, 17 minutes for 256 MiB at the
+# quarter MiB a second eight parts get from a 2 MiB cap.
 _r2_put_part() {
     local file="$1" url="$2" part_mib="$3" number="$4" work="$5" parts="$6"
     local piece="$work/$number.part" md5 etag attempt
@@ -205,7 +207,8 @@ _r2_put_part() {
         || return 1
     md5="$(md5 -q "$piece")"
     for attempt in 1 2 3 4; do
-        etag="$(r2_curl -o /dev/null -D - --max-time 900 -T "$piece" "$url&partNumber=$number" | tr -d '\r' \
+        etag="$(r2_curl -o /dev/null -D - --speed-limit 1024 --speed-time 60 -T "$piece" "$url&partNumber=$number" \
+            | tr -d '\r' \
             | awk 'tolower($1) == "etag:" {gsub(/"/, "", $2); print $2}')"
         [[ "$etag" != "$md5" ]] || break
         sleep $(( attempt * ${OPENHIKES_R2_RETRY_SECONDS:-2} ))
