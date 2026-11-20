@@ -74,42 +74,48 @@ nonisolated extension VectorTilePainter {
     }
 
     /// The waterways and then the lakes, as Carto orders them, each with
-    /// the ones that are not always there drawn broken. The basemap draws
-    /// those as any water, and joins a stream's pieces whether or not each
-    /// runs all year, so the vector extras' `intermittent` layer says where
-    /// to break them: its lines' gaps are rubbed out of the stretches of the
-    /// waterways that run along them (``VectorTileSeasonalStretches``), and
-    /// its areas out of the lakes, each in a layer of its own so that
-    /// nothing under the water goes with them, nor a river a seasonal stream
-    /// crosses.
+    /// the ones that are not always there drawn broken and the ones under
+    /// the ground drawn as tunnels. The basemap draws both as any water,
+    /// and joins a stream's pieces whether or not each runs all year or
+    /// through a culvert, so the vector extras say which stretches are
+    /// which (``VectorTileWaterwayStretches``). Along the `culverts` layer's
+    /// lines a waterway is drawn as Carto draws a tunnel. The `intermittent`
+    /// layer's lines' gaps are rubbed out of the stretches of the waterways
+    /// that run along them, and its areas out of the lakes, each in a layer
+    /// of its own so that nothing under the water goes with them, nor a
+    /// river a seasonal stream crosses.
     func paintWater() {
         let seasonal = features(in: VectorTileRasterizer.intermittentLayer, type: .line)
-        let stretches = seasonal.first.map { _, geometry in
-            VectorTileSeasonalStretches(
-                seasonal.compactMap { feature, geometry in
-                    gapBand(of: feature).map { (parts: geometry.lines(of: feature), reach: $0 / 2) }
-                },
-                frame: geometry.frame,
-                piece: VectorTileStyle.intermittentPeriod(z: z) * unit,
-                bounds: bounds
-            )
-        }
+        let seasonalStretches = stretches(
+            along: seasonal,
+            piece: VectorTileStyle.intermittentPeriod(z: z),
+            band: gapBand(of:)
+        )
+        let culverts = stretches(
+            along: features(in: VectorTileRasterizer.culvertsLayer, type: .line),
+            piece: VectorTileStyle.waterTunnelPiece,
+            band: tunnelBand(of:)
+        )
         var perennial: [(kind: String, path: CGPath)] = []
         var broken: [(kind: String, path: CGPath)] = []
         var tunnels: [(path: CGPath, outer: CGFloat, inner: CGFloat)] = []
         for (feature, geometry) in features(in: "water", type: .line) {
             guard let kind = feature.string("kind") else { continue }
-            if feature.string("tunnel").map(VectorTileStyle.waterTunnels.contains) == true,
-               let tunnel = VectorTileStyle.waterTunnel(kind: kind, z: z) {
-                tunnels.append((geometry.path(of: feature), tunnel.outer, tunnel.inner))
-                continue
-            }
-            guard let split = stretches?.split(geometry.lines(of: feature)) else {
+            guard seasonalStretches != nil || culverts != nil else {
                 perennial.append((kind, geometry.path(of: feature)))
                 continue
             }
-            broken.append((kind, split.seasonal))
-            if let rest = split.perennial { perennial.append((kind, rest)) }
+            var open = geometry.lines(of: feature)
+            if let tunnel = VectorTileStyle.waterTunnel(kind: kind, z: z), let split = culverts?.split(open) {
+                tunnels.append((Self.path(split.along), tunnel.outer, tunnel.inner))
+                open = split.rest
+            }
+            guard let split = seasonalStretches?.split(open) else {
+                if !open.isEmpty { perennial.append((kind, Self.path(open))) }
+                continue
+            }
+            broken.append((kind, Self.path(split.along)))
+            if !split.rest.isEmpty { perennial.append((kind, Self.path(split.rest))) }
         }
         // Every waterway's glow before any waterway, so a stream is not
         // drawn over by the glow of the one it joins.
@@ -122,7 +128,8 @@ nonisolated extension VectorTilePainter {
             context.endTransparencyLayer()
         }
         strokeWaterways(perennial, glow: false)
-        // The tunnels after the open water, as Carto orders them.
+        // The tunnels after the open water, as Carto orders them, so the
+        // pale line covers where the open stretch beside one ends.
         for tunnel in tunnels {
             strokePixels(tunnel.path, VectorTileStyle.waterTunnelFill, width: tunnel.outer)
             strokePixels(
@@ -134,6 +141,34 @@ nonisolated extension VectorTilePainter {
             strokePixels(tunnel.path, VectorTileStyle.waterTunnelFill, width: tunnel.inner)
         }
         paintLakes()
+    }
+
+    /// The stretches of the basemap's waterways along `lines`, judged in
+    /// pieces of `piece` pixels of a 256-pixel tile, each line's band as
+    /// `band` gives it; `nil` where the tile has none of those lines.
+    private func stretches(
+        along lines: [(MapboxVectorTile.Feature, VectorTileGeometry)],
+        piece: CGFloat,
+        band: (MapboxVectorTile.Feature) -> CGFloat?
+    ) -> VectorTileWaterwayStretches? {
+        lines.first.map { _, geometry in
+            VectorTileWaterwayStretches(
+                lines.compactMap { feature, geometry in
+                    band(feature).map { (parts: geometry.lines(of: feature), reach: $0 / 2) }
+                },
+                frame: geometry.frame,
+                piece: piece * unit,
+                bounds: bounds
+            )
+        }
+    }
+
+    private static func path(_ parts: [[CGPoint]]) -> CGPath {
+        let path = CGMutablePath()
+        for part in parts {
+            path.addLines(between: part)
+        }
+        return path
     }
 
     /// Each waterway's glow, or each waterway itself.
@@ -213,6 +248,15 @@ nonisolated extension VectorTilePainter {
         return (width + VectorTileStyle.intermittentMargin) * unit
     }
 
+    /// How wide a band a waterway runs along a culvert within, in the
+    /// picture's pixels: a little wider than the tunnel Carto draws, or
+    /// `nil` for one it draws none for at this zoom.
+    private func tunnelBand(of feature: MapboxVectorTile.Feature) -> CGFloat? {
+        guard let tunnel = feature.string("kind").flatMap({ VectorTileStyle.waterTunnel(kind: $0, z: z) })
+        else { return nil }
+        return (tunnel.outer + VectorTileStyle.intermittentMargin) * unit
+    }
+
     /// What Carto draws after all the ground and the water, over whatever
     /// lies in the area: the tint of mud and tidal flats, then a wetland's
     /// marks, a beach's dots, scrub, a reef, and last the woods' trees by
@@ -249,8 +293,9 @@ nonisolated extension VectorTilePainter {
     }
 
     /// What stands in the water, as Carto draws it after the water and
-    /// before the buildings and roads: breakwaters and groynes, piers, and
-    /// the dams, weirs and lock gates that hold it back.
+    /// before the buildings and roads: breakwaters and groynes, piers, the
+    /// dams, weirs and lock gates that hold it back, and the bridges
+    /// mapped as areas over it.
     func paintWaterStructures() {
         guard z >= VectorTileStyle.pierZ else { return }
         for (feature, geometry) in features(in: VectorTileRasterizer.breakwatersLayer, type: .polygon) {
@@ -276,6 +321,10 @@ nonisolated extension VectorTilePainter {
                 VectorTileStyle.waterBarrier(kind: feature.string("kind")),
                 cap: .butt
             )
+        }
+        for (feature, geometry) in features(in: "landuse", type: .polygon)
+        where feature.string("kind") == VectorTileStyle.bridgeKind {
+            fill(geometry.path(of: feature), VectorTileStyle.bridgeArea)
         }
     }
 

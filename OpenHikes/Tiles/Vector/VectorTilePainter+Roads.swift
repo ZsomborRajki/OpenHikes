@@ -99,11 +99,16 @@ nonisolated extension VectorTilePainter {
         stroke(path, VectorTileStyle.Line(color: casing, width: width), cap: cap)
     }
 
-    /// Roads being built: the color of the road each is to be, with white
-    /// dashes down it.
+    /// Roads being built: the color of the road each is to be, with dashes
+    /// down it in the color of its surface.
     private func paintConstruction() {
         for (feature, geometry) in features(in: VectorTileRasterizer.constructionLayer, type: .line) {
-            guard let line = VectorTileStyle.construction(kind: feature.string("kind"), z: z) else { continue }
+            guard let line = VectorTileStyle.construction(
+                kind: feature.string("kind"),
+                z: z,
+                service: feature.string("service")
+            )
+            else { continue }
             strokeWithCenter(geometry.path(of: feature), line, cap: .butt)
         }
     }

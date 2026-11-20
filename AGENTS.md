@@ -1238,7 +1238,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
     the cable cars with its stations, the light railways before zoom 14,
     power lines with their towers and poles, every path, track and service
     road with what Carto draws it by, the roads being built, a bridge mapped
-    as an area, dams and weirs, breakwaters and groynes, ridges, cliffs and
+    as an area, the waterways through a culvert, dams and weirs,
+    breakwaters and groynes, ridges, cliffs and
     embankments in the direction they were mapped, the lines cut through a forest, trees and
     their rows, the names of buildings, and the points Carto draws before
     the basemap has them: huts and stations with the tags Carto files them
@@ -1284,6 +1285,11 @@ a change to recording, the map, the sheet or the render path; the PR template,
     the waterways, and the lakes out of the water, each in a layer of its
     own so the ground under them stays, then lays Carto's lines over the
     lakes.
+  - **So is water underground.** The basemap keeps no `tunnel` on a
+    waterway and joins a culvert into the stream it carries, so the extras'
+    `culverts` layer has the ways Carto calls tunnels, and the stretch of a
+    basemap waterway along one is drawn as Carto draws a tunnel
+    (`VectorTileWaterwayStretches`, which parts a waterway for both).
   - **A cliff's teeth need the extras' line.** They go down the side that
     falls away, the right of the way the cliff was mapped, and the basemap's
     build may turn a line around. The basemap's cliff is drawn, plain, only

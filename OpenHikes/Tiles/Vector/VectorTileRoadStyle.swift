@@ -64,6 +64,11 @@ nonisolated extension VectorTileStyle {
 
     /// Whether the basemap files a road as a service road, which the
     /// extras' `service_roads` layer stands in for where a tile has it.
+    /// The basemap gives every `highway=service` the detail `service`,
+    /// whatever its own `service` tag says. A minor road with another
+    /// detail is a street: a street with a `service` tag of its own has
+    /// that tag's value as its detail, a residential street's `driveway`
+    /// among them, and Carto draws it as the street it is.
     static func isServiceRoad(kind: String, detail: String?) -> Bool {
         kind == "minor_road" && detail == "service"
     }
@@ -177,41 +182,74 @@ nonisolated extension VectorTileStyle {
     // MARK: Roads being built
 
     /// A road being built, from the extras' `construction` layer: the color
-    /// of the road it is to be, a minor one's in gray, with white dashes
-    /// down it (`roads.mss`'s `highway_construction`). `nil` for a kind Carto
-    /// draws no such line for, and before the zoom it first draws one.
-    static func construction(kind: String?, z: Int) -> Line? {
-        guard let kind, let listed = constructionColors[kind],
-              let shape = (listed.isMinor ? minorConstruction : majorConstruction).last(where: { z >= $0.z })
-        else { return nil }
+    /// of the road it is to be, a minor one's in gray, with dashes down it
+    /// in the color of the road's own surface (`roads.mss`'s
+    /// `highway_construction`). A service road's `service` is given where it
+    /// makes it a minor one, which Carto draws narrower and not before zoom
+    /// 17. `nil` for a kind Carto draws no such line for, and before the
+    /// zoom it first draws one.
+    static func construction(kind: String?, z: Int, service: String? = nil) -> Line? {
+        guard let kind, let listed = constructionClasses[kind] else { return nil }
+        let shapes = kind == "service" && service.map(minorServices.contains) == true
+            ? minorServiceConstruction
+            : listed.shapes
+        guard let shape = shapes.last(where: { z >= $0.z }) else { return nil }
         return Line(
             color: listed.color,
             width: ZoomCurve([(z, shape.width)]),
             center: Center(
-                color: color("#FFFFFF"),
+                color: listed.center,
                 width: ZoomCurve([(z, shape.dashes)]),
                 dash: [shape.dash / shape.dashes, shape.gap / shape.dashes]
             )
         )
     }
 
+    /// The look of one class of road being built: the line's color, its
+    /// dashes', and its shape from each zoom.
+    private struct ConstructionClass {
+        let color: CGColor
+        var center = VectorTileStyle.color("#FFFFFF")
+        let shapes: [ConstructionShape]
+    }
+
     private static let constructionGray = color("#AAAAAA")
-    private static let constructionColors: [String: (color: CGColor, isMinor: Bool)] = [
-        "motorway": (motorway.color, false),
-        "motorway_link": (motorway.color, false),
-        "trunk": (trunk.color, false),
-        "trunk_link": (trunk.color, false),
-        "primary": (primary.color, false),
-        "primary_link": (primary.color, false),
-        "secondary": (secondary.color, false),
-        "secondary_link": (secondary.color, false),
-        "tertiary": (constructionGray, false),
-        "tertiary_link": (constructionGray, false),
-        "residential": (constructionGray, true),
-        "unclassified": (constructionGray, true),
-    ]
-    /// From zoom `z`: the line's width, the width of the white dashes down
-    /// it, and their dash and gap, in pixels.
+    private static let constructionClasses: [String: ConstructionClass] = {
+        let major = { (line: Line) in ConstructionClass(color: line.color, shapes: majorConstruction) }
+        let minor = ConstructionClass(color: constructionGray, shapes: minorConstruction)
+        return [
+            "motorway": major(motorway),
+            "motorway_link": major(motorway),
+            "trunk": major(trunk),
+            "trunk_link": major(trunk),
+            "primary": major(primary),
+            "primary_link": major(primary),
+            "secondary": major(secondary),
+            "secondary_link": major(secondary),
+            "tertiary": ConstructionClass(color: constructionGray, shapes: majorConstruction),
+            "tertiary_link": ConstructionClass(color: constructionGray, shapes: majorConstruction),
+            "residential": minor,
+            "unclassified": minor,
+            "living_street": ConstructionClass(
+                color: constructionGray,
+                center: livingStreet.color,
+                shapes: minorConstruction
+            ),
+            "pedestrian": ConstructionClass(
+                color: constructionGray,
+                center: pedestrian.color,
+                shapes: minorConstruction
+            ),
+            "service": ConstructionClass(color: constructionGray, shapes: serviceConstruction),
+            "road": ConstructionClass(color: constructionGray, center: unpavedRoad, shapes: serviceConstruction),
+            "raceway": ConstructionClass(color: constructionGray, center: unpavedRoad, shapes: serviceConstruction),
+        ]
+    }()
+    /// Carto's `@road-fill`, the surface of a road of unknown class.
+    private static let unpavedRoad = color("#DDDDDD")
+
+    /// From zoom `z`: the line's width, the width of the dashes down it,
+    /// and their dash and gap, in pixels.
     private struct ConstructionShape {
         let z: Int
         let width: CGFloat
@@ -231,9 +269,28 @@ nonisolated extension VectorTileStyle {
         ConstructionShape(z: 16, width: 6, dashes: minorDashesZ16, dash: 8, gap: 6),
         ConstructionShape(z: z17, width: 8, dashes: 7, dash: 8, gap: 6),
     ]
+    /// A service road's and a road's of unknown class, from zoom 15, the
+    /// dashes as wide as the line at first.
+    private static let serviceConstruction = [
+        ConstructionShape(z: 15, width: 2, dashes: 2, dash: 6, gap: 4),
+        ConstructionShape(z: 16, width: serviceZ16.width, dashes: serviceZ16.dashes, dash: 8, gap: 6),
+        ConstructionShape(z: z17, width: 7, dashes: serviceZ17Dashes, dash: 8, gap: 6),
+        ConstructionShape(z: z18, width: 8, dashes: 7, dash: 8, gap: 6),
+    ]
+    /// A driveway's, a parking aisle's and a drive-through's, from zoom 17.
+    private static let minorServiceConstruction = [
+        ConstructionShape(z: z17, width: minorServiceZ17.width, dashes: minorServiceZ17.dashes, dash: 8, gap: 6),
+        ConstructionShape(z: z18, width: minorServiceZ18.width, dashes: minorServiceZ18.dashes, dash: 8, gap: 6),
+        ConstructionShape(z: z19, width: minorServiceZ19.width, dashes: minorServiceZ19.dashes, dash: 8, gap: 6),
+    ]
     private static let majorDashes: CGFloat = 3.5
     private static let minorDashesZ15: CGFloat = 3.8
     private static let minorDashesZ16: CGFloat = 4.8
+    private static let serviceZ16: (width: CGFloat, dashes: CGFloat) = (3.5, 2.3)
+    private static let serviceZ17Dashes: CGFloat = 5.4
+    private static let minorServiceZ17: (width: CGFloat, dashes: CGFloat) = (3.5, 1.9)
+    private static let minorServiceZ18: (width: CGFloat, dashes: CGFloat) = (4.75, 3.15)
+    private static let minorServiceZ19: (width: CGFloat, dashes: CGFloat) = (3.9, 2.3)
 
     // MARK: Power lines' towers
 

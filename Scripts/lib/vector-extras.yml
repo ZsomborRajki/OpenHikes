@@ -7,9 +7,10 @@
 # tile of each merges into one and is read by the same code. `parks`,
 # `protected_areas`, `area_details`, `barriers`, `oneways`, `paths`,
 # `service_roads`, `construction`, `power`, `power_points`, `dams`,
-# `breakwaters`, `ridges`, `cliffs`, `cutlines`, `trees`, `intermittent` and
-# `building_names` are the layers of its own, and a car park's `access` and
-# an area's `area` the attributes. Most features wait for zoom 14 or 15: the
+# `breakwaters`, `ridges`, `cliffs`, `cutlines`, `trees`, `intermittent`,
+# `culverts` and `building_names` are the layers of its own, and a car
+# park's `access` and an area's `area` the attributes. Most features wait
+# for zoom 14 or 15: the
 # map draws deeper zooms from zoom 15, and Carto draws none of these wider.
 # The names of areas come in from the zoom Carto could first name each, by
 # its size, and the ground, the lifts, the huts and the stations from the
@@ -210,7 +211,8 @@ layers:
       value: pedestrian
 
   # A bridge mapped as an area, which the basemap files as a pedestrian
-  # square: drawn over that in Carto's gray, from zoom 12.
+  # square: drawn in Carto's gray over that and the water it crosses, from
+  # zoom 12.
   - source: osm
     geometry: polygon
     min_zoom: 12
@@ -1500,7 +1502,8 @@ layers:
     - *is_tunnel
 
 # Roads being built, which the basemap leaves out: the road each is to be,
-# from the zoom Carto first draws one of that class.
+# from the zoom Carto first draws one of that class. Paths being built,
+# which Carto draws as a faint broken line, are left out.
 - id: construction
   features:
   - source: osm
@@ -1527,8 +1530,24 @@ layers:
     include_when:
       __all__:
       - highway: construction
-      - construction: [tertiary_link, residential, unclassified]
+      - construction: [tertiary_link, residential, unclassified, living_street, pedestrian]
     attributes: *construction_kind
+  # A service road's `service` where it makes it a minor one, which Carto
+  # draws only from zoom 17.
+  - source: osm
+    geometry: line
+    min_zoom: 15
+    include_when:
+      __all__:
+      - highway: construction
+      - construction: [service, road, raceway]
+    attributes:
+    - key: kind
+      tag_value: construction
+    - key: service
+      tag_value: service
+      include_when:
+        service: *minor_services
   - source: osm
     geometry: line
     min_zoom: 14
@@ -1736,6 +1755,33 @@ layers:
     attributes:
     - key: kind
       value: water
+
+# Waterways through a tunnel or a culvert, which Carto draws as a pale line
+# with the water broken along its edges. The basemap draws them as open
+# water: it keeps no `tunnel` on a waterway, and joins a stream's pieces
+# into one line, so these say which stretches of its lines go underground.
+# A river's from zoom 12 and every other's from 14, where Carto first draws
+# one so.
+- id: culverts
+  features:
+  - source: osm
+    geometry: line
+    min_zoom:
+      default_value: 14
+      overrides:
+        12:
+          waterway: river
+    include_when:
+      __any__:
+      - __all__:
+        - waterway: [river, canal, stream, ditch, drain]
+        - tunnel: ['yes', culvert]
+      - __all__:
+        - waterway: canal
+        - tunnel: flooded
+    attributes:
+    - key: kind
+      tag_value: waterway
 
 # The names of buildings, at a point inside each with its size: Carto names
 # a building from zoom 14 once it covers 3,000 square pixels, and every one

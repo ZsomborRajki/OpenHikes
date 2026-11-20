@@ -83,3 +83,6 @@ n/natural=tree
 # Water that is not always there.
 wr/intermittent=yes
 wr/seasonal=yes,spring,summer,autumn,winter,wet_season,dry_season
+# Waterways through a tunnel or a culvert; the schema keeps the waterways
+# among them.
+w/tunnel=yes,culvert,flooded
