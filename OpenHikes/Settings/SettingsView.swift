@@ -564,25 +564,21 @@ private extension SettingsView {
     }
 
     func deleteAllTiles() {
-        // Before the manifests are cleared: stopping auto-save folds in whatever
-        // it saved since the last drain, which would otherwise land in a
-        // manifest emptied a line later and claim tiles that are about to go.
-        // The selection is held onto so it can be announced again below —
-        // this is a storage action, not a change to which hike is selected,
-        // so neither announcement ends the hold on a hike whose saved map
-        // was just deleted.
-        let selected = autoSave.selectedHike
-        autoSave.reannounceSelection(nil)
-
-        let sweep = OfflineStorageActions.deleteAllTiles(in: .shared, fetchingHikes: fetchHikes)
-
-        // Back on, with an empty manifest and a fresh cap, for whatever was
-        // selected before, where the switch has it on — including on the path
-        // where the fetch failed and nothing was cleared at all.
-        autoSave.reannounceSelection(selected)
-
-        guard let sweep else { return }
+        // Before the manifests are cleared, and until their tiles are gone:
+        // see ``AutoSaveController/beginStorageAction()``. Back on afterwards
+        // for whatever is selected by then, where the switch has it on —
+        // including on the path where the fetch failed and nothing was
+        // cleared at all.
+        autoSave.beginStorageAction()
+        guard let sweep = OfflineStorageActions.deleteAllTiles(in: .shared, fetchingHikes: fetchHikes) else {
+            autoSave.endStorageAction()
+            return
+        }
         reportingUsage(after: sweep)
+        Task {
+            await sweep.value
+            autoSave.endStorageAction()
+        }
     }
 
     /// `nonisolated`: passed as a bare function reference to `Optional.map`,

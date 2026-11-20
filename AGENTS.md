@@ -1133,7 +1133,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
 ### Tiles
 
 - **Respect provider policy.** `TileProvider.supportsBulkDownload` gates
-  prefetching, and OpenStreetMap is auto-save only. The hiking routes are a
+  prefetching. OpenStreetMap's tiles are never bulk-downloaded: the
+  OpenHikes map is kept by country (*The offline countries*), and the
+  openstreetmap.org card by auto-save alone. The hiking routes are a
   `TileLayer` the app draws itself (*The hiking-routes layer*), and stay out
   of `TileProvider.all`.
 - **Auto-save is one switch, off until the hiker turns it on**, by the
@@ -1151,8 +1153,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
     with no signal already. One its archive lacks, which the map fetched
     instead, is kept as any other (`OfflineCountryArchives.holds(_:deepest:)`).
   - Deleting a hike's saved map holds auto-save down for that hike until the
-    map selects a hike anew, whatever the switch or the map says
-    (`AutoSaveController.holdDown(_:)`).
+    map selects a hike anew or the hiker moves the switch, whatever the map
+    says (`AutoSaveController.holdDown(_:)`). Settings' delete-all arms
+    nothing until its tiles are gone (`beginStorageAction()`).
 - **A tile is identified by provider plus z/x/y**, never by scale
   (`TileCacheKey`).
 - **Never turn a render miss into synchronous disk or network work**, and never

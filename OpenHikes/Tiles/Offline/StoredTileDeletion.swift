@@ -86,11 +86,11 @@ nonisolated enum StoredTileDeletion {
     ///   drain into the manifest; a claim read ahead of that would be up to
     ///   two seconds stale, and everything saved since would be stranded on
     ///   durable storage with nothing left pointing at it. It is held down
-    ///   until the map selects a hike anew, whatever the switch in Settings
-    ///   or the map on *Map Modes* says: a map the hiker just deleted must
-    ///   not be saved again by the next pan, and a tile claimed while the
-    ///   plan below is being spent would be claimed and then deleted — see
-    ///   ``AutoSaveController/holdDown(_:)``.
+    ///   until the map selects a hike anew or the hiker moves the switch in
+    ///   Settings, whatever the map on *Map Modes* says: a map the hiker just
+    ///   deleted must not be saved again by the next pan, and a tile claimed
+    ///   while the plan below is being spent would be claimed and then
+    ///   deleted — see ``AutoSaveController/holdDown(_:)``.
     /// - The manifests are emptied, and the commit is the point of no return.
     ///   A refusal puts the whole thing back — manifests, the fold and the
     ///   arming — and deletes nothing.

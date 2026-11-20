@@ -526,7 +526,8 @@ struct OfflineStorageStatus: View {
     ///
     /// The saving notes are read off the controller, not the switch: they are
     /// true only while this hike is the one being saved for, which a hike
-    /// whose saved map was just deleted is not until it is selected again.
+    /// whose saved map was just deleted is not until it is selected again or
+    /// the switch is moved.
     /// The pointer to Settings is for the maps with no download, the only
     /// ones where a hiker who never finds the switch has no map offline, and
     /// only while it is off.
