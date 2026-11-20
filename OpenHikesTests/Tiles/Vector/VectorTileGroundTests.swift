@@ -195,7 +195,8 @@ struct VectorTileGroundTests {
         #expect(stream.value(at: 16) == 3)
         #expect(ditch.value(at: 14) == stream.value(at: 14))
         #expect(ditch.value(at: 16) < stream.value(at: 16), "a ditch stops widening")
-        #expect(canal.value(at: 10) == river.value(at: 10))
+        #expect(canal.value(at: 11) == 0, "before zoom 12 Carto draws the rivers and nothing else")
+        #expect(canal.value(at: 12) > 0)
         #expect(canal.value(at: 14) > stream.value(at: 14))
         #expect(canal.value(at: 14) < river.value(at: 14))
     }

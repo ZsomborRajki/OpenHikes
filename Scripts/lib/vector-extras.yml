@@ -5,7 +5,8 @@
 # Its layers and attributes are named as the basemap's are — `landuse`,
 # `roads` and `pois` with `kind`, `kind_detail` and `name:<language>` — so a
 # tile of each merges into one and is read by the same code. `parks`,
-# `protected_areas`, `area_details`, `barriers`, `oneways`, `power`, `dams`,
+# `protected_areas`, `area_details`, `barriers`, `oneways`, `paths`,
+# `service_roads`, `construction`, `power`, `power_points`, `dams`,
 # `breakwaters`, `ridges`, `cliffs`, `cutlines`, `trees`, `intermittent` and
 # `building_names` are the layers of its own, and a car park's `access` and
 # an area's `area` the attributes. Most features wait for zoom 14 or 15: the
@@ -64,6 +65,31 @@ definitions:
     key: area
     value: '${ feature.area("z0 tile2") * 65536.0 }'
     type: double
+  # A way's surface as Carto reads it (`carto_highway_int_surface`): paved,
+  # unpaved, or neither for a value it does not know.
+  - &paved
+    key: surface
+    value: paved
+    include_when:
+      surface: [paved, asphalt, cobblestone, 'cobblestone:flattened', sett, concrete, 'concrete:lanes', 'concrete:plates', paving_stones, metal, wood, unhewn_cobblestone]
+  - &unpaved
+    key: surface
+    value: unpaved
+    include_when:
+      surface: [unpaved, compacted, dirt, earth, fine_gravel, grass, grass_paver, gravel, ground, mud, pebblestone, salt, sand, woodchips, clay, ice, snow]
+  # Carto's own bridges and tunnels, a covered way among the tunnels.
+  - &is_bridge
+    key: is_bridge
+    value: true
+    include_when:
+      bridge: ['yes', boardwalk, cantilever, covered, low_water_crossing, movable, trestle, viaduct]
+  - &is_tunnel
+    key: is_tunnel
+    value: true
+    include_when:
+      __any__:
+      - tunnel: ['yes', building_passage, avalanche_protector]
+      - covered: 'yes'
 layers:
 # Car parks, which the basemap has no fill for at all.
 - id: landuse
@@ -182,6 +208,17 @@ layers:
     attributes:
     - key: kind
       value: pedestrian
+
+  # A bridge mapped as an area, which the basemap files as a pedestrian
+  # square: drawn over that in Carto's gray, from zoom 12.
+  - source: osm
+    geometry: polygon
+    min_zoom: 12
+    include_when:
+      man_made: bridge
+    attributes:
+    - key: kind
+      value: bridge
 
   # A shoal and a salt pond, which the basemap has no kind for, and a danger
   # area, which Carto hatches in red over whatever lies in it, from zoom 9.
@@ -1295,6 +1332,214 @@ layers:
     - key: oneway
       value: 'yes'
 
+# Every path and track, as a line of its own with what Carto draws it by,
+# all of which the basemap drops: a track's grade, a path's surface, whether
+# it is closed to those it is for, and whether a path is a cycleway or a
+# bridleway by designation. The basemap joins a road's ways into one line, so
+# none of this can be said of its paths by their ids, as it is of its areas:
+# where a tile has these, the map draws its paths from them and none of the
+# basemap's. `kind` is the feature Carto's roads query makes of the way
+# (`carto_path_type`), and `access` is `no` where its `carto_highway_int_access`
+# is, which reads the tag of whoever the way is for before `access`. From the
+# zoom Carto first draws each.
+- id: paths
+  features:
+  - source: osm
+    geometry: line
+    min_zoom: 14
+    include_when:
+      __any__:
+      - highway: footway
+      - __all__:
+        - highway: path
+        - __not__:
+            bicycle: designated
+        - __not__:
+            horse: designated
+    exclude_when: &is_area
+      area: 'yes'
+    attributes:
+    - key: kind
+      value: footway
+    - &closed_on_foot
+      key: access
+      value: 'no'
+      include_when:
+        __any__:
+        - foot: &closing ['no', permit, private, agricultural, forestry, 'agricultural;forestry']
+        - __all__:
+          - __any__:
+            - __not__:
+                foot: __any__
+            - foot: unknown
+          - access: *closing
+    - *paved
+    - *unpaved
+    - *is_bridge
+    - *is_tunnel
+  - source: osm
+    geometry: line
+    min_zoom: 14
+    include_when:
+      highway: steps
+    exclude_when: *is_area
+    attributes:
+    - key: kind
+      value: steps
+    - *closed_on_foot
+    - *is_bridge
+    - *is_tunnel
+  - source: osm
+    geometry: line
+    min_zoom: 13
+    include_when:
+      __any__:
+      - highway: cycleway
+      - __all__:
+        - highway: path
+        - bicycle: designated
+    exclude_when: *is_area
+    attributes:
+    - key: kind
+      value: cycleway
+    - key: access
+      value: 'no'
+      include_when:
+        __any__:
+        - bicycle: *closing
+        - __all__:
+          - __any__:
+            - __not__:
+                bicycle: __any__
+            - bicycle: unknown
+          - access: *closing
+    - *paved
+    - *unpaved
+    - *is_bridge
+    - *is_tunnel
+  - source: osm
+    geometry: line
+    min_zoom: 13
+    include_when:
+      __any__:
+      - highway: bridleway
+      - __all__:
+        - highway: path
+        - horse: designated
+        - __not__:
+            bicycle: designated
+    exclude_when: *is_area
+    attributes:
+    - key: kind
+      value: bridleway
+    - key: access
+      value: 'no'
+      include_when:
+        __any__:
+        - horse: *closing
+        - __all__:
+          - __any__:
+            - __not__:
+                horse: __any__
+            - horse: unknown
+          - access: *closing
+    - *is_bridge
+    - *is_tunnel
+  - source: osm
+    geometry: line
+    min_zoom: 13
+    include_when:
+      highway: track
+    exclude_when: *is_area
+    attributes:
+    - key: kind
+      value: track
+    - key: tracktype
+      tag_value: tracktype
+      include_when:
+        tracktype: [grade1, grade2, grade3, grade4, grade5]
+    - key: access
+      value: 'no'
+      include_when:
+        access: *closing
+    - *is_bridge
+    - *is_tunnel
+
+# Service roads, as lines of their own, to tell the driveways, parking aisles
+# and drive-throughs from the roads that serve a place: Carto draws those
+# three narrower and only from zoom 16, and the basemap keeps no `service`
+# on a road. Where a tile has these, the map draws its service roads from
+# them and none of the basemap's. The rest from zoom 14, where Carto first
+# draws one.
+- id: service_roads
+  features:
+  - source: osm
+    geometry: line
+    min_zoom: 14
+    include_when:
+      highway: service
+    exclude_when:
+      __any__:
+      - area: 'yes'
+      - service: &minor_services [parking_aisle, drive-through, driveway]
+    attributes:
+    - *is_bridge
+    - *is_tunnel
+  - source: osm
+    geometry: line
+    min_zoom: 15
+    include_when:
+      __all__:
+      - highway: service
+      - service: *minor_services
+    exclude_when: *is_area
+    attributes:
+    - key: service
+      tag_value: service
+    - *is_bridge
+    - *is_tunnel
+
+# Roads being built, which the basemap leaves out: the road each is to be,
+# from the zoom Carto first draws one of that class.
+- id: construction
+  features:
+  - source: osm
+    geometry: line
+    min_zoom: 12
+    include_when:
+      __all__:
+      - highway: construction
+      - construction: [motorway, trunk, primary, secondary]
+    attributes: &construction_kind
+    - key: kind
+      tag_value: construction
+  - source: osm
+    geometry: line
+    min_zoom: 13
+    include_when:
+      __all__:
+      - highway: construction
+      - construction: [motorway_link, trunk_link, primary_link, secondary_link, tertiary]
+    attributes: *construction_kind
+  - source: osm
+    geometry: line
+    min_zoom: 14
+    include_when:
+      __all__:
+      - highway: construction
+      - construction: [tertiary_link, residential, unclassified]
+    attributes: *construction_kind
+  - source: osm
+    geometry: line
+    min_zoom: 14
+    include_when:
+      highway: construction
+    exclude_when:
+      construction: __any__
+    attributes:
+    - key: kind
+      value: residential
+
 # Power lines, which Carto draws from zoom 14, and the minor ones from 16.
 - id: power
   features:
@@ -1314,6 +1559,27 @@ layers:
     attributes:
     - key: kind
       value: minor_line
+
+# The towers a power line hangs from, which Carto draws from zoom 14, and
+# the poles of a minor one, from 16.
+- id: power_points
+  features:
+  - source: osm
+    geometry: point
+    min_zoom: 14
+    include_when:
+      power: tower
+    attributes:
+    - key: kind
+      value: tower
+  - source: osm
+    geometry: point
+    min_zoom: 15
+    include_when:
+      power: pole
+    attributes:
+    - key: kind
+      value: pole
 
 # Dams, weirs and lock gates mapped as lines, which Carto draws from zoom 13.
 # The basemap has the dams mapped as areas.

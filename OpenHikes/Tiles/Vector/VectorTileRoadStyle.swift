@@ -2,11 +2,12 @@
 //  VectorTileRoadStyle.swift
 //  OpenHikes
 //
-//  What the map draws each road, path, railway and lift as: the `roads`
-//  layer of the Protomaps basemap, and the lifts and light railways the
-//  vector extras add to it. Colors and widths are OpenStreetMap Carto's
-//  (`roads.mss`, `aerialways.mss`), in the pixels of a 256-pixel tile, as the
-//  rest of ``VectorTileStyle`` is.
+//  What the map draws each road, railway and lift as: the `roads` layer of
+//  the Protomaps basemap, and the lifts, the light railways, the service
+//  roads and the roads being built that the vector extras add to it. Colors
+//  and widths are OpenStreetMap Carto's (`roads.mss`, `aerialways.mss`,
+//  `power.mss`), in the pixels of a 256-pixel tile, as the rest of
+//  ``VectorTileStyle`` is. The paths are `VectorTilePathStyle.swift`'s.
 //
 
 import CoreGraphics
@@ -22,36 +23,55 @@ nonisolated extension VectorTileStyle {
     struct Road: Sendable {
         let line: Line
         let order: Int
-        /// The look where the way's `access` closes it, for the kinds Carto
-        /// draws a closed one of differently.
-        var closed: Line?
+        /// The look before ``casingWidth``'s first zoom, for the classes
+        /// Carto draws in the gray of an unimportant road until then.
+        var far: Line?
+
+        /// The look at zoom `z`.
+        func line(at z: Int) -> Line {
+            z < VectorTileStyle.surfacedRoadZ ? far ?? line : line
+        }
     }
+
+    /// Carto draws a road as a surface between casings from this zoom.
+    static let surfacedRoadZ = 12
 
     /// The style of a feature in the `roads` layer, or `nil` for one not drawn
     /// as a road: its `kind` and `kind_detail` first, then its `kind` alone.
-    /// A pier is drawn with the water (``isPier(kind:detail:)``). A path,
-    /// track or flight of steps whose `access` closes it is drawn as Carto
-    /// draws one: paler, and not before ``closedPathZ``. A service road
-    /// whose `service` makes it a minor one is drawn as Carto draws those.
-    ///
-    /// Carto reads a path's `foot` (or `bicycle`, or `horse`) before its
-    /// `access`, and the archive carries `access` alone, so a path closed to
-    /// all but walkers is drawn closed. The archive carries `access` from
-    /// zoom 15, where Carto starts drawing closed paths, and leaves out a
-    /// way with `access=no` or `private` before it.
-    static func road(kind: String, detail: String?, access: String? = nil, service: String? = nil) -> Road? {
+    /// A pier is drawn with the water (``isPier(kind:detail:)``), and a path
+    /// with the paths (``pathTraits(detail:access:)``): only a pedestrian
+    /// street among the basemap's paths is a road. A service road whose
+    /// `service` makes it a minor one is drawn as Carto draws those; the
+    /// basemap keeps no `service` on a road, so that is said of the extras'
+    /// service roads alone (``serviceRoad(service:)``).
+    static func road(kind: String, detail: String?, service: String? = nil) -> Road? {
         guard !isPier(kind: kind, detail: detail),
               let listed = roads["\(kind)/\(detail ?? "")"] ?? roads["\(kind)/*"]
         else { return nil }
         var road = listed
-        if kind == "minor_road", detail == "service", let service, minorServices.contains(service) {
+        if isServiceRoad(kind: kind, detail: detail), let service, minorServices.contains(service) {
             road = Road(line: minorService, order: listed.order)
         }
         if kind == "rail", let service, sidingServices.contains(service), let detail, let siding = sidings[detail] {
             road = Road(line: siding, order: listed.order)
         }
-        guard let access, closingAccess.contains(access), let closed = road.closed else { return road }
-        return Road(line: closed, order: road.order)
+        return road
+    }
+
+    /// The basemap's kind for every path, track and flight of steps, and
+    /// for a pedestrian street.
+    static let pathKind = "path"
+
+    /// Whether the basemap files a road as a service road, which the
+    /// extras' `service_roads` layer stands in for where a tile has it.
+    static func isServiceRoad(kind: String, detail: String?) -> Bool {
+        kind == "minor_road" && detail == "service"
+    }
+
+    /// The style of one of the extras' service roads, by its `service`:
+    /// absent on a road that serves a place.
+    static func serviceRoad(service: String?) -> Road? {
+        road(kind: "minor_road", detail: "service", service: service)
     }
 
     /// The `service` values of a service road Carto draws as a minor one:
@@ -104,11 +124,6 @@ nonisolated extension VectorTileStyle {
     private static let roads: [String: Road] = Dictionary(
         uniqueKeysWithValues: [
             ("ferry/*", ferry),
-            ("path/steps", steps),
-            ("path/*", footpath),
-            ("path/cycleway", cycleway),
-            ("path/bridleway", bridleway),
-            ("path/track", track),
             ("minor_road/service", service),
             ("major_road/tertiary_link", tertiary),
             ("major_road/secondary_link", secondary),
@@ -141,20 +156,123 @@ nonisolated extension VectorTileStyle {
             ("aerialway/mixed_lift", cabinLift),
             ("aerialway/*", chairLift),
         ].enumerated().map { order, entry in
-            (entry.0, Road(line: entry.1, order: order, closed: closedPaths[entry.0]))
+            (entry.0, Road(line: entry.1, order: order, far: farRoads[entry.0]))
         }
     )
 
-    /// Carto's look for each kind of path where its `access` closes it:
-    /// `roads.mss`'s `-fill-noaccess` colors, and nothing before
-    /// ``closedPathZ``, where Carto still draws only the open ones.
-    private static let closedPaths: [String: Line] = [
-        "path/steps": steps.closed("#BBBBBB"),
-        "path/*": footpath.closed("#BBBBBB"),
-        "path/cycleway": cycleway.closed("#9999FF"),
-        "path/bridleway": bridleway.closed("#AADDAA"),
-        "path/track": track.closed("#E2C5BB"),
+    /// Carto's look for a secondary and a tertiary road before zoom 12: a
+    /// thin line in the gray of an unimportant road, where their own pale
+    /// yellow and white would be lost on the ground.
+    private static let farRoads: [String: Line] = [
+        "major_road/secondary": Line(
+            color: unimportantRoad,
+            width: ZoomCurve([(9, 1), (10, farSecondary), (11, farSecondary)])
+        ),
+        "major_road/*": Line(color: unimportantRoad, width: ZoomCurve([(10, farTertiary), (11, farTertiary)])),
     ]
+    private static let unimportantRoad = color("#BBBBBB")
+    private static let farSecondary: CGFloat = 1.1
+    private static let farTertiary: CGFloat = 0.7
+
+    // MARK: Roads being built
+
+    /// A road being built, from the extras' `construction` layer: the color
+    /// of the road it is to be, a minor one's in gray, with white dashes
+    /// down it (`roads.mss`'s `highway_construction`). `nil` for a kind Carto
+    /// draws no such line for, and before the zoom it first draws one.
+    static func construction(kind: String?, z: Int) -> Line? {
+        guard let kind, let listed = constructionColors[kind],
+              let shape = (listed.isMinor ? minorConstruction : majorConstruction).last(where: { z >= $0.z })
+        else { return nil }
+        return Line(
+            color: listed.color,
+            width: ZoomCurve([(z, shape.width)]),
+            center: Center(
+                color: color("#FFFFFF"),
+                width: ZoomCurve([(z, shape.dashes)]),
+                dash: [shape.dash / shape.dashes, shape.gap / shape.dashes]
+            )
+        )
+    }
+
+    private static let constructionGray = color("#AAAAAA")
+    private static let constructionColors: [String: (color: CGColor, isMinor: Bool)] = [
+        "motorway": (motorway.color, false),
+        "motorway_link": (motorway.color, false),
+        "trunk": (trunk.color, false),
+        "trunk_link": (trunk.color, false),
+        "primary": (primary.color, false),
+        "primary_link": (primary.color, false),
+        "secondary": (secondary.color, false),
+        "secondary_link": (secondary.color, false),
+        "tertiary": (constructionGray, false),
+        "tertiary_link": (constructionGray, false),
+        "residential": (constructionGray, true),
+        "unclassified": (constructionGray, true),
+    ]
+    /// From zoom `z`: the line's width, the width of the white dashes down
+    /// it, and their dash and gap, in pixels.
+    private struct ConstructionShape {
+        let z: Int
+        let width: CGFloat
+        let dashes: CGFloat
+        let dash: CGFloat
+        let gap: CGFloat
+    }
+
+    private static let majorConstruction = [
+        ConstructionShape(z: 12, width: 2, dashes: 2, dash: 4, gap: 2),
+        ConstructionShape(z: 13, width: 4, dashes: majorDashes, dash: 6, gap: 4),
+        ConstructionShape(z: 16, width: 8, dashes: 7, dash: 8, gap: 6),
+    ]
+    private static let minorConstruction = [
+        ConstructionShape(z: 14, width: 3, dashes: 2, dash: 6, gap: 4),
+        ConstructionShape(z: 15, width: 5, dashes: minorDashesZ15, dash: 6, gap: 4),
+        ConstructionShape(z: 16, width: 6, dashes: minorDashesZ16, dash: 8, gap: 6),
+        ConstructionShape(z: z17, width: 8, dashes: 7, dash: 8, gap: 6),
+    ]
+    private static let majorDashes: CGFloat = 3.5
+    private static let minorDashesZ15: CGFloat = 3.8
+    private static let minorDashesZ16: CGFloat = 4.8
+
+    // MARK: Power lines' towers
+
+    /// A tower or a pole of a power line, as a square of `side` pixels: a
+    /// tower's with Carto's white eye, and from zoom 15 its cross.
+    struct PowerPoint: Sendable {
+        let color: CGColor
+        let side: CGFloat
+        /// The white eye's width, or zero for none.
+        let eye: CGFloat
+        let hasCross: Bool
+    }
+
+    static let powerPointEye = color("#FFFFFF")
+    /// How many of the cross's strokes side by side would fill the square.
+    static let powerPointCrossShare: CGFloat = 13
+
+    /// The mark of a feature in the extras' `power_points` layer
+    /// (`power.mss`): a tower from zoom 14, larger from 15 and from 17, and
+    /// a pole from 16.
+    static func powerPoint(kind: String?, z: Int) -> PowerPoint? {
+        switch kind {
+        case "tower" where z == towerZ:
+            return PowerPoint(color: towerGray, side: 3, eye: 1, hasCross: false)
+        case "tower" where z > towerZ:
+            return PowerPoint(color: towerGray, side: z >= z17 ? 7 : 5, eye: z >= z17 ? 5 : towerEye, hasCross: true)
+        case "pole" where z >= poleZ:
+            return PowerPoint(color: color("#928F8F"), side: 3, eye: 0, hasCross: false)
+        default:
+            return nil
+        }
+    }
+
+    private static let towerZ = 14
+    private static let poleZ = 16
+    private static let towerGray = color("#868686")
+    /// The eye of a tower five pixels across: five sevenths of it, as the
+    /// seven-pixel one's is.
+    private static let towerEye: CGFloat = 3.6
 }
 
 // MARK: - The figures
@@ -186,9 +304,10 @@ nonisolated private extension VectorTileStyle {
         width: ZoomCurve([(10, 0.5), (12, 1), (14, 4), (16, 7), (20, 25)]),
         casing: color("#8F8F8F")
     )
+    /// From zoom 14, where Carto first draws one.
     static let service = Line(
         color: color("#FFFFFF"),
-        width: ZoomCurve([(13, 0.5), (14, 1), (16, 3), (20, 12)]),
+        width: ZoomCurve([(14, 1), (16, 3), (20, 12)]),
         casing: color("#BBBBBB")
     )
     static let minorRoad = Line(
@@ -202,36 +321,10 @@ nonisolated private extension VectorTileStyle {
         width: ZoomCurve([(12, 0.5), (13, 1), (14, 2), (16, 6), (20, 24)]),
         casing: color("#BBBBBB")
     )
-    static let track = Line(
-        color: color("#996600"),
-        width: ZoomCurve([(12, 0.5), (14, 1), (16, 2), (20, 3)]),
-        dash: [5, 3]
-    )
-    static let steps = Line(
-        color: color("#FA8072"),
-        width: ZoomCurve([(13, 1), (15, 2), (20, 4)]),
-        dash: [1, 1]
-    )
-    static let cycleway = Line(
-        color: color("#0000FF"),
-        width: ZoomCurve([(13, 0.5), (15, 1), (20, 2)]),
-        dash: [1, 3]
-    )
-    static let bridleway = Line(
-        color: color("#008000"),
-        width: ZoomCurve([(13, 0.5), (15, 1), (20, 2)]),
-        dash: [4, 2]
-    )
     static let pedestrian = Line(
         color: color("#DDDDE8"),
         width: ZoomCurve([(13, 1), (14, 2), (16, 6), (20, 24)]),
         casing: color("#999999")
-    )
-    /// Footways, paths and every path kind not listed: what a hiker walks.
-    static let footpath = Line(
-        color: color("#FA8072"),
-        width: ZoomCurve([(12, 0.5), (14, 0.75), (16, 1), (20, 2)]),
-        dash: [2, 3]
     )
     static let subway = Line(color: color("#999999"), width: ZoomCurve([(12, 0.5), (16, 1)]), alpha: 0.5)
     /// Carto's railway: a gray line with white dashes down it from zoom 12,
@@ -340,19 +433,4 @@ nonisolated private extension VectorTileStyle {
             dash: [chairDash.tick / chairDash.width, chairDash.gap / chairDash.width]
         )
     )
-}
-
-nonisolated private extension VectorTileStyle.Line {
-    /// This path as Carto draws it where its `access` closes it: in `hex`,
-    /// and not before ``VectorTileStyle/closedPathZ``.
-    func closed(_ hex: String) -> Self {
-        Self(
-            color: VectorTileStyle.color(hex),
-            width: width.starting(at: VectorTileStyle.closedPathZ),
-            casing: casing,
-            dash: dash,
-            alpha: alpha,
-            center: center
-        )
-    }
 }

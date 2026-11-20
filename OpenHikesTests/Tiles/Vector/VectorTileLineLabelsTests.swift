@@ -368,7 +368,9 @@ extension VectorTileLineLabelsTests {
         #expect(try category(of: named("cliff", in: "earth"), at: 15) == .ridge)
         #expect(try category(of: named("ridge", in: "ridges"), at: 14) == nil)
         #expect(VectorTileLabelStyle.look(of: .ridge).offset > 0)
-        #expect(VectorTileLabelStyle.LineCategory.ridge.isPlacedAfterPoints)
+        // Carto's `text-line` layer, which has them, comes before its points'.
+        #expect(!VectorTileLabelStyle.LineCategory.ridge.isPlacedAfterPoints)
+        #expect(VectorTileLabelStyle.LineCategory.stream.isPlacedAfterPoints)
     }
 
     @Test("a tertiary road is named from zoom 14, a zoom after a primary one")

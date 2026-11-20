@@ -38,7 +38,8 @@ nonisolated enum VectorTileRasterizer {
         // The vector extras' own layers.
         "barriers", VectorTileArrows.layerName, parksLayer, protectedAreasLayer, powerLayer, damsLayer, ridgesLayer,
         VectorTileAreaDetails.layerName, cliffsLayer, cutlinesLayer, treesLayer, intermittentLayer,
-        VectorTileBuildingNames.layerName, breakwatersLayer,
+        VectorTileBuildingNames.layerName, breakwatersLayer, pathsLayer, serviceRoadsLayer, constructionLayer,
+        powerPointsLayer,
     ]
 
     /// The vector extras' layers of their own that the rasterizer fills or
@@ -57,12 +58,20 @@ nonisolated enum VectorTileRasterizer {
     static let cutlinesLayer = "cutlines"
     static let treesLayer = "trees"
     static let intermittentLayer = "intermittent"
+    /// And the ways the extras give again, with what Carto draws each by:
+    /// the paths and tracks, the service roads and the roads being built
+    /// (`VectorTilePainter+Roads.swift`), and the towers and poles of the
+    /// power lines.
+    static let pathsLayer = "paths"
+    static let serviceRoadsLayer = "service_roads"
+    static let constructionLayer = "construction"
+    static let powerPointsLayer = "power_points"
 
     /// The properties read, the names in `language` among them.
     static func propertyKeys(language: String) -> Set<String> {
         VectorTileLabels.propertyKeys(language: language).union([
             "kind", "kind_detail", "is_tunnel", "is_bridge", "disputed", "access", "oneway", "addr_housenumber",
-            "service", VectorTileShields.refKey, VectorTilePoints.sizeKey,
+            "service", "surface", "tracktype", "tunnel", VectorTileShields.refKey, VectorTilePoints.sizeKey,
         ])
     }
 
@@ -188,58 +197,41 @@ nonisolated struct VectorTilePainter {
         }
     }
 
-    /// Tunnels under the ground, bridges over it, and within each the more
-    /// important road over the less, in ``VectorTileStyle/road(kind:detail:access:)``'s
-    /// order. Every casing of a level is drawn before any fill of it, so a
-    /// junction reads as one road surface rather than two outlined strips.
-    private func paintRoads() {
-        let styled = features(in: "roads", type: .line).compactMap { pair -> StyledLine? in
-            let (feature, geometry) = pair
-            guard let kind = feature.string("kind"),
-                  let road = VectorTileStyle.road(
-                      kind: kind,
-                      detail: feature.string("kind_detail"),
-                      access: feature.string("access"),
-                      service: feature.string("service")
-                  )
-            else { return nil }
-            return StyledLine(feature: feature, geometry: geometry, road: road)
-        }
-        let levels = [
-            styled.filter { $0.feature.flag("is_tunnel") },
-            styled.filter { !$0.feature.flag("is_tunnel") && !$0.feature.flag("is_bridge") },
-            styled.filter { $0.feature.flag("is_bridge") },
-        ]
-        for (index, level) in levels.enumerated() {
-            let ordered = level.sorted { $0.road.order < $1.road.order }
-            let isTunnel = index == 0
-            // A bridge's casing ends square where the bridge does, rather than
-            // ringing a short bridge with a round cap.
-            let casingCap: CGLineCap = index == levels.count - 1 ? .butt : .round
-            for road in ordered where !isTunnel {
-                strokeCasing(road.geometry.path(of: road.feature), road.road.line, cap: casingCap)
-            }
-            for road in ordered {
-                var line = road.road.line
-                if isTunnel { line.alpha *= VectorTileRasterizer.tunnelAlpha }
-                strokeWithCenter(road.geometry.path(of: road.feature), line)
-            }
-        }
-    }
-
     private func paintBoundaries() {
         for (feature, geometry) in features(in: "boundaries", type: .line) {
             guard let kind = feature.string("kind"),
                   let line = VectorTileStyle.boundary(kind: kind, disputed: feature.flag("disputed"))
             else { continue }
-            stroke(geometry.path(of: feature), line)
+            strokeWithCenter(geometry.path(of: feature), line, cap: .butt)
         }
     }
 
-    /// Power lines over the roads they cross, where Carto draws them.
+    /// Power lines over the roads they cross, where Carto draws them, and
+    /// then the towers and poles they hang from: a gray square each, a
+    /// tower's with Carto's white eye.
     private func paintPowerLines() {
         for (feature, geometry) in features(in: VectorTileRasterizer.powerLayer, type: .line) {
             stroke(geometry.path(of: feature), VectorTileStyle.powerLine(kind: feature.string("kind")), cap: .butt)
+        }
+        for (feature, geometry) in features(in: VectorTileRasterizer.powerPointsLayer, type: .point) {
+            guard let mark = VectorTileStyle.powerPoint(kind: feature.string("kind"), z: z) else { continue }
+            for point in geometry.points(of: feature) {
+                let side = mark.side * unit
+                context.setFillColor(mark.color)
+                context.fill(CGRect(x: point.x - side / 2, y: point.y - side / 2, width: side, height: side))
+                guard mark.eye > 0 else { continue }
+                let eye = mark.eye * unit
+                context.setFillColor(VectorTileStyle.powerPointEye)
+                context.fillEllipse(in: CGRect(x: point.x - eye / 2, y: point.y - eye / 2, width: eye, height: eye))
+                guard mark.hasCross else { continue }
+                context.setStrokeColor(mark.color)
+                context.setLineWidth(side / VectorTileStyle.powerPointCrossShare)
+                for corner in [side / 2, -side / 2] {
+                    context.move(to: CGPoint(x: point.x - side / 2, y: point.y - corner))
+                    context.addLine(to: CGPoint(x: point.x + side / 2, y: point.y + corner))
+                }
+                context.strokePath()
+            }
         }
     }
 
@@ -328,17 +320,6 @@ nonisolated struct VectorTilePainter {
         )
     }
 
-    /// No casing for a road not drawn at this zoom: the casing starts at
-    /// zoom 12, a service road or a pedestrian street at 13, and a casing
-    /// with no road inside it would draw as a gray line of its own.
-    private func strokeCasing(_ path: CGPath, _ line: VectorTileStyle.Line, cap: CGLineCap) {
-        let edge = VectorTileStyle.casingWidth.value(at: z)
-        let fill = line.width.value(at: z)
-        guard let casing = line.casing, edge > 0, fill > 0 else { return }
-        let width = ZoomCurve([(z, fill + 2 * edge)])
-        stroke(path, VectorTileStyle.Line(color: casing, width: width), cap: cap)
-    }
-
     // MARK: Reading
 
     func features(
@@ -349,10 +330,4 @@ nonisolated struct VectorTilePainter {
         let geometry = VectorTileGeometry(extent: layer.extent, source: source, target: target)
         return layer.features.filter { $0.type == type }.map { ($0, geometry) }
     }
-}
-
-nonisolated private struct StyledLine {
-    let feature: MapboxVectorTile.Feature
-    let geometry: VectorTileGeometry
-    let road: VectorTileStyle.Road
 }
