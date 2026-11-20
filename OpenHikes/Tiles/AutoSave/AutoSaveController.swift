@@ -7,6 +7,13 @@
 //  ``AutoSaveTileStore`` into that hike's SwiftData-backed manifest as they
 //  arrive.
 //
+//  Whether any hike is saved for is one switch for the device, *Auto-Save
+//  Tiles* in Settings, off until the hiker turns it on. It was a switch on
+//  every hike, on until turned off, while browsing was the only way the
+//  default map could be kept at all; that map downloads by country now (see
+//  *The offline countries* in AGENTS.md), and this is left for the maps with
+//  no download of their own. Which hike is the map's selection, as before.
+//
 
 import CoreLocation
 import Foundation
@@ -21,6 +28,10 @@ final class AutoSaveController {
     /// selected-hike state, the pushed detail view); this controller shouldn't
     /// be the thing keeping a deleted hike around.
     private weak var activeHike: Hike?
+    /// The hike the map has selected, as it was last announced, whether or
+    /// not it is being saved for: what the switch arms when it goes on, and
+    /// what a storage action puts back. Weak for the reason ``activeHike`` is.
+    @ObservationIgnored private(set) weak var selectedHike: Hike?
     /// The read of the line ``activeHike``'s corridor was last asked for.
     /// Edit Route saves into the same hike, so its ID alone cannot tell a
     /// re-selection from a new route — the same reason the hike's screen
@@ -60,7 +71,7 @@ final class AutoSaveController {
     /// has nothing to save.
     ///
     /// Auto-save is a promise about *drawn* tiles, so the code that arms it has
-    /// to keep that promise rather than relying on the toggle being hidden.
+    /// to keep that promise whatever the switch says.
     /// With the system base map selected nothing is ever fetched, so activating
     /// would buy a route-sized ``TileCorridor`` build and a live store entry
     /// for a hike that can never claim a tile — which is exactly the work that
@@ -73,6 +84,12 @@ final class AutoSaveController {
     /// "tiles are drawn", which is what a test that never mentions a provider
     /// means.
     @ObservationIgnored private let mapRendersTiles: () -> Bool
+    /// Whether the hiker has asked for browsed tiles to be kept —
+    /// ``SettingsKey/autoSaveTilesEnabled``. A closure for the reason
+    /// ``mapRendersTiles`` is, and read at each announcement rather than
+    /// captured, so the switch takes effect without rebuilding anything. The
+    /// default answers "on", which is what a suite about saving means.
+    @ObservationIgnored private let isSwitchedOn: () -> Bool
 
     /// How long a burst of newly-saved tiles is allowed to gather before it is
     /// folded into the active hike's manifest.
@@ -95,10 +112,12 @@ final class AutoSaveController {
         store: AutoSaveTileStore = .shared,
         drainInterval: Duration? = .seconds(2),
         lines: SelectedLine = SelectedLine(),
+        isSwitchedOn: @escaping () -> Bool = { true },
         mapRendersTiles: @escaping () -> Bool = { true }
     ) {
         self.store = store
         self.lines = lines
+        self.isSwitchedOn = isSwitchedOn
         self.mapRendersTiles = mapRendersTiles
         guard let drainInterval else { return }
         drainTask = Task { [weak self, store] in
@@ -132,9 +151,8 @@ final class AutoSaveController {
     /// selected map source changes — so auto-save follows whatever is actually
     /// being drawn on screen.
     func hikeSelectionChanged(to hike: Hike?) {
-        let eligibleHike = hike.flatMap { candidateHike in
-            isEligible(candidateHike) ? candidateHike : nil
-        }
+        selectedHike = hike
+        let eligibleHike = isEligible ? hike : nil
         guard !isSuspended else {
             deferredHike = eligibleHike
             hasDeferredSelectionChange = true
@@ -143,36 +161,45 @@ final class AutoSaveController {
         applySelection(eligibleHike)
     }
 
-    /// Toggled from the hike detail view's Auto-Save control.
-    func setEnabled(_ enabled: Bool, for hike: Hike) {
-        hike.autoSaveTilesEnabled = enabled
-        // The per-hike preference is recorded either way. Turning it on while
-        // the system base map is selected is a stored intention, not a reason
-        // to start saving tiles nothing is drawing.
-        let shouldRun = enabled && isEligible(hike)
-        if isSuspended {
-            deferredHike = shouldRun ? hike : nil
-            hasDeferredSelectionChange = true
-            return
-        }
-        if shouldRun {
-            activate(hike)
-        } else if activeHike?.id == hike.id {
-            deactivate()
-        }
+    /// The hiker's switch as `defaults` holds it, off where nothing has
+    /// written it: the one reading of ``SettingsKey/autoSaveTilesEnabled``,
+    /// for the composition root and ``StoredSettings`` alike.
+    nonisolated static func isSwitchedOn(in defaults: UserDefaults) -> Bool {
+        defaults.object(forKey: SettingsKey.autoSaveTilesEnabled) as? Bool ?? SettingsDefault.autoSaveTilesEnabled
     }
 
-    /// Whether `hike` should be auto-saving right now: it has to want to, and
-    /// be drawn on a map that fetches tiles.
+    /// Called when *Auto-Save Tiles* is switched in Settings, so the hike the
+    /// map has selected starts or stops being saved for at once rather than
+    /// at its next selection. Going off folds in what was saved since the
+    /// last drain, as deselecting does.
     ///
-    /// It also needs a route worth a corridor, but that is asked once the
-    /// line is read rather than here: counting the points reads `route`, and
-    /// on the main actor that decodes the whole of it (#1232). Until then the
-    /// store has the empty corridor ``AutoSaveTileStore/beginActiveHike(id:knownKeys:acceptsNewClaims:)``
+    /// A hike deleted since it was announced is not announced again: the
+    /// selection moves off it in the same breath, and reading its line would
+    /// read a row that is gone.
+    func switchDidChange() {
+        hikeSelectionChanged(to: selectedHike.flatMap { $0.isAttached ? $0 : nil })
+    }
+
+    /// Whether the selected hike should be auto-saving right now: the hiker
+    /// has to have asked for it, and the map has to be one that fetches
+    /// tiles.
+    ///
+    /// The hike also needs a route worth a corridor, but that is asked once
+    /// the line is read rather than here: counting the points reads `route`,
+    /// and on the main actor that decodes the whole of it (#1232). Until then
+    /// the store has the empty corridor ``AutoSaveTileStore/beginActiveHike(id:knownKeys:acceptsNewClaims:)``
     /// starts with, which claims nothing, and a line of one point or none
     /// stands the hike down — see ``prepareCorridor(for:line:)``.
-    private func isEligible(_ hike: Hike) -> Bool {
-        hike.autoSaveTilesEnabled && mapRendersTiles()
+    private var isEligible: Bool {
+        isSwitchedOn() && mapRendersTiles()
+    }
+
+    /// Whether tiles browsed now are being kept for `hike`: the switch is on,
+    /// the map fetches tiles, and `hike` is the one the map has selected,
+    /// with a line long enough to save along. What the hike's screen says so
+    /// by — see ``OfflineStorageStatus``.
+    func isSaving(for hike: Hike) -> Bool {
+        activeHike?.id == hike.id
     }
 
     func isCapReached(for hike: Hike) -> Bool {
@@ -181,9 +208,11 @@ final class AutoSaveController {
 
     /// The hike auto-save is currently running for, if any.
     ///
-    /// For callers that have to stop it briefly and then put it back exactly as
-    /// it was — Settings' delete-all, which flushes through a deactivation
-    /// before clearing the manifests it would otherwise write into.
+    /// A caller that has to stop it briefly and then put it back — Settings'
+    /// delete-all, which flushes through a deactivation before clearing the
+    /// manifests it would otherwise write into — announces ``selectedHike``
+    /// again instead, which arms this one or nothing by the same rule a
+    /// selection does.
     var currentHike: Hike? { activeHike }
 
     /// Stops background tile work from creating new ownership after the final
@@ -357,8 +386,8 @@ final class AutoSaveController {
     /// another edit of this one — has superseded it by the time it is ready.
     ///
     /// A line of one point or none has no corridor worth the name, so it
-    /// stands the hike down instead: the toggle is disabled for one in the
-    /// UI, and the empty corridor the store held meanwhile claimed nothing.
+    /// stands the hike down instead, and the empty corridor the store held
+    /// meanwhile claimed nothing.
     /// A read that failed stands nothing down. The corridor up stays up, and
     /// the watch on the line hears it when it is read.
     private func prepareCorridor(for hikeID: UUID, line: SelectedLine.Read) {

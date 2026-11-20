@@ -41,19 +41,14 @@ public final class HikeLocalState {
     /// (and so measure and remove) exactly the tiles each one saved.
     public var offlineDownloads: [OfflineDownloadRecord] = []
 
-    /// Cache keys of tiles auto-saved for this hike while browsing (OSM-style,
-    /// non-bulk-downloadable providers) — recorded exactly, since (unlike
-    /// ``OfflineDownloadRecord``) organic partial coverage can't be recomputed
-    /// deterministically from a bounding box.
-    public var autoSavedTileKeys: [String] = []
-
-    /// Whether auto-save is turned on for this hike's map.
+    /// Cache keys of tiles auto-saved for this hike while browsing — recorded
+    /// exactly, since (unlike ``OfflineDownloadRecord``) organic partial
+    /// coverage can't be recomputed deterministically from a bounding box.
     ///
-    /// Device-local rather than a synced preference because it is a statement
-    /// about whether *this* phone should be spending its storage and its
-    /// connection on a map, which is not something the other one gets a vote
-    /// on.
-    public var autoSaveTilesEnabled: Bool = true
+    /// Whether browsing saves any is one switch for the device, kept in its
+    /// defaults rather than here: a hike holds what was saved for it, not
+    /// whether more should be.
+    public var autoSavedTileKeys: [String] = []
 
     /// The walk under way along this hike, between the milestones that write
     /// it — see ``TrailWalkRecord``.

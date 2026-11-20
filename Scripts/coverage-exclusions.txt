@@ -342,6 +342,7 @@ OpenHikes/Tiles/Countries/OfflineCountryRow.swift
 OpenHikes/Map/MapSheet+OfflineCountries.swift
 OpenHikes/Map/Modes/MapModesOfflineMapsRow.swift
 OpenHikes/Settings/OfflineCountriesSettingsRow.swift
+OpenHikes/Settings/AutoSaveTilesSection.swift
 OpenHikes/Hikes/Detail/HikeOfflineCountryTile.swift
 OpenHikes/Tiles/Countries/OfflineCountriesBar.swift
 OpenHikes/Tiles/Countries/OfflineCountriesHead.swift

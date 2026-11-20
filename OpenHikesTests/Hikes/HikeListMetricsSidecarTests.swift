@@ -25,7 +25,6 @@ struct HikeListMetricsSidecarTests {
         try context.save()
 
         hike.autoSavedTileKeys = ["osm/1/0/0"]
-        hike.autoSaveTilesEnabled = false
         hike.listOrder = 3
         #expect(hike.localState?.modelContext === context)
 
@@ -38,7 +37,6 @@ struct HikeListMetricsSidecarTests {
         let state = try #require(rows.first)
         #expect(state.hikeID == hike.id)
         #expect(state.autoSavedTileKeys == ["osm/1/0/0"])
-        #expect(!state.autoSaveTilesEnabled)
         #expect(state.listOrder == 3)
         let climb = try #require(state.climbMeters)
         let descent = try #require(state.descentMeters)

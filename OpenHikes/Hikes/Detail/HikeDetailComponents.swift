@@ -477,17 +477,27 @@ struct OfflineDownloadStatus: View {
 /// and storage row. The parent is notified only when a debounced byte
 /// measurement should be scheduled.
 struct OfflineStorageStatus: View {
+    /// What the selected map offers a hike for use with no signal.
+    enum MapKind: Equatable {
+        /// One of MapKit's own, which fetches no tile to keep. The name is
+        /// the selected map's, not a fixed one, because there are two such
+        /// maps to be on.
+        case system(name: String)
+        /// A download of its own: a bulk download along the trail, or
+        /// countries.
+        case downloadable
+        /// Neither, so the tiles kept as they are browsed are all it has.
+        case browsedOnly
+    }
+
     let hike: Hike
     let autoSave: AutoSaveController
     let downloader: OfflineTileDownloader
+    /// Read here, by this view alone, for whether *Auto-Save Tiles* is on:
+    /// the hike screen above re-runs for none of it.
+    let settings: StoredSettings
     let storedBytes: Int64?
-    /// The selected map's name when it is one of MapKit's own and nothing on
-    /// the map fetches tiles; `nil` for a tile source, or for Apple's map with
-    /// the hiking routes drawn over it. A name replaces the auto-save
-    /// note, which would otherwise invite the hiker to turn on a switch that
-    /// is no longer drawn and could save nothing if it were — and it is the
-    /// name, not a fixed one, because there are two such maps to be on.
-    let systemMapName: String?
+    let map: MapKind
     let scheduleStoredBytesRefresh: () -> Void
     let deleteStoredTiles: () -> Void
 
@@ -501,7 +511,7 @@ struct OfflineStorageStatus: View {
         VStack(spacing: 12) {
             OfflineDownloadStatus(
                 downloader: downloader,
-                idleNote: autoSaveNote(local, autoSavedCount: autoSavedCount)
+                idleNote: autoSaveNote(autoSavedCount: autoSavedCount)
             )
             storedTilesRow(
                 hasStoredTiles: !(local?.offlineDownloads.isEmpty ?? true) || autoSavedCount > 0
@@ -512,24 +522,32 @@ struct OfflineStorageStatus: View {
         }
     }
 
-    private func autoSaveNote(_ local: HikeLocalState?, autoSavedCount count: Int) -> String? {
-        if let systemMapName {
+    /// What the idle row says about this hike's map with no signal.
+    ///
+    /// The saving notes are read off the controller, not the switch: they are
+    /// true only while this hike is the one being saved for, which a hike
+    /// whose saved map was just deleted is not until it is selected again.
+    /// The pointer to Settings is for the maps with no download, the only
+    /// ones where a hiker who never finds the switch has no map offline, and
+    /// only while it is off.
+    private func autoSaveNote(autoSavedCount count: Int) -> String? {
+        if case let .system(name) = map {
             return String(localized: """
-            \(systemMapName) uses no downloadable tiles. Choose another map in Map Modes to save \
+            \(name) uses no downloadable tiles. Choose another map in Map Modes to save \
             this hike for offline use.
             """)
         }
-        // On for a hike with no record yet, as ``Hike/autoSaveTilesEnabled``
-        // answers.
-        guard local?.autoSaveTilesEnabled ?? true else {
-            return String(localized: """
-            Turn on Auto-Save, then pan and zoom around the trail to save its tiles for offline use.
-            """)
+        if autoSave.isSaving(for: hike) {
+            if autoSave.isCapReached(for: hike) {
+                return String(localized: "Auto-saved \(count) tiles near the trail — storage limit reached.")
+            }
+            return String(localized: "Auto-saving tiles near the trail as you browse (\(count) so far).")
         }
-        if autoSave.isCapReached(for: hike) {
-            return String(localized: "Auto-saved \(count) tiles near the trail — storage limit reached.")
-        }
-        return String(localized: "Auto-saving tiles near the trail as you browse (\(count) so far).")
+        guard map == .browsedOnly, !settings.autoSavesTiles else { return nil }
+        return String(localized: """
+        This map can’t be downloaded. Turn on Auto-Save Tiles in Settings to save it around this \
+        hike as you browse.
+        """)
     }
 
     @ViewBuilder

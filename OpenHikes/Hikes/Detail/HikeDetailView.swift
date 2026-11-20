@@ -18,7 +18,9 @@ struct HikeDetailView: View {
     let highlight: RouteHighlight
     /// Drives one-shot map commands (the Zoom button).
     let mapController: MapController
-    /// Owns whether this hike is passively auto-saving OSM tiles while browsed.
+    /// Keeps the tiles browsed around the selected hike, where the hiker has
+    /// asked for that in Settings. This screen says whether it is, and stands
+    /// it down to delete what it kept.
     let autoSave: AutoSaveController
     /// The Pro unlock, observed rather than read from the process-wide
     /// ``MapEntitlement``. The offline controls below resolve a provider *and*
@@ -461,49 +463,40 @@ private extension HikeDetailView {
         }
     }
 
-    /// How this hike sits on the map: saving its tiles as they are browsed,
-    /// and the way to the screen that restyles its line. What is saved, and
-    /// the way to delete it, follow the card.
+    /// How this hike sits on the map: the way to the screen that restyles
+    /// its line. What of the map is saved for it, and the way to delete that,
+    /// follow the card.
+    ///
+    /// The card held an *Auto-Save Tiles* switch for every hike while
+    /// browsing was the only way the default map could be kept. It is one
+    /// switch in Settings now (``AutoSaveTilesSection``), and
+    /// ``OfflineStorageStatus`` says here what it is doing for this hike.
     private var mapSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             PlaceCardList(title: String(localized: "On the Map")) {
-                // No toggle at all rather than a disabled one: there is nothing
-                // to save from a map that fetches no tiles, and
-                // `OfflineStorageStatus` says so where the note goes.
-                if mapRendersTiles { autoSaveToggle }
                 RouteStyleRow(hike: hike)
             }
             OfflineStorageStatus(
                 hike: hike,
                 autoSave: autoSave,
                 downloader: downloader,
+                settings: settings,
                 storedBytes: storedBytes,
-                systemMapName: mapRendersTiles ? nil : activeProvider.name,
+                map: offlineMapKind,
                 scheduleStoredBytesRefresh: scheduleStoredBytesRefresh,
                 deleteStoredTiles: deleteStoredTiles
             )
         }
     }
 
-    /// Passive gap-filler alongside (or instead of) the bulk
-    /// ``OfflineDownloadButton``: saves tiles as they're actually browsed, so
-    /// areas a bulk download missed — or, for OSM-style providers, everything
-    /// — still end up saved.
-    private var autoSaveToggle: some View {
-        Toggle(isOn: autoSaveBinding) {
-            Label("Auto-Save Tiles", systemImage: "arrow.down.circle")
+    /// What the selected map offers this hike for use with no signal, which
+    /// is what the note under the card is about.
+    private var offlineMapKind: OfflineStorageStatus.MapKind {
+        if !mapRendersTiles { return .system(name: activeProvider.name) }
+        if activeProvider.supportsBulkDownload || OfflineCountries.areDrawn(on: activeProvider) {
+            return .downloadable
         }
-        .frame(minHeight: StatCardMetrics.rowMinimumHeight)
-        .disabled(line.pointCount < 2)
-    }
-
-    /// Reads/writes `hike.autoSaveTilesEnabled` through `autoSave`, so toggling
-    /// also starts/stops the store's active-hike tracking.
-    private var autoSaveBinding: Binding<Bool> {
-        Binding(
-            get: { hike.autoSaveTilesEnabled },
-            set: { autoSave.setEnabled($0, for: hike) }
-        )
+        return .browsedOnly
     }
 
     /// The list a Maps place card closes with: the things done *to* this hike

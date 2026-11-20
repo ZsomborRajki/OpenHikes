@@ -166,8 +166,8 @@ nonisolated extension TileProvider {
             comment: "The name of a map style on Map Modes: OpenStreetMap's data, drawn by OpenHikes"
         ),
         summary: String(localized: """
-            OpenStreetMap’s data, drawn by OpenHikes. Tiles you view are auto-saved \
-            for offline use.
+            OpenStreetMap’s data, drawn by OpenHikes. Countries can be downloaded for \
+            offline use.
             """),
         urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
         maximumZ: osmMaximumZ,
@@ -192,8 +192,8 @@ nonisolated extension TileProvider {
             comment: "The name of a map style on Map Modes: the map as OpenStreetMap's own website draws it"
         ),
         summary: String(localized: """
-            The map as openstreetmap.org draws it, to compare with the new one. Tiles you \
-            view are auto-saved for offline use.
+            The map as openstreetmap.org draws it, to compare with the new one. Turn on \
+            Auto-Save Tiles in Settings to save the tiles you view for offline use.
             """),
         urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
         maximumZ: osmMaximumZ,
@@ -328,8 +328,8 @@ nonisolated extension TileProvider {
         id: "thunderforest_outdoors",
         name: String(localized: "Thunderforest Outdoors", comment: "The name of a map style on Map Modes"),
         summary: String(localized: """
-            Topographic map with sharp close-up detail. Tiles you view are auto-saved for \
-            offline use.
+            Topographic map with sharp close-up detail. Turn on Auto-Save Tiles in Settings \
+            to save the tiles you view for offline use.
             """),
         urlTemplate: "https://tile.thunderforest.com/outdoors/{z}/{x}/{y}.png?apikey={key}",
         maximumZ: thunderforestMaximumZ,

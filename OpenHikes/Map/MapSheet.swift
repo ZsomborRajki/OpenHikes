@@ -666,8 +666,8 @@ private func delete(_ hike: Hike, among hikes: [Hike]) {
 
     // Clearing the selection stops the *map* drawing a deleted trail; clearing
     // the path stops its detail view staying pushed, showing a hike that no
-    // longer exists — stats, elevation chart, and live Offline/Auto-Save
-    // controls writing to a detached object nothing will persist. SwiftData
+    // longer exists — stats, elevation chart, and live Offline controls
+    // writing to a detached object nothing will persist. SwiftData
     // detaches rather than invalidates, so it's a stale screen rather than a
     // crash. `SheetRoute.removeHike` owns both, including why the path is
     // cleared unconditionally where the selection is not.

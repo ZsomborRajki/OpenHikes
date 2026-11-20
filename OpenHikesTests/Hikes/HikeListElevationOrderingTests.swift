@@ -121,7 +121,7 @@ struct HikeListElevationOrderingTests {
         let changes = RemoteChangeLog()
         changes.start()
         defer { changes.stop() }
-        stage.hikes[4].autoSaveTilesEnabled = false
+        stage.hikes[4].autoSavedTileKeys = ["osm/1/0/0"]
         try stage.container.mainContext.save()
         let localStore = try #require(stage.hikes[4].localState?.persistentModelID.storeIdentifier)
         await settleDelegateHop(until: "the device-local save's change is delivered") { changes.posted(localStore) }

@@ -36,12 +36,10 @@ struct HikeLocalStateTests {
         hike.offlineDownloads = [
             OfflineDownloadRecord(providerID: "osm", maxZoom: 14, savedTileKeys: ["osm/14/1/1@2.0"])
         ]
-        hike.autoSaveTilesEnabled = false
         try context.save()
 
         #expect(hike.autoSavedTileKeys == ["osm/16/9/9@2.0"])
         #expect(hike.offlineDownloads.first?.savedTileKeys == ["osm/14/1/1@2.0"])
-        #expect(!hike.autoSaveTilesEnabled)
         #expect(hike.hasStoredTiles)
     }
 
@@ -55,7 +53,6 @@ struct HikeLocalStateTests {
 
         #expect(hike.autoSavedTileKeys.isEmpty)
         #expect(hike.offlineDownloads.isEmpty)
-        #expect(hike.autoSaveTilesEnabled, "on by default, as it always was")
         #expect(!hike.hasStoredTiles)
 
         let rows = try context.fetch(FetchDescriptor<HikeLocalState>())
@@ -69,7 +66,6 @@ struct HikeLocalStateTests {
         let hike = Fixture.hike(in: context)
 
         hike.autoSavedTileKeys = ["a"]
-        hike.autoSaveTilesEnabled = false
         hike.offlineDownloads = [OfflineDownloadRecord(providerID: "osm", maxZoom: 12)]
         try context.save()
 
@@ -122,10 +118,10 @@ struct HikeLocalStateTests {
         let detached = Hike(title: "Never inserted", distanceMeters: 100)
 
         detached.autoSavedTileKeys = ["ignored"]
-        detached.autoSaveTilesEnabled = false
+        detached.ownsRecordingDraft = true
 
         #expect(detached.autoSavedTileKeys.isEmpty)
-        #expect(detached.autoSaveTilesEnabled)
+        #expect(!detached.ownsRecordingDraft)
         #expect(try context.fetch(FetchDescriptor<HikeLocalState>()).isEmpty)
     }
 

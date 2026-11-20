@@ -73,20 +73,36 @@ struct AutoSaveControllerTests {
         #expect(!controller.isCapReached(for: first), "the previous hike is no longer the active one")
     }
 
-    /// A hike with auto-save switched off is browsed like any other; nothing
-    /// should be saved for it.
-    @Test("a hike with auto-save off is never activated")
-    func disabledHikeIsNotActivated() {
-        let controller = makeController()
-        let hike = fullHike { $0.autoSaveTilesEnabled = false }
+    /// With *Auto-Save Tiles* off, which is how it starts, a hike is browsed
+    /// like any map; nothing is saved for it.
+    @Test("no hike is activated while the switch is off")
+    func switchedOffNeverActivates() {
+        let controller = AutoSaveController(store: sandbox.store, drainInterval: nil, isSwitchedOn: { false })
+        let hike = fullHike()
         controller.hikeSelectionChanged(to: hike)
+        #expect(controller.currentHike == nil)
+        #expect(!controller.isSaving(for: hike))
         #expect(!controller.isCapReached(for: hike))
     }
 
-    /// A one-point hike has no corridor worth speaking of, and the toggle is
-    /// disabled for it in the UI. Its points are counted once its line has
-    /// been read, off the main actor, rather than as it is selected: counting
-    /// them there decoded the whole route on the main thread (#1232).
+    /// The switch is off until the hiker turns it on. A hike's screen once
+    /// carried it, on for every hike, when browsing was the only way the
+    /// default map could be kept.
+    @Test("the switch starts off, and is read from the defaults Settings writes it to")
+    func switchStartsOff() throws {
+        let suite = "AutoSaveControllerTests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        #expect(!AutoSaveController.isSwitchedOn(in: defaults), "nothing is saved for until the hiker asks")
+        defaults.set(true, forKey: SettingsKey.autoSaveTilesEnabled)
+        #expect(AutoSaveController.isSwitchedOn(in: defaults))
+    }
+
+    /// A one-point hike has no corridor worth speaking of. Its points are
+    /// counted once its line has been read, off the main actor, rather than
+    /// as it is selected: counting them there decoded the whole route on the
+    /// main thread (#1232).
     @Test("a hike with fewer than two points is let go once its line is read")
     func degenerateHikeIsNotActivated() async {
         let controller = makeController()
@@ -100,19 +116,47 @@ struct AutoSaveControllerTests {
         #expect(!controller.isCapReached(for: hike))
     }
 
-    @Test("the toggle writes through to the hike, and starts and stops saving")
-    func toggleWritesThrough() {
-        let controller = makeController()
+    /// The switch is in Settings, with the selected hike's map under the
+    /// sheet, so it has to take effect there and then: nothing else announces
+    /// the selection again until the hiker picks another hike.
+    @Test("the switch starts and stops saving for the hike already selected")
+    func switchArmsTheSelectedHike() {
+        nonisolated(unsafe) var isOn = false
+        let controller = AutoSaveController(store: sandbox.store, drainInterval: nil, isSwitchedOn: { isOn })
         let hike = fullHike()
         controller.hikeSelectionChanged(to: hike)
+        #expect(controller.currentHike == nil)
 
-        controller.setEnabled(false, for: hike)
-        #expect(hike.autoSaveTilesEnabled == false)
+        isOn = true
+        controller.switchDidChange()
+        #expect(controller.isSaving(for: hike))
+        #expect(controller.isCapReached(for: hike), "turning it on should arm the store from this hike's manifest")
+
+        isOn = false
+        controller.switchDidChange()
+        #expect(!controller.isSaving(for: hike))
         #expect(!controller.isCapReached(for: hike), "turning it off should stop the store tracking this hike")
+    }
 
-        controller.setEnabled(true, for: hike)
-        #expect(hike.autoSaveTilesEnabled == true)
-        #expect(controller.isCapReached(for: hike), "turning it back on should resume from the same manifest")
+    /// With nothing selected the switch has nothing to arm, and a hike
+    /// deleted since it was announced is not read again.
+    @Test("the switch arms nothing when no hike is selected, or the selected one is gone")
+    func switchArmsNothingWithoutAHike() throws {
+        nonisolated(unsafe) var isOn = false
+        let controller = AutoSaveController(store: sandbox.store, drainInterval: nil, isSwitchedOn: { isOn })
+        isOn = true
+        controller.switchDidChange()
+        #expect(controller.currentHike == nil)
+
+        isOn = false
+        let hike = fullHike()
+        try context.save()
+        controller.hikeSelectionChanged(to: hike)
+        context.delete(hike)
+        try context.save()
+        isOn = true
+        controller.switchDidChange()
+        #expect(controller.currentHike == nil)
     }
 
     /// The system base map draws no tiles, so there is nothing to auto-save
@@ -131,18 +175,17 @@ struct AutoSaveControllerTests {
         #expect(!controller.isCapReached(for: hike))
     }
 
-    /// The per-hike preference is still the user's to set; it just doesn't
-    /// start anything while nothing is being drawn. Flipping it would be a
-    /// silent change to a setting they'd find switched off next time they
-    /// picked a tile source.
-    @Test("the toggle still records the preference while the map draws no tiles")
-    func systemBaseMapKeepsThePreference() {
+    /// The switch is the hiker's to set whatever map is up; it just doesn't
+    /// start anything while nothing is being drawn.
+    @Test("the switch going on arms nothing while the map draws no tiles")
+    func systemBaseMapIgnoresTheSwitch() {
         let controller = AutoSaveController(store: sandbox.store, drainInterval: nil) { false }
-        let hike = fullHike { $0.autoSaveTilesEnabled = false }
+        let hike = fullHike()
+        controller.hikeSelectionChanged(to: hike)
 
-        controller.setEnabled(true, for: hike)
-        #expect(hike.autoSaveTilesEnabled, "the hike's own preference is recorded either way")
-        #expect(controller.currentHike == nil, "but nothing is armed for a map that fetches nothing")
+        controller.switchDidChange()
+        #expect(controller.currentHike == nil, "nothing is armed for a map that fetches nothing")
+        #expect(controller.selectedHike?.id == hike.id, "and the selection is still known for when one does")
     }
 
     /// Picking a tile source again has to arm auto-save for whatever is

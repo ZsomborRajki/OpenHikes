@@ -2,7 +2,7 @@
 //  StoredSettingsTests.swift
 //  OpenHikesTests
 //
-//  `StoredSettings` stands in for four `@AppStorage`s, so it has to read what
+//  `StoredSettings` stands in for five `@AppStorage`s, so it has to read what
 //  they read — the same fallbacks for a key nothing has written — and follow
 //  every writer they followed, while waking its readers only for the key that
 //  changed. Why it exists at all is `AppStorageInvalidationTests`.
@@ -28,6 +28,7 @@ struct StoredSettingsTests {
         #expect(settings.showsHikingRoutes == SettingsDefault.showsHikingRoutes)
         #expect(settings.hikeListSort == HikeListSort.newest.rawValue)
         #expect(settings.savesPhotosToLibrary == SettingsDefault.savePhotosToLibrary)
+        #expect(settings.autoSavesTiles == SettingsDefault.autoSaveTilesEnabled)
     }
 
     @Test("a write made elsewhere is read back before the write returns")
@@ -41,11 +42,13 @@ struct StoredSettingsTests {
         defaults.set(!SettingsDefault.showsHikingRoutes, forKey: SettingsKey.showsHikingRoutes)
         defaults.set(HikeListSort.longest.rawValue, forKey: SettingsKey.hikeListSort)
         defaults.set(!SettingsDefault.savePhotosToLibrary, forKey: SettingsKey.savePhotosToLibrary)
+        defaults.set(!SettingsDefault.autoSaveTilesEnabled, forKey: SettingsKey.autoSaveTilesEnabled)
 
         #expect(settings.tileProviderID == "stamen-terrain")
         #expect(settings.showsHikingRoutes == !SettingsDefault.showsHikingRoutes)
         #expect(settings.hikeListSort == HikeListSort.longest.rawValue)
         #expect(settings.savesPhotosToLibrary == !SettingsDefault.savePhotosToLibrary)
+        #expect(settings.autoSavesTiles == !SettingsDefault.autoSaveTilesEnabled)
     }
 
     @Test("a write beside a setting wakes nobody reading it")

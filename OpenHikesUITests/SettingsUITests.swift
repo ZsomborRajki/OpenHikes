@@ -3,15 +3,15 @@
 //  OpenHikesUITests
 //
 //  The settings screen and what it governs, with what the map chosen on *Map
-//  Modes* is allowed to do, and the two toggles that outlive the screen they
-//  are set on.
+//  Modes* is allowed to do, and the toggles that outlive the screen they are
+//  set on.
 //
 
 import XCTest
 
 nonisolated final class SettingsUITests: XCTestCase {
-    /// OpenStreetMap is passive auto-save only, and the detail screen is where
-    /// that policy is either honoured or quietly broken.
+    /// OpenStreetMap's tile policy forbids a bulk download, and the detail
+    /// screen is where that policy is either honoured or quietly broken.
     ///
     /// The button is absent rather than disabled, which is the stronger
     /// statement: there is nothing to press. Asserting it here means the
@@ -46,7 +46,7 @@ nonisolated final class SettingsUITests: XCTestCase {
     }
 
     /// The Apple Maps option's whole promise is negative: with it selected
-    /// there is no bulk download to press and no auto-save to switch on,
+    /// there is no bulk download to press and nothing for auto-save to keep,
     /// because nothing draws a tile that either could act on. Asserted on the
     /// screen a user would reach for them, for the same reason the OSM policy
     /// above is — the flags behind both are pinned in `TileProviderTests`, but
@@ -81,12 +81,8 @@ nonisolated final class SettingsUITests: XCTestCase {
             element("offline-download-button", in: app).exists,
             "a map that fetches no tiles has nothing to download"
         )
-        XCTAssertFalse(
-            app.switches["Auto-Save Tiles"].exists,
-            "a map that fetches no tiles has nothing to auto-save"
-        )
-        // The note in the switch's place names the map that is selected —
-        // not Apple Maps whichever of the two it is.
+        // The note under the card names the map that is selected — not
+        // Apple Maps whichever of the two it is.
         let note = app.staticTexts
             .matching(NSPredicate(format: "label BEGINSWITH %@", "\(name) uses no downloadable tiles"))
             .firstMatch
@@ -96,8 +92,8 @@ nonisolated final class SettingsUITests: XCTestCase {
     /// The hiking routes are on from the first launch, and over Apple's
     /// satellite map they add nothing to save: the app draws them from
     /// squares the layer keeps for itself, not from tiles, so the hike still
-    /// offers neither control. While the layer was somebody's tiles it
-    /// offered auto-save there, and a switch left behind would arm nothing.
+    /// offers no download and says so. While the layer was somebody's tiles
+    /// the hike offered to auto-save them there.
     @MainActor
     func testHikingRoutesOverSatelliteAddNoTileControls() {
         let app = launchApp(
@@ -121,12 +117,59 @@ nonisolated final class SettingsUITests: XCTestCase {
         openHikeDetail(in: app)
         scrollIntoView(element("route-style-row", in: app), in: app)
         XCTAssertFalse(
-            app.switches["Auto-Save Tiles"].exists,
-            "the routes are drawn from squares, not tiles, so there is nothing to auto-save"
-        )
-        XCTAssertFalse(
             element("offline-download-button", in: app).exists,
             "the layer has no bulk download path"
+        )
+        let note = app.staticTexts
+            .matching(NSPredicate(format: "label BEGINSWITH %@", "Apple Satellite uses no downloadable tiles"))
+            .firstMatch
+        XCTAssertTrue(note.exists, "the routes are drawn from squares, not tiles, so there is nothing to save")
+    }
+
+    /// *Auto-Save Tiles* is one switch in Settings, off until the hiker turns
+    /// it on, and a map with no download of its own is where a hiker who has
+    /// not found it has no map offline. So the hike says where it is, and
+    /// says instead that it is saving once the switch is on, with the hike
+    /// still selected under the sheet: nothing announces the selection again
+    /// for the switch.
+    @MainActor
+    func testAutoSaveIsOneSwitchInSettingsThatTheHikePointsTo() {
+        let app = launchApp(
+            arguments: [
+                "--ui-test-expanded-sheet",
+                "--ui-test-import-gpx=\(UITestFixture.gpxName)",
+            ]
+        )
+        selectMap("osm_raster", in: app)
+
+        openHikeDetail(in: app)
+        scrollIntoView(element("route-style-row", in: app), in: app)
+        let pointer = app.staticTexts
+            .matching(NSPredicate(format: "label BEGINSWITH %@", "This map can’t be downloaded"))
+            .firstMatch
+        XCTAssertTrue(
+            pointer.waitForExistence(timeout: UITestTimeout.navigation),
+            "a map with no download should say where auto-save is turned on"
+        )
+
+        popScreen(in: app)
+        element("settings-button", in: app).tap()
+        XCTAssertTrue(element("settings-screen", in: app).waitForExistence(timeout: UITestTimeout.navigation))
+        let autoSave = toggle("auto-save-tiles-toggle", in: app)
+        XCTAssertTrue(scrollIntoView(autoSave, in: app))
+        XCTAssertFalse(toggleIsOn(autoSave), "auto-save is off until the hiker turns it on")
+        flip(autoSave)
+        XCTAssertTrue(waitUntilToggle(autoSave, is: true))
+        app.buttons["settings-close"].tap()
+
+        openHikeDetail(in: app)
+        scrollIntoView(element("route-style-row", in: app), in: app)
+        let saving = app.staticTexts
+            .matching(NSPredicate(format: "label BEGINSWITH %@", "Auto-saving tiles near the trail"))
+            .firstMatch
+        XCTAssertTrue(
+            saving.waitForExistence(timeout: UITestTimeout.navigation),
+            "with the switch on, the selected hike is being saved for"
         )
     }
 

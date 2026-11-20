@@ -53,14 +53,17 @@ extension StorageAccountingTests {
 
     @Test("turning auto-save off keeps what it already saved accounted for")
     func disablingFoldsInPendingKeys() async throws {
-        let controller = makeController()
+        nonisolated(unsafe) var isOn = true
+        let controller = AutoSaveController(store: sandbox.store, drainInterval: nil, isSwitchedOn: { isOn })
         let hike = Fixture.hike(in: context)
         controller.hikeSelectionChanged(to: hike)
         await controller.waitForActivation()
 
         let saved = key(17, 8, 8)
         try await persist(key: saved, tile: tile(z: 17))
-        controller.setEnabled(false, for: hike)
+        // The switch in Settings, with no flush first.
+        isOn = false
+        controller.switchDidChange()
 
         #expect(hike.autoSavedTileKeys.contains(saved))
     }

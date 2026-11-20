@@ -123,6 +123,13 @@ nonisolated enum SettingsKey {
     /// and most of its points, for about twice the space — *Extra Detail*
     /// under *Offline Maps*. Read and written by ``OfflineCountries``.
     static let offlineCountriesDetail = "settings.offlineCountriesDetail"
+    /// Whether the map around the selected hike is kept as it is browsed —
+    /// *Auto-Save Tiles* in Settings; see ``AutoSaveController``, which reads
+    /// it at every selection rather than capturing it.
+    ///
+    /// Deliberately not synced through ``SyncedSettingsMirror``: it spends
+    /// this device's storage on tiles that stay on this device.
+    static let autoSaveTilesEnabled = "settings.autoSaveTilesEnabled"
     /// Whether a finished recording is also written to Health as a hiking
     /// workout.
     ///
@@ -269,6 +276,15 @@ nonisolated enum SettingsDefault {
     /// with a signal. The hiker short of space turns it off and keeps every
     /// path, road and summit for half the bytes.
     static let offlineCountriesDetail = true
+    /// Off, by the owner's decision. It was a switch on every hike, on until
+    /// turned off, while browsing was the only way the OpenStreetMap map
+    /// could be kept: its tile policy forbids a bulk download. That map is
+    /// drawn from the app's own tiles now and downloads by country (*Offline
+    /// Maps*), so quietly keeping up to ``AutoSaveTileStore/tileCap`` tiles a
+    /// hike is storage nobody asked for. It stays for the maps with no
+    /// download of their own, and for a hiker who wants one trail's map
+    /// without its country.
+    static let autoSaveTilesEnabled = false
     /// On. The marked routes are what a hiking map is read for, and the app
     /// draws them itself from squares it keeps once they have been seen, so
     /// the layer costs a new area a few hundred kilobytes and nobody's server

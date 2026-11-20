@@ -241,7 +241,7 @@ struct SelectedLineStoreWatchTests {
 
         // A device-local field: its row lives in the unmirrored store, which
         // this save creates.
-        stage.hike.autoSaveTilesEnabled = false
+        stage.hike.autoSavedTileKeys = ["osm/1/0/0"]
         try stage.container.mainContext.save()
         let localStore = try #require(stage.hike.localState?.persistentModelID.storeIdentifier)
         let hikesStore = try #require(stage.hike.persistentModelID.storeIdentifier)
