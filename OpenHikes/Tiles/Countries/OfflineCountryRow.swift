@@ -23,6 +23,10 @@ struct OfflineCountryRow: View {
     /// Shows the country on the map, where there is one behind the list.
     let onSelect: () -> Void
 
+    /// Whether *Try Again* is reading the list before it starts, which can
+    /// take a few seconds on a slow connection.
+    @State private var isRetrying = false
+
     var body: some View {
         let download = countries.downloads[country.id]
         HStack(spacing: 12) {
@@ -104,8 +108,17 @@ struct OfflineCountryRow: View {
                 .accessibilityValue(download.fraction.formatted(.percent.precision(.fractionLength(0))))
             }
         } else if download?.hasFailed == true {
-            glyphButton("Try Again", systemImage: "arrow.clockwise") {
-                Task { await countries.retry(country.id) }
+            if isRetrying {
+                ProgressView()
+                    .minimumTapTarget()
+            } else {
+                glyphButton("Try Again", systemImage: "arrow.clockwise") {
+                    isRetrying = true
+                    Task {
+                        await countries.retry(country.id)
+                        isRetrying = false
+                    }
+                }
             }
         } else if let update = countries.update(for: country.id) {
             Button("Update") { countries.download(update) }

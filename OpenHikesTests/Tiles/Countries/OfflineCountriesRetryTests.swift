@@ -187,6 +187,27 @@ struct OfflineCountriesRetryTests {
         }
     }
 
+    /// The background session cancels by area, not by file, so a try with
+    /// fewer files than the one it replaced leaves that one's other
+    /// transfers running.
+    @Test("a transfer the try that replaced a failed one does not ask for leaves it alone")
+    func strayTransfer() async throws {
+        try await OfflineCountryFixture.withDirectory { directory in
+            let country = OfflineCountryFixture.country(bytes: basemap, detail: detail)
+            let setup = await setUp(in: directory, offering: [country])
+            setup.countries.download(country)
+            setup.downloader.fail(.basemap, resumeData: nil)
+            setup.countries.setIncludesDetail(false)
+            await setup.countries.retry("SI")
+            #expect(setup.countries.downloads["SI"]?.files.map(\.role) == [.basemap])
+
+            setup.downloader.progress(.detail, Int64(detail.count))
+            #expect(setup.countries.downloads["SI"]?.writtenBytes == 0)
+            setup.downloader.fail(.detail, resumeData: nil)
+            #expect(setup.countries.downloads["SI"]?.phase == .downloading)
+        }
+    }
+
     // MARK: - A build the server has moved past
 
     @Test("trying again once the server has moved on starts the build it offers now, and drops the old one's files")
