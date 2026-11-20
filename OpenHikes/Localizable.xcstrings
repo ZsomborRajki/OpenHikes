@@ -6816,24 +6816,6 @@
     },
     "%lld regions" : {
       "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld region"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld regions"
-                }
-              }
-            }
-          }
-        },
         "de" : {
           "variations" : {
             "plural" : {
@@ -6852,109 +6834,7 @@
             }
           }
         },
-        "fr" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld région"
-                }
-              },
-              "many" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld régions"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld régions"
-                }
-              }
-            }
-          }
-        },
-        "es" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld región"
-                }
-              },
-              "many" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld regiones"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld regiones"
-                }
-              }
-            }
-          }
-        },
-        "it" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld regione"
-                }
-              },
-              "many" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld regioni"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld regioni"
-                }
-              }
-            }
-          }
-        },
-        "ru" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld регион"
-                }
-              },
-              "few" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld региона"
-                }
-              },
-              "many" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld регионов"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld региона"
-                }
-              }
-            }
-          }
-        },
-        "pl" : {
+        "en" : {
           "variations" : {
             "plural" : {
               "one" : {
@@ -6963,6 +6843,90 @@
                   "value" : "%lld region"
                 }
               },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld regions"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld regiones"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld región"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld regiones"
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld régions"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld région"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld régions"
+                }
+              }
+            }
+          }
+        },
+        "it" : {
+          "variations" : {
+            "plural" : {
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld regioni"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld regione"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld regioni"
+                }
+              }
+            }
+          }
+        },
+        "pl" : {
+          "variations" : {
+            "plural" : {
               "few" : {
                 "stringUnit" : {
                   "state" : "translated",
@@ -6975,6 +6939,12 @@
                   "value" : "%lld regionów"
                 }
               },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld region"
+                }
+              },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
@@ -6984,15 +6954,39 @@
             }
           }
         },
-        "uk" : {
+        "ru" : {
           "variations" : {
             "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld региона"
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld регионов"
+                }
+              },
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld регіон"
+                  "value" : "%lld регион"
                 }
               },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld региона"
+                }
+              }
+            }
+          }
+        },
+        "uk" : {
+          "variations" : {
+            "plural" : {
               "few" : {
                 "stringUnit" : {
                   "state" : "translated",
@@ -7003,6 +6997,12 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld регіонів"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld регіон"
                 }
               },
               "other" : {
@@ -9026,16 +9026,16 @@
             "value" : "Fügt Gebäude und kleine Orte wie Wasserstellen, Toiletten und Bänke hinzu. Downloads brauchen etwa doppelt so viel Speicherplatz."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ajoute les bâtiments et les petits lieux, comme les points d’eau, les toilettes et les bancs. Les téléchargements occupent environ deux fois plus d’espace."
-          }
-        },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Añade edificios y lugares pequeños como fuentes, aseos y bancos. Las descargas ocupan aproximadamente el doble de espacio."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajoute les bâtiments et les petits lieux, comme les points d’eau, les toilettes et les bancs. Les téléchargements occupent environ deux fois plus d’espace."
           }
         },
         "it" : {
@@ -9044,16 +9044,16 @@
             "value" : "Aggiunge edifici e piccoli luoghi come fontanelle, bagni e panchine. I download occupano circa il doppio dello spazio."
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Добавляет здания и небольшие места, например источники воды, туалеты и скамейки. Загрузки занимают примерно вдвое больше места."
-          }
-        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dodaje budynki i małe miejsca, takie jak punkty z wodą pitną, toalety i ławki. Pobrane mapy zajmują mniej więcej dwa razy więcej miejsca."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавляет здания и небольшие места, например источники воды, туалеты и скамейки. Загрузки занимают примерно вдвое больше места."
           }
         },
         "uk" : {
@@ -20525,16 +20525,16 @@
             "value" : "Zusätzliche Details"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Détails supplémentaires"
-          }
-        },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Más detalle"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Détails supplémentaires"
           }
         },
         "it" : {
@@ -20543,16 +20543,16 @@
             "value" : "Dettagli aggiuntivi"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Дополнительные детали"
-          }
-        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Więcej szczegółów"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Дополнительные детали"
           }
         },
         "uk" : {
@@ -37400,48 +37400,48 @@
         }
       }
     },
-    "OpenStreetMap’s data, drawn by OpenHikes. Tiles you view are auto-saved for offline use." : {
+    "OpenStreetMap’s data, drawn by OpenHikes. Countries can be downloaded for offline use." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Die Daten von OpenStreetMap, gezeichnet von OpenHikes. Angesehene Kacheln werden automatisch für die Offlinenutzung gespeichert."
+            "value" : "Die Daten von OpenStreetMap, gezeichnet von OpenHikes. Länder können für die Offlinenutzung heruntergeladen werden."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Los datos de OpenStreetMap, dibujados por OpenHikes. Las teselas que ves se guardan automáticamente para usarlas sin conexión."
+            "value" : "Los datos de OpenStreetMap, dibujados por OpenHikes. Los países se pueden descargar para usarlos sin conexión."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Les données d’OpenStreetMap, dessinées par OpenHikes. Les tuiles que vous consultez sont enregistrées automatiquement pour une utilisation hors ligne."
+            "value" : "Les données d’OpenStreetMap, dessinées par OpenHikes. Les pays peuvent être téléchargés pour une utilisation hors ligne."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "I dati di OpenStreetMap, disegnati da OpenHikes. I tasselli che visualizzi vengono salvati automaticamente per l’uso offline."
+            "value" : "I dati di OpenStreetMap, disegnati da OpenHikes. I paesi si possono scaricare per l’uso offline."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dane OpenStreetMap narysowane przez aplikację OpenHikes. Oglądane kafelki są automatycznie zapisywane do użytku offline."
+            "value" : "Dane OpenStreetMap narysowane przez aplikację OpenHikes. Kraje można pobrać do użytku offline."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Данные OpenStreetMap, нарисованные приложением OpenHikes. Просмотренные тайлы автоматически сохраняются для использования офлайн."
+            "value" : "Данные OpenStreetMap, нарисованные приложением OpenHikes. Страны можно загрузить для использования офлайн."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Дані OpenStreetMap, намальовані програмою OpenHikes. Тайли, які ви переглядаєте, автоматично зберігаються для використання офлайн."
+            "value" : "Дані OpenStreetMap, намальовані програмою OpenHikes. Країни можна викачати для використання офлайн."
           }
         }
       }
@@ -46590,6 +46590,52 @@
         }
       }
     },
+    "Saves the map around a hike as you browse it, so it’s there without a signal. For the OpenHikes map, Offline Maps downloads a whole country instead." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speichert die Karte rund um eine Wanderung, während du sie ansiehst, damit sie auch ohne Empfang da ist. Für die OpenHikes-Karte lädst du stattdessen unter „Offlinekarten“ ein ganzes Land herunter."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guarda el mapa alrededor de una excursión mientras lo exploras, para que esté disponible sin cobertura. Para el mapa de OpenHikes, «Mapas sin conexión» descarga en su lugar un país entero."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistre la carte autour d’une randonnée pendant que vous la consultez, pour qu’elle reste disponible sans réseau. Pour la carte OpenHikes, « Cartes hors ligne » télécharge plutôt un pays entier."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salva la mappa intorno a un’escursione mentre la esplori, così è disponibile anche senza segnale. Per la mappa OpenHikes, «Mappe offline» scarica invece un intero paese."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zapisuje mapę wokół wędrówki, gdy ją przeglądasz, aby była dostępna bez zasięgu. Dla mapy OpenHikes zamiast tego pobierz cały kraj w sekcji „Mapy offline”."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сохраняет карту вокруг похода, пока вы ее просматриваете, чтобы она была доступна без сигнала. Для карты OpenHikes вместо этого можно загрузить целую страну в разделе «Офлайн-карты»."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Зберігає карту навколо походу, поки ви її переглядаєте, щоб вона була доступна без сигналу. Для карти OpenHikes натомість можна викачати цілу країну в розділі «Офлайн-карти»."
+          }
+        }
+      }
+    },
     "Saving" : {
       "localizations" : {
         "de" : {
@@ -54304,48 +54350,48 @@
         }
       }
     },
-    "The map as openstreetmap.org draws it, to compare with the new one. Tiles you view are auto-saved for offline use." : {
+    "The map as openstreetmap.org draws it, to compare with the new one. Turn on Auto-Save Tiles in Settings to save the tiles you view for offline use." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Die Karte, wie openstreetmap.org sie zeichnet, zum Vergleich mit der neuen. Angesehene Kacheln werden automatisch für die Offlinenutzung gespeichert."
+            "value" : "Die Karte, wie openstreetmap.org sie zeichnet, zum Vergleich mit der neuen. Aktiviere in den Einstellungen „Kacheln automatisch speichern“, um angesehene Kacheln für die Offlinenutzung zu speichern."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "El mapa tal como lo dibuja openstreetmap.org, para compararlo con el nuevo. Las teselas que ves se guardan automáticamente para usarlas sin conexión."
+            "value" : "El mapa tal como lo dibuja openstreetmap.org, para compararlo con el nuevo. Activa «Guardado automático de teselas» en Ajustes para guardar las teselas que ves y usarlas sin conexión."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La carte telle qu’openstreetmap.org la dessine, pour la comparer avec la nouvelle. Les tuiles que vous consultez sont enregistrées automatiquement pour une utilisation hors ligne."
+            "value" : "La carte telle qu’openstreetmap.org la dessine, pour la comparer avec la nouvelle. Activez « Enregistrement automatique des tuiles » dans Réglages pour enregistrer les tuiles que vous consultez pour une utilisation hors ligne."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La mappa come la disegna openstreetmap.org, per confrontarla con quella nuova. I tasselli che visualizzi vengono salvati automaticamente per l’uso offline."
+            "value" : "La mappa come la disegna openstreetmap.org, per confrontarla con quella nuova. Attiva «Salvataggio automatico dei tasselli» in Impostazioni per salvare i tasselli che visualizzi per l’uso offline."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mapa w postaci, w jakiej rysuje ją openstreetmap.org, do porównania z nową. Oglądane kafelki są automatycznie zapisywane do użytku offline."
+            "value" : "Mapa w postaci, w jakiej rysuje ją openstreetmap.org, do porównania z nową. Włącz „Automatyczne zapisywanie kafelków” w ustawieniach, aby zapisywać oglądane kafelki do użytku offline."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Карта в том виде, в каком ее рисует openstreetmap.org, — для сравнения с новой. Просмотренные тайлы автоматически сохраняются для использования офлайн."
+            "value" : "Карта в том виде, в каком ее рисует openstreetmap.org, — для сравнения с новой. Включите «Автосохранение тайлов» в настройках, чтобы сохранять просмотренные тайлы для использования офлайн."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Карта в тому вигляді, у якому її малює openstreetmap.org, — для порівняння з новою. Тайли, які ви переглядаєте, автоматично зберігаються для використання офлайн."
+            "value" : "Карта в тому вигляді, у якому її малює openstreetmap.org, — для порівняння з новою. Увімкніть «Автозбереження тайлів» у параметрах, щоб зберігати тайли, які ви переглядаєте, для використання офлайн."
           }
         }
       }
@@ -56788,6 +56834,52 @@
         }
       }
     },
+    "This map can’t be downloaded. Turn on Auto-Save Tiles in Settings to save it around this hike as you browse." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Karte lässt sich nicht herunterladen. Aktiviere in den Einstellungen „Kacheln automatisch speichern“, um sie rund um diese Wanderung beim Ansehen zu speichern."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este mapa no se puede descargar. Activa «Guardado automático de teselas» en Ajustes para guardarlo alrededor de esta excursión mientras lo exploras."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette carte ne peut pas être téléchargée. Activez « Enregistrement automatique des tuiles » dans Réglages pour l’enregistrer autour de cette randonnée pendant que vous la consultez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questa mappa non può essere scaricata. Attiva «Salvataggio automatico dei tasselli» in Impostazioni per salvarla intorno a questa escursione mentre la esplori."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tej mapy nie można pobrać. Włącz „Automatyczne zapisywanie kafelków” w ustawieniach, aby zapisywać ją wokół tej wędrówki podczas przeglądania."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Эту карту нельзя загрузить. Включите «Автосохранение тайлов» в настройках, чтобы сохранять ее вокруг этого похода, пока вы просматриваете карту."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цю карту не можна викачати. Увімкніть «Автозбереження тайлів» у параметрах, щоб зберігати її навколо цього походу під час перегляду."
+          }
+        }
+      }
+    },
     "This map source doesn’t allow offline downloads." : {
       "localizations" : {
         "de" : {
@@ -58263,48 +58355,48 @@
         }
       }
     },
-    "Topographic map with sharp close-up detail. Tiles you view are auto-saved for offline use." : {
+    "Topographic map with sharp close-up detail. Turn on Auto-Save Tiles in Settings to save the tiles you view for offline use." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Topografische Karte mit scharfen Details aus der Nähe. Angesehene Kacheln werden automatisch für die Offlinenutzung gespeichert."
+            "value" : "Topografische Karte mit scharfen Details aus der Nähe. Aktiviere in den Einstellungen „Kacheln automatisch speichern“, um angesehene Kacheln für die Offlinenutzung zu speichern."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mapa topográfico con detalle nítido de cerca. Las teselas que ves se guardan automáticamente para usarlas sin conexión."
+            "value" : "Mapa topográfico con detalle nítido de cerca. Activa «Guardado automático de teselas» en Ajustes para guardar las teselas que ves y usarlas sin conexión."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Carte topographique aux détails nets en gros plan. Les tuiles consultées sont enregistrées automatiquement pour une utilisation hors ligne."
+            "value" : "Carte topographique aux détails nets en gros plan. Activez « Enregistrement automatique des tuiles » dans Réglages pour enregistrer les tuiles que vous consultez pour une utilisation hors ligne."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mappa topografica con dettagli nitidi da vicino. I tasselli che visualizzi vengono salvati automaticamente per l’uso offline."
+            "value" : "Mappa topografica con dettagli nitidi da vicino. Attiva «Salvataggio automatico dei tasselli» in Impostazioni per salvare i tasselli che visualizzi per l’uso offline."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mapa topograficzna z ostrymi szczegółami w zbliżeniu. Oglądane kafelki są automatycznie zapisywane do użytku offline."
+            "value" : "Mapa topograficzna z ostrymi szczegółami w zbliżeniu. Włącz „Automatyczne zapisywanie kafelków” w ustawieniach, aby zapisywać oglądane kafelki do użytku offline."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Топографическая карта с четкими деталями вблизи. Просмотренные тайлы автоматически сохраняются для использования офлайн."
+            "value" : "Топографическая карта с четкими деталями вблизи. Включите «Автосохранение тайлов» в настройках, чтобы сохранять просмотренные тайлы для использования офлайн."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Топографічна карта з чіткою деталізацією зблизька. Тайли, які ви переглядаєте, автоматично зберігаються для використання офлайн."
+            "value" : "Топографічна карта з чіткою деталізацією зблизька. Увімкніть «Автозбереження тайлів» у параметрах, щоб зберігати тайли, які ви переглядаєте, для використання офлайн."
           }
         }
       }
@@ -59278,52 +59370,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Вимкніть режим економії заряду або дайте пристрою охолонути, а тоді спробуйте ще раз."
-          }
-        }
-      }
-    },
-    "Turn on Auto-Save, then pan and zoom around the trail to save its tiles for offline use." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aktiviere das automatische Speichern und bewege und zoome dann rund um den Weg, um seine Kacheln für die Offlinenutzung zu speichern."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Activa «Guardado automático de teselas» y luego mueve y amplía el mapa alrededor del sendero para guardar sus teselas y usarlas sin conexión."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Activez « Enregistrement automatique des tuiles », puis déplacez la carte et zoomez autour du sentier afin d’en enregistrer les tuiles pour une utilisation hors ligne."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Attiva «Salvataggio automatico dei tasselli», poi sposta e ingrandisci la mappa intorno al sentiero per salvarne i tasselli per l’uso offline."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Włącz „Automatyczne zapisywanie kafelków”, a potem przesuwaj i przybliżaj mapę wokół szlaku, aby zapisać jego kafelki do użytku offline."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Включите «Автосохранение тайлов», затем перемещайте и масштабируйте карту вокруг тропы, чтобы сохранить ее тайлы для использования офлайн."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Увімкніть «Автозбереження тайлів», а потім пересувайте й масштабуйте карту навколо стежки, щоб зберегти її тайли для використання офлайн."
           }
         }
       }

@@ -82,13 +82,17 @@ nonisolated enum StoredTileDeletion {
     ///   cache the writes below read, so the two cannot disagree a line
     ///   apart.
     /// - Auto-save stands down *next*, and only then is the doomed claim
-    ///   snapshotted. Switching it off folds the tiles saved since the last
+    ///   snapshotted. Standing down folds the tiles saved since the last
     ///   drain into the manifest; a claim read ahead of that would be up to
     ///   two seconds stale, and everything saved since would be stranded on
-    ///   durable storage with nothing left pointing at it.
+    ///   durable storage with nothing left pointing at it. It stays down
+    ///   until the hike is next announced as the selection, whatever the
+    ///   switch in Settings says: a map the hiker just deleted must not be
+    ///   saved again by the next pan, and a tile claimed while the plan
+    ///   below is being spent would be claimed and then deleted.
     /// - The manifests are emptied, and the commit is the point of no return.
-    ///   A refusal puts the whole thing back — manifests, the fold, the
-    ///   preference and the arming — and deletes nothing.
+    ///   A refusal puts the whole thing back — manifests, the fold and the
+    ///   arming — and deletes nothing.
     /// - Every download in flight is stood down once the commit lands, before
     ///   the plan is spent: their tiles are precisely the ones no hike claims
     ///   yet, so left running they would have them deleted and then claim
@@ -162,11 +166,7 @@ nonisolated enum StoredTileDeletion {
         // stand-down's own keys added on top by ``AutoSaveController``.
         let previousDownloads = hike.offlineDownloads
         let previousKeys = hike.autoSavedTileKeys
-        let wasAutoSaving = hike.autoSaveTilesEnabled
         let standDown = autoSave.standDown(for: hike)
-        // Recorded off as well as stood down: a hike whose saved map the
-        // hiker just deleted must not start saving it again on the next pan.
-        autoSave.setEnabled(false, for: hike)
         let plan = StoredTileDeletionPlan(doomed: TileOwnership(hike), survivors: survivors)
 
         hike.offlineDownloads.removeAll()
@@ -181,10 +181,10 @@ nonisolated enum StoredTileDeletion {
             // folded in above. Nor does a rollback put this back on every OS.
             // Measured in a hosted test on iOS 18.6, for the iOS 18 floor, it
             // takes back an insertion or a deletion but not an attribute
-            // written over an existing row: the emptied manifest and the
-            // switched-off preference stay as written, with no change
-            // pending, and the next save that writes the row for any other
-            // reason writes them. Measured on iOS 27.0, it takes them back.
+            // written over an existing row: the emptied manifest stays as
+            // written, with no change pending, and the next save that writes
+            // the row for any other reason writes it. Measured on iOS 27.0,
+            // it takes it back.
             // iOS 26 was not measured. `AutoSaveController.sceneWillResignActive`
             // puts this same property back by hand as well. And it has to be
             // put back, because a manifest left empty in the context is
@@ -194,7 +194,6 @@ nonisolated enum StoredTileDeletion {
             // refused.
             hike.offlineDownloads = previousDownloads
             hike.autoSavedTileKeys = previousKeys
-            hike.autoSaveTilesEnabled = wasAutoSaving
             if let standDown {
                 autoSave.restoreAfterRefusal(standDown, for: hike)
             }

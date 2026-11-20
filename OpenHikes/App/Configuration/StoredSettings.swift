@@ -10,9 +10,9 @@ import Foundation
 import Observation
 import OpenHikesData
 
-/// The map's style and hiking-route layer, the hikes list's order and the
-/// photo-library switch, read from `UserDefaults` and published only when they
-/// change.
+/// The map's style and hiking-route layer, the hikes list's order, the
+/// photo-library switch and the auto-save one, read from `UserDefaults` and
+/// published only when they change.
 ///
 /// `@AppStorage` cannot be handed to a screen that is always up. It re-runs the
 /// view that declares it on **every** write to its `UserDefaults` — any key,
@@ -47,6 +47,10 @@ final class StoredSettings {
     /// Whether a photo filed by the app is also saved to the photo library.
     /// Only ever read when one is filed, so no screen depends on it.
     private(set) var savesPhotosToLibrary: Bool
+    /// Whether the map around the selected hike is kept as it is browsed —
+    /// see ``SettingsKey/autoSaveTilesEnabled``. Read by the hike screen's
+    /// note about its saved map, and by nothing above it.
+    private(set) var autoSavesTiles: Bool
 
     @ObservationIgnored private let defaults: UserDefaults
     /// Holds the suite's change notification, and takes it down with this —
@@ -60,6 +64,7 @@ final class StoredSettings {
         showsHikingRoutes = Self.showsHikingRoutes(in: defaults)
         hikeListSort = Self.hikeListSort(in: defaults)
         savesPhotosToLibrary = Self.savesPhotosToLibrary(in: defaults)
+        autoSavesTiles = Self.autoSavesTiles(in: defaults)
         // Scoped to this suite, never the process-wide notification. A write
         // made on the main thread is delivered before it returns, so an
         // `@AppStorage` binding on *Map Modes* and the screens reading this move
@@ -99,6 +104,8 @@ final class StoredSettings {
         if sort != hikeListSort { hikeListSort = sort }
         let photos = Self.savesPhotosToLibrary(in: defaults)
         if photos != savesPhotosToLibrary { savesPhotosToLibrary = photos }
+        let autoSave = Self.autoSavesTiles(in: defaults)
+        if autoSave != autoSavesTiles { autoSavesTiles = autoSave }
     }
 
     // Each falls back to what the `@AppStorage` it replaced declared, so a key
@@ -118,5 +125,9 @@ final class StoredSettings {
 
     private static func savesPhotosToLibrary(in defaults: UserDefaults) -> Bool {
         defaults.object(forKey: SettingsKey.savePhotosToLibrary) as? Bool ?? SettingsDefault.savePhotosToLibrary
+    }
+
+    private static func autoSavesTiles(in defaults: UserDefaults) -> Bool {
+        AutoSaveController.isSwitchedOn(in: defaults)
     }
 }

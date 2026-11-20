@@ -82,7 +82,7 @@ struct AutoSaveTaskLifecycleTests {
     @Test("an activation in flight publishes nothing once the controller is gone")
     func activationCannotPublishAfterRelease() async throws {
         let context = try Fixture.modelContext()
-        let hike = Fixture.hike(in: context) { $0.autoSaveTilesEnabled = true }
+        let hike = Fixture.hike(in: context)
         var controller: AutoSaveController? = AutoSaveController(
             store: sandbox.store,
             drainInterval: nil
@@ -109,7 +109,7 @@ struct AutoSaveTaskLifecycleTests {
     @Test("a held controller does claim that tile")
     func aHeldControllerClaimsTheSameTile() async throws {
         let context = try Fixture.modelContext()
-        let hike = Fixture.hike(in: context) { $0.autoSaveTilesEnabled = true }
+        let hike = Fixture.hike(in: context)
         let controller = AutoSaveController(store: sandbox.store, drainInterval: nil)
         controller.hikeSelectionChanged(to: hike)
         await controller.waitForActivation()

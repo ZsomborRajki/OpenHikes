@@ -533,13 +533,6 @@ extension Hike {
         set { mutableLocalState?.autoSavedTileKeys = newValue }
     }
 
-    /// Whether auto-save is turned on for this hike's map. On by default,
-    /// which is what a hike with no local record yet reports.
-    public var autoSaveTilesEnabled: Bool {
-        get { localState?.autoSaveTilesEnabled ?? true }
-        set { mutableLocalState?.autoSaveTilesEnabled = newValue }
-    }
-
     /// The walk under way along this trail on this device, if any — see
     /// ``TrailWalkRecord`` for why it is device-local and lives here rather
     /// than in a row that syncs.

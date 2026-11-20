@@ -337,7 +337,8 @@ either: the second run waits silently on the first run's build lock.
   Activity, motion or barometer. Each is asked about at run time, as on an
   iPad, so the app goes without it. Its camera does open the camera picker.
 - **Settings shows a Mac only what a Mac uses** (`SettingsView.fieldSections`):
-  iCloud, the subscription, the photos switch, map storage, blocks and About.
+  iCloud, the subscription, the photos switch, auto-save, map storage, blocks
+  and About.
   Health, background tracking, the Live Activity, Auto-Pause, the reminders
   and the screen switch are about a device carried on a trail, and are left
   out there, keeping their stored values or defaults, which a recording on a
@@ -1135,6 +1136,21 @@ a change to recording, the map, the sheet or the render path; the PR template,
   prefetching, and OpenStreetMap is auto-save only. The hiking routes are a
   `TileLayer` the app draws itself (*The hiking-routes layer*), and stay out
   of `TileProvider.all`.
+- **Auto-save is one switch, off until the hiker turns it on**, by the
+  owner's decision: *Auto-Save Tiles* in Settings, above the storage it
+  spends (`SettingsKey.autoSaveTilesEnabled`). The default map downloads by
+  country (*The offline countries*), so browsing keeps nothing nobody asked
+  for.
+  - With it on, the tiles drawn within reach of the selected hike's line are
+    kept for that hike (`AutoSaveController`), up to
+    `AutoSaveTileStore.tileCap`.
+  - It is for the maps with no download of their own, so the hike screen
+    points to the switch only on one of those, and only while it is off
+    (`OfflineStorageStatus`).
+  - A tile a downloaded country holds is never kept: the country draws it
+    with no signal already (`OfflineCountryArchives.holds(_:)`).
+  - Deleting a hike's saved map stands auto-save down for that hike until it
+    is next selected, whatever the switch says.
 - **A tile is identified by provider plus z/x/y**, never by scale
   (`TileCacheKey`).
 - **Never turn a render miss into synchronous disk or network work**, and never
@@ -2327,8 +2343,8 @@ beside them. `RouteSquareGrid` argues the design and has the measurements.
 
 - **On unless the hiker turns it off, and nothing of it is a tile.** A
   stored answer outranks the default (`SettingsDefault`). Auto-save and
-  downloads ask the selected map alone, so over Apple's maps a hike offers
-  neither, whatever the switch says.
+  downloads ask the selected map alone, so over Apple's maps a hike has
+  neither, whatever the layer's switch says.
 - **One way, once.** `Scripts/trail-cells.sh build-routes` keeps each member
   way of every hiking relation once, with the routes it is drawn as and the
   most important network among them, and files it at four levels of detail,

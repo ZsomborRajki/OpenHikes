@@ -49,9 +49,9 @@ struct HikeDeletionTests {
 
     /// The screen this prevents. A hike left in the navigation stack after
     /// deletion would keep its detail view pushed, showing a trail that no
-    /// longer exists — its stats, its elevation chart, its Offline and
-    /// Auto-Save controls all live and tappable, writing to a detached object
-    /// that nothing will persist.
+    /// longer exists — its stats, its elevation chart and its Offline
+    /// controls all live and tappable, writing to a detached object that
+    /// nothing will persist.
     ///
     /// `MapSheet.delete(_:among:)` clears `selectedHike` when it matches,
     /// which is what stops the *map* drawing a ghost route, and removes the

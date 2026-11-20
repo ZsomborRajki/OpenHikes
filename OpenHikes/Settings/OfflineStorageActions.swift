@@ -118,11 +118,10 @@ enum OfflineStorageActions {
         for hike in holders where hike.hasStoredTiles {
             hike.offlineDownloads.removeAll()
             hike.autoSavedTileKeys.removeAll()
-            // `autoSaveTilesEnabled` is deliberately left alone. Reclaiming
-            // disk is not a decision about whether a hike should keep saving
-            // tiles, and this used to silently turn that setting off for every
-            // hike the user had ever enabled it on.
         }
+        // The *Auto-Save Tiles* switch is deliberately left alone. Reclaiming
+        // disk is not a decision about whether browsing should keep saving
+        // tiles; the caller puts auto-save back for the selected hike.
     }
 
     /// The union is O(tile budget) trig per download record, so it belongs

@@ -108,7 +108,7 @@ extension HikeDeletionTests {
         let context = try Fixture.modelContext()
         let controller = AutoSaveController(store: sandbox.store, drainInterval: nil)
         let doomed = Fixture.hike(in: context, title: "On its way out")
-        let survivor = Fixture.hike(in: context, title: "Being browsed") { $0.autoSaveTilesEnabled = true }
+        let survivor = Fixture.hike(in: context, title: "Being browsed")
         doomed.autoSavedTileKeys = [Self.corridorTileKey]
         try context.save()
         controller.hikeSelectionChanged(to: survivor)

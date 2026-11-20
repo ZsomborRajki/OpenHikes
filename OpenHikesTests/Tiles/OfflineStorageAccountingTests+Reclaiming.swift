@@ -14,39 +14,32 @@ extension StorageAccountingTests {
 
     // MARK: - Reclaiming storage from Settings
 
-    /// "Delete All Saved Tiles" reclaims disk. It is not a decision about which
-    /// hikes should go on saving tiles as they're browsed — but it used to set
-    /// `autoSaveTilesEnabled = false` on every hike, silently clearing a
-    /// per-hike setting the user had chosen, on a screen that says nothing
-    /// about it.
-    @Test("deleting every saved tile doesn't turn off anyone's auto-save")
-    func deleteAllKeepsAutoSavePreferences() async throws {
-        let controller = makeController()
-        let selected = Fixture.hike(in: context) { $0.autoSaveTilesEnabled = true }
-        let other = Fixture.hike(in: context, title: "Other", route: Fixture.loopRoute) { hike in
-            hike.autoSaveTilesEnabled = true
-        }
-        let optedOut = Fixture.hike(in: context, title: "Opted out") { $0.autoSaveTilesEnabled = false }
+    /// "Delete All Saved Tiles" reclaims disk. It is not a decision about
+    /// whether browsing should save tiles: with the switch off it arms
+    /// nothing, and it must leave the selection known, so that the switch
+    /// going on a moment later, on the same screen, still has a hike to arm.
+    @Test("deleting every saved tile arms nothing while the switch is off, and keeps the selection")
+    func deleteAllKeepsTheSwitchAndTheSelection() async {
+        nonisolated(unsafe) var isOn = false
+        let controller = AutoSaveController(store: sandbox.store, drainInterval: nil, isSwitchedOn: { isOn })
+        let selected = Fixture.hike(in: context)
+        selected.autoSavedTileKeys = [key(16, 30, 30)]
         controller.hikeSelectionChanged(to: selected)
-        await controller.waitForActivation()
-
-        let saved = key(16, 30, 30)
-        try await persist(key: saved, tile: tile())
 
         // `SettingsView.deleteAllTiles`, minus the SwiftUI.
-        let resumed = controller.currentHike
+        let announced = controller.selectedHike
         controller.hikeSelectionChanged(to: nil)
-        for hike in [selected, other, optedOut] {
-            hike.offlineDownloads.removeAll()
-            hike.autoSavedTileKeys.removeAll()
-        }
-        controller.hikeSelectionChanged(to: resumed)
-        await controller.waitForActivation()
+        selected.offlineDownloads.removeAll()
+        selected.autoSavedTileKeys.removeAll()
+        controller.hikeSelectionChanged(to: announced)
         await removeAllTiles()
 
-        #expect(selected.autoSaveTilesEnabled, "the setting is the user's, not the delete button's")
-        #expect(other.autoSaveTilesEnabled)
-        #expect(!optedOut.autoSaveTilesEnabled, "and a hike that had it off still has it off")
+        #expect(controller.currentHike == nil, "a storage action is not the hiker asking for auto-save")
+
+        isOn = true
+        controller.switchDidChange()
+        await controller.waitForActivation()
+        #expect(controller.isSaving(for: selected), "the switch still finds the hike the map has selected")
     }
 
     /// The other half: auto-save has to still be *running* for the selected
@@ -55,18 +48,18 @@ extension StorageAccountingTests {
     @Test("deleting every saved tile leaves the selected hike still saving")
     func deleteAllResumesAutoSave() async throws {
         let controller = makeController()
-        let selected = Fixture.hike(in: context) { $0.autoSaveTilesEnabled = true }
+        let selected = Fixture.hike(in: context)
         controller.hikeSelectionChanged(to: selected)
         await controller.waitForActivation()
 
         let before = key(16, 31, 31)
         try await persist(key: before, tile: tile())
 
-        let resumed = controller.currentHike
+        let announced = controller.selectedHike
         controller.hikeSelectionChanged(to: nil)
         selected.offlineDownloads.removeAll()
         selected.autoSavedTileKeys.removeAll()
-        controller.hikeSelectionChanged(to: resumed)
+        controller.hikeSelectionChanged(to: announced)
         await controller.waitForActivation()
         await removeAllTiles()
 

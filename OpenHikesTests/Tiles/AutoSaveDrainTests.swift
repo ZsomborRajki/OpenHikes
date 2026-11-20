@@ -48,7 +48,7 @@ struct AutoSaveDrainTests {
     private func tileKey(_ id: String) -> String { "osm/14/2638/6357@2.0-\(id)" }
 
     private func activeHike(in context: ModelContext) async -> (Hike, AutoSaveController) {
-        let hike = Fixture.hike(in: context) { $0.autoSaveTilesEnabled = true }
+        let hike = Fixture.hike(in: context)
         let controller = AutoSaveController(store: sandbox.store, drainInterval: nil)
         controller.hikeSelectionChanged(to: hike)
         await controller.waitForActivation()
@@ -143,7 +143,7 @@ struct AutoSaveDrainTests {
     @Test("a saved tile reaches the manifest with nobody asking it to")
     func theDrainFoldsWithoutBeingAsked() async throws {
         let context = try Fixture.modelContext()
-        let hike = Fixture.hike(in: context) { $0.autoSaveTilesEnabled = true }
+        let hike = Fixture.hike(in: context)
         let controller = AutoSaveController(
             store: sandbox.store,
             drainInterval: .zero

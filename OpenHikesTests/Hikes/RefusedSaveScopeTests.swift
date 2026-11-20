@@ -243,7 +243,7 @@ struct RefusedSaveScopeTests {
         let photos = HikePhotoImportTests.Sandbox()
         let controller = AutoSaveController(store: sandbox.store, drainInterval: nil)
         let doomed = Fixture.hike(in: context, title: "On its way out")
-        let survivor = Fixture.hike(in: context, title: "Being browsed") { $0.autoSaveTilesEnabled = true }
+        let survivor = Fixture.hike(in: context, title: "Being browsed")
         try context.save()
         controller.hikeSelectionChanged(to: survivor)
         await controller.waitForActivation()
@@ -294,7 +294,7 @@ struct RefusedSaveScopeTests {
         let sandbox = TileSandbox()
         let photos = HikePhotoImportTests.Sandbox()
         let controller = AutoSaveController(store: sandbox.store, drainInterval: nil)
-        let hike = Fixture.hike(in: context) { $0.autoSaveTilesEnabled = true }
+        let hike = Fixture.hike(in: context)
         try context.save()
         controller.hikeSelectionChanged(to: hike)
         await controller.waitForActivation()

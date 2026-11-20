@@ -642,9 +642,10 @@ private extension OpenHikesModel {
         SignificantLocationRegistration(monitor: Self.dormantLocationSource())
     }
 
-    /// The auto-save controller wired to the real selected map source: a map
-    /// drawn from tiles is what there is to save. The hiking-route layer is
-    /// not one of them — it draws from squares kept in `Caches` — see
+    /// The auto-save controller wired to the hiker's switch and the real
+    /// selected map source: a map drawn from tiles is what there is to save,
+    /// where *Auto-Save Tiles* asks for it. The hiking-route layer is not one
+    /// of them — it draws from squares kept in `Caches` — see
     /// ``HikingRouteSquares``.
     ///
     /// Same argument as
@@ -652,12 +653,15 @@ private extension OpenHikesModel {
     /// "which map the user picked" is a choice about the environment, and the
     /// controller takes it as a closure so a suite can decide it outright
     /// instead of inheriting whatever the host app has stored. Read on each
-    /// call rather than captured once, so a change made on *Map Modes* takes
-    /// effect on the next selection without rebuilding anything.
+    /// call rather than captured once, so a change made on *Map Modes* or in
+    /// Settings takes effect on the next announcement without rebuilding
+    /// anything.
     static func makeAutoSaveController(defaults: UserDefaults, lines: SelectedLine) -> AutoSaveController {
-        AutoSaveController(lines: lines) {
-            !TileProvider.selected(in: defaults).usesSystemBaseMap
-        }
+        AutoSaveController(
+            lines: lines,
+            isSwitchedOn: { AutoSaveController.isSwitchedOn(in: defaults) },
+            mapRendersTiles: { !TileProvider.selected(in: defaults).usesSystemBaseMap }
+        )
     }
 }
 

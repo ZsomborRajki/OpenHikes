@@ -56,7 +56,7 @@ struct SelectedLineLocalStoreTests {
         let hike = Fixture.hike(in: main, title: "Followed", route: SelectedLineStoreWatchTests.original)
         // The device-local row first, so that a walk's writes update it, as
         // every milestone after a walk's first does.
-        hike.autoSaveTilesEnabled = false
+        hike.autoSavedTileKeys = ["osm/1/0/0"]
         try await RemoteChangeLog.save(main, settling: hike)
         let lines = SelectedLine()
         _ = await lines.read(of: hike).route

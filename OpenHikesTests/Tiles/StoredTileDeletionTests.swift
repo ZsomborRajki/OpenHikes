@@ -165,7 +165,7 @@ struct StoredTileDeletionTests {
         #expect(sandbox.isSaved(Self.exclusiveKey), "and nothing was deleted for a change that never landed")
     }
 
-    /// The other half of putting it back. Auto-save is switched off on the way
+    /// The other half of putting it back. Auto-save stands down on the way
     /// down — a hike whose map was just deleted must not start saving it again
     /// on the next pan — and that move folds the last drain window's tiles out
     /// of the store's pending set and into the manifest, which the refusal
@@ -175,7 +175,7 @@ struct StoredTileDeletionTests {
     @Test("a refused save gives the hike back its auto-save and the tiles it had just folded in")
     func refusedSaveRestoresAutoSave() async throws {
         let controller = AutoSaveController(store: sandbox.store, drainInterval: nil)
-        let hike = Fixture.hike(in: context) { $0.autoSaveTilesEnabled = true }
+        let hike = Fixture.hike(in: context)
         try context.save()
         controller.hikeSelectionChanged(to: hike)
         await controller.waitForActivation()
@@ -215,9 +215,42 @@ struct StoredTileDeletionTests {
             by nobody, and deleted at the next launch trim — for a hike the hiker still has.
             """
         )
-        #expect(hike.autoSaveTilesEnabled, "and the switch the hiker never touched is back on")
         #expect(controller.currentHike?.id == hike.id, "nothing else re-arms it: the selection never changed")
         #expect(sandbox.isSaved(Self.corridorKey))
+    }
+
+    /// What a deletion that lands leaves behind. The hike is still selected
+    /// and the switch in Settings still on, so the stand-down is all that
+    /// keeps the next pan from saving the map the hiker just deleted — and a
+    /// tile claimed while the plan is being spent would be claimed and then
+    /// deleted, with the manifest left naming it. The hike is saved for again
+    /// when it is next announced as the selection.
+    @Test("a deletion that lands leaves the hike unsaved-for until it is selected again")
+    func committedDeletionStandsAutoSaveDown() async throws {
+        let controller = AutoSaveController(store: sandbox.store, drainInterval: nil)
+        let hike = Fixture.hike(in: context)
+        try context.save()
+        controller.hikeSelectionChanged(to: hike)
+        await controller.waitForActivation()
+        try #require(controller.isSaving(for: hike), "precondition: the hike is being saved for")
+
+        let outcome = StoredTileDeletion.delete(
+            storedTilesOf: hike, autoSave: controller, downloads: downloads, fetchingHikes: { [hike] }
+        )
+
+        guard case .committed = outcome else {
+            Issue.record("the deletion was refused")
+            return
+        }
+        #expect(!controller.isSaving(for: hike))
+        try sandbox.browse(key: Self.corridorKey)
+        let (store, tile) = (sandbox.store, Self.corridorTile)
+        await offMain { store.considerPersisting(key: Self.corridorKey, z: tile.z, x: tile.x, y: tile.y) }
+        #expect(!sandbox.isSaved(Self.corridorKey), "the next pan must not save the map again")
+
+        controller.hikeSelectionChanged(to: hike)
+        await controller.waitForActivation()
+        #expect(controller.isSaving(for: hike), "selecting the hike again is what saves for it again")
     }
 
     // MARK: The hike that is not the one being deleted
@@ -238,7 +271,7 @@ struct StoredTileDeletionTests {
     func survivorsPendingKeysAreNotFreed() async throws {
         let controller = AutoSaveController(store: sandbox.store, drainInterval: nil)
         let deleting = Fixture.hike(in: context, title: "Deleting its map")
-        let survivor = Fixture.hike(in: context, title: "Being browsed") { $0.autoSaveTilesEnabled = true }
+        let survivor = Fixture.hike(in: context, title: "Being browsed")
         // The doomed hike claims the tile outright, so it is in the plan
         // unless the survivor's claim takes it back out.
         deleting.autoSavedTileKeys = [Self.corridorKey]
@@ -403,7 +436,6 @@ struct StoredTileDeletionTests {
     @Test("a library that cannot be read refuses before anything is written")
     func unreadableLibraryWritesNothing() async throws {
         let (deleting, _) = try sandboxWithSharedTile()
-        deleting.autoSaveTilesEnabled = true
         try context.save()
         let controller = AutoSaveController(store: sandbox.store, drainInterval: nil)
         controller.hikeSelectionChanged(to: deleting)
@@ -422,8 +454,10 @@ struct StoredTileDeletionTests {
         }
         #expect(Set(deleting.autoSavedTileKeys) == [Self.sharedKey, Self.exclusiveKey])
         #expect(deleting.offlineDownloads.count == 1)
-        #expect(deleting.autoSaveTilesEnabled, "auto-save is switched off by a deletion, not by an attempt at one")
-        #expect(controller.currentHike?.id == deleting.id)
+        #expect(
+            controller.currentHike?.id == deleting.id,
+            "auto-save is stood down by a deletion, not by an attempt at one"
+        )
         #expect(sandbox.isSaved(Self.sharedKey))
         #expect(sandbox.isSaved(Self.exclusiveKey))
     }

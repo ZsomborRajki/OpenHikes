@@ -40,7 +40,7 @@ extension HikeDeletionTests {
         in context: ModelContext,
         sandbox: TileSandbox
     ) async throws -> (Hike, AutoSaveController) {
-        let hike = Fixture.hike(in: context) { $0.autoSaveTilesEnabled = true }
+        let hike = Fixture.hike(in: context)
         try context.save()
         let controller = AutoSaveController(store: sandbox.store, drainInterval: nil)
         controller.hikeSelectionChanged(to: hike)

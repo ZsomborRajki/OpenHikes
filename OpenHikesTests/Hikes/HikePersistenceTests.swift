@@ -87,7 +87,6 @@ struct HikePersistenceTests {
                 OfflineDownloadRecord(providerID: "osm", maxZoom: 14, savedTileKeys: ["osm/14/1/1"])
             ]
             hike.autoSavedTileKeys = ["osm/16/9/9"]
-            hike.autoSaveTilesEnabled = false
             hike.ownsRecordingDraft = true
             try context.save()
         }
@@ -120,8 +119,7 @@ struct HikePersistenceTests {
         #expect(reopened.offlineDownloads.count == 1)
         #expect(reopened.offlineDownloads.first?.savedTileKeys == ["osm/14/1/1"])
 
-        // And the per-hike toggles, which are the user's and not the app's.
-        #expect(reopened.autoSaveTilesEnabled == false)
+        // And the per-hike toggle, which is the user's and not the app's.
         #expect(reopened.autoFollowEnabled == false)
     }
 

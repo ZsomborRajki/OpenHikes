@@ -39,28 +39,26 @@ struct AutoSaveLifecycleTests {
 
     private func tileKey(_ id: String) -> String { "osm/14/2638/6357@2.0-\(id)" }
 
-    /// Turning the Auto-Save toggle off is how the hike sheet's Delete button
-    /// folds the last drain window's tiles into the manifest before reading
-    /// it — `deleteStoredTiles()` calls `setEnabled(false, for:)` first,
-    /// because "reading the manifest ahead of that would delete a snapshot
-    /// taken up to two seconds ago and strand everything saved since —
-    /// durably, where nothing would reclaim it."
+    /// The switch going off stands the selected hike down, which folds the
+    /// last drain window's tiles into its manifest on the way.
     ///
-    /// While suspended, `setEnabled` takes the deferred branch and returns
-    /// *without* deactivating, so that flush never happens. What saves the
-    /// delete is a second mechanism entirely: `sceneWillResignActive` already
-    /// folded the pending set in on its way out, and `acceptsNewClaims` is
-    /// false from that moment, so there is nothing left un-flushed to strand.
+    /// While suspended, the announcement behind it takes the deferred branch
+    /// and returns *without* deactivating, so that flush never happens. What
+    /// saves the tiles is a second mechanism entirely: `sceneWillResignActive`
+    /// already folded the pending set in on its way out, and
+    /// `acceptsNewClaims` is false from that moment, so there is nothing left
+    /// un-flushed to strand.
     ///
     /// Two independent guarantees standing on each other is worth a test of
     /// its own: the deferred branch is only safe *because* suspension both
     /// flushes and stops claiming, and neither of those facts is stated
-    /// anywhere near `setEnabled`.
-    @Test("a delete during suspension still sees every tile that reached disk")
-    func disablingWhileSuspendedLosesNothing() async throws {
+    /// anywhere near `switchDidChange`.
+    @Test("the switch going off during suspension still keeps every tile that reached disk")
+    func switchingOffWhileSuspendedLosesNothing() async throws {
         let context = try Fixture.modelContext()
-        let controller = AutoSaveController(store: sandbox.store, drainInterval: nil)
-        let hike = Fixture.hike(in: context) { $0.autoSaveTilesEnabled = true }
+        nonisolated(unsafe) var isOn = true
+        let controller = AutoSaveController(store: sandbox.store, drainInterval: nil, isSwitchedOn: { isOn })
+        let hike = Fixture.hike(in: context)
         controller.hikeSelectionChanged(to: hike)
         await controller.waitForActivation()
 
@@ -70,9 +68,9 @@ struct AutoSaveLifecycleTests {
 
         // The scene resigns active — a phone call, a swipe up, App Switcher.
         controller.sceneWillResignActive { /* scene resigned active */ }
-        // …and the user taps Delete on the hike sheet, whose first act is to
-        // turn auto-save off. This is the branch that does not flush.
-        controller.setEnabled(false, for: hike)
+        // …and the switch goes off. This is the branch that does not flush.
+        isOn = false
+        controller.switchDidChange()
 
         #expect(
             hike.autoSavedTileKeys.contains(key),
@@ -84,18 +82,21 @@ struct AutoSaveLifecycleTests {
         let laterKey = tileKey(UUID().uuidString)
         try await persistOneTile(key: laterKey)
         #expect(!sandbox.isSaved(laterKey), "a suspended store must not take new claims")
+
+        // Back in front, the deferred announcement stands the hike down.
+        controller.sceneDidBecomeActive()
+        #expect(!controller.isSaving(for: hike))
     }
 
     /// The same window, reached the other way: deleting the hike outright.
     /// `standDown(for:)` exists precisely to flush regardless of suspension
-    /// (`flushWhileSuspended: true`), so this one must hold — it's the
-    /// contrast that shows the gap above is an omission rather than the
-    /// intended policy.
+    /// (`flushWhileSuspended: true`), so this one must hold whether or not
+    /// the scene's own fold ran first.
     @Test("deleting a hike folds in what it just saved, suspended or not")
     func deletingWhileSuspendedStillFlushes() async throws {
         let context = try Fixture.modelContext()
         let controller = AutoSaveController(store: sandbox.store, drainInterval: nil)
-        let hike = Fixture.hike(in: context) { $0.autoSaveTilesEnabled = true }
+        let hike = Fixture.hike(in: context)
         controller.hikeSelectionChanged(to: hike)
         await controller.waitForActivation()
 
@@ -128,7 +129,7 @@ struct AutoSaveLifecycleTests {
     func failedSuspensionSaveRestoresTheManifest() async throws {
         let context = try Fixture.modelContext()
         let controller = AutoSaveController(store: sandbox.store, drainInterval: nil)
-        let hike = Fixture.hike(in: context) { $0.autoSaveTilesEnabled = true }
+        let hike = Fixture.hike(in: context)
         hike.autoSavedTileKeys = ["osm/14/1/1@2.0", "osm/14/1/2@2.0"]
         controller.hikeSelectionChanged(to: hike)
         await controller.waitForActivation()
@@ -152,7 +153,7 @@ struct AutoSaveLifecycleTests {
     func reactivatingTheSameHikeIsIdempotent() async throws {
         let context = try Fixture.modelContext()
         let controller = AutoSaveController(store: sandbox.store, drainInterval: nil)
-        let hike = Fixture.hike(in: context) { $0.autoSaveTilesEnabled = true }
+        let hike = Fixture.hike(in: context)
         controller.hikeSelectionChanged(to: hike)
         await controller.waitForActivation()
 
@@ -173,7 +174,7 @@ struct AutoSaveLifecycleTests {
     /// arrived while suspended is replayed through `applySelection` instead,
     /// which returns early for the hike it is already on. That early return
     /// used to skip the resume as well, so auto-save spent the rest of the
-    /// session declining every tile, silently, with the toggle still on.
+    /// session declining every tile, silently, with the switch still on.
     ///
     /// It also must not resume by re-activating: `beginActiveHike` installs an
     /// empty corridor, which rejects everything until the rebuild lands.
@@ -181,7 +182,7 @@ struct AutoSaveLifecycleTests {
     func deferredReselectionResumesSaving() async throws {
         let context = try Fixture.modelContext()
         let controller = AutoSaveController(store: sandbox.store, drainInterval: nil)
-        let hike = Fixture.hike(in: context) { $0.autoSaveTilesEnabled = true }
+        let hike = Fixture.hike(in: context)
         controller.hikeSelectionChanged(to: hike)
         await controller.waitForActivation()
 
