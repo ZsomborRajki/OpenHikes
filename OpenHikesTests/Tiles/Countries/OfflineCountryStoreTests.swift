@@ -140,7 +140,10 @@ struct OfflineCountryStoreTests {
             let grown = Int64(Self.memoryFootprint()) - Int64(before)
 
             #expect(digest == expected.finalize().map { String(format: "%02x", $0) }.joined())
-            #expect(grown < Int64(OfflineCountryDigest.chunkBytes) * 2)
+            // Half the file, which is three chunks: well clear of the one a
+            // pooled read holds and of the six an unpooled one did, with room
+            // for what the rest of the process allocates meanwhile.
+            #expect(grown < Int64(OfflineCountryDigest.chunkBytes * chunks / 2))
         }
     }
 
