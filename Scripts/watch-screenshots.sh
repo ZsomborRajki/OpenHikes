@@ -64,6 +64,21 @@
 # all, so every figure in the frames comes from the seeded fixture and none of
 # it from a link.
 #
+# **Maps is started once the watch is up, from a stop, and again when the map
+# still does not draw.** On watchOS 27.2 a companion can answer an erased
+# watch nothing: the watch logs
+#
+#     [GeoServices:TileLoading] [Companion] Error loading tile key {…}:
+#     Code=-11 "Paired device finished request without sending information
+#     for tile"
+#
+# two minutes after each request. A Maps launched before the watch booted, or
+# left running by the run before, did that in three runs of three, one of them
+# given five minutes. Restarted as the watch came up it served two runs of
+# five, and restarted after a warm-up had failed it served four of four. Why
+# is not known, so the warm-up does what worked: a map that does not draw has
+# the companion's Maps restarted and is warmed again — see `warm_up`.
+#
 # `--no-pair` skips all of it, and is the fallback if this ever stops working:
 # an unpaired watch draws its map and wears the glyph.
 #
@@ -372,9 +387,6 @@ if [[ "$skip_pair" == false ]]; then
     # down by that restart *after* its own `bootstatus` returned — which is a
     # run that then fails on the next command with "device is not booted".
     ensure_booted "$companion_udid"
-    # The companion's maps stack, started by opening its Maps app — see this
-    # file's header. Without it every map frame is the grey grid.
-    xcrun simctl launch "$companion_udid" com.apple.Maps >/dev/null 2>&1 || true
 fi
 
 ensure_booted "$udid"
@@ -394,6 +406,11 @@ if [[ "$skip_pair" == false ]]; then
     fi
     # Again, because the sync above can have restarted it since.
     ensure_booted "$udid"
+    # The companion's maps stack, started by opening its Maps app — see this
+    # file's header. Without it every map frame is the grey grid. Only now,
+    # with the watch up, and from a stop: a Maps already running went on
+    # answering this watch nothing.
+    restart_companion_maps
 fi
 
 # After the erase, which takes these with everything else, and before the first

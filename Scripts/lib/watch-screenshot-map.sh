@@ -45,6 +45,19 @@ wait_for_map() {
     done
 }
 
+# How many times a map that does not draw is warmed, the companion's Maps
+# restarted between one and the next.
+readonly map_warm_up_attempts=3
+
+# Stops Maps on the companion and opens it again, which is what starts the
+# stack a paired watch fetches its tiles through — see the header of
+# Scripts/watch-screenshots.sh. Nothing to do for a watch with no companion.
+restart_companion_maps() {
+    [[ "$skip_pair" == false ]] || return 0
+    xcrun simctl terminate "$companion_udid" com.apple.Maps >/dev/null 2>&1 || true
+    xcrun simctl launch "$companion_udid" com.apple.Maps >/dev/null 2>&1 || true
+}
+
 # One launch whose picture is thrown away.
 #
 # MapKit has no tiles for this route until something has asked for them, so
@@ -56,8 +69,13 @@ wait_for_map() {
 # the one thing here that takes minutes rather than seconds, and it is paid
 # once ever: the pair outlives both the erase and the devices being shut down,
 # so every later run finds it already correct and skips it.
+#
+# A map that does not draw in its time is warmed again, after the companion's
+# Maps has been restarted: a companion can answer an erased watch no tile at
+# all, and a restart after a warm-up had failed got it answering four times
+# of four.
 warm_up() {
-    local entry rest
+    local entry rest attempt
     if [[ "$just_paired" == true ]]; then
         echo "Waiting out the pairing sync (once, on a first run)…"
         sleep "$sync_wait_seconds"
@@ -67,9 +85,14 @@ warm_up() {
         case "${rest%%|*}" in
             map)
                 echo "Warming the map…"
-                xcrun simctl terminate "$udid" "$app_bundle_id" 2>/dev/null || true
-                launch_frame "${entry#*|*|}"
-                wait_for_map
+                for ((attempt = 1; ; attempt++)); do
+                    xcrun simctl terminate "$udid" "$app_bundle_id" 2>/dev/null || true
+                    launch_frame "${entry#*|*|}"
+                    if wait_for_map; then break; fi
+                    if (( attempt >= map_warm_up_attempts )); then return 1; fi
+                    echo "The map did not draw; warming it again…" >&2
+                    restart_companion_maps
+                done
                 xcrun simctl terminate "$udid" "$app_bundle_id" 2>/dev/null || true
                 ;;
         esac

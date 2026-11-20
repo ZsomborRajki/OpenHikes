@@ -623,7 +623,12 @@ reads as deliberate. There are two causes and both are handled:
   says `[GeoServices:TileLoading] [Companion] … com.apple.nanomaps.xpc.
   GeoServices was invalidated`, with each request timing out after exactly
   60 seconds. The script launches `com.apple.Maps` on the companion to start
-  that stack. This is the one to suspect first if the frames regress.
+  that stack: once the watch is up, and from a stop, because a Maps that was
+  running before the erased watch came back gives it no tile (`Paired device
+  finished request without sending information for tile`, two minutes after
+  each request). Even then the first warm-up can come out as the grid, so a
+  map that does not draw has Maps restarted and is warmed again, up to three
+  times. This is the one to suspect first if the frames regress.
 - **A cold cache is slow.** The device is erased every run, so the tiles are
   always fetched fresh. The map frame polls its rendered pixels, up to 120
   seconds (`OPENHIKES_WATCH_MAP_SETTLE`), and fails if the loading grid remains.
