@@ -229,10 +229,15 @@ struct RecordingCard: View {
 
     private var stopButton: some View {
         Button("Stop", systemImage: "stop.fill") {
-            switch recorder.stopStep {
-            case .askName: askForName()
-            case .confirmDiscard: showDiscardConfirmation = true
-            case .endEmpty: Task { await discard() }
+            Task {
+                // Settled first, because a recording the live figures call
+                // empty can still have fixes on their way to its journal.
+                switch await recorder.settledStopStep() {
+                case .askName: askForName()
+                case .confirmDiscard: showDiscardConfirmation = true
+                case .endEmpty: await discard()
+                case nil: break
+                }
             }
         }
         .prominentGlassButtonStyle()

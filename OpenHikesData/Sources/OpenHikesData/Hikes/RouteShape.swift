@@ -35,9 +35,23 @@
 //  under three at the farthest, which takes in two passes along one path
 //  under trees and leaves out a path on the other side of a stream.
 //
+//  ## A pause that moved the walk
+//
+//  A pause is not distance and not trail (`RouteBoundary`), and a hiker can
+//  be carried a long way inside one: down by the cable car, or back to the
+//  start in a shuttle. Read as one line, such a walk comes back by the
+//  straight leg across the pause, and two stretches walked away from each
+//  other would be called a loop. So a line is handed over with the legs its
+//  pauses opened, and a walk one of them moved further than a line's two
+//  ends may be apart has no shape at all: nothing it walked is known to
+//  close. A pause the hiker stood still through, for lunch or for a stop
+//  Auto-Pause made, leaves a leg shorter than that, and the walk is read
+//  whole.
+//
 
 import CoreLocation
 import Foundation
+import OpenHikesShared
 
 /// What kind of line a walk drew.
 nonisolated public enum RouteShape: Hashable, Sendable {
@@ -47,6 +61,26 @@ nonisolated public enum RouteShape: Hashable, Sendable {
     case outAndBack
     /// Ends somewhere else.
     case pointToPoint
+
+    /// The leg a pause opened: from the last point before it to the first
+    /// after it.
+    public struct PausedLeg: Sendable {
+        public var from: CLLocationCoordinate2D
+        public var to: CLLocationCoordinate2D
+
+        public init(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D) {
+            self.from = from
+            self.to = to
+        }
+
+        /// Whether the walk went on from about where it stopped — no further
+        /// than ``RouteShape/closingToleranceMeters``, the gap two ends of a
+        /// loop may leave. A leg that cannot be measured has not shown that
+        /// it did.
+        var keepsTheWalkInPlace: Bool {
+            RouteGeometry.distanceMeters(from: from, to: to) <= RouteShape.closingToleranceMeters
+        }
+    }
 
     /// How far apart a line's two ends may be for it to have come back.
     ///
@@ -67,11 +101,30 @@ nonisolated public enum RouteShape: Hashable, Sendable {
     /// spacing apart are never further than a cell from each other.
     private static let cellSpacings: Double = 2
 
+    /// The shape of a saved route, with the legs its pauses opened — see
+    /// ``of(_:pausedLegs:)``.
+    public static func of(route: [RouteCoordinate]) -> Self? {
+        of(
+            route.map(\.clCoordinate),
+            pausedLegs: route.trailRuns.pausedLegs.map { leg in
+                PausedLeg(from: route[leg].clCoordinate, to: route[leg + 1].clCoordinate)
+            }
+        )
+    }
+
     /// The shape of the line through `coordinates`, or `nil` for a line too
     /// slight to have one: fewer than two points, or one that never went
     /// further from its start than ``closingToleranceMeters``.
-    public static func of(_ coordinates: [CLLocationCoordinate2D]) -> Self? {
-        guard let start = coordinates.first, let end = coordinates.last, coordinates.count > 1 else {
+    ///
+    /// - Parameter pausedLegs: The legs of the line its pauses opened. One
+    ///   that moved the walk leaves it no shape — see *A pause that moved
+    ///   the walk* above.
+    public static func of(
+        _ coordinates: [CLLocationCoordinate2D],
+        pausedLegs: [PausedLeg] = []
+    ) -> Self? {
+        guard let start = coordinates.first, let end = coordinates.last, coordinates.count > 1,
+              pausedLegs.allSatisfy(\.keepsTheWalkInPlace) else {
             return nil
         }
         let gap = RouteGeometry.distanceMeters(from: start, to: end)

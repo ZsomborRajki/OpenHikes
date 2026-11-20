@@ -229,6 +229,28 @@ extension HikeRecorderTests {
         #expect(recorder.suggestedTitle == offered)
     }
 
+    /// Up the trail, carried two blocks east while paused, and down another
+    /// way to the start. The line on the map is joined across the pause, and
+    /// read as one it is the block walked round.
+    @Test("a walk a pause carried somewhere else is not called a loop")
+    func aWalkCarriedInAPauseIsNotALoop() async throws {
+        let recorder = makeRecorder()
+        await recorder.start()
+        for north in [0, 1, 2] {
+            walk(recorder, north: north, east: 0, on: "Ridge Path")
+        }
+        recorder.pause()
+        await recorder.resume()
+        for (north, east) in [(2, 2), (1, 2), (0, 2), (0, 1), (0, 0)] {
+            walk(recorder, north: north, east: east, on: "Ridge Path")
+        }
+        let offered = try name("Ridge Path", of: recorder)
+
+        #expect(recorder.suggestedTitle == offered)
+        let hike = try savedHike(from: await recorder.stop())
+        #expect(hike.title == offered, "nor from its saved line")
+    }
+
     /// A Stop that showed no name reads the word off the saved line, which
     /// is the one the hike keeps.
     @Test("a loop saved with no name shown is named a loop from its saved line")

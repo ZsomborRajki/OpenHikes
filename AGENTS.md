@@ -497,7 +497,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
 - **Stop is where a recording ends, kept or not** (`RecordingStop.swift`).
   It asks for a name, beside *Discard Recording* and *Keep Recording*. A
   recording with no line to save is not asked for one: Stop ends it, and
-  asks first only when a photograph or a place is on it.
+  asks first only when a photograph or a place is on it. No line is the
+  journal's answer once every pending fix has merged
+  (`HikeRecorder.settledStopStep()`), never the live count's.
   - **The name is offered as the field's text, selected**, by the owner's
     decision, so one key replaces it and a tap keeps it to be edited. A field
     left as it opened is not a typed name (`RecordingStopName`).
@@ -505,7 +507,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
     day**, in that order, by the owner's decision (`RecordingTitle`). A part
     the walk does not have is left out. A loop is a walk that came back by
     other ground than it went out on (`RouteShape`), so there and back is
-    not one.
+    not one, and a walk a pause carried somewhere else has no shape. The
+    names are cut to fit, never the loop's word or the day.
 - **The map is imperative MapKit behind `MapView`.** `MapView.Coordinator`
   observes stable controllers and updates `MKMapView` directly. Tiles flow
   through `CachingTileOverlayRenderer` into `TileCache`, auto-saves through

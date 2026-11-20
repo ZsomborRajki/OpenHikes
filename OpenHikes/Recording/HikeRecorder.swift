@@ -217,6 +217,10 @@ final class HikeRecorder: NSObject {
     /// ``persist(_:prepared:customName:)``, whether the save follows Stop
     /// straight away, a route review or a retry.
     @ObservationIgnored var offeredTitle: String?
+    /// Whether a tap on Stop is still counting the walk's fixes — see
+    /// ``settledStopStep()``. A second tap in that moment is not a second
+    /// stop.
+    @ObservationIgnored var isSettlingStop = false
     @ObservationIgnored var liveMatchingTask: Task<Void, Never>?
     @ObservationIgnored var liveMatchingTaskID: UUID?
     @ObservationIgnored var liveMatchNeedsRun = false
@@ -536,7 +540,7 @@ extension HikeRecorder {
     ///     it: the town can answer, and the walk go on, while the alert is
     ///     up. `nil` for a Stop that offered nothing, such as Siri's, which
     ///     leaves the name to the save — see
-    ///     ``suggestedTitle(forDistance:along:startedAt:)``.
+    ///     ``suggestedTitle(forDistance:shape:startedAt:)``.
     @discardableResult func stop(
         customName: String? = nil,
         offeredTitle: String? = nil

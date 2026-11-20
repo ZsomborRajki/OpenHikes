@@ -12,7 +12,7 @@
 //  the same as of one up it and back. So the walk now says all it knows, in
 //  one order — see ``RecordingTitle`` — and this file is where each part is
 //  found: the town here, the trail by ``RecordingTrailNames``, the loop by
-//  ``RouteShape``. See ``HikeRecorder/suggestedTitle(forDistance:along:startedAt:)``.
+//  ``RouteShape``. See ``HikeRecorder/suggestedTitle(forDistance:shape:startedAt:)``.
 //
 //  ## The town is asked once, at the first fix
 //
@@ -69,12 +69,15 @@ extension HikeRecorder {
     ///     authoritative for them: the live accumulator's while the walk is
     ///     still running, and the prepared recording's once it has been
     ///     measured for the last time.
-    ///   - line: The line the walk drew, for the same two callers: the one
-    ///     on the map while it runs, and the prepared one at the save.
+    ///   - shape: The shape of the line the walk drew, for the same two
+    ///     callers: the one on the map while it runs, and the prepared one
+    ///     at the save. Both are read with the legs the walk's pauses opened,
+    ///     because a pause can carry a hiker somewhere else — see
+    ///     ``RouteShape/PausedLeg``.
     ///   - startedAt: When it started, or `nil` for no walk at all.
     func suggestedTitle(
         forDistance totalMeters: Double,
-        along line: @autoclosure () -> [CLLocationCoordinate2D],
+        shape: @autoclosure () -> RouteShape?,
         startedAt: Date?
     ) -> String? {
         guard let startedAt else { return nil }
@@ -82,7 +85,7 @@ extension HikeRecorder {
         return RecordingTitle.title(
             city: startPlaceName,
             trail: trail,
-            shape: trail == nil ? nil : RouteShape.of(line()),
+            shape: trail == nil ? nil : shape(),
             date: startedAt
         )
     }
@@ -97,7 +100,7 @@ extension HikeRecorder {
     var suggestedTitle: String? {
         suggestedTitle(
             forDistance: stats.distanceMeters,
-            along: trace.recordedCoordinates,
+            shape: RouteShape.of(trace.recordedCoordinates, pausedLegs: accumulator.pausedLegs),
             startedAt: sessionStartedAt
         )
     }

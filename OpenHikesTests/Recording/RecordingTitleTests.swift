@@ -115,6 +115,56 @@ struct RecordingTitleTests {
 
         #expect(title.count <= HikeTitle.maximumCharacters)
         #expect(title.hasPrefix("Berchtesgaden – Höhenweg"))
+        #expect(title.hasSuffix(RecordingTitle.separator + Self.day))
+    }
+
+    /// Cut from the end of the whole, a long trail's name took the word and
+    /// the day with it, and the same trail walked on two days was offered one
+    /// name for both.
+    @Test("a long name gives up its own end, never the loop's word or the day")
+    func aLongNameKeepsTheLoopAndTheDay() throws {
+        let paragraph = String(repeating: "Höhenweg ", count: 60)
+        let nextDay = Self.date.addingTimeInterval(24 * 60 * 60)
+
+        let first = try #require(
+            RecordingTitle.title(city: "Berchtesgaden", trail: paragraph, shape: .loop, date: Self.date)
+        )
+        let second = try #require(
+            RecordingTitle.title(city: "Berchtesgaden", trail: paragraph, shape: .loop, date: nextDay)
+        )
+
+        #expect(first != second)
+        #expect(first.hasSuffix(" Loop" + RecordingTitle.separator + Self.day))
+        #expect(second.hasSuffix(" Loop" + RecordingTitle.separator + RecordingTitle.day(nextDay)))
+        #expect(first.count <= HikeTitle.maximumCharacters)
+        #expect(first.hasPrefix("Berchtesgaden – Höhenweg"))
+    }
+
+    /// The trail is the name that runs long, so a town that does takes no
+    /// more than half of what is left.
+    @Test("a long town leaves the trail room")
+    func aLongTownLeavesTheTrailRoom() throws {
+        let paragraph = String(repeating: "Unterwössen ", count: 30)
+
+        let title = try #require(
+            RecordingTitle.title(city: paragraph, trail: "Ridge Path", shape: nil, date: Self.date)
+        )
+
+        #expect(title.hasSuffix(" – Ridge Path – \(Self.day)"))
+        #expect(title.count <= HikeTitle.maximumCharacters)
+    }
+
+    /// Flags are eight bytes a character, so the byte bound is the one that
+    /// bites here.
+    @Test("a name heavy in bytes is held to a title's bytes, and keeps the day")
+    func aHeavyNameKeepsTheDay() throws {
+        let flags = String(repeating: "🇦🇹", count: 100)
+
+        let title = try #require(RecordingTitle.title(city: nil, trail: flags, shape: .loop, date: Self.date))
+
+        #expect(title.utf8.count <= HikeTitle.maximumUTF8Bytes)
+        #expect(title.hasPrefix("🇦🇹"))
+        #expect(title.hasSuffix(" Loop" + RecordingTitle.separator + Self.day))
     }
 
     @Test(

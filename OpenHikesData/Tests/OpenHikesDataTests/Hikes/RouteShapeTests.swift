@@ -34,6 +34,18 @@ struct RouteShapeTests {
         corners.map { point(east: $0.east, north: $0.north) }
     }
 
+    /// The leg a pause opened between these two points, in meters east and
+    /// north.
+    private static func pause(
+        from start: (east: Double, north: Double),
+        to end: (east: Double, north: Double)
+    ) -> RouteShape.PausedLeg {
+        RouteShape.PausedLeg(
+            from: point(east: start.east, north: start.north),
+            to: point(east: end.east, north: end.north)
+        )
+    }
+
     /// A circle walked once round from the trailhead, a point every ten
     /// degrees.
     private static func circle(diameter: Double) -> [CLLocationCoordinate2D] {
@@ -129,6 +141,52 @@ struct RouteShapeTests {
     @Test("a small loop is a loop", arguments: [160.0, 200, 400])
     func aSmallLoopIsALoop(diameter: Double) {
         #expect(RouteShape.of(Self.circle(diameter: diameter)) == .loop)
+    }
+
+    /// Walked north from the trailhead, carried while paused to another
+    /// trailhead, and walked back from there. Read as one line, the shuttle
+    /// is the third side of a triangle.
+    @Test("a walk a pause carried somewhere else has no shape")
+    func aShuttleLeavesNoShape() {
+        let wayOut = Self.line([(0, 0), (0, 2000)])
+        let wayBack = Self.line([(2000, 1000), (0, 0)])
+        let shuttle = Self.pause(from: (0, 2000), to: (2000, 1000))
+        var route = (wayOut + wayBack).map(RouteCoordinate.init)
+        route[wayOut.count].boundary = .paused
+
+        #expect(RouteShape.of(wayOut + wayBack) == .loop, "the line alone, which is why the pause is asked")
+        #expect(RouteShape.of(wayOut + wayBack, pausedLegs: [shuttle]) == nil)
+        #expect(RouteShape.of(route: route) == nil)
+    }
+
+    /// Paused for lunch at the far corner, and resumed a few steps away.
+    @Test("a loop paused where the hiker stood is still a loop")
+    func aLunchStopLeavesALoop() {
+        let wayOut = Self.line([(0, 0), (0, 1000), (1000, 1000)])
+        let wayBack = Self.line([(1010, 1000), (1000, 0), (0, 0)])
+        var route = (wayOut + wayBack).map(RouteCoordinate.init)
+        route[wayOut.count].boundary = .paused
+
+        #expect(RouteShape.of(route: route) == .loop)
+    }
+
+    /// The same walk carried a car park's width further is the shuttle's.
+    @Test("a pause may leave the walk as far off as a loop's two ends may be")
+    func aPauseMayMoveTheWalkACarParkAway() {
+        let wayOut = Self.line([(0, 0), (0, 1000), (1000, 1000)])
+        let line = wayOut + Self.line([(1000, 1100), (1000, 0), (0, 0)])
+        let across = Self.pause(from: (1000, 1000), to: (1000, 1100))
+        let further = Self.pause(from: (1000, 1000), to: (1000, 1200))
+
+        #expect(RouteShape.of(line, pausedLegs: [across]) == .loop)
+        #expect(RouteShape.of(line, pausedLegs: [further]) == nil)
+    }
+
+    @Test("a saved route with no pause is read as its line is")
+    func aRouteWithNoPauseIsItsLine() {
+        let walk = Self.line([(0, 0), (0, 2000), (0, 0)])
+
+        #expect(RouteShape.of(route: walk.map(RouteCoordinate.init)) == .outAndBack)
     }
 
     @Test("a line that never left its start has no shape")

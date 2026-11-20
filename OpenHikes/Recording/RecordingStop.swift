@@ -14,6 +14,13 @@
 //  nothing, and with the discard question when the hiker has already put a
 //  photograph or a place on it.
 //
+//  What counts as no line is the journal's answer, not the live figures'.
+//  The widget's fixes wait in the App Group for the next merge, and a merge
+//  can be running when Stop is tapped, so a walk the live count gives one
+//  point can already hold two: the line the save would have kept. Stop
+//  waits for those before it calls a walk empty — see
+//  ``HikeRecorder/settledStopStep()``.
+//
 //  And a walk worth throwing away could only be thrown away from a pause. The
 //  name alert now offers that too — see ``RecordingCard`` — so Stop is the one
 //  place a recording ends, kept or not.
@@ -31,6 +38,7 @@
 
 import Foundation
 import OpenHikesData
+import os
 
 /// What a tap on Stop does first.
 nonisolated enum RecordingStopStep: Equatable {
@@ -78,13 +86,73 @@ nonisolated enum RecordingStopName {
 }
 
 extension HikeRecorder {
-    /// What a tap on Stop does first, for the recording as it stands.
+    /// What a tap on Stop does first, for the recording as the live figures
+    /// have it.
     ///
     /// Read in the Stop button's action and never in a `body`: the point
-    /// count moves with every accepted fix.
+    /// count moves with every accepted fix. A recording this calls empty may
+    /// not be — see ``settledStopStep()``, which is what the button acts on.
     var stopStep: RecordingStopStep {
+        stopStep(pointCount: stats.pointCount)
+    }
+
+    /// What a tap on Stop does first, once every fix the walk has is counted,
+    /// or `nil` when there is no longer a recording to stop — or this tap
+    /// came while an earlier one was still counting.
+    ///
+    /// A walk the live figures give a line is answered at once. One they do
+    /// not is answered only after the fixes still on their way to the journal
+    /// have landed: a merge already running, and the widget's fixes waiting in
+    /// the App Group for the next one. Ending a recording on the live count
+    /// alone threw those away with it — a phone fix and a widget fix is a line
+    /// that ``stop(customName:offeredTitle:)``, which merges first, saves.
+    /// And the count is then read off the journal, normalized as the save
+    /// normalizes it, rather than off the live figures, which a merge rebuilds
+    /// only when no fix lands inside its read.
+    ///
+    /// Every wait is here, before the answer, so that nothing can land between
+    /// an empty answer and the discard it leads to: the caller acts on it
+    /// without a suspension, and ``discard()`` stops the sensors before its
+    /// own first one.
+    func settledStopStep() async -> RecordingStopStep? {
+        guard isStoppable, !isSettlingStop else { return nil }
+        let live = stopStep
+        guard live != .askName, let journal, let sessionID else { return live }
+        isSettlingStop = true
+        defer { isSettlingStop = false }
+        // Bounded as the merge's own refresh is: a merge is scheduled by
+        // every accepted fix, and a walk that keeps getting them past a count
+        // of one is no longer empty, which the last answer will say.
+        for _ in 0..<Self.journalMergeRefreshAttemptLimit {
+            await pendingFixMergeTask?.value
+            await mergePendingWidgetFixes(for: sessionID)
+            await journalQueue.drain()
+            if pendingFixMergeTask == nil { break }
+        }
+        let journaled: Int
+        do {
+            let points = try await journal.loadSession()?.points ?? []
+            journaled = await RecordingPreparation.normalizedPointsOffMain(points).count
+        } catch {
+            // A journal that cannot be read cannot be saved either, and
+            // nothing here may decide unasked that it held nothing.
+            Self.logger.error(
+                "Stop could not count the journal: \(error.localizedDescription, privacy: .public)"
+            )
+            return self.sessionID == sessionID && isStoppable ? .confirmDiscard : nil
+        }
+        guard self.sessionID == sessionID, isStoppable else { return nil }
+        return stopStep(pointCount: max(stats.pointCount, journaled))
+    }
+
+    /// The phases Stop is offered in.
+    private var isStoppable: Bool {
+        phase == .waitingForFix || phase == .recording || phase == .paused
+    }
+
+    private func stopStep(pointCount: Int) -> RecordingStopStep {
         RecordingStopStep(
-            pointCount: stats.pointCount,
+            pointCount: pointCount,
             holdsKeepsakes: currentHike.map { $0.hasPhotos || !$0.places.isEmpty } ?? false
         )
     }

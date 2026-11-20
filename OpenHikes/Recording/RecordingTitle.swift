@@ -27,6 +27,16 @@
 //  something does: a trail's name is somebody else's text, and nothing here
 //  knows its gender or its case.
 //
+//  ## A name too long for a title
+//
+//  A title is bounded, and the cut is made from the end (``HikeTitle``). A
+//  route relation's name can be a paragraph, and cut whole, it took the
+//  loop's word and the day with it, so two walks of the same trail on two
+//  days were offered one name. So the day, the loop's word and the
+//  separators take their room first, and the town and the trail share what
+//  is left: the town as much as it needs up to half of it, and the trail the
+//  rest, since the trail's name is the one that runs long.
+//
 
 import Foundation
 import OpenHikesData
@@ -42,7 +52,9 @@ nonisolated enum RecordingTitle {
     /// Bounded through ``HikeTitle``, like every name this app did not get
     /// from a keyboard: the town is MapKit's text and the trail's name is
     /// OpenStreetMap's, both arriving over the network, and a route
-    /// relation's name is occasionally a paragraph.
+    /// relation's name is occasionally a paragraph. What a long name gives
+    /// up is its own end, never the loop's word or the day — see *A name too
+    /// long for a title* above.
     ///
     /// - Parameters:
     ///   - city: The town the walk started in.
@@ -63,14 +75,61 @@ nonisolated enum RecordingTitle {
             trailName?.caseInsensitiveCompare(town) == .orderedSame ? nil : town
         }
         guard town != nil || trailName != nil else { return nil }
-        let trailPart = trailName.map { name in
-            shape == .loop && !saysLoop(name) ? String(localized: "\(name) Loop") : name
-        }
+        let isLoop = shape == .loop && trailName.map { !saysLoop($0) } ?? false
+        let dayPart = day(date, calendar: calendar)
+
+        var room = Room()
+        room.take(dayPart)
+        room.take(separator)
+        if town != nil, trailName != nil { room.take(separator) }
+        if isLoop { room.take(loop("")) }
+        let fittedTown = town.flatMap { room.fit($0, sharing: trailName == nil ? 1 : 2) }
+        let fittedTrail = trailName.flatMap { room.fit($0) }
+        guard fittedTown != nil || fittedTrail != nil else { return nil }
+        let trailPart = fittedTrail.map { isLoop ? loop($0) : $0 }
         return HikeTitle.bounded(
-            [town, trailPart, day(date, calendar: calendar)]
+            [fittedTown, trailPart, dayPart]
                 .compactMap(\.self)
                 .joined(separator: separator)
         )
+    }
+
+    /// A trail's name with the word for a loop beside it.
+    private static func loop(_ name: String) -> String {
+        String(localized: "\(name) Loop")
+    }
+
+    /// What is left of a title's bound, in both its units, as the parts are
+    /// given their room.
+    private struct Room {
+        /// The bytes a bound allows each of its characters.
+        private static let bytesPerCharacter = HikeTitle.maximumUTF8Bytes / HikeTitle.maximumCharacters
+
+        private var characters = HikeTitle.maximumCharacters
+        private var utf8Bytes = HikeTitle.maximumUTF8Bytes
+
+        /// Gives `text` its room whole.
+        ///
+        /// A sum of the parts' counts, which the joined text can only come in
+        /// under: a part that opens with a combining mark joins the character
+        /// before it rather than adding one.
+        mutating func take(_ text: String) {
+            characters -= text.count
+            utf8Bytes -= text.utf8.count
+        }
+
+        /// As much of `name` as fits in one `share`-th of the room left,
+        /// trimmed, and `nil` when none of it does. Whatever it takes is taken.
+        ///
+        /// Cut by ``BoundedText``, as every title is, to a bound whose bytes
+        /// fit too: a bound allows each character
+        /// ``bytesPerCharacter``, so it is held to the bytes left as well.
+        mutating func fit(_ name: String, sharing share: Int = 1) -> String? {
+            let allowed = min(characters, utf8Bytes / Self.bytesPerCharacter) / share
+            let fitted = BoundedText.bounded(name, to: TextBound(characters: max(0, allowed)))
+            if let fitted { take(fitted) }
+            return fitted
+        }
     }
 
     /// The day every default name ends with.
