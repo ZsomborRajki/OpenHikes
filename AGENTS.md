@@ -8,6 +8,8 @@ open work lives in [issues](https://github.com/ZsomborRajki/OpenHikes/issues).
 
 Most source files open with a header that argues for their design. When a rule
 below names a type, a file or a test, that is where the longer reasoning lives.
+This file keeps what a change must not break and where to read on. How a
+feature behaves is in its source (see *Documentation*).
 
 ## House rules
 
@@ -60,14 +62,6 @@ xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes \
 #   -only-testing:OpenHikesTests/HikeStatisticsTests
 #   -only-testing:'OpenHikesTests/HikeStatisticsTests/elevationGainAndLoss()'
 
-# The same two bundles on the deployment floor, from a pool of its own: an
-# iPhone 16 Pro on iOS 18.6 (see *Deployment floor*). Then the same test
-# command with -destination "platform=iOS Simulator,id=$floor".
-floor="$(OPENHIKES_SIM_POOL_PREFIX='OpenHikes Floor' \
-  OPENHIKES_SIM_POOL_DEVICE_TYPE='iPhone 16 Pro' \
-  OPENHIKES_SIM_POOL_RUNTIME=com.apple.CoreSimulator.SimRuntime.iOS-18-6 \
-  Scripts/sim-pool.sh acquire)"
-
 # The two local packages, on the macOS host, with warnings as errors as CI runs
 # them (CI repeats both with --configuration release). Add --filter <Suite> for
 # one suite, such as MercatorTests in OpenHikesShared.
@@ -89,8 +83,7 @@ xcodebuild build -project OpenHikes.xcodeproj -scheme OpenHikesWatch \
 # clones, then a serial pass
 Scripts/run-ui-tests.sh --all --device "$udid" --derived-data DerivedData
 
-# Give the simulator back once this session's testing is done (the floor's
-# with the same OPENHIKES_SIM_POOL_PREFIX)
+# Give the simulator back once this session's testing is done
 Scripts/sim-pool.sh release
 ```
 
@@ -102,87 +95,69 @@ script tests and the page check.
 - **Boot before you test.** `acquire` waits on `simctl bootstatus -b`. A cold
   simulator fails with "Early unexpected exit, operation never finished
   bootstrapping", or after nearly six minutes with "The test runner hung before
-  establishing connection". Booted first, the same run passes in eighteen
-  seconds.
+  establishing connection".
 - **`-only-testing:` can select nothing and still pass.** An identifier it
-  cannot resolve is ignored. A suite declared inside an `extension` looks like
-  that (`BackgroundDeliveryTests` lives in `extension WidgetFeedSuites`), and so
-  does a method missing its `()`. A job that pins identifiers has to count what
-  ran, as `Scripts/check-sanitized-selection.sh` does for TSan.
+  cannot resolve is ignored: a suite declared inside an `extension`
+  (`BackgroundDeliveryTests` lives in `extension WidgetFeedSuites`), or a
+  method missing its `()`. A job that pins identifiers has to count what ran,
+  as `Scripts/check-sanitized-selection.sh` does for TSan.
 - **Suspect the device before the code.** Failures that differ on every run
   (`Test crashed with signal kill`, `kAXErrorServerNotFound`,
-  `Application … is not running`) mean two runs shared a simulator. That has
-  been mistaken for a product bug four times.
+  `Application … is not running`) mean two runs shared a simulator.
 - **Rebase before trusting a timing.** A stale branch still pays for slowness
   that `main` has since fixed. Compare against `main` at the same commit.
 
 ### CI
 
-`.github/workflows/ci.yml` has eight jobs that can fail a run:
-
-| Job | What it covers |
-|---|---|
-| `Published legal pages` | The pages the app links in `docs/` (`Scripts/check-legal-pages.sh`) |
-| `Lint and shared package` | Lint, script tests, both packages in Debug and Release |
-| `App and widget tests` | Strict suite preconditions, the string-catalog check, the coverage floor |
-| `iOS Debug build`, `iOS Release build` | Simulator builds |
-| `Unsigned iOS archive` | A device archive |
-| `Thread sanitizer` | Concurrency suites under TSan |
-| `Accessibility UI tests` | The two accessibility UI classes |
+`.github/workflows/ci.yml` has eight jobs that can fail a run: `Published
+legal pages`, `Lint and shared package` (with the script tests, and both
+packages in Debug and Release), `App and widget tests` (with strict suite
+preconditions, the string-catalog check and the coverage floor), `iOS Debug
+build`, `iOS Release build`, `Unsigned iOS archive`, `Thread sanitizer` and
+`Accessibility UI tests`.
 
 - **None of them is a required check.** `main`'s branch protection has no
   `required_status_checks`, so a red run reports a problem but blocks nothing.
-- **A merged branch's runs are cancelled for it.** `concurrency` cancels a run
-  only when a newer push to the same ref supersedes it, and neither a merge nor
-  a branch deletion is a push, so a merged branch's queued runs used to sit on
-  macOS runners while the branches still open waited behind them.
-  `.github/workflows/cancel-superseded-runs.yml` hands the branch to
-  `Scripts/cancel-branch-runs.sh` on a `delete` event and on a closed pull
-  request, which takes down every unfinished run that a push or the pull
-  request started on it, leaving alone a dispatched run (a TestFlight upload)
-  and a reopened pull request's. It refuses the default branch: a queued run
-  there is the only thing that will ever say whether that commit compiles.
+- **A merged branch's runs are cancelled for it**
+  (`cancel-superseded-runs.yml`, `Scripts/cancel-branch-runs.sh`), except a
+  dispatched run's. The script refuses the default branch: a queued run there
+  is the only thing that will ever say whether that commit compiles.
 - **Documentation-only pull requests skip the jobs.** The `changes` job runs
   everything unless every changed path is `*.md`, `LICENSE` or under `docs/`. It
   is a job-level `if:` rather than `paths-ignore:`, because a skipped job
-  reports success and so would not block a check made required later. A push
-  to `main` builds everything. `Published legal pages` has no `if:`: it is
-  the one job that reads `docs/`, and it takes seconds.
+  reports success and so would not block a check made required later.
+  `Published legal pages` always runs: it is the one job that reads `docs/`.
 - **The toolchain is pinned.** CI uses the `xcode-27` image with Xcode 27.0
   pinned by `DEVELOPER_DIR` at the top of `ci.yml`, and its Swift is 6.4. A
-  local Xcode 27.x matches only while `xcrun swift --version` says 6.4 too; a
-  point release that moves the Swift minor reopens the gap. While CI ran Xcode
-  26.6, that version difference broke `main` three times with errors no local
-  build could show.
+  local Xcode 27.x matches only while `xcrun swift --version` says 6.4 too.
+  While CI ran Xcode 26.6, that version difference broke `main` three times
+  with errors no local build could show.
 - **CodeQL is the exception.** `codeql.yml` stays on `macos-26` with Xcode 26.6
-  until a CodeQL bundle supports Swift 6.4 (watch `swift/ql/lib/CHANGELOG.md`).
-  That makes it the one job compiling with the older Swift, so it catches code
-  Xcode 27 accepts but 26.6 rejects:
-  - a nested type in an unannotated extension (see *Concurrency*)
-  - a member of a type reached only through a transitive import (import its
-    module)
-  - a memberwise init hidden by a `private` stored property (write the init out)
-
-  `reorderable()` and `reorderContainer(for:)`, the app's only iOS 27.0 APIs,
-  sit behind `#if compiler(>=6.4)` as well as `#available`, so that this job
-  still builds — at the deployment floor, like every other job. The one iOS
-  27.1 API, `toolbarVerticalBehavior(_:)`, sits behind
+  until a CodeQL bundle supports Swift 6.4. That makes it the one job
+  compiling with the older Swift and SDK, so it catches what Xcode 27 accepts
+  and 26.6 rejects: a nested type in an unannotated extension (see
+  *Concurrency*), a member of a type reached only through a transitive import,
+  and a memberwise init hidden by a `private` stored property.
+- **An API newer than CI's SDK needs a compile-time gate as well as
+  `#available`.** `reorderable()` and `reorderContainer(for:)`, the app's only
+  iOS 27.0 APIs, sit behind `#if compiler(>=6.4)` for CodeQL. The one iOS 27.1
+  API, `toolbarVerticalBehavior(_:)`, sits behind
   `#if canImport(SwiftUI, _version: 8.0.85)`: CI's Xcode 27.0 is Swift 6.4 too,
   and only the SDK's SwiftUI version (8.0.84 there) tells it apart.
 - **The coverage floor.** `OpenHikes.app` line coverage must stay at or above
-  76% (`COVERAGE_FLOOR`). The measurement leaves out the files in
-  `Scripts/coverage-exclusions.txt`, which are entirely SwiftUI body code that
-  only UI suites evaluate. Put a new screen, or a section folded out of two
-  screens, on that list in the same change. Anything containing logic stays off
-  it, and the floor is never lowered. A stale path in the list fails the gate.
+  76% (`COVERAGE_FLOOR`), and the floor is never lowered. The measurement
+  leaves out the files in `Scripts/coverage-exclusions.txt`, which are
+  entirely SwiftUI body code that only UI suites evaluate. Put a new screen on
+  that list in the same change; anything containing logic stays off it. A
+  stale path in the list fails the gate.
 - **Every `xcodebuild` in `ci.yml` passes `-skipPackagePluginValidation`.** Add
   it to any new call too: SwiftLint plugin trust is stored per user, and a
   fresh runner has none.
 - **A program inside YAML is a program nothing checks.** Logic beyond a shell
-  conditional goes in a script under `Scripts/`. The thresholds it enforces stay
+  conditional goes in a script under `Scripts/`, where
+  `Scripts/run-script-tests.sh` exercises it. The thresholds it enforces stay
   in the workflow as environment variables, beside the comments that argue for
-  them. Every `*.sh` file is parse-checked, and `Scripts/run-script-tests.sh`
-  exercises each gate.
+  them.
 
 ### A second session on this machine
 
@@ -192,167 +167,108 @@ either: the second run waits silently on the first run's build lock.
 
 - **Get the device from the pool, never from `simctl create`.**
   `Scripts/sim-pool.sh acquire` hands out the lowest-numbered free
-  `OpenHikes Pool <n>`, booted and with the photo library granted. It creates a
-  new device only when every existing one is held, up to
-  `OPENHIKES_SIM_POOL_MAX` (5).
-  - A device that changes hands is replaced with a fresh clone of a settled
-    `OpenHikes Template (<device type>, <runtime>)`. An erased iOS 27 simulator
-    downloads about 1.4 GB of Siri and speech models on its next boot; a clone
-    boots in seconds.
-  - The same owner always gets its own device back, data intact, even after
-    `release` if nobody else has taken it since. So it is safe to call before
-    every test command.
-  - Inside Claude Code the owner is the session, and the claim ends with the
-    session's process.
-  - Any claim also lapses after `OPENHIKES_SIM_POOL_TTL_MINUTES` (180) without
-    a renewal, unless a running process still names the device. A device that a
-    running process names is never handed out.
-- **Never boot, erase or delete an `OpenHikes Template (…)`.** Losing one means
-  downloading those 1.4 GB again, and `adopt` refuses templates.
-  `Scripts/sim-pool.sh template` settles a template, or refreshes one older than
-  `OPENHIKES_SIM_TEMPLATE_REFRESH_DAYS` (7). Settling or refreshing downloads
-  about 1.4 GB, and `acquire` does either on its own when it needs a clean
-  device and the template is missing or stale (or erases instead, which also
-  downloads), so run `template` first on an unmetered connection.
+  `OpenHikes Pool <n>`, booted and with the photo library granted, and creates
+  one only when every existing one is held, up to `OPENHIKES_SIM_POOL_MAX` (5).
+  The same owner always gets its own device back, data intact, so it is safe
+  to call before every test command. Inside Claude Code the owner is the
+  session, and the claim ends with the session's process. The script's header
+  has the rest.
+- **Never boot, erase or delete an `OpenHikes Template (…)`.** A device that
+  changes hands is replaced with a clone of a settled template, because an
+  erased iOS 27 simulator downloads about 1.4 GB of Siri and speech models on
+  its next boot. `Scripts/sim-pool.sh template` settles or refreshes one, with
+  that download.
 - **When the pool is full, do not make a device of your own**, and never delete
-  a pool device or boot one by name. Instead:
-  - `status` shows who holds each device and how old each template is.
-  - `adopt <name|udid>` brings an idle leftover simulator into the pool.
-  - `prune --keep <n>` deletes free devices beyond the lowest `n`.
-  - `release` gives your device back. A session that ends frees its device
-    anyway.
-
+  a pool device or boot one by name. `status` shows who holds each device,
+  `adopt <name|udid>` brings an idle leftover simulator in, `prune --keep <n>`
+  deletes free devices beyond the lowest `n`, and `release` gives yours back.
   To try out a change to the pool script itself, set
   `OPENHIKES_SIM_POOL_PREFIX` to get a separate pool.
-- **`Scripts/run-ui-tests.sh` holds its device for the whole run.** It writes a
-  PID lock under `~/Library/Caches/OpenHikes/ui-test-locks` and refuses a second
-  run on that device. A lock left by a killed run is taken over, and
-  `--no-device-lock` forces past one. Pass each session its own `--device`
-  (name or UDID) and `--derived-data <path>`, or set
-  `OPENHIKES_SIMULATOR_NAME` and `OPENHIKES_DERIVED_DATA` once per session.
-- **Pass `Scripts/simulate-hike.sh` a UDID.** It reads `OPENHIKES_SIMULATOR`
-  and hands it to `simctl location`, which accepts a UDID or `booted` but not a
-  name.
+- **`Scripts/run-ui-tests.sh` holds its device for the whole run**, with a PID
+  lock under `~/Library/Caches/OpenHikes/ui-test-locks`, and refuses a second
+  run on that device (`--no-device-lock` forces past one). Pass each session
+  its own `--device` (name or UDID) and `--derived-data <path>`.
+- **Pass `Scripts/simulate-hike.sh` a UDID** (`OPENHIKES_SIMULATOR`).
+  `simctl location` accepts a UDID or `booted` but not a name.
 
 ### The iPhone Duo
 
 - **It needs a runtime of its own, which runs no other device:** iOS 27.1 as
   Xcode 27.1 installed it, and a build of iOS 27.2 for the Duo alone under
-  Xcode 27.2. CI's Xcode 27.0 has neither, so no gate runs on a Duo, and
-  the 27.1 SDK's Duo APIs (`toolbarVerticalBehavior`, the one the app uses,
-  and `ArrangementView`, `reservedRegions`, `toolbarVerticalEdge`) do not
-  exist where CI compiles; *CI* above has the gate they need. Templates and
-  the pool pick the newest runtime that runs their device type, never just
-  the newest.
-- **It boots closed**, on the cover display (466 × 678 points), and only
-  Device Hub opens it by hand. `Scripts/duo-pose.sh open --device <udid>`
-  unfolds it to the inner display (669 × 951, upright) and reads the display
-  state back; one unfold from cold is the move to rely on.
-  `--orientation landscape` leaves it the way it unfolds, 951 × 669: wide
-  enough for a map beside the side panel, so the map screen draws one.
+  Xcode 27.2. CI's Xcode 27.0 has neither, so no gate runs on a Duo, and the
+  27.1 SDK's Duo APIs do not exist where CI compiles (*CI* has the gate).
+  Templates and the pool pick the newest runtime that runs their device type,
+  never just the newest.
+- **It boots closed**, on the cover display (466 × 678 points).
+  `Scripts/duo-pose.sh open --device <udid>` unfolds it to the inner display
+  (669 × 951, upright) and reads the display state back.
+  `--orientation landscape` leaves it 951 × 669, wide enough for the map
+  screen's side panel.
 - **Opening it takes hinge**
   ([artemnovichkov/hinge](https://github.com/artemnovichkov/hinge)), an
-  optional tool that posts the event Device Hub's hinge slider posts. It is
-  installed rather than kept here, so a release reaches the scripts with
-  `brew upgrade`.
-  - Only opening needs it. Without hinge, `Scripts/duo-pose.sh closed` reads
-    the cover back, and an open screenshot set is skipped with a message
-    saying so.
-  - Give hinge the pool device every time (`-d "$udid"`). Without `-d` it
-    folds the only booted iPhone Duo, which on a shared machine can be
-    another session's. Its Claude Code plugin
-    (`/plugin marketplace add artemnovichkov/hinge`) teaches an agent the
-    same commands.
+  optional Homebrew tool. Give it the pool device every time (`-d "$udid"`):
+  without `-d` it folds the only booted iPhone Duo, which on a shared machine
+  can be another session's.
 - **XCTest sees it through the cover.** `XCUIScreen.main` is the cover display
-  open or closed (the inner one is the other `XCUIScreen.screens` entry), and
-  on the inner display turned sideways `app.frame` stays portrait while
-  `app.windows.firstMatch.frame` turns. There `isHittable` also answers no for
-  everything in the side panel, so the shared helpers measure the window and
-  skip it (`OpenHikesUITests/WindowSupport.swift`).
-- The screenshot set shoots on it open, on its side, with `--device-type
-  "iPhone Duo"`; see `Screenshots/README.md`.
+  open or closed, and on the inner display turned sideways `app.frame` stays
+  portrait while `app.windows.firstMatch.frame` turns. There `isHittable` also
+  answers no for everything in the side panel, so the shared helpers measure
+  the window and skip it (`OpenHikesUITests/WindowSupport.swift`).
 
 ### The iPad
 
 - **It runs the iPhone's screens, laid out by the window.** Nothing in the app
   asks which device it is on, except whether it is a Mac (*The Mac*). A
-  full-screen iPad either way up is wide enough for the map screen's side
-  panel, and a window narrowed beside another app gets the sheet a phone gets
-  (*The map screen*).
+  full-screen iPad either way up takes the map screen's side panel, and a
+  window narrowed beside another app gets the sheet a phone gets (*The map
+  screen*).
 - **One window.** `UIApplicationSceneManifest~ipad` turns multiple scenes off,
-  because each window builds its own `OpenHikesView`, whose launch work — the
-  tile, photo and sidecar sweeps and the library-line reads — would run again
-  beside the first. iPadOS 26 still resizes that one window.
-  `InfoPlistContractTests` pins it, with the four orientations App Store
-  Connect requires of an iPad app that shares the screen.
-- **What an iPad lacks.** It pairs with no watch (`WCSession.isSupported()` is
-  false, so the watch link never starts), and a Wi-Fi model has no GPS. The
-  widget offers the iPhone's three Home Screen sizes; `.systemExtraLarge`
-  waits for a basemap its size.
-- **Take one from a pool of its own**, and pass its UDID as usual:
-  `OPENHIKES_SIM_POOL_PREFIX='OpenHikes iPad'
-  OPENHIKES_SIM_POOL_DEVICE_TYPE='iPad Pro 13-inch (M5)' Scripts/sim-pool.sh
-  acquire`. No gate runs on an iPad. There `isHittable` answers no for
-  everything in the side panel, either way up, and the shared helpers skip it
-  as they do on the Duo (`OpenHikesUITests/WindowSupport.swift`).
-- The screenshot set shoots on it upright, with `--device-type "iPad Pro
-  13-inch (M5)"`; see `Screenshots/README.md`.
+  because each window would build its own `OpenHikesView` and run its launch
+  sweeps again. `InfoPlistContractTests` pins it, with the four orientations
+  App Store Connect requires.
+- **It pairs with no watch** (`WCSession.isSupported()` is false), and a Wi-Fi
+  model has no GPS.
+- **Take one from a pool of its own:** `OPENHIKES_SIM_POOL_PREFIX='OpenHikes
+  iPad' OPENHIKES_SIM_POOL_DEVICE_TYPE='iPad Pro 13-inch (M5)'
+  Scripts/sim-pool.sh acquire`. No gate runs on an iPad, and `isHittable`
+  answers no in its side panel as on the Duo.
 
 ### The Mac
 
 - **An Apple silicon Mac runs the iPad app as it is.** There is no Mac target
   and no Catalyst build: Xcode's *My Mac (Designed for iPad)* destination runs
-  the device build in a window that resizes as an iPad's does (*The iPad*).
-  Xcode offers that destination only to a target whose `SDKROOT` is
-  `iphoneos`, so neither the app nor `OpenHikesTests` may go back to the
-  multiplatform template's `auto`.
-- **A symbol the Mac's libraries lack stops the launch.** The app binds
-  against macOS's copies of the iOS libraries, and dyld refuses a binary that
-  names a missing symbol strongly, before any code runs ("Symbol not found" in
-  the crash report). The iOS SDK compiles such a reference without a word.
-  - CoreLocation's overlay on the Mac has `CLBackgroundActivitySession` but
-    not its `Diagnostic` or `diagnostics`. The app target links the overlay
-    weakly (`OTHER_LDFLAGS = -weak-lswiftCoreLocation`, held by
-    `MacLaunchContractTests`), and the recorder starts the task that reads
-    the diagnostics only where `isiOSAppOnMac` is false: a missing weak
-    symbol binds to nothing, and calling it crashes.
+  the device build. Xcode offers that destination only to a target whose
+  `SDKROOT` is `iphoneos`, so neither the app nor `OpenHikesTests` may go back
+  to the multiplatform template's `auto`.
+- **A symbol the Mac's libraries lack stops the launch.** dyld refuses a
+  binary that names a missing symbol strongly, before any code runs ("Symbol
+  not found" in the crash report), and the iOS SDK compiles such a reference
+  without a word. So after adding a framework or a newer API, run the app on
+  the Mac once, through the code that uses it.
+  - CoreLocation's overlay on the Mac lacks `CLBackgroundActivitySession`'s
+    diagnostics, so the app target links it weakly
+    (`OTHER_LDFLAGS = -weak-lswiftCoreLocation`, held by
+    `MacLaunchContractTests`), and the recorder reads them only where
+    `isiOSAppOnMac` is false.
   - **Ask in the caller, never in the function that uses the symbol.** A
-    function can look up the metadata of the types it uses as it is
-    entered, before its first line runs, and the drain's async entry does,
-    in Debug and Release alike. A guard at its top came too late.
-  - `@_weakLinked import` cannot do this instead. The compiler wants it on
-    every import of the module or none.
-  - After adding a framework or a newer API, run the app on the Mac once,
-    through the code that uses it. `MacLaunchContractTests` holds the
-    launch, not what a missing symbol does when it is reached.
-  - Only macOS 27 has been checked. An older macOS's libraries may lack
-    symbols this one has, so run the app on one before App Store Connect
-    offers it to Macs (below).
+    function can look up the metadata of the types it uses as it is entered,
+    so a guard at its top comes too late. `@_weakLinked import` cannot do
+    this instead: the compiler wants it on every import of the module or
+    none.
 - **No hardened runtime.** The app target leaves `ENABLE_HARDENED_RUNTIME`
-  off, which the multiplatform template had turned on. A Mac's location
-  daemon will not even show the location prompt to an app signed with it and
-  without macOS's location entitlement, so the hiker could never allow
-  location there. iOS ignores the flag, and a simulator build is signed
-  without it whatever the setting says, so no hosted test can hold this.
-- **What a Mac lacks.** No GPS (it locates by Wi-Fi), no Health, watch, Live
-  Activity, motion or barometer. Each is asked about at run time, as on an
-  iPad, so the app goes without it. Its camera does open the camera picker.
-- **Settings shows a Mac only what a Mac uses** (`SettingsView.fieldSections`):
-  iCloud, the subscription, the photos switch, auto-save, map storage, blocks
-  and About.
-  Health, background tracking, the Live Activity, Auto-Pause, the reminders
-  and the screen switch are about a device carried on a trail, and are left
-  out there, keeping their stored values or defaults, which a recording on a
-  Mac still follows.
+  off: a Mac's location daemon will not show the location prompt to an app
+  signed with it and without macOS's location entitlement. No hosted test can
+  hold this.
+- **What a Mac lacks is asked about at run time**, as on an iPad: GPS, Health,
+  the watch, the Live Activity, motion and the barometer. Settings shows a Mac
+  only what a Mac uses (`SettingsView.fieldSections`).
 - **Running it outside Xcode.** Build with `-destination 'platform=macOS,
-  arch=arm64,variant=Designed for iPad'`, then put the `Debug-iphoneos` app
-  inside a wrapper, `X.app/Wrapper/OpenHikes.app` with an
-  `X.app/WrappedBundle` symlink to it, and `open` the wrapper; the bare app
-  is refused as "an incorrect executable format". Signing needs the Mac
-  registered to the team, which Xcode's automatic signing does.
-- **No gate runs on a Mac**, and whether the App Store offers the app there
-  is App Store Connect's switch (*iPhone and iPad Apps on Apple Silicon Macs*,
-  under Pricing and Availability), not the build's.
+  arch=arm64,variant=Designed for iPad'`, put the `Debug-iphoneos` app inside
+  a wrapper (`X.app/Wrapper/OpenHikes.app`, with an `X.app/WrappedBundle`
+  symlink to it) and `open` the wrapper.
+- **No gate runs on a Mac**, only macOS 27 has been checked, and whether the
+  App Store offers the app there is App Store Connect's switch, not the
+  build's.
 
 ### UI automation
 
@@ -362,25 +278,16 @@ either: the second run waits silently on the first run's build lock.
 a change to recording, the map, the sheet or the render path; the PR template,
 `CONTRIBUTING.md` and this file all ask for it.
 
-- **A bare `--all`:**
-  - spreads classes across four clones (under twenty minutes, against about
-    fifty serially)
-  - then runs the `serial_tests` list on one simulator
-  - retries failures only, so a green run pays nothing extra
-
-  `--serial`, `--parallel N` and `--no-retry` change that. Anything narrower
-  stays serial, which keeps CI's `--suite` runs on one device. Neither
-  `serial_tests` nor retries is a place for a broken test: anything that fails a
-  `--suite X --test Y` run fails for its own reasons. Each pass ends by listing
-  what failed and what only passed on retry.
+- **A bare `--all`** spreads classes across four clones (under twenty minutes,
+  against about fifty serially), then runs the `serial_tests` list on one
+  simulator, and retries failures only. Anything narrower stays serial, which
+  keeps CI's `--suite` runs on one device. Neither `serial_tests` nor retries
+  is a place for a broken test.
 - **A new `XCTestCase` must join the script's class list**, or `--all` never
-  runs it; `run-script-tests.sh` fails when a class is missing. There are two
-  exceptions:
-  - `ScreenshotUITests` belongs to the screenshot scripts (see
-    `Screenshots/README.md`).
-  - `testLaunchPerformance` is kept out by `measurement_tests`, because a
-    contended machine measures itself. Let its measure block end on its own:
-    `stopMeasuring()` makes the launch metric raise.
+  runs it; `run-script-tests.sh` fails when a class is missing. The two
+  exceptions are `ScreenshotUITests`, which belongs to the screenshot scripts
+  (`Screenshots/README.md`), and `testLaunchPerformance`, kept out by
+  `measurement_tests`.
 - **There is no sysdiagnose.** Runs pass `-collect-test-diagnostics never`,
   because Xcode 27's end-of-session `simctl diagnose` hangs for 600 seconds.
   The evidence is in the result bundle (`--result-bundle <path>`).
@@ -388,27 +295,22 @@ a change to recording, the map, the sheet or the render path; the PR template,
   isolated `UserDefaults`. Further `DEBUG`-only `--ui-test-…` arguments seed
   data, force failures or replace a network source; each takes effect only
   alongside `--ui-testing`. `AppLaunchEnvironment` is the list, and a new
-  argument goes there. Two do the reverse, and belong to the App Store
-  frames alone: `--ui-test-live-maker` lets the trail maker ask Apple Maps
-  and the billed Stadia elevation for real, for the frame of a drawn trail,
-  and `--ui-test-tile-server` draws the OpenHikes map from the tile server,
-  for every frame.
-- **No UI launch shows a first-run tip unless it passes `--ui-test-tips`**,
-  which starts them from an empty store of their own (`TipLaunch`). Only
-  `FirstRunTipsUITests` does, so no other suite and no screenshot meets one.
+  argument goes there. Two do the reverse and reach real services, for the
+  App Store frames alone: `--ui-test-live-maker` and `--ui-test-tile-server`.
+- **No UI launch shows a first-run tip unless it passes `--ui-test-tips`**
+  (`TipLaunch`). Only `FirstRunTipsUITests` does.
 - **Reuse the shared helpers.** `OpenHikesUITests/UITestSupport.swift` has the
   fixtures, launch helpers and gestures, and `AccessibilityAuditSupport.swift`
-  has the audit support. A file named `Suite+Something.swift` extends `Suite`;
-  it is never a second class.
+  the audit support. A file named `Suite+Something.swift` extends `Suite`; it
+  is never a second class.
 - **A spoofed route must respect `RecordingFixPolicy`.** A static simulated
   location is delivered once, so a fix that gets rejected has to be set again.
   Wait on the `recording-point-count` element. For longer playback, use
   `Scripts/simulate-hike.sh`.
-- **A spoofed stop has to pace.** A simulator delivers no fix for a position
-  inside the recording's distance filter, and it has no motion sensors, so
-  standing still is silence that Auto-Pause cannot call a stop. A scenario
-  paces between two spots inside the stop's area, and asks for a stop it can
-  wait out with `--ui-test-auto-pause-seconds`
+- **A spoofed stop has to pace.** A simulator delivers no fix inside the
+  recording's distance filter and has no motion sensors, so standing still is
+  silence that Auto-Pause cannot call a stop. A scenario paces between two
+  spots inside the stop's area, with `--ui-test-auto-pause-seconds`
   (`RecordingUITests+AutoPause.swift`).
 - **The accessibility suites.** `AccessibilityUITests` audits each screen
   without `.contrast`, `.textClipped` and `.dynamicType` (each exclusion is
@@ -421,14 +323,11 @@ a change to recording, the map, the sheet or the render path; the PR template,
 - **App tests use in-memory SwiftData fixtures** from
   `OpenHikesTests/General/TestSupport.swift`. `Fixture.hike(in:configure:)`
   inserts before it configures, because `Hike`'s device-local passthroughs do
-  nothing on a row with no context.
-  - Give anything that has a clock, a transport, defaults or a location an
-    injected one.
-  - A suite that touches tiles builds a `TileSandbox`, never
-    `TileCache.shared`.
+  nothing on a row with no context. Give anything that has a clock, a
+  transport, defaults or a location an injected one. A suite that touches
+  tiles builds a `TileSandbox`, never `TileCache.shared`.
 - **Both unit bundles are hosted by the app and serialized**
-  (`parallelizable: false` in `OpenHikes.xctestplan`). `OpenWidgetTests`
-  compiles the `OpenWidget/` sources into itself.
+  (`parallelizable: false` in `OpenHikes.xctestplan`).
   - The app's `.task`s run before any test, so startup work that writes shared
     state, or would mirror to iCloud, stays behind
     `AppLaunchEnvironment.isRunningTests`.
@@ -445,68 +344,53 @@ a change to recording, the map, the sheet or the render path; the PR template,
     authorization change.
   - To prove something did not happen, wait for the effect that must follow
     it, then assert.
-- **Compare floating-point values with `isApproximatelyEqual`.** Write
-  `a.isApproximatelyEqual(to: b, absoluteTolerance: t)`, from swift-numerics'
-  `RealModule`, rather than `abs(a - b) < t`. If the test target does not link
-  the module yet, add it as a dependency rather than writing a helper. Put any
-  optional chain on the `to:` side. Bounds and inequality stay written out,
-  because `!isApproximatelyEqual` passes a NaN.
+- **Compare floating-point values with `isApproximatelyEqual`**
+  (`a.isApproximatelyEqual(to: b, absoluteTolerance: t)`, from swift-numerics'
+  `RealModule`), rather than `abs(a - b) < t`. Put any optional chain on the
+  `to:` side. Bounds and inequality stay written out, because
+  `!isApproximatelyEqual` passes a NaN.
 - **Report a missing environment capability through `SuitePrecondition`.**
   Today that means the App Group container. Strict mode turns a skip into a
-  failure, and CI runs strict. Turn it on with
-  `SWIFT_ACTIVE_COMPILATION_CONDITIONS="\$(inherited) REQUIRE_ALL_SUITES"`, or
-  with `OPENHIKES_REQUIRE_ALL_SUITES=1` in the scheme.
+  failure, and CI runs strict (`REQUIRE_ALL_SUITES` as a compilation
+  condition, or `OPENHIKES_REQUIRE_ALL_SUITES=1` in the scheme).
 
 ### Lint and tools
 
 - **`Scripts/lint.sh`** runs strict SwiftLint at the pinned version. It exits
-  0 when clean, 2 on violations, and 1 when it could not lint at all (SwiftLint
-  reads an unparseable `.swiftlint.yml` as a warning and lints against its
-  defaults).
+  0 when clean, 2 on violations, and 1 when it could not lint at all.
   - The version is the SwiftLintPlugins pin in the app's `Package.resolved`,
-    the SwiftLint the build plugin runs, so Dependabot's bump of the plugin
-    moves the CLI too. CI's install step then fails until the `SwiftLint.pkg`
-    checksum beside it in `ci.yml` is updated for the new release.
+    so Dependabot's bump of the plugin moves the CLI too. CI's install step
+    then fails until the `SwiftLint.pkg` checksum beside it in `ci.yml` is
+    updated for the new release.
   - Strict mode makes the *warning* thresholds fail. The ones a large change
     hits are `line_length` 120 (comments exempt), `file_length` 500,
     `type_body_length` 300, `function_body_length` 60, `closure_body_length` 40
     and `cyclomatic_complexity` 12.
-  - The project's own `custom_rules`:
-    - one `@Suite` per file
-    - American spelling in names and in literals outside the test bundles
-      (color, center, license, meter, gray)
-    - the typographic ’ in user-visible copy
-    - `ForEach` over `x.indexed()`, never over `Array(x.enumerated())`
-      (`x.enumerated()` alone is random access only from iOS 26)
-
+  - The project's own `custom_rules`: one `@Suite` per file; American
+    spelling in names and in literals outside the test bundles (color,
+    center, license, meter, gray); the typographic ’ in user-visible copy;
+    and `ForEach` over `x.indexed()`, never over `Array(x.enumerated())`.
     Somebody else's vocabulary, such as an OSM tag or a wire key, carries
     `swiftlint:disable:this`.
 - **The Xcode build lints too**, through the SwiftLint build-tool plugin, but
   without `--strict`. Warnings never show there, but an *error* fails the
-  prebuild step and with it every target. The error thresholds sit next to the
-  warning thresholds in `.swiftlint.yml`, and some rules (`force_cast`,
+  prebuild step and with it every target, and some rules (`force_cast`,
   `force_try`, `unhandled_throwing_task`, the custom rules) error on a single
   occurrence.
 - **SwiftLint walks dot-directories.** `excluded: "**/.*"` keeps a worktree or
   a scratch copy inside the checkout out of the lint.
 - **Optional tools** run if installed (`brew install xcbeautify periphery
-  xcode-build-server artemnovichkov/tap/hinge osmium-tool`):
-  - `xcbeautify` formats `xcodebuild` output through
-    `Scripts/lib/xcodebuild-output.sh`. It prints nothing for output it cannot
-    parse (crashes, hangs, TSan reports), so the UI scripts keep a raw log. In
-    CI, every piped `run:` needs `set -o pipefail`.
+  xcode-build-server artemnovichkov/tap/hinge osmium-tool`).
+  - `xcbeautify` prints nothing for output it cannot parse (crashes, hangs,
+    TSan reports), so the UI scripts keep a raw log. In CI, every piped `run:`
+    needs `set -o pipefail`.
   - `Scripts/periphery.sh` requires the version it pins, or newer, because an
-    older Periphery ignores `.periphery.yml` and reports a clean scan. It
-    indexes into `.build/periphery`, and what it lists are candidates, not
-    verdicts.
+    older Periphery ignores `.periphery.yml` and reports a clean scan. What it
+    lists are candidates, not verdicts. No CI job runs it; run it after a
+    feature lands. With `MemberImportVisibility` on, deleting an unused
+    import is safe, because the build fails at once if it was load-bearing.
   - `xcode-build-server config -project OpenHikes.xcodeproj -scheme OpenHikes`
     writes the gitignored `buildServer.json` that `sourcekit-lsp` uses.
-  - `hinge` opens an iPhone Duo simulator; see *The iPhone Duo*.
-  - `osmium` reads an OpenStreetMap extract for `Scripts/trail-cells.sh build`;
-    see *The trail squares*.
-  - `pyosmium-up-to-date` keeps the planet current for
-    `Scripts/trail-cells.sh update-planet`. Homebrew has no formula for it:
-    `brew install pipx && pipx install osmium`.
 - **Hooks and formatting.** `Scripts/install-git-hooks.sh` installs an opt-in
   pre-push lint hook. There is no formatter.
 
@@ -516,40 +400,26 @@ a change to recording, the map, the sheet or the render path; the PR template,
   runs on demand with the version to ship (`gh workflow run testflight.yml -f
   version=<version> -f cloudkit_promoted=true`). It archives the branch it is
   run from, uploads it and pushes its tag. Its header lists the `testflight`
-  environment's secrets and how to set them, and argues why that environment
-  admits every branch.
+  environment's secrets and how to set them.
   - It stamps the version at build time and commits nothing, because `main`
     takes no pushes. So the tags, not `project.pbxproj`, record what shipped.
   - Each version's builds start at 1. After that, the build number is one
     past the highest build tagged or committed for that version
-    (`Scripts/release-version.sh`). An untagged upload from Xcode is invisible
-    to it; pass `build` past that one.
-- **Before an archive from Xcode, bump all four shipping targets together**, to
-  the build `Scripts/release-version.sh --version <version>` prints. The app,
-  the widget, the watch app and the watch widgets each carry
-  `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in `project.pbxproj`, and
-  the version and build committed there fall behind what the workflow tags.
-- **Run `Scripts/check-release-secrets.sh` before pressing Archive.** The
-  gitignored `OpenHikes/Secrets.plist` holds the Stadia and Thunderforest keys,
-  and an archive succeeds without it, shipping paid map styles that draw
-  nothing. `ci.yml` archives without keys on purpose, so the check is no step
-  of it. The TestFlight workflow writes the file from its secrets
-  (`Scripts/write-release-secrets.sh`), then runs the check on that file and on
-  the archived app's copy.
+    (`Scripts/release-version.sh`).
+  - It writes the gitignored `OpenHikes/Secrets.plist` (the Stadia and
+    Thunderforest keys) from its secrets, then runs
+    `Scripts/check-release-secrets.sh` on that file and on the archived app's
+    copy. An archive succeeds without the file, shipping paid map styles that
+    draw nothing, and `ci.yml` archives without keys on purpose.
 - **Promote the CloudKit schema before uploading.** An App Store Connect
   upload, TestFlight included, is signed for the production container, and a
   save there cannot add a field. Check production against the model first (see
   *CloudKit*). Nothing can check it for the workflow, so it refuses to start
   until `cloudkit_promoted` is ticked.
-- **Tag each archived commit.** Use an annotated tag,
-  `git tag -a v<MARKETING_VERSION>-<CURRENT_PROJECT_VERSION>`, and add a GitHub
-  Release for App Store builds. There are no release branches, so a tag is the
-  only way to map an Organizer crash report to a revision. The bump commit is
-  not the answer: the archive can be any commit at or after it. The workflow
-  tags its own uploads; an archive from Xcode is tagged by hand.
-- **Run `Scripts/periphery.sh` after a feature lands.** No CI job runs it. With
-  `MemberImportVisibility` on, deleting an unused import is safe, because the
-  build fails at once if the import was load-bearing.
+- **Every archived commit carries a tag**,
+  `v<MARKETING_VERSION>-<CURRENT_PROJECT_VERSION>`, which the workflow pushes.
+  There are no release branches, so a tag is the only way to map an Organizer
+  crash report to a revision. Add a GitHub Release for App Store builds.
 
 ## Architecture
 
@@ -567,11 +437,11 @@ a change to recording, the map, the sheet or the render path; the PR template,
   - Tests mirror the same folders.
 - **`OpenHikesData` is what a hike *is*.** This package holds the six
   `@Model` types (`Hike`, `HikeWalk`, `TrailPoint`, `HikeLocalState`,
-  `TrailDraftRecord`, `DeletedWatchWalk`), `OpenHikesSchema`, `RouteProfile`, their stored value
-  types and the framework-free logic over them.
-  - It defaults to `MainActor`, like the app.
-  - An app extension on one of its types takes the app's isolation, so a pure
-    static there needs `nonisolated`.
+  `TrailDraftRecord`, `DeletedWatchWalk`), `OpenHikesSchema`, `RouteProfile`,
+  their stored value types and the framework-free logic over them.
+  - It defaults to `MainActor`, like the app. An app extension on one of its
+    types takes the app's isolation, so a pure static there needs
+    `nonisolated`.
   - The container, the trail graph, recording, GPX, Community and every view
     stay in the app.
   - So do the words: only an app target extracts `String(localized:)`, so a
@@ -585,6 +455,10 @@ a change to recording, the map, the sheet or the render path; the PR template,
     links only this package pays for a dependency in full: five one-line
     swift-algorithms rewrites measured +610 KB on the widget and +1.2 MB on
     each watch product. Write the few lines by hand.
+  - Its platform guards are load-bearing: the watch build compiles it, where
+    `canImport(UIKit)` is true, and `swift test` compiles its macOS side.
+    Guard iOS-only API there with `os(iOS)` (or
+    `canImport(UIKit) && !os(watchOS)`).
 - **Targets: iPhone and iPad, plus a watch companion, and nothing else.** The
   shipping targets are `OpenHikes`, `OpenWidgetExtension` (the widget, the Live
   Activity views and the Control Center toggle), `OpenHikesWatch` (watchOS 11)
@@ -593,25 +467,16 @@ a change to recording, the map, the sheet or the render path; the PR template,
   the iPad app; see *The Mac*.
   - The app embeds the watch app, so building `OpenHikes` builds the watch
     too. Breaking the watch cannot leave CI green.
-  - An embedded extension's device family stays a subset of its host's, so
-    `OpenWidgetExtension` moves with the app; the archive job's
-    `ValidateEmbeddedBinary` enforces it. A subset still archives with an iPad
-    left out, so `InfoPlistContractTests` holds the widget's family equal to
-    the app's.
-  - In the app targets, the `canImport(UIKit)` and `#if os(iOS)` guards are kept
-    for possible later platforms, and nothing builds their other branch. In
-    `OpenHikesShared` they are load-bearing: the watch build compiles it, where
-    `canImport(UIKit)` is true, and `swift test` compiles its macOS side. Guard
-    iOS-only API there with `os(iOS)` (or `canImport(UIKit) && !os(watchOS)`).
+  - `InfoPlistContractTests` holds the widget's device family equal to the
+    app's.
 - **Synchronized folders compile everything in them**, and bundle their
   resources flat.
   - `OpenWidget/` feeds both the extension and `OpenWidgetTests`, minus
     `OpenWidgetBundle.swift`, because a test bundle cannot have a second
     `@main`.
   - `OpenHikes/SimulatedLocations/` is excluded from Release builds by
-    `EXCLUDED_SOURCE_FILE_NAMES`.
-  - `OpenHikes.storekit` is in no Resources phase.
-  - CI's archive job asserts that neither of the last two ships.
+    `EXCLUDED_SOURCE_FILE_NAMES`, and `OpenHikes.storekit` is in no Resources
+    phase. CI's archive job asserts that neither ships.
 
 ### The app
 
@@ -633,96 +498,47 @@ a change to recording, the map, the sheet or the render path; the PR template,
   observes stable controllers and updates `MKMapView` directly. Tiles flow
   through `CachingTileOverlayRenderer` into `TileCache`, auto-saves through
   `AutoSaveTileStore`, and bulk downloads through `OfflineTileDownloader`.
-- **Every hike in the library is on the map** (`LibraryLines`), faded
-  beneath the selected route, which it leaves out, and over the shared
-  hikes' lines.
-  - A line is read once, off the main actor, and thinned to a budget
-    (`LibraryLineOutline`). It is read again only when its row is saved:
-    `ModelContext.didSave` names the main context's saves, the store's
-    history an import's. Never by observing `route`. A read that fails stays
-    owed, with the old line drawn, until a pass reads it (`LibraryLines.LineRead`).
-  - One overlay and one renderer draw them all (`LibraryLinesRenderer`), so
-    hikes over the same trail do not stack into a solid line.
+- **Every hike in the library is on the map** (`LibraryLines`), faded beneath
+  the selected route. A line is read once, off the main actor, and read again
+  only when its row is saved, never by observing `route`. One overlay and one
+  renderer draw them all (`LibraryLinesRenderer`), so hikes over the same
+  trail do not stack into a solid line.
 - **A drawn trail is an ordinary `Hike`.** `TrailDraftSave` writes the same row
   a GPX import does, plus `Hike.drawnRouteData` (a `DrawnRoute`), which is what
-  *Edit Route* reads. That column is `nil` on recordings and imports.
-  - The draft, `TrailDraft`, is a stable `@Observable`. It persists as a
-    `TrailDraftRecord` in the **unmirrored** store, because a half-drawn line is
-    one device's work.
-  - The maker routes legs one at a time through one worker, since nineteen
-    parallel Overpass requests earn a `429`. Nothing on that path may block
-    drawing.
+  *Edit Route* reads. The draft, `TrailDraft`, persists as a `TrailDraftRecord`
+  in the **unmirrored** store, because a half-drawn line is one device's work.
+  The maker routes legs one at a time through one worker, since nineteen
+  parallel Overpass requests earn a `429`, and nothing on that path may block
+  drawing.
 - **Places** (`Hikes/Places/`): `TrailPlace` is the value and `TrailPoint` the
-  mirrored row. The owner's rule:
-  - A place from OpenStreetMap takes photographs and nothing else.
-  - A place the hiker made can also be renamed, re-kinded and annotated.
-  - A place's photographs belong to the hike (`HikePhoto.placeID`), and go back
-    to the gallery when the place is removed.
+  mirrored row. The owner's rule: a place from OpenStreetMap takes photographs
+  and nothing else, and a place the hiker made can also be renamed, re-kinded
+  and annotated. A place's photographs belong to the hike
+  (`HikePhoto.placeID`), and go back to the gallery when the place is removed.
 - **A map claim goes to the deepest screen, not to the newest**
   (`ScreenClaims`). Pushing a third screen makes the screen two levels down
   appear again *after* the new one has claimed, so "last to appear" would hand
   the map to the wrong screen.
 - **Following a trail is a walk, and the walk outlives the screen.**
-  - **One owner.** `TrailWalkSession` is the only place a walk starts: by hand,
-    or once matches show real movement along the route. One walk runs at a
-    time, and it pins `BackgroundTrailTracker`.
-  - **Device-local while it runs.** The walk in progress lives on
-    `HikeLocalState`, written at milestones and never per fix.
-  - **Bound to its line.** A walk ends when its route is edited
-    (`routeRevision`). Its stretches, climb and photo matches are read only
-    along the same revision. In `LibraryTotals`, a walk on an older revision
-    keeps its distance and time and can still be the longest, but adds no climb
-    and is never the highest or the steepest.
-  - **A saved recording writes its own walk.** Its active time is
+  `TrailWalkSession` is the only place a walk starts. One walk runs at a time,
+  and it pins `BackgroundTrailTracker`.
+  - The walk in progress is device-local, on `HikeLocalState`, written at
+    milestones and never per fix.
+  - A walk is bound to its line. It ends when its route is edited
+    (`routeRevision`), and its stretches, climb and photo matches are read
+    only along the same revision.
+  - A saved recording writes its own walk. Its active time is
     `PreparedRecording.recordedSeconds`, the gaps between saved points, and
-    never wall clock minus the pause list. The pause list is incomplete: a
-    recovered session is parked without a pause, and nothing records the time
-    before a relaunch. The watch measures the same way
-    (`WatchWalkAccumulator`).
-  - **Off the trail, the hiker is asked.** On the fix the *Off the trail*
-    banner is first tried on, the app asks on its own screen whether to keep
-    following or to record instead (`OffTrailQuestion`). One rule decides
-    both, once per departure (`OffTrailWatch`), but the question waits on no
-    notification permission (`MovementWarningState`). It stands until it is
-    answered, the hiker is back on the trail, or the walk is paused or over.
-    A *Record Instead* that could not be done asks it again, saying so,
-    because nothing else would ask about that departure.
-  - **Recording instead takes the walk along.** The walk ends as End ends
-    it, kept in its trail's History, but where it was last on its trail
-    rather than at the tap. The recording begins with what it covered: the
-    trail's own line along the covered stretches, clocked over the walk's
-    own time (`RecordingSeed`). A walk keeps no fixes, so nothing else is
-    carried, and a stretch it did not reach from the one before opens as a
-    pause does. The recording's clock covers the walk's, which is what has
-    `LibraryTotals` count that ground once. Every carried point is marked
-    `.carried`, so its length counts in full, live and at the save, where a
-    tight bend would otherwise read as a hiker standing still.
-  - **Junction warnings say the turn before it is taken** (`JunctionGuide`).
-    The off-trail question is for a hiker already off the trail; this is a
-    voice before each fork — *Keep left at the fork in 150 meters*, then
-    *Keep left at the fork* a few steps before it. Off until the hiker turns
-    it on, from a button on the map's leading edge that is there while a walk
-    is under way (`MapCoordinator+JunctionButton.swift`), by the owner's
-    decision: never in Settings. It runs only while a walk is *following*.
-  - **A junction is a node three trails share**, on the walks' own trail
-    graph, which holds no roads (`TrailJunctionFinder`). It counts only where
-    the line arrives along one of its ways and leaves along another, and
-    nothing is said where the line goes plainly straight on. Each junction
-    carries what to do walking either way (`TrailJunction`), and
-    `JunctionAnnouncer` in `OpenHikesShared` decides when each is said, for
-    the phone and the watch alike.
-  - **The watch taps where the phone speaks.** The phone finds the junctions
-    and sends them with the trail (`WatchTrailPackage.junctions`), each
-    placed on the sent line's own leg where the watch's tracker reads a fix
-    there, because decimation shortens a winding stretch more than a
-    straight one. The switch rides on the library
-    (`WatchLibraryDigest.junctionWarningsEnabled`; a watch told nothing has
-    it off). With it off, a trail is packaged without the graph, so a watch
-    never waits on a download for forks it will not tap at. The watch taps
-    only on a trail it is following: a recording along it or a map open on
-    it (`WatchFollowClaim.follows`), never the trail merely held. The tap is
-    `.notification` for every turn, because WatchKit's turn haptics are for
-    apps running a navigation session.
+    never wall clock minus the pause list, which is incomplete. The watch
+    measures the same way (`WatchWalkAccumulator`).
+  - Off the trail, the hiker is asked whether to keep following or to record
+    instead (`OffTrailQuestion`, `OffTrailWatch`). Recording instead begins
+    with what the walk covered (`RecordingSeed`).
+  - Junction warnings (`JunctionGuide`) are spoken only while a walk is
+    *following*, and are off until the hiker turns them on from a button on
+    the map, by the owner's decision: never in Settings. `JunctionAnnouncer`
+    in `OpenHikesShared` decides when each is said, for the phone and the
+    watch alike, and the watch taps where the phone speaks.
 - **A recording always outranks a followed trail**, on every surface, because
   it is the one that would be *lost*: a follow is re-derived from the trail and
   the next fix, and a recording is not. Three places hold the rule and must
@@ -735,11 +551,6 @@ a change to recording, the map, the sheet or the render path; the PR template,
   - The recorder stays the single authority. The coordinator holds no state,
     settles recovery before it reads the phase, and reads the phase back
     afterwards, because refusals arrive as `.failed`, not as a throw.
-  - Start and resume hand off with `askToContinueInForeground(_:)` for the
-    two foreground-only location prompts: `continueInForeground(_:)` on iOS
-    26, `requestToContinueInForeground` below it. A
-    `needsToContinueInForegroundError` re-run would find the same undecided
-    authorization.
   - Suites reach the intents through `HikeIntentContext.$override`.
   - `AppShortcutsProvider` silently drops shortcuts past ten.
 - **The Control Center toggle and the Live Activity buttons live in
@@ -753,95 +564,34 @@ a change to recording, the map, the sheet or the render path; the PR template,
 - **A recording pauses itself at a stop, and resumes as the next segment**
   (`AutoPauseWatch` in `OpenHikesShared` decides; `HikeRecorder+AutoPause.swift`
   acts). The switch is *Auto-Pause*, on unless the hiker turns it off.
-  - **A stop is a place, not stillness.** In a shop a hiker keeps walking,
-    so the rule is every position inside one small area, with no height
-    gained, for `AutoPausePolicy`'s minutes. The watch is shown every fix
-    the recorder is delivered, kept for the track or not.
-  - **Position decides, motion confirms.** Motion & Fitness can be refused.
-    Motion answers only what a position cannot: that a silence is a hiker
-    sitting still, and that a fix leaving the stop was carried, which keeps
-    the pause until the hiker walks again.
-  - **A silence is a stop only on evidence of standing.** A tunnel is
-    silence too, and a walk stays inside a stop's area for half a minute.
-    Motion has to say the device was still from about the last fix
-    (`AutoPausePolicy.motionLagSeconds`), or the fixes before the silence
-    have to show the hiker standing by the recorder's own rule
-    (`AutoPausePolicy.settledMeters`, held to `MovementThresholds` by
-    `AutoPausePolicyParityTests`). A silence motion says was walked or
-    ridden for any part of it waits for the fix that ends it.
-  - **Backdated both ways.** The pause is counted from when the stop began.
-    The journal is cut back to that fix
-    (`TrackJournal.pause(at:discardingPointsAfter:)`) and the live figures
-    are rebuilt from it, so it reads as a pause by hand at that moment
-    would: the same `RouteBoundary`, no record of a new kind and no new
-    journal version. The resume is the first fix of the walk away.
-  - **An auto-pause is a pause.** It leaves the clock *Avg Speed* divides
-    by, and every surface reads it as *Paused*, with Resume.
-  - **Only the app's own pause ends by itself.** Resume during one resumes
-    at once. Pause, the switch going off, or a relaunch makes it the
-    hiker's, with a pause's parking and its reminder.
-  - **A long auto-pause asks whether the hike is over.** A recording
-    forgotten after the walk is auto-paused with its feed running, and a
-    phone left at home delivers no fix to decide anything by. So
-    `MovementReminderController` posts the `longAutoPause` banner when the
-    pause begins, for the system to show `MovementReminderPolicy.autoPausedFor`
-    after the stop began, and whatever ends the pause withdraws it. It has
-    no button, for the reason the Live Activity has no Stop.
-  - **The thresholds are a first guess.** A `DEBUG` build writes down every
-    fix and change of motion (`AutoPauseEvidenceFile`), and
+  - The journal is cut back to the fix the stop began at
+    (`TrackJournal.pause(at:discardingPointsAfter:)`), so an auto-pause reads
+    as a pause by hand at that moment would, on every surface: the same
+    `RouteBoundary`, no record of a new kind and no new journal version.
+  - The thresholds (`AutoPausePolicy`) are a first guess. A `DEBUG` build
+    writes down every fix and change of motion (`AutoPauseEvidenceFile`), and
     `AutoPauseEvidence.replay(_:policy:)` runs a policy over what was
     written. Change one from recorded stops, and give `AutoPauseWatchTests`
     the stream that argued for it.
-  - **The watch's own recordings take the same rule**
-    (`WatchAutoPause` decides; `WatchRecorder+AutoPause.swift` acts), by the
-    phone's switch, which rides on the library's application context
-    (`WatchLibraryDigest.autoPauseEnabled`; a watch told nothing has it on).
-    The watch reads no motion and no height, so there the rule runs on
-    position alone. A watch pause keeps its feed whoever made it, so the
-    only cost is the rule. The cut is `WatchWalkAccumulator.pause(since:)`,
-    journaled as one `.autoPaused` line that a recovery replays to the same
-    boundary. Unlike the phone, a relaunch under the workout session
-    HealthKit hands back takes the app's pause up again, because the watch
-    has no reminder for a pause nothing will end; Pause or the switch going
-    off journals it as the hiker's first. A phone recording the app has
-    paused is mirrored to the watch as paused.
+  - The watch's own recordings take the same rule (`WatchAutoPause`), on
+    position alone, by the phone's switch.
 - **A segment is a walked run** (`RouteSegments`). A hike's segments are
   read off the pauses its route already has, so a pause by hand, an
   auto-pause and a GPX file's `<trkseg>` breaks all cut one, and nothing is
   stored for it.
-  - A recording has no route until Stop, so `RecordingSegmentLedger` feeds
-    the kept points to the same `RouteSegments.Builder` and reads it as the
-    saved hike is read. It lives inside the distance accumulator, where a
-    journal replay reaches it too. Both draw `HikeSegmentList`.
-  - A segment's time is the active clock's, and the segments add up to the
-    distance shown above them.
-  - A photograph taken during a pause whose two ends are one place was
-    taken at that stop, however long it lasted
-    (`HikePhotoTimeline.stopSpanMeters`). Any other pause keeps its grace.
 
 ### First-run tips
 
-- **TipKit, in two ordered queues and one tip of its own** (`AppTips`). The
-  main screen's are *Record a Hike*, *Make a Trail*, the *Community* tab and
-  *Search this area*; the recording screen's are *Add Place* and *Places
-  Nearby*. *Offline Maps*, over its row on *Map Modes*, is the only tip that
-  sheet shows, so it waits in no queue. A screen never shows two at once, and
-  a tip goes for good once it is closed or its control is used.
-- **The two about making a hike are for a new hiker** (`CreationTipsAudience`).
-  They are retired the first time the list holds a hike, so an existing hiker
-  never sees them and the queue moves on to the *Community* tab's. A
-  recording in progress is not a hike yet. A hiker who taps the pill on an
-  empty list is new, which is kept in TipKit's store, and from then on each
-  of the two goes only when it is closed or used. The list is the only
-  witness: on a new phone it is empty until iCloud's first import, so an
-  existing hiker sees *Record a Hike* until then.
+- **TipKit, in two ordered queues and one tip of its own** (`AppTips`). A
+  screen never shows two at once, and a tip goes for good once it is closed
+  or its control is used. The two about making a hike are for a new hiker
+  (`CreationTipsAudience`).
 - **Every tip is inline, never a popover.** A popover over the map would be
   presented by the permanent sheet, and while it was up the sheet could
   present nothing else (see *Present modals from inside the sheet's
   contents*). And a `.popoverTip` on a toolbar button never presented at all,
   measured on iOS 27. The map's tips are cards beside their controls
-  (`MapTipCards.swift`), the *Community* tab's sits under the picker, the
-  recording screen's sit under its bar, and *Map Modes*' sits over its row.
+  (`MapTipCards.swift`).
 - **A card on the map speaks for itself.** MapKit builds the map's
   accessibility from its UIKit elements and walks straight past TipKit's
   SwiftUI, so `MapTipCardView` is one element carrying the title, the message
@@ -855,24 +605,24 @@ a change to recording, the map, the sheet or the render path; the PR template,
 - **The app computes and the widget draws.** The app writes a compact
   `SharedTrailSnapshot` atomically through `SharedStore` into the App Group,
   then reloads timelines. The widget never recomputes route matching.
-- **The widget reads location, deliberately.**
-  - While a recording `isCapturingFixes`, `WidgetRecordingLocationSampler`
-    appends sparse anchors to `pending-fixes.json`: at most one per 15 minutes,
-    claimed with an App Group lock file.
-  - The recorder merges and deduplicates them on its next drain.
-  - The widget's half is append-only. It never reads the queue back, matches a
-    route or computes a statistic.
+- **The widget reads location, deliberately.** While a recording
+  `isCapturingFixes`, `WidgetRecordingLocationSampler` appends sparse anchors
+  to `pending-fixes.json`: at most one per 15 minutes, claimed with an App
+  Group lock file. The recorder merges and deduplicates them on its next
+  drain. The widget's half is append-only: it never reads the queue back,
+  matches a route or computes a statistic.
 - **Basemaps are kept per trail**, so a pinned widget keeps its map whatever is
   selected. When WidgetKit cannot say what is pinned, nothing is pruned. A pin
   whose hike the store no longer holds loses its snapshot and map at the
   launch sweep; a read that failed is not a missing row, and keeps them.
 - **The Live Activity is split along the same seam.**
   - `OpenHikesShared/LiveActivity/` owns the payload (`HikeActivityAttributes`)
-    and numeric projections and rounding. `OpenWidget/`
-    owns the wording (`HikeActivityPresentation`) and draws it, so its build
-    extracts the words into the widget’s String Catalog. `OpenHikes/LiveActivity/` decides when one exists.
-  - It renders `context.state` only, fed by the widget's two funnels.
-  - Its clock ticks by itself through `Text(timerInterval:)`.
+    and numeric projections and rounding. `OpenWidget/` owns the wording
+    (`HikeActivityPresentation`) and draws it, so its build extracts the words
+    into the widget’s String Catalog. `OpenHikes/LiveActivity/` decides when
+    one exists.
+  - It renders `context.state` only, and its clock ticks by itself through
+    `Text(timerInterval:)`.
   - The payload must fit 4 KB (`payloadFitsTheActivityBudget`), so it carries no
     polyline.
   - The attributes **type name** is a storage contract.
@@ -920,18 +670,16 @@ a change to recording, the map, the sheet or the render path; the PR template,
   it again. A screen about a hike reads `ShownLine`, which
   `HikeDetailInteraction` keeps for all of them. A reader with no screen hands
   on a line it read anyway, or makes a `SelectedLine` for one read. A read
-  that fails is not a missing row: the readers following the line keep the
-  one they hold, and it stays owed until a refresh reads it
-  (`SelectedLine.Found`). A recording's screens read the column, because a
-  draft has no line until Stop.
+  that fails is not a missing row: the readers keep the line they hold, and it
+  stays owed until a refresh reads it (`SelectedLine.Found`). A recording's
+  screens read the column, because a draft has no line until Stop.
 - **`CloudSyncCoordinator` only reports and toggles; SwiftData owns sync.** That
   gives up four things, deliberately:
   - photo pixels on other devices (see *Settled decisions*)
   - small updates (a rename re-uploads the whole row)
   - hiding unfinished work (a recording's draft is an ordinary row, so
-    another device shows it, with its places and photos, as a hike with no
-    line; the route stays in the device-local `TrackJournal` until Stop
-    writes it)
+    another device shows it as a hike with no line; the route stays in the
+    device-local `TrackJournal` until Stop writes it)
   - any preference for unsent local edits
 
   The Simulator gets no CloudKit pushes, so two simulators cannot test sync.
@@ -944,30 +692,21 @@ a change to recording, the map, the sheet or the render path; the PR template,
   set. A failed fetch sweeps nothing. A downloaded country's owner is an index
   of its own (*The offline countries*).
 - **Persisted identifiers are stable:**
-  - provider IDs
-  - `SettingsKey` strings
-  - the container and App Group IDs
-  - the widget kind
-  - the tile-key shape
-  - the deep-link format
+  - provider IDs, `SettingsKey` strings, the container and App Group IDs, the
+    widget kind, the tile-key shape and the deep-link format
   - `MovementReminderKind` raw values (they double as notification categories)
   - the Live Activity attributes type name
-  - the first-run tips' ids, which their closed and used state is stored
-    against (`FirstRunTipsTests`), and the name of `AppTips.isNewHiker`,
-    the TipKit parameter that keeps a new hiker
-  - the trail squares' record names, which every installed build asks for
-    (`TrailCellGridTests`; see *The trail squares*), the hiking-routes
-    layer's (`RouteSquareGridTests`; see *The hiking-routes layer*), the
-    places' (`PlaceSquareGridTests`; see *The place squares*) and the trail
-    graph's (`TrailGraphSquareGridTests`; see *The trail graph squares*)
+  - the first-run tips' ids (`FirstRunTipsTests`) and the name of
+    `AppTips.isNewHiker`, the TipKit parameter that keeps a new hiker
+  - the record names of the four sets of squares, which every installed
+    build asks for (`TrailCellGridTests`, `RouteSquareGridTests`,
+    `PlaceSquareGridTests`, `TrailGraphSquareGridTests`)
   - the background session the areas download in
-    (`BackgroundCountryDownloader.sessionIdentifier`), which the system wakes
-    the app for, and `countries/manifest.json` with the names of the files it
-    lists and the area codes they start with, which every installed build
-    reads (*The offline countries*)
+    (`BackgroundCountryDownloader.sessionIdentifier`), and
+    `countries/manifest.json` with the names of the files it lists and the
+    area codes they start with (*The offline countries*)
   - the tile server's own `manifest.json`, its fields, and the 410 it gives
-    for an archive it does not have, which every build from the first that
-    reads it relies on (*Tiles*)
+    for an archive it does not have (*Tiles*)
 
 ## Conventions
 
@@ -981,23 +720,13 @@ a change to recording, the map, the sheet or the render path; the PR template,
   to it.
 - **A newer API is reached through one wrapper, with its fallback beside
   it.** A screen asks for a shape or a behavior, never for a release. The
-  `if #available` lives in:
-  - `RoleButton` (`OpenHikesShared`), for the role-only close, cancel and
-    confirm buttons. Below 26 they say *Cancel* and *Done*, or the screen's
-    own verb (*Save*, *Add*, *Send*), and a pill or a notice draws the glyph.
-  - `LiquidGlass.swift` and `GlassButtonStyle.swift`, for SwiftUI glass, which
-    falls back to the regular material and the bordered styles, as the
-    visionOS branches always did. `MapGlass` does the same for the map's
-    UIKit controls.
-  - `observedValues(_:)` for `Observations`, `LifecycleObservation` for the
-    typed lifecycle messages, `ReverseGeocode` and the `MKMapItem` readers
-    beside it for MapKit's iOS 26 geocoding (`CLGeocoder` below), and
-    `askToContinueInForeground(_:)` for an intent's foreground hand-off.
-  - `trailStopsReorderable(_:move:)`, for the one iOS 27 API: `reorderable()`
-    on 27, `onMove` below.
-  - `sectionIndexLetter(_:isShown:)`, for the letters down the edge of a
-    list by name, which SwiftUI draws from 26. Below it the sections keep
-    their headers and the list has no index.
+  `if #available` lives in `RoleButton` (the role-only close, cancel and
+  confirm buttons), `LiquidGlass.swift`, `GlassButtonStyle.swift` and
+  `MapGlass` (glass), `observedValues(_:)` (`Observations`),
+  `LifecycleObservation`, `ReverseGeocode` and the `MKMapItem` readers beside
+  it (`CLGeocoder` below 26), `askToContinueInForeground(_:)`,
+  `trailStopsReorderable(_:move:)` (`reorderable()` on 27, `onMove` below) and
+  `sectionIndexLetter(_:isShown:)`.
 - **A fallback with logic in it is tested on the current simulator.** Each
   wrapper exposes its earlier form, so a suite can hold it to the same
   contract on a release that would never run it: `EarlierObservations`,
@@ -1019,14 +748,10 @@ a change to recording, the map, the sheet or the render path; the PR template,
     the `AccentColor` asset is the accent.
   - ImageIO writes no XMP into a PNG it copies, so only a JPEG, a HEIC or a
     TIFF takes a Commons credit there.
-- **Nothing in CI runs on the floor.** The image has no iOS 18 runtime, so the
-  compile at 18.4 is the only gate there. Before a release, and after changing
-  a fallback, run the unit suite on an iOS 18 simulator (*Build and test*).
-  Xcode 27.1 will not download one (`iOS 18.4 is not available for
-  download`), so it has to be a runtime an earlier Xcode installed. An image
-  still in `/System/Library/AssetsV2/com_apple_MobileAsset_iOSSimulatorRuntime`
-  comes back with `xcrun simctl runtime add <its .dmg>`, with nothing to
-  download.
+- **The compile at 18.4 is the only gate on the floor.** CI's image has no
+  iOS 18 runtime, and nothing runs the suites there. A problem that exists
+  only on iOS 18 is fixed when it is a crash. `Scripts/sim-pool.sh`'s header
+  says how to pin a pool of its own to an older runtime.
 
 ### Concurrency
 
@@ -1051,8 +776,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
   - `lazy` changes when the work runs, not where.
 - **Spell `nonisolated` on the extension**, not only on the type. An
   unannotated extension of a `nonisolated` type is still a main-actor context,
-  and Swift 6.3 rejects nested types in one. Every `CloudKitCommunityTransport` extension says
-  `nonisolated`.
+  and Swift 6.3 rejects nested types in one. Every `CloudKitCommunityTransport`
+  extension says `nonisolated`.
 - **Blocking work stays off the main thread:** tile math, image encoding and
   disk enumeration. Hot paths call `assertOffMainThread`. Shared off-main types
   are `Sendable`, and singleton state sits behind the existing `Mutex` pattern.
@@ -1067,63 +792,35 @@ a change to recording, the map, the sheet or the render path; the PR template,
   missed-photo alert, which carries an object rather than a binding, and the
   refused location button's and a walk's off-trail question, which go with
   the map controls' (below).
-  - **What a map control opens goes through `MapControlModals`.** A place card
-    leaves the map live behind it, the pill and the weather badge included,
-    and the map sheet is already presenting the card. A sheet asked for from
-    under it waits, and comes up when the card is closed; an alert comes up
-    at once and takes the card down. So the card presents *Map Modes*, the
-    location alert and the forecast over itself while it is up
-    (`presentsMapControlsOverCard()`), and anything new a map control opens
-    joins them there. So has the one alert no control opens: a fix raises a
-    walk's off-trail question at any moment, a card's included.
-- **The map is chosen on the map.** *Map Modes* (`MapModesView`) is a sheet
-  as tall as its cards, opened from the pill the "my location" button stands
-  in, so the map above it turns over as a card is tapped. It holds the cards,
-  the selected map's summary, *Hiking Routes* as two fixed pictures (clean,
-  and with the routes) and the credits of every picture on it. It is the
-  only place either is chosen: Settings keeps only a subscriber's
-  subscription row.
+- **What a map control opens goes through `MapControlModals`.** A place card
+  leaves the map live behind it, and the map sheet is already presenting the
+  card. A sheet asked for from under it waits until the card is closed; an
+  alert comes up at once and takes the card down. So the card presents those
+  modals over itself while it is up (`presentsMapControlsOverCard()`), and
+  anything new a map control opens joins them there.
+- **The map is chosen on the map.** *Map Modes* (`MapModesView`) is the only
+  place the map and *Hiking Routes* are chosen. Settings keeps only a
+  subscriber's subscription row.
 - **The primary surface has two shapes: a sheet in a narrow window, a panel
   beside the map in a wide or a short one.**
+  `SheetLayout(windowSize:isCompactHeight:)` is the rule, and
+  `verticalSizeClass` and the window's size are read only in
+  `SheetLayoutReader`.
   - At a compact height a sheet left to adapt is presented full-screen, its
     detents ignored, so `MapSidePanel` draws the same `MapSheet` beside the
-    map, and `SheetPresentation.layout` settles the differences. A sheet
-    with `.presentationCompactAdaptation(.none)`, as the place cards have,
-    stays a sheet there and keeps every detent but `.medium` (`SheetLayout`).
-  - A window of regular height with room for a map beside the panel — an
-    unfolded iPhone Duo in landscape, an iPad either way up — takes the panel
-    too, by choice; there the sheet was a card in the middle of the bottom
-    edge, with the map's controls floating above it. A phone and a Duo held
-    upright are too narrow. `SheetLayout(windowSize:isCompactHeight:)` is the
-    rule.
-  - `verticalSizeClass` and the window's size are read only in
-    `SheetLayoutReader`.
-  - Where the window is of regular height the panel stands as tall as the
-    screen on top needs, at the top of the leading edge, and never shorter
-    than it is wide; at a compact height it keeps the window's
-    (`SidePanelFit`). A screen pushed into the sheet marks the scroll view it
-    is built around with `fitsSidePanel()`, or the panel keeps the height it
-    had when the screen was pushed. A photo viewer takes the window's height.
-    Each figure a screen reports is one that does not move when the panel
-    does, because a measure that follows the panel is chased by it.
-  - A window can change size and keep the panel: an iPad turned, or its
-    window resized. Nothing SwiftUI hands the map changes then, so
-    `MapView.update` does not run, and what the map measures from its own
-    height — the row along its bottom — hears of it from UIKit
-    (`MapLayoutObserver`).
-  - Beside a panel nothing covers the credit MapKit draws on its own maps,
-    so over Apple Maps or Apple Satellite that row rests above it
-    (`MapCoordinator+TrackingButton.swift`).
-  - The sheet keeps its toolbar across its top (`horizontalSheetToolbar()`).
-    A closed iPhone Duo stands a sheet's toolbar up its side, and the compact
-    detent holds one button of that column.
-  - Only the map ignores the horizontal safe area, plus a photo viewer, which
-    `MapSidePanel` widens to edge to edge.
+    map. A window of regular height with room for a map beside the panel (an
+    unfolded iPhone Duo in landscape, an iPad either way up) takes the panel
+    too.
+  - A screen pushed into the sheet marks the scroll view it is built around
+    with `fitsSidePanel()` (`SidePanelFit`). Each figure a screen reports is
+    one that does not move when the panel does, because a measure that
+    follows the panel is chased by it.
+  - A window can change size and keep the panel. `MapView.update` does not
+    run then, so what the map measures from its own height hears of it from
+    UIKit (`MapLayoutObserver`).
   - `SheetPresentation` keeps each pushed screen's state objects until the
-    route pops, so rotation keeps them. A cover driven by a destination's own
-    `@State` closes on a turn. A pop builds the screen it is taking away once
-    more, so a new destination's object goes in a `SheetRetained`, which hands
-    that build the object it had.
+    route pops, so rotation keeps them. A pop builds the screen it is taking
+    away once more, so a new destination's object goes in a `SheetRetained`.
   - `OrientationUITests` guards all of this.
 - **Make a push reach `NavigationStack` in one pass per frame.**
   - Outside a tap, write the selection and the detent first and the path last,
@@ -1142,473 +839,142 @@ a change to recording, the map, the sheet or the render path; the PR template,
   `TileLayer` the app draws itself (*The hiking-routes layer*), and stay out
   of `TileProvider.all`.
 - **Auto-save is one switch, off until the hiker turns it on**, by the
-  owner's decision: *Auto-Save Tiles* in Settings, above the storage it
-  spends (`SettingsKey.autoSaveTilesEnabled`). The default map downloads by
-  country (*The offline countries*), so browsing keeps nothing nobody asked
-  for.
-  - With it on, the tiles drawn within reach of the selected hike's line are
-    kept for that hike (`AutoSaveController`), up to
-    `AutoSaveTileStore.tileCap`.
-  - It is for the maps with no download of their own, so the hike screen
-    points to the switch only on one of those, and only while it is off
-    (`OfflineStorageStatus`).
-  - A tile a downloaded country draws is never kept: the country draws it
-    with no signal already. One its archive lacks, which the map fetched
-    instead, is kept as any other (`OfflineCountryArchives.holds(_:deepest:)`).
-  - Deleting a hike's saved map holds auto-save down for that hike until the
-    map selects a hike anew or the hiker moves the switch, whatever the map
-    says (`AutoSaveController.holdDown(_:)`). Settings' delete-all arms
-    nothing until its tiles are gone (`beginStorageAction()`).
+  owner's decision (`SettingsKey.autoSaveTilesEnabled`, `AutoSaveController`).
+  It is for the maps with no download of their own: a tile a downloaded
+  country draws is never kept.
 - **A tile is identified by provider plus z/x/y**, never by scale
   (`TileCacheKey`).
 - **Never turn a render miss into synchronous disk or network work**, and never
   measure storage in a body. Delete durable tiles through `TileOwnership`.
 - **OpenStreetMap is drawn from our own vector tiles, with the OSMF's raster
-  tiles behind them** (#1481).
-  - **Drawing.** The style's `vectorSource` names a PMTiles archive on
-    `tiles.openhikes.app`. `VectorTileClient` fetches each tile and
-    `VectorTileRasterizer` draws it. The cache then files the picture as any
-    tile, under the raster style's id and keys, so saved coverage keeps
-    answering. Past zoom 15 a tile is drawn from the zoom-15 tile around it.
-  - **Roads stack in OpenStreetMap Carto's order** (`VectorTileStyle.road`),
-    because the archive gives every road the same `sort_rank`. **Areas are
-    drawn largest first**, as Carto orders them, because the archive gives
-    every area the same `sort_rank` too, and a residential area listed last
-    would cover the parks inside it.
-  - **A path is drawn by what it is made of and who it is for**
-    (`VectorTilePathStyle`), in Carto's own figures: a track's grade by how
-    broken its line is, a path's surface by its dashes, a way closed to
-    those it is for in a paler color and only from zoom 15, a pale band
-    under every one from there, and a casing round its bridge and its
-    tunnel. A path's dashes are in pixels and its width a step of the zoom,
-    so neither is a `ZoomCurve`.
-  - **Paths, service roads and roads being built are the extras', where a
-    tile has them** (`VectorTilePainter+Roads.swift`). The basemap keeps
-    none of a track's grade, a path's surface, who a path is for or a road's
-    `service`, and it joins a road's ways into one line, so nothing can be
-    said of them by their ids as it is of the areas. The extras give each
-    way again, in `paths` and `service_roads`, with what Carto draws it by,
-    and a tile that has a layer draws that kind from it and none of the
-    basemap's; `construction` has the roads the basemap leaves out. A
-    driveway or a parking aisle is then a minor road, narrower and not
-    before zoom 16. A tile whose extras did not arrive draws the basemap's
-    paths, as far as it describes them: the kind and its own `access`.
-    Names still come from the basemap's lines.
-  - **Only track is drawn as a railway.** The archive files every way with a
-    `railway` tag under `rail`, a station's outline and a turntable among
-    them, so the style lists the details that are track and draws no other.
-    A lift is listed by its kind too.
-  - **A park is the extras', never the basemap's.** The basemap files most
-    national parks under the kind it files a city park under, so its `park`
-    has no fill: the parks filled are the extras' `parks` layer, and the
-    borders of protected areas their `protected_areas` layer, stroked with
-    Carto's band inside each. It files the boundary of a United States
-    National Forest under the kind of a mapped forest too, so a `forest`
-    whose element the extras outline as protected is not filled either
-    (`VectorTileAreaDetails.isBoundary`), on a tile whose extras arrived.
-  - **The archive's landcover is ESA WorldCover's**, under CC BY 4.0, so the
-    style credits it beside OpenStreetMap.
-  - **Points are Carto's, read out of its style, never written by hand.**
-    `Scripts/carto-points.sh` reads a pinned Carto release's
-    `amenity-points.mss` and `stations.mss` into `VectorTilePoints.json` and
-    the icons they name into `CartoIcons.xcassets` (both CC0);
-    `VectorTilePointStyle` reads the table. A new Carto release is a re-run
-    and a read of the table's diff. The archive files a point by its value
-    alone, so where two keys share a value the table gives it to one: a
-    `gate` is a barrier's, not an airport's. Where Carto draws a point
-    differently for an `access` its queries count as restricted — a private
-    car park faded, a private toilet a zoom later — the table holds that look
-    too, for whichever points the tile carries an `access` on.
-  - **Patterns are Carto's pictures, laid from the corner of the world**
-    (`VectorTilePatterns`). `Scripts/carto-points.sh` also copies every
-    picture Carto's `landcover.mss` and `water.mss` fill an area with, or lay
-    along a line, into the catalog as `carto-pattern-…`: a wood's trees by
-    their leaves, a
-    wetland's marks, scree, a quarry, a cemetery's graves, the red hatch over
-    military land, a ridge's dots. A tile draws the part of a pattern that
-    falls on its own ground, so two tiles carry one pattern across their
-    edge. Carto lays most patterns straight over the area's fill, where a
-    smaller area drawn after covers them, and the woods', wetlands' and
-    beaches' after all the ground and the water; the map keeps both orders.
-    A cliff's and an embankment's teeth are drawn along the line itself.
-  - **The extras fill in what the archive leaves out** (`VectorTileSource.Extras`):
-    car parks with their `access`, barriers and the fences, walls and hedges
-    Carto draws, `man_made` points, offices, an information point's type, a
-    vending machine's goods, waterfalls, every one-way street and path as a
-    line of its own (`oneways`), and each named area's point with its size
-    (`area`). And what a hiker's map is read by: the ground the basemap has
-    no kind for (scree, heath, shingle, quarries, vineyards, camp sites,
-    danger areas, a square mapped as a relation), parks and the borders of
-    protected areas, every lift but
-    the cable cars with its stations, the light railways before zoom 14,
-    power lines with their towers and poles, every path, track and service
-    road with what Carto draws it by, the roads being built, a bridge mapped
-    as an area, the waterways through a culvert, dams and weirs,
-    breakwaters and groynes, ridges, cliffs and
-    embankments in the direction they were mapped, the lines cut through a forest, trees and
-    their rows, the names of buildings, and the points Carto draws before
-    the basemap has them: huts and stations with the tags Carto files them
-    by, summits, springs, passes and fords.
-    `Scripts/vector-extras.sh` builds them from the planet (`osmium` with
-    `Scripts/lib/vector-extras.filter`, and the named areas and buildings
-    through `Scripts/lib/vector-extras-areas.filter` and then a cut for a
-    name, then Planetiler with `Scripts/lib/vector-extras.yml`) into
-    `extras-<planet day>-<hour>.pmtiles`,
-    named as the archive's layers are so a tile of each merges into one, and
-    `Scripts/vector-extras.sh upload` puts them beside the basemap under a new
-    name each time, signing with R2 keys kept outside the repository, and the
-    server's manifest then names them (below). The app
-    asks for their tile beside the basemap's from zoom 4, where Carto names an
-    island, unless the basemap's is already falling back. They add to the map and are never its
-    reason to fall back: a tile they lack, fail to give or cannot read, or one
-    the device loses on the way, leaves the basemap drawn. Drawn without
-    extras it failed to get, a tile is provisional
-    (`VectorTileClient.Drawing.provisional`): held in memory alone, as stale
-    coverage is, and drawn again after that, never filed for a week.
-  - **Where both archives have a point for one thing, the extras' is drawn.**
-    The basemap files a hut tagged as a restaurant as the restaurant, and a
-    castle tagged as an attraction as the attraction; the extras file each as
-    Carto does, and the basemap's point of the same name at the same spot is
-    left out (`VectorTilePoints.supersedingKinds`). A feature merged from the
-    extras says so (`MapboxVectorTile.Feature.isFromExtras`).
-  - **What the basemap drops of an area comes back by its id**
-    (`VectorTileAreaDetails`). Carto picks a wood's trees by its `leaf_type`,
-    a wetland's fill and marks by its `wetland`, a beach's dots by its
-    `surface` and a cemetery's graves by its `religion`, none of which the
-    basemap keeps. Sending the areas again made the extras five times the
-    size, for the woods alone. The basemap gives every feature the id
-    OpenStreetMap does, with a 2 for a way or a 3 for a relation above bit
-    44, so the extras' `area_details` layer gives the same id with the tag's
-    value, on an area cut rough that only carries the id to the tile and is
-    never drawn. An area the extras say nothing of is drawn as Carto draws
-    one with no such tag.
-  - **Water that is not always there is rubbed out of the basemap's.** The
-    basemap draws an intermittent stream or lake as any water, and joins a
-    stream's pieces whether or not each runs all year, so no feature of its
-    own can be drawn broken. The extras' `intermittent` layer has the ways
-    and lakes that are, and the map rubs the gaps of Carto's dashes out of
-    the waterways, and the lakes out of the water, each in a layer of its
-    own so the ground under them stays, then lays Carto's lines over the
-    lakes.
-  - **So is water underground.** The basemap keeps no `tunnel` on a
-    waterway and joins a culvert into the stream it carries, so the extras'
-    `culverts` layer has the ways Carto calls tunnels, and the stretch of a
-    basemap waterway along one is drawn as Carto draws a tunnel
-    (`VectorTileWaterwayStretches`, which parts a waterway for both).
-  - **A cliff's teeth need the extras' line.** They go down the side that
-    falls away, the right of the way the cliff was mapped, and the basemap's
-    build may turn a line around. The basemap's cliff is drawn, plain, only
-    on a tile the extras gave no cliffs for.
-  - **Names are drawn into the tile.**
-    - **Place names** (`VectorTileLabels`): places, lakes and glaciers.
-      Summits, passes and huts are points, named under their icons with their
-      heights (`VectorTilePoints`).
-    - **Names along lines** (`VectorTileLineLabels`): streets, paths, lifts,
-      waterways, ridges and cliffs, and the number of a minor road or a
-      track, which Carto writes along it where a main road's is on a plate,
-      letter by letter, upright, following
-      bends no sharper than Mapnik follows them (22.5 degrees from one letter
-      to the next, 15 for water). Pieces with the same name are joined end to
-      end first. A repeat stands on marks measured from the line's middle, so
-      the tiles cut from one archive tile agree on them. A name written
-      beside its line, a stream's or a ridge's, is set along the line that
-      runs beside it (`MeasuredPath.offset`), never shifted letter by letter,
-      which crowds the letters inside every bend.
-    - **Road numbers** (`VectorTileShields`): a plate in its road's colors, a
-      motorway's from zoom 10 down to a tertiary road's from 13. A plate
-      stands where its road crosses a grid laid over the whole world, which
-      every tile works out alike, so a road is numbered evenly however it is
-      cut into tiles. The grid is half Carto's spacing, for a phone's screen.
-    - **One-way arrows** (`VectorTileArrows`) from zoom 16, on a way tagged
-      `oneway` `yes` or `-1`, or a roundabout not tagged otherwise. They are
-      drawn along the extras' ways, never the archive's roads: its build
-      merges a road's pieces into one line and can turn one around, so an
-      arrow along it points back. Each way is spaced on its own. Along a
-      street they are Carto's marker, spaced as Mapnik spaces markers, so a
-      short one-way street has none; along a path they are its barbed arrow,
-      spaced as Mapnik spaces a line's text, so a short one-way path has one.
-    - **House numbers** (`VectorTileHouseNumbers`) from zoom 17, from the
-      archive's address points, which carry `addr_housenumber` alone.
-    - **Names of buildings** (`VectorTileBuildingNames`) from zoom 14 once a
-      building covers 3,000 square pixels, and every one from zoom 17, from
-      the extras' point inside each named building. Most are named for the
-      shop or the hut in them, whose own point is named already: a building
-      leaves its name to a point of the same name standing by it.
-    - **Names of areas** (`VectorTilePoints`) by the area's size, as Carto
-      names them: a forest or a national park from zoom 8 once it covers
-      3,000 square pixels, a park from 10, an island from 4, larger the
-      larger it is, and none at a point past 768,000. The table gives each
-      kind its bands for each range of sizes Carto's rules tell apart
-      (`VectorTilePointStyle`). The size is the extras' `area`: the basemap
-      gives a named area's point without one, from a zoom of its own
-      choosing, so where the extras give an area's point, the basemap's
-      point of the same name at the same spot is left out. The extras file
-      an area under the first of its tags Carto's query tries, and below
-      zoom 10 under its low-zoom query's, which tries fewer keys in another
-      order: a national park that is also a park is a national park there.
-      A car park's `parking` is its `kind_detail`, because Carto marks
-      parking along a street only from zoom 18. Carto names a protected
-      area too large for a point along its edge, from zoom 13; the map does
-      not, because keeping the edges as areas made the extras half as large
-      again, for names few of the tiles an edge crosses had room for.
-    - **Room is claimed in Carto's layer order**: place names, the stations
-      (each one's icon, then its name), the points' icons, the road numbers,
-      the names along streets, paths, ridges and cliffs, then the one-way
-      arrows, the names of the summits and passes by their height, the
-      lakes', bays' and glaciers', every other point's and the areas', the
-      localities', the buildings', the house numbers, the names along water,
-      and last the low-priority icons and names (benches, bins, wayside
-      crosses). So a summit keeps its name where a lake's would cover it.
-    - **A place's name comes in at Carto's zoom**: a hamlet's from 14, a
-      farm's from 15, and a locality's, a spot nobody lives at, from 16 and
-      after the points, so a gully's name never takes a summit's room.
-    - Each name is in the app's language where the tile carries it, and in
-      the local one where not.
-    - **A name never crosses its tile's edge**, because the tile beside it
-      could not finish it. It moves inward, moves along its line, or waits
-      for a deeper zoom. A point's name that the edge would move back over
-      the point's own icon is written on the icon's other side, above a
-      summit at the foot of its tile, where Carto would write it below.
-    - **Every tile ranks names the same way** (`VectorTileLabelStyle.Category`,
-      then the archive's own ranking), so a zoom reads alike wherever it is
-      drawn.
-    - **A drawn name stays in the cached picture.** So a change of language
-      or region shows only as tiles are fetched again.
-  - **Fallback.** Wherever the server cannot answer — it is down or failing,
-    or it has no tile there — the tile comes from `tile.openstreetmap.org` as
-    before. A failing archive is passed over for a minute, or for as long as
-    its `Retry-After` asks, within `RetryAfterHeader`'s ceiling, and only that
-    archive: the extras failing leave the basemap asked. A raster server's
-    `Retry-After` holds back the URL it refused, whichever style asks it
-    (`TileRetryAdvice`), and never the tile server asked ahead of it. An
-    archive's answer that it has nothing at a tile is kept as its tiles are,
-    so the deeper tiles inside it ask once, and bytes that could not be read
-    are not kept.
-    A failure of the device's own connection falls back to nothing: the load
-    fails and is tried again, rather than filing a raster tile among the
-    drawn ones for a week. A connection lost mid-request is asked again at
-    once, and lost twice it is the server's.
-  - **openstreetmap.org stands beside it while the style is new.**
-    `TileProvider.openStreetMapRaster` (`osm_raster`), the fourth card on
-    *Map Modes*, draws the OSMF's raster tiles alone, so the two can be
-    compared. It goes once the transition is over, and a choice stored for it
-    then reads as the default.
-  - **No suite reaches the tile server.** `TileCache.shared` has no vector
-    source under `isRunningTests`, UI tests included
-    (`VectorTileArchives.forThisLaunch()`), except a launch that passes
-    `--ui-test-tile-server`, which only the App Store frames do.
-  - **A new build gets a new archive name**, carrying its date, and the
-    extras the hour too, never the old one's: the server's cache holds a tile
-    for a day, so a build overwritten in place would mix two builds on screen.
-  - **The server's manifest names the archives the app draws from**
-    (`VectorTileArchiveManifest`). It is `manifest.json` at the server's
-    root, a copy of `VectorTileArchiveManifest.json`, which the app bundles
-    and `Scripts/vector-archives.sh publish` puts there once every archive it
-    names answers. Each list is newest first. A build draws the first basemap
-    of the schema it reads and the first extras of a generation it reads, so
-    extras an installed app would draw wrong go up as the next generation,
-    and the last of the old one stays listed.
-  - **Refreshing the server is a run of commands, each safe to run again:**
-    1. `Scripts/trail-cells.sh update-planet <planet.osm.pbf>`, then
-       `Scripts/vector-extras.sh build <planet.osm.pbf>` and `upload`.
-    2. `Scripts/vector-archives.sh basemap` copies Protomaps' newest daily
-       build of the schema the app reads into the bucket as
-       `planet-<day>.pmtiles`, and keeps the download for the countries. It
-       sends the build up in Protomaps' own parts, so the bucket's ETag has
-       to come out as Protomaps' or nothing is written.
-    3. `Scripts/vector-archives.sh use` with each new name, which heads its
-       list in the manifest and drops what no build would draw any more,
-       then `publish`, and commit the manifest.
-    4. `Scripts/offline-countries.sh publish` cuts every area again from the
-       new archives and puts it up (*The offline countries*).
-    5. `prune` in both scripts deletes what the server has moved past, once
-       the apps have read the new manifests: an archive neither manifest
-       names that is earlier than the latest of its kind the server names,
-       and a country file of a build earlier than the one listed for its
-       area. Anything later may be an upload on its way, so it stays.
-
-    `OPENHIKES_R2_MIB_PER_SECOND` caps how fast any of them sends to the
-    bucket, so a world of uploads leaves the connection usable.
-  - **The app moves without a release** (`VectorTileArchives`). It reads the
-    manifest when it comes to the front, at most hourly, and when an archive
-    answers 410, the server's word for a name it does not have: the tile
-    that met it waits for that read and is drawn from what the manifest names
-    now. What was read is kept across launches and never traded for a lower
-    `revision`, and a tile drawn before a move is drawn again.
-  - **An archive leaves the manifest before it leaves the bucket**, and stays
-    in the bucket a while after, for apps that have not read the manifest
-    since. A build from before the manifest names its archives in code and
-    never moves: TestFlight 1.6 (1) asks for `planet-20261117` and
-    `extras-20261117`, which are gone, and draws openstreetmap.org's tiles
-    in their place.
-  - **The server is not in this repository.** It is a Worker and an R2
-    bucket.
+  tiles behind them** (#1481). The style's `vectorSource` names a PMTiles
+  archive on `tiles.openhikes.app`. `VectorTileClient` fetches each tile and
+  `VectorTileRasterizer` draws it. The cache then files the picture as any
+  tile, under the raster style's id and keys, so saved coverage keeps
+  answering.
+- **The look is OpenStreetMap Carto's**, and each rule is argued in the file
+  that draws it, under `OpenHikes/Tiles/Vector/`. Points, icons and patterns
+  are read out of Carto's style, never written by hand
+  (`Scripts/carto-points.sh`). The archive's landcover is ESA WorldCover's,
+  under CC BY 4.0, so the style credits it beside OpenStreetMap.
+- **The extras fill in what the basemap leaves out**
+  (`VectorTileSource.Extras`): a second archive that
+  `Scripts/vector-extras.sh` builds from the planet, with its layers named as
+  the basemap's are, so a tile of each merges into one. They add to the map
+  and are never its reason to fall back. A tile drawn without extras it
+  failed to get is provisional (`VectorTileClient.Drawing.provisional`): held
+  in memory alone and drawn again, never filed for a week.
+- **A tile is drawn so that the tile beside it agrees.** A name never crosses
+  its tile's edge, because the neighbor could not finish it. Whatever repeats
+  (a name along a line, a road number, a pattern) stands on marks worked out
+  from the whole line or the whole world, never from the tile. Every tile
+  ranks names the same way (`VectorTileLabelStyle.Category`).
+- **Fallback.** Wherever the server cannot answer, the tile comes from
+  `tile.openstreetmap.org` as before. A failure of the device's own
+  connection falls back to nothing: the load fails and is tried again, rather
+  than filing a raster tile among the drawn ones for a week.
+- **openstreetmap.org stands beside it while the style is new.**
+  `TileProvider.openStreetMapRaster` (`osm_raster`), the fourth card on
+  *Map Modes*, draws the OSMF's raster tiles alone, so the two can be
+  compared. It goes once the transition is over, and a choice stored for it
+  then reads as the default.
+- **No suite reaches the tile server.** `TileCache.shared` has no vector
+  source under `isRunningTests`, UI tests included
+  (`VectorTileArchives.forThisLaunch()`), except a launch that passes
+  `--ui-test-tile-server`, which only the App Store frames do.
+- **A new build gets a new archive name**, carrying its date, and the
+  extras the hour too: the server's cache holds a tile for a day, so a build
+  overwritten in place would mix two builds on screen.
+- **The server's manifest names the archives the app draws from**
+  (`VectorTileArchiveManifest`): `manifest.json` at the server's root, a copy
+  of the bundled `VectorTileArchiveManifest.json`. A build draws the first
+  basemap of the schema it reads and the first extras of a generation it
+  reads, so extras an installed app would draw wrong go up as the next
+  generation, and the last of the old one stays listed. The app reads the
+  manifest again when it comes to the front and when an archive answers 410,
+  so it moves without a release (`VectorTileArchives`).
+- **Refreshing the server is a run of commands, each safe to run again.**
+  Each script's header has its options.
+  1. `Scripts/trail-cells.sh update-planet <planet.osm.pbf>`, then
+     `Scripts/vector-extras.sh build <planet.osm.pbf>` and `upload`.
+  2. `Scripts/vector-archives.sh basemap` copies Protomaps' newest daily
+     build of the schema the app reads into the bucket.
+  3. `Scripts/vector-archives.sh use` with each new name, then `publish`, and
+     commit the manifest.
+  4. `Scripts/offline-countries.sh publish` cuts every area again from the
+     new archives and puts it up.
+  5. `prune` in both scripts, once the apps have read the new manifests. An
+     archive leaves the manifest before it leaves the bucket.
+- **The server is not in this repository.** It is a Worker and an R2 bucket.
 
 ### The offline countries
 
-Any country can be downloaded for the OpenHikes map (#1482), or, for the
-few too big for one download, any of their states or provinces. It is all
-from *Offline Maps*: a row at the foot of *Map Modes*, which pushes the list
-into the map sheet with every area outlined on the map behind it; a row in
-Settings' storage section; and the hike screen's *Offline* tile on that map,
-which offers the areas the trail crosses. `OfflineCountries` is the one
-owner, on the main actor.
+Any country can be downloaded for the OpenHikes map (#1482), or, for the few
+too big for one download, any of their states or provinces, from *Offline
+Maps*. `OfflineCountries` is the one owner, on the main actor.
 
 - **An area is a country, or a region of one too big for one download.**
-  Every country Natural Earth's 1:50m outlines name is cut whole, except
-  those `Scripts/lib/offline-countries.json` splits, which are cut by their
-  1:10m states and provinces and listed under the country, all of them
-  (`OfflineCountryListing`). The United States, Canada and Russia are split,
-  because only they passed 5 GB at zoom 14 when the planet was measured; a
-  split country is never itself downloadable. A country is keyed by its ISO
-  3166-1 code and a region by its ISO 3166-2 one, and a region carries its
-  name in the app's eight languages, from Natural Earth.
-- **The codes decide where an area belongs, where Natural Earth draws
-  otherwise.** Natural Earth draws borders as they are held, so it puts
-  Crimea and Sevastopol in Russia, while their codes, UA-43 and UA-40, are
-  Ukraine's: a region goes into the country its code names
-  (`Scripts/lib/offline-countries/Areas.swift`). Natural Earth's areas with
-  no ISO code join the country `attach` names, or are left out.
+  Every country Natural Earth's outlines name is cut whole, except those
+  `Scripts/lib/offline-countries.json` splits (the United States, Canada and
+  Russia), which are cut by state or province and are never themselves
+  downloadable. An area is keyed by its ISO 3166 code, and a region goes into
+  the country its code names, where Natural Earth draws otherwise.
 - **Zoom 14 always, zoom 15 with *Extra Detail*.** An area is four files:
   the basemap and the extras to zoom 14, which every download takes, and
-  both at zoom 15, which the switch at the head of the list adds
-  (`SettingsKey.offlineCountriesDetail`, on by default). Zoom 15 is half an
-  area's bytes, and it is where the buildings and most of the points are: a
-  water tap, a toilet, a bench, an information board. Without it the map
-  draws closer in from the zoom-14 tile around it, with every path, road
-  and summit. Turning the switch on brings zoom 15 to every area already
-  down; turning it off deletes it from them and keeps the areas.
-- **Cut on the server, read in place.** `Scripts/offline-countries.sh build`
-  cuts each area out of the planet the map draws, along its outline grown by
-  3 km, from the local copies `Scripts/vector-archives.sh basemap` and
-  `Scripts/vector-extras.sh build` leave, or from the bucket with signed
-  ranges where there are none, which takes a day for the world rather than
-  hours. It reads each cut back through the app's reader before listing it.
-  `publish` builds and uploads every area a batch at a time, and goes on
-  where a stopped run left off; `prune` then deletes the older build's
-  files.
-- **A build is named for the later of its archives' days**, the basemap's
-  and the extras', so new extras over the same basemap make a newer build,
-  which an installed app offers as an update. `upload` puts its files under
-  `countries/` as `<area>-<build>.pmtiles`, `-extras-`, `-detail-` and
-  `-detail-extras-`, each with its SHA-256 beside it, never over a file of
-  the same name, and reuses one already there only for the same bytes,
-  because the manifest it writes last (`countries/manifest.json`,
-  `OfflineCountryManifest`) promises them. A second cut over the same two
-  days is therefore refused, and waits for a newer archive. The app keeps
-  each file as it arrived and reads tiles out of it (`PMTilesArchive`);
-  nothing is unpacked into the tile cache.
+  both at zoom 15, which the switch adds
+  (`SettingsKey.offlineCountriesDetail`, on by default).
+- **Cut on the server, read in place.** `Scripts/offline-countries.sh` cuts
+  each area out of the archives the map draws; its header is the procedure.
+  A build is named for the later of its archives' days. Its files go under
+  `countries/`, never over a file of the same name, and the manifest that
+  promises them is written last (`OfflineCountryManifest`). The app keeps each
+  file as it arrived and reads tiles out of it (`PMTilesArchive`).
 - **The tool compiles the app's format files as they stand**
   (`PMTilesFile.swift`, `PMTilesArchive.swift`, `OfflineCountryManifest.swift`
-  and `PackedBytes.swift`), which import nothing of the app's, and
-  `Scripts/run-script-tests.sh` builds it and runs its `selftest`, which
-  holds the area rules above too.
-- **The Worker serves `countries/` straight out of R2**, with ranges, and no
-  other object of the bucket.
+  and `PackedBytes.swift`), which import nothing of the app's.
+  `Scripts/run-script-tests.sh` builds it and runs its `selftest`.
 - **An area is drawn before the network is asked.** `TileCache` asks the
-  downloaded areas (`OfflineCountryArchives`) for an OpenHikes tile ahead of
-  the network policy, so an area draws with no signal, and ahead of the tile
-  server, so it costs the server nothing once it is down. The tile is drawn
-  as the server's bytes would have been (`OfflineCountryDrawing`), and filed
-  in the cache as any tile is. A copy the cache drew before the area holding
-  it was installed, or updated, is not current there
-  (`OfflineCountryArchives.redraws(_:drawnAt:)`), so it is drawn again from
-  the build there is now. A tile no area holds goes to the server as
-  before.
-- **A download is `.speculative`.** It runs in a background `URLSession` that
-  refuses cellular, expensive and constrained paths, so it waits for Wi-Fi by
-  itself. Low Power Mode or heat refuse it outright (`TileNetworkPolicy`),
-  and so does a volume without room for what has yet to come down, of it and
-  of the areas coming down beside it (a failed one's transfers still out
-  among them), and `OfflineCountries.spareBytes` besides. A refusal keeps
-  what has come down. A file that stopped resumes from the session's resume
-  data, and one that stopped with none counts whole again. Trying again asks
-  only for the files no transfer is still out for.
-- **Trying again goes by what the server offers now**
-  (`OfflineCountries.retry`). The server deletes a build it has moved past,
-  so a download left waiting across a refresh fails for good, and its row
-  comes back at every launch. Trying again reads the list at the tap, or
-  waits for the read already out, and starts the newer build where it has
-  one, and *Extra Detail* asks for no zoom 15 of an older build than the
-  list's: the update brings it. A row whose download stopped can be
-  cancelled.
+  downloaded areas (`OfflineCountryArchives`) ahead of the network policy and
+  the tile server, and files the picture in the cache as any tile.
+- **A download is `.speculative`** (`TileNetworkPolicy`), in a background
+  `URLSession`, and nothing on its path checks an entitlement. Trying again
+  goes by what the server offers now (`OfflineCountries.retry`), because the
+  server deletes a build it has moved past.
 - **Checked before it is used.** Each file is staged and moved into place
   only once its size and SHA-256 match the manifest's
-  (`OfflineCountryStore.isWhole`), hashed a chunk at a time: a country's
-  file is gigabytes. An update downloads the new build beside
-  the old one, and deletes the old one only once the index on disk names
-  the new one.
-- **Owned by an index, not a row.** An area belongs to the device, and the
-  tile cache reads the list from MapKit's drawing threads, where a main-actor
-  model cannot be read. So `OfflineCountryStore` keeps a JSON index beside the
-  archives under Application Support, out of the backup, and the launch sweep,
-  run after the downloads that landed while the app was away are installed,
-  deletes every archive the index does not hold and every staged file no
-  pending download is for. A file is never deleted while the index on disk
-  names it, and a record whose files have gone reads as not downloaded.
+  (`OfflineCountryStore.isWhole`).
+- **Owned by an index, not a row.** The tile cache reads the list from
+  MapKit's drawing threads, where a main-actor model cannot be read. So
+  `OfflineCountryStore` keeps a JSON index beside the archives under
+  Application Support, out of the backup. The launch sweep deletes every
+  archive the index does not hold, and never a file the index on disk names.
 - **An index that cannot be read is not an empty one.** Before the device's
-  first unlock since it restarted, a launch the system makes can list and
-  delete files and read none, and a later build's index may not decode. So
-  a launch that cannot read the index, or the list of downloads under way,
-  opens, resumes and sweeps nothing (`OfflineCountryStore.List`), and starts
-  again when a scene is next active. Until it reads both, nothing downloads
-  and *Offline Maps* says it is not available (`OfflineCountries.Holdings`):
-  a download writes both lists, and written over one that could not be read,
-  it would leave what that one names to the sweep. A change to
-  `OfflineCountryStore.Record`, or to the manifest's `Country` inside it, has
-  to keep reading the index an installed build wrote, or that build's
-  downloads are lost to their owner.
+  first unlock, a launch the system makes can list and delete files and read
+  none. So a launch that cannot read the index, or the list of downloads
+  under way, opens, resumes and sweeps nothing (`OfflineCountryStore.List`).
+  A change to `OfflineCountryStore.Record`, or to the manifest's `Country`
+  inside it, has to keep reading the index an installed build wrote, or that
+  build's downloads are lost to their owner.
 - **A name off the network never reaches a path.** The manifest's file names
-  are held to the shape the server's route serves, each starting with its
-  own area's code (`OfflineCountryManifest.File.hasSafeName`), and an area
-  listing one that is not is left off whole, as is one cut from a planet
-  schema the rasterizer does not draw.
+  are held to the shape the server's route serves
+  (`OfflineCountryManifest.File.hasSafeName`), and an area listing one that
+  is not is left off whole.
 - **The list is read to leave the server room to move**
-  (`OfflineCountryManifest`), because every installed build keeps reading
-  it. A file of a role a build does not know is left out, where reading it
-  strictly would refuse the whole list. Only the list a download is chosen
-  from is read that way (`OfflineCountryManifest.catalog(from:)`): the index
-  on the device and the cutting tool refuse such a file, because one left
-  out of what owns it would be swept, and one left out of a list the tool
-  writes back would be gone from the server's. An area says which
-  generation of the extras it was cut from (*Tiles*), and a build leaves off
-  one it would draw wrong. An area may be listed more than once, and each
-  build takes the newest it draws, so the last cut for older apps can stand
-  beside the newest. The tool lists one build an area today.
-- **The list says which map the downloads are for.** Only the OpenHikes map
-  is cut by country, and the outlines are drawn over whichever map is up. So
-  the head of the list says it always, and while another map is selected a
-  row under that names the map and goes back to the OpenHikes one
-  (`OfflineCountries.areDrawn(on:)`, which the hike screen's tile asks too).
-- **The list is searched, and in one of three orders**
-  (`OfflineCountryDirectory`). It opens nearest first where the hiker's
-  position is known as it comes up, and by name where it is not; largest
-  first is the third (`OfflineCountrySort`). The choice lasts as long as the
-  list is up. By name the countries stand under their letters, in the app's
-  language, with the letters down the list's edge to jump by while the list
-  has its full height, and a split country is one line that holds its
-  regions. The other two orders and a
-  search are flat, a region named with its country. What is downloaded or
-  coming down is first in each order.
-- **Free.** Nothing on the download path checks an entitlement.
+  (`OfflineCountryManifest.catalog(from:)`): a file of a role a build does
+  not know, and an area it would draw wrong, are left out. The index on the
+  device and the cutting tool refuse such a file instead, because one left
+  out of what owns it would be swept.
 - **No suite reaches the server or the session.**
-  `OfflineCountries.forThisLaunch()` has neither under `isRunningTests`, and
-  `TileCache.shared` has no areas there. The one way past the server is
-  `--ui-test-offline-countries=<seeded|showcase|refused>`, which hands the
-  list ten areas out of a bundled manifest, a bundled copy of the server's
-  whole manifest for the App Store frame, or a list that fails
-  (`SeededOfflineCountryServer`), and still no session: `OfflineMapsUITests`
-  goes as far as the download button and the hike tile's dialog, and never
-  further, because nothing would download.
+  `OfflineCountries.forThisLaunch()` has neither under `isRunningTests`. The
+  one way past the server is
+  `--ui-test-offline-countries=<seeded|showcase|refused>`
+  (`SeededOfflineCountryServer`), and still no session, so nothing downloads.
 - **Deployment state, checked 2026-11-20.** The bucket holds every area of
   build `20261120`, cut from `planet-20261118` and `extras-20261120-00`: 381
   of them (234 countries, and the 51 states, 13 provinces and 83 regions of
-  the three split ones), 1,524 files and 162.6 GB, each at the size the
-  manifest lists and uploaded under the SHA-256 it lists, and no other
-  country file. Beside them it holds those two archives and the map's
-  manifest at revision 7, which names them, and nothing else. The Worker on
-  `tiles.openhikes.app` serves the manifests, the archives and the files,
-  with ranges.
+  the three split ones), 1,524 files and 162.6 GB, and no other country
+  file. Beside them it holds those two archives and the map's manifest at
+  revision 7, which names them, and nothing else.
 
 ### Accessibility
 
@@ -1627,288 +993,69 @@ owner, on the main actor.
   required-reason codes (`CA92.1`, `C617.1`, `3B52.1`, `35F9.1`, `E174.1`) and
   five collected types, all linked to the user and none used for tracking:
   precise location, photos, other user content, user ID and fitness.
-  Publishing a hike sends all five.
-  - A new required-reason API adds its code in the same change.
-  - `PrivacyManifestTests` pins the collected set both ways.
-  - The widget extension has no manifest of its own, because it calls none of
-    those APIs.
+  Publishing a hike sends all five. A new required-reason API adds its code
+  in the same change, and `PrivacyManifestTests` pins the collected set both
+  ways.
 - **Background location is described in three places, and they must agree:**
   the `Info.plist` purpose strings, the Background Trail Tracking footer, and
   App Review's notes in App Store Connect. Always access is for the widget and
   the Live Activity; the `location` background mode is for the recorder and
   for a walk with junction warnings on, and the `audio` mode is for those
-  warnings alone (`JunctionVoice`). Their
-  German, French, Spanish, Italian, Russian, Polish and Ukrainian must agree
-  too: the prompts in `OpenHikes/InfoPlist.xcstrings`, the footer in the app's
-  catalog.
+  warnings alone (`JunctionVoice`). Their translations must agree too.
 - **Strings live in String Catalogs, in English, German, French, Spanish,
   Italian, Russian, Polish and Ukrainian.** English is the development
-  language. The app, the widget, the watch, Siri and the permission prompts
-  all follow the device's language.
+  language.
   - `xcodebuild` does not merge extracted strings the way the IDE does. After
     changing text, build, then run
     `Scripts/sync-string-catalogs.sh <derived-data>`. CI's `--check` exits 2
-    when a catalog is behind. `Scripts/check-string-extraction.sh` audits the
-    source for copy that bypasses extraction, including concatenations and
-    `String` label parameters. It reads helper parameter types with the selected
-    toolchain’s SwiftSyntax and runs regression fixtures. Intentional machine
-    text and prescribed credits are listed with reasons in
-    `Scripts/string-extraction-exclusions.json`; stale entries fail the gate.
-    Shared App Intent metadata and `RoleButton` defaults must remain in their
-    package declarations. The sync script derives temporary typed literals
-    from them and asks the compiler to extract those for all four catalogs;
-    no second copy of their wording is checked in. An IDE build never sees
-    them, so wherever the target does not use the same words itself, their
-    entry is marked `"extractionState" : "manual"`, which the IDE leaves
-    alone. A new one needs the same mark, or every IDE build marks it stale.
-  - A count is a plural variation, never `if count == 1`.
-  - Figures are formatted per locale and never catalogued.
+    when a catalog is behind.
+  - `Scripts/check-string-extraction.sh` audits the source for copy that
+    bypasses extraction. Intentional machine text and prescribed credits are
+    listed with reasons in `Scripts/string-extraction-exclusions.json`; stale
+    entries fail the gate.
+  - **Every string gets all seven translations in the same change**, each
+    with `"state" : "translated"`. `StringCatalogTests+Translations.swift`
+    fails on a key missing one, on a translation that drops or retypes a
+    placeholder, and on a plural without a form its language needs. The
+    catalog is the style guide: a new translation takes its form of address,
+    its words for the app's things and its punctuation from the entries
+    already there.
   - **Copy is a simple explanation.** A footer, alert or empty state says what
     a control does, or what happened and what to do next, in a sentence or
-    two. The reasoning, the mechanism and the edge cases go in the code's
-    comments, or on the support page when a hiker needs them. A switch is
-    named for everything it controls. `StringCatalogTests` holds every English
-    value under a length ceiling.
-  - **Every string gets its German, French, Spanish, Italian, Russian, Polish
-    and Ukrainian in the same change.** Sync the new key into its catalog,
-    then give it a `de`, an `fr`, an `es`, an `it`, a `ru`, a `pl` and a `uk`
-    localization with `"state" : "translated"`.
-    `StringCatalogTests+Translations.swift` fails on a key missing any of them,
-    and on a translation that drops or retypes a placeholder (a singular may
-    leave the count out, as the English one does, except in French, Russian
-    and Ukrainian). The shared
-    App Intent and `RoleButton` wording sits in all four catalogs, so it is
-    translated in all four. A new language joins
-    `StringCatalogTests.translations`, `knownRegions` in the project,
-    `MapPurchaseLinks.PageLanguage` with its pages under `docs/`, and the
-    archive job's `.lproj` list in `ci.yml`.
-  - **The German says *du*, and keeps one word for each thing:** *Wanderung*
-    (hike), *Weg* (trail), *Route* (route), *Ort* (place), *Aufzeichnung*
-    (recording), *Stopp* (a stop on a drawn trail), *Kachel* (map tile),
-    *Mediathek* (the photo library). Quotes are „…“, a dash is a spaced –, and
-    an ellipsis follows a space.
-  - **The French says *vous*, and keeps one word for each thing:**
-    *randonnée* (hike), *sentier* (trail), *itinéraire* (route), *lieu*
-    (place), *enregistrement* (recording), *étape* (a stop on a drawn trail),
-    *tuile* (map tile), *photothèque* (the photo library). Buttons and titles
-    are in sentence case, Apple's own names are Apple's French ones
-    (*Réglages*, *Santé*, *Plans*), and people are named without a gender
-    where French allows it (*une autre personne*). Quotes are « … », a no-break
-    space goes before : ; ? ! and %, the apostrophe is ’, a dash is a spaced –,
-    and an ellipsis follows the word with no space. The Siri phrases are what
-    the hiker says to Siri, so they take the imperative people speak to it in
-    (*Démarre une randonnée dans OpenHikes*).
-  - **The Spanish says *tú*, and keeps one word for each thing:** *excursión*
-    (hike), *sendero* (trail), *ruta* (route), *lugar* (place), *grabación*
-    (recording), *parada* (a stop on a drawn trail), *tesela* (map tile),
-    *fototeca* (the photo library), *punto GPS* (a track point). Record is
-    *grabar* and save is *guardar*, so the two never meet, and report is
-    *denunciar*. One `es` follows Spain's usage, as Apple's own `es` does, in
-    Apple's names (*Ajustes*, *Salud*, *Mapas*, *Actividad en directo*) and in
-    the app's own words (*aparcamiento*, *en coche*); Latin America's would be
-    an `es-419` of its own. Buttons and titles are in sentence case, a button
-    is an infinitive (*Guardar excursión*) and an instruction the *tú*
-    imperative (*Activa*), and people are named without a gender where Spanish
-    allows it (*otra persona*, *quien revisa*). Quotes are the RAE's «…», a
-    question or an exclamation opens with ¿ or ¡, nothing goes before : ; ? !,
-    a no-break space goes before %, an aside sits between rayas with no space
-    inside (—así—), and an ellipsis follows the word with no space. The Siri
-    phrases take the *tú* imperative (*Empieza una excursión en OpenHikes*).
-    Spanish uses the `one` form for 1 alone, so its singular may spell the
-    count out as the English does, and each Spanish plural carries `many`
-    worded as `other`, as the French does.
-  - **The Italian says *tu*, and keeps one word for each thing:** *escursione*
-    (hike), *sentiero* (trail), *percorso* (route), *luogo* (place),
-    *registrazione* (recording), *tappa* (a stop on a drawn trail), *tassello*
-    (map tile), *libreria foto* (the photo library), *punto GPS* (a track
-    point), *camminata* (a walk along a trail), *segnavia* (a waymark). Record
-    is *registrare*, save is *salvare* and report is *segnalare*. Apple's own
-    names are Apple's Italian ones (*Impostazioni*, *Salute*, *Mappe di
-    Apple*, *Attività in tempo reale*), and *Community* keeps its English name,
-    as the German does, lowercase in a sentence as the English has it. Buttons
-    and titles are in sentence case, a button or an instruction is the *tu*
-    imperative (*Salva escursione*, *Attiva*), an error title opens with
-    *Impossibile*, as Apple's do, and people are named without a gender where
-    Italian allows it (*un’altra persona*, *chi revisiona*). OpenHikes takes
-    no gender where the sentence can avoid one (*OpenHikes non ha potuto…*),
-    and is feminine, as *app* is, where it cannot. Quotes are «…» with no
-    space inside, the apostrophe is ’ and È is never E’, nothing goes before
-    : ; ? ! or %, a dash is a spaced –, and an ellipsis follows the word with
-    no space. The Siri phrases take the *tu* imperative (*Avvia un’escursione
-    in OpenHikes*). Italian uses the `one` form for 1 alone, so its singular
-    may spell the count out as the English does, and each Italian plural
-    carries `many` worded as `other`, as the French and the Spanish do.
-  - **The Russian says *вы*, in lower case, and keeps one word for each
-    thing:** *поход* (hike), *тропа* (trail), *маршрут* (route), *место*
-    (place), *запись* (recording), *остановка* (a stop on a drawn trail),
-    *тайл* (map tile), *медиатека* (the photo library), *точка трека* (a track
-    point), *маркировка* (a waymark), *турист* (a hiker) and *фото* (a photo),
-    which never declines. Record is *записать*, save is *сохранить* and
-    report is *пожаловаться*. Apple's own names are Apple's Russian ones
-    (*Настройки*, *Здоровье*, *Карты Apple*, *Эфир активности*, and
-    *геопозиция* for location), and *ё* is written *е*, as Apple's Russian
-    writes it. Buttons and titles are in sentence case, a button is an
-    infinitive (*Сохранить поход*) and an instruction the *вы* imperative
-    (*Включите*), and an error title opens with *Не удалось*, as Apple's do.
-    With *вы* the past tense is plural, so it never genders the hiker, and
-    other people are named without a gender where Russian allows it (*другой
-    человек*). OpenHikes takes no gender: its sentence is in the present or
-    impersonal, or says *приложение OpenHikes*. Quotes are «…», and „…“
-    inside them, a dash is a spaced —, nothing goes before : ; ? !, a
-    no-break space goes before %, and an ellipsis follows the word with no
-    space. The Siri phrases take the *ты* imperative people speak to Siri in
-    (*Начни поход в OpenHikes*), and a phrase in the first person past is
-    listed once for each gender (*прошел*, *прошла*).
-  - **A Russian count has three forms.** Russian uses `one` for 21 and 101
-    as well as 1, `few` for 2 to 4 and `many` for 5 and up, so every Russian
-    plural carries `one`, `few`, `many` and `other`
-    (`pluralHasEveryForm`). Its singular keeps its number, as the
-    French does, and takes no *оно* or *его*, which 21 photos would make
-    wrong. Only a fraction reaches `other`, which is worded as `few`. A string
-    with one count takes the forms even where the English has no plural
-    (*%lld процент*, *процента*, *процентов*). Where a string has two counts,
-    or its figure arrives already formatted, no word may agree with it:
-    *Сохранено тайлов: 3 из 12*.
-  - **What fills a Russian placeholder stays in the nominative.** Russian
-    would decline it, so a title, a name or a catalogued word goes in «» or
-    after a colon (*Источник: %@*). A duration in words arrives in the
-    nominative too (*1 час 21 минута*), so nothing governs it: *время в пути:
-    %@*, never *за %@*. A date ends in *г.*, so it never stands before a
-    sentence's full stop.
-  - **The Polish says *ty*, with a capital on its pronouns, and keeps one word
-    for each thing:** *wędrówka* (hike), *szlak* (trail), *trasa* (route),
-    *miejsce* (place), *nagranie* (recording), *przystanek* (a stop on a drawn
-    trail), *kafelek* (map tile), *biblioteka zdjęć* (the photo library),
-    *punkt śladu* (a track point), *przejście* (a walk along a trail), *znak
-    szlaku* (a waymark) and *turysta* (a hiker). Record is *nagrać*, save is
-    *zapisać*, keep is *zachować* and report is *zgłosić*. Apple's own names
-    are Apple's Polish ones (*Ustawienia*, *Zdrowie*, *Mapy Apple*,
-    *wydarzenie na żywo*, and *położenie* for location), and *Twój*, *Ci* and
-    *Cię* take the capital Apple's Polish gives them, as the system's prompts
-    beside the app's do. Buttons and titles are in sentence case, a button or
-    an instruction is the *ty* imperative (*Zapisz wędrówkę*, *Włącz*), a
-    dialog's question is an infinitive (*Usunąć tę wędrówkę?*), *Couldn’t* is
-    *Nie udało się* and *Can’t* is *Nie można*. The Polish past tense names a
-    gender (*zapisałeś*, *zapisałaś*), so nothing is said of the hiker in it:
-    a sentence is impersonal (*Zapisano*), passive, present or future, and
-    other people are named without a gender where Polish allows it (*inna
-    osoba*). OpenHikes takes no gender and no ending: its sentence is in the
-    present or impersonal, or says *aplikacja OpenHikes*. Quotes are „…”, a
-    dash is a spaced –, nothing goes before : ; ? ! or %, the apostrophe is ’
-    and stands only in a declined foreign name (*iPhone’a*), and an ellipsis
-    follows the word with no space. The Siri phrases take the *ty* imperative
-    (*Rozpocznij wędrówkę w OpenHikes*), and a phrase in the first person past
-    is listed once for each gender (*przeszedłem*, *przeszłam*).
-  - **A Polish count has three forms too.** Polish uses `one` for 1 alone,
-    `few` for 2 to 4, and for 22 to 24 but not 12 to 14, and `many` for the
-    rest, so every Polish plural carries `one`, `few`, `many` and `other`
-    (`pluralHasEveryForm`). Only a fraction reaches `other`, which takes the
-    genitive singular (*1,5 szlaku*). A verb beside the count changes with it
-    (*Pozostały 2 zdjęcia*, *Pozostało 5 zdjęć*). What the Russian paragraphs
-    say of two counts, of a figure that arrives formatted and of what fills a
-    placeholder holds for Polish as it stands: *Zapisane kafelki: 3 z 12*,
-    *Autor: %@*, *czas: %@*. A duration spoken in words follows no verb
-    either, because the verb would have to agree with it: *Do końca: %@*,
-    never *Pozostało %@*.
-  - **The Ukrainian says *ви*, in lower case, and keeps one word for each
-    thing:** *похід* (hike), *стежка* (trail), *маршрут* (route), *місце*
-    (place), *запис* (recording), *зупинка* (a stop on a drawn trail), *тайл*
-    (map tile), *фототека* (the photo library), *точка треку* (a track
-    point), *проходження* (a walk along a trail), *маркування* (a waymark),
-    *турист* (a hiker) and *фото* (a photo), which never declines. Record is
-    *записати*, save is *зберегти*, download is *викачати*, as Apple's is,
-    and report is *поскаржитися*. Apple's own names are Apple's Ukrainian
-    ones (*Параметри*, *Здоровʼя*, *Фотографії*, *Карти Apple*, *Дія
-    наживо*, and *геопозиція* for location), declined in a sentence as
-    Apple's are (*у Параметрах*, *до Фотографій*), and an app is a *програма*,
-    as Apple's Ukrainian has it. Buttons and titles are in sentence case, a
-    button is an infinitive (*Зберегти похід*) and an instruction the *ви*
-    imperative (*Увімкніть*), a dialog's question is an infinitive (*Видалити
-    цей похід?*), *Couldn’t* is *Не вдалося* and *Can’t* is *Не можна*. With
-    *ви* the past tense is plural, so it never genders the hiker, and other
-    people are named without a gender where Ukrainian allows it (*інша
-    людина*, *автор*). OpenHikes takes no gender: its sentence is in the
-    present or impersonal, or says *програма OpenHikes*. The apostrophe is ʼ
-    (U+02BC), as Apple's Ukrainian writes it (*памʼять*, *Здоровʼя*), never
-    ’ or '; no letter Ukrainian lacks (ы, э, ъ, ё) appears. Quotes are «…»,
-    and „…“ inside them, a dash is a spaced — with a no-break space before
-    it, nothing goes before : ; ? ! or %, and an ellipsis follows the word
-    with no space. У/в, і/й and з/із/зі alternate as Ukrainian euphony asks
-    (*в OpenHikes*, *у Фотографіях*). The Siri phrases take the *ти*
-    imperative people speak to Siri in (*Почни похід в OpenHikes*), and a
-    phrase in the first person past is listed once for each gender
-    (*пройшов*, *пройшла*).
-  - **A Ukrainian count has three forms, as a Russian one does.** Ukrainian
-    uses `one` for 21 and 101 as well as 1, `few` for 2 to 4 and `many` for
-    5 and up, so every Ukrainian plural carries `one`, `few`, `many` and
-    `other` (`pluralHasEveryForm`), and its singular keeps its number
-    (`singularKeepsTheCount`) and takes no *його* or *її*, which 21 places
-    would make wrong. Only a fraction reaches `other`, which takes the
-    genitive singular (*1,5 походу*). Wherever the Russian or the Polish
-    is a plural, the Ukrainian is one. What the Russian paragraphs say of two
-    counts, of a figure that arrives formatted and of what fills a
-    placeholder holds for Ukrainian as it stands: *Збережено тайлів: 3 з 12*,
-    *Автор: %@*, *час у дорозі: %@*. A date ends in *р.*, so it never stands
-    before a sentence's full stop.
-  - **A French singular keeps its number.** French uses the `one` form for 0
-    as well as 1, so a singular that spells the count out as a word would say
-    *une* photo for none (`singularKeepsTheCount`). Each French plural
-    also carries `many`, the form CLDR gives large round numbers, worded as
-    `other`.
-  - **One English word that a translation splits takes a second key.** A
-    catalog holds one entry per key, so where English uses one word for two
-    things a translation names apart, the call site that differs reads
+    two. The reasoning and the edge cases go in the code's comments, or on
+    the support page when a hiker needs them. `StringCatalogTests` holds
+    every English value under a length ceiling.
+  - A count is a plural variation, never `if count == 1`. Figures are
+    formatted per locale and never catalogued.
+  - **One English word that a translation splits takes a second key**:
     `String(localized: "<area>.<meaning>", defaultValue: "…")` with the same
-    English. French says « Départ » for a route's start and « Démarrer » on
-    the record button (`recording.start`), and agrees *None* with a place's
-    kind (`place.kind.none`). Spanish calls the watch's share of a trail
-    already walked «Completado» and a close button «OK» (`follow.done`), and
-    files the recording actions in Shortcuts under «Grabación» while a badge
-    says «Grabando» (`intent.category.recording`). Russian calls the easiest
-    difficulty grade *Пеший поход* and the trail maker's travel mode *По
-    тропам* (`travelMode.hiking`).
+    English, as `recording.start` does for the record button.
   - **A sentence never changes the case of a catalogued word**, because German
-    capitalizes every noun. A sentence that names something is passed whole
-    (`CommunityMailOutcomeSections.handoffDetail`).
-  - **Two catalogs have no sync.** The permission prompts are translated in
-    `InfoPlist.xcstrings` (the app's and the watch's), and the Siri phrases in
-    `OpenHikes/AppShortcuts.xcstrings`, one entry per shortcut keyed by its
-    first phrase. The IDE extracts into both and `xcodebuild` into neither, so
-    an edited purpose string or phrase means editing its catalog's English,
-    German, French, Spanish, Italian, Russian, Polish and Ukrainian by hand.
-    The translation tests hold each to its `Info.plist` and to
-    `OpenHikesShortcuts.swift`. The IDE also extracts the bundle's name and
-    the GPX type's into `InfoPlist.xcstrings`: a name gets its translations,
-    or `"shouldTranslate" : false` when it stays as it is, as *OpenHikes*
-    does.
-  - **The privacy policy and the terms are published in German, French,
-    Spanish, Italian, Russian, Polish and Ukrainian too.**
-    `docs/de/privacy/`, `docs/de/terms/`, `docs/fr/privacy/`,
-    `docs/fr/terms/`, `docs/es/privacy/`, `docs/es/terms/`,
-    `docs/it/privacy/`, `docs/it/terms/`, `docs/ru/privacy/`,
-    `docs/ru/terms/`, `docs/pl/privacy/`, `docs/pl/terms/`,
-    `docs/uk/privacy/` and `docs/uk/terms/` translate the English pages, and
-    the app opens the copy in its own language
-    (`MapPurchaseLinks.PageLanguage` argues why). An edit to an English page
-    edits its German, French, Spanish, Italian, Russian, Polish and Ukrainian
-    copies in the same change, and all eight move their `<time datetime>`
-    together, which `Scripts/check-legal-pages.sh` holds them to, on every
-    pull request. It reads the pages from the quoted URLs in
-    `MapPurchaseLinks.swift`. `MapPurchaseLinksTests` fails on an app
-    language that has no pages of its own. Each page's language menu links
-    the other seven.
-  - **So is the support page.** `docs/de/support/`, `docs/fr/support/`,
-    `docs/es/support/`, `docs/it/support/`, `docs/ru/support/`,
-    `docs/pl/support/` and `docs/uk/support/` translate `docs/support/`, for
-    the App Store listing in each language to link. The app links none of
-    them, so no script holds them together: an edit to one edits the others
-    in the same change.
+    capitalizes every noun. A sentence that names something is passed whole.
+  - Shared App Intent metadata and `RoleButton` defaults stay in their
+    package declarations, and the sync script extracts them into all four
+    catalogs. An IDE build never sees them, so their entries are marked
+    `"extractionState" : "manual"` wherever the target does not use the same
+    words itself.
+  - **Two catalogs have no sync:** the permission prompts in
+    `InfoPlist.xcstrings` (the app's and the watch's) and the Siri phrases in
+    `OpenHikes/AppShortcuts.xcstrings`. The IDE extracts into both and
+    `xcodebuild` into neither, so an edited purpose string or phrase means
+    editing its catalog in every language by hand.
+  - A new language joins `StringCatalogTests.translations`, `knownRegions` in
+    the project, `MapPurchaseLinks.PageLanguage` with its pages under `docs/`,
+    and the archive job's `.lproj` list in `ci.yml`.
+  - **The privacy policy, the terms and the support page are published in
+    every language**, the translations under `docs/<language>/`. An edit to
+    an English page edits its seven copies in the same change, and the legal
+    pages move their `<time datetime>` together, which
+    `Scripts/check-legal-pages.sh` holds them to. No script holds the support
+    pages together.
   - The hosted tests and the UI suites assert English copy, so they assume a
     simulator whose language is English, as CI's is.
 - **OpenHikes Pro is one monthly subscription.**
   - **`MapEntitlementStore.productID` (`…pro.maps.monthly`) never changes.**
-    It is recorded against every purchase. The name customers read lives in the
-    paywall's title.
+    It is recorded against every purchase.
   - **`MapPaywallView` lists everything Pro unlocks and unlocks everything it
     lists**, because App Review checks both directions. Today that is the paid
     map styles (Stadia Outdoors, Stamen Terrain, Thunderforest Outdoors), offline
@@ -2022,33 +1169,18 @@ in its source header. Do not weaken one without a measurement.
   The policy has no setting. Every refusal logs a stable `reason` and serves
   saved coverage.
 - **A pause spends nothing unless something will read it**
-  (`Reminders/MovementReminderController.swift` decides whether to watch;
-  `SystemRecordingLocationSource.startMovementWatch()` in
-  `Recording/HikeRecorder+State.swift` picks the feed). With reminders off, or
-  before the first fix, GPS stops. Otherwise the app uses the cheapest delivery
-  that still notices a departure: significant-change monitoring with Always
-  access, or a 100-meter feed with When In Use.
-- **An auto-pause keeps its feed** (`HikeRecorder+AutoPause.swift`). A pause
-  by hand parks the sensors. The app's own pause is watched as a recording
-  standing still is: full accuracy and the 25-meter filter, because the
-  first fixes of the walk away are the next segment's. It spends what an
-  unpaused stop spent before Auto-Pause existed. Spending less on a long
-  stop needs a device measurement first. Watching a running recording for a
-  stop costs one timer, set for the place being watched and set again when
-  it rings: a wakeup every few minutes, beside the fixes.
+  (`Reminders/MovementReminderController.swift`). With reminders off, or
+  before the first fix, GPS stops. Otherwise the app uses the cheapest
+  delivery that still notices a departure: significant-change monitoring with
+  Always access, or a 100-meter feed with When In Use.
+- **An auto-pause keeps its feed** (`HikeRecorder+AutoPause.swift`), because
+  the first fixes of the walk away are the next segment's. Spending less on a
+  long stop needs a device measurement first.
 - **Junction warnings spend what a recording spends, and only when asked**
-  (`Hikes/Walks/Junctions/JunctionLocationFeed.swift`). A followed walk is
-  otherwise fed by significant changes in a pocket, hundreds of meters apart,
-  which is too late for a fork. With the switch on and a walk following, a
-  feed of its own takes the recorder's `RecordingEnergyPolicy` profile, with
-  background delivery and the location indicator. It starts only once the
-  line's junctions are found, and not for a line with none. A pause, the
-  walk ending or the switch going off stops it, and so does a fix more than
-  a kilometer from the line, until the app next comes to the front: in a
-  pocket on When In Use nothing else ends the walk for hours.
+  (`Hikes/Walks/Junctions/JunctionLocationFeed.swift`): a feed of its own,
+  only with the switch on and a walk following a line that has junctions.
 - **The screen stays awake only on a claim, and only if asked**
   (`General/ScreenWake.swift`). `SettingsKey.keepScreenAwake` is off by default.
-  The switch, a live subject and an active scene must all agree.
   `ScreenWakeCoordinator` counts claims and is the only writer of
   `isIdleTimerDisabled`.
 - **A backgrounded recording draws nothing and ticks nothing.**
@@ -2059,8 +1191,7 @@ in its source header. Do not weaken one without a measurement.
 - **Terrain goes under the tiles only while the map is tilted**
   (`Map/MapCoordinator+TerrainUnderTiles.swift`). MapKit keeps fetching the
   map a replacing tile overlay hides, so terrain under the tiles costs Apple's
-  satellite imagery on every view. A map lying flat keeps the flat map under
-  its tiles, as it always did.
+  satellite imagery on every view.
 
 ## Schema and migration policy
 
@@ -2085,14 +1216,12 @@ in its source header. Do not weaken one without a measurement.
   validation, not migration. Derived caches carry no version and are
   regenerated when they fail to decode. The trail graph's region cache is the
   exception, because its older files still decode: it counts its format
-  (`OverpassTrailGraphProvider.cacheFormat`). A region in another format reads
-  as expired. It is fetched again when next asked for, and serves as a
-  fallback until a fetch succeeds.
-- **Revisit this policy only when installs must survive upgrades.** Then:
-  - Freeze the actual model and every encoded type.
-  - Write a real migration plan.
-  - Test previous-version stores from disk.
-  - Never put a new version number on today's model.
+  (`OverpassTrailGraphProvider.cacheFormat`), and a region in another format
+  reads as expired.
+- **Revisit this policy only when installs must survive upgrades.** Then
+  freeze the actual model and every encoded type, write a real migration
+  plan, and test previous-version stores from disk. Never put a new version
+  number on today's model.
 
 ### CloudKit
 
@@ -2132,22 +1261,17 @@ in its source header. Do not weaken one without a measurement.
 - **Deployment state, checked 2026-11-13.** Development and production both
   export `md5 e2fd4f7c500b3911fae3d86a9b9d3f9c`. Both have the two
   trail-square record types, `CuratedTrailCell` and `CuratedTrailManifest`,
-  neither with an index, and both hold the world's squares under a manifest
-  that says so (*The trail squares*). Both also hold the same build of the
-  hiking-routes layer's squares, from planet-261109, marked as the whole
-  world under `routes1_manifest` (*The hiking-routes layer*), the same
-  build of the places' squares, from planet-261109, marked as the whole
-  world under `places1_manifest` (*The place squares*; checked 2026-11-15),
-  and the same build of the trail graph's squares, from planet-261109,
-  marked as the whole world under `graph1_manifest` (*The trail graph
-  squares*; checked 2026-11-16). Both have a column for every attribute in
-  `MirroredCloudKitSchema.recordTypes`. The only live columns the contract
-  does not name are SwiftData's own `CD_entityName`, the
-  to-one reference columns that the contract lists as relationships, and the
-  `CD_route_ckAsset` and `CD_rawRoute_ckAsset` asset fields of the two
-  external-storage attributes. Re-export before believing these numbers, and
-  update this paragraph when they move. Deployment facts live here, not in
-  code.
+  neither with an index. Both hold the same build of all four sets of
+  squares, from OpenStreetMap as of 2026-11-17 23:00 UTC, each marked as the
+  whole world under its own manifest (checked 2026-11-18): `trails1_manifest`,
+  `routes1_manifest`, `places1_manifest` and `graph1_manifest`. Both have a
+  column for every attribute in `MirroredCloudKitSchema.recordTypes`. The
+  only live columns the contract does not name are SwiftData's own
+  `CD_entityName`, the to-one reference columns that the contract lists as
+  relationships, and the `CD_route_ckAsset` and `CD_rawRoute_ckAsset` asset
+  fields of the two external-storage attributes. Re-export before believing
+  these numbers, and update this paragraph when they move. Deployment facts
+  live here, not in code.
 
 ## The community feature
 
@@ -2176,11 +1300,10 @@ is world-readable, because browsing needs no account.
 | `CuratedTrailManifest` (what the squares cover) | `reviewer` / `reviewer` | **none** |
 
 - **A submission is write-once.** A listing points at its submission, so an
-  author who could write would be able to swap an approved route.
-  - Amending a route means a removal request plus a fresh share. A takedown is
-    a reviewer's delete.
-  - A reviewer may correct only the title (on the listing) and which
-    photographs go (`keepOnlyPhotos`, before the listing exists).
+  author who could write would be able to swap an approved route. Amending a
+  route means a removal request plus a fresh share, and a takedown is a
+  reviewer's delete. A reviewer may correct only the title (on the listing)
+  and which photographs go (`keepOnlyPhotos`, before the listing exists).
 - **The missing indexes are the security control.** A submission is fetched
   only by record ID, so any index on one, including the `___recordID` the
   Console adds by default, would list every unreviewed upload. `authorID` has
@@ -2196,58 +1319,41 @@ is world-readable, because browsing needs no account.
   trusting the role in production.
 - **The last two types hold nothing a hiker made.** They are a copy of
   OpenStreetMap's routes, places and trails that a script uploads; see *The
-  trail squares*, *The hiking-routes layer*, *The place squares* and *The
-  trail graph squares*.
+  trail squares* and the three sections after it.
 
 ### Rules that hold it up
 
 - **A suite must never reach the real transport.** There is no sandbox for a
-  public database.
-  - Under `isRunningTests` (UI tests included),
-    `OpenHikesModel.makeCommunityTransport()` returns `nil`, which removes the
-    share button and the list.
-  - The only way past that is `--ui-test-community=<scenario>`, which selects
-    the `DEBUG`-only `SeededCommunityTransport`. `published` is the only
-    scenario that reaches the published state; `curated` and `commons` seed the
-    OpenStreetMap and Wikimedia halves.
+  public database. Under `isRunningTests` (UI tests included),
+  `OpenHikesModel.makeCommunityTransport()` returns `nil`, which removes the
+  share button and the list. The only way past that is
+  `--ui-test-community=<scenario>`, which selects the `DEBUG`-only
+  `SeededCommunityTransport`.
 - **The feature is free**, including publishing and photo contributions.
   Nothing on the publish path checks an entitlement. Do not add one back
   without the decision being made again in the open; only the schema decides
   what reaches other people.
 - **The server decides who reviews.** No role is stored. `reviewQueue()`
   reports a refusal as `.notPermitted`, not as an empty list, and
-  `CommunityReviewQueue.isReviewer` only hints at what to draw. A failed queue
-  load draws nothing; a failed action is reported.
+  `CommunityReviewQueue.isReviewer` only hints at what to draw.
 - **Publication has three derived states.** `CommunityPublicationState` derives
-  `notShared`, `awaitingReview` or `published` from two columns on `Hike`.
-  - A decline leaves no record, so the UI never says *rejected*.
-  - Only `CommunityPublicationCheck.refresh` learns `communityListingID`, and
-    it fails silently. A new route share clears it
-    (`CommunityUploadQueueing.record`), and so does `forgetPublication`.
-  - Un-publishing happens only through an explicit *Check Whether It's Still
-    Live*. `forgetPublication` clears both columns only after the listing is
-    confirmed gone, because queries are eventually consistent.
+  `notShared`, `awaitingReview` or `published` from two columns on `Hike`. A
+  decline leaves no record, so the UI never says *rejected*. Un-publishing
+  happens only through an explicit *Check Whether It's Still Live*, and
+  `forgetPublication` clears both columns only after the listing is confirmed
+  gone, because queries are eventually consistent.
 - **Reporting is an email; blocking is device-local.** Both follow from
-  account-free browsing.
-  - `CommunityReport` composes a `mailto:` naming both record names.
-  - `CommunityBlockList` keeps blocks in unsynced `UserDefaults`.
-  - Blocks are keyed on `CommunityHike.authorID` (the CloudKit creator, which
-    the app copies at publication), never on a typed name. A listing without an
-    `authorID` is dropped.
-  - Blocked authors are filtered on read and excluded before a page's `limit`
-    is spent (`CommunityPageBudget`).
-  - Report and Block sit on the content's screen, never on a row. Contributed
-    photos get their own (`CommunityPhotoActions`).
+  account-free browsing. `CommunityBlockList` keeps blocks in unsynced
+  `UserDefaults`, keyed on `CommunityHike.authorID` (the CloudKit creator,
+  which the app copies at publication), never on a typed name. A listing
+  without an `authorID` is dropped, and blocked authors are excluded before a
+  page's `limit` is spent (`CommunityPageBudget`). Report and Block sit on
+  the content's screen, never on a row.
 - **A submission and its review notice are two saves, and a failed notice must
-  not lose the upload.**
-  - A refused notice comes back as `CommunityQueueingFailure`, carrying the
-    name of the submission that did land.
-  - `CommunityUploadQueueing.record` keeps that name in the mirrored column
-    and in a device-local marker (`HikeLocalState.unqueuedSubmissionID`,
-    `unqueuedPhotoSubmissionID`).
-  - *Finish Sending* then saves the notice and nothing else; it never
-    re-uploads. The notice is named `notice-<submissionID>`, so a retry saves
-    the same record.
+  not lose the upload** (`CommunityUploadQueueing`).
+  - *Finish Sending* saves the notice and nothing else; it never re-uploads.
+    The notice is named `notice-<submissionID>`, so a retry saves the same
+    record.
   - `.serverRecordChanged` reads as *already queued*. A permission failure is
     never read as success.
   - Two server answers are assumed and not yet observed: `.serverRecordChanged`
@@ -2256,25 +1362,16 @@ is world-readable, because browsing needs no account.
     before a promote, never from a test (`CommunityRecordWriting` is the seam
     the suites script).
 - **Photos can be added to an already-listed trail** as a second pair of record
-  types, not as an edit.
-  - `CommunityHike.photoCount` stays the author's count.
-  - Contributions load when a hike opens, never for a list, budgeted to 20 sets
-    and 60 photos.
-  - `HikePhoto.sentToCommunityAt` starts a photo already sent struck off the
-    contribution form, and one tap puts it back: a default, not a filter.
+  types, not as an edit. Contributions load when a hike opens, never for a
+  list.
 - **What is sent is stated, and the statements move together.**
   `CommunityShareDisclosureTests` holds the share footer to the payload. The
-  privacy manifest, `docs/privacy/` and `docs/terms/`, with their German,
-  French, Spanish, Italian, Russian, Polish and Ukrainian copies under
-  `docs/de/`, `docs/fr/`, `docs/es/`, `docs/it/`, `docs/ru/`, `docs/pl/` and
-  `docs/uk/`, change
-  whenever what is sent changes,
-  what a reviewer may do changes, the removal, *Check Whether It's Still
-  Live*, reset or *Finish Sending* flows change, what the Commons requests ask
-  for or keep changes, or `CommunityPublisher.maximumPhotos` (36) changes.
-  That limit is the first number to lower if storage costs bite. App Store
-  Connect's own privacy answers are separate, and the manifest does not update
-  them.
+  privacy manifest, `docs/privacy/` and `docs/terms/`, with their translated
+  copies, change whenever what is sent changes, what a reviewer may do
+  changes, the removal, *Check Whether It's Still Live*, reset or *Finish
+  Sending* flows change, what the Commons requests ask for or keep changes,
+  or `CommunityPublisher.maximumPhotos` (36) changes. App Store Connect's own
+  privacy answers are separate, and the manifest does not update them.
 
 ### OpenStreetMap and Wikimedia Commons
 
@@ -2283,8 +1380,7 @@ is world-readable, because browsing needs no account.
   from the pre-built squares where they have an answer and from Overpass where
   they do not (*The trail squares*).
   - The `limit` is spent on CloudKit first, so a published hike never loses its
-    place. A search wider than Overpass is asked about asks for a longer page
-    (`CommunityQueryPolicy.resultLimit(for:)`).
+    place.
   - A curated failure comes back as a `CuratedTrailOutage` beside the rows,
     rather than failing the whole answer.
   - Calls route on `CommunityIdentity`, and `CommunityOrigin` is a sum type, so
@@ -2293,19 +1389,12 @@ is world-readable, because browsing needs no account.
     openstreetmap.org instead, which is also its ODbL attribution.
 - **Only a hiker's own request asks Overpass.** `overpass-api.de` allows a few
   request slots per address, and has answered this app with a `429`.
-  - `CommunityQueryPolicy` turns a pan into an *offer*, never a request.
-  - Nothing is fetched until the *Community* tab opens.
-  - The same request asks the squares first, and Overpass only when they have
-    no answer, and never about a search wider than
-    `CuratedTrailQuery.maximumOverpassRadiusMeters`.
-  - All requests share `OverpassConversation`'s gate and its single retry.
-  - Relations are cached on disk (`CuratedTrailStore`), and a refused search
-    falls back to them while still showing the outage.
-- **Stadia elevation is Pro-only and never fetched for a list.** A curated
-  route asks once, on open; the trail maker asks once the drawing settles.
+  `CommunityQueryPolicy` turns a pan into an *offer*, never a request, and
+  nothing is fetched until the *Community* tab opens. All requests share
+  `OverpassConversation`'s gate and its single retry.
+- **Stadia elevation is Pro-only and never fetched for a list.**
   `StadiaElevationSource` is billed per call, so it refuses before forming a
   request unless `MapEntitlement.current` is entitled (`.unknown` refuses too).
-  The default source is `DormantElevationSource`.
 - **Commons photographs** fill a curated route's strip and the area search
   (`CommonsPhotoSourcing`, live only from the composition root).
   - Keep only CC BY, CC0 or public-domain files, credited with
@@ -2314,63 +1403,38 @@ is world-readable, because browsing needs no account.
     (`CommonsPhotoQuery.imageHosts`), sending `TileCache.userAgent`.
   - Make one API request at a time, and fetch nothing in Low Data Mode.
   - Never offer one for community sharing: `HikePhoto.isOwn` is false.
-- **Wikipedia on a place's card** (`Hikes/Places/Wikidata/`). A place from
-  OpenStreetMap keeps its `wikidata` tag (`TrailPlaceOSM.wikidata`, mirrored
-  as `TrailPoint.osmWikidata`), and its card asks Wikidata for the article in
-  the device's languages and the item's photograph (`WikidataPlaceSource`,
-  live only from the composition root).
-  - Ask when a card opens, never for a list, and fetch nothing in Low Data
-    Mode.
-  - Keep what comes back in memory only (`WikidataPlaceLookup`). The words are
-    Wikipedia's, under CC BY-SA, so they are shown with their credit and link
-    and never written to the device, copied into a hike or shared.
-  - The photograph passes the checks every Commons file does
-    (`CommonsPhotoQuery.files(from:)`).
-- **Shared hikes draw as lines and pins.** `CommunityRouteOutline` is a polyline
-  of about 1 KB on the submission, so a page's outlines arrive in one
-  `desiredKeys` fetch. MapKit never hit-tests overlays, so the app does
-  (`RouteHitTest`). Pins stay, because a polyline is not an accessibility
-  element.
+- **Wikipedia on a place's card** (`Hikes/Places/Wikidata/`) is asked for when
+  a card opens, never for a list, and never in Low Data Mode. What comes back
+  is kept in memory only (`WikidataPlaceLookup`): the words are Wikipedia's,
+  under CC BY-SA, so they are shown with their credit and link and never
+  written to the device, copied into a hike or shared.
+- **Shared hikes draw as lines and pins.** MapKit never hit-tests overlays, so
+  the app does (`RouteHitTest`). Pins stay, because a polyline is not an
+  accessibility element.
 
 ### The trail squares
 
 A curated search used to wait in Overpass's queue, so its answer is built
 ahead of time: OpenStreetMap's waymarked day hikes, filed by quarter-degree
 square, one `CuratedTrailCell` record a square in the public database, fetched
-by name. `TrailCellGrid` argues the design and has the measurements.
+by name. `TrailCellGrid` argues the design and has the measurements. The three
+sets after this one are built, uploaded and read on the same terms.
 
 - **An answer is complete or it is not given** (`TrailCellLibrary`). A search
   is answered from the squares only when the manifest says they are the whole
   world, and every square within reach of the search was read or has no
-  record. With no manifest, a regional set, or a square that could not be
-  read, `CuratedTrailSource` asks Overpass as it did before, about a search
-  Overpass may be asked about (next point). So a search that narrow fills
-  without the squares, and an empty answer from the squares means *no trails
-  here*.
-- **The squares reach further than Overpass is asked.** The search ceiling is
-  theirs (`CuratedTrailQuery.maximumRadiusMeters`), and Overpass keeps the
-  narrower one it had (`maximumOverpassRadiusMeters`). Between the two, a
-  search the squares cannot answer fails as a search does: the outage is
-  reported, the routes already on the device are drawn, and Overpass is asked
-  nothing. The squares that did arrive are kept, so the next try asks only
-  for the rest.
-- **A route is measured before it is drawn.** A wide search has thousands of
-  routes in its area and keeps a page of them, so the routes are ordered by
-  where their pins stand and a line is assembled for the page alone
-  (`CuratedTrailDecoding.drawn(_:limit:)`).
-- **A regional build is never read, even where its squares are.** It leaves
-  out the routes that run out of its extract and holds nothing of the ones
-  beyond it, so a record that is there cannot say what is missing from it. A
-  region uploaded to development tries the upload, not the search.
+  record. Otherwise `CuratedTrailSource` asks Overpass as it did before. So an
+  empty answer from the squares means *no trails here*, and a regional build
+  is never read, even where its squares are.
+- **The squares reach further than Overpass is asked**
+  (`CuratedTrailQuery.maximumRadiusMeters` against
+  `maximumOverpassRadiusMeters`). Between the two, a search the squares cannot
+  answer fails as a search does, and Overpass is asked nothing.
 - **A square holds relations as OpenStreetMap has them**, not assembled
-  lines. Which ways are the route, and whether they join, stays
-  `CuratedTrailDecoding`'s, applied to a square as it is to an Overpass answer
-  (`CuratedTrailSourceTests+Cells` holds the two to one result). The tool
-  decides only what is filed: a name, under 500 members, every member way
-  present, and no wider than 20 km.
-- **A route is filed once**, under the square that holds the center of its
-  box, and a search reads every square within `TrailCellGrid.reachMeters` of
-  its map. `CuratedTrailQuery`'s day-hike figures are the grid's, spelled once:
+  lines. Which ways are the route stays `CuratedTrailDecoding`'s, applied to a
+  square as it is to an Overpass answer (`CuratedTrailSourceTests+Cells` holds
+  the two to one result).
+- **`CuratedTrailQuery`'s day-hike figures are the grid's**, spelled once:
   raising them without rebuilding the squares would offer nothing more.
 - **The file's generation is in every record name** (`trails1_…`). An
   installed build keeps asking for the names it knows, so a file it cannot
@@ -2380,213 +1444,105 @@ by name. `TrailCellGrid` argues the design and has the measurements.
   `RouteSquareGrid.swift`, `RouteSquareFile.swift`, `PlaceSquareGrid.swift`,
   `PlaceSquareFile.swift`, `TrailGraphSquareGrid.swift`,
   `TrailGraphSquareFile.swift`, `TrailGraphHighway.swift` and
-  `CommunitySchema.swift`. They import nothing of
-  the app's, and `Scripts/run-script-tests.sh` builds the tool, which is what
-  holds them to that.
-- **Building and uploading** is `Scripts/trail-cells.sh`:
-  1. `update-planet <planet.osm.pbf>`. The planet is downloaded once, by
-     torrent or from a mirror, and from then on kept current with the hourly
-     changes openstreetmap.org publishes, because the volunteers who serve it
-     asked that it not be downloaded again for each refresh. Only a planet
-     more than three months old, which pyosmium will not update, is replaced
-     by a new download.
-  2. `build <planet.osm.pbf> --world`. Only a build of the whole planet takes
-     `--world`, which is what marks the squares complete.
-  3. `upload <dir> --environment development`, then search in a Debug build.
+  `CommunitySchema.swift`. They import nothing of the app's, and
+  `Scripts/run-script-tests.sh` builds the tool, which is what holds them to
+  that.
+- **Building and uploading** is `Scripts/trail-cells.sh`, whose header has
+  every option:
+  1. `update-planet <planet.osm.pbf>`. The planet is downloaded once and then
+     kept current with the hourly changes openstreetmap.org publishes,
+     because the volunteers who serve it asked that it not be downloaded
+     again for each refresh.
+  2. `build <planet.osm.pbf> --world` (or `build-routes`, `build-places`,
+     `build-graph`). Only a build of the whole planet takes `--world`, which
+     is what marks the squares complete.
+  3. `upload <dir> --environment development`, then try it in a Debug build.
   4. `upload <dir> --environment production`.
-
-  An upload sends the squares whose digest changed, deletes the ones the build
-  no longer has, and writes the manifest last. It refuses a regional build
-  over a database that holds the world; told `--replace-world`, it first makes
-  the manifest say the squares are no longer the whole world, before it
-  deletes one. It signs with a server-to-server key
-  from the CloudKit Console, named by `OPENHIKES_CLOUDKIT_KEY_ID` and
-  `OPENHIKES_CLOUDKIT_KEY_FILE`; the private half stays out of the repository.
-  Each environment has keys of its own there, so either name takes
-  `_DEVELOPMENT` or `_PRODUCTION` for a key that is one environment's.
 - **Both record types are added by schema import before the first upload**
-  to an environment, for the reason *A new field arrives indexed* gives. The
-  deployment state under *CloudKit* says which environments have them.
+  to an environment, for the reason *A new field arrives indexed* gives.
+- **No suite reaches any of the squares.** Each set's source is `nil` under
+  `isRunningTests`: `makeCommunityTransport()`,
+  `HikingRouteSquares.forThisLaunch()`, `makeTrailPointSource()` and
+  `TrailGraphSquareLibrary.forThisLaunch()`.
 
 ### The hiking-routes layer
 
-*Hiking Routes*, chosen on *Map Modes*, draws
-every `route=hiking` relation OpenStreetMap has over whichever map is
-selected, coloured by its network. The app draws it
-(`HikingRoutesRenderer`), from squares built the trail squares' way and kept
-beside them. `RouteSquareGrid` argues the design and has the measurements.
+*Hiking Routes*, chosen on *Map Modes*, draws every `route=hiking` relation
+OpenStreetMap has over whichever map is selected, colored by its network. The
+app draws it (`HikingRoutesRenderer`) from squares kept beside the trail
+squares. `RouteSquareGrid` argues the design and has the measurements.
 
-- **On unless the hiker turns it off, and nothing of it is a tile.** A
-  stored answer outranks the default (`SettingsDefault`). Auto-save and
-  downloads ask the selected map alone, so over Apple's maps a hike has
-  neither, whatever the layer's switch says.
-- **One way, once.** `Scripts/trail-cells.sh build-routes` keeps each member
-  way of every hiking relation once, with the routes it is drawn as and the
-  most important network among them, and files it at four levels of detail,
-  each simplified to what its zooms show and holding the networks they draw
-  (`RouteSquareLevel`). Nothing is left out for being long, unnamed or big;
-  a route OpenStreetMap calls proposed is, and so is a relation whose `type`
-  is not `route` or `superroute`: a `network` tagged `route=hiking` gathers
-  routes and is none of them.
-- **A way is drawn as its topmost relations.** A stage relation inside a
-  relation of its own network is that route, not one more, so its ways are
-  filed under the whole route alone; a relation inside one of another
-  network is filed beside it (`RouteCatalogue` in `RouteBuild.swift`). A
-  square's routes are therefore the relations a way is drawn as, not every
-  relation that names it.
-- **The trail squares' record types and upload, under names of their own.**
-  A routes square is a `CuratedTrailCell` named `routes1_z<zoom>_<row>_<col>`,
-  and the layer's manifest is `routes1_manifest`. The build's manifest says
-  `"kind": "routes"`, and `upload` reads that to choose the manifest record.
-  It is written to `routes-manifest.json`, never `manifest.json`, because a
-  tool from before the layer reads only that name and no `kind`, and would
-  take the layer's squares for the day hikes'. An upload leaves alone any
-  name its manifest lists that is not one of its own set's squares, and
-  refuses a build that lists one. No schema change was needed.
-- **Drawn only from a set that is the whole world**, for the reason *An
-  answer is complete or it is not given* is: until then a missing record means
-  nothing, and the layer draws nothing (`HikingRouteSquares`).
-- **A tile waits for every square it overlaps.** `canDraw` answers no and asks
-  for the missing ones, which redraw the tile when they arrive, or draws at
-  once when they came in while it was asking; a line never
-  stops at the edge of a square that has not come. Nothing on MapKit's
-  drawing threads waits on the disk or the network, and the redraw is asked
-  for on the main thread.
-- **The disk never waits for the network, and the network is asked as a
-  tile's would be** (`HikingRouteSquares`). A square kept on disk is drawn
-  while the request for its neighbour is still out. A request is refused
-  where `TileNetworkPolicy` refuses a tile somebody is looking at, so Low
-  Data Mode stops the layer too. A square that was refused or failed is left
-  for a minute, and then the tiles that asked for it meanwhile are drawn
-  again, and no others. Nothing else would ask on a map nobody moves. The
-  layer's requests take longer to time out than the day hikes' search, which
-  has Overpass to fall back on.
-- **Ways are joined end to end when a square loads, where the same routes
-  run** (`DrawnRouteSquare`), and a tile strokes only vertices a pixel apart.
-  A square holds OpenStreetMap's ways, which split a route at every junction,
-  and stroked one way at a time a zoomed-out tile stalled every overlay on
-  the map, the base map's tiles included.
-- **The look is Waymarked Trails', figure for figure** (`HikingRoutesStyle`):
-  which networks are stroked at each zoom, how wide and in which colour, and
-  which routes get a sign. Routes that share a way are stacked, the most
-  important network widest and underneath. No local route is drawn before
-  zoom 12 or gets a sign before zoom 13. Every size is in tile pixels — a
-  256-pixel tile's, `1 / zoomScale` map points — because MapKit hands a
-  phone tiles one to two zooms deeper than its screen, and a size in points
-  stood half as large again as the layer this one replaced.
-- **The caption credits Waymarked Trails for the look**, under the two
-  pictures (`HikingRoutesPicker`) on *Map Modes*, in one string. The figures
-  were read out of the map style that project publishes under the GPL, and
-  the owner settled on a credit in the caption, in every language. It stays
-  for as long as the look does. The line on the map still credits
-  OpenStreetMap alone, whose data is drawn.
-- **A sign is a route's waymark, or its number** (`WaymarkSign`): its
-  `osmc:symbol` (`OSMCSymbol`), else its `ref`, else what its name shortens
-  to, framed in its network's colour. Shapes the wiki lists that `OSMCSymbol`
-  does not draw are dropped, not guessed. A number is never cut: one too wide
-  for a tile's reach (`WaymarkSign.maximumWidth`) leaves the route without a
-  sign, because two routes cut to the same characters would share one.
+- **On unless the hiker turns it off, and nothing of it is a tile.** Auto-save
+  and downloads ask the selected map alone.
+- **Names of their own.** A routes square is a `CuratedTrailCell` named
+  `routes1_z<zoom>_<row>_<col>`, under `routes1_manifest`. The build writes
+  `routes-manifest.json`, never `manifest.json`, because a tool from before
+  the layer reads only that name and would take the layer's squares for the
+  day hikes'.
+- **Drawn only from a set that is the whole world** (`HikingRouteSquares`).
+- **A tile waits for every square it overlaps**, so a line never stops at the
+  edge of a square that has not come. Nothing on MapKit's drawing threads
+  waits on the disk or the network, and the redraw is asked for on the main
+  thread.
+- **Ways are joined end to end when a square loads** (`DrawnRouteSquare`).
+  Stroked one way at a time, a zoomed-out tile stalled every overlay on the
+  map, the base map's tiles included.
+- **The look is Waymarked Trails', figure for figure** (`HikingRoutesStyle`),
+  and the caption on *Map Modes* credits it (`HikingRoutesPicker`): the
+  figures were read out of the map style that project publishes under the
+  GPL, and the owner settled on a credit in the caption, in every language.
+  It stays for as long as the look does.
+- **Every size is in tile pixels** (`1 / zoomScale` map points), because
+  MapKit hands a phone tiles one to two zooms deeper than its screen.
 - **Signs are placed once for a square and a zoom, never tile by tile**
-  (`DrawnRouteSquare+Waymarks.swift`): along each line every so many pixels,
-  moved along it to stand clear of another sign, and left out within the
-  repeat distance of one the same. Every tile draws from that list, so a
-  sign across two tiles is whole in both. Deeper than
-  `DrawnRouteSquare.deepestPlacementZoom` the places are kept: each zoom
-  deeper doubles the places a whole square tries, on a drawing thread.
-- **No suite reaches the squares.** `HikingRouteSquares.forThisLaunch()` is
-  `nil` under `isRunningTests`, UI tests included, and the map then installs
-  no layer whatever the switch says; suites hand the map a stub's squares.
-- **Building and uploading** is the trail squares' procedure with
-  `build-routes` for `build`: `build-routes <planet.osm.pbf> --world`, then
-  `upload` to development, then to production.
+  (`DrawnRouteSquare+Waymarks.swift`), so a sign across two tiles is whole in
+  both.
 
 ### The place squares
 
-What a place search offers — the summits, springs, huts, viewpoints,
-campsites and car parks of *Search this area*, *Places Around Trail*, *Add
-Place* and *Places Nearby* — is built ahead of time the same way: every
-element `TrailPointQuery` asks Overpass for, filed by one-degree square, one
+What a place search offers (*Search this area*, *Places Around Trail*, *Add
+Place* and *Places Nearby*) is built ahead of time the same way: every element
+`TrailPointQuery` asks Overpass for, filed by one-degree square, one
 `CuratedTrailCell` a square named `places1_<row>_<col>`, under
 `places1_manifest`. `PlaceSquareGrid` argues the size and has the
 measurements.
 
-- **The squares first, Overpass second** (`TrailPointSource`). The squares
-  answer on the trail squares' terms (*An answer is complete or it is not
-  given*), through `PlaceSquareLibrary`, and no answer sends the search to
-  Overpass exactly as before. An empty answer means nothing of those kinds
-  is mapped there.
-- **A place is filed under every square its box touches**, and its box is
-  kept beside its pin, so a search reads only the squares its own boxes
-  touch, one to four for the widest, and finds a hut or a campsite that only
-  reaches into its map, as Overpass does. A way's box is around its nodes
-  and a relation's around its member nodes and ways, and the pin is the
-  middle of it, as Overpass's `out center` has it.
+- **The squares first, Overpass second** (`TrailPointSource`, through
+  `PlaceSquareLibrary`), on the trail squares' terms.
 - **The tool keeps the kinds and the tags in lists of its own**
   (`PlaceSquareFile.kinds` and `keptTagKeys`), because it cannot compile
   `TrailPointQuery`. `PlaceSquareFileTests` holds them to the query's kinds
   and to what a place card reads; a new kind or fact is a rebuild.
 - **The symbol is the app's.** A square holds tags, and
   `TrailPointDecoding.place(…)` reads them as it reads an Overpass element.
-  On both paths a way or a relation is only ever a kind asked for as an area.
-- **What is kept answers with no signal.** `cachedPlaces(near:limit:)` reads
-  the kept squares beside the Overpass store, so *Add Place* offers what is
-  mapped where the hiker stands before its search answers.
-- **No suite reaches the squares.** `makeTrailPointSource()` is `nil` under
-  `isRunningTests`, as it was for Overpass alone.
-- **Building and uploading** is the trail squares' procedure with
-  `build-places` for `build`, which writes `places-manifest.json`:
-  `build-places <planet.osm.pbf> --world`, then `upload` to development,
-  then to production.
 
 ### The trail graph squares
 
 The trail graph a recording is matched against, a hike's surface and
-difficulty are read from and a route is coloured by is built ahead of time
+difficulty are read from and a route is colored by is built ahead of time
 too: every trail OpenStreetMap has (`TrailGraphHighway.trails`) that may be
-walked, whole, with its nodes' ids, filed by slippy-map tile at zoom 10, one
-`CuratedTrailCell` a square named `graph1_z10_<x>_<y>`, under
-`graph1_manifest`. `TrailGraphSquareGrid` argues the design and has the
-measurements.
+walked, filed by slippy-map tile at zoom 10, one `CuratedTrailCell` a square
+named `graph1_z10_<x>_<y>`, under `graph1_manifest`. `TrailGraphSquareGrid`
+argues the design and has the measurements.
 
 - **Trails, never the roads that join them.** The roads were most of the
   planet, so the squares leave them out, and nothing that reads roads may
   read the squares. The trail maker routes over both, so it has a provider of
   its own that asks Overpass for the whole graph, in the `TrailGraphs`
-  directory every earlier build used; every other reader shares one that asks
-  the squares first and keeps its regions in `TrailGraphTrails`
-  (`OpenHikesModel.makeDependencies`).
+  directory; every other reader shares one that asks the squares first and
+  keeps its regions in `TrailGraphTrails` (`OpenHikesModel.makeDependencies`).
 - **A square answers for the sixteen regions inside it**, on the trail
-  squares' terms (*An answer is complete or it is not given*), through
-  `TrailGraphSquareLibrary`; no answer sends the region to Overpass exactly
-  as before. A square is fetched once however many regions wait on it, its
-  request is cancelled when the last of them stops waiting, as a region's
-  is, and one that could not be read is left for a minute. Overpass's `429`
-  stops only a region that would ask Overpass, and stops it in both
-  providers, which share its deadline (`OverpassRetryDeadline`).
-- **A region is as old as its square.** It is kept as fetched when the
-  square was, so it expires with the square, not thirty days after it was
-  read out of it.
+  squares' terms, through `TrailGraphSquareLibrary`. Overpass's `429` stops
+  only a region that would ask Overpass, in both providers, which share its
+  deadline (`OverpassRetryDeadline`).
 - **A region read from a square is the graph Overpass gives** for the same
   trails, joined at the same node ids, so the two merge in the provider's
-  cache. `TrailGraphSquareLibraryTests` holds them to one answer, and the
-  walking and hiking-route rules are written once, in `TrailGraphSquareFile`,
-  for the decoder and the tool. The one difference: a square holds positions
-  to a millionth of a degree, where two of a way's nodes can fall on one
-  point, and it keeps the segment between them, with no length, which the
-  decoder would leave out, so the trail is not cut there
-  (`TrailGraphSquareLibrary.graph(of:crossing:)`).
-- **A way is filed under every square its box touches**, whole, because an
-  Overpass region answers with every way that crosses it from end to end.
-- **No suite reaches the squares.** `TrailGraphSquareLibrary.forThisLaunch()`
-  is `nil` under `isRunningTests`.
-- **Building and uploading** is the trail squares' procedure with
-  `build-graph` for `build`, which writes `graph-manifest.json`. A planet's
-  trails are a billion nodes: the tool spools them to disk a few gigabytes at
-  a time, and the build needs some 60 GB of work files and about forty
-  minutes. The squares are 5 GB in 124,279 records, ten times every other set
-  together, and an upload to one environment took three to four hours. The
-  CloudKit Console shows no allowance for the public database to weigh them
-  against.
+  cache (`TrailGraphSquareLibraryTests`). The walking and hiking-route rules
+  are written once, in `TrailGraphSquareFile`, for the decoder and the tool.
+- **A planet's build needs some 60 GB of work files and about forty
+  minutes.** The squares are 5 GB in about 124,000 records, ten times every
+  other set together, and a first upload to one environment took three to
+  four hours.
 
 ## The watch app
 
@@ -2602,53 +1558,34 @@ this before changing `OpenHikesWatch/`, `OpenHikes/Watch/` or the shared
     `HikeIntentCoordinator`. That makes it a fourth surface beside the Live
     Activity, Control Center and Siri, holding no state of its own
     (`WatchRecordingMirror`).
-- **The mirror runs only while the watch app is reachable** (in the
-  foreground). It publishes on the Live Activity's 20-second floor, and only
-  when a figure moves. It sends the clock once, as an anchor, and carries
-  `LiveRecordingReport`'s figures only.
-- **Commands use `sendMessage` with a reply handler, and have no fallback.** A
-  button press delivered late is worse than none.
 - **A phone recording outranks the watch's own.** The watch refuses to start
   while the phone records. The reverse is unguarded: the phone never learns of
   a watch recording.
 - **Which `WCSession` door a payload uses is a decision.** The library goes as
   the application context (latest wins). The live recording mirror goes by
   `sendMessage` with no reply and is dropped when the watch is out of reach,
-  because a late reading is a wrong one. Everything else, including the trail
-  request, goes by `transferUserInfo`, because `sendMessage` fails out of range.
-  `WatchLink` is the only encoder, with one function pair per
-  `WatchMessageKind`.
+  because a late reading is a wrong one. Commands use `sendMessage` with a
+  reply handler and have no fallback: a button press delivered late is worse
+  than none. Everything else goes by `transferUserInfo`, because `sendMessage`
+  fails out of range. `WatchLink` is the only encoder, with one function pair
+  per `WatchMessageKind`.
 - **No transfer leaves before activation completes**, because
   `transferUserInfo` on a session that has not activated is a programmer
-  error.
-  - On the watch (`WatchLinkActivation`), a launch's requests wait for the
-    callback, and a walk stays on the disk queue, not marked as crossing, for
-    the drain that follows it. A failed activation is tried again when the app
-    comes to the front.
-  - On the phone (`WatchSessionActivation`), a switch to another watch takes
-    the session down too. A trail package or a walk's receipt that finishes
-    before activation or during a switch waits for the next activation that
-    succeeds, which after a switch reaches the watch now selected.
-- **A recorded walk is written before it is sent.**
-  - `WatchStore` queues it on disk and drops it only on a `WatchWalkReceipt`.
-  - The phone's import is idempotent on `HikeLocalState.watchSessionID`.
-    Deleting the hike leaves a `DeletedWatchWalk` in the same save, so a
-    retry still earns its receipt and does not bring the hike back.
-  - A failed write leaves the walk `.unsaved` (`WatchStoppedWalk`).
-  - Until Stop, `WatchRecorder` journals fixes, pauses and resumes. A crash
-    resumes the workout session, or offers Continue, Save or Discard; the
-    outage counts as a pause.
+  error (`WatchLinkActivation` on the watch, `WatchSessionActivation` on the
+  phone).
+- **A recorded walk is written before it is sent.** `WatchStore` queues it on
+  disk and drops it only on a `WatchWalkReceipt`. The phone's import is
+  idempotent on `HikeLocalState.watchSessionID`, and deleting the hike leaves
+  a `DeletedWatchWalk` in the same save, so a retry still earns its receipt
+  and does not bring the hike back. Until Stop, `WatchRecorder` journals
+  fixes, pauses and resumes.
 - **The watch matches against the trail itself.** `WatchRouteTracker` uses one
   polyline. It is not `TrailMatcher` and must not grow toward it. Its
-  thresholds are `RouteProfile`'s (`WatchFixPolicyParityTests`), and an
-  out-and-back is settled by course on both devices
-  (`RouteProfileHeadingFirstTests`).
+  thresholds are `RouteProfile`'s (`WatchFixPolicyParityTests`).
 - **The workout session only keeps the app alive.** Its builder is always
   discarded, because the phone's `HealthKitWorkoutWriter` is the walk's only
   Health writer. The session is read for heart rate alone, and its data
-  source collects nothing else (`WatchWorkoutCollection`): a discard keeps
-  out the workout but not the samples the builder was given, so Health may
-  keep the readings.
+  source collects nothing else (`WatchWorkoutCollection`).
 - **There is no watch test bundle.** Decisions live in `OpenHikesShared` value
   types under `swift test` (`WatchRouteTracker`, `WatchWalkAccumulator`,
   `WatchFixPolicy`, `WatchStoppedWalk`, `WatchLink`, `WatchGlanceDisplay`…). The
@@ -2662,8 +1599,7 @@ this before changing `OpenHikesWatch/`, `OpenHikes/Watch/` or the shared
   pauses and resumes, and never starts or stops.
 - **The complication shows only the watch's own recording.** It reads a
   `WatchGlance` from the watch's **own** App Group
-  (`group.tappium.com.OpenHikes.watch`). `WatchGlanceDisplay` and
-  `WatchGlanceReloadPolicy` decide what it shows and when it redraws.
+  (`group.tappium.com.OpenHikes.watch`).
 - **Not on the watch:** community, photographs, weather and offline maps.
   Following a trail without recording updates only while the app is on screen.
 
@@ -2719,15 +1655,14 @@ Reopening one needs new evidence, not a fresh reading of the same code.
   tested through the seams.
 - **ActivityKit is untestable in a hosted test.** Policy sits above
   `HikeActivityPresenting`, and the controller is `nil` under `isHostingTests`.
-  - `Activity` is boxed in a `nonisolated` `@unchecked Sendable` handle.
-  - `ActivityState` is matched positively.
-  - A running activity is adopted, never requested twice.
+  `Activity` is boxed in a `nonisolated` `@unchecked Sendable` handle,
+  `ActivityState` is matched positively, and a running activity is adopted,
+  never requested twice.
 - **A live recording outranks the selected trail, on every surface, without
-  qualification.**
+  qualification** (*The app* names the three places that hold the rule).
   - The widget replaces the trail rather than badging it, and a paused
-    recording keeps the widget.
-  - The takeover writes nothing, so the trail returns the moment the recording
-    clears.
+    recording keeps the widget. The takeover writes nothing, so the trail
+    returns the moment the recording clears.
   - A finished recording still lingers on the Lock Screen while the widget
     returns to the trail at once. That split is deliberate: the panel shows a
     result the hiker may not have read yet, and the widget shows what is
@@ -2746,15 +1681,11 @@ Reopening one needs new evidence, not a fresh reading of the same code.
 - **The live average speed keeps its clock, and is spoken in full.** Every
   *Avg Speed* that is not named for a clock divides by the walk's active
   clock: the time between kept fixes, which leaves pauses out and counts a
-  rest taken without one. That covers the recording screen, the watch, the
-  widget and Live Activity chip and the share card, and it is the clock a
-  walk's *Active Time* shows. A saved hike's two averages are named for their
-  own clocks, *Overall* and *Moving*, so after a pause the live figure matches
+  rest taken without one. A saved hike's two averages are named for their own
+  clocks, *Overall* and *Moving*, so after a pause the live figure matches
   neither. Moving time live would need a moving-time rule for the watch in
-  `OpenHikesShared`, written without `Deque`, and a mirrored `HikeWalk` column
-  for the share card to agree. The caption stays *Avg Speed*, which fits a
-  watch tile, and every surface speaks "Average Speed", as the chip always
-  has.
+  `OpenHikesShared` and a mirrored `HikeWalk` column for the share card to
+  agree.
 - **Two foreground location managers, on purpose.** iOS coalesces demand to the
   most demanding request, so the second manager costs dispatch, not power, and
   keeps background semantics out of browsing. Revisit only with a device energy
@@ -2779,30 +1710,17 @@ Reopening one needs new evidence, not a fresh reading of the same code.
 - **Load-bearing but never observed.**
   - The overzoom path, and the redraw that puts a refreshed tile over the
     saved copy drawn ahead of it, assume MapKit re-enters `draw` after
-    every `setNeedsDisplay(_ mapRect:)`. Nobody has watched it on a device
-    or on the iOS 18.4 floor. An iOS 27.2 simulator re-entered it at zoom
-    scales 0.0625 to 0.5: at once for the ground on screen, and for a scale
-    drawn earlier when that scale was shown again.
+    every `setNeedsDisplay(_ mapRect:)`. Watched on an iOS 27.2 simulator,
+    never on a device or on the floor.
   - Mirroring is assumed to carry `@Attribute(.externalStorage)` routes as
     `CKAsset`s. Nobody has watched a 20,000-point route cross a real container.
   - A tilted map's tiles assume MapKit drapes a replacing tile overlay, and
     every line above it, over the realistic satellite map's terrain. Watched
-    on iOS 18.6 and 27.2 simulators, never on a device; WWDC22 said an
-    overlay flattens a realistic map, on iOS 16.
+    on iOS 18.6 and 27.2 simulators, never on a device.
   - No search in the app has been watched reading a trail square, on a
-    device or in a TestFlight build. The fetch itself has been:
-    `CloudKitTrailCellDatabase` under `TrailCellLibrary`, hosted in a
-    simulator with no iCloud account, read the manifest and the squares from
-    development, and from production in a scratch build whose entitlements
-    named that environment. A search of two squares took 0.3 seconds and one
-    of six 0.8, and each again from disk under 0.15. The widest search, a
-    map 200 km across, took 3 to 17.5 seconds over ground with trails on
-    it, on Wi-Fi, and under 2 again from disk; nobody has watched one on a
-    cellular connection, where each of its requests has thirty seconds. The
-    upload has been
-    watched in both environments: a server-to-server key acts as the
-    developer who made it, wrote both `reviewer`-only types, and the asset
-    store took each square as a request's raw body.
+    device or in a TestFlight build, and nobody has watched the widest
+    search on a cellular connection. The fetch itself has been watched,
+    hosted in a simulator, from both environments, and so has the upload.
 
 ## Documentation
 
@@ -2818,6 +1736,11 @@ Each fact lives in one file:
 | `docs/` | The GitHub Pages site: a home page, and the privacy, terms and support pages linked from the App Store listing. It is not a documentation folder; new prose goes at the repository root. |
 
 - **Open work is a GitHub issue, never a checked-in list.**
+- **This file takes rules, not descriptions.** What a feature does, how it
+  was measured and why it is built that way go in the header of the type
+  that owns it, and a script's procedure in the script's header. A feature
+  earns a line here when a change somewhere else could break it, and the
+  line names the type to read.
 - **Cite this file by section name.** Code comments cite sections such as
   *Schema and migration policy*, *Settled decisions*, *Deliberate test seams*
   and *The watch app*, so keep those names stable. Never cite a number or a
