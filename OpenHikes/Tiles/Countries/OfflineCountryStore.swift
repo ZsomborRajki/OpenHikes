@@ -180,12 +180,23 @@ nonisolated struct OfflineCountryStore: Sendable {
 nonisolated enum OfflineCountryDigest {
     static let chunkBytes = 8 * 1024 * 1024
 
+    /// A pool for each chunk, because `FileHandle` hands one back
+    /// autoreleased and nothing on a task's thread drains until the task
+    /// lets go of it: without one, every chunk read was still in memory when
+    /// the last was hashed, which for a country is gigabytes.
     static func sha256(of url: URL) throws -> String {
         let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
         var hasher = SHA256()
-        while let chunk = try handle.read(upToCount: chunkBytes), !chunk.isEmpty {
-            hasher.update(data: chunk)
+        var isAtEnd = false
+        while !isAtEnd {
+            try autoreleasepool {
+                guard let chunk = try handle.read(upToCount: chunkBytes), !chunk.isEmpty else {
+                    isAtEnd = true
+                    return
+                }
+                hasher.update(data: chunk)
+            }
         }
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }

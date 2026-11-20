@@ -1489,7 +1489,8 @@ owner, on the main actor.
   transfer is still out for.
 - **Checked before it is used.** Each file is staged and moved into place
   only once its size and SHA-256 match the manifest's
-  (`OfflineCountryStore.isWhole`). An update downloads the new build beside
+  (`OfflineCountryStore.isWhole`), hashed a chunk at a time: a country's
+  file is gigabytes. An update downloads the new build beside
   the old one, and deletes the old one only once the index on disk names
   the new one.
 - **Owned by an index, not a row.** An area belongs to the device, and the
