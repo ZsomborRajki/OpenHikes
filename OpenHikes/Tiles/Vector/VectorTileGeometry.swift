@@ -13,6 +13,9 @@ import CoreGraphics
 nonisolated struct VectorTileGeometry {
     let scale: CGFloat
     let offset: CGPoint
+    /// The archive's tile on the picture: the picture itself, or the square
+    /// around it that it is a part of when drawn deeper than the archive goes.
+    let frame: CGRect
 
     /// The grid of `source`, whose side is `extent`, placed so that the part
     /// of it `target` covers fills a ``VectorTileRasterizer/pixelSize`` picture.
@@ -24,6 +27,7 @@ nonisolated struct VectorTileGeometry {
             x: (CGFloat(target.x) - CGFloat(source.x) * factor) * size,
             y: (CGFloat(target.y) - CGFloat(source.y) * factor) * size
         )
+        frame = CGRect(x: -offset.x, y: -offset.y, width: size * factor, height: size * factor)
     }
 
     /// A line or polygon feature's path. Each ring of a polygon is its own

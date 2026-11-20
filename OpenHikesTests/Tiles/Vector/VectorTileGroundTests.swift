@@ -401,3 +401,41 @@ extension VectorTileGroundTests {
         #expect(try colors([layer], z: 18, in: trunk) != colors([layer], z: 18, in: crown))
     }
 }
+
+// MARK: Seasonal stretches
+
+extension VectorTileGroundTests {
+    private func waterway(_ kind: String, _ points: [(Int, Int)]) -> VectorTileFixture.Feature {
+        .init(type: .line, properties: ["kind": .string(kind)], geometry: VectorTileFixture.line(points))
+    }
+
+    /// A seasonal stream's gaps were once rubbed out of every waterway, and
+    /// cut the river it crosses down the river's middle.
+    @Test("a seasonal stream's gaps leave the river it crosses whole")
+    func riverCrossedBySeasonalStream() throws {
+        let river = waterway("river", [(grid / 2, grid / 8), (grid / 2, grid * 7 / 8)])
+        let waterways = VectorTileFixture.Layer(name: "water", features: [line("stream"), river])
+        let seasonal = VectorTileFixture.Layer(name: VectorTileRasterizer.intermittentLayer, features: [line("stream")])
+        let riverMiddle = CGRect(x: side / 2 - 1, y: side / 4, width: 2, height: side / 2)
+
+        #expect(try colors([waterways, seasonal], z: 14, in: riverMiddle) == [water])
+        #expect(try colors([waterways, seasonal], z: 14, in: band(reach: 1)).contains(land), "the stream still broken")
+    }
+
+    /// The basemap joins a stream's pieces into one line, and can run it
+    /// straight through the point where it starts to run all year.
+    @Test("a stream is broken only along the stretch the extras say is not always there")
+    func streamSeasonalForPartOfItsLength() throws {
+        let stream = VectorTileFixture.Layer(name: "water", features: [line("stream")])
+        let upper = waterway("stream", [(grid / 8, grid / 2), (grid / 2, grid / 2)])
+        let seasonal = VectorTileFixture.Layer(name: VectorTileRasterizer.intermittentLayer, features: [upper])
+        let along = band(reach: 1)
+        let (left, right) = (
+            CGRect(x: along.minX, y: along.minY, width: side / 4 - 16, height: along.height),
+            CGRect(x: side / 2 + 16, y: along.minY, width: side / 4 - 16, height: along.height)
+        )
+
+        #expect(try colors([stream, seasonal], z: 14, in: left).contains(land))
+        #expect(try colors([stream, seasonal], z: 14, in: right) == [water])
+    }
+}

@@ -395,6 +395,12 @@ nonisolated extension VectorTileStyle {
         z >= intermittentDeepZ ? (dash: 4, gap: 3) : (dash: 8, gap: 4)
     }
 
+    /// One dash and the gap after it, at zoom `z`.
+    static func intermittentPeriod(z: Int) -> CGFloat {
+        let (dash, gap) = intermittentDash(z: z)
+        return dash + gap
+    }
+
     /// How much wider than a waterway the gaps rubbed out of it are: the
     /// basemap's line is not to the pixel where the extras' is.
     static let intermittentMargin: CGFloat = 2
