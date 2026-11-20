@@ -3426,6 +3426,73 @@ if expect_status 0 \
     else fail "each map should be verified in warm-up and capture" "$output"; fi
 fi
 
+# A companion can answer an erased watch no tile at all, and what got one
+# answering was restarting its Maps after a warm-up had failed. So a map that
+# does not draw is warmed again, Maps restarted between, a bounded number of
+# times. STUB_MAP_FAILURES is how many waits fail before one succeeds.
+cat > "$work/watch-warm-up-fixture.sh" <<'BASH'
+#!/usr/bin/env bash
+set -euo pipefail
+source "$1"
+derived_data="$2"
+mkdir -p "$derived_data"
+# The restart discards what its commands print, so the stub keeps a list.
+: > "$derived_data/maps-calls.log"
+trap 'cat "$derived_data/maps-calls.log"' EXIT
+frames=('01-the-map|map|the-map' '02-figures|0|figures')
+just_paired=false
+skip_pair="$3"
+udid=stub-watch
+companion_udid=stub-phone
+app_bundle_id=stub-bundle
+waits=0
+launch_frame() { printf 'launch %s\n' "$1"; }
+wait_for_map() {
+    waits=$((waits + 1))
+    if (( waits <= STUB_MAP_FAILURES )); then echo "no map"; return 1; fi
+    echo verified
+}
+xcrun() {
+    if [[ "$*" == *com.apple.Maps* ]]; then printf 'maps %s %s\n' "$2" "$3" >> "$derived_data/maps-calls.log"; fi
+}
+warm_up
+echo "warmed after $waits wait(s)"
+BASH
+STUB_MAP_FAILURES=1 \
+    run_script "watch warm-up restarts the companion's Maps and warms a map that did not draw again" \
+    bash "$work/watch-warm-up-fixture.sh" "$repository_root/Scripts/lib/watch-screenshot-map.sh" \
+    "$work/watch-warm-up" false
+if expect_status 0 \
+    && expect_contains "$output" "warmed after 2 wait(s)" "the output" \
+    && expect_contains "$output" "maps terminate stub-phone" "the restart" \
+    && expect_contains "$output" "maps launch stub-phone" "the restart"; then
+    if [[ "$(printf '%s\n' "$output" | grep -c '^launch the-map$')" == 2 ]]; then pass
+    else fail "the map frame should be launched once for each wait" "$output"; fi
+fi
+STUB_MAP_FAILURES=0 \
+    run_script "watch warm-up leaves the companion's Maps alone when the map draws" \
+    bash "$work/watch-warm-up-fixture.sh" "$repository_root/Scripts/lib/watch-screenshot-map.sh" \
+    "$work/watch-warm-up" false
+if expect_status 0 \
+    && expect_contains "$output" "warmed after 1 wait(s)" "the output" \
+    && expect_absent "$output" "maps " "the output"; then pass; fi
+STUB_MAP_FAILURES=9 \
+    run_script "watch warm-up gives up on a map that never draws, after three waits" \
+    bash "$work/watch-warm-up-fixture.sh" "$repository_root/Scripts/lib/watch-screenshot-map.sh" \
+    "$work/watch-warm-up" false
+if expect_status 1 && expect_absent "$output" "warmed after" "the output"; then
+    if [[ "$(printf '%s\n' "$output" | grep -c '^no map$')" == 3 \
+        && "$(printf '%s\n' "$output" | grep -c '^maps launch stub-phone$')" == 2 ]]; then pass
+    else fail "expected three waits with Maps restarted between them" "$output"; fi
+fi
+STUB_MAP_FAILURES=1 \
+    run_script "watch warm-up warms an unpaired watch's map again without a companion to restart" \
+    bash "$work/watch-warm-up-fixture.sh" "$repository_root/Scripts/lib/watch-screenshot-map.sh" \
+    "$work/watch-warm-up" true
+if expect_status 0 \
+    && expect_contains "$output" "warmed after 2 wait(s)" "the output" \
+    && expect_absent "$output" "maps " "the output"; then pass; fi
+
 run_script "screenshots rejects a capture from a device with the wrong dimensions" \
     bash -c 'source "$1"; fit_screenshot_frame "$2"' _ \
     "$repository_root/Scripts/lib/screenshots.sh" "$fit_work/phone.png"
