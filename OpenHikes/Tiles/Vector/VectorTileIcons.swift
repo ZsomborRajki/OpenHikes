@@ -40,6 +40,8 @@ nonisolated protocol VectorTileIconDrawing: Sendable {
 nonisolated final class CatalogIcons: VectorTileIconDrawing, @unchecked Sendable {
     static let shared = CatalogIcons()
 
+    /// Draws an icon that is not kept yet: the catalog's, or a suite's stand-in.
+    private let render: @Sendable (_ asset: String, _ fill: CGColor?, _ size: CGSize) -> CGImage?
     private let made = Mutex<[Key: CGImage]>([:])
     // swiftlint:disable:next legacy_objc_type
     private let patterns: NSCache<NSString, CGImage> = {
@@ -53,6 +55,26 @@ nonisolated final class CatalogIcons: VectorTileIconDrawing, @unchecked Sendable
     /// largest, or every one a mountain tile draws.
     static let patternByteLimit = 24 * 1024 * 1024
 
+    /// Held while an icon or a pattern is drawn, so one tile at a time reads
+    /// the asset catalog off the main thread.
+    ///
+    /// CoreUI, which keeps the catalog's SVG renditions, is not safe to read
+    /// from two threads at once: tiles drawn side by side released one of its
+    /// objects twice, and the app crashed later, when a job's autorelease
+    /// pool was drained, with nothing of the app's on the stack. Reproduced on
+    /// a Mac and in the iOS simulator by drawing cold tiles with points six at
+    /// a time. An icon is drawn once for each size and color and kept, so
+    /// the wait is a tile's first few icons.
+    private let drawing = Mutex(())
+
+    convenience init() {
+        self.init(render: Self.render)
+    }
+
+    init(render: @escaping @Sendable (_ asset: String, _ fill: CGColor?, _ size: CGSize) -> CGImage?) {
+        self.render = render
+    }
+
     private struct Key: Hashable {
         let asset: String
         /// Empty for the icon's own colors.
@@ -64,9 +86,16 @@ nonisolated final class CatalogIcons: VectorTileIconDrawing, @unchecked Sendable
     func image(asset: String, fill: CGColor?, size: CGSize) -> CGImage? {
         let key = Key(asset: asset, fill: fill?.components ?? [], width: size.width, height: size.height)
         if let image = made.withLock({ $0[key] }) { return image }
-        guard let image = Self.render(asset: asset, fill: fill, size: size) else { return nil }
-        made.withLock { $0[key] = image }
-        return image
+        return drawing.withLock { _ in
+            // Drawn by the tile this one waited on.
+            if let image = made.withLock({ $0[key] }) { return image }
+            // What CoreUI hands back is let go here, under the lock, rather
+            // than when the job's pool drains with other tiles drawing.
+            let image = autoreleasepool { render(asset, fill, size) }
+            guard let image else { return nil }
+            made.withLock { $0[key] = image }
+            return image
+        }
     }
 
     func pattern(asset: String, unit: CGFloat) -> CGImage? {
@@ -74,15 +103,17 @@ nonisolated final class CatalogIcons: VectorTileIconDrawing, @unchecked Sendable
         // swiftlint:disable:next legacy_objc_type
         let key = "\(asset)@\(unit)" as NSString
         if let kept = patterns.object(forKey: key) { return kept }
-        guard let size = UIImage(named: asset, in: .main, with: nil)?.size,
-              let pattern = Self.render(
-                  asset: asset,
-                  fill: nil,
-                  size: CGSize(width: size.width * unit, height: size.height * unit)
-              )
-        else { return nil }
-        patterns.setObject(pattern, forKey: key, cost: pattern.bytesPerRow * pattern.height)
-        return pattern
+        // Under the icons' lock: a pattern is read out of the same catalog.
+        return drawing.withLock { _ in
+            if let kept = patterns.object(forKey: key) { return kept }
+            let pattern = autoreleasepool { () -> CGImage? in
+                guard let size = UIImage(named: asset, in: .main, with: nil)?.size else { return nil }
+                return render(asset, nil, CGSize(width: size.width * unit, height: size.height * unit))
+            }
+            guard let pattern else { return nil }
+            patterns.setObject(pattern, forKey: key, cost: pattern.bytesPerRow * pattern.height)
+            return pattern
+        }
         #else
         return nil
         #endif

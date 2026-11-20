@@ -31,6 +31,9 @@ struct OfflineCountriesList: View {
     /// opens in.
     let near: CLLocationCoordinate2D?
     var selectedID: String?
+    /// Whether the list stands over the map, on the sheet's or the side
+    /// panel's glass, rather than on Settings' own ground.
+    var isOverMap = false
     /// Whether the list stands at its full height, which a sheet at its
     /// middle does not: the search field gives the keyboard up there, and
     /// the index, which needs the height, is put away.
@@ -123,13 +126,22 @@ struct OfflineCountriesList: View {
     private func list(_ sections: OfflineCountrySections, by sort: OfflineCountrySort) -> some View {
         ScrollViewReader { scroller in
             List {
-                OfflineCountriesHead(countries: countries)
-                if !sections.held.isEmpty {
-                    Section("Downloaded") { rows(sections.held) }
+                Group {
+                    OfflineCountriesHead(countries: countries)
+                    if !sections.held.isEmpty {
+                        Section("Downloaded") { rows(sections.held) }
+                    }
+                    ForEach(sections.parts) { part in
+                        section(part, isLast: part.id == sections.parts.last?.id)
+                    }
                 }
-                ForEach(sections.parts) { part in
-                    section(part, isLast: part.id == sections.parts.last?.id)
-                }
+                // Over the map, the cards the hike detail's are. A sheet draws
+                // a grouped list's own cards on its glass without asking, but
+                // on ``MapSidePanel``, which is no presentation, every one was
+                // opaque, *Extra Detail* included: white beside the map, or
+                // near black in dark. An area's row sets its own, for its
+                // tint when chosen — see ``OfflineCountryRow``.
+                .placeCardRows(isOverMap)
             }
             // A list of its own an order, so another order starts at its head
             // rather than as far down as the last one was scrolled.
@@ -259,7 +271,8 @@ struct OfflineCountriesList: View {
             country: country,
             countries: countries,
             namesCountry: namesCountry,
-            isSelected: selectedID == country.id
+            isSelected: selectedID == country.id,
+            isOverMap: isOverMap
         ) {
             // The keyboard would stand over the map the row is shown on.
             isSearchFocused = false
