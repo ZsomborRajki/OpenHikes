@@ -52,6 +52,10 @@ final class OfflineCountryDownload {
     /// What it costs, in bytes.
     var byteCount: Int64 { files.reduce(0) { $0 + $1.byteCount } }
 
+    /// What has yet to come down, which is the room it still needs: the
+    /// rest is on the volume already.
+    var remainingBytes: Int64 { max(byteCount - writtenBytes, 0) }
+
     /// How much of it has come down, from 0 to 1.
     var fraction: Double {
         byteCount > 0 ? min(Double(writtenBytes) / Double(byteCount), 1) : 0

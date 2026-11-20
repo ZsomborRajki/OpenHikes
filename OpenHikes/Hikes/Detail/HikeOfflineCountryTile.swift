@@ -46,7 +46,15 @@ struct HikeOfflineCountryTile: View {
         .confirmationDialog("Offline Maps", isPresented: $isAsking, titleVisibility: .visible) {
             if let download, let countries {
                 if download.hasFailed {
-                    Button("Try Again") { countries.download(download.country) }
+                    Button("Try Again") {
+                        // The build that failed may be one the server has
+                        // deleted since, and no list is on screen here to
+                        // have been read again.
+                        Task {
+                            await countries.refreshList()
+                            countries.retry(download.country.id)
+                        }
+                    }
                 }
                 Button("Cancel Download", role: .destructive) {
                     countries.cancel(download.country.id)

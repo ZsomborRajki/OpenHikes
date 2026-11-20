@@ -1483,10 +1483,18 @@ owner, on the main actor.
 - **A download is `.speculative`.** It runs in a background `URLSession` that
   refuses cellular, expensive and constrained paths, so it waits for Wi-Fi by
   itself. Low Power Mode or heat refuse it outright (`TileNetworkPolicy`),
-  and so does a volume without room for the files and
-  `OfflineCountries.spareBytes` besides. A file that stopped resumes from the
-  session's resume data, and trying again asks only for the files no
-  transfer is still out for.
+  and so does a volume without room for what has yet to come down, of it and
+  of the areas coming down beside it, and `OfflineCountries.spareBytes`
+  besides. A refusal keeps what has come down. A file that stopped resumes
+  from the session's resume data, and trying again asks only for the files
+  no transfer is still out for.
+- **Trying again goes by what the server offers now**
+  (`OfflineCountries.retry`). The server deletes a build it has moved past,
+  so a download left waiting across a refresh fails for good, and its row
+  comes back at every launch. Trying again starts the newer build where the
+  list has one, and *Extra Detail* asks for no zoom 15 of an older build
+  than the list's: the update brings it. A row whose download stopped can
+  be cancelled.
 - **Checked before it is used.** Each file is staged and moved into place
   only once its size and SHA-256 match the manifest's
   (`OfflineCountryStore.isWhole`), hashed a chunk at a time: a country's
