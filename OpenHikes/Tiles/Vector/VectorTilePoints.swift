@@ -189,7 +189,7 @@ nonisolated enum VectorTilePoints {
             var ids: Set<UInt64> = []
             var found: [String: [CGPoint]] = [:]
             for feature in features where feature.type == .point && Self.supersedes(feature) {
-                if feature.isFromExtras, let id = feature.id.flatMap(Self.basemapID(ofExtras:)) {
+                if feature.isFromExtras, let id = feature.id.flatMap(VectorTileAreaDetails.basemapID(ofExtras:)) {
                     ids.insert(id)
                 }
                 guard let name = feature.string("name") else { continue }
@@ -218,20 +218,6 @@ nonisolated enum VectorTilePoints {
             guard feature.isFromExtras, let kind = feature.string("kind") else { return false }
             return supersedingKinds.contains(kind)
         }
-
-        /// The basemap's id for the element an extras' point was cut from.
-        /// Planetiler gives each of the extras' points the element's
-        /// OpenStreetMap id times ten, plus 1 for a node, 2 for a way and 3
-        /// for a relation; the basemap gives it the same id with the 1, 2 or
-        /// 3 written above it (``VectorTileAreaDetails``).
-        static func basemapID(ofExtras id: UInt64) -> UInt64? {
-            let (element, type) = id.quotientAndRemainder(dividingBy: 10)
-            guard (1...3).contains(type), element < 1 << elementTypeShift else { return nil }
-            return type << elementTypeShift | element
-        }
-
-        /// The bit the basemap writes an element's type from.
-        private static let elementTypeShift: UInt64 = 44
     }
 
     // MARK: Placing

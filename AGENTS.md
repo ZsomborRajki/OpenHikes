@@ -1181,7 +1181,10 @@ a change to recording, the map, the sheet or the render path; the PR template,
     national parks under the kind it files a city park under, so its `park`
     has no fill: the parks filled are the extras' `parks` layer, and the
     borders of protected areas their `protected_areas` layer, stroked with
-    Carto's band inside each.
+    Carto's band inside each. It files the boundary of a United States
+    National Forest under the kind of a mapped forest too, so a `forest`
+    whose element the extras outline as protected is not filled either
+    (`VectorTileAreaDetails.isBoundary`), on a tile whose extras arrived.
   - **The archive's landcover is ESA WorldCover's**, under CC BY 4.0, so the
     style credits it beside OpenStreetMap.
   - **Points are Carto's, read out of its style, never written by hand.**

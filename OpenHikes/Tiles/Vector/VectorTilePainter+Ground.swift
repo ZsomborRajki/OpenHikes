@@ -26,7 +26,9 @@ nonisolated extension VectorTilePainter {
             }
         }
         let landuse = features(in: "landuse", type: .polygon).compactMap { feature, geometry -> FilledArea? in
-            guard let kind = feature.string("kind") else { return nil }
+            // A protected area's boundary is no ground: its border is the
+            // extras' to draw (``VectorTileAreaDetails/isBoundary(_:)``).
+            guard let kind = feature.string("kind"), !details.isBoundary(feature) else { return nil }
             let detail = details.detail(of: feature)
             let color = kind == VectorTileStyle.wetlandKind
                 ? VectorTileStyle.wetlandFill(detail: detail)
@@ -188,7 +190,8 @@ nonisolated extension VectorTilePainter {
         guard z >= VectorTileStyle.mudZ else { return }
         var trees: [(CGPath, VectorTilePatterns.Pattern)] = []
         let reefs = features(in: "water", type: .polygon).filter { $0.0.string("kind") == VectorTileStyle.reefKind }
-        let areas = (features(in: "landuse", type: .polygon) + reefs).compactMap { feature, geometry in
+        let ground = features(in: "landuse", type: .polygon).filter { !details.isBoundary($0.0) }
+        let areas = (ground + reefs).compactMap { feature, geometry in
             feature.string("kind").map { (kind: $0, detail: details.detail(of: feature), feature, geometry) }
         }
         for (kind, detail, feature, geometry) in areas where VectorTileStyle.isMud(kind: kind, detail: detail) {
