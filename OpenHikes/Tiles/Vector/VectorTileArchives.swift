@@ -202,9 +202,11 @@ nonisolated final class VectorTileArchives: Sendable {
         )
     }
 
-    /// The app's, or `nil` in a suite, which reaches no tile server.
+    /// The app's, or `nil` in a suite, which reaches no tile server unless it
+    /// is the App Store frames' (``AppLaunchEnvironment/asksTileServer``).
     static func forThisLaunch() -> VectorTileArchives? {
-        guard !AppLaunchEnvironment.isRunningTests, let bundled = VectorTileArchiveManifest.bundled else { return nil }
+        guard !AppLaunchEnvironment.isRunningTests || AppLaunchEnvironment.asksTileServer,
+              let bundled = VectorTileArchiveManifest.bundled else { return nil }
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         return VectorTileArchives(
             providerIDs: Set(TileProvider.vectorSources.keys),

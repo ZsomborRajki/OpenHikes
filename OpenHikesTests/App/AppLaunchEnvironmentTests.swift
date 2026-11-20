@@ -312,6 +312,23 @@ struct AppLaunchEnvironmentTests {
         #expect(seconds("--ui-test-auto-pause-seconds=9000") == 60)
     }
 
+    /// The App Store frames ask for the map a hiker gets. Nothing else can:
+    /// every other test launch draws openstreetmap.org's raster tiles, so no
+    /// run is decided by the tile server's builds or its uptime.
+    @Test("the tile server is for automation only when asked for")
+    func tileServerIsOptIn() {
+        func asks(_ argument: String?, isUITesting: Bool = true) -> Bool {
+            AppLaunchEnvironment.asksTileServer(
+                askedFor: ["OpenHikes", argument].compactMap(\.self),
+                isUITesting: isUITesting
+            )
+        }
+
+        #expect(asks("--ui-test-tile-server"))
+        #expect(!asks(nil))
+        #expect(!asks("--ui-test-tile-server", isUITesting: false))
+    }
+
     /// A hue is a place on the wheel, so anything that is not one is refused
     /// outright rather than wrapped: a typo asking for 68 would otherwise
     /// come out as some colour nobody chose.

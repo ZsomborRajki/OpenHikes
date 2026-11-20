@@ -731,3 +731,36 @@ nonisolated extension AppLaunchEnvironment {
         #endif
     }
 }
+
+// MARK: - The tile server
+
+/// Parsed here rather than in ``AppLaunchEnvironment/Configuration``, for the
+/// room the extensions above were made for.
+nonisolated extension AppLaunchEnvironment {
+    private static let tileServerArgument = "--ui-test-tile-server"
+
+    /// Whether the OpenHikes map should be drawn from the tile server's
+    /// vector archives, as a shipping launch draws it, rather than from the
+    /// openstreetmap.org raster tiles every other test launch is given.
+    ///
+    /// For one caller: the App Store frames, which are pictures of the map a
+    /// hiker gets. Nothing asserts on what the server draws — a frame waits
+    /// for tiles and shoots them — so the reason the other launches stay off
+    /// the server, that a run would be decided by its builds and its uptime
+    /// rather than by this app, does not reach them. See
+    /// ``VectorTileArchives/forThisLaunch()``.
+    static let asksTileServer = asksTileServer(
+        askedFor: ProcessInfo.processInfo.arguments,
+        isUITesting: isUITesting
+    )
+
+    /// Whether `--ui-test-tile-server` was passed, only alongside
+    /// `--ui-testing` in a `DEBUG` build, as every such argument is.
+    static func asksTileServer(askedFor arguments: [String], isUITesting: Bool) -> Bool {
+        #if DEBUG
+        isUITesting && arguments.contains(tileServerArgument)
+        #else
+        false
+        #endif
+    }
+}

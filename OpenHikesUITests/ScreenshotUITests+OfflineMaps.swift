@@ -69,6 +69,7 @@ extension ScreenshotUITests {
             "--ui-test-expanded-sheet",
             "--ui-test-enable-location",
             Self.offlineCountriesArgument,
+            Self.tileServerArgument,
         ])
         addLocationPermissionMonitor()
         setSimulatedLocation(Self.schoenau)

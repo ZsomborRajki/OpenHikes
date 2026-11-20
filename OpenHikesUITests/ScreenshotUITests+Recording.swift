@@ -49,6 +49,7 @@ extension ScreenshotUITests {
             "--ui-test-weather",
             "--ui-test-seed-recording=\(Self.routeFixture)",
             Self.routeHueArgument,
+            Self.tileServerArgument,
         ])
         // No `resetAuthorizationStatus`: the script grants location before the
         // run, so no prompt lands on this frame's first gesture. The monitor

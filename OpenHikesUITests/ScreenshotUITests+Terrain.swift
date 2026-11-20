@@ -74,6 +74,7 @@ extension ScreenshotUITests {
             "--ui-test-entitled",
             "--ui-test-weather",
             Self.routeHueArgument,
+            Self.tileServerArgument,
         ])
         selectMap("thunderforest_outdoors", in: app)
         openHikeDetail(in: app, titled: Self.routeTitle)
