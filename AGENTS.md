@@ -1147,8 +1147,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
   - It is for the maps with no download of their own, so the hike screen
     points to the switch only on one of those, and only while it is off
     (`OfflineStorageStatus`).
-  - A tile a downloaded country holds is never kept: the country draws it
-    with no signal already (`OfflineCountryArchives.holds(_:)`).
+  - A tile a downloaded country draws is never kept: the country draws it
+    with no signal already. One its archive lacks, which the map fetched
+    instead, is kept as any other (`OfflineCountryArchives.holds(_:deepest:)`).
   - Deleting a hike's saved map stands auto-save down for that hike until it
     is next selected, whatever the switch says.
 - **A tile is identified by provider plus z/x/y**, never by scale

@@ -65,22 +65,36 @@ nonisolated final class PMTilesArchive: Sendable {
 
     /// The tile's bytes, unpacked, or `nil` where the archive has none.
     func tile(z: Int, x: Int, y: Int) throws(PMTilesError) -> Data? {
+        try state.withLock { state throws(PMTilesError) -> Data? in
+            guard let entry = try entry(z: z, x: x, y: y, in: &state) else { return nil }
+            let bytes = try bytes(at: header.tileDataOffset, entry, in: &state)
+            return Data(try PMTilesGzip.unpacked(bytes, compression: header.tileCompression))
+        }
+    }
+
+    /// Whether the archive has a tile at this address, read from its
+    /// directories alone: the answer ``tile(z:x:y:)`` would give, without
+    /// reading or unpacking the tile.
+    func contains(z: Int, x: Int, y: Int) throws(PMTilesError) -> Bool {
+        try state.withLock { state throws(PMTilesError) -> Bool in
+            try entry(z: z, x: x, y: y, in: &state) != nil
+        }
+    }
+
+    /// The directory entry that points at the tile's bytes, or `nil` where
+    /// the archive has none.
+    private func entry(z: Int, x: Int, y: Int, in state: inout State) throws(PMTilesError) -> PMTilesEntry? {
         guard z >= Int(header.minimumZoom), z <= Int(header.maximumZoom), z <= PMTilesTileID.maximumZoom,
               x >= 0, y >= 0, x < 1 << z, y < 1 << z
         else { return nil }
         let id = PMTilesTileID.id(z: z, x: x, y: y)
-        return try state.withLock { state throws(PMTilesError) -> Data? in
-            var entries = root
-            for _ in 0..<Self.maximumDirectoryDepth {
-                guard let entry = PMTilesDirectory.entry(holding: id, in: entries) else { return nil }
-                guard entry.isLeaf else {
-                    let bytes = try bytes(at: header.tileDataOffset, entry, in: &state)
-                    return Data(try PMTilesGzip.unpacked(bytes, compression: header.tileCompression))
-                }
-                entries = try leaf(at: header.leafDirectoryOffset, entry, in: &state)
-            }
-            throw .tooDeep
+        var entries = root
+        for _ in 0..<Self.maximumDirectoryDepth {
+            guard let entry = PMTilesDirectory.entry(holding: id, in: entries) else { return nil }
+            guard entry.isLeaf else { return entry }
+            entries = try leaf(at: header.leafDirectoryOffset, entry, in: &state)
         }
+        throw .tooDeep
     }
 
     private func leaf(at base: UInt64, _ entry: PMTilesEntry, in state: inout State) throws(PMTilesError)

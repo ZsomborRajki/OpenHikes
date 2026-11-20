@@ -30,6 +30,12 @@ struct PMTilesArchiveTests {
             // Beyond the archive's zooms, and off the edge of the world.
             #expect(try archive.tile(z: 4, x: 8, y: 4) == nil)
             #expect(try archive.tile(z: 3, x: 8, y: 0) == nil)
+
+            // What auto-save asks of a downloaded country, from the
+            // directories alone, agrees.
+            #expect(try archive.contains(z: 3, x: 4, y: 2))
+            #expect(try !archive.contains(z: 3, x: 4, y: 3))
+            #expect(try !archive.contains(z: 4, x: 8, y: 4))
         }
     }
 
@@ -60,6 +66,7 @@ struct PMTilesArchiveTests {
             for address in [VectorTileAddress(z: 7, x: 70, y: 45), VectorTileAddress(z: 7, x: 127, y: 127)] {
                 let tile = try #require(try archive.tile(z: address.z, x: address.x, y: address.y))
                 #expect(String(bytes: tile, encoding: .utf8) == "\(address.z)/\(address.x)/\(address.y)")
+                #expect(try archive.contains(z: address.z, x: address.x, y: address.y))
             }
         }
     }
