@@ -17,6 +17,9 @@ struct OfflineCountryRow: View {
     /// under that country.
     var namesCountry = true
     let isSelected: Bool
+    /// Whether the list stands over the map, where a row is the hike
+    /// detail's card rather than the system's — see ``background``.
+    var isOverMap = false
     /// Shows the country on the map, where there is one behind the list.
     let onSelect: () -> Void
 
@@ -40,7 +43,7 @@ struct OfflineCountryRow: View {
             .accessibilityIdentifier("offline-country-\(country.id)")
             action(download)
         }
-        .listRowBackground(isSelected ? Color.accentColor.opacity(Self.selectedTint) : nil)
+        .listRowBackground(background.map { Rectangle().fill($0) })
         .swipeActions {
             if countries.isInstalled(country.id) {
                 Button("Delete", systemImage: "trash", role: .destructive) {
@@ -127,6 +130,24 @@ struct OfflineCountryRow: View {
         .buttonStyle(.borderless)
         .minimumTapTarget()
         .accessibilityLabel(Text(label))
+    }
+
+    /// The chosen row's tint, or else the card the list's other rows stand
+    /// on: the hike detail's over the map — see
+    /// ``SwiftUICore/View/placeCardRows(_:)`` — and the system's, `nil`, in
+    /// Settings.
+    ///
+    /// Spelled out here rather than left to the list's `placeCardRows`: a
+    /// row's own background is the one drawn, even `nil`, which is the
+    /// system's card, and that is opaque on the side panel.
+    private var background: AnyShapeStyle? {
+        if isSelected {
+            AnyShapeStyle(Color.accentColor.opacity(Self.selectedTint))
+        } else if isOverMap {
+            AnyShapeStyle(.quaternary)
+        } else {
+            nil
+        }
     }
 
     /// How strongly the chosen row is tinted, as the outline on the map is.
