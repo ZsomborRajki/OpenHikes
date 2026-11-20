@@ -225,6 +225,22 @@
 				<string>35F9.1</string>
 			</array>
 		</dict>
+		<dict>
+			<!--
+			  A downloaded country is gigabytes, so `OfflineCountryStore` reads
+			  the volume's free space before one is started, and a download
+			  with no room for it is refused on its row. That is `E174.1`:
+			  checking for room to write files, with a refusal the hiker sees.
+			  Not `85F4.1`, which is for showing the figure, and the app never
+			  does.
+			-->
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryDiskSpace</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>E174.1</string>
+			</array>
+		</dict>
 	</array>
 </dict>
 </plist>

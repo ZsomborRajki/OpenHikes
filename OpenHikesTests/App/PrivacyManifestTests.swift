@@ -134,7 +134,7 @@ struct PrivacyManifestTests {
         }
     }
 
-    /// The four required-reason codes the app's own APIs oblige it to declare.
+    /// The five required-reason codes the app's own APIs oblige it to declare.
     /// An upload missing one is rejected with ITMS-91053, and the rejection
     /// names the API rather than the manifest — so reaching for a new one
     /// means adding its code, and dropping one here means this fails first.
@@ -152,5 +152,6 @@ struct PrivacyManifestTests {
         #expect(reasons["NSPrivacyAccessedAPICategoryUserDefaults"] == ["CA92.1"])
         #expect(reasons["NSPrivacyAccessedAPICategoryFileTimestamp"] == ["C617.1", "3B52.1"])
         #expect(reasons["NSPrivacyAccessedAPICategorySystemBootTime"] == ["35F9.1"])
+        #expect(reasons["NSPrivacyAccessedAPICategoryDiskSpace"] == ["E174.1"])
     }
 }
