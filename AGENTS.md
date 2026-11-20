@@ -1553,11 +1553,11 @@ owner, on the main actor.
 
 ### Platform contracts
 
-- **`OpenHikes/PrivacyInfo.xcprivacy` ships with the app.** It declares four
-  required-reason codes (`CA92.1`, `C617.1`, `3B52.1`, `35F9.1`) and five
-  collected types, all linked to the user and none used for tracking: precise
-  location, photos, other user content, user ID and fitness. Publishing a hike
-  sends all five.
+- **`OpenHikes/PrivacyInfo.xcprivacy` ships with the app.** It declares five
+  required-reason codes (`CA92.1`, `C617.1`, `3B52.1`, `35F9.1`, `E174.1`) and
+  five collected types, all linked to the user and none used for tracking:
+  precise location, photos, other user content, user ID and fitness.
+  Publishing a hike sends all five.
   - A new required-reason API adds its code in the same change.
   - `PrivacyManifestTests` pins the collected set both ways.
   - The widget extension has no manifest of its own, because it calls none of
