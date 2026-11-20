@@ -16,7 +16,10 @@
 //  (``VectorTileRasterizer/serviceRoadsLayer``), which is what tells a
 //  driveway from the road that serves a place, and the roads being built,
 //  which the basemap leaves out. A tile whose extras did not arrive draws
-//  the basemap's, as far as it describes them.
+//  the basemap's, as far as it describes them. The paths and the service
+//  roads each hold every way of their kind from the zoom the map first
+//  draws one, the driveways too, so a tile with extras and no such layer
+//  has none of that kind for the basemap's to stand in for.
 //
 
 import CoreGraphics
