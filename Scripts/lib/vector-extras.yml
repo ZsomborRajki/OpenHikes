@@ -383,6 +383,11 @@ layers:
     - *name_pl
     - *name_uk
 
+# Each point keeps the id Planetiler gives it, the OpenStreetMap element's
+# times ten plus 1 for a node, 2 for a way and 3 for a relation, by which the
+# map drops the basemap's point for the same element where a point here
+# stands in its place, named or not (`VectorTilePoints.Superseded`). So no
+# feature here sets an `id`.
 - id: pois
   features:
   # A car park mapped as an area, at a point inside it, named or not: the

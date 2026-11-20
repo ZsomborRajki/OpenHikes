@@ -345,10 +345,11 @@ struct VectorTilePointsTests {
 
     private func poi(
         _ properties: [String: VectorTileFixture.Value],
-        at position: (Int, Int)? = nil
+        at position: (Int, Int)? = nil,
+        id: UInt64? = nil
     ) -> VectorTileFixture.Feature {
         let spot = position ?? (grid / 2, grid / 2)
-        return .init(type: .point, properties: properties, geometry: VectorTileFixture.points([spot]))
+        return .init(type: .point, properties: properties, geometry: VectorTileFixture.points([spot]), id: id)
     }
 
     private func candidates(_ features: [VectorTileFixture.Feature]) throws -> [VectorTilePoints.Candidate] {
@@ -428,6 +429,24 @@ extension VectorTilePointsTests {
 
         #expect(points.count == 1)
         #expect(points.first?.look.icons.isEmpty == false, "with a castle's icon, which an attraction has none of")
+    }
+
+    /// The Watzmannhaus is way 1435198912: the basemap gives its point the
+    /// way's id with a 2 above it from bit 44, the extras the way's id times
+    /// ten plus 2. Unnamed, nothing else says the two are one hut, and the
+    /// restaurant, offered from a nearer zoom, would take the hut's room.
+    @Test("an unnamed hut stands in the place of the basemap's point for the same element, and no other")
+    func unnamedHutByItsElement() throws {
+        let restaurant = poi(["kind": .string("restaurant"), "min_zoom": .double(16)], id: 35_185_807_287_744)
+        let hut = poi(["kind": .string("alpine_hut")], id: 14_351_989_122)
+        let nodeOfTheSameNumber = poi(["kind": .string("alpine_hut")], id: 14_351_989_121)
+
+        let same = try merged(basemap: [restaurant], extras: [hut])
+        let other = try merged(basemap: [restaurant], extras: [nodeOfTheSameNumber])
+
+        #expect(same.count == 1)
+        #expect(same.first?.look.icons.map(\.asset) == ["carto-tourism-alpinehut"])
+        #expect(other.count == 2)
     }
 
     @Test("only the same thing gives way: another name, another spot, or a kind the extras do not vouch for")

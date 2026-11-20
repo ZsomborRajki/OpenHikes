@@ -171,10 +171,13 @@ nonisolated enum VectorTilePoints {
     static let sizeKey = "area"
 
     /// The points of the vector extras that stand in the basemap's place,
-    /// by name and where they stand, to tell the basemap's point for the
-    /// same thing: an area the extras give with its size, and a point of one
-    /// of the ``supersedingKinds``.
+    /// to tell the basemap's point for the same thing: an area the extras
+    /// give with its size, and a point of one of the ``supersedingKinds``.
+    /// The same OpenStreetMap element is the same thing, named or not; the
+    /// same name at the same spot is too, for a point either archive gives
+    /// without its id.
     private struct Superseded {
+        private let elements: Set<UInt64>
         private let spots: [String: [CGPoint]]
         private let geometry: VectorTileGeometry
         /// How far apart two points of one thing may stand: two steps of the
@@ -182,23 +185,28 @@ nonisolated enum VectorTilePoints {
         private let reach: CGFloat
 
         init(_ features: [MapboxVectorTile.Feature], geometry: VectorTileGeometry) {
+            var ids: Set<UInt64> = []
             var found: [String: [CGPoint]] = [:]
             for feature in features where feature.type == .point && Self.supersedes(feature) {
+                if feature.isFromExtras, let id = feature.id.flatMap(Self.basemapID(ofExtras:)) {
+                    ids.insert(id)
+                }
                 guard let name = feature.string("name") else { continue }
                 found[name, default: []] += geometry.points(of: feature)
             }
+            elements = ids
             spots = found
             self.geometry = geometry
             reach = 2 * geometry.scale
         }
 
         /// Whether `feature` is the basemap's point for a thing the extras
-        /// give in its place: the same name at the same spot, and itself
-        /// neither sized nor the extras'.
+        /// give in its place: the same element, or the same name at the same
+        /// spot, and itself neither sized nor the extras'.
         func repeats(_ feature: MapboxVectorTile.Feature) -> Bool {
-            guard !Self.supersedes(feature), let name = feature.string("name"), let named = spots[name] else {
-                return false
-            }
+            guard !Self.supersedes(feature) else { return false }
+            if !feature.isFromExtras, let id = feature.id, elements.contains(id) { return true }
+            guard let name = feature.string("name"), let named = spots[name] else { return false }
             return geometry.points(of: feature).contains { point in
                 named.contains { abs($0.x - point.x) <= reach && abs($0.y - point.y) <= reach }
             }
@@ -209,6 +217,20 @@ nonisolated enum VectorTilePoints {
             guard feature.isFromExtras, let kind = feature.string("kind") else { return false }
             return supersedingKinds.contains(kind)
         }
+
+        /// The basemap's id for the element an extras' point was cut from.
+        /// Planetiler gives each of the extras' points the element's
+        /// OpenStreetMap id times ten, plus 1 for a node, 2 for a way and 3
+        /// for a relation; the basemap gives it the same id with the 1, 2 or
+        /// 3 written above it (``VectorTileAreaDetails``).
+        static func basemapID(ofExtras id: UInt64) -> UInt64? {
+            let (element, type) = id.quotientAndRemainder(dividingBy: 10)
+            guard (1...3).contains(type), element < 1 << elementTypeShift else { return nil }
+            return type << elementTypeShift | element
+        }
+
+        /// The bit the basemap writes an element's type from.
+        private static let elementTypeShift: UInt64 = 44
     }
 
     // MARK: Placing
