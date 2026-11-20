@@ -6,7 +6,8 @@
 //  the failure did: with room asked only for what has not come down, with
 //  what did come down kept through a refusal, and, once the tile server has
 //  moved past the build that failed and deleted its files, with the build it
-//  offers now rather than the same 404 at every launch.
+//  offers now rather than the same 404 at every launch, read at the tap
+//  rather than when the list opened.
 //
 
 import Foundation
@@ -122,6 +123,70 @@ struct OfflineCountriesRetryTests {
         }
     }
 
+    /// One file failing stops none of the others, so an area whose row
+    /// says it failed can still be bringing down a gigabyte.
+    @Test("an area whose download failed keeps room for the files still coming down")
+    func roomForAFailedAreasTransfers() async throws {
+        try await OfflineCountryFixture.withDirectory { directory in
+            let slovenia = OfflineCountryFixture.country(bytes: basemap, extras: extras)
+            let austria = OfflineCountryFixture.northernCountry(bytes: basemap)
+            let setup = await setUp(in: directory, offering: [slovenia, austria])
+            setup.countries.download(slovenia)
+            setup.downloader.fail(.basemap, resumeData: nil)
+            #expect(setup.countries.downloads["SI"]?.hasFailed == true)
+
+            setup.room.bytes = Int64(extras.count + basemap.count) + OfflineCountries.spareBytes - 1
+            setup.countries.download(austria)
+            #expect(setup.countries.downloads["AT"]?.phase == .failed(.space))
+
+            setup.room.bytes += 1
+            setup.countries.download(austria)
+            #expect(setup.countries.downloads["AT"]?.phase == .downloading)
+        }
+    }
+
+    /// The session hands back nothing to resume from when the partial file
+    /// is gone, and the next transfer asks for every byte again.
+    @Test("a file that stopped with nothing to resume from needs room for all of it again")
+    func roomForAFileStartedOver() async throws {
+        try await OfflineCountryFixture.withDirectory { directory in
+            let country = OfflineCountryFixture.country(bytes: basemap)
+            let size = Int64(basemap.count)
+            let setup = await setUp(in: directory, offering: [country])
+            setup.countries.download(country)
+            setup.downloader.progress(.basemap, size * 4 / 5)
+            setup.downloader.fail(.basemap, resumeData: nil)
+
+            setup.room.bytes = size / 2 + OfflineCountries.spareBytes
+            await setup.countries.retry("SI")
+            #expect(setup.countries.downloads["SI"]?.phase == .failed(.space))
+            #expect(setup.downloader.requests.count == 1)
+
+            setup.room.bytes = size + OfflineCountries.spareBytes
+            await setup.countries.retry("SI")
+            #expect(setup.countries.downloads["SI"]?.phase == .downloading)
+            #expect(setup.downloader.requests.count == 2)
+            #expect(setup.downloader.requests.last?.resumeData == nil)
+        }
+    }
+
+    @Test("a file that stopped with something to resume from needs room only for the rest")
+    func roomForAFileResumed() async throws {
+        try await OfflineCountryFixture.withDirectory { directory in
+            let country = OfflineCountryFixture.country(bytes: basemap)
+            let size = Int64(basemap.count)
+            let setup = await setUp(in: directory, offering: [country])
+            setup.countries.download(country)
+            setup.downloader.progress(.basemap, size * 4 / 5)
+            setup.downloader.fail(.basemap, resumeData: Data("resume here".utf8))
+
+            setup.room.bytes = size / 2 + OfflineCountries.spareBytes
+            await setup.countries.retry("SI")
+
+            #expect(setup.countries.downloads["SI"]?.phase == .downloading)
+        }
+    }
+
     // MARK: - A build the server has moved past
 
     @Test("trying again once the server has moved on starts the build it offers now, and drops the old one's files")
@@ -136,9 +201,9 @@ struct OfflineCountriesRetryTests {
             let stagedExtras = try #require(old.files.last.map { setup.store.stagedURL(for: $0) })
             #expect(FileManager.default.fileExists(atPath: stagedExtras.path))
 
+            // Offline Maps read the list as it opened, and is still open.
             setup.server.serve(OfflineCountryFixture.manifest([new]))
-            await setup.countries.refreshList()
-            setup.countries.retry("SI")
+            await setup.countries.retry("SI")
 
             #expect(setup.countries.downloads["SI"]?.country == new)
             #expect(setup.countries.downloads["SI"]?.phase == .downloading)
@@ -148,6 +213,31 @@ struct OfflineCountriesRetryTests {
             ])
             #expect(setup.store.pending().map(\.country) == [new])
             #expect(!FileManager.default.fileExists(atPath: stagedExtras.path))
+        }
+    }
+
+    /// The list reads as *Offline Maps* opens, and a failed row is the
+    /// first thing on it, so a tap can come before the read is back.
+    @Test("trying again while the list is being read waits for that read")
+    func waitsForTheReadOut() async throws {
+        try await OfflineCountryFixture.withDirectory { directory in
+            let old = OfflineCountryFixture.country(bytes: basemap, build: "20261117")
+            let new = OfflineCountryFixture.country(bytes: basemap, build: "20261201")
+            let setup = await setUp(in: directory, offering: [old])
+            setup.countries.download(old)
+            setup.downloader.fail(.basemap, resumeData: nil)
+            setup.server.serve(OfflineCountryFixture.manifest([new]))
+            setup.server.hold()
+
+            let opening = Task { await setup.countries.refreshList() }
+            await settleDelegateHop(until: "the list is being read") { setup.countries.listPhase == .loading }
+            let tapped = Task { await setup.countries.retry("SI") }
+            setup.server.release()
+            await opening.value
+            await tapped.value
+
+            #expect(setup.countries.downloads["SI"]?.country == new)
+            #expect(setup.downloader.requests.dropFirst().map(\.key.build) == ["20261201"])
         }
     }
 
@@ -161,7 +251,7 @@ struct OfflineCountriesRetryTests {
             try setup.downloader.land(.extras, as: extras)
             setup.downloader.fail(.basemap, resumeData: resumeData)
 
-            setup.countries.retry("SI")
+            await setup.countries.retry("SI")
 
             let again = setup.downloader.requests.dropFirst(2)
             #expect(again.map(\.key.role) == [.basemap])

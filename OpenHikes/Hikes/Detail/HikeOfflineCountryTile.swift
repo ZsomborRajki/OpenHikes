@@ -30,7 +30,11 @@ struct HikeOfflineCountryTile: View {
 
     var body: some View {
         let countries = appModel?.offlineCountries
-        let missing = coverage.crossed.filter { countries?.isInstalled($0.id) == false }
+        // None to offer where the device's own list cannot be read: nothing
+        // downloads then, and what it holds is not known.
+        let missing = countries?.isAvailable == true
+            ? coverage.crossed.filter { countries?.isInstalled($0.id) == false }
+            : []
         let download = coverage.crossed.lazy.compactMap { countries?.downloads[$0.id] }.first
         let saving = countries?.saving(coverage) ?? .unsaved
         Button {
@@ -47,13 +51,7 @@ struct HikeOfflineCountryTile: View {
             if let download, let countries {
                 if download.hasFailed {
                     Button("Try Again") {
-                        // The build that failed may be one the server has
-                        // deleted since, and no list is on screen here to
-                        // have been read again.
-                        Task {
-                            await countries.refreshList()
-                            countries.retry(download.country.id)
-                        }
+                        Task { await countries.retry(download.country.id) }
                     }
                 }
                 Button("Cancel Download", role: .destructive) {

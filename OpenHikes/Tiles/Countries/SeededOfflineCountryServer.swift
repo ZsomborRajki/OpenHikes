@@ -103,7 +103,7 @@ nonisolated struct SeededOfflineCountryServer: OfflineCountryServing {
         guard let url = Bundle.main.url(forResource: fixture, withExtension: "json") else {
             throw Failure.missingFixture
         }
-        return try JSONDecoder().decode(OfflineCountryManifest.self, from: Data(contentsOf: url))
+        return try OfflineCountryManifest.catalog(from: Data(contentsOf: url))
     }
 
     /// Somewhere that answers nothing: `.invalid` never resolves.

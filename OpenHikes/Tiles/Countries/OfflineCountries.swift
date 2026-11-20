@@ -53,6 +53,19 @@ final class OfflineCountries {
         case failed
     }
 
+    /// What this launch has read of the device's own two lists, the index
+    /// and the downloads under way.
+    enum Holdings: Equatable {
+        /// Not yet, or not at all on a launch that keeps no archives.
+        case unread
+        case read
+        /// One is kept and cannot be read, so nothing downloads until
+        /// ``start()`` reads both: a download writes both, and written over
+        /// one this launch cannot read, it would leave what that one names
+        /// to the next sweep.
+        case unreadable
+    }
+
     typealias Country = OfflineCountryManifest.Country
     typealias Record = OfflineCountryStore.Record
 
@@ -65,6 +78,7 @@ final class OfflineCountries {
     private(set) var downloads: [String: OfflineCountryDownload] = [:]
     /// Whether an area brings its zoom 15 too: *Extra Detail*.
     private(set) var includesDetail: Bool
+    private(set) var holdings = Holdings.unread
     /// The outlines *Offline Maps* draws on the map behind it.
     @ObservationIgnored let outlines = OfflineCountryOutlines()
 
@@ -77,7 +91,9 @@ final class OfflineCountries {
     @ObservationIgnored private let archivesDidChange: () -> Void
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private let freeSpace: () -> Int64?
-    @ObservationIgnored private var hasStarted = false
+    /// The read of the server's list under way, which a second caller waits
+    /// for rather than going by the list before it.
+    @ObservationIgnored private var listRead: Task<Void, Never>?
     /// Counts the openings of the archives, so an opening that finishes after
     /// a later one is dropped rather than put back over it.
     @ObservationIgnored private var archiveGeneration = 0
@@ -115,8 +131,9 @@ final class OfflineCountries {
 
     nonisolated deinit { /* intentionally empty */ }
 
-    /// Whether this launch can list and download areas at all.
-    var isAvailable: Bool { server != nil }
+    /// Whether this launch can list and download areas at all: it has a
+    /// server, and the device's own lists are not ones it cannot read.
+    var isAvailable: Bool { server != nil && holdings != .unreadable }
 
     // MARK: - Extra Detail
 
@@ -159,8 +176,21 @@ final class OfflineCountries {
 
     // MARK: - The list
 
+    /// Reads the server's list. A caller that asks while a read is out waits
+    /// for that one, so what it does next goes by the list as it is now.
     func refreshList() async {
-        guard let server, listPhase != .loading else { return }
+        if let listRead {
+            await listRead.value
+            return
+        }
+        let read = Task { await readList() }
+        listRead = read
+        await read.value
+        listRead = nil
+    }
+
+    private func readList() async {
+        guard let server else { return }
         listPhase = .loading
         do {
             let manifest = try await server.manifest()
@@ -176,9 +206,12 @@ final class OfflineCountries {
     // MARK: - Downloads
 
     /// Starts `country`, its update, or the zoom 15 it lacks. A refusal is
-    /// shown on its row.
+    /// shown on its row. Nothing starts before the device's own lists are
+    /// read (``Holdings``).
     func download(_ country: Country) {
-        guard let server, let downloader, downloads[country.id].map(\.hasFailed) ?? true else { return }
+        guard let server, let downloader, holdings == .read,
+              downloads[country.id].map(\.hasFailed) ?? true
+        else { return }
         let files = filesToFetch(for: country)
         guard !files.isEmpty else { return }
         let decision = networkDecision()
@@ -351,8 +384,10 @@ final class OfflineCountries {
         }
     }
 
+    /// Changes the list of downloads under way, and never one that is kept
+    /// and cannot be read, which would leave what it names to the sweep.
     private func writePending(_ change: (inout [OfflineCountryStore.Pending]) -> Void) {
-        var pending = store.pending()
+        guard case var .holding(pending) = store.downloadsUnderWay() else { return }
         change(&pending)
         try? store.write(pending: pending)
     }
@@ -368,13 +403,14 @@ extension OfflineCountries {
     /// Opens what is downloaded, picks up what was coming down, and sweeps
     /// what nothing owns. Once a launch, unless the index or the list of
     /// downloads is there and cannot be read: then nothing is opened,
-    /// resumed or swept, because what a launch cannot read it cannot call
-    /// unowned, and the next call starts again. The model asks again each
-    /// time a scene becomes active, by when a device that was locked since
-    /// it restarted has been unlocked.
+    /// resumed, swept or downloaded, because what a launch cannot read it
+    /// cannot call unowned, and the next call starts again. The model asks
+    /// again each time a scene becomes active, by when a device that was
+    /// locked since it restarted has been unlocked.
     func start() async {
-        guard !hasStarted, let archives else { return }
-        hasStarted = true
+        // Read and marked before the first suspension, so a second call
+        // meanwhile finds them read.
+        guard holdings != .read, let archives else { return }
         do {
             try store.prepare()
         } catch {
@@ -384,9 +420,10 @@ extension OfflineCountries {
               case let .holding(waiting) = store.downloadsUnderWay()
         else {
             Self.logger.error("The countries' lists cannot be read; leaving the directory as it is")
-            hasStarted = false
+            holdings = .unreadable
             return
         }
+        holdings = .read
         installed = Dictionary(records.map { ($0.country.id, $0) }, uniquingKeysWith: { first, _ in first })
         // Megabytes of outlines, so read off the main actor; and a list
         // fetched while it was read is newer.

@@ -179,19 +179,33 @@ struct OfflineCountryManifestTests {
         )
     }
 
-    /// A later server may list a file this build has no use for, an area's
-    /// hiking routes, say. Read strictly, that one file would cost every
-    /// installed copy of this build its whole list.
-    @Test("a file of a role this build does not know is left out, and its area is still offered")
+    /// An area as a later server may list it, with its hiking routes beside
+    /// its basemap.
+    private static let listingWithRoutes = listing(
+        files: """
+        , {"role": "routes", "path": "countries/SI-routes-20261117.pmtiles", "bytes": 5,
+        "sha256": "9f86d081", "minimumZoom": 0, "maximumZoom": 14}
+        """
+    )
+
+    /// A later server may list a file this build has no use for. Read
+    /// strictly, that one file would cost every installed copy of this build
+    /// its whole list.
+    @Test("in the catalog, a file of a role this build does not know is left out, and its area is still offered")
     func unknownRole() throws {
-        let json = Self.listing(
-            files: """
-            , {"role": "routes", "path": "countries/SI-routes-20261117.pmtiles", "bytes": 5,
-            "sha256": "9f86d081", "minimumZoom": 0, "maximumZoom": 14}
-            """
-        )
-        let manifest = try JSONDecoder().decode(OfflineCountryManifest.self, from: json)
+        let manifest = try OfflineCountryManifest.catalog(from: Self.listingWithRoutes)
         #expect(manifest.readableCountries.first?.files.map(\.role) == [.basemap])
+    }
+
+    /// The index and the cutting tool read the same areas as a list of what
+    /// is kept: a file left out there would be swept from the device, or
+    /// dropped from the server's list when the tool writes it back.
+    @Test("read as anything but the catalog, a file of a role this build does not know refuses the list")
+    func unknownRoleKept() {
+        let json = Self.listingWithRoutes
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder().decode(OfflineCountryManifest.self, from: json)
+        }
     }
 
     /// The extras' layers change by generation, as the tile server's own
