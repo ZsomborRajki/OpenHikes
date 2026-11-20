@@ -4,10 +4,15 @@
 //
 //  Passively persists tiles for the one hike currently being auto-saved, as a
 //  side effect of tiles MapKit already fetched to draw on screen — no bulk
-//  enumeration, no extra network requests. This is how providers like OSM
-//  (which disallow automated bulk downloading) save anything at all, and it
-//  doubles as a gap-filler for bulk-download-capable providers: any tile the
-//  bulk pass missed still gets saved the moment it's actually browsed.
+//  enumeration, no extra network requests. This is how a provider that
+//  disallows automated bulk downloading, and is not cut by country, saves
+//  anything at all, and it doubles as a gap-filler for bulk-download-capable
+//  providers: any tile the bulk pass missed still gets saved the moment it's
+//  actually browsed.
+//
+//  A tile a downloaded country holds is left alone. It draws with no signal
+//  already, out of the country's own files, so a copy kept here would be the
+//  same ground on disk twice, counted against the hike's cap.
 //
 
 import CoreLocation
@@ -132,11 +137,16 @@ nonisolated final class AutoSaveTileStore: Sendable {
 
     /// Called after a tile has already been resolved for on-screen display
     /// (memory/disk/network hit alike). No-ops unless a hike is active, is
-    /// still accepting claims, and the tile falls in its corridor; a key the
-    /// hike doesn't already know also has to be under the cap. Otherwise the
-    /// cached tile is moved into durable storage, bytes unchanged.
+    /// still accepting claims, and the tile falls in its corridor and in no
+    /// downloaded country; a key the hike doesn't already know also has to be
+    /// under the cap. Otherwise the cached tile is moved into durable
+    /// storage, bytes unchanged.
     func considerPersisting(key: String, z: Int, x: Int, y: Int) {
         assertOffMainThread("considerPersisting moves a file on disk — call it off the main thread")
+        // Asked before the claim, so a tile a country holds is never one the
+        // hike was told it had, and after the cheap question, so a map nobody
+        // is saving costs each tile one lock and no outline.
+        guard isAccepting(z: z, x: x, y: y), !tileCache.isHeldByDownloadedCountry(key) else { return }
         // Claim the tile up front so two threads drawing it at once don't both
         // try to move it; `releaseClaim` undoes that if the bytes never land.
         let claim = state.withLock { state -> PersistenceClaim? in
@@ -171,6 +181,16 @@ nonisolated final class AutoSaveTileStore: Sendable {
         #if DEBUG
         Self.logger.debug("Auto-saved tile \(key, privacy: .public)")
         #endif
+    }
+
+    /// Whether a tile at these indices could be claimed at all: a hike is
+    /// active, taking claims, and the tile falls in its corridor. The claim
+    /// itself asks again under its own lock, where the answer is acted on.
+    private func isAccepting(z: Int, x: Int, y: Int) -> Bool {
+        state.withLock { state in
+            guard let hike = state else { return false }
+            return hike.acceptsNewClaims && hike.corridor.overlaps(z: z, x: x, y: y)
+        }
     }
 
     /// A signal each time a tile is newly claimed for the active hike and its

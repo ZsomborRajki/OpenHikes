@@ -96,10 +96,32 @@ nonisolated final class OfflineCountryArchives: Sendable {
             return since > storedAt ? record : nil
         }
         guard !newer.isEmpty else { return false }
-        let size = Double(1 << target.z)
-        let longitude = (Double(target.x) + 0.5) / size * 360 - 180
-        let latitude = Self.latitude(ofRow: (Double(target.y) + 0.5) / size)
-        return newer.contains { $0.country.contains(longitude: longitude, latitude: latitude) }
+        let middle = Self.middle(of: target)
+        return newer.contains { $0.country.contains(longitude: middle.longitude, latitude: middle.latitude) }
+    }
+
+    /// Whether a downloaded country holds `target`, by the rule
+    /// ``redraws(_:drawnAt:)`` reads: its outline holds the tile's middle,
+    /// at a zoom its files reach down to. A tile on a country's edge, held
+    /// only by the margin it was cut with, answers no, and so does one of a
+    /// country opened with no record, so what asks this keeps a tile too
+    /// many and never one too few.
+    func holds(_ target: VectorTileAddress) -> Bool {
+        let held = countries.withLock { $0 }
+        guard !held.isEmpty else { return false }
+        let middle = Self.middle(of: target)
+        return held.contains { country in
+            target.z >= Int(country.basemap.header.minimumZoom)
+                && country.record?.country.contains(longitude: middle.longitude, latitude: middle.latitude) == true
+        }
+    }
+
+    private static func middle(of tile: VectorTileAddress) -> (longitude: Double, latitude: Double) {
+        let size = Double(1 << tile.z)
+        return (
+            (Double(tile.x) + 0.5) / size * 360 - 180,
+            latitude(ofRow: (Double(tile.y) + 0.5) / size)
+        )
     }
 
     /// The bytes the first area that holds `target` has for it, from the
@@ -193,6 +215,17 @@ nonisolated final class OfflineCountryDrawing: Sendable {
               sources.source(for: named.providerID) != nil
         else { return false }
         return archives.redraws(VectorTileAddress(z: named.z, x: named.x, y: named.y), drawnAt: storedAt)
+    }
+
+    /// Whether a downloaded country holds the tile `key` names, for a
+    /// provider drawn from vector tiles: any other provider's tile of the
+    /// same ground is no country's. See ``OfflineCountryArchives/holds(_:)``.
+    func holds(_ key: String) -> Bool {
+        guard !archives.isEmpty,
+              let named = TileCacheKey.named(key),
+              sources.source(for: named.providerID) != nil
+        else { return false }
+        return archives.holds(VectorTileAddress(z: named.z, x: named.x, y: named.y))
     }
 
     /// The tile `key` names, drawn out of a downloaded country as PNG bytes,
