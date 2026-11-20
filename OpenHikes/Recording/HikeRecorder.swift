@@ -188,8 +188,8 @@ final class HikeRecorder: NSObject {
     @ObservationIgnored var acceptedFixRevision: UInt64 = 0
     @ObservationIgnored var liveMatchWindow: [RecordingPoint] = []
     /// How far this walk has gone along each trail the live matcher could
-    /// name — see ``RecordingTrailNames``, and ``suggestedTitle(forDistance:)``
-    /// for what it is read for.
+    /// name — see ``RecordingTrailNames``, and ``suggestedTitle`` for what it
+    /// is read for.
     ///
     /// `@ObservationIgnored` like the window it is fed alongside, and for the
     /// same budget: this is written on every accepted fix, and an observed
@@ -197,26 +197,30 @@ final class HikeRecorder: NSObject {
     /// Nothing draws it. It is read twice — once when the hiker asks to stop,
     /// and once when the hike is written — both outside a `body`.
     @ObservationIgnored var trailNames = RecordingTrailNames()
-    /// What the town this walk started in names it — "Budapest – Oct 26,
-    /// 2026" — once the geocoder has answered, and `nil` before that or when
-    /// there was no town to give. See ``nameStartPlace(at:)``, and
-    /// ``suggestedTitle(forDistance:)`` for where it ranks.
+    /// The town this walk started in, once the geocoder has answered, and
+    /// `nil` before that or when there was no town to give. See
+    /// ``nameStartPlace(at:)``, and ``suggestedTitle`` for where it stands in
+    /// the walk's name.
     ///
     /// `@ObservationIgnored` for the reason ``trailNames`` is: nothing draws
     /// it, and it is read at Stop and at save, both outside a `body`.
-    @ObservationIgnored var startPlaceTitle: String?
+    @ObservationIgnored var startPlaceName: String?
     /// Whether this walk has asked what town it started in, answered or not —
     /// the once in ``nameStartPlace(at:)``.
     @ObservationIgnored var hasAskedForStartPlace = false
-    /// The name the hiker was shown for a blank field when they stopped, and
-    /// so the name the save writes — see ``stop(customName:offeredTitle:)``.
-    /// `nil` before Stop, and after a Stop that offered nothing.
+    /// The name the stop alert opened with when the hiker stopped, and so the
+    /// name the save writes — see ``stop(customName:offeredTitle:)``. `nil`
+    /// before Stop, and after a Stop that offered nothing.
     ///
-    /// Kept here beside the two names it was made from rather than carried
+    /// Kept here beside the parts it was made from rather than carried
     /// with the typed name, because it is read where they are: once, in
     /// ``persist(_:prepared:customName:)``, whether the save follows Stop
     /// straight away, a route review or a retry.
     @ObservationIgnored var offeredTitle: String?
+    /// Whether a tap on Stop is still counting the walk's fixes — see
+    /// ``settledStopStep()``. A second tap in that moment is not a second
+    /// stop.
+    @ObservationIgnored var isSettlingStop = false
     @ObservationIgnored var liveMatchingTask: Task<Void, Never>?
     @ObservationIgnored var liveMatchingTaskID: UUID?
     @ObservationIgnored var liveMatchNeedsRun = false
@@ -528,23 +532,22 @@ extension HikeRecorder {
     /// Ends the walk, and saves it or opens its route review.
     ///
     /// - Parameters:
-    ///   - customName: The name the hiker typed, if any.
-    ///   - offeredTitle: The name the hiker was shown for leaving the field
-    ///     blank — the stop alert's placeholder — which the hike is then saved
-    ///     under, beneath any name they typed instead. A placeholder is a
-    ///     promise, and asking again at the save would break it: the town can
-    ///     answer, and the walk go on, while the alert is up. `nil` for a Stop
-    ///     that offered nothing, such as Siri's, which leaves the name to the
-    ///     save — see ``suggestedTitle(forDistance:)``.
+    ///   - customName: The name the hiker typed, if any. A name field left as
+    ///     it opened is not one — see ``RecordingStopName``.
+    ///   - offeredTitle: The name the stop alert opened with, which the hike
+    ///     is then saved under, beneath any name the hiker typed instead. A
+    ///     name shown is a promise, and asking again at the save would break
+    ///     it: the town can answer, and the walk go on, while the alert is
+    ///     up. `nil` for a Stop that offered nothing, such as Siri's, which
+    ///     leaves the name to the save — see
+    ///     ``suggestedTitle(forDistance:shape:startedAt:)``.
     @discardableResult func stop(
         customName: String? = nil,
         offeredTitle: String? = nil
     ) async throws -> RecordingStopOutcome {
-        guard phase == .waitingForFix
-            || phase == .recording
-            || phase == .paused else { throw RecordingFailure.save(String(
-                localized: "No active recording is ready to stop."
-            )) }
+        guard isStoppable else { throw RecordingFailure.save(String(
+            localized: "No active recording is ready to stop."
+        )) }
         self.offeredTitle = HikeTitle.bounded(offeredTitle)
         guard let journal, sessionStartedAt != nil else {
             let failure = RecordingFailure.storageUnavailable

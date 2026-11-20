@@ -48,7 +48,8 @@ struct RecordedWalkTests {
             recordedSeconds: recordedSeconds,
             startedAt: startedAt,
             matchedTrailName: nil,
-            matchResult: nil
+            matchResult: nil,
+            shape: nil
         )
     }
 

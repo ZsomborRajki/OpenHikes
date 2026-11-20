@@ -494,6 +494,14 @@ a change to recording, the map, the sheet or the render path; the PR template,
     difficulty or steepness stretch is measured across it.
   - A recording that the matcher moved or found ambiguous stops in
     `.reviewing`, and only `saveReviewedRecording()` writes it.
+- **Stop is where a recording ends, kept or not** (`RecordingStop.swift`).
+  A recording with no line is ended without being named, and *no line* is
+  the journal's answer once every pending fix has merged
+  (`HikeRecorder.settledStopStep()`), never the live count's.
+  - **The offered name opens selected, and its parts and their order are
+    the owner's decision** (`RecordingTitle`). A field left as it opened is
+    not a typed name (`RecordingStopName`), and only `RouteShape` says what
+    a loop is.
 - **The map is imperative MapKit behind `MapView`.** `MapView.Coordinator`
   observes stable controllers and updates `MKMapView` directly. Tiles flow
   through `CachingTileOverlayRenderer` into `TileCache`, auto-saves through
@@ -798,6 +806,11 @@ a change to recording, the map, the sheet or the render path; the PR template,
   alert comes up at once and takes the card down. So the card presents those
   modals over itself while it is up (`presentsMapControlsOverCard()`), and
   anything new a map control opens joins them there.
+- **What follows an alert is an alert.** A `confirmationDialog` raised from
+  an alert's button is never presented, so the question the recording's stop
+  alert leads to is a second alert (`RecordingCard`). And an alert's text
+  field ignores a `selection:` binding: one that opens holding text to type
+  over is asked to select it (`AlertTextSelection`).
 - **The map is chosen on the map.** *Map Modes* (`MapModesView`) is the only
   place the map and *Hiking Routes* are chosen. Settings keeps only a
   subscriber's subscription row.

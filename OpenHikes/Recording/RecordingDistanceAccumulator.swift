@@ -51,6 +51,15 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
     /// The segments the walk's pauses have cut it into so far — see
     /// ``RecordingSegmentLedger``.
     private(set) var segments = RecordingSegmentLedger()
+    /// The legs the walk's pauses have opened so far, each from the last
+    /// point before a pause to the first after it, for the shape the live
+    /// line is read as at Stop — see ``RouteShape/PausedLeg``. The line on
+    /// the map is joined across them, and a pause can carry a hiker a long
+    /// way. One entry per pause, so a few dozen at the most.
+    private(set) var pausedLegs: [RouteShape.PausedLeg] = []
+    /// Where the last point handed in was, for the leg the next pause opens.
+    /// Not ``previous``, which a stationary window holds back at its anchor.
+    private var lastCoordinate: CLLocationCoordinate2D?
 
     private struct RecentSample {
         let timestamp: Date
@@ -162,7 +171,11 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
         // moment a hiker resumed.
         if point.flags.contains(.resumed) {
             recentWindow.removeAll(keepingCapacity: true)
+            if let lastCoordinate {
+                pausedLegs.append(RouteShape.PausedLeg(from: lastCoordinate, to: point.coordinate))
+            }
         }
+        lastCoordinate = point.coordinate
         let distance = accumulate(point)
         movingTime.record(point.routeCoordinate)
         appendRecentSample(at: point.timestamp, distanceMeters: distance)

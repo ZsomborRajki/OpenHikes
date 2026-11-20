@@ -406,7 +406,8 @@ struct HikeHealthExportTests {
                 recordedSeconds: Self.recordedSeconds,
                 startedAt: startedAt,
                 matchedTrailName: nil,
-                matchResult: nil
+                matchResult: nil,
+                shape: nil
             )
         }
 
