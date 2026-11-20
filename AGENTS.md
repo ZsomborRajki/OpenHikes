@@ -1501,6 +1501,14 @@ owner, on the main actor.
   deletes every archive the index does not hold and every staged file no
   pending download is for. A file is never deleted while the index on disk
   names it, and a record whose files have gone reads as not downloaded.
+- **An index that cannot be read is not an empty one.** Before the device's
+  first unlock since it restarted, a launch the system makes can list and
+  delete files and read none, and a later build's index may not decode. So
+  a launch that cannot read the index, or the list of downloads under way,
+  opens, resumes and sweeps nothing (`OfflineCountryStore.List`), and starts
+  again when a scene is next active. A change to `OfflineCountryStore.Record`,
+  or to the manifest's `Country` inside it, has to keep reading the index an
+  installed build wrote, or that build's downloads are lost to their owner.
 - **A name off the network never reaches a path.** The manifest's file names
   are held to the shape the server's route serves, each starting with its
   own area's code (`OfflineCountryManifest.File.hasSafeName`), and an area

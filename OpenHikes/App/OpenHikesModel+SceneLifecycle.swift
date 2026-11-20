@@ -42,6 +42,10 @@ extension OpenHikesModel {
             backgroundTracker.refreshBasemaps()
             // A new build of the map may have gone up while the app was away.
             TileCache.shared.refreshVectorArchives()
+            // A launch the system made before the device was first unlocked
+            // could not read the countries' index, and left them unopened;
+            // by now it can. Once started, this does nothing.
+            Task { [offlineCountries] in await offlineCountries.start() }
         }
         // Armed here and taken down on the way out, which is the whole of what
         // keeps the weather badge's movement feed from becoming a background
