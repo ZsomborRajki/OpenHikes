@@ -59,8 +59,8 @@ nonisolated extension TileCache {
 
     /// Whether a downloaded country holds the tile `key` names, and so draws
     /// it with no signal whether or not a copy is kept: what auto-save asks
-    /// before it keeps one. Reads outlines, never a file. See
-    /// ``OfflineCountryArchives/holds(_:)``.
+    /// before it keeps one. Reads outlines and the archives' directories,
+    /// never a tile. See ``OfflineCountryArchives/holds(_:deepest:)``.
     func isHeldByDownloadedCountry(_ key: String) -> Bool {
         countryTiles?.holds(key) == true
     }

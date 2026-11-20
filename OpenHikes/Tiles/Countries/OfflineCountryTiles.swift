@@ -100,19 +100,30 @@ nonisolated final class OfflineCountryArchives: Sendable {
         return newer.contains { $0.country.contains(longitude: middle.longitude, latitude: middle.latitude) }
     }
 
-    /// Whether a downloaded country holds `target`, by the rule
-    /// ``redraws(_:drawnAt:)`` reads: its outline holds the tile's middle,
-    /// at a zoom its files reach down to. A tile on a country's edge, held
-    /// only by the margin it was cut with, answers no, and so does one of a
-    /// country opened with no record, so what asks this keeps a tile too
-    /// many and never one too few.
-    func holds(_ target: VectorTileAddress) -> Bool {
+    /// Whether a downloaded country draws `target` with no signal: its
+    /// outline holds the tile's middle, by the rule ``redraws(_:drawnAt:)``
+    /// reads, and the files ``tile(for:deepest:extrasFrom:)`` would draw it
+    /// from, to `deepest`, have the tile it would be drawn from. Read from
+    /// the archives' directories, never a tile's bytes.
+    ///
+    /// What asks this keeps a tile too many and never one too few, so every
+    /// doubt answers no: a tile on a country's edge, held only by the margin
+    /// it was cut with; a country opened with no record; a zoom its files do
+    /// not reach; a gap in its archive, where the map fell back to the
+    /// server; and a directory that could not be read.
+    func holds(_ target: VectorTileAddress, deepest: Int) -> Bool {
         let held = countries.withLock { $0 }
         guard !held.isEmpty else { return false }
         let middle = Self.middle(of: target)
         return held.contains { country in
-            target.z >= Int(country.basemap.header.minimumZoom)
-                && country.record?.country.contains(longitude: middle.longitude, latitude: middle.latitude) == true
+            guard country.record?.country.contains(longitude: middle.longitude, latitude: middle.latitude) == true
+            else { return false }
+            return [country.detail, country.basemap].contains { basemap in
+                guard let basemap, let dataTile = Self.dataTile(of: target, deepest: deepest, in: basemap) else {
+                    return false
+                }
+                return (try? basemap.contains(z: dataTile.z, x: dataTile.x, y: dataTile.y)) == true
+            }
         }
     }
 
@@ -157,14 +168,11 @@ nonisolated final class OfflineCountryArchives: Sendable {
         _ extras: PMTilesArchive?,
         of country: Country
     ) -> Found? {
-        let zoom = min(target.z, deepest, Int(basemap.header.maximumZoom))
-        guard zoom >= Int(basemap.header.minimumZoom) else { return nil }
-        let shift = target.z - zoom
-        let dataTile = VectorTileAddress(z: zoom, x: target.x >> shift, y: target.y >> shift)
+        guard let dataTile = dataTile(of: target, deepest: deepest, in: basemap) else { return nil }
         do {
             guard let bytes = try basemap.tile(z: dataTile.z, x: dataTile.x, y: dataTile.y) else { return nil }
             var added: Data?
-            if let extrasZoom, zoom >= extrasZoom {
+            if let extrasZoom, dataTile.z >= extrasZoom {
                 added = try? extras?.tile(z: dataTile.z, x: dataTile.x, y: dataTile.y)
             }
             return Found(dataTile: dataTile, basemap: bytes, extras: added)
@@ -173,6 +181,20 @@ nonisolated final class OfflineCountryArchives: Sendable {
             logger.error("Country \(country.id, privacy: .public) unreadable: \(reason, privacy: .public)")
             return nil
         }
+    }
+
+    /// The archive tile `target` is drawn from: itself, or the one around it
+    /// at the deepest zoom both `basemap` and `deepest` reach. `nil` where
+    /// that zoom is above the archive's first.
+    private static func dataTile(
+        of target: VectorTileAddress,
+        deepest: Int,
+        in basemap: PMTilesArchive
+    ) -> VectorTileAddress? {
+        let zoom = min(target.z, deepest, Int(basemap.header.maximumZoom))
+        guard zoom >= Int(basemap.header.minimumZoom) else { return nil }
+        let shift = target.z - zoom
+        return VectorTileAddress(z: zoom, x: target.x >> shift, y: target.y >> shift)
     }
 
     /// Whether the tile's ground meets `bounds` at all.
@@ -217,15 +239,16 @@ nonisolated final class OfflineCountryDrawing: Sendable {
         return archives.redraws(VectorTileAddress(z: named.z, x: named.x, y: named.y), drawnAt: storedAt)
     }
 
-    /// Whether a downloaded country holds the tile `key` names, for a
+    /// Whether a downloaded country draws the tile `key` names, for a
     /// provider drawn from vector tiles: any other provider's tile of the
-    /// same ground is no country's. See ``OfflineCountryArchives/holds(_:)``.
+    /// same ground is no country's. See
+    /// ``OfflineCountryArchives/holds(_:deepest:)``.
     func holds(_ key: String) -> Bool {
         guard !archives.isEmpty,
               let named = TileCacheKey.named(key),
-              sources.source(for: named.providerID) != nil
+              let source = sources.source(for: named.providerID)
         else { return false }
-        return archives.holds(VectorTileAddress(z: named.z, x: named.x, y: named.y))
+        return archives.holds(VectorTileAddress(z: named.z, x: named.x, y: named.y), deepest: source.maximumZ)
     }
 
     /// The tile `key` names, drawn out of a downloaded country as PNG bytes,

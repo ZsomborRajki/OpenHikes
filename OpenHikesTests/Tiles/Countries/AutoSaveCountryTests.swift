@@ -6,7 +6,8 @@
 //  country's own files, so auto-save leaves it in the cache: kept as well, it
 //  would be the same ground on disk twice, counted against the hike's cap.
 //  What no country holds is kept as it always was: ground outside the
-//  outline, and any other map's tile of the same ground, which no country
+//  outline, a gap in the country's archive, where the map fell back to the
+//  server, and any other map's tile of the same ground, which no country
 //  draws.
 //
 
@@ -18,10 +19,14 @@ import Testing
 @Suite("Auto-save beside a downloaded country")
 struct AutoSaveCountryTests {
     /// Zoom 14's tile over Ljubljana, inside the fixture's Slovenia, the one
-    /// beside it, and one over Madrid, outside it.
+    /// beside it, both in its archive, one more beside that, inside the
+    /// outline but missing from the archive, and one over Madrid, outside it.
     private static let inside = VectorTileAddress(z: 14, x: 8851, y: 5825)
     private static let beside = VectorTileAddress(z: 14, x: 8852, y: 5825)
+    private static let gap = VectorTileAddress(z: 14, x: 8853, y: 5825)
     private static let outside = VectorTileAddress(z: 14, x: 8023, y: 6178)
+    /// How deep the OpenHikes map's source draws, as the sandbox's has it.
+    private static let deepest = 15
 
     private let hikeID = UUID()
     private let archives = OfflineCountryArchives()
@@ -30,7 +35,7 @@ struct AutoSaveCountryTests {
     init() throws {
         let planet = try #require(URL(string: "https://vector.example.invalid/planet"))
         sandbox = TileSandbox(
-            vectorSources: ["osm": VectorTileSource(archiveURL: planet, maximumZ: 15)],
+            vectorSources: ["osm": VectorTileSource(archiveURL: planet, maximumZ: Self.deepest)],
             countryArchives: archives
         )
     }
@@ -53,12 +58,12 @@ struct AutoSaveCountryTests {
         ]
     }
 
-    /// Slovenia, opened as an install records it. What its archive holds is
-    /// beside the point: the question auto-save asks reads the outline.
+    /// Slovenia, opened as an install records it, its archive holding
+    /// ``inside`` and ``beside`` and nothing else.
     private func slovenia(in directory: URL, minimumZoom: Int = 0, recorded: Bool = true) throws
         -> OfflineCountryArchives.Country {
         let bytes = OfflineCountryFixture.archive(
-            [Self.inside: Data("tile".utf8)],
+            [Self.inside: Data("tile".utf8), Self.beside: Data("tile".utf8)],
             maximumZoom: max(Self.inside.z, minimumZoom),
             minimumZoom: minimumZoom
         )
@@ -118,6 +123,23 @@ struct AutoSaveCountryTests {
         }
     }
 
+    /// The country's outline holds the tile, but its archive has nothing
+    /// there, so the map drew it from the server. Left in the cache, it would
+    /// be gone offline once the cache was trimmed, with the country no help.
+    @Test("a tile the country's archive lacks is still kept")
+    func archiveGapIsStillKept() async throws {
+        try await OfflineCountryFixture.withDirectory { directory in
+            archives.replace(with: [try slovenia(in: directory)])
+            sandbox.store.setActiveHike(id: hikeID, route: Self.trail(across: Self.gap), knownKeys: [])
+
+            let key = Self.key(Self.gap)
+            try await browse(key, at: Self.gap)
+
+            #expect(sandbox.isSaved(key))
+            #expect(sandbox.store.drainPendingKeys(for: hikeID) == [key])
+        }
+    }
+
     @Test("a tile outside every downloaded country is still kept")
     func groundOutsideIsStillKept() async throws {
         try await OfflineCountryFixture.withDirectory { directory in
@@ -134,20 +156,27 @@ struct AutoSaveCountryTests {
     /// The question errs toward keeping. An answer of yes for a tile the
     /// country could not draw would leave that ground with no map offline
     /// from either.
-    @Test("a country holds a tile only inside its outline, at a zoom its files reach, once it has a record")
+    @Test("a country holds a tile only inside its outline, where its archive has it, once it has a record")
     func holdsOnlyWhatItCanDraw() async throws {
         try await OfflineCountryFixture.withDirectory { directory in
-            #expect(!archives.holds(Self.inside), "no country is downloaded")
+            #expect(!archives.holds(Self.inside, deepest: Self.deepest), "no country is downloaded")
 
             archives.replace(with: [try slovenia(in: directory)])
-            #expect(archives.holds(Self.inside))
-            #expect(!archives.holds(Self.outside))
+            #expect(archives.holds(Self.inside, deepest: Self.deepest))
+            #expect(!archives.holds(Self.gap, deepest: Self.deepest), "its archive has no tile there")
+            #expect(!archives.holds(Self.outside, deepest: Self.deepest))
+            // Zoom 16, drawn from the zoom-14 tile around it: the deepest the
+            // archive reaches.
+            let closer = VectorTileAddress(z: 16, x: Self.inside.x * 4 + 1, y: Self.inside.y * 4 + 2)
+            #expect(archives.holds(closer, deepest: Self.deepest), "a closer tile is drawn from the one around it")
+            let closerInGap = VectorTileAddress(z: 16, x: Self.gap.x * 4, y: Self.gap.y * 4)
+            #expect(!archives.holds(closerInGap, deepest: Self.deepest))
 
             archives.replace(with: [try slovenia(in: directory, minimumZoom: 15)])
-            #expect(!archives.holds(Self.inside), "its files start below this zoom")
+            #expect(!archives.holds(Self.inside, deepest: Self.deepest), "its files start below this zoom")
 
             archives.replace(with: [try slovenia(in: directory, recorded: false)])
-            #expect(!archives.holds(Self.inside), "with no record there is no outline to ask")
+            #expect(!archives.holds(Self.inside, deepest: Self.deepest), "with no record there is no outline to ask")
         }
     }
 }
