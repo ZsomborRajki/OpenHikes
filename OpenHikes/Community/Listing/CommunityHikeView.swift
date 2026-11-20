@@ -139,7 +139,8 @@
 //  The import is in that menu too, and is not a third moderation gesture: it
 //  is the page's own action, offered a second time where a hiker who has
 //  already decided can reach it without scrolling the page they decided
-//  without. See ``actionsToolbarItem``.
+//  without. A curated route has nothing to report, so there it is a button of
+//  its own instead of a menu. See ``actionsToolbarItem``.
 //
 
 import Foundation
@@ -342,86 +343,125 @@ struct CommunityHikeView: View {
     }
 }
 
-// MARK: - The toolbar menu
+// MARK: - The toolbar
 
 private extension CommunityHikeView {
-    /// Adding the hike, reporting it, and blocking its author: everything this
-    /// screen can do that is not scrolling it.
+    /// Everything this screen can do that is not scrolling it, in one of two
+    /// shapes: the menu on a hike somebody shared, and the import alone on a
+    /// curated route.
+    ///
+    /// The import is deliberately a *second* way to the same thing. The button
+    /// under the page is where a hiker who has read the page arrives; this is
+    /// for one who decided from the row and does not want to scroll a chart, a
+    /// grid, a strip of photographs and two trail sections to say so.
+    ///
+    /// Only a menu for a hike somebody shared, and the difference is not
+    /// cosmetic. Report and Block are Guideline 1.2 affordances about
+    /// *user-generated content*, and an OSM relation is not that: there is no
+    /// author to block — the item would read "Block This Hiker" about nobody —
+    /// and no record for a reviewer to delete, so a report would ask a person
+    /// to act on something they cannot reach. What can be done about a wrong
+    /// trail is done upstream, which is what ``curatedAttribution`` links to.
+    /// That left a curated route's menu holding the import and nothing else,
+    /// and a menu in front of a single action is a tap spent on nothing — the
+    /// same call ``MapAttributionView`` makes about its licence links — so
+    /// there the import is the button itself. See ``importToolbarButton(_:)``.
+    @ToolbarContentBuilder var actionsToolbarItem: some ToolbarContent {
+        if !listing.isCurated {
+            ToolbarItem(placement: .primaryAction) { actionsMenu }
+        } else if case .loaded(let detail) = session.phase {
+            ToolbarItem(placement: .primaryAction) { importToolbarButton(detail) }
+        }
+    }
+
+    /// Adding the hike, reporting it, and blocking its author.
     ///
     /// Both halves of the Guideline 1.2 affordance are here because this is
     /// the screen showing the content. A menu rather than the plain
     /// destructive button this was while reporting was the only destination:
-    /// a menu in front of a single one is a tap spent on nothing — the same
-    /// call ``MapAttributionView`` makes about its licence links — while
     /// actions a hiker reaches for at the same moment and must not confuse are
     /// the case a menu is for, and the alternative, a toolbar button each,
     /// spends the navigation bar of a screen whose title is a stranger's trail
     /// name.
-    ///
-    /// The import is first and is deliberately a *second* way to the same
-    /// thing. The button under the page is where a hiker who has read the page
-    /// arrives; this is for one who decided from the row and does not want to
-    /// scroll a chart, a grid, a strip of photographs and two trail sections
-    /// to say so. It draws only once the route is here, because the route is
-    /// what there is to import — before then this page is a spinner, and the
-    /// button below it does not exist either.
-    @ToolbarContentBuilder var actionsToolbarItem: some ToolbarContent {
-        ToolbarItem(placement: .primaryAction) {
-            Menu {
-                importMenuItem
+    var actionsMenu: some View {
+        Menu {
+            importMenuItem
 
-                // Absent rather than disabled for a curated route, and the
-                // difference is not cosmetic. Both of these are Guideline 1.2
-                // affordances about *user-generated content*, and an OSM
-                // relation is not that: there is no author to block — the menu
-                // item would read "Block This Hiker" about nobody — and no
-                // record for a reviewer to delete, so a report would ask a
-                // person to act on something they cannot reach. What can be
-                // done about a wrong trail is done upstream, which is what
-                // ``curatedAttribution`` links to.
-                if !listing.isCurated {
-                    Button {
-                        isReporting = true
-                    } label: {
-                        Label("Report Hike", systemImage: "exclamationmark.bubble")
-                    }
-                    .accessibilityHint("Tells the reviewer something is wrong with it")
-                    .accessibilityIdentifier("community-report-button")
-
-                    Button(role: .destructive) {
-                        isConfirmingBlock = true
-                    } label: {
-                        Label(blockActionTitle, systemImage: "hand.raised.slash")
-                    }
-                    .accessibilityHint("Hides their hikes on this device")
-                    .accessibilityIdentifier("community-block-button")
-                }
-
-                // A last entry, and only for an account the server has already
-                // let read the queue. Not a permission check — the permission
-                // is on the record type, and this account would be refused the
-                // delete anyway — but an ordinary hiker should not be offered
-                // a control that can only fail. It is the one action here that
-                // reaches everybody rather than this device: reporting sends a
-                // mail and blocking writes to `UserDefaults`, while this
-                // unlists a hike for the whole world.
-                if review?.isReviewer == true, !listing.isCurated {
-                    Divider()
-                    Button(role: .destructive) {
-                        isConfirmingTakeDown = true
-                    } label: {
-                        Label("Take Down", systemImage: "trash")
-                    }
-                    .disabled(isTakingDown)
-                    .accessibilityHint("Unlists it for everybody and deletes the submission")
-                    .accessibilityIdentifier("community-take-down-button")
-                }
+            Button {
+                isReporting = true
             } label: {
+                Label("Report Hike", systemImage: "exclamationmark.bubble")
+            }
+            .accessibilityHint("Tells the reviewer something is wrong with it")
+            .accessibilityIdentifier("community-report-button")
+
+            Button(role: .destructive) {
+                isConfirmingBlock = true
+            } label: {
+                Label(blockActionTitle, systemImage: "hand.raised.slash")
+            }
+            .accessibilityHint("Hides their hikes on this device")
+            .accessibilityIdentifier("community-block-button")
+
+            // A last entry, and only for an account the server has already
+            // let read the queue. Not a permission check — the permission is
+            // on the record type, and this account would be refused the
+            // delete anyway — but an ordinary hiker should not be offered a
+            // control that can only fail. It is the one action here that
+            // reaches everybody rather than this device: reporting sends a
+            // mail and blocking writes to `UserDefaults`, while this unlists a
+            // hike for the whole world.
+            if review?.isReviewer == true {
+                Divider()
+                Button(role: .destructive) {
+                    isConfirmingTakeDown = true
+                } label: {
+                    Label("Take Down", systemImage: "trash")
+                }
+                .disabled(isTakingDown)
+                .accessibilityHint("Unlists it for everybody and deletes the submission")
+                .accessibilityIdentifier("community-take-down-button")
+            }
+        } label: {
+            // A spinner while the import runs, because the menu closes on the
+            // tap that starts it: the button under the page spins too, but a
+            // hiker who added from up here is above the fold, and the
+            // photographs can take a while to copy. Still the menu's label, so
+            // Report and Block stay a tap away while it spins.
+            if session.isImporting {
+                ProgressView()
+            } else {
                 Label("More", systemImage: "ellipsis.circle")
             }
-            .accessibilityLabel("Add, report or block")
-            .accessibilityIdentifier("community-actions-menu")
         }
+        .accessibilityLabel("Add, report or block")
+        .accessibilityValue(session.isImporting ? Text(importButtonTitle) : Text(verbatim: ""))
+        .accessibilityIdentifier("community-actions-menu")
+    }
+
+    /// The import on its own, where it is the only action there is: a `+`,
+    /// and a spinner in its place while the hike and its photographs are
+    /// copied, for the reason the menu's label spins.
+    ///
+    /// Drawn only once the route is here, as the menu's item is — see
+    /// ``importMenuItem`` — and filtered for the reason that one is.
+    ///
+    /// The title is the button under the page's. The glyph is not while the
+    /// hike is still to be added: a `+` is what a bare toolbar button for
+    /// adding draws, where the page's button has its title beside its glyph.
+    func importToolbarButton(_ detail: CommunityHikeDetail) -> some View {
+        Button {
+            performImport(visible(detail))
+        } label: {
+            if session.isImporting {
+                ProgressView()
+            } else {
+                Label(importButtonTitle, systemImage: session.existingHike == nil ? "plus" : importGlyph)
+            }
+        }
+        .disabled(session.isImporting)
+        .accessibilityLabel(importButtonTitle)
+        .accessibilityIdentifier("community-import-toolbar-button")
     }
 
     /// The import, at the top of the menu and above a divider of its own.
@@ -433,8 +473,8 @@ private extension CommunityHikeView {
     ///
     /// Drawn only once the route is here. The route is what there is to
     /// import, and an item that could only fail is worse than one that is not
-    /// offered — the same argument ``actionsToolbarItem`` makes about *Take
-    /// Down* for an ordinary hiker.
+    /// offered — the same argument ``actionsMenu`` makes about *Take Down* for
+    /// an ordinary hiker.
     ///
     /// Title and glyph come from the button under the page rather than being
     /// written a second time here, so the two ways to one tap cannot end up

@@ -82,10 +82,11 @@ extension CommunityHikeView {
     }
 
     /// One title for one action, wherever it is offered: the button under the
-    /// page and the first item of the toolbar menu are the same tap, and two
-    /// wordings for it would read as two different things to do.
+    /// page and the first item of the toolbar menu, or the toolbar's `+`, are
+    /// the same tap, and two wordings for it would read as two different
+    /// things to do.
     var importButtonTitle: String {
-        if session.isImporting { return "Adding…" }
+        if session.isImporting { return String(localized: "Adding…") }
         return session.existingHike == nil
             ? String(localized: "Add to My Hikes")
             : String(localized: "Open in My Hikes")
