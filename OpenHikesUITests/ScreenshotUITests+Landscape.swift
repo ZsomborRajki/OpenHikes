@@ -30,7 +30,7 @@ extension ScreenshotUITests {
     @MainActor
     func positionScreenshotGallery(in app: XCUIApplication) {
         let strip = element("hike-photo-strip", in: app)
-        guard element("map-side-panel", in: app).exists else {
+        guard isPanelBesideTheMap(in: app) else {
             XCTAssertTrue(scrollIntoView(strip, in: app))
             return
         }
