@@ -199,9 +199,10 @@ nonisolated final class CommunityCuratedUITests: XCTestCase {
     /// Opening a curated route says where the data came from, with a link, and
     /// offers nothing to report or block.
     ///
-    /// The import item is asserted *first* and is doing real work: it is what
-    /// proves the menu opened at all, so the two absences after it are about
-    /// the listing rather than about a tap that missed.
+    /// The `+` is asserted *first* and is doing real work: it is what proves
+    /// the toolbar has drawn, so the absence of the menu after it is about the
+    /// listing rather than about a bar still loading. The menu held the import
+    /// alone on a curated route, so there the import is the button itself.
     @MainActor
     func testACuratedRouteHasNobodyToReportOrBlock() {
         let app = launchCommunity(scenario: .curated)
@@ -217,11 +218,14 @@ nonisolated final class CommunityCuratedUITests: XCTestCase {
             "the screen a curated route opens must credit OpenStreetMap with a link"
         )
 
-        openActionsMenu(in: app)
         XCTAssertTrue(
-            element("community-import-menu-button", in: app)
+            element("community-import-toolbar-button", in: app)
                 .waitForExistence(timeout: UITestTimeout.navigation),
-            "the menu should have opened, and saving a curated route is offered"
+            "saving a curated route should be offered as the toolbar's + button"
+        )
+        XCTAssertFalse(
+            element("community-actions-menu", in: app).exists,
+            "with nothing to report or block, there is no menu for the import to sit in"
         )
         XCTAssertFalse(
             element("community-report-button", in: app).exists,
@@ -233,8 +237,26 @@ nonisolated final class CommunityCuratedUITests: XCTestCase {
         )
     }
 
-    /// The same menu on a published hike has both, which is what makes the
-    /// absences above a statement about the source rather than about the menu.
+    /// The `+` is the import, and not merely a glyph: tapping it saves the
+    /// route and opens the hike it saved, as the button under the page does.
+    @MainActor
+    func testACuratedRouteIsAddedFromTheToolbarButton() {
+        let app = launchCommunity(scenario: .curated)
+        selectCommunityTab(in: app)
+        openCommunityHike(titled: SeededCuratedTrail.loopTitle, in: app)
+
+        tapWhenReady(element("community-import-toolbar-button", in: app))
+
+        XCTAssertTrue(
+            element("community-share-button", in: app)
+                .waitForExistence(timeout: UITestTimeout.existence),
+            "the toolbar's + should save the route and open the hike it saved"
+        )
+    }
+
+    /// A published hike keeps the menu, with both, which is what makes the
+    /// absences above a statement about the source rather than about the
+    /// toolbar.
     @MainActor
     func testAPublishedHikeStillOffersReportAndBlock() {
         let app = launchCommunity(scenario: .curated)
@@ -263,7 +285,7 @@ private extension CommunityCuratedUITests {
         let menu = element("community-actions-menu", in: app)
         XCTAssertTrue(
             menu.waitForExistence(timeout: UITestTimeout.existence),
-            "the actions menu should be offered whichever source the hike came from"
+            "the actions menu should be offered on a hike somebody published"
         )
         menu.tap()
     }
