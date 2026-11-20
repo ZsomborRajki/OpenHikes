@@ -236,8 +236,9 @@ either: the second run waits silently on the first run's build lock.
 
 ### The iPhone Duo
 
-- **It needs the iOS 27.1 runtime, which as Xcode 27.1 installs it runs no
-  other device.** CI's Xcode 27.0 has neither, so no gate runs on a Duo, and
+- **It needs a runtime of its own, which runs no other device:** iOS 27.1 as
+  Xcode 27.1 installed it, and a build of iOS 27.2 for the Duo alone under
+  Xcode 27.2. CI's Xcode 27.0 has neither, so no gate runs on a Duo, and
   the 27.1 SDK's Duo APIs (`toolbarVerticalBehavior`, the one the app uses,
   and `ArrangementView`, `reservedRegions`, `toolbarVerticalEdge`) do not
   exist where CI compiles; *CI* above has the gate they need. Templates and
