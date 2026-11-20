@@ -17,6 +17,12 @@
 //  matches the manifest's, so an archive under the directory's own names is
 //  always a whole one.
 //
+//  A list that is there and cannot be read is not an empty one. The device
+//  may not have been unlocked since it restarted, when a launch the system
+//  makes for a location or a finished download can list and delete files and
+//  read none; or the list may be a later build's. So reading says which
+//  (``List``), and a launch that cannot read sweeps nothing.
+//
 
 import CryptoKit
 import Foundation
@@ -46,6 +52,14 @@ nonisolated struct OfflineCountryStore: Sendable {
         var files: [OfflineCountryManifest.File] { country.files.filter { roles.contains($0.role) } }
     }
 
+    /// One of the store's two lists, as it could be read.
+    enum List<Element: Sendable>: Sendable {
+        /// What it names: nothing, where none was kept.
+        case holding([Element])
+        /// One is kept, and it cannot be read.
+        case unreadable
+    }
+
     let directory: URL
 
     var stagingDirectory: URL { directory.appending(path: "Staging", directoryHint: .isDirectory) }
@@ -73,21 +87,36 @@ nonisolated struct OfflineCountryStore: Sendable {
 
     // MARK: - What is kept
 
-    /// The areas downloaded, leaving out any whose files have gone.
-    func installed() -> [Record] {
-        let records = read([Record].self, from: indexURL) ?? []
-        return records.filter { record in
+    /// The index: the areas downloaded, leaving out any whose files have
+    /// gone, or ``List/unreadable`` where one is kept that cannot be read,
+    /// which names files nobody can list.
+    func index() -> List<Record> {
+        guard case let .holding(records) = list(Record.self, at: indexURL) else { return .unreadable }
+        return .holding(records.filter { record in
             record.files.allSatisfy { FileManager.default.fileExists(atPath: fileURL(for: $0).path) }
-        }
+        })
+    }
+
+    /// The areas downloaded, as far as can be read.
+    func installed() -> [Record] {
+        guard case let .holding(records) = index() else { return [] }
+        return records
     }
 
     func write(installed records: [Record]) throws {
         try write(records, to: indexURL)
     }
 
-    /// The downloads started and not finished.
+    /// The downloads started and not finished, or ``List/unreadable``
+    /// where their list is kept and cannot be read.
+    func downloadsUnderWay() -> List<Pending> {
+        list(Pending.self, at: pendingURL)
+    }
+
+    /// The downloads started and not finished, as far as can be read.
     func pending() -> [Pending] {
-        read([Pending].self, from: pendingURL) ?? []
+        guard case let .holding(downloads) = downloadsUnderWay() else { return [] }
+        return downloads
     }
 
     func write(pending downloads: [Pending]) throws {
@@ -168,6 +197,13 @@ nonisolated struct OfflineCountryStore: Sendable {
     private func read<Value: Decodable>(_ type: Value.Type, from url: URL) -> Value? {
         guard let data = try? Data(contentsOf: url) else { return nil }
         return try? JSONDecoder().decode(type, from: data)
+    }
+
+    /// The list kept at `url`: empty where no file is there, and unreadable
+    /// where one is and it cannot be read or is not such a list.
+    private func list<Element: Decodable>(_ type: Element.Type, at url: URL) -> List<Element> {
+        guard FileManager.default.fileExists(atPath: url.path) else { return .holding([]) }
+        return read([Element].self, from: url).map { .holding($0) } ?? .unreadable
     }
 
     private func write(_ value: some Encodable, to url: URL) throws {

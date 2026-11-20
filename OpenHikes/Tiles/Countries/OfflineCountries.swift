@@ -115,42 +115,6 @@ final class OfflineCountries {
 
     nonisolated deinit { /* intentionally empty */ }
 
-    /// The app's: the OpenHikes tile server, the background session, the
-    /// archives `TileCache.shared` draws from and the standard defaults. A
-    /// suite's launch has none of them, and lists nothing, unless a UI
-    /// scenario names a stand-in list (``SeededOfflineCountryServer``); even
-    /// then it has no session, so nothing downloads.
-    static func forThisLaunch() -> OfflineCountries {
-        guard !AppLaunchEnvironment.isRunningTests else {
-            return OfflineCountries(
-                store: OfflineCountryStore(directory: FileManager.default.temporaryDirectory),
-                server: seededServer(),
-                downloader: nil,
-                archives: nil
-            )
-        }
-        return OfflineCountries(
-            store: .applicationSupport(),
-            server: OfflineCountryServer.openHikes,
-            downloader: BackgroundCountryDownloader.shared,
-            archives: .shared,
-            defaults: .standard,
-            networkDecision: { TileCache.shared.networkDecision(for: .speculative) },
-            archivesDidChange: { TileCache.shared.notifyInteractiveFetchUnblocked() }
-        )
-    }
-
-    /// The stand-in list a UI scenario asked for, or `nil` for every launch
-    /// that did not — which is every launch a person could make.
-    private static func seededServer() -> (any OfflineCountryServing)? {
-        #if DEBUG
-        SeededOfflineCountryServer.Scenario(argument: AppLaunchEnvironment.offlineCountriesScenarioName)
-            .map { SeededOfflineCountryServer(scenario: $0) }
-        #else
-        nil
-        #endif
-    }
-
     /// Whether this launch can list and download areas at all.
     var isAvailable: Bool { server != nil }
 
@@ -395,7 +359,12 @@ final class OfflineCountries {
 
 extension OfflineCountries {
     /// Opens what is downloaded, picks up what was coming down, and sweeps
-    /// what nothing owns. Once a launch.
+    /// what nothing owns. Once a launch, unless the index or the list of
+    /// downloads is there and cannot be read: then nothing is opened,
+    /// resumed or swept, because what a launch cannot read it cannot call
+    /// unowned, and the next call starts again. The model asks again each
+    /// time a scene becomes active, by when a device that was locked since
+    /// it restarted has been unlocked.
     func start() async {
         guard !hasStarted, let archives else { return }
         hasStarted = true
@@ -404,7 +373,13 @@ extension OfflineCountries {
         } catch {
             Self.logger.error("Countries directory: \(String(describing: error), privacy: .public)")
         }
-        let records = store.installed()
+        guard case let .holding(records) = store.index(),
+              case let .holding(waiting) = store.downloadsUnderWay()
+        else {
+            Self.logger.error("The countries' lists cannot be read; leaving the directory as it is")
+            hasStarted = false
+            return
+        }
         installed = Dictionary(records.map { ($0.country.id, $0) }, uniquingKeysWith: { first, _ in first })
         // Megabytes of outlines, so read off the main actor; and a list
         // fetched while it was read is newer.
@@ -418,11 +393,13 @@ extension OfflineCountries {
             archives.replace(with: opened)
             if !records.isEmpty { archivesDidChange() }
         }
-        await resumePending()
+        await resumePending(waiting)
         // After the recovery, which may have installed what landed while the
         // app was away: swept against the records from before it, that would
         // go with everything nothing else owns.
-        await Self.sweep(store, keeping: Array(installed.values), pending: store.pending())
+        if case let .holding(stillWaiting) = store.downloadsUnderWay() {
+            await Self.sweep(store, keeping: Array(installed.values), pending: stillWaiting)
+        }
         reconcile()
     }
 
@@ -467,8 +444,7 @@ extension OfflineCountries {
         }
     }
 
-    private func resumePending() async {
-        let pending = store.pending()
+    private func resumePending(_ pending: [OfflineCountryStore.Pending]) async {
         guard !pending.isEmpty else { return }
         let running = await downloader?.running() ?? [:]
         for entry in pending {
