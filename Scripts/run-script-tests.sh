@@ -5461,6 +5461,18 @@ if expect_status 0 \
     pass
 fi
 
+head -c 40 "$countries_work/later.json" > "$countries_work/cut-short.json"
+run_script "offline-countries merge refuses a server manifest it cannot read, rather than starting from none" \
+    "$OPENHIKES_OFFLINE_COUNTRIES_BUILD/offline-countries" merge --server "$countries_work/cut-short.json" \
+    --build "$countries_work/later.json" --out "$countries_work/unread.json"
+if expect_status 1; then
+    if [[ -f "$countries_work/unread.json" ]]; then
+        fail "a merged manifest was written" "$(cat "$countries_work/unread.json")"
+    else
+        pass
+    fi
+fi
+
 rm -f "$countries_work/merged.json"
 run_script "offline-countries merge refuses a build earlier than the server's" \
     "$OPENHIKES_OFFLINE_COUNTRIES_BUILD/offline-countries" merge --server "$countries_work/later.json" \
@@ -5782,8 +5794,16 @@ basemap_etag="$(md5 -q "$STUB_PROTOMAPS/20261118.pmtiles" | xxd -r -p | md5 -q)-
 printf '%s' "$basemap_etag" > "$STUB_PROTOMAPS/20261118.pmtiles.etag"
 printf '%s' "00000000000000000000000000000000-1" > "$STUB_PROTOMAPS/20261117.pmtiles.etag"
 printf '%s' "$basemap_etag" > "$STUB_PROTOMAPS/20261119.pmtiles.etag"
-cat > "$STUB_PROTOMAPS/builds.json" <<'EOF'
-[{"key": "20261117.pmtiles", "size": 7, "version": "4.15.2"},
+# Two parts of 3 MiB and a byte could have been cut at 2 MiB or at 3.
+head -c $(( 3 * 1024 * 1024 + 1 )) /dev/zero > "$STUB_PROTOMAPS/20261116.pmtiles"
+printf '%s' "00000000000000000000000000000000-2" > "$STUB_PROTOMAPS/20261116.pmtiles.etag"
+printf 'archive' > "$STUB_PROTOMAPS/20261115.pmtiles"
+printf '%s' "$(md5 -q "$STUB_PROTOMAPS/20261115.pmtiles" | xxd -r -p | md5 -q)-1" \
+    > "$STUB_PROTOMAPS/20261115.pmtiles.etag"
+cat > "$STUB_PROTOMAPS/builds.json" <<EOF
+[{"key": "20261115.pmtiles", "size": 7, "version": "4.15.2"},
+ {"key": "20261116.pmtiles", "size": $(( 3 * 1024 * 1024 + 1 )), "version": "4.15.2"},
+ {"key": "20261117.pmtiles", "size": 7, "version": "4.15.2"},
  {"key": "20261118.pmtiles", "size": 7, "version": "4.15.2"},
  {"key": "20261119.pmtiles", "size": 9, "version": "5.0.0"}]
 EOF
@@ -5839,6 +5859,29 @@ if expect_status 1 \
         pass
     fi
 fi
+
+run_script "vector-archives basemap refuses a build whose parts could have been cut at more than one size" \
+    "$vector_archives" basemap 20261116
+if expect_status 1 \
+    && expect_contains "$output" "parts could each be 2 to 3 MiB" "the error" \
+    && expect_absent "$calls" "-C -" "the requests" \
+    && expect_absent "$calls" "?uploads" "the requests"; then
+    pass
+fi
+
+# The bucket already holds that day's name with other bytes, which would
+# refuse the copy only once it was downloaded.
+printf 'others' > "$STUB_BUCKET/planet-20261115.pmtiles"
+run_script "vector-archives basemap refuses a name the bucket holds other bytes under, before downloading" \
+    "$vector_archives" basemap 20261115
+if expect_status 1 \
+    && expect_contains "$output" "already has planet-20261115 as $(md5 -q "$STUB_BUCKET/planet-20261115.pmtiles")" \
+        "the error" \
+    && expect_absent "$calls" "-C -" "the requests" \
+    && expect_absent "$calls" "?uploads" "the requests"; then
+    pass
+fi
+rm "$STUB_BUCKET/planet-20261115.pmtiles"
 
 run_script "vector-archives basemap refuses a day Protomaps built in a schema the app does not read" \
     "$vector_archives" basemap 20261119
@@ -5930,6 +5973,21 @@ if expect_status 0 \
     pass
 fi
 
+# Naming an archive the list already has, as a step back would, keeps its
+# own schema and zoom: given the head's, it would be drawn by builds of a
+# schema it is not, in place of the one they read.
+run_script "vector-archives use keeps the schema of an archive the list already has" \
+    "$vector_archives" use planet-20261001
+if expect_status 0 \
+    && expect_contains "$output" "planet-20261001 heads the basemaps at revision 4" "the output"; then
+    expected_basemaps="$(printf '%s\n' \
+        '    { "name": "planet-20261001", "schema": 3, "maximumZoom": 14 },' \
+        '    { "name": "planet-20261118", "schema": 4, "maximumZoom": 15 }')"
+    if expect_contains "$(cat "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST")" "$expected_basemaps" "the manifest"; then
+        pass
+    fi
+fi
+
 # An archive already first still drops one of its generation behind it,
 # which every build passes over for it: the manifest of an extras build kept
 # listed while the countries were cut from it.
@@ -5994,8 +6052,10 @@ cp "$bucket_work/before.json" "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST"
 # country, of which prune deletes the one neither names alone.
 sed 's/"extras-20261120"/"extras-20261119"/' "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST" > "$STUB_SERVED_MANIFEST"
 mkdir -p "$STUB_BUCKET/countries"
-for key in planet-20261001.pmtiles planet-20261117.pmtiles extras-20261119.pmtiles extras-20261120.pmtiles \
-    manifest.json countries/SI-20261117.pmtiles; do
+# A later basemap neither manifest names yet is an upload on its way to a
+# `use`, perhaps in another checkout, and is kept with it.
+for key in planet-20261001.pmtiles planet-20261117.pmtiles planet-20261125.pmtiles extras-20261118.pmtiles \
+    extras-20261119.pmtiles extras-20261120.pmtiles manifest.json countries/SI-20261117.pmtiles; do
     printf 'bytes' > "$STUB_BUCKET/$key"
 done
 run_script "vector-archives prune --dry-run deletes nothing" "$vector_archives" prune --dry-run
@@ -6005,13 +6065,16 @@ if expect_status 0 \
     pass
 fi
 
-run_script "vector-archives prune deletes the archives at the bucket's root that neither manifest names" \
+run_script "vector-archives prune deletes the archives the server has moved past that neither manifest names" \
     "$vector_archives" prune
 if expect_status 0 \
-    && expect_contains "$output" "deleted planet-20261117.pmtiles" "the output"; then
+    && expect_contains "$output" "deleted planet-20261117.pmtiles" "the output" \
+    && expect_contains "$output" "deleted extras-20261118.pmtiles" "the output" \
+    && expect_contains "$output" "kept planet-20261125.pmtiles (5 bytes): the server names no later archive of its kind" \
+        "the output"; then
     remaining="$(cd "$STUB_BUCKET" && find . -type f | sed 's|^\./||' | LC_ALL=C sort | tr '\n' ' ')"
     kept="countries/SI-20261117.pmtiles extras-20261119.pmtiles extras-20261120.pmtiles manifest.json"
-    if [[ "$remaining" != "$kept planet-20261001.pmtiles planet-20261118.pmtiles " ]]; then
+    if [[ "$remaining" != "$kept planet-20261001.pmtiles planet-20261118.pmtiles planet-20261125.pmtiles " ]]; then
         fail "the bucket holds the wrong archives afterwards" "$remaining"
     else
         pass

@@ -308,9 +308,15 @@ extension Tool {
             OfflineCountryManifest.self,
             from: Data(contentsOf: URL(fileURLWithPath: options.required("build")))
         )
+        // No file is a server with no manifest yet. One that does not read is
+        // an error: taken as empty, the merge would write back this build's
+        // countries alone, and drop every other one from the server's list.
         let serverPath = options.required("server")
-        var merged = (try? decoder.decode(OfflineCountryManifest.self, from: Data(contentsOf: URL(fileURLWithPath: serverPath))))
-            ?? OfflineCountryManifest(version: OfflineCountryManifest.currentVersion, countries: [])
+        var merged = if FileManager.default.fileExists(atPath: serverPath) {
+            try decoder.decode(OfflineCountryManifest.self, from: Data(contentsOf: URL(fileURLWithPath: serverPath)))
+        } else {
+            OfflineCountryManifest(version: OfflineCountryManifest.currentVersion, countries: [])
+        }
         for country in built.countries {
             if let listed = merged.countries.first(where: { $0.id == country.id }), listed.build > country.build {
                 fail("the server lists build \(listed.build) of \(country.id), later than this \(country.build)")

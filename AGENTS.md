@@ -1284,10 +1284,10 @@ a change to recording, the map, the sheet or the render path; the PR template,
     4. `Scripts/offline-countries.sh publish` cuts every area again from the
        new archives and puts it up (*The offline countries*).
     5. `prune` in both scripts deletes what the server has moved past, once
-       the apps have read the new manifests: the archives neither manifest
-       names, and the country files of a build earlier than the one listed
-       for their area. A country file not listed yet may be an upload's on
-       its way, so it stays.
+       the apps have read the new manifests: an archive neither manifest
+       names that is earlier than the latest of its kind the server names,
+       and a country file of a build earlier than the one listed for its
+       area. Anything later may be an upload on its way, so it stays.
 
     `OPENHIKES_R2_MIB_PER_SECOND` caps how fast any of them sends to the
     bucket, so a world of uploads leaves the connection usable.

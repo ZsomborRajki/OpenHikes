@@ -24,13 +24,14 @@
 # or keeps it there, and raises `revision` above the server's, once however
 # many archives it names before the next publish: a basemap (`planet-…`) of
 # the schema of the one it replaces, extras (`extras-…`) of the generation of
-# the ones they replace, unless --schema or --generation says otherwise. It
-# drops what no build would draw from any more, the archives behind it of the
-# same schema or of the same or a later generation, and keeps the first of
-# each other one for the builds that read only that. Then `publish`, and
-# commit the file. It edits the manifest this checkout has, so it refuses one
-# behind the server's: one of the server's revision that is not the server's
-# file, or of a lower one.
+# the ones they replace, unless --schema or --generation says otherwise or the
+# list already has the archive, which keeps its own. It drops what no build
+# would draw from any more, the archives behind it of the same schema or of
+# the same or a later generation, and keeps the first of each other one for
+# the builds that read only that. Then `publish`, and commit the file. It
+# edits the manifest this checkout has, so it refuses one behind the
+# server's: one of the server's revision that is not the server's file, or of
+# a lower one.
 #
 # `check` asks the server for every archive the manifest names, and fails on
 # any it does not have: an app told to draw from one would fall back to
@@ -39,13 +40,14 @@
 # `manifest.json`, and reads it back through the server.
 #
 # `prune` deletes every archive at the bucket's root that neither the server's
-# manifest nor this one names, so an archive uploaded and not yet published is
-# kept, and deletes nothing unless both read whole. An archive leaves the
-# manifest before it leaves the bucket: an app that asks for a deleted one
-# gets a 410, reads the manifest again and moves, so prune once the apps have
-# had the publish, or at once while no build that reads the server is in
-# anybody's hands. A build from before the manifest (TestFlight 1.6 (1)) names
-# its archives in code and never moves.
+# manifest nor this one names and that is earlier than the latest of its kind
+# the server names, so an archive uploaded and not yet named by any `use` is
+# kept, and deletes nothing unless both manifests read whole. An archive
+# leaves the manifest before it leaves the bucket: an app that asks for a
+# deleted one gets a 410, reads the manifest again and moves, so prune once
+# the apps have had the publish, or at once while no build that reads the
+# server is in anybody's hands. A build from before the manifest (TestFlight
+# 1.6 (1)) names its archives in code and never moves.
 #
 # It signs with R2's S3 keys (Scripts/lib/r2.sh), read from OPENHIKES_R2_ENV
 # (default ~/.config/openhikes/r2-openhikes-tiles.env). It is a development
@@ -194,15 +196,27 @@ basemap() {
   [[ "$etag" =~ ^[0-9a-f]{32}-([0-9]+)$ ]] \
     || die "$key's ETag ($etag) is not a multipart one, so the copy could not be held to it"
   parts="${BASH_REMATCH[1]}"
-  # The part size Protomaps uploaded in, in whole MiB, as the parts' count
-  # allows only one of.
-  local mib=$(( 1024 * 1024 )) part_mib
+  # The part size Protomaps uploaded in, in whole MiB: the one size that cuts
+  # the file into exactly that many parts, from the smallest that holds it in
+  # that many to the largest that still needs the last. Hundreds of parts
+  # leave one size; a count that several fit cannot say which, and a wrong
+  # guess would show only once the whole copy was sent, so it is refused.
+  local mib=$(( 1024 * 1024 )) part_mib largest
   part_mib=$(( (size + parts * mib - 1) / (parts * mib) ))
-  (( (size + part_mib * mib - 1) / (part_mib * mib) == parts )) \
-    || die "$key's $parts parts are no whole number of MiB each"
+  largest="$part_mib"
+  (( parts == 1 )) || largest=$(( (size - 1) / ((parts - 1) * mib) ))
+  (( part_mib <= largest )) || die "$key's $parts parts are no whole number of MiB each"
+  (( part_mib == largest )) \
+    || die "$key's $parts parts could each be $part_mib to $largest MiB, so the copy could not be cut as Protomaps' was"
+  # A name already taken by other bytes, or a bucket that will not answer,
+  # stops the copy before the download rather than after it.
   r2_load_keys
-  if [[ "$(r2_etag "$name.pmtiles")" == "$etag" ]]; then
+  local existing
+  existing="$(r2_etag "$name.pmtiles")" || exit 1
+  if [[ "$existing" == "$etag" ]]; then
     echo "vector-archives: $R2_BUCKET already has $name as $etag"
+  elif [[ -n "$existing" ]]; then
+    die "$R2_BUCKET already has $name as $existing, not as Protomaps' $etag; it is never replaced in place"
   else
     local copy="$ARCHIVES/$name.pmtiles"
     download "$PROTOMAPS/$key" "$copy" "$size"
@@ -273,14 +287,20 @@ bring it up to the server's (curl -o '$MANIFEST' $SERVER/manifest.json), then us
   esac
   local zoom_key=maximumZoom
   [[ "$list" == basemaps ]] || zoom_key=minimumZoom
-  local level zoom
-  level="${override:-$(value "$list.0.$key" "$MANIFEST")}" || die "$MANIFEST has no $list to take the $key from"
-  zoom="$(value "$list.0.$zoom_key" "$MANIFEST")" || die "$MANIFEST has no $list to take the $zoom_key from"
+  # An archive the list already has keeps its own schema or generation and
+  # zoom, as one stepped back to would; a new one takes the head's, which it
+  # replaces.
+  local count index from=0 level zoom
+  count="$(value "$list" "$MANIFEST")" || die "$MANIFEST has no $list"
+  for (( index = 0; index < count; index++ )); do
+    [[ "$(value "$list.$index.name" "$MANIFEST")" != "$name" ]] || { from="$index"; break; }
+  done
+  level="${override:-$(value "$list.$from.$key" "$MANIFEST")}" || die "$MANIFEST has no $list to take the $key from"
+  zoom="$(value "$list.$from.$zoom_key" "$MANIFEST")" || die "$MANIFEST has no $list to take the $zoom_key from"
   # The new archive first, then of the rest only the first of each schema
   # other than its own, or each generation earlier than its own: the builds
   # that would draw the rest draw the new one instead.
-  local entries=("$name$TAB$level$TAB$zoom") seen=" $level " count index other other_level
-  count="$(value "$list" "$MANIFEST")"
+  local entries=("$name$TAB$level$TAB$zoom") seen=" $level " other other_level
   for (( index = 0; index < count; index++ )); do
     other="$(value "$list.$index.name" "$MANIFEST")"
     other_level="$(value "$list.$index.$key" "$MANIFEST")"
@@ -343,16 +363,32 @@ prune() {
   local_names="$(manifest_names "$MANIFEST" "$MANIFEST")" || die "prune nothing without it"
   kept=" $(tr '\n' ' ' <<< "$live_names") $(tr '\n' ' ' <<< "$local_names") "
   r2_load_keys
-  local objects key bytes doomed=0
+  local objects key bytes doomed=0 spared=0
   objects="$(r2_list "" /)"
   for name in $live_names; do
     grep -q "^$name\.pmtiles$TAB" <<< "$objects" \
       || die "$SERVER's manifest names $name, which $R2_BUCKET does not hold; prune nothing until it does"
   done
+  # Of the rest, only an archive earlier than the latest of its kind the
+  # server names goes, by name, whose date sorts. A later one is an upload
+  # not yet named, perhaps by another checkout's `use`, and is kept.
+  local newest_planet newest_extras newest
+  newest_planet="$(awk '/^planet-/' <<< "$live_names" | LC_ALL=C sort | tail -n 1)"
+  newest_extras="$(awk '/^extras-/' <<< "$live_names" | LC_ALL=C sort | tail -n 1)"
   while IFS=$'\t' read -r key bytes; do
     [[ "$key" == *.pmtiles ]] || continue
     name="${key%.pmtiles}"
     [[ "$kept" != *" $name "* ]] || continue
+    case "$name" in
+      planet-*) newest="$newest_planet" ;;
+      extras-*) newest="$newest_extras" ;;
+      *) newest="" ;;
+    esac
+    if [[ -z "$newest" || "$(printf '%s\n%s\n' "$name" "$newest" | LC_ALL=C sort | tail -n 1)" == "$name" ]]; then
+      spared=$(( spared + 1 ))
+      echo "vector-archives: kept $key ($bytes bytes): the server names no later archive of its kind"
+      continue
+    fi
     doomed=$(( doomed + 1 ))
     if [[ "$dry_run" == true ]]; then
       echo "vector-archives: would delete $key ($bytes bytes)"
@@ -361,7 +397,8 @@ prune() {
       echo "vector-archives: deleted $key ($bytes bytes)"
     fi
   done <<< "$objects"
-  (( doomed > 0 )) || echo "vector-archives: $R2_BUCKET holds only archives a manifest names"
+  echo "vector-archives: $doomed archives the server has moved past$([[ "$dry_run" == true ]] \
+    && echo ", none deleted"), and $spared later ones no manifest names yet kept"
 }
 
 [[ $# -ge 1 ]] || usage
