@@ -206,6 +206,43 @@ nonisolated struct VectorTilePointStyle: Sendable {
     }
 }
 
+// MARK: - Named squares
+
+nonisolated extension VectorTilePointStyle {
+    /// How the name of a street or a square mapped as an area is written
+    /// inside it, as Carto's `roads-area-text-name` writes one
+    /// (`roads.mss`): in a street name's ink, from zoom 17, or from zoom 15
+    /// where the area covers 3,000 square pixels. The basemap gives no area,
+    /// only the zoom it first offers the name at, which it grades by the
+    /// area: one offered before zoom 15 is taken for large enough.
+    /// - Parameter firstZoom: the archive's `min_zoom` for the point.
+    static func square(z: Int, firstZoom: Double?) -> Look? {
+        let isLarge = (firstZoom ?? .infinity) < Double(squareNameZ)
+        guard z >= VectorTileStyle.z17 || (isLarge && z >= squareNameZ) else { return nil }
+        return Look(
+            lowPriority: false,
+            stationOrder: nil,
+            showsElevation: false,
+            icons: [],
+            text: Text(
+                size: squareNameSize,
+                color: VectorTileStyle.color("#000000"),
+                halo: VectorTileLabelStyle.halo,
+                haloRadius: 1,
+                offset: 0,
+                wrapWidth: 30,
+                lineSpacing: squareLineSpacing,
+                face: .regular,
+                opacity: 1
+            )
+        )
+    }
+
+    private static let squareNameZ = 15
+    private static let squareNameSize: CGFloat = 11
+    private static let squareLineSpacing: CGFloat = -1.7
+}
+
 // MARK: - Reading the table
 
 nonisolated extension VectorTilePointStyle {

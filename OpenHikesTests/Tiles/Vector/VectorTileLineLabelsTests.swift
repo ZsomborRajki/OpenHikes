@@ -340,3 +340,86 @@ struct VectorTileLineLabelsTests {
         return count
     }
 }
+
+// MARK: Ridges, lifts and bends
+
+extension VectorTileLineLabelsTests {
+    private func named(
+        _ kind: String,
+        in layer: String,
+        detail: String? = nil
+    ) -> VectorTileFixture.Layer {
+        var properties: [String: VectorTileFixture.Value] = ["kind": .string(kind), "name": .string("Name")]
+        if let detail { properties["kind_detail"] = .string(detail) }
+        let line = VectorTileFixture.line([(0, grid / 2), (grid, grid / 2)])
+        return .init(name: layer, features: [.init(type: .line, properties: properties, geometry: line)])
+    }
+
+    private func category(of layer: VectorTileFixture.Layer, at z: Int) throws -> VectorTileLabelStyle.LineCategory? {
+        let address = VectorTileAddress(z: z, x: 0, y: 0)
+        let decoded = try VectorTileFixture.decoded([layer])
+        return VectorTileLineLabels.lines(in: decoded, source: address, target: address, language: "en").first?.category
+    }
+
+    @Test("a ridge, an arête and a cliff carry their names from zoom 15, beside the line")
+    func ridgesAndCliffs() throws {
+        #expect(try category(of: named("ridge", in: "ridges"), at: 15) == .ridge)
+        #expect(try category(of: named("arete", in: "ridges"), at: 15) == .ridge)
+        #expect(try category(of: named("cliff", in: "earth"), at: 15) == .ridge)
+        #expect(try category(of: named("ridge", in: "ridges"), at: 14) == nil)
+        #expect(VectorTileLabelStyle.look(of: .ridge).offset > 0)
+        #expect(VectorTileLabelStyle.LineCategory.ridge.isPlacedAfterPoints)
+    }
+
+    @Test("a tertiary road is named from zoom 14, a zoom after a primary one")
+    func tertiaryRoadsWait() throws {
+        #expect(try category(of: named("major_road", in: "roads", detail: "tertiary"), at: 13) == nil)
+        #expect(try category(of: named("major_road", in: "roads", detail: "tertiary"), at: 14) == .tertiaryRoad)
+        #expect(try category(of: named("major_road", in: "roads", detail: "primary"), at: 13) == .majorRoad)
+    }
+
+    /// Until zoom 17 a lift's stations say which it is.
+    @Test("a lift is named along its line from zoom 17")
+    func liftsAreNamedLate() throws {
+        #expect(try category(of: named("aerialway", in: "roads", detail: "gondola"), at: 16) == nil)
+        #expect(try category(of: named("aerialway", in: "roads", detail: "gondola"), at: 17) == .aerialway)
+    }
+
+    @Test("a street's name follows Mapnik's 22.5 degrees from letter to letter, and water's Carto's 15")
+    func bends() {
+        #expect(VectorTileLabelStyle.look(of: .minorRoad).bend.isApproximatelyEqual(to: .pi / 8))
+        #expect(VectorTileLabelStyle.look(of: .stream).bend.isApproximatelyEqual(to: .pi / 12))
+        #expect(VectorTileLabelStyle.look(of: .river).bend.isApproximatelyEqual(to: .pi / 12))
+    }
+
+    /// “Versahltobelbach” above St. Anton: each letter was set on the
+    /// stream and then shifted sideways, which piled the letters up inside
+    /// every bend. Set along the line beside the stream, they keep their
+    /// advances.
+    @Test("a name beside a bending stream keeps its letters apart")
+    func offsetNameKeepsItsSpacing() {
+        // A stream that turns 10 degrees at each of its points, to the right.
+        var points = [CGPoint(x: 40, y: 100)]
+        var heading: CGFloat = 0
+        for _ in 0..<12 {
+            let last = points[points.count - 1]
+            points.append(CGPoint(x: last.x + 30 * cos(heading), y: last.y + 30 * sin(heading)))
+            heading += .pi / 18
+        }
+        let advances = [CGFloat](repeating: 10, count: 12)
+        let beside = MeasuredPath.offset(points, by: 16)
+
+        let letters = VectorTileLineLabels.letters(
+            along: beside,
+            advances: advances,
+            centeredAt: MeasuredPath(beside).length / 2,
+            maximumBend: VectorTileLabelStyle.waterNameBend
+        )
+
+        #expect(letters.count == advances.count)
+        for (letter, next) in zip(letters, letters.dropFirst()) {
+            let apart = hypot(next.center.x - letter.center.x, next.center.y - letter.center.y)
+            #expect(apart > 9, "a letter's advance, less only the corner cut between two of them")
+        }
+    }
+}

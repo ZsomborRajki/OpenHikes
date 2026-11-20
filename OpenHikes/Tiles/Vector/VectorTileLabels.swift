@@ -2,10 +2,11 @@
 //  VectorTileLabels.swift
 //  OpenHikes
 //
-//  The names of places, lakes and glaciers on a drawn tile. Each is in the
-//  app's language where the map has the name in it, and in the local one
-//  where it does not, which for a hamlet is always. Summits, huts and every
-//  other point are drawn with their icons, in ``VectorTilePoints``.
+//  The names of places, lakes, bays and glaciers on a drawn tile. Each is in
+//  the app's language where the map has the name in it, and in the local one
+//  where it does not, which for a hamlet is always. A long name is broken
+//  between words, as Carto breaks one. Summits, huts and every other point
+//  are drawn with their icons, in ``VectorTilePoints``.
 //
 //  Each tile places its own names, and never one that crosses its edge. Tiles
 //  are drawn one at a time from one archive tile each, so a name cut at an
@@ -37,6 +38,10 @@ nonisolated enum VectorTileLabels {
         let anchor: CGPoint
         /// Order within a category, lower first.
         let rank: Double
+        /// The size the name is set at, in the pixels of a 256-pixel tile,
+        /// where it is not its look's own: a lake's, which grows with the
+        /// lake (``VectorTileLabelStyle/waterSize(zoomsPastFirst:firstZoom:)``).
+        var size: CGFloat?
     }
 
     struct Placement: Equatable {
@@ -77,7 +82,8 @@ nonisolated enum VectorTileLabels {
                         category: category,
                         name: name,
                         anchor: point,
-                        rank: rank(of: feature, category: category)
+                        rank: rank(of: feature, category: category),
+                        size: size(of: feature, category: category, z: target.z)
                     ))
                 }
             }
@@ -116,6 +122,17 @@ nonisolated enum VectorTileLabels {
         }
     }
 
+    /// A lake's, a bay's or a glacier's size by how long the archive has
+    /// offered its name, and `nil` for every name set at its look's size.
+    private static func size(
+        of feature: MapboxVectorTile.Feature,
+        category: VectorTileLabelStyle.Category,
+        z: Int
+    ) -> CGFloat? {
+        guard category == .water || category == .glacier, let first = feature.number("min_zoom") else { return nil }
+        return VectorTileLabelStyle.waterSize(zoomsPastFirst: z - Int(first), firstZoom: Int(first))
+    }
+
     private static func precedes(_ lhs: Candidate, _ rhs: Candidate) -> Bool {
         if lhs.category != rhs.category { return lhs.category < rhs.category }
         if lhs.rank != rhs.rank { return lhs.rank < rhs.rank }
@@ -132,11 +149,13 @@ nonisolated enum VectorTileLabels {
     /// - Parameters:
     ///   - sizes: each candidate's name, in pixels.
     ///   - spacing: the room kept between two names, and from each edge.
+    ///   - occupied: the room taken before these names are placed.
     static func place(
         _ candidates: [Candidate],
         sizes: [CGSize],
         bounds: CGRect,
-        spacing: CGFloat
+        spacing: CGFloat,
+        occupied: [CGRect] = []
     ) -> [Placement] {
         let inner = bounds.insetBy(dx: spacing, dy: spacing)
         var placed: [Placement] = []
@@ -148,7 +167,8 @@ nonisolated enum VectorTileLabels {
                 width: size.width,
                 height: size.height
             )
-            let crowded = placed.contains { $0.frame.insetBy(dx: -spacing, dy: -spacing).intersects(frame) }
+            let reach = frame.insetBy(dx: -spacing, dy: -spacing)
+            let crowded = placed.contains { $0.frame.intersects(reach) } || occupied.contains { $0.intersects(reach) }
             if !crowded { placed.append(Placement(index: index, frame: frame)) }
         }
         return placed
@@ -158,23 +178,33 @@ nonisolated enum VectorTileLabels {
 
     /// The names placed on one tile, set in their fonts and ready to draw.
     struct Layout {
-        private let blocks: [InkedText]
+        private let blocks: [Block]
         let placements: [Placement]
 
         /// `candidates` set at `z` and placed inside `bounds`, with `unit`
-        /// pixels for each pixel of the style's 256-pixel tile.
-        init(_ candidates: [Candidate], z: Int, unit: CGFloat, bounds: CGRect, language: String) {
+        /// pixels for each pixel of the style's 256-pixel tile, clear of
+        /// `occupied`.
+        init(
+            _ candidates: [Candidate],
+            z: Int,
+            unit: CGFloat,
+            bounds: CGRect,
+            language: String,
+            occupied: [CGRect] = []
+        ) {
             var fonts = LabelFonts(language: language)
             blocks = candidates.map { candidate in
                 let look = VectorTileLabelStyle.look(of: candidate.category)
-                let font = fonts.font(size: look.size.value(at: z) * unit, face: look.face)
-                return InkedText(candidate.name, font: font, color: look.color, unit: unit)
+                let size = (candidate.size ?? look.size.value(at: z)) * unit
+                let font = fonts.font(size: size, face: look.face)
+                return Block(candidate.name, font: font, color: look.color, unit: unit)
             }
             placements = VectorTileLabels.place(
                 candidates,
-                sizes: blocks.map { CGSize(width: $0.width, height: $0.ascent + $0.descent) },
+                sizes: blocks.map(\.size),
                 bounds: bounds,
-                spacing: VectorTileLabelStyle.spacing * unit
+                spacing: VectorTileLabelStyle.spacing * unit,
+                occupied: occupied
             )
         }
 
@@ -184,12 +214,51 @@ nonisolated enum VectorTileLabels {
             context.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
             context.setLineJoin(.round)
             for placement in placements {
-                let name = blocks[placement.index]
-                let baseline = CGPoint(x: placement.frame.minX, y: placement.frame.minY + name.ascent)
-                name.drawHalo(at: baseline, context: context)
-                name.drawInk(at: baseline, context: context)
+                blocks[placement.index].draw(in: placement.frame, context: context)
             }
             context.restoreGState()
+        }
+    }
+
+    /// A place's name set in its look and broken between words where it is
+    /// wider than ``VectorTileLabelStyle/placeWrapEms`` of its size, as
+    /// Mapnik breaks one: “Saalfelden am Steinernen Meer” takes three lines.
+    private struct Block {
+        let lines: [InkedText]
+        /// Taken off each line's height after the first.
+        let squeeze: CGFloat
+
+        var size: CGSize {
+            CGSize(
+                width: lines.map(\.width).max() ?? 0,
+                height: lines.reduce(0) { $0 + $1.ascent + $1.descent } - squeeze * CGFloat(max(lines.count - 1, 0))
+            )
+        }
+
+        init(_ name: String, font: CTFont, color: CGColor, unit: CGFloat) {
+            let em = CTFontGetSize(font)
+            let broken = VectorTilePoints.wrapped(name, width: em * VectorTileLabelStyle.placeWrapEms) { line in
+                InkedText.width(of: line, font: font)
+            }
+            lines = broken.map { InkedText($0, font: font, color: color, unit: unit) }
+            squeeze = em * VectorTileLabelStyle.placeLineSqueeze
+        }
+
+        /// Each line centred in `frame`: every halo first, so none covers a
+        /// letter of the line above it.
+        func draw(in frame: CGRect, context: CGContext) {
+            for halo in [true, false] {
+                var top = frame.minY
+                for line in lines {
+                    let baseline = CGPoint(x: frame.midX - line.width / 2, y: top + line.ascent)
+                    if halo {
+                        line.drawHalo(at: baseline, context: context)
+                    } else {
+                        line.drawInk(at: baseline, context: context)
+                    }
+                    top += line.ascent + line.descent - squeeze
+                }
+            }
         }
     }
 }
@@ -246,6 +315,13 @@ nonisolated struct InkedText {
     func drawInk(at baseline: CGPoint, context: CGContext) {
         context.textPosition = baseline
         CTLineDraw(ink, context)
+    }
+
+    /// How wide `text` is in `font`, without setting it to draw.
+    static func width(of text: String, font: CTFont) -> CGFloat {
+        let key = NSAttributedString.Key(kCTFontAttributeName as String)
+        let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [key: font]))
+        return CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
     }
 }
 

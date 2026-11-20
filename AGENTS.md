@@ -1151,6 +1151,15 @@ a change to recording, the map, the sheet or the render path; the PR template,
     drawn largest first**, as Carto orders them, because the archive gives
     every area the same `sort_rank` too, and a residential area listed last
     would cover the parks inside it.
+  - **Only track is drawn as a railway.** The archive files every way with a
+    `railway` tag under `rail`, a station's outline and a turntable among
+    them, so the style lists the details that are track and draws no other.
+    A lift is listed by its kind too.
+  - **A park is the extras', never the basemap's.** The basemap files most
+    national parks under the kind it files a city park under, so its `park`
+    has no fill: the parks filled are the extras' `parks` layer, and the
+    borders of protected areas their `protected_areas` layer, stroked with
+    Carto's band inside each.
   - **The archive's landcover is ESA WorldCover's**, under CC BY 4.0, so the
     style credits it beside OpenStreetMap.
   - **Points are Carto's, read out of its style, never written by hand.**
@@ -1164,16 +1173,37 @@ a change to recording, the map, the sheet or the render path; the PR template,
     differently for an `access` its queries count as restricted — a private
     car park faded, a private toilet a zoom later — the table holds that look
     too, for whichever points the tile carries an `access` on.
+  - **Patterns are Carto's pictures, laid from the corner of the world**
+    (`VectorTilePatterns`). `Scripts/carto-points.sh` also copies every
+    picture Carto's `landcover.mss` and `water.mss` fill an area with, or lay
+    along a line, into the catalog as `carto-pattern-…`: a wood's trees by
+    their leaves, a
+    wetland's marks, scree, a quarry, a cemetery's graves, the red hatch over
+    military land, a ridge's dots. A tile draws the part of a pattern that
+    falls on its own ground, so two tiles carry one pattern across their
+    edge. Carto lays most patterns straight over the area's fill, where a
+    smaller area drawn after covers them, and the woods', wetlands' and
+    beaches' after all the ground and the water; the map keeps both orders.
+    A cliff's and an embankment's teeth are drawn along the line itself.
   - **The extras fill in what the archive leaves out** (`VectorTileSource.Extras`):
     car parks with their `access`, barriers and the fences, walls and hedges
     Carto draws, `man_made` points, offices, an information point's type, a
     vending machine's goods, waterfalls, every one-way street and path as a
     line of its own (`oneways`), and each named area's point with its size
-    (`area`).
+    (`area`). And what a hiker's map is read by: the ground the basemap has
+    no kind for (scree, heath, shingle, quarries, vineyards, camp sites,
+    danger areas, a square mapped as a relation), parks and the borders of
+    protected areas, every lift but
+    the cable cars with its stations, the light railways before zoom 14,
+    power lines, dams and weirs, breakwaters and groynes, ridges, cliffs and
+    embankments in the direction they were mapped, the lines cut through a forest, trees and
+    their rows, the names of buildings, and the points Carto draws before
+    the basemap has them: huts and stations with the tags Carto files them
+    by, summits, springs, passes and fords.
     `Scripts/vector-extras.sh` builds them from the planet (`osmium` with
-    `Scripts/lib/vector-extras.filter`, and the named areas through
-    `Scripts/lib/vector-extras-areas.filter` and then a cut for a name, then
-    Planetiler with `Scripts/lib/vector-extras.yml`) into
+    `Scripts/lib/vector-extras.filter`, and the named areas and buildings
+    through `Scripts/lib/vector-extras-areas.filter` and then a cut for a
+    name, then Planetiler with `Scripts/lib/vector-extras.yml`) into
     `extras-<planet day>-<hour>.pmtiles`,
     named as the archive's layers are so a tile of each merges into one, and
     `Scripts/vector-extras.sh upload` puts them beside the basemap under a new
@@ -1186,15 +1216,53 @@ a change to recording, the map, the sheet or the render path; the PR template,
     extras it failed to get, a tile is provisional
     (`VectorTileClient.Drawing.provisional`): held in memory alone, as stale
     coverage is, and drawn again after that, never filed for a week.
+  - **Where both archives have a point for one thing, the extras' is drawn.**
+    The basemap files a hut tagged as a restaurant as the restaurant, and a
+    castle tagged as an attraction as the attraction; the extras file each as
+    Carto does, and the basemap's point of the same name at the same spot is
+    left out (`VectorTilePoints.supersedingKinds`). A feature merged from the
+    extras says so (`MapboxVectorTile.Feature.isFromExtras`).
+  - **What the basemap drops of an area comes back by its id**
+    (`VectorTileAreaDetails`). Carto picks a wood's trees by its `leaf_type`,
+    a wetland's fill and marks by its `wetland`, a beach's dots by its
+    `surface` and a cemetery's graves by its `religion`, none of which the
+    basemap keeps. Sending the areas again made the extras five times the
+    size, for the woods alone. The basemap gives every feature the id
+    OpenStreetMap does, with a 2 for a way or a 3 for a relation above bit
+    44, so the extras' `area_details` layer gives the same id with the tag's
+    value, on an area cut rough that only carries the id to the tile and is
+    never drawn. An area the extras say nothing of is drawn as Carto draws
+    one with no such tag.
+  - **Water that is not always there is rubbed out of the basemap's.** The
+    basemap draws an intermittent stream or lake as any water, and joins a
+    stream's pieces whether or not each runs all year, so no feature of its
+    own can be drawn broken. The extras' `intermittent` layer has the ways
+    and lakes that are, and the map rubs the gaps of Carto's dashes out of
+    the waterways, and the lakes out of the water, each in a layer of its
+    own so the ground under them stays, then lays Carto's lines over the
+    lakes.
+  - **A cliff's teeth need the extras' line.** They go down the side that
+    falls away, the right of the way the cliff was mapped, and the basemap's
+    build may turn a line around. The basemap's cliff is drawn, plain, only
+    on a tile the extras gave no cliffs for.
   - **Names are drawn into the tile.**
     - **Place names** (`VectorTileLabels`): places, lakes and glaciers.
       Summits, passes and huts are points, named under their icons with their
       heights (`VectorTilePoints`).
-    - **Names along lines** (`VectorTileLineLabels`): streets, paths, cable
-      cars and waterways, letter by letter, upright, following gentle bends.
-      Pieces with the same name are joined end to end first. A repeat stands
-      on marks measured from the line's middle, so the tiles cut from one
-      archive tile agree on them.
+    - **Names along lines** (`VectorTileLineLabels`): streets, paths, lifts,
+      waterways, ridges and cliffs, letter by letter, upright, following
+      bends no sharper than Mapnik follows them (22.5 degrees from one letter
+      to the next, 15 for water). Pieces with the same name are joined end to
+      end first. A repeat stands on marks measured from the line's middle, so
+      the tiles cut from one archive tile agree on them. A name written
+      beside its line, a stream's or a ridge's, is set along the line that
+      runs beside it (`MeasuredPath.offset`), never shifted letter by letter,
+      which crowds the letters inside every bend.
+    - **Road numbers** (`VectorTileShields`): a plate in its road's colors, a
+      motorway's from zoom 10 down to a tertiary road's from 13. A plate
+      stands where its road crosses a grid laid over the whole world, which
+      every tile works out alike, so a road is numbered evenly however it is
+      cut into tiles. The grid is half Carto's spacing, for a phone's screen.
     - **One-way arrows** (`VectorTileArrows`) from zoom 16, on a way tagged
       `oneway` `yes` or `-1`, or a roundabout not tagged otherwise. They are
       drawn along the extras' ways, never the archive's roads: its build
@@ -1205,6 +1273,11 @@ a change to recording, the map, the sheet or the render path; the PR template,
       spaced as Mapnik spaces a line's text, so a short one-way path has one.
     - **House numbers** (`VectorTileHouseNumbers`) from zoom 17, from the
       archive's address points, which carry `addr_housenumber` alone.
+    - **Names of buildings** (`VectorTileBuildingNames`) from zoom 14 once a
+      building covers 3,000 square pixels, and every one from zoom 17, from
+      the extras' point inside each named building. Most are named for the
+      shop or the hut in them, whose own point is named already: a building
+      leaves its name to a point of the same name standing by it.
     - **Names of areas** (`VectorTilePoints`) by the area's size, as Carto
       names them: a forest or a national park from zoom 8 once it covers
       3,000 square pixels, a park from 10, an island from 4, larger the
@@ -1223,15 +1296,23 @@ a change to recording, the map, the sheet or the render path; the PR template,
       not, because keeping the edges as areas made the extras half as large
       again, for names few of the tiles an edge crosses had room for.
     - **Room is claimed in Carto's layer order**: place names, the stations
-      (each one's icon, then its name), the points' icons, the names along
-      streets and paths, then their one-way arrows, the points' names and
-      the areas', the house numbers, the names along water, and last the
-      low-priority icons and names (benches, bins, wayside crosses).
+      (each one's icon, then its name), the points' icons, the road numbers,
+      the names along streets and paths, then their one-way arrows, the
+      names of the summits and passes by their height, the lakes', bays' and
+      glaciers', every other point's and the areas', the localities', the
+      buildings', the house numbers, the names along water and ridges, and
+      last the low-priority icons and names (benches, bins, wayside
+      crosses). So a summit keeps its name where a lake's would cover it.
+    - **A place's name comes in at Carto's zoom**: a hamlet's from 14, a
+      farm's from 15, and a locality's, a spot nobody lives at, from 16 and
+      after the points, so a gully's name never takes a summit's room.
     - Each name is in the app's language where the tile carries it, and in
       the local one where not.
     - **A name never crosses its tile's edge**, because the tile beside it
       could not finish it. It moves inward, moves along its line, or waits
-      for a deeper zoom.
+      for a deeper zoom. A point's name that the edge would move back over
+      the point's own icon is written on the icon's other side, above a
+      summit at the foot of its tile, where Carto would write it below.
     - **Every tile ranks names the same way** (`VectorTileLabelStyle.Category`,
       then the archive's own ranking), so a zoom reads alike wherever it is
       drawn.
@@ -1428,15 +1509,15 @@ owner, on the main actor.
   goes as far as the download button and the hike tile's dialog, and never
   further, because nothing would download.
 - **Deployment state, checked 2026-11-20.** The bucket holds every area of
-  build `20261119`, cut from `planet-20261118` and `extras-20261119-18`: 381
+  build `20261120`, cut from `planet-20261118` and `extras-20261120-00`: 381
   of them (234 countries, and the 51 states, 13 provinces and 83 regions of
-  the three split ones), 1,524 files and 155.6 GB, each at the size the
-  manifest lists and uploaded under the SHA-256 it lists, and no other
-  country file. Beside them it holds those two archives, `extras-20261120-00`,
-  and the map's manifest at revision 6, which names the newer extras first,
-  and nothing else. So the areas are one extras build behind the map. The
-  Worker on `tiles.openhikes.app` serves the manifests, the archives and the
-  files, with ranges.
+  the three split ones), 1,524 files and 162.6 GB, each at the size the
+  manifest lists and uploaded under the SHA-256 it lists. Build `20261119`'s
+  1,524 files, 155.6 GB, are still beside them, listed by no manifest, until
+  `Scripts/offline-countries.sh prune` is run. Beside the areas the bucket
+  holds those two archives and the map's manifest at revision 7, which names
+  them, and nothing else. The Worker on `tiles.openhikes.app` serves the
+  manifests, the archives and the files, with ranges.
 
 ### Accessibility
 

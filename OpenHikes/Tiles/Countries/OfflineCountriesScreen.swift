@@ -36,6 +36,7 @@ struct OfflineCountriesScreen: View {
             state: list,
             near: near,
             selectedID: selectedID,
+            isOverMap: true,
             hasFullHeight: presentation.isFullHeight,
             onSearch: presentation.makeRoomToSearch
         ) { country in

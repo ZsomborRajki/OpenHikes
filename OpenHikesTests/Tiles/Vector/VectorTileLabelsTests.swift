@@ -363,3 +363,108 @@ struct VectorTileLabelsTests {
         return count
     }
 }
+
+// MARK: Localities, bays and long names
+
+extension VectorTileLabelsTests {
+    private func place(_ detail: String, _ name: String) -> VectorTileFixture.Feature {
+        point(["kind": .string("locality"), "kind_detail": .string(detail), "name": .string(name)])
+    }
+
+    private func categories(at z: Int) throws -> [VectorTileLabelStyle.Category] {
+        let places = [place("hamlet", "Hinterbrand"), place("farm", "Schapbachhof"), place("locality", "Kessel")]
+        let layers: [VectorTileFixture.Layer] = [.init(name: "places", features: places)]
+        let address = VectorTileAddress(z: z, x: 0, y: 0)
+        let decoded = try VectorTileFixture.decoded(layers)
+        return VectorTileLabels
+            .candidates(in: decoded, source: address, target: address, bounds: bounds, language: "en")
+            .map(\.category)
+    }
+
+    /// Ben Nevis carried two dozen gully names at zoom 13, and two summits
+    /// lost theirs to them.
+    @Test("a hamlet is named from zoom 14, a farm from 15 and a locality from 16")
+    func smallPlacesWait() throws {
+        #expect(try categories(at: 13).isEmpty)
+        #expect(try categories(at: 14) == [.hamlet])
+        #expect(try categories(at: 15) == [.hamlet, .dwelling])
+        #expect(try categories(at: 16) == [.hamlet, .dwelling, .locality])
+    }
+
+    @Test("a locality waits for every point's name, a lake and a glacier for the summits', and a place for nothing")
+    func whenANameClaimsItsRoom() {
+        #expect(VectorTileLabelStyle.Category.locality.turn == .afterPoints)
+        #expect(VectorTileLabelStyle.Category.water.turn == .afterSummits)
+        #expect(VectorTileLabelStyle.Category.glacier.turn == .afterSummits)
+        #expect(VectorTileLabelStyle.Category.hamlet.turn == .first)
+        #expect(VectorTileLabelStyle.Category.town.turn == .first)
+    }
+
+    @Test("a name keeps clear of the room taken before it")
+    func nameKeepsClearOfTakenRoom() {
+        let spot = CGPoint(x: 256, y: 256)
+        let name = [VectorTileLabels.Candidate(category: .locality, name: "Kessel", anchor: spot, rank: 0)]
+        let size = [CGSize(width: 80, height: 20)]
+
+        let free = VectorTileLabels.place(name, sizes: size, bounds: bounds, spacing: 4)
+        let taken = VectorTileLabels.place(
+            name,
+            sizes: size,
+            bounds: bounds,
+            spacing: 4,
+            occupied: [CGRect(x: 250, y: 250, width: 12, height: 12)]
+        )
+
+        #expect(free.count == 1)
+        #expect(taken.isEmpty)
+    }
+
+    @Test("a bay and a strait are named as a lake is; a sea is not")
+    func baysAndStraits() {
+        typealias Category = VectorTileLabelStyle.Category
+        #expect(Category.water(kind: "bay", detail: nil) == .water)
+        #expect(Category.water(kind: "strait", detail: nil) == .water)
+        #expect(Category.water(kind: "water", detail: "lake") == .water)
+        #expect(Category.water(kind: "sea", detail: nil) == nil)
+        #expect(Category.water(kind: "ocean", detail: nil) == nil)
+        #expect(Category.water(kind: "water", detail: "river") == nil)
+        #expect(Category.poi(kind: "bay") == .water)
+    }
+
+    @Test("a lake's name grows with the zooms since the archive first offered it, a pond's less")
+    func waterSizes() {
+        let lake = (0...3).map { VectorTileLabelStyle.waterSize(zoomsPastFirst: $0, firstZoom: 10) }
+        let pond = (0...3).map { VectorTileLabelStyle.waterSize(zoomsPastFirst: $0, firstZoom: 15) }
+
+        #expect(lake == [10, 12, 15, 15])
+        #expect(pond == [10, 12, 12, 12])
+        #expect(VectorTileLabelStyle.waterSize(zoomsPastFirst: -1, firstZoom: 10) == 10)
+    }
+
+    @Test("a lake offered since two zooms back is a candidate with the larger size")
+    func lakeCandidateSize() throws {
+        let first = VectorTileFixture.Value.double(Double(tile.z - 2))
+        let lake = point(["kind": .string("water"), "name": .string("Königssee"), "min_zoom": first])
+        let layers: [VectorTileFixture.Layer] = [.init(name: "water", features: [lake])]
+
+        #expect(try candidates(layers).map(\.size) == [15])
+    }
+
+    /// “Saalfelden am Steinernen Meer” was one line, half a tile wide.
+    @Test("a long name takes less width and more height than its one line would")
+    func longNameIsBroken() throws {
+        let spot = CGPoint(x: 256, y: 256)
+        let long = [candidate("Saalfelden am Steinernen Meer", at: spot)]
+        let short = [candidate("Saalfelden", at: spot)]
+
+        let broken = try #require(layout(long).placements.first?.frame)
+        let one = try #require(layout(short).placements.first?.frame)
+
+        #expect(broken.height > one.height * 1.5, "two lines or three")
+        #expect(broken.width < one.width * 2)
+    }
+
+    private func layout(_ candidates: [VectorTileLabels.Candidate]) -> VectorTileLabels.Layout {
+        VectorTileLabels.Layout(candidates, z: 12, unit: 2, bounds: bounds, language: "en")
+    }
+}

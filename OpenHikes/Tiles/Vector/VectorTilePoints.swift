@@ -24,6 +24,12 @@
 //  one OpenStreetMap area by Planetiler; where the extras give an area's
 //  point, the basemap's is left out.
 //
+//  The extras also give the points the basemap files unlike Carto, or later:
+//  a hut the basemap takes for a restaurant, a castle it takes for an
+//  attraction, a station it keeps without the tag that says it is a
+//  subway's. There too the basemap's point of the same name at the same spot
+//  is left out (``Superseded``).
+//
 //  As with every name, a point belongs to the tile its point lies in, and
 //  what is drawn for it, a name's halo included, never crosses the tile's
 //  edge: near the edge it is moved inward, by no more than it would have
@@ -71,6 +77,10 @@ nonisolated enum VectorTilePoints {
         let x: CGFloat
         let y: CGFloat
 
+        /// Whether the point is one Carto orders by height, and has one: a
+        /// summit, a volcano, a saddle or a pass.
+        var isByHeight: Bool { height > -.infinity }
+
         static func < (lhs: Self, rhs: Self) -> Bool {
             let (left, right) = ((lhs.order, -lhs.height, -lhs.pixels), (rhs.order, -rhs.height, -rhs.pixels))
             guard left == right else { return left < right }
@@ -79,7 +89,23 @@ nonisolated enum VectorTilePoints {
     }
 
     /// The kinds Carto orders by height.
-    private static let rankedByHeight: Set<String> = ["peak", "volcano", "saddle"]
+    private static let rankedByHeight: Set<String> = ["peak", "volcano", "saddle", "mountain_pass"]
+
+    /// The kinds of point the vector extras file as Carto files them where
+    /// the basemap's own point for the same thing may say otherwise, so the
+    /// extras' stands in its place: a mountain hut, which the basemap files
+    /// by its `amenity` where it has one; Carto's stops, which the basemap
+    /// keeps without their `station` tag; and the historic kinds the basemap
+    /// files as an attraction where they are tagged as one too.
+    static let supersedingKinds: Set<String> = [
+        "alpine_hut", "wilderness_hut", "station", "halt", "tram_stop",
+        "castle", "fort", "manor", "monument", "memorial", "archaeological_site", "city_gate", "wayside_cross",
+        "wayside_shrine",
+    ]
+
+    /// The basemap's kind for a named street or square mapped as an area,
+    /// whose name Carto writes inside it (``VectorTilePointStyle/square(z:firstZoom:)``).
+    static let squareKind = "pedestrian"
 
     // MARK: Choosing
 
@@ -99,14 +125,17 @@ nonisolated enum VectorTilePoints {
         let side = CGFloat(VectorTileRasterizer.pixelSize)
         let bounds = CGRect(x: 0, y: 0, width: side, height: side)
         let geometry = VectorTileGeometry(extent: layer.extent, source: source, target: target)
-        let areas = SizedAreas(layer.features, geometry: geometry)
+        let superseded = Superseded(layer.features, geometry: geometry)
         var found: [Candidate] = []
         for feature in layer.features where feature.type == .point {
-            guard let kind = feature.string("kind"), !areas.repeats(feature) else { continue }
+            guard let kind = feature.string("kind"), !superseded.repeats(feature) else { continue }
             let name = VectorTileLabels.name(of: feature, language: language)
             let detail = feature.string("kind_detail")
             let pixels = feature.number(sizeKey).map { $0 * pow(4, Double(target.z)) }
-            guard let look = style.look(
+            let square = kind == squareKind && name != nil
+                ? VectorTilePointStyle.square(z: target.z, firstZoom: feature.number("min_zoom"))
+                : nil
+            guard let look = square ?? style.look(
                 kind: kind,
                 detail: detail,
                 named: name != nil,
@@ -141,36 +170,68 @@ nonisolated enum VectorTilePoints {
     /// 4 to the power of a zoom times it at that zoom.
     static let sizeKey = "area"
 
-    /// The areas the extras give with their sizes, by name and where they
-    /// stand, to tell the basemap's point for the same area.
-    private struct SizedAreas {
+    /// The points of the vector extras that stand in the basemap's place,
+    /// to tell the basemap's point for the same thing: an area the extras
+    /// give with its size, and a point of one of the ``supersedingKinds``.
+    /// The same OpenStreetMap element is the same thing, named or not; the
+    /// same name at the same spot is too, which on the live tiles has only
+    /// ever paired a point with its own element, and holds for a point
+    /// either archive gives without its id.
+    private struct Superseded {
+        private let elements: Set<UInt64>
         private let spots: [String: [CGPoint]]
         private let geometry: VectorTileGeometry
-        /// How far apart two points of one area may stand: two steps of the
+        /// How far apart two points of one thing may stand: two steps of the
         /// archive's grid. Both archives put it on the same step.
         private let reach: CGFloat
 
         init(_ features: [MapboxVectorTile.Feature], geometry: VectorTileGeometry) {
+            var ids: Set<UInt64> = []
             var found: [String: [CGPoint]] = [:]
-            for feature in features where feature.type == .point && feature.number(sizeKey) != nil {
+            for feature in features where feature.type == .point && Self.supersedes(feature) {
+                if feature.isFromExtras, let id = feature.id.flatMap(Self.basemapID(ofExtras:)) {
+                    ids.insert(id)
+                }
                 guard let name = feature.string("name") else { continue }
                 found[name, default: []] += geometry.points(of: feature)
             }
+            elements = ids
             spots = found
             self.geometry = geometry
             reach = 2 * geometry.scale
         }
 
-        /// Whether `feature` is the basemap's point for an area the extras
-        /// give: the same name at the same spot, with no size.
+        /// Whether `feature` is the basemap's point for a thing the extras
+        /// give in its place: the same element, or the same name at the same
+        /// spot, and itself neither sized nor the extras'.
         func repeats(_ feature: MapboxVectorTile.Feature) -> Bool {
-            guard feature.number(sizeKey) == nil, let name = feature.string("name"), let named = spots[name] else {
-                return false
-            }
+            guard !Self.supersedes(feature) else { return false }
+            if !feature.isFromExtras, let id = feature.id, elements.contains(id) { return true }
+            guard let name = feature.string("name"), let named = spots[name] else { return false }
             return geometry.points(of: feature).contains { point in
                 named.contains { abs($0.x - point.x) <= reach && abs($0.y - point.y) <= reach }
             }
         }
+
+        private static func supersedes(_ feature: MapboxVectorTile.Feature) -> Bool {
+            if feature.number(sizeKey) != nil { return true }
+            guard feature.isFromExtras, let kind = feature.string("kind") else { return false }
+            return supersedingKinds.contains(kind)
+        }
+
+        /// The basemap's id for the element an extras' point was cut from.
+        /// Planetiler gives each of the extras' points the element's
+        /// OpenStreetMap id times ten, plus 1 for a node, 2 for a way and 3
+        /// for a relation; the basemap gives it the same id with the 1, 2 or
+        /// 3 written above it (``VectorTileAreaDetails``).
+        static func basemapID(ofExtras id: UInt64) -> UInt64? {
+            let (element, type) = id.quotientAndRemainder(dividingBy: 10)
+            guard (1...3).contains(type), element < 1 << elementTypeShift else { return nil }
+            return type << elementTypeShift | element
+        }
+
+        /// The bit the basemap writes an element's type from.
+        private static let elementTypeShift: UInt64 = 44
     }
 
     // MARK: Placing
@@ -222,10 +283,11 @@ nonisolated enum VectorTilePoints {
             }
         }
 
-        /// The candidate's icons centred on its point, where they find room.
-        mutating func place(_ candidate: Candidate, unit: CGFloat, room: inout Room) {
-            guard !candidate.look.icons.isEmpty else { return }
-            let iconFrames = candidate.look.icons.map { icon in
+        /// Where the candidate's icons stand centred on its point, before
+        /// the tile's edge moves them in, and the room they take together;
+        /// `nil` for a point with no icon.
+        static func frames(of candidate: Candidate, unit: CGFloat) -> (icons: [CGRect], whole: CGRect)? {
+            let standing = candidate.look.icons.map { icon in
                 CGRect(
                     x: candidate.anchor.x - icon.size.width * unit / 2,
                     y: candidate.anchor.y - icon.size.height * unit / 2,
@@ -233,8 +295,15 @@ nonisolated enum VectorTilePoints {
                     height: icon.size.height * unit
                 )
             }
-            let whole = iconFrames.dropFirst().reduce(iconFrames[0]) { $0.union($1) }
-            guard let moved = room.inside(whole) else { return }
+            guard let first = standing.first else { return nil }
+            return (standing, standing.dropFirst().reduce(first) { $0.union($1) })
+        }
+
+        /// The candidate's icons centred on its point, where they find room.
+        mutating func place(_ candidate: Candidate, unit: CGFloat, room: inout Room) {
+            guard let (iconFrames, whole) = Self.frames(of: candidate, unit: unit),
+                  let moved = room.inside(whole)
+            else { return }
             let shift = CGPoint(x: moved.minX - whole.minX, y: moved.minY - whole.minY)
             let lead = candidate.look.icons[0]
             guard lead.allowsOverlap || room.isFree(moved) else { return }
@@ -303,6 +372,13 @@ nonisolated enum VectorTilePoints {
         /// tile beside cannot finish a halo cut at the edge, and its own
         /// names cannot see this one, so the margin keeps two names either
         /// side of the edge apart, as the names along lines keep theirs.
+        ///
+        /// A name the edge would move back over its own point goes on the
+        /// point's other side instead, where it fits there: a summit near
+        /// the foot of its tile is named above its triangle, which would
+        /// otherwise take the room and leave it unnamed until a zoom whose
+        /// tiles are cut elsewhere. It stands as far from the icon there as
+        /// it would have here, the icon having been moved in too.
         mutating func place(
             _ candidate: Candidate,
             unit: CGFloat,
@@ -312,19 +388,47 @@ nonisolated enum VectorTilePoints {
         ) {
             guard !candidate.lines.isEmpty, let style = candidate.look.text else { return }
             let block = NameBlock(candidate.lines, style: style, unit: unit, fonts: &fonts)
-            let size = block.size
-            let offset = style.offset * unit
-            let top = offset > 0 ? candidate.anchor.y + offset
-                : offset < 0 ? candidate.anchor.y + offset - size.height
-                : candidate.anchor.y - size.height / 2
-            let left = candidate.anchor.x - size.width / 2
-            let frame = CGRect(x: left, y: top, width: size.width, height: size.height)
             let reach = style.haloRadius * unit + margin
-            guard let fitted = room.inside(frame.insetBy(dx: -reach, dy: -reach)) else { return }
-            let moved = fitted.insetBy(dx: reach, dy: reach)
-            guard room.isFree(moved.insetBy(dx: -margin, dy: -margin)) else { return }
-            room.take(moved)
-            placed.append((block, moved))
+            let offset = style.offset * unit
+            let size = block.size
+            guard let styled = Self.fitted(size, at: candidate.anchor, offset: offset, reach: reach, in: room) else {
+                return
+            }
+            var frame = styled.frame
+            if styled.isPushedBack {
+                let icons = Icons.frames(of: candidate, unit: unit)?.whole
+                let lift = icons.flatMap { whole in room.inside(whole).map { $0.minY - whole.minY } } ?? 0
+                let icon = CGPoint(x: candidate.anchor.x, y: candidate.anchor.y + lift)
+                if let other = Self.fitted(size, at: icon, offset: -offset, reach: reach, in: room),
+                   !other.isPushedBack, room.isFree(other.frame.insetBy(dx: -margin, dy: -margin)) {
+                    frame = other.frame
+                }
+            }
+            guard room.isFree(frame.insetBy(dx: -margin, dy: -margin)) else { return }
+            room.take(frame)
+            placed.append((block, frame))
+        }
+
+        /// Where a name of `size` stands by the point at `anchor`, moved
+        /// inside the tile with `reach` to spare, or `nil` for one larger
+        /// than the tile: its top `offset` below the point, its foot that
+        /// far above it where the offset is negative, and centred on the
+        /// point where there is none. And whether the edge pushed it back
+        /// towards its point.
+        private static func fitted(
+            _ size: CGSize,
+            at anchor: CGPoint,
+            offset: CGFloat,
+            reach: CGFloat,
+            in room: Room
+        ) -> (frame: CGRect, isPushedBack: Bool)? {
+            let top = offset > 0 ? anchor.y + offset
+                : offset < 0 ? anchor.y + offset - size.height
+                : anchor.y - size.height / 2
+            let frame = CGRect(x: anchor.x - size.width / 2, y: top, width: size.width, height: size.height)
+            guard let inside = room.inside(frame.insetBy(dx: -reach, dy: -reach)) else { return nil }
+            let moved = inside.insetBy(dx: reach, dy: reach)
+            return (moved, offset > 0 ? moved.minY < frame.minY : offset < 0 && moved.maxY > frame.maxY)
         }
 
         func draw(into context: CGContext) {
@@ -401,15 +505,7 @@ nonisolated private struct NameBlock {
             )
         }
         let width = style.wrapWidth * unit
-        let key = NSAttributedString.Key(kCTFontAttributeName as String)
-        let measure = { (line: String) in
-            CGFloat(CTLineGetTypographicBounds(
-                CTLineCreateWithAttributedString(NSAttributedString(string: line, attributes: [key: font])),
-                nil,
-                nil,
-                nil
-            ))
-        }
+        let measure = { (line: String) in InkedText.width(of: line, font: font) }
         lines = text.flatMap { VectorTilePoints.wrapped($0, width: width, measure: measure) }.map(set)
         lineSpacing = style.lineSpacing * unit
         opacity = style.opacity

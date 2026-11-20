@@ -194,6 +194,9 @@ struct MapboxVectorTileTests {
 
         #expect(merged.layers["pois"]?.features.map { $0.string("kind") } == ["peak", "gate"])
         #expect(merged.layers["barriers"]?.features.count == 1)
+        #expect(merged.layers["pois"]?.features.map(\.isFromExtras) == [false, true], "each says which archive gave it")
+        #expect(merged.layers["barriers"]?.features.map(\.isFromExtras) == [true])
+        #expect(basemap.layers["pois"]?.features.map(\.isFromExtras) == [false])
     }
 
     @Test("a layer on another grid is not merged into one it would misplace")
