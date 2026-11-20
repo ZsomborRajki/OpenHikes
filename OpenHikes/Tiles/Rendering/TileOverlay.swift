@@ -55,6 +55,14 @@ nonisolated final class TileOverlay: MKTileOverlay, @unchecked Sendable {
         cache.memoryImage(forKey: cacheKey(for: path))
     }
 
+    /// Offers a tile the draw pass found in memory to auto-save, which no
+    /// load does: the hiker may have browsed it before auto-save took the
+    /// hike on. One lock, and never the disk, so the draw pass may call it —
+    /// see ``AutoSaveTileStore/offerTileDrawnFromMemory(z:x:y:key:)``.
+    func offerTileDrawnFromMemory(at path: MKTileOverlayPath) {
+        autoSaveStore.offerTileDrawnFromMemory(z: path.z, x: path.x, y: path.y) { cacheKey(for: path) }
+    }
+
     /// Asynchronously ensures the tile is cached (network if needed), keeping
     /// policy suppression distinct from a failed request for renderer backoff.
     func cacheTile(at path: MKTileOverlayPath) async -> TileLoadDisposition {
