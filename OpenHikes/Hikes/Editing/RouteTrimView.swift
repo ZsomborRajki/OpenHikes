@@ -172,7 +172,7 @@ struct RouteTrimSaveButton: View {
 
     var body: some View {
         RoleButton(.confirm, title: "Save", action: save)
-            .disabled(!session.hasChanges || session.isSaving || session.isRouting)
+            .disabled(!session.hasChanges || session.isSaving || session.isRouting || session.isMakingStep)
             .accessibilityIdentifier("route-trim-save")
     }
 }

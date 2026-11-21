@@ -78,6 +78,9 @@ nonisolated struct EditedLine: Equatable, Sendable {
         /// the line's clock — see ``RouteSteps/Applied/recordedSeconds``.
         /// `nil` for the line's own.
         var recordedSeconds: TimeInterval?
+        /// The line before the first of them that cleared its clock, or
+        /// empty — see ``RouteSteps/Applied/clockedRoute``.
+        var clockedRoute: [RouteCoordinate] = []
     }
 
     /// What a save does to the clock at one end of the walk: the hike's
@@ -99,6 +102,10 @@ nonisolated struct EditedLine: Equatable, Sendable {
     }
 
     let route: [RouteCoordinate]
+    /// The line a workout of the walk is written from — see
+    /// ``RouteEditWorkout``: this one, or, where a step took its clock away,
+    /// the line before that step, which the walk's time was last read off.
+    let workoutRoute: [RouteCoordinate]
     /// Its own length, on ``RouteProfile``'s axis.
     let lengthMeters: Double
     /// How much shorter it is than the line the hike has now. Less than
@@ -159,6 +166,7 @@ nonisolated struct EditedLine: Equatable, Sendable {
         let length = kept.lengthMeters
         guard length > 0 else { return nil }
         route = kept
+        workoutRoute = steps.clockedRoute.isEmpty ? kept : steps.clockedRoute
         lengthMeters = length
         removedMeters = current.lengthMeters - length
         // A line with no times leaves the walk's time as it was, as it
@@ -269,8 +277,8 @@ enum RouteEditRefusal: LocalizedError, Equatable, Sendable {
 
 enum RouteEditOutcome: Equatable, Sendable {
     case refused(RouteEditRefusal)
-    /// Saved, with the line the hike has now, for whoever has to tell
-    /// Health — see ``RouteEditWorkout``.
+    /// Saved, with the line whose clock Health's workout is written from —
+    /// see ``EditedLine/workoutRoute``.
     case saved([RouteCoordinate])
 
     var isSaved: Bool {
@@ -331,7 +339,7 @@ enum RouteEditSave {
             walk.routeDistanceMeters = edited.lengthMeters
             walk.routeRevision = edited.revision
         }
-        return commit(hike, to: edited.route, before: before, in: context, save: save)
+        return commit(hike, to: edited.workoutRoute, before: before, in: context, save: save)
     }
 
     /// Puts back the line `hike` had before its first edit, with the figures

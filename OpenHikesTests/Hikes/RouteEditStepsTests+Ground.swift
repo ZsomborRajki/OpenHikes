@@ -3,15 +3,19 @@
 //  OpenHikesTests
 //
 //  A step is made on the ground it was worked out on, or not at all: a path
-//  that comes back after a handle moved is dropped, a step that would change
-//  nothing is not made, and the gray cover hides every stretch of the hike's
-//  own line the new one no longer draws the same way.
+//  that comes back after a handle moved is dropped, nothing else changes the
+//  line while a step is under way, a pause at the edge of a stretch stays a
+//  pause, a step that would change nothing is not made, and the gray cover
+//  hides every stretch of the hike's own line the new one no longer draws
+//  the same way. And the whole-route menu is offered what fits the line, and
+//  wakes only when that changes.
 //
 
 import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import SwiftData
 import Synchronization
 import Testing
 
@@ -170,5 +174,96 @@ extension RouteEditStepsTests {
         #expect(session.line?.route.count == Self.route.count, "precondition: no point went")
         #expect(session.staleStretches.count == 1)
         #expect(session.staleStretches.first?.map(\.latitude) == [Self.route[3].latitude, Self.route[4].latitude])
+    }
+
+    // MARK: One change at a time
+
+    @Test("while a step is being worked out, nothing else changes the line")
+    func oneChangeAtATime() async throws {
+        let context = try Fixture.modelContext()
+        let assembly = RouteAssembly(
+            pieces: [.kept(0...3), .check(1), .kept(6...10)],
+            checks: [RouteCheck(id: 1, kind: .snapped, savedChoice: .matched, savedRange: 3...6, rawRange: 3...6)]
+        )
+        let recorded = Fixture.hike(in: context, route: Self.route)
+        recorded.rawRoute = Self.route.map { fix in
+            RouteCoordinate(latitude: fix.latitude, longitude: fix.longitude + 0.0001, timestamp: fix.timestamp)
+        }
+        recorded.routeEdit = RouteEdit(assembly: assembly)
+        try context.save()
+        let router = HeldRouter()
+        let session = await visit(recorded, in: context, router: router)
+
+        let closing = Task { await session.closeLoop() }
+        await settleDelegateHop(until: "the way home is asked for") { router.isAsked }
+        #expect(session.isMakingStep)
+        #expect(!session.canMakeSteps)
+        await session.choose(.gps, forCheck: 1)
+        router.answer()
+        await closing.value
+
+        #expect(!session.isMakingStep)
+        #expect(session.checks.first?.choice == .matched, "the answer given while the loop was closed is not taken")
+        #expect(session.steps.count == 1, "and the loop is closed")
+        #expect(session.line?.steps == session.steps)
+        #expect(await session.editedLine() != nil, "a line drawn under the steps it would be saved with")
+    }
+
+    // MARK: A pause at the edge
+
+    @Test("a stretch pulled from the line's start begins where the walk did, not where the drive to it did")
+    func aPullAfterTheDrive() async throws {
+        let context = try Fixture.modelContext()
+        var trailhead = Self.route[0]
+        trailhead.boundary = .paused
+        var home = Self.point(0)
+        home.latitude -= Line.spacing * 50
+        home.timestamp = Line.start.addingTimeInterval(-Line.walkSeconds)
+        let driven = [home, trailhead] + Self.route.dropFirst()
+        let hike = Fixture.hike(in: context, route: driven)
+        try context.save()
+        let session = await visit(hike, in: context)
+        let via = CLLocationCoordinate2D(
+            latitude: Line.latitude + 1.5 * Line.spacing,
+            longitude: Line.longitude + Line.detourOffset / 2
+        )
+
+        #expect(await session.reroute(0...Self.distances[3], through: via))
+
+        let drawn = try #require(session.line?.route)
+        #expect(Array(drawn.prefix(2)) == [home, trailhead], "the drive is still a pause")
+        #expect(drawn.lengthMeters < Self.distances[10] + 2 * Line.spacing * 111_000, "and no walk home")
+    }
+
+    // MARK: The whole-route menu
+
+    @Test("a loop is offered Start Loop Here, an out and back nothing of its shape, and a drag wakes neither")
+    func whatTheMenuOffers() async throws {
+        let context = try Fixture.modelContext()
+        let loop = Fixture.hike(in: context, route: Fixture.loopRoute)
+        let there = Fixture.hike(in: context, route: Fixture.outAndBackRoute)
+        try context.save()
+
+        let back = await visit(there, in: context)
+        #expect(back.line?.shape == .outAndBack, "precondition")
+        #expect(!back.isLoop, "begun at its far end an out and back is the same walk turned round")
+        #expect(back.keptEndsMeet, "and it is home already")
+
+        let round = await visit(loop, in: context)
+        let menu = ObservationCounter {
+            _ = round.isLoop
+            _ = round.canStartLoopAtCut
+        }
+        await menu.settle()
+        let drag = round.totalMeters / 20
+        round.move(.start, to: drag)
+        await menu.settle()
+        #expect(round.canStartLoopAtCut)
+        #expect(menu.count == 1)
+
+        round.move(.start, to: drag * 2)
+        round.move(.start, to: drag * 3)
+        await menu.settle()
+        #expect(menu.count == 1, "a handle dragged on is no news to the menu")
     }
 }

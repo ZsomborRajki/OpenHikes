@@ -177,6 +177,10 @@ extension MapView.Coordinator {
         let ground = line.coordinates(between: stretch)
         guard ground.count > 1 else { return false }
         let cover = MKPolyline(coordinates: ground, count: ground.count)
+        // A pull whose line has not landed yet still has its band up.
+        let earlier = [routeTrimMap.stretch.pullCover, routeTrimMap.stretch.pullBand].compactMap(\.self)
+        mapView.removeOverlays(earlier)
+        routeTrimMap.stretch.pullBand = nil
         routeTrimMap.stretch.pulled = stretch
         routeTrimMap.stretch.pulledOn = session.stepGround
         routeTrimMap.stretch.pullOrigin = point

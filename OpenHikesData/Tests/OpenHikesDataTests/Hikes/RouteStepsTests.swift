@@ -46,7 +46,7 @@ struct RouteStepsTests {
 
     /// Eleven points a step apart, a minute between each.
     static let line = (0...10).map { point(Double($0), at: Double($0) * 60) }
-    private static let total = step * 10
+    static let total = step * 10
 
     /// A way round to the north of the line, between its third and sixth
     /// steps.

@@ -128,7 +128,7 @@ struct RouteCheckRow: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .disabled(session.isSaving || !session.steps.isEmpty)
+        .disabled(session.isSaving || session.isMakingStep || !session.steps.isEmpty)
         .accessibilityAddTraits(isChosen ? .isSelected : [])
         .accessibilityIdentifier(RouteCheckWording.identifier(for: choice))
     }

@@ -88,8 +88,17 @@ final class RouteTrimSession {
     /// Whether the handles picking a stretch out have the whole line between
     /// them, which is nothing to take out. Kept as ``keptEndsMeet`` is.
     private(set) var picksWholeLine = false
-    /// Whether a path is being asked for, which holds the buttons.
+    /// Whether the start handle marks where a loop could begin instead: the
+    /// line is a loop, its start is cut and its end is not. Kept as
+    /// ``keptEndsMeet`` is, for the menu that reads it.
+    private(set) var canStartLoopAtCut = false
+    /// Whether a path is being asked for, which shows a spinner beside the
+    /// button that asked.
     var isRouting = false
+    /// Whether a step is being worked out and drawn, which holds every
+    /// control that changes the line: one change at a time, each made on
+    /// the line the one before it left — see ``holdingSteps(_:)``.
+    private(set) var isMakingStep = false
 
     /// The stretches to check, as the hiker has answered them. Empty for a
     /// hike with none. An answer is here the moment it is given, and the
@@ -319,6 +328,18 @@ final class RouteTrimSession {
         keptEndsMeet = RouteSteps.endsMeet(start.coordinate, end.coordinate)
         picksWholeLine = isSelectingStretch && startMeters <= Self.endToleranceMeters
             && endMeters >= line.totalMeters - Self.endToleranceMeters
+        canStartLoopAtCut = line.shape == .loop && !isSelectingStretch && cuts(.start) && !cuts(.end)
+            && pausesTakenOff.isEmpty
+    }
+
+    /// Runs `change` as the one change to the line under way, holding every
+    /// control that would make another — see ``isMakingStep``. `nil` when
+    /// another is under way already.
+    @discardableResult func holdingSteps<Result>(_ change: () async -> Result) async -> Result? {
+        guard !isMakingStep else { return nil }
+        isMakingStep = true
+        defer { isMakingStep = false }
+        return await change()
     }
 
     /// Cuts `stretch` off the end of the line `handle` stands on: what the
@@ -401,7 +422,7 @@ extension RouteTrimSession {
         // An answer puts the line together again under the steps made on
         // it, whose distances were measured on the line the old answer
         // drew: with a step made, the answers stand.
-        guard line != nil, !isSaving, steps.isEmpty,
+        guard line != nil, !isSaving, !isMakingStep, steps.isEmpty,
               let index = checks.firstIndex(where: { $0.id == id }),
               checks[index].choice != choice,
               choices(of: checks[index]).contains(choice)
@@ -676,7 +697,8 @@ extension RouteTrimSession {
             steps: EditedLine.Steps(
                 made: line.steps,
                 moving: line.endsMovedBySteps,
-                recordedSeconds: line.recordedSeconds
+                recordedSeconds: line.recordedSeconds,
+                clockedRoute: line.clockedRoute
             ),
             recordedBefore: recordedBefore
         )
@@ -685,7 +707,9 @@ extension RouteTrimSession {
     /// Where the cut at `handle` stands on the map, or `nil` with no line.
     func spot(of handle: RouteTrimHandle) -> RouteTrimLine.Spot? {
         guard let line else { return nil }
-        let takesOffPause = pausesTakenOff.contains(handle.endPause)
+        // A stretch picked out keeps a pause at either edge on its side —
+        // see `RouteStep.swift` — the pause on an end of the line included.
+        let takesOffPause = isSelectingStretch || pausesTakenOff.contains(handle.endPause)
         return switch handle {
         case .start: line.startSpot(at: startMeters, takingOffPause: takesOffPause)
         case .end: line.endSpot(at: endMeters, takingOffPause: takesOffPause)

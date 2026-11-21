@@ -30,6 +30,16 @@
 //  somewhere else keeps its ground and loses its clock, because times that
 //  run backwards along a line are nobody's.
 //
+//  ## A pause at the edge of a stretch
+//
+//  Belongs to the line on that side of it, never to the stretch. The line
+//  before a stretch ends where the walk took up again after a pause standing
+//  where the stretch begins, and the line after it begins where the walk
+//  stopped before one standing where it ends: the two spots the handles
+//  stand on (`RouteTrimLine.startSpot` and `endSpot` in the app). Drawn into
+//  the stretch, the ride a recording was paused through would be walked
+//  ground.
+//
 //  ## The clock a step leaves
 //
 //  A stretch drawn along other ground was still walked, and for as long as
@@ -41,8 +51,10 @@
 //
 //  A line that has lost its clock still had one when the steps before began,
 //  so ``RouteSteps/Applied/recordedSeconds`` carries the figure through a
-//  step that clears it: the same steps give the same figure whichever of
-//  them were saved first.
+//  step that clears it, and ``RouteSteps/Applied/clockedRoute`` keeps the
+//  line it was last read off, for a workout to be written from: the same
+//  steps give the same walk whichever of them were saved first. Nothing made
+//  after the clock is gone can say what it takes off the walk.
 //
 //  ## A step that changes nothing
 //
@@ -61,6 +73,7 @@
 //  they travel in a field of the hike's record beside ``RouteAssembly``.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 
@@ -161,6 +174,10 @@ nonisolated public enum RouteSteps {
         /// Whether the last step changed the line: one that did not fit it
         /// is kept with nothing done, and is no step to make.
         public let lastStepChangedLine: Bool
+        /// The line as it stood before the first step that took its clock
+        /// away — see *The clock a step leaves* in the file header. Empty
+        /// while every step kept it.
+        public let clockedRoute: [RouteCoordinate]
     }
 
     public static func pathCoordinateCount(of steps: [RouteStep]) -> Int {
@@ -181,6 +198,7 @@ nonisolated public enum RouteSteps {
         var clock = RouteTrim.recordedSeconds(of: line)
         var recorded = clock
         var lastStepChangedLine = false
+        var clockedRoute: [RouteCoordinate] = []
         let limit = maximumPoints(from: line.count)
         for step in steps {
             let before = route
@@ -190,6 +208,7 @@ nonisolated public enum RouteSteps {
             route = after
             let recordedNow = RouteTrim.recordedSeconds(of: after)
             if step.keepsClock { recorded += recordedNow - clock }
+            if !step.keepsClock, clockedRoute.isEmpty { clockedRoute = before }
             clock = recordedNow
             switch step {
             case .closeLoop, .outAndBack:
@@ -199,8 +218,11 @@ nonisolated public enum RouteSteps {
                 movesStart = true
                 movesEnd = true
             case .pause, .replace, .trim:
-                if route.first != before.first { movesStart = true }
-                if route.last != before.last { movesEnd = true }
+                // The same fix at an end, whatever is now said of the leg
+                // arriving at it, is the same end: a stretch redrawn up to
+                // the last point leaves the walk ending where it did.
+                if !isSameFix(route.first, before.first) { movesStart = true }
+                if !isSameFix(route.last, before.last) { movesEnd = true }
             }
         }
         return Applied(
@@ -208,8 +230,14 @@ nonisolated public enum RouteSteps {
             movesStart: movesStart,
             movesEnd: movesEnd,
             recordedSeconds: recorded,
-            lastStepChangedLine: lastStepChangedLine
+            lastStepChangedLine: lastStepChangedLine,
+            clockedRoute: clockedRoute
         )
+    }
+
+    /// Whether two points are the same fix: where and when.
+    private static func isSameFix(_ one: RouteCoordinate?, _ other: RouteCoordinate?) -> Bool {
+        one?.latitude == other?.latitude && one?.longitude == other?.longitude && one?.timestamp == other?.timestamp
     }
 
     /// `line` with one step applied. A step that does not fit the line — see
@@ -252,10 +280,44 @@ nonisolated public enum RouteSteps {
         let lower = max(range.lowerBound, 0)
         let upper = min(range.upperBound, total)
         guard upper > lower else { return nil }
-        let head = lower > 0 ? RouteTrim.trimmed(line, distances: distances, keeping: 0...lower) : [first]
-        let tail = upper < total ? RouteTrim.trimmed(line, distances: distances, keeping: upper...total) : [last]
-        guard !head.isEmpty, !tail.isEmpty else { return nil }
+        var head = lower > 0 ? RouteTrim.trimmed(line, distances: distances, keeping: 0...lower) : [first]
+        var tail = upper < total ? RouteTrim.trimmed(line, distances: distances, keeping: upper...total) : [last]
+        guard let ends = head.last, let begins = tail.first else { return nil }
+        // A pause standing at either edge stays on its side — see the file
+        // header.
+        var headEnd = index(of: ends, near: lower, in: line, distances: distances)
+        if let end = headEnd {
+            let paused = line[(end + 1)...].prefix(while: \.isPauseBoundary)
+            head += paused
+            headEnd = end + paused.count
+        }
+        var tailBegin = index(of: begins, near: upper, in: line, distances: distances)
+        if let begin = tailBegin, line[begin].isPauseBoundary {
+            var stopped = begin - 1
+            while stopped > 0, line[stopped].isPauseBoundary { stopped -= 1 }
+            // The fix the pause took up again on, as it was: the cut said it
+            // began a line, and it no longer does.
+            tail = Array(line[stopped...begin]) + tail.dropFirst()
+            tailBegin = stopped
+        }
+        if let headEnd, let tailBegin, headEnd >= tailBegin { return nil }
         return Sides(head: head, tail: tail, reachesStart: lower <= 0, reachesEnd: upper >= total)
+    }
+
+    /// Where `point`, the point a cut `meters` along `line` ended or began
+    /// on, stands in it: `nil` for a point the cut made between two.
+    private static func index(
+        of point: RouteCoordinate,
+        near meters: Double,
+        in line: [RouteCoordinate],
+        distances: [Double]
+    ) -> Int? {
+        var index = distances.partitioningIndex { $0 >= meters - RouteTrim.snapMeters }
+        while index < line.count, distances[index] <= meters + RouteTrim.snapMeters {
+            if isSameFix(line[index], point) { return index }
+            index += 1
+        }
+        return nil
     }
 
     private static func replaced(
@@ -311,7 +373,12 @@ nonisolated public enum RouteSteps {
         guard var sides = sides(of: line, around: range) else { return line }
         // A stretch that reaches an end leaves nothing either side of the
         // pause to pause between: it is a cut.
-        if sides.reachesStart { return sides.tail }
+        if sides.reachesStart {
+            // Nothing arrives at a line's first point — see ``RouteTrim``.
+            sides.tail[0].boundary = nil
+            sides.tail[0].provenance = nil
+            return sides.tail
+        }
         if sides.reachesEnd { return sides.head }
         sides.tail[0].boundary = .paused
         sides.tail[0].provenance = nil

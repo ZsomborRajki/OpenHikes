@@ -24,6 +24,13 @@
 //  within ``snapMeters`` of a point takes that point instead, so dragging a
 //  handle back to where it was gives the line it was.
 //
+//  Inside a stretch drawn along other ground, whose points carry no time
+//  (``RouteStep``), the time of the cut is read off the stamped points
+//  either side of the stretch by distance instead: the hiker crossed it at
+//  one pace, as far as anyone knows. Without it, a cut or a stretch taken
+//  out there would take the whole crossing's time off the walk, or none of
+//  it.
+//
 //  ## A pause at a cut
 //
 //  The two fixes either side of a pause stand at one distance. A line cut
@@ -229,10 +236,7 @@ nonisolated public enum RouteTrim {
         if let low = from.elevation, let high = to.elevation, low.isFinite, high.isFinite {
             elevation = low + (high - low) * fraction
         }
-        var timestamp: Date?
-        if let began = from.timestamp, let arrived = to.timestamp {
-            timestamp = began.addingTimeInterval(arrived.timeIntervalSince(began) * fraction)
-        }
+        let timestamp = time(at: target, between: lower, and: upper, of: route, distances: distances)
         return RouteCoordinate(
             latitude: coordinate.latitude,
             longitude: coordinate.longitude,
@@ -241,5 +245,28 @@ nonisolated public enum RouteTrim {
             motion: to.motion,
             provenance: to.provenance
         )
+    }
+
+    /// The clock `target` metres along the line, on the leg between `lower`
+    /// and `upper`, read off the nearest stamped points either side of it
+    /// by distance: the leg's own two ends where both have a time — see
+    /// *Where a cut falls* in the file header. `nil` where either side has
+    /// none, or a pause stands between them, whose length says nothing of
+    /// where along the way the hiker was when.
+    private static func time(
+        at target: Double,
+        between lower: Int,
+        and upper: Int,
+        of route: [RouteCoordinate],
+        distances: [Double]
+    ) -> Date? {
+        guard let before = route[...lower].lastIndex(where: { $0.timestamp != nil }),
+              let after = route[upper...].firstIndex(where: { $0.timestamp != nil }),
+              let began = route[before].timestamp, let arrived = route[after].timestamp,
+              !route[(before + 1)...after].contains(where: \.isPauseBoundary)
+        else { return nil }
+        let span = distances[after] - distances[before]
+        let fraction = span > 0 ? (target - distances[before]) / span : 0
+        return began.addingTimeInterval(arrived.timeIntervalSince(began) * fraction)
     }
 }
