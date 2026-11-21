@@ -32,8 +32,8 @@ Groups, the iCloud container, push, Time Sensitive Notifications and HealthKit.
 
 `OpenHikes/Secrets.plist` holds the optional Stadia and Thunderforest keys. It
 is gitignored and **must never be committed** — `cp Secrets.example.plist
-OpenHikes/Secrets.plist` and edit the copy. OpenStreetMap is the keyless
-default, so a build with no keys works; the paid providers simply stay locked.
+OpenHikes/Secrets.plist` and edit the copy. A build with no keys works;
+[Requirements](README.md#requirements) says which maps need none.
 
 ## Before you open a pull request
 
