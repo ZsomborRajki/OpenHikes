@@ -7,7 +7,8 @@
 //  nothing is replayed to a reader that arrives late — and the one it
 //  promises its senders: a send never waits for anybody. The first holds by
 //  default: a reader that asks for only its newest unread message, as the
-//  hike detail's byte refresh does, gets that and nothing older.
+//  hike detail's byte refresh does, gets that and nothing older. And the
+//  count a suite reads a reader's end by follows the reads.
 //
 
 import Foundation
@@ -108,5 +109,27 @@ struct EventFeedTests {
         feed.send(3)
 
         #expect(await reader.next() == 3)
+    }
+
+    /// What `AutoSaveTaskLifecycleTests` reads a drain's end by: a stream is
+    /// counted from the moment it is handed out, until its reader stops or
+    /// the stream is let go, and the rest stay counted.
+    @Test("a reader is counted until its read ends")
+    func readerCountFollowsTheReads() async {
+        let feed = EventFeed<Int>()
+        _ = feed.events()
+        #expect(feed.readerCount == 0, "a stream let go ends at once")
+
+        let first = FeedReader(feed.events())
+        let second = FeedReader(feed.events())
+        #expect(feed.readerCount == 2, "a stream counts from the moment it is handed out")
+
+        first.stop()
+        await settleDelegateHop(until: "the stopped reader to drop out") { feed.readerCount == 1 }
+        #expect(feed.readerCount == 1, "the reader still reading is still counted")
+
+        second.stop()
+        await settleDelegateHop(until: "the last reader to drop out") { feed.readerCount == 0 }
+        #expect(feed.readerCount == 0)
     }
 }

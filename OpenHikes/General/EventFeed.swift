@@ -26,9 +26,12 @@
 //  time the view's `.task` was torn down — a scene disconnecting does it —
 //  and every message after that would vanish without a word. So each
 //  ``events()`` call makes a stream of its own and takes it out again on
-//  termination, the shape ``AutoSaveTileStore/pendingKeySignals()`` has, and
-//  a message goes to every reader there is. More than one scene can be
-//  connected, and each root view reads its own.
+//  termination, and a message goes to every reader there is. More than one
+//  scene can be connected, and each root view reads its own.
+//
+//  The same shape carries notifications that only say "there is work", such
+//  as ``AutoSaveTileStore/pendingKeySignals()``: a reader that asks for
+//  `.bufferingNewest(1)` hears a burst of them as one.
 //
 //  ## Why not swift-async-algorithms
 //
@@ -69,11 +72,22 @@ nonisolated final class EventFeed<Element: Sendable>: Sendable {
     }
 
     /// Hands `element` to every current reader and returns at once, whether
-    /// or not anybody is reading.
+    /// or not anybody is reading. The readers are copied out under the lock
+    /// and handed the element after it is let go.
     func send(_ element: Element) {
         let current = readers.withLock { readers in Array(readers.values) }
         for continuation in current {
             continuation.yield(element)
         }
+    }
+
+    /// How many streams ``events(bufferingPolicy:)`` has handed out that have
+    /// not ended.
+    ///
+    /// **Test seam.** A stream ends when its reader's task is cancelled or
+    /// the stream is let go, and takes itself out then, so a suite can see a
+    /// read really end without waiting out a duration.
+    var readerCount: Int {
+        readers.withLock { readers in readers.count }
     }
 }

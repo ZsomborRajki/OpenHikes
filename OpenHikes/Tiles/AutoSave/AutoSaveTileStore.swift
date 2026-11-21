@@ -93,9 +93,9 @@ nonisolated final class AutoSaveTileStore: Sendable {
     private let state = Mutex<ActiveHike?>(nil)
     private let memoryOffers = Mutex(MemoryOffers())
 
-    /// Consumers waiting to hear that a tile has been claimed, keyed so a
-    /// finished one drops out of its own accord.
-    private let pendingObservers = Mutex([UUID: AsyncStream<Void>.Continuation]())
+    /// Wakes whoever is waiting to hear that a tile has been claimed. A
+    /// reader that finishes drops out of its own accord.
+    private let pendingKeyWakeups = EventFeed<Void>()
 
     /// Where claimed tiles are promoted from browsing storage to durable
     /// storage. Injectable for the same reason ``TileCache``'s `storageRoot`
@@ -217,8 +217,11 @@ nonisolated final class AutoSaveTileStore: Sendable {
             }
             return
         }
+        // Outside the state lock: this is the tile thread, and nothing a
+        // reader does in response belongs inside the lock it needs to claim
+        // the next tile.
         if claim.isNewKey {
-            signalPendingKeys()
+            pendingKeyWakeups.send(())
         }
         #if DEBUG
         Self.logger.debug("Auto-saved tile \(key, privacy: .public)")
@@ -325,40 +328,23 @@ nonisolated final class AutoSaveTileStore: Sendable {
     /// `bufferingNewest(1)`: the payload is "there is work", not "here is a
     /// key", so a screenful of tiles arriving in one draw pass has to collapse
     /// into one wake-up rather than one per tile.
+    ///
+    /// Each call is a stream of its own, so a drain that ends leaves every
+    /// other reader, and the next drain, hearing the claims after it.
     func pendingKeySignals() -> AsyncStream<Void> {
-        let id = UUID()
-        let (stream, continuation) = AsyncStream<Void>.makeStream(
-            bufferingPolicy: .bufferingNewest(1)
-        )
-        continuation.onTermination = { [weak self] _ in
-            self?.pendingObservers.withLock { observers in observers[id] = nil }
-        }
-        pendingObservers.withLock { observers in observers[id] = continuation }
-        return stream
+        pendingKeyWakeups.events(bufferingPolicy: .bufferingNewest(1))
     }
 
     /// How many consumers are waiting on ``pendingKeySignals()`` right now.
     ///
-    /// **Test seam**, and the only trace a finished drain leaves: the stream's
-    /// `onTermination` drops its continuation, so a controller whose drain task
-    /// really did end is one this no longer counts. A drain nothing cancels
-    /// stays suspended on its iterator for the life of the store and keeps
-    /// being counted, which is what `AutoSaveTaskLifecycleTests` reads instead of
-    /// waiting out a duration.
+    /// **Test seam**, and the only trace a finished drain leaves: a stream
+    /// that ends takes itself out of the feed, so a controller whose drain
+    /// task really did end is one this no longer counts. A drain nothing
+    /// cancels stays suspended on its iterator for the life of the store and
+    /// keeps being counted, which is what `AutoSaveTaskLifecycleTests` reads
+    /// instead of waiting out a duration.
     var pendingSignalObserverCount: Int {
-        pendingObservers.withLock { observers in observers.count }
-    }
-
-    /// Deliberately outside the state lock: this is called from the tile
-    /// thread, and nothing a consumer does in response belongs inside the lock
-    /// that the tile thread needs to claim the next tile.
-    private func signalPendingKeys() {
-        let observers = pendingObservers.withLock { observers in
-            Array(observers.values)
-        }
-        for continuation in observers {
-            continuation.yield()
-        }
+        pendingKeyWakeups.readerCount
     }
 
     /// Gives back a claim taken by `considerPersisting` whose tile never made it
