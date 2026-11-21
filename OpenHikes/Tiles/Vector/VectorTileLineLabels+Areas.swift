@@ -18,9 +18,19 @@
 //  it close together, and two tiles either side of a seam would each name
 //  the crossing on their side, nearer each other than Carto's 250 pixels.
 //  So a crossing of a line across gives way to a crossing of a line down
-//  near it along the edge. A tile sees only its own stretch of the edge, so
-//  past the ends of that stretch it takes the edge to run straight on, as the
-//  tile beside it sees it do.
+//  near it along the edge. An edge that runs along a line of the grid, back
+//  and forth across it, would be named at each crossing, so a crossing with
+//  two more of the same line that near it gives way, and the edge is named
+//  as an edge beside the line would be. A ring that crosses a line and back
+//  keeps both crossings. A tile sees only its own stretch of
+//  the edge, so past the ends of that stretch it takes the edge to run
+//  straight on: an edge that turns beyond what a tile sees can still be
+//  named on both sides of a seam nearer than Carto would.
+//
+//  Every 375th tile a line of the grid runs along a seam, and where an edge
+//  crosses it, worked out along the stretch each tile sees, lands a rounding
+//  either side. The grid line's own place decides which tile names it
+//  (`VectorTileShields.GridCrossing`).
 //
 //  The vector extras' `protected_areas` layer gives an area its size and its
 //  names from zoom 13 where it is that large by then, and every area its own
@@ -103,7 +113,7 @@ nonisolated extension VectorTileLineLabels {
     /// and only as far as the name stays on the line. Marks stand far enough
     /// apart along the line that two names at neighbouring marks stand at
     /// least `apart` from each other however each slid, in the same tile or
-    /// on either side of a seam.
+    /// on either side of a seam, where the line runs on as the tile sees it.
     static func marks(
         along path: MeasuredPath,
         origin: CGPoint,
@@ -118,37 +128,48 @@ nonisolated extension VectorTileLineLabels {
         let fits = (width / 2)...(path.length - width / 2)
         let crossings = edgeCrossings(of: path.points, origin: origin, every: spacing, clearance: apart + 2 * reach)
         return crossings.compactMap { crossing in
-            let spots = slides.map { crossing + $0 }.filter(fits.contains)
-            return spots.isEmpty ? nil : Mark(distance: crossing, spots: spots)
+            let spots = slides.map { crossing.distance + $0 }.filter(fits.contains)
+            return spots.isEmpty ? nil : Mark(distance: crossing.distance, spots: spots, crossing: crossing)
         }
     }
 
-    /// How far along `points` the line crosses the world's grid, `spacing`
-    /// apart with `origin` the picture's corner on it: wherever it crosses a
-    /// line down the map, and where it crosses a line across the map no
-    /// nearer than `clearance` along it to a line down. Past its first and
-    /// last points the line is taken to run straight on, so a tile that sees
-    /// only its own stretch of an edge gives way to a crossing just beyond
-    /// it, as the tile that holds that crossing names it.
+    /// Where along `points` the line crosses the world's grid, `spacing`
+    /// apart with `origin` the picture's corner on it, at which a name may
+    /// stand. A crossing with two more of the same grid line within
+    /// `clearance` of it along the line is none: the line runs along that
+    /// grid line, back and forth across it, where a ring that crosses one
+    /// and back keeps both crossings. Of the rest, every crossing of a line
+    /// down the map stands, and a crossing of a line across the map only
+    /// where it is no nearer than `clearance` to one down. Past its first and last points the line is taken to run
+    /// straight on, so a tile that sees only its own stretch of an edge gives
+    /// way to a crossing just beyond it, as the tile that holds that
+    /// crossing names it.
     static func edgeCrossings(
         of points: [CGPoint],
         origin: CGPoint,
         every spacing: CGFloat,
         clearance: CGFloat
-    ) -> [CGFloat] {
+    ) -> [VectorTileShields.GridCrossing] {
         let sides = points.adjacentPairs().filter { $0.0 != $0.1 }
         guard let first = sides.first, let last = sides.last else { return [] }
         let before = point(from: first.1, through: first.0, on: clearance)
         let after = point(from: last.0, through: last.1, on: clearance)
         let length = Self.length(of: points)
-        let crossings = VectorTileShields.gridCrossings(of: [before] + points + [after], origin: origin, every: spacing)
-            .map { VectorTileShields.GridCrossing(distance: $0.distance - clearance, isDown: $0.isDown) }
-        let downs = crossings.filter(\.isDown).map(\.distance)
-        return crossings.filter { crossing in
+        let all = VectorTileShields.gridCrossings(of: [before] + points + [after], origin: origin, every: spacing)
+            .map { VectorTileShields.GridCrossing(distance: $0.distance - clearance, isDown: $0.isDown, line: $0.line) }
+        let clean = all.indices.filter { index in
+            let near = all.indices.filter { other in
+                other != index && all[other].isDown == all[index].isDown && all[other].line == all[index].line
+                    && abs(all[other].distance - all[index].distance) < clearance
+            }
+            return near.count < 2
+        }
+        .map { all[$0] }
+        let downs = clean.filter(\.isDown).map(\.distance)
+        return clean.filter { crossing in
             guard crossing.distance >= 0, crossing.distance < length else { return false }
             return crossing.isDown || !downs.contains { abs($0 - crossing.distance) < clearance }
         }
-        .map(\.distance)
     }
 
     /// How far a name may slide from its mark, nearest first: not at all,
