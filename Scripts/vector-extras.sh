@@ -40,8 +40,8 @@
 # MiB a second where that is set (Scripts/lib/r2.sh).
 #
 # It is a development tool and is in no gate. It needs osmium and Planetiler
-# (`brew install osmium-tool planetiler`). On an M4 Max the planet took 35
-# minutes to cut, and the cut's 14.6 GB eleven minutes to build into 16.1 GB.
+# (`brew install osmium-tool planetiler`). On an M4 Max the planet took 39
+# minutes to cut, and the cut's 28.3 GB twenty minutes to build into 32.1 GB.
 # The buildings and the areas of the named areas' kinds, named or not, pass
 # through the work directory on the way: 48 GB of the planet, of which the
 # named are 3.6 GB.

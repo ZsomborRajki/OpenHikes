@@ -982,12 +982,12 @@ Maps*. `OfflineCountries` is the one owner, on the main actor.
   one way past the server is
   `--ui-test-offline-countries=<seeded|showcase|refused>`
   (`SeededOfflineCountryServer`), and still no session, so nothing downloads.
-- **Deployment state, checked 2026-11-20.** The bucket holds every area of
-  build `20261120`, cut from `planet-20261118` and `extras-20261120-00`: 381
+- **Deployment state, checked 2026-11-21.** The bucket holds every area of
+  build `20261121`, cut from `planet-20261118` and `extras-20261121-00`: 381
   of them (234 countries, and the 51 states, 13 provinces and 83 regions of
-  the three split ones), 1,524 files and 162.6 GB, and no other country
+  the three split ones), 1,524 files and 179.3 GB, and no other country
   file. Beside them it holds those two archives and the map's manifest at
-  revision 7, which names them, and nothing else.
+  revision 8, which names them, and nothing else.
 
 ### Accessibility
 
