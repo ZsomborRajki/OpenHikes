@@ -94,8 +94,11 @@ extension RouteTrimSession {
         guard let health, RouteEditWorkout.isOwed(for: hike, in: health.defaults) else { return }
         let hikeID = hike.id
         let distance = hike.distanceMeters
-        workoutReplacement = Task {
-            await RouteEditWorkout.replace(of: hikeID, with: route, distanceMeters: distance, through: health)
-        }
+        workoutReplacement = RouteEditWorkout.replace(
+            of: hikeID,
+            with: route,
+            distanceMeters: distance,
+            through: health
+        )
     }
 }

@@ -50,6 +50,9 @@ import SwiftData
 @MainActor
 struct WatchWalkHealthExport {
     let writer: any HikeWorkoutWriting
+    /// The recorder's, so a walk's write takes its turn with everything else
+    /// asked of Health for its hike — see ``HikeWorkoutQueue``.
+    let queue: HikeWorkoutQueue
     let container: ModelContainer
     let defaults: UserDefaults
     /// The phone's weather, read once per walk. Kept only when the reading is
@@ -62,7 +65,10 @@ struct WatchWalkHealthExport {
     func export(_ walk: WatchRecordedWalk, after outcome: WatchWalkImportOutcome) async {
         guard case .imported(let saved) = outcome,
               HikeWorkoutExport.isEnabled(in: defaults) else { return }
-        await HikeWorkoutExport.write(request(for: walk, savedAs: saved), with: writer, filingInto: container)
+        let request = request(for: walk, savedAs: saved)
+        await queue.enqueue(for: saved.hikeID) { [writer, container] in
+            await HikeWorkoutExport.write(request, with: writer, filingInto: container)
+        }.value
     }
 
     /// The workout `walk` becomes, from what its import saved.
@@ -86,6 +92,22 @@ struct WatchWalkHealthExport {
                 to: endedAt
             ),
             route: saved.route
+        )
+    }
+}
+
+extension WatchWalkHealthExport {
+    /// The export through `recorder`'s writer and its queue, so a walk from
+    /// the watch reaches Health as a recording of this phone's does, or `nil`
+    /// on a launch with no Health — see ``OpenHikesModel/makeWorkoutWriter()``.
+    init?(recorder: HikeRecorder, container: ModelContainer, defaults: UserDefaults) {
+        guard let writer = recorder.workoutWriter else { return nil }
+        self.init(
+            writer: writer,
+            queue: recorder.workoutQueue,
+            container: container,
+            defaults: defaults,
+            weatherState: recorder.weatherState
         )
     }
 }

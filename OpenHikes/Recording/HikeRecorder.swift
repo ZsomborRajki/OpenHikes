@@ -92,6 +92,10 @@ final class HikeRecorder: NSObject {
     /// `nil` for a launch that must not reach HealthKit — see
     /// ``OpenHikesModel/makeWorkoutWriter()``.
     @ObservationIgnored let workoutWriter: (any HikeWorkoutWriting)?
+    /// The order ``workoutWriter`` is asked in, one operation at a time for
+    /// each hike, shared with every other path into Health — see
+    /// ``HikeWorkoutQueue``.
+    @ObservationIgnored let workoutQueue = HikeWorkoutQueue()
     /// What the weather badge holds, read once when a finished hike is
     /// written to Health. A closure rather than the manager, because the
     /// recorder has no other business with the weather and a suite can hand

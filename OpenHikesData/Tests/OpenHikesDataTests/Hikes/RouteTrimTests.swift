@@ -148,6 +148,32 @@ struct RouteTrimTests {
         #expect(Array(kept[1...]) == Array(Self.paused[4...]))
     }
 
+    /// A recording paused through the drive home and stopped on the first
+    /// fix after it: the pause is the line's last leg and has no length, so
+    /// the walk is the whole of the line and an end left alone keeps the fix.
+    @Test("a pause the line ends on comes off only when the trim says so")
+    func takesOffAPauseOnTheEnd() {
+        let route = Array(Self.line[0...2]) + [Self.point(140, at: 7200, resumed: true)]
+        let total = 2 * Self.step
+
+        #expect(RouteTrim.trimmed(route, keeping: 0...total) == route)
+        #expect(RouteTrim.trimmed(route, keeping: 0...total, takingOff: .end) == Array(route[0...2]))
+    }
+
+    @Test("a pause the line opens with comes off only when the trim says so")
+    func takesOffAPauseOnTheStart() throws {
+        var resumed = Self.line[0]
+        resumed.boundary = .paused
+        let route = [Self.point(-140), resumed, Self.line[1], Self.line[2]]
+        let total = 2 * Self.step
+
+        #expect(RouteTrim.trimmed(route, keeping: 0...total) == route)
+        let kept = RouteTrim.trimmed(route, keeping: 0...total, takingOff: .start)
+        try #require(kept.count == 3)
+        #expect(!kept[0].isPauseBoundary)
+        #expect(kept == Array(Self.line[0...2]))
+    }
+
     @Test("a pause between the cuts stays a pause")
     func keepsAPauseInside() {
         let kept = RouteTrim.trimmed(Self.paused, keeping: Self.step...(3 * Self.step))

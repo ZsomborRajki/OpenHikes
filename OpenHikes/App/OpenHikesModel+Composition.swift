@@ -341,14 +341,7 @@ extension OpenHikesModel {
         defaults: UserDefaults
     ) -> WatchSessionCoordinator? {
         guard !AppLaunchEnvironment.isRunningTests else { return nil }
-        let healthExport = recorder.workoutWriter.map { writer in
-            WatchWalkHealthExport(
-                writer: writer,
-                container: container,
-                defaults: defaults,
-                weatherState: recorder.weatherState
-            )
-        }
+        let healthExport = WatchWalkHealthExport(recorder: recorder, container: container, defaults: defaults)
         // The recorder's trail graph, which a walk's junction warnings read
         // too, so a trail's junctions on the watch are the phone's.
         return WatchSessionCoordinator(

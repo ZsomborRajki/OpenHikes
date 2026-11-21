@@ -30,6 +30,13 @@
 //  there ends on the fix before the pause, or begins on the fix after it:
 //  never with the pause itself, which would be a leg leading nowhere.
 //
+//  Except at the line's own two ends, where a cut standing there is an end
+//  left alone and keeps every point. A recording paused through the drive
+//  home and stopped on the first fix after it ends on a pause with nothing
+//  walked past it, so the drive stands right on the end: the walk is the
+//  whole of the line's length, and only ``EndPauses`` can say to take that
+//  fix off.
+//
 
 import Algorithms
 import CoreLocation
@@ -39,6 +46,22 @@ nonisolated public enum RouteTrim {
     /// How near a cut may come to a point of the line and take that point
     /// rather than make one beside it.
     public static let snapMeters = 0.5
+
+    /// The ends of a line at which a cut standing on the end itself takes
+    /// off the pause there, as a cut anywhere else does — see *A pause at a
+    /// cut* in the file header.
+    public struct EndPauses: OptionSet, Hashable, Sendable {
+        public let rawValue: Int
+
+        public init(rawValue: Int) {
+            self.rawValue = rawValue
+        }
+
+        /// The line begins on the fix after the pause it opens with.
+        public static let start = Self(rawValue: 1 << 0)
+        /// The line ends on the fix before the pause it closes with.
+        public static let end = Self(rawValue: 1 << 1)
+    }
 
     /// How far along `route` each of its points stands, in metres, by the
     /// rule ``RouteProfile/distances`` follows: one figure a point, ascending,
@@ -61,20 +84,23 @@ nonisolated public enum RouteTrim {
     ///
     /// - Parameter distances: ``distances(along:)`` of the same route, handed
     ///   in because every caller has measured the line already.
+    /// - Parameter pauses: the ends where a cut standing on the end takes off
+    ///   the pause there.
     /// - Returns: the kept line, or nothing when the two cuts leave less than
     ///   a line: fewer than two points, or no length.
     public static func trimmed(
         _ route: [RouteCoordinate],
         distances: [Double],
-        keeping range: ClosedRange<Double>
+        keeping range: ClosedRange<Double>,
+        takingOff pauses: EndPauses = []
     ) -> [RouteCoordinate] {
         guard route.count > 1, distances.count == route.count, let total = distances.last else { return [] }
         let start = min(max(range.lowerBound, 0), total)
         let end = min(max(range.upperBound, 0), total)
         guard end > start else { return [] }
 
-        let head = startCut(of: route, distances: distances, at: start)
-        let tail = endCut(of: route, distances: distances, at: end)
+        let head = startCut(of: route, distances: distances, at: start, isCut: start > 0 || pauses.contains(.start))
+        let tail = endCut(of: route, distances: distances, at: end, isCut: end < total || pauses.contains(.end))
         var kept: [RouteCoordinate] = []
         if let made = head.made { kept.append(made) }
         if head.firstWhole <= tail.lastWhole {
@@ -93,8 +119,12 @@ nonisolated public enum RouteTrim {
     }
 
     /// The same, measuring the line first.
-    public static func trimmed(_ route: [RouteCoordinate], keeping range: ClosedRange<Double>) -> [RouteCoordinate] {
-        trimmed(route, distances: distances(along: route), keeping: range)
+    public static func trimmed(
+        _ route: [RouteCoordinate],
+        keeping range: ClosedRange<Double>,
+        takingOff pauses: EndPauses = []
+    ) -> [RouteCoordinate] {
+        trimmed(route, distances: distances(along: route), keeping: range, takingOff: pauses)
     }
 
     /// How long `route` was being recorded: the gaps between its consecutive
@@ -126,9 +156,16 @@ nonisolated public enum RouteTrim {
 
     /// Where the kept line begins. `start` is short of the line's end, so a
     /// point stands past it.
-    private static func startCut(of route: [RouteCoordinate], distances: [Double], at start: Double) -> StartCut {
-        // An end left alone keeps every point it had, a pause on it included.
-        guard start > 0 else { return StartCut(firstWhole: 0) }
+    ///
+    /// - Parameter isCut: `false` for an end left alone, which keeps every
+    ///   point it had, a pause on it included.
+    private static func startCut(
+        of route: [RouteCoordinate],
+        distances: [Double],
+        at start: Double,
+        isCut: Bool
+    ) -> StartCut {
+        guard isCut else { return StartCut(firstWhole: 0) }
         // The first point past the cut. Every point at the cut's own distance
         // is before it, so across a pause the one taken is the fix after it.
         let upper = min(distances.partitioningIndex { $0 > start }, route.count - 1)
@@ -143,8 +180,13 @@ nonisolated public enum RouteTrim {
 
     /// Where the kept line ends. `end` is past the line's start, so a point
     /// stands before it.
-    private static func endCut(of route: [RouteCoordinate], distances: [Double], at end: Double) -> EndCut {
-        guard let total = distances.last, end < total else { return EndCut(lastWhole: route.count - 1) }
+    private static func endCut(
+        of route: [RouteCoordinate],
+        distances: [Double],
+        at end: Double,
+        isCut: Bool
+    ) -> EndCut {
+        guard isCut else { return EndCut(lastWhole: route.count - 1) }
         // The first point at or past the cut. Of the points at the cut's own
         // distance it is the first, so across a pause the one taken is the
         // fix before it.

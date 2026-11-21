@@ -53,6 +53,17 @@ final class StubWorkoutWriter: HikeWorkoutWriting {
         await Task.yield()
         if let deleteFailure { throw deleteFailure }
     }
+
+    /// The hikes an edit asked Health to clear for a replacement, in the
+    /// order it asked. A delete of its own, so a suite can tell it from a
+    /// hike's deletion.
+    private(set) var deletedToReplace: [UUID] = []
+
+    func deleteWorkoutToReplace(of hikeID: UUID) async throws {
+        deletedToReplace.append(hikeID)
+        await Task.yield()
+        if let deleteFailure { throw deleteFailure }
+    }
 }
 
 @MainActor
