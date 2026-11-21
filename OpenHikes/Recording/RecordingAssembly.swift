@@ -58,7 +58,15 @@ nonisolated extension RouteReviewSection {
 nonisolated extension RouteAssembly {
     /// The pieces `match` resolves into with every section at its default,
     /// or `nil` when there is no section to keep.
-    static func saved(from match: TrailMatchResult, sections: [RouteReviewSection]) -> Self? {
+    ///
+    /// - Parameter alternativeBudget: how many points the sections' other
+    ///   routes may carry between them — ``maximumAlternativeCoordinates``,
+    ///   and less only in a suite.
+    static func saved(
+        from match: TrailMatchResult,
+        sections: [RouteReviewSection],
+        alternativeBudget: Int = maximumAlternativeCoordinates
+    ) -> Self? {
         guard !sections.isEmpty, !match.legs.isEmpty else { return nil }
         var sectionOfLeg: [Int: Int] = [:]
         for (position, section) in sections.enumerated() {
@@ -73,13 +81,23 @@ nonisolated extension RouteAssembly {
         }
         walk.closeKept()
 
-        var budget = maximumAlternativeCoordinates
-        let checks = sections.enumerated().compactMap { position, section -> RouteCheck? in
+        var budget = alternativeBudget
+        var pieces = walk.pieces
+        var checks: [RouteCheck] = []
+        for (position, section) in sections.enumerated() {
             guard let range = walk.ranges[position],
                   let firstLeg = section.legIndices.first,
                   let lastLeg = section.legIndices.last
-            else { return nil }
-            return RouteCheck(
+            else { continue }
+            let alternatives = alternatives(of: section, within: &budget)
+            // Every route offered across it left out: nothing is left to
+            // choose between, and it was saved as its fixes, so it is ground
+            // the line keeps as it is, not a question.
+            if section.kind == .ambiguous, alternatives.isEmpty {
+                pieces = keeping(range, inPlaceOf: section.id, in: pieces)
+                continue
+            }
+            checks.append(RouteCheck(
                 id: section.id,
                 kind: RouteCheck.Kind(section.kind),
                 savedChoice: RouteCheck.Choice(section.defaultChoice),
@@ -89,11 +107,28 @@ nonisolated extension RouteAssembly {
                 trailName: section.trailName,
                 unobservedSeconds: section.unobservedDuration,
                 isBridged: section.isBridged,
-                alternatives: alternatives(of: section, within: &budget)
-            )
+                alternatives: alternatives
+            ))
         }
         guard !checks.isEmpty else { return nil }
-        return Self(pieces: walk.pieces, checks: checks)
+        return Self(pieces: pieces, checks: checks)
+    }
+
+    /// `pieces` with the check `id` made kept ground, `range` of the saved
+    /// line, joined to kept ground either side where they meet: the same
+    /// points, put together the same way, with no question about them.
+    static func keeping(_ range: ClosedRange<Int>, inPlaceOf id: Int, in pieces: [Piece]) -> [Piece] {
+        var kept: [Piece] = []
+        for piece in pieces {
+            let next = piece == .check(id) ? .kept(range) : piece
+            if case .kept(let added) = next, case .kept(let before)? = kept.last,
+               added.lowerBound <= before.upperBound + 1 {
+                kept[kept.count - 1] = .kept(before.lowerBound...max(before.upperBound, added.upperBound))
+            } else {
+                kept.append(next)
+            }
+        }
+        return kept
     }
 
     /// The section's other routes, as many as still fit — see

@@ -311,6 +311,24 @@ extension RouteReviewTests {
 
         #expect(RouteAssembly.saved(from: fixture.result, sections: []) == nil)
     }
+
+    /// The routes offered across ambiguous stretches share one budget, so a
+    /// long recording's later stretches can be left with none of theirs.
+    @Test("an ambiguous stretch whose routes did not fit is kept as it was recorded, and not asked about")
+    func anAmbiguousStretchWithNoRoutesIsNoQuestion() {
+        let fixture = ambiguousFixture()
+        let sections = RouteReviewSection.sections(in: fixture.result)
+        #expect(sections.map(\.kind) == [.ambiguous])
+
+        #expect(RouteAssembly.saved(from: fixture.result, sections: sections, alternativeBudget: 0) == nil)
+
+        // Made kept ground, it is the same points, joined to the ground
+        // either side whether it shared their points or not.
+        let shared: [RouteAssembly.Piece] = [.kept(0...3), .check(7), .kept(6...10)]
+        #expect(RouteAssembly.keeping(3...6, inPlaceOf: 7, in: shared) == [.kept(0...10)])
+        let apart: [RouteAssembly.Piece] = [.kept(0...3), .check(7), .kept(7...10), .check(8)]
+        #expect(RouteAssembly.keeping(4...6, inPlaceOf: 7, in: apart) == [.kept(0...10), .check(8)])
+    }
 }
 
 // MARK: - UI automation fixture
