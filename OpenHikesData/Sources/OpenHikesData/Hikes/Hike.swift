@@ -298,6 +298,29 @@ public final class Hike {
     /// recording or an import never carries one.
     public var drawnRouteData: Data?
 
+    /// The line as it stood before *Edit Route* first trimmed it, or empty
+    /// for a hike whose line was never edited: what *Revert to Original* puts
+    /// back, on whichever device the hiker reverts on.
+    ///
+    /// The whole line rather than the cut that was made, because an edit must
+    /// never be the only copy of a walk: ``route`` is what every reader
+    /// draws, measures and exports, so the edit goes there, and what it took
+    /// away stays here. Written by the first edit and left alone by every
+    /// later one, so a second trim cannot make the first one permanent.
+    ///
+    /// External for the reason ``route`` is: it is the same size and travels
+    /// the same way. ``rawRoute`` is not this: that is the unmatched GPS
+    /// trace of a recording the matcher moved, and it stays whole under an
+    /// edit.
+    @Attribute(.externalStorage) public var originalRoute: [RouteCoordinate] = []
+
+    /// What an edited hike was before its line was edited, beside the line
+    /// itself, as JSON, or `nil` for a hike never edited — read through the
+    /// app's `routeEdit`. One `Data` column for the reason ``drawnRouteData``
+    /// is one: it crosses CloudKit as a single field, and a later addition
+    /// to it costs no schema change.
+    public var routeEditData: Data?
+
     /// Photos taken or imported while this hike was open, newest last once
     /// read through ``orderedPhotos``.
     ///

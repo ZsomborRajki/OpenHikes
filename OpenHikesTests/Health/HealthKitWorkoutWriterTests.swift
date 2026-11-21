@@ -131,6 +131,62 @@ struct HealthKitWorkoutWriterTests {
         #expect(store.heldTypes == [Self.workout])
     }
 
+    // MARK: - Replacing
+
+    /// A hiker who lets this app write workouts and not their routes, which
+    /// Health's own settings allow. The delete a hike's deletion makes took
+    /// the workout and then threw for the route, so the replacement was never
+    /// written and the trim cost the hike its workout.
+    @Test("a route the hiker does not let this app write leaves the replacement to be written")
+    func aRefusedRouteStillReplaces() async throws {
+        let store = ScriptedHealthStore()
+        let harness = try Harness(store: store)
+        await harness.export()
+        store.refusesSharing = [Self.route]
+        store.refusesDeleting = [Self.route]
+
+        await RouteEditWorkout.replace(
+            of: harness.hike.id,
+            with: harness.request.route,
+            distanceMeters: Self.walkMeters / 2,
+            through: try harness.health()
+        ).value
+
+        #expect(store.held.count { $0.type == Self.workout } == 1, "Health holds \(store.heldTypes)")
+        #expect(store.held.count { $0.type == Self.distance } == 1, "Health holds \(store.heldTypes)")
+        #expect(!store.deletions.contains(Self.route))
+    }
+
+    @Test("a replacement keeps the workout when what goes before it will not go")
+    func aFailedRouteDeleteKeepsTheWorkout() async throws {
+        let store = ScriptedHealthStore()
+        let harness = try Harness(store: store)
+        await harness.export()
+        store.refusesDeleting = [Self.route]
+
+        await #expect(throws: ScriptedHealthStore.Refusal.self) {
+            try await harness.writer.deleteWorkoutToReplace(of: harness.hike.id)
+        }
+
+        #expect(store.deletions == [Self.route])
+        #expect(store.heldTypes == [Self.distance, Self.workout, Self.route])
+    }
+
+    @Test("a hiker who stopped this app writing workouts keeps the one there is")
+    func noWorkoutSharingTakesNothingOut() async throws {
+        let store = ScriptedHealthStore()
+        let harness = try Harness(store: store)
+        await harness.export()
+        store.refusesSharing = [Self.workout]
+
+        await #expect(throws: HikeWorkoutFailure.notAuthorized) {
+            try await harness.writer.deleteWorkoutToReplace(of: harness.hike.id)
+        }
+
+        #expect(store.deletions.isEmpty)
+        #expect(store.heldTypes == [Self.distance, Self.workout, Self.route])
+    }
+
     // MARK: - Harness
 
     /// A saved hike and a writer over `store`, paired the way the app pairs
@@ -181,6 +237,16 @@ struct HealthKitWorkoutWriterTests {
         /// The list's deletion, asking this writer's Health.
         func deleteHike() throws {
             try HikeDeletion.delete([hike], workouts: writer)
+        }
+
+        /// What an edit replaces this hike's workout through.
+        func health() throws -> RouteEditWorkout.Health {
+            RouteEditWorkout.Health(
+                writer: writer,
+                queue: HikeWorkoutQueue(),
+                container: container,
+                defaults: try #require(UserDefaults(suiteName: "HealthKitWorkoutWriterTests-\(UUID().uuidString)"))
+            ) { .idle }
         }
     }
 }
@@ -240,6 +306,9 @@ final class ScriptedHealthStore: HealthWorkoutStore {
     var handsWorkoutBack = true
     /// Types Health refuses to delete from.
     var refusesDeleting: [HKObjectType] = []
+    /// Types the hiker does not let this app write, which Health's own
+    /// settings can turn off one at a time.
+    var refusesSharing: [HKObjectType] = []
 
     private(set) var held: [Object] = []
     /// Every type a deletion asked about, in order.
@@ -250,7 +319,7 @@ final class ScriptedHealthStore: HealthWorkoutStore {
     var isHealthDataAvailable: Bool { true }
 
     func authorizationStatus(for type: HKObjectType) -> HKAuthorizationStatus {
-        .sharingAuthorized
+        refusesSharing.contains(type) ? .sharingDenied : .sharingAuthorized
     }
 
     func requestAuthorization(toShare types: Set<HKSampleType>) {

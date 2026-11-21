@@ -72,6 +72,7 @@ extension WatchWalkHealthExportTests {
         let writer = HeldWorkoutWriter()
         let export = WatchWalkHealthExport(
             writer: writer,
+            queue: HikeWorkoutQueue(),
             container: container,
             defaults: Harness.defaults(savesToHealth: .on),
             weatherState: { .idle }

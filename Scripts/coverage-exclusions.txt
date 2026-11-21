@@ -234,6 +234,16 @@
 # the map sheet's own field (`ClearFieldButton`), body code with nothing to
 # decide.
 #
+# *Edit Route* on a hike that was recorded or imported arrived as a screen
+# (`RouteTrimView`), its trimmer (`RouteTrimChart`) and what it says under it
+# (`RouteTrimDetails`), with the sheet's destination for it
+# (`MapSheet+RouteEdit`). What they decide stays measured: where a cut may
+# stand and what a save refuses are `RouteTrimSession`'s
+# (`RouteTrimSessionTests`), the write and the revert are `RouteEditSave`'s
+# (`RouteEditSaveTests`), the workout that follows is `RouteEditWorkout`'s
+# (`RouteEditWorkoutTests`), and the handles on the map are
+# `MapRouteTrim.swift`'s (`MapCoordinatorTests+RouteTrim`).
+#
 # The UI suites still exist and still run locally:
 #
 #   Scripts/run-ui-tests.sh --all
@@ -349,3 +359,7 @@ OpenHikes/Tiles/Countries/OfflineCountriesHead.swift
 OpenHikes/General/SortMenu.swift
 OpenHikes/General/SectionIndex.swift
 OpenHikes/General/ClearFieldButton.swift
+OpenHikes/Hikes/Editing/RouteTrimView.swift
+OpenHikes/Hikes/Editing/RouteTrimChart.swift
+OpenHikes/Hikes/Editing/RouteTrimDetails.swift
+OpenHikes/Map/MapSheet+RouteEdit.swift

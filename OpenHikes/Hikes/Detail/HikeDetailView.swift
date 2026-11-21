@@ -509,8 +509,12 @@ private extension HikeDetailView {
             communityShareButton
             // The column rather than the decoded value: a body pass should
             // not decode JSON to ask whether there is any.
-            if let trailMaker, hike.drawnRouteData != nil {
-                HikeRouteEditButton(hike: hike, maker: trailMaker)
+            if hike.drawnRouteData != nil {
+                if let trailMaker { HikeRouteEditButton(hike: hike, maker: trailMaker) }
+            } else if line.pointCount > 1 {
+                // A line somebody walked or imported is trimmed, never
+                // re-routed — see ``RouteTrimView``.
+                HikeRouteTrimLink(hike: hike)
             }
             renameButton(scroller)
         }

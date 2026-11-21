@@ -159,7 +159,7 @@ nonisolated extension HikePhotoSearchPlan {
     /// line. A height is left out, because filling heights in writes a new
     /// line with every point where it was (``HikeElevationFill``), and a
     /// review should not be thrown away for that. So is ``RouteMotion``,
-    /// which nothing reads.
+    /// which says how a point was reached and not where it is.
     ///
     /// By value rather than by a revision: ``Hike/lineRevision`` moves only
     /// for a line this context wrote, and a walk has no counter at all, while

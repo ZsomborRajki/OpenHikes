@@ -289,6 +289,10 @@ final class HeldWorkoutWriter: HikeWorkoutWriting {
         deleted.append(hikeID)
     }
 
+    func deleteWorkoutToReplace(of hikeID: UUID) {
+        Issue.record("a deletion asked to replace a workout")
+    }
+
     /// Returns once `write` has been entered and is waiting.
     func untilWriting() async {
         guard !hasEntered else { return }

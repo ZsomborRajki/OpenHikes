@@ -82,6 +82,10 @@ enum SheetRoute: Hashable {
     /// in the area the map shows, to add to it. See ``HikePlacesNearbyView``.
     case placesNearby(Hike)
     case recording
+    /// *Edit Route* on a hike that was recorded or imported — see
+    /// ``RouteTrimView``. Pushed over the hike's own screen, and popped with
+    /// it when the hike is deleted. A drawn trail's goes to the maker.
+    case routeEdit(Hike)
     /// How a hike's line is drawn — see ``RouteStyleView``. Pushed over the
     /// hike's own screen, and popped with it when the hike is deleted.
     case routeStyle(Hike)
@@ -127,7 +131,7 @@ enum SheetRoute: Hashable {
         case let .newPlace(hike, _): hike.id == hikeID
         case let .placesAround(hike): hike.id == hikeID
         case let .placesNearby(hike): hike.id == hikeID
-        case let .routeStyle(hike): hike.id == hikeID
+        case let .routeEdit(hike), let .routeStyle(hike): hike.id == hikeID
         case let .walk(walk): walk.hikeID == hikeID
         // None of them shows a `Hike`, so none is popped by one being
         // deleted. A community preview — and the gallery over it — is about a
@@ -180,7 +184,7 @@ enum SheetRoute: Hashable {
         switch self {
         case .commonsGallery, .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto: true
         case .hike, .newPlace, .pendingPhotos, .pendingSubmission, .photo, .place, .placesAround, .placesNearby,
-            .recording, .routeStyle, .offlineCountries, .totals, .trailDraft, .walk:
+            .recording, .routeEdit, .routeStyle, .offlineCountries, .totals, .trailDraft, .walk:
             false
         }
     }
@@ -192,8 +196,8 @@ enum SheetRoute: Hashable {
         switch self {
         case .commonsGallery, .communityPhoto, .photo: true
         case .commonsPhoto, .commonsPhotos, .communityHike, .hike, .newPlace, .offlineCountries, .pendingPhotos,
-            .pendingSubmission, .place, .placesAround, .placesNearby, .recording, .routeStyle, .totals, .trailDraft,
-            .walk:
+            .pendingSubmission, .place, .placesAround, .placesNearby, .recording, .routeEdit, .routeStyle, .totals,
+            .trailDraft, .walk:
             false
         }
     }
@@ -212,7 +216,7 @@ enum SheetRoute: Hashable {
         case .photo: true
         case .commonsGallery, .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto, .hike, .newPlace,
             .offlineCountries, .pendingPhotos, .pendingSubmission, .place, .placesAround, .placesNearby, .recording,
-            .routeStyle, .totals, .trailDraft, .walk:
+            .routeEdit, .routeStyle, .totals, .trailDraft, .walk:
             false
         }
     }
@@ -227,7 +231,9 @@ enum SheetRoute: Hashable {
         if lhs.isAboutCommons || rhs.isAboutCommons { return commonsRoutesEqual(lhs, rhs) }
         return switch (lhs, rhs) {
         case let (.hike(left), .hike(right)): left == right
-        case let (.routeStyle(left), .routeStyle(right)): left == right
+        // Two screens about a hike and nothing else of it, in one case so
+        // this switch stays inside the complexity limit.
+        case let (.routeStyle(left), .routeStyle(right)), let (.routeEdit(left), .routeEdit(right)): left == right
         case let (.photo(left, leftPhoto), .photo(right, rightPhoto)): left == right && leftPhoto == rightPhoto
         // The three that carry nothing are equal to themselves and to nothing
         // else, which is one rule rather than three.
@@ -315,6 +321,9 @@ enum SheetRoute: Hashable {
         case let .routeStyle(hike):
             hasher.combine(12)
             hasher.combine(hike)
+        case let .routeEdit(hike):
+            hasher.combine(25)
+            hasher.combine(hike)
         case let .place(hike, placeID):
             hasher.combine(9)
             hasher.combine(hike)
@@ -342,7 +351,8 @@ enum SheetRoute: Hashable {
         // 21 to 23 are numbers the linter would have named.
         case .offlineCountries: hasher.combine(24)
         case .commonsGallery, .commonsPhoto, .commonsPhotos, .communityHike, .communityPhoto, .hike, .newPlace,
-            .pendingPhotos, .pendingSubmission, .photo, .place, .placesAround, .placesNearby, .routeStyle, .walk:
+            .pendingPhotos, .pendingSubmission, .photo, .place, .placesAround, .placesNearby, .routeEdit, .routeStyle,
+            .walk:
             break
         }
     }
@@ -383,7 +393,7 @@ enum SheetRoute: Hashable {
             hasher.combine(20)
             hasher.combine(opening.credit.license.sourceURL)
         case .hike, .newPlace, .offlineCountries, .photo, .place, .placesAround, .placesNearby, .recording,
-            .routeStyle, .totals, .trailDraft, .walk:
+            .routeEdit, .routeStyle, .totals, .trailDraft, .walk:
             break
         }
     }

@@ -327,6 +327,7 @@ struct OpenHikesView: View {
             walk: appModel.walkSession,
             junctionGuide: appModel.junctionGuide,
             countryOutlines: appModel.offlineCountries.outlines,
+            routeTrim: appModel.routeTrim,
             // Keeps the credit line and the camera pill beside the landscape
             // panel instead of behind it.
             sidePanelInset: usesSidePanel ? MapSidePanelLayout.mapInset : 0,
