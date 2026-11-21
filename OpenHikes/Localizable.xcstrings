@@ -48788,6 +48788,58 @@
         }
       }
     },
+    "Recording stopped. It was too short to save as a hike." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufzeichnung beendet. Sie war zu kurz, um als Wanderung gespeichert zu werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grabación detenida. Era demasiado corta para guardarla como excursión."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrement arrêté. Il était trop court pour être sauvegardé comme randonnée."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registrazione interrotta. Era troppo breve per essere salvata come escursione."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nagrywanie zatrzymane. Nagranie było zbyt krótkie, aby zapisać je jako wędrówkę."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Înregistrarea s-a oprit. A fost prea scurtă pentru a fi salvată ca drumeție."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запись остановлена. Она слишком короткая, чтобы сохранить ее как поход."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запис зупинено. Він закороткий, щоб зберегти його як похід."
+          }
+        }
+      }
+    },
     "Recording your hike on %@." : {
       "localizations" : {
         "de" : {
@@ -73350,6 +73402,58 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Запис призупинено вже %1$@, і відтоді ви пройшли %2$@. Поновіть запис, щоб решта походу потрапила в трек."
+          }
+        }
+      }
+    },
+    "Your recording is too short to save, but it has photos or places on it. Open OpenHikes to discard it or keep recording." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Aufzeichnung ist zu kurz zum Speichern, enthält aber Fotos oder Orte. Öffne OpenHikes, um sie zu verwerfen oder weiter aufzuzeichnen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu grabación es demasiado corta para guardarla, pero tiene fotos o lugares. Abre OpenHikes para descartarla o seguir grabando."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre enregistrement est trop court pour être sauvegardé, mais il contient des photos ou des lieux. Ouvrez OpenHikes pour le supprimer ou continuer à enregistrer."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La tua registrazione è troppo breve per essere salvata, ma contiene foto o luoghi. Apri OpenHikes per scartarla o continuare a registrare."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Twoje nagranie jest zbyt krótkie, aby je zapisać, ale zawiera zdjęcia lub miejsca. Otwórz OpenHikes, aby je odrzucić lub nagrywać dalej."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Înregistrarea dvs. este prea scurtă pentru a fi salvată, dar conține poze sau locuri. Deschideți OpenHikes pentru a o abandona sau a continua înregistrarea."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ваша запись слишком короткая, чтобы ее сохранить, но в ней есть фото или места. Откройте OpenHikes, чтобы удалить ее или продолжить запись."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ваш запис закороткий, щоб його зберегти, але в ньому є фото або місця. Відкрийте OpenHikes, щоб видалити його або продовжити запис."
           }
         }
       }

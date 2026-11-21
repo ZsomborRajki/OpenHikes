@@ -198,6 +198,20 @@ final class WatchRecordingMirrorTests {
         #expect(outcome.recording.state == .idle)
     }
 
+    /// Started by mistake and stopped at once: the watch is told nothing went
+    /// wrong, because nothing did (#1535).
+    @Test("stopping a recording with no line ends it without a refusal")
+    func stoppingAnEmptyRecordingEndsIt() async throws {
+        let coordinator = makeCoordinator()
+        let mirror = makeMirror(publishing: Published(), coordinator: coordinator)
+        _ = try await coordinator.startRecording()
+
+        let outcome = await mirror.perform(WatchRecordingCommand(action: .stop))
+
+        #expect(outcome.refusal == nil)
+        #expect(outcome.recording.state == .idle)
+    }
+
     @Test("with no coordinator registered, a button is refused rather than dropped")
     func withoutACoordinatorACommandIsRefused() async {
         let mirror = WatchRecordingMirror(coordinator: nil) { _ in /* nothing to collect */ }

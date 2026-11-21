@@ -106,13 +106,7 @@ struct StopHikeRecordingIntent: AppIntent, HikeCoordinatingIntent {
     @Dependency var appCoordinator: HikeIntentCoordinator
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        let hike = try await coordinator.stopRecording()
-        return .result(dialog: IntentDialog("\(Self.confirmation(for: hike))"))
-    }
-
-    /// Named "Saved" rather than "Stopped": stopping is what the hiker asked
-    /// for, and what they want confirmed is that it survived.
-    nonisolated private static func confirmation(for hike: FinishedHikeReport) -> String {
-        String(localized: "Saved \(hike.spokenSummary)")
+        let stopped = try await coordinator.stopRecording()
+        return .result(dialog: IntentDialog("\(stopped.spokenConfirmation)"))
     }
 }

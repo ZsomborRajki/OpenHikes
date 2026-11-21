@@ -76,6 +76,20 @@ nonisolated struct FinishedHikeReport: Equatable, Sendable {
     let duration: TimeInterval?
 }
 
+/// What a Stop asked for by Siri, Control Center or the watch came to.
+///
+/// Two answers, because Stop ends a recording kept or not, as the recording
+/// screen's own button does (`RecordingStop.swift`). A recording with no line
+/// is not a hike that failed to save: it is ended, and saying "saved" or
+/// "couldn't be saved" about it would both be wrong.
+nonisolated enum StoppedRecordingReport: Equatable, Sendable {
+    /// Too short to be a hike, and holding nothing the hiker put on it: ended,
+    /// with no draft left behind.
+    case endedEmpty
+    /// The walk had a line, and this is the hike it was saved as.
+    case saved(FinishedHikeReport)
+}
+
 /// Everything walked between two instants, which is how "today" is asked.
 nonisolated struct HikeTotalsReport: Equatable, Sendable {
     let hikeCount: Int
@@ -123,6 +137,21 @@ nonisolated extension FinishedHikeReport {
             return String(localized: "\(title): \(length) on \(day).")
         }
         return String(localized: "\(title): \(length) in \(HikeFormat.spokenDuration(duration)) on \(day).")
+    }
+}
+
+nonisolated extension StoppedRecordingReport {
+    /// What the hiker hears after Stop.
+    ///
+    /// "Saved" rather than "Stopped" for a hike: stopping is what the hiker
+    /// asked for, and what they want confirmed is that it survived. A
+    /// recording with no line says it was too short, so nobody goes looking
+    /// for a hike that was never written.
+    var spokenConfirmation: String {
+        switch self {
+        case .endedEmpty: String(localized: "Recording stopped. It was too short to save as a hike.")
+        case .saved(let hike): String(localized: "Saved \(hike.spokenSummary)")
+        }
     }
 }
 

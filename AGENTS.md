@@ -502,6 +502,11 @@ a change to recording, the map, the sheet or the render path; the PR template,
     the owner's decision** (`RecordingTitle`). A field left as it opened is
     not a typed name (`RecordingStopName`), and only `RouteShape` says what
     a loop is.
+  - **Every Stop asks the same first question.** Siri, Control Center and
+    the watch stop through `HikeIntentCoordinator.stopRecording()`, which
+    ends an empty recording as the button does. It leaves one holding
+    photographs or places running, because only the screen can ask before
+    they go.
 - **The map is imperative MapKit behind `MapView`.** `MapView.Coordinator`
   observes stable controllers and updates `MKMapView` directly. Tiles flow
   through `CachingTileOverlayRenderer` into `TileCache`, auto-saves through
