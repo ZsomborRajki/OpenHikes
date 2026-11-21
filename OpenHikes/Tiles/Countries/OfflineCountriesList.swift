@@ -14,7 +14,9 @@
 //
 //  The body reads the list, what is installed, *Extra Detail*, the order
 //  and the query, which change a few times a visit or once a keystroke. What
-//  it orders and finds the areas by is kept across those passes
+//  it orders and finds the areas by is prepared off the main actor, by a
+//  task for each change to what it is made from, and kept across those
+//  passes, the last one drawn until the next is ready
 //  (``OfflineCountryDirectoryCache``). A download's progress is read by its
 //  row alone. The query, the order and the countries open are kept outside
 //  it (``OfflineCountriesListState``), because under the map a turn of the
@@ -57,21 +59,30 @@ struct OfflineCountriesList: View {
                 description: Text("This build can’t download countries.")
             )
         } else {
-            let directory = directories.directory(
+            let revision = directories.revision(for: OfflineCountryDirectory.Source(
                 offered: countries.offered,
                 installed: countries.installed,
                 near: near
-            )
-            if directory.isEmpty {
-                emptyState
-            } else {
-                content(directory)
-            }
+            ))
+            prepared
+                .task(id: revision) { await directories.prepare(revision) }
         }
     }
 
-    @ViewBuilder private var emptyState: some View {
-        if countries.listPhase == .failed {
+    /// The list, once a directory is prepared and has areas in it.
+    @ViewBuilder private var prepared: some View {
+        if let directory = directories.directory, !directory.isEmpty {
+            content(directory)
+        } else {
+            emptyState(isPrepared: directories.directory != nil)
+        }
+    }
+
+    /// - Parameter isPrepared: Whether a directory is prepared: until one
+    ///   is, the list is still coming, whatever the server answered.
+    @ViewBuilder
+    private func emptyState(isPrepared: Bool) -> some View {
+        if isPrepared, countries.listPhase == .failed {
             ContentUnavailableView {
                 Label("Couldn’t Load Countries", systemImage: "wifi.exclamationmark")
             } description: {
