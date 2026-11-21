@@ -3,7 +3,10 @@
 //  OpenHikesTests
 //
 //  What a finished recording is called, once the live matcher has spent the
-//  walk saying which trail it was on.
+//  walk saying which trail it was on: that trail and the day, and "Loop"
+//  beside the trail when the walk came back by other ground than it went out
+//  on — see ``RecordingTitle`` for the order, and `HikeRecorder+PlaceName.swift`
+//  for where the parts come from.
 //
 //  The trail is published the way the live matcher publishes it — through
 //  ``HikeRecorder/applyCurrentTrail(_:isCurrent:)`` — rather than by handing
@@ -34,12 +37,13 @@ extension HikeRecorderTests {
     /// are credited to the trail the matcher had already named — a verdict
     /// arriving after them belongs to the ground after them.
     ///
-    /// Shared with `HikeRecorderTests+PlaceName.swift`, where the trail is
-    /// what outranks the town a walk started in.
+    /// Shared with `HikeRecorderTests+PlaceName.swift`, where the trail
+    /// stands beside the town a walk started in.
     func walk(
         _ recorder: HikeRecorder,
         to latitude: Double,
-        on trailName: String?
+        on trailName: String?,
+        longitude: Double = 12.86
     ) {
         recorder.applyCurrentTrail(
             trailName.map { name in
@@ -47,22 +51,68 @@ extension HikeRecorderTests {
             },
             isCurrent: true
         )
-        source.deliver(fix(latitude: latitude))
+        source.deliver(fix(latitude: latitude, longitude: longitude))
         clock.advance(by: 60)
     }
 
-    /// The placeholder the stop alert shows, read while the walk is still
+    /// Where the two walks below set off from, and the stride they take: two
+    /// thousandths of a degree, some 220 m of latitude and 150 m of longitude
+    /// here, a minute apart.
+    private static let trailheadLatitude = 47.63
+    private static let trailheadLongitude = 12.86
+    private static let stride = 0.002
+
+    /// Walks to the point so many strides north and east of the trailhead.
+    private func walk(
+        _ recorder: HikeRecorder,
+        north: Int,
+        east: Int,
+        on trailName: String
+    ) {
+        walk(
+            recorder,
+            to: Self.trailheadLatitude + Double(north) * Self.stride,
+            on: trailName,
+            longitude: Self.trailheadLongitude + Double(east) * Self.stride
+        )
+    }
+
+    /// Walks round a block some 440 m by 300 m, along `trailName`, and back
+    /// to where it set off: north, east, south and west again.
+    private func walkRoundABlock(_ recorder: HikeRecorder, on trailName: String) {
+        let corners = [(0, 0), (1, 0), (2, 0), (2, 1), (2, 2), (1, 2), (0, 2), (0, 1), (0, 0)]
+        for (north, east) in corners {
+            walk(recorder, north: north, east: east, on: trailName)
+        }
+    }
+
+    /// Walks some 440 m up `trailName` and back down it.
+    private func walkThereAndBack(_ recorder: HikeRecorder, on trailName: String) {
+        for north in [0, 1, 2, 1, 0] {
+            walk(recorder, north: north, east: 0, on: trailName)
+        }
+    }
+
+    /// `trailPart` and the day `recorder`'s walk started: the name of a walk
+    /// no town was asked about.
+    private func name(_ trailPart: String, of recorder: HikeRecorder) throws -> String {
+        let startedAt = try #require(recorder.sessionStartedAt)
+        return trailPart + RecordingTitle.separator + RecordingTitle.day(startedAt)
+    }
+
+    /// The name the stop alert opens with, read while the walk is still
     /// running — which is the only time it can be read, since the hiker is
     /// asked for a name before the recording is prepared.
-    @Test("a walk along one trail is offered that trail's name")
-    func aWalkAlongOneTrailIsOfferedItsName() async {
+    @Test("a walk along one trail is offered that trail's name and the day")
+    func aWalkAlongOneTrailIsOfferedItsName() async throws {
         let recorder = makeRecorder()
         await recorder.start()
         walk(recorder, to: 47.63, on: "Ridge Path")
         walk(recorder, to: 47.631, on: "Ridge Path")
         walk(recorder, to: 47.632, on: "Ridge Path")
+        let offered = try name("Ridge Path", of: recorder)
 
-        #expect(recorder.suggestedTitle == "Ridge Path")
+        #expect(await recorder.suggestedTitle() == offered)
     }
 
     /// The draft keeps the name it was created with for the length of the
@@ -78,12 +128,13 @@ extension HikeRecorderTests {
         walk(recorder, to: 47.631, on: "Ridge Path")
 
         let draft = try #require(recorder.currentHike)
-        #expect(recorder.suggestedTitle == "Ridge Path")
+        let offered = try name("Ridge Path", of: recorder)
+        #expect(await recorder.suggestedTitle() == offered)
         #expect(draft.title == HikeRecorder.defaultTitle(for: draft.date))
     }
 
-    /// The promise the placeholder makes. A hiker who types nothing gets the
-    /// name they were shown, in `title` — the field a default lives in.
+    /// A Stop that showed no name — Siri's, the watch's — is named at the
+    /// save, for the trail, in `title`: the field a default lives in.
     @Test("a hike saved with no typed name takes the trail's")
     func savingWithoutANameTakesTheTrails() async throws {
         let recorder = makeRecorder()
@@ -91,11 +142,12 @@ extension HikeRecorderTests {
         walk(recorder, to: 47.63, on: "Ridge Path")
         walk(recorder, to: 47.631, on: "Ridge Path")
         walk(recorder, to: 47.632, on: "Ridge Path")
+        let offered = try name("Ridge Path", of: recorder)
 
         let hike = try savedHike(from: await recorder.stop())
 
-        #expect(hike.title == "Ridge Path")
-        #expect(hike.displayTitle == "Ridge Path")
+        #expect(hike.title == offered)
+        #expect(hike.displayTitle == offered)
         #expect(hike.customName == nil, "nobody typed this name")
     }
 
@@ -111,17 +163,18 @@ extension HikeRecorderTests {
         walk(recorder, to: 47.63, on: "Ridge Path")
         walk(recorder, to: 47.631, on: "Ridge Path")
         walk(recorder, to: 47.632, on: "Ridge Path")
+        let offered = try name("Ridge Path", of: recorder)
 
         let hike = try savedHike(from: await recorder.stop(customName: "Sunday Walk"))
 
         #expect(hike.displayTitle == "Sunday Walk")
-        #expect(hike.title == "Ridge Path")
+        #expect(hike.title == offered)
     }
 
     /// The floor, through the recorder. Two thirds of this walk is ground the
     /// matcher had no name for, and the date says something true about it
     /// where "Ridge Path" would not.
-    @Test("a walk that mostly left the trail keeps the date in its name")
+    @Test("a walk that mostly left the trail keeps the time of day in its name")
     func aWalkThatLeftTheTrailKeepsTheDate() async throws {
         let recorder = makeRecorder()
         await recorder.start()
@@ -131,7 +184,7 @@ extension HikeRecorderTests {
         walk(recorder, to: 47.633, on: nil)
         walk(recorder, to: 47.635, on: nil)
 
-        #expect(recorder.suggestedTitle == nil)
+        #expect(await recorder.suggestedTitle() == nil)
         let hike = try savedHike(from: await recorder.stop())
         #expect(hike.title == HikeRecorder.defaultTitle(for: hike.date))
     }
@@ -139,7 +192,7 @@ extension HikeRecorderTests {
     /// A recording with no trail graph behind it at all — no provider, an
     /// Overpass outage, a valley nobody has mapped. The name it had before
     /// this existed is the name it still gets.
-    @Test("a walk the matcher never named keeps the date in its name")
+    @Test("a walk the matcher never named keeps the time of day in its name")
     func anUnmatchedWalkKeepsTheDate() async throws {
         let recorder = makeRecorder()
         await recorder.start()
@@ -147,8 +200,69 @@ extension HikeRecorderTests {
         clock.advance(by: 60)
         source.deliver(fix(latitude: 47.631))
 
-        #expect(recorder.suggestedTitle == nil)
+        #expect(await recorder.suggestedTitle() == nil)
         let hike = try savedHike(from: await recorder.stop())
         #expect(hike.title == HikeRecorder.defaultTitle(for: hike.date))
+    }
+
+    /// The word is read off the line drawn so far when the hiker asks to
+    /// stop, which is when the alert needs it.
+    @Test("a walk round a trail and back to its start is offered a loop")
+    func aWalkRoundATrailIsOfferedALoop() async throws {
+        let recorder = makeRecorder()
+        await recorder.start()
+        walkRoundABlock(recorder, on: "Ridge Path")
+        let offered = try name("Ridge Path Loop", of: recorder)
+
+        #expect(await recorder.suggestedTitle() == offered)
+    }
+
+    /// The two ends of this walk meet as a loop's do. What it came back
+    /// along is what tells them apart.
+    @Test("a walk up a trail and back down it is not called a loop")
+    func aWalkThereAndBackIsNotALoop() async throws {
+        let recorder = makeRecorder()
+        await recorder.start()
+        walkThereAndBack(recorder, on: "Ridge Path")
+        let offered = try name("Ridge Path", of: recorder)
+
+        #expect(await recorder.suggestedTitle() == offered)
+    }
+
+    /// Up the trail, carried two blocks east while paused, and down another
+    /// way to the start. The line on the map is joined across the pause, and
+    /// read as one it is the block walked round.
+    @Test("a walk a pause carried somewhere else is not called a loop")
+    func aWalkCarriedInAPauseIsNotALoop() async throws {
+        let recorder = makeRecorder()
+        await recorder.start()
+        for north in [0, 1, 2] {
+            walk(recorder, north: north, east: 0, on: "Ridge Path")
+        }
+        recorder.pause()
+        await recorder.resume()
+        for (north, east) in [(2, 2), (1, 2), (0, 2), (0, 1), (0, 0)] {
+            walk(recorder, north: north, east: east, on: "Ridge Path")
+        }
+        let offered = try name("Ridge Path", of: recorder)
+
+        #expect(await recorder.suggestedTitle() == offered)
+        let hike = try savedHike(from: await recorder.stop())
+        #expect(hike.title == offered, "nor from its saved line")
+    }
+
+    /// A Stop that showed no name reads the word off the saved line, which
+    /// is the one the hike keeps.
+    @Test("a loop saved with no name shown is named a loop from its saved line")
+    func aLoopSavedUnshownIsNamedALoop() async throws {
+        let recorder = makeRecorder()
+        await recorder.start()
+        walkRoundABlock(recorder, on: "Ridge Path")
+        let offered = try name("Ridge Path Loop", of: recorder)
+
+        let hike = try savedHike(from: await recorder.stop())
+
+        #expect(hike.title == offered)
+        #expect(hike.customName == nil, "nobody typed this name")
     }
 }
