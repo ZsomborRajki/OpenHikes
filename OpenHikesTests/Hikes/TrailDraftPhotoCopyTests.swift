@@ -197,31 +197,33 @@ struct TrailDraftPhotoCopyTests {
         await Self.gone(handOff.directory)
     }
 
-    @Test("a later save keeps both trails' missed photographs until each is answered")
+    /// Three trails, so two wait behind the alert at once and the order they
+    /// come out in is the order they were saved in.
+    @Test("later saves keep every trail's missed photographs, in order, until each is answered")
     func laterMissesWait() async throws {
         let sandbox = PhotoStoreSandbox()
         let saves = Saves()
-        saves.refused = [1, 2]
+        saves.refused = [1, 2, 3]
         let copy = TrailDraftPhotoCopy(store: sandbox.store, libraryWriter: StubPhotoLibraryWriter(), save: saves.save)
         let context = try Fixture.modelContext()
-        let first = try Self.handOff(of: 1)
-        let firstHike = Fixture.hike(in: context, title: "First")
-        await copy.attach(first, along: firstHike.route, to: firstHike).value
+        let titles = ["First", "Second", "Third"]
+        var handOffs: [TrailDraftPhotoHandOff] = []
+        for title in titles {
+            let handOff = try Self.handOff(of: 1)
+            let hike = Fixture.hike(in: context, title: title)
+            await copy.attach(handOff, along: hike.route, to: hike).value
+            handOffs.append(handOff)
+        }
 
-        let second = try Self.handOff(of: 1)
-        let secondHike = Fixture.hike(in: context, title: "Second")
-        await copy.attach(second, along: secondHike.route, to: secondHike).value
-
-        #expect(copy.missed?.hikeTitle == "First")
-        #expect(FileManager.default.fileExists(atPath: first.directory.path))
-        #expect(FileManager.default.fileExists(atPath: second.directory.path))
-        copy.skip()
-        #expect(copy.missed?.hikeTitle == "Second")
-        await Self.gone(first.directory)
-        #expect(FileManager.default.fileExists(atPath: second.directory.path))
-        copy.skip()
+        for (index, handOff) in handOffs.enumerated() {
+            #expect(copy.missed?.hikeTitle == titles[index])
+            for waiting in handOffs.dropFirst(index) {
+                #expect(FileManager.default.fileExists(atPath: waiting.directory.path))
+            }
+            copy.skip()
+            await Self.gone(handOff.directory)
+        }
         #expect(copy.missed == nil)
-        await Self.gone(second.directory)
     }
 
     @Test("a source that cannot be read is reported and can be restored for a retry")

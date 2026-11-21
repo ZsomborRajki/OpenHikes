@@ -36,6 +36,46 @@ struct OfflineCountryStoreTests {
         }
     }
 
+    @Test("an install that cannot move every file moves back the ones it did")
+    func installIsAllOrNone() async throws {
+        try await OfflineCountryFixture.withDirectory { directory in
+            let store = OfflineCountryStore(directory: directory)
+            try store.prepare()
+            let bytes = Data("basemap".utf8)
+            let country = OfflineCountryFixture.country(bytes: bytes, extras: Data("extras".utf8))
+            let basemap = try #require(country.files.first { $0.role == .basemap })
+            // The extras were never staged, so their move fails after the basemap's.
+            try bytes.write(to: store.stagedURL(for: basemap))
+
+            #expect(throws: (any Error).self) { try store.install(country.files) }
+            #expect(FileManager.default.fileExists(atPath: store.stagedURL(for: basemap).path))
+            #expect(!FileManager.default.fileExists(atPath: store.fileURL(for: basemap).path))
+        }
+    }
+
+    @Test("unstaging moves a file back to staging, and leaves one another record holds")
+    func unstages() async throws {
+        try await OfflineCountryFixture.withDirectory { directory in
+            let store = OfflineCountryStore(directory: directory)
+            try store.prepare()
+            let bytes = Data("basemap".utf8)
+            let country = OfflineCountryFixture.country(bytes: bytes)
+            let held = OfflineCountryFixture.country(bytes: bytes, id: "AT")
+            let files = country.files + held.files
+            for file in files { try bytes.write(to: store.fileURL(for: file)) }
+            let record = OfflineCountryStore.Record(country: held, installedAt: Date(timeIntervalSince1970: 0))
+
+            store.unstage(files, keeping: [record])
+
+            let moved = try #require(country.files.first)
+            let kept = try #require(held.files.first)
+            #expect(FileManager.default.fileExists(atPath: store.stagedURL(for: moved).path))
+            #expect(!FileManager.default.fileExists(atPath: store.fileURL(for: moved).path))
+            #expect(FileManager.default.fileExists(atPath: store.fileURL(for: kept).path))
+            #expect(!FileManager.default.fileExists(atPath: store.stagedURL(for: kept).path))
+        }
+    }
+
     @Test("a file of the right size and the wrong bytes is not whole")
     func checksTheDigest() async throws {
         try await OfflineCountryFixture.withDirectory { directory in

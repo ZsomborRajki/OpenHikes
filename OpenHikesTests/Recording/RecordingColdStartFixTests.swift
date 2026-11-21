@@ -152,8 +152,9 @@ struct RecordingColdStartFixTests {
     /// both a fix older than the anchor and one carrying its timestamp
     /// exactly. Nothing behind it would. A negative interval reads as a
     /// negative implied speed, which is not greater than the ceiling; a zero
-    /// one reads as an infinite speed, which the hiker's reported speed then
-    /// *corroborates*, since everything is within an infinite tolerance.
+    /// one reads as an infinite speed, which no reported speed corroborates,
+    /// but which non-pedestrian motion waves past the speed gate as it does
+    /// any fast fix.
     @Test("a reordered fix is refused however wide the gap it claims")
     func reorderedFixIsStillRefused() {
         let now = start.addingTimeInterval(60)
@@ -174,6 +175,7 @@ struct RecordingColdStartFixTests {
                 speed: 1.4
             ),
             after: anchor,
+            motionState: .nonPedestrian,
             now: now
         ))
     }
