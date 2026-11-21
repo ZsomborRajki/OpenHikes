@@ -93,14 +93,12 @@ nonisolated struct OfflineCountryStore: Sendable {
 
     // MARK: - What is kept
 
-    /// The index: the areas downloaded, leaving out any whose files have
-    /// gone, or ``List/unreadable`` where one is kept that cannot be read,
-    /// which names files nobody can list.
+    /// The index: the areas downloaded, or ``List/unreadable`` where one is
+    /// kept that cannot be read, which names files nobody can list. An area
+    /// one of whose files has gone is still listed, so the sweep keeps the
+    /// rest, and the map's opening finds the gap (#1534).
     func index() -> List<Record> {
-        guard case let .holding(records) = list(Record.self, at: indexURL) else { return .unreadable }
-        return .holding(records.filter { record in
-            record.files.allSatisfy { FileManager.default.fileExists(atPath: fileURL(for: $0).path) }
-        })
+        list(Record.self, at: indexURL)
     }
 
     /// The areas downloaded, as far as can be read.

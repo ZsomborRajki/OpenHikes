@@ -32,6 +32,8 @@ extension OfflineCountries {
         installed.values.reduce(0) { $0 + $1.byteCount }
     }
 
+    /// Whether the area `id` is on the device: the index names it, whether
+    /// or not its files open.
     func isInstalled(_ id: String) -> Bool { installed[id] != nil }
 
     /// The area listed now under `id`, as ``listed`` has it: the build the
@@ -43,13 +45,33 @@ extension OfflineCountries {
         offered.first { $0.id == id } ?? installed[id]?.country
     }
 
-    /// The areas `coverage` found a line crossing that are not downloaded,
-    /// as the list has them now, in the order the line reaches them. None
-    /// where the device's own lists cannot be read: nothing downloads then,
-    /// and what it holds is not known.
+    /// The areas `coverage` found a line crossing that the map does not
+    /// draw, as the list has them now, in the order the line reaches them.
+    /// One on the device whose basemap would not open is among them, for
+    /// what would not open. None where the device's own lists cannot be
+    /// read: nothing downloads then, and what it holds is not known.
     func missing(from coverage: OfflineRouteCoverage) -> [Country] {
         guard isAvailable else { return [] }
-        return coverage.crossed.compactMap { listedCountry($0.id) }.filter { !isInstalled($0.id) }
+        return coverage.crossed.compactMap { listedCountry($0.id) }.filter { !isDrawn($0.id) }
+    }
+
+    /// Whether the map draws the area `id` with no signal: it is on the
+    /// device and its basemap opened. What a hike counts as saved.
+    func isDrawn(_ id: String) -> Bool {
+        installed[id] != nil && unopenable[id]?.contains(.basemap) != true
+    }
+
+    /// Whether a file of the area `id` on the device would not open, which
+    /// ``repair(_:)`` brings down again.
+    func needsRepair(_ id: String) -> Bool {
+        installed[id] != nil && unopenable[id]?.isEmpty == false
+    }
+
+    /// Downloads again the files of the area `id` that would not open, and
+    /// nothing else of it: the rest is on the device, and was checked.
+    func repair(_ id: String) {
+        guard needsRepair(id), let record = installed[id] else { return }
+        download(record.country)
     }
 
     /// Whether the server has a newer build of an area downloaded.
@@ -61,9 +83,10 @@ extension OfflineCountries {
         return newer
     }
 
-    /// What downloading `country` costs, as *Extra Detail* stands.
+    /// What downloading `country` costs, as *Extra Detail* stands: of an
+    /// area on the device, only the files it would bring.
     func byteCount(of country: Country) -> Int64 {
-        country.byteCount(withDetail: includesDetail)
+        filesToFetch(for: country).reduce(0) { $0 + $1.byteCount }
     }
 
     /// What `country` takes where it is downloaded, and costs where it is

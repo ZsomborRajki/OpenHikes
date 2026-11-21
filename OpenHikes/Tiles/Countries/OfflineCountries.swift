@@ -26,6 +26,13 @@
 //  Wi-Fi, and it is refused outright in Low Power Mode or while the device is
 //  hot (``TileNetworkPolicy``).
 //
+//  What the index names is the area's whether or not the map can open it
+//  (#1534). A file that will not open, cut short or gone or refused by the
+//  device for now, is offered again on its own (``unopenable``), and opened
+//  again each time the app comes to the front, so a failure that passes
+//  deletes nothing that was checked. Only an area whose basemap opened is
+//  drawn, and only that counts as saved.
+//
 
 import CoreLocation
 import Foundation
@@ -89,6 +96,9 @@ final class OfflineCountries {
     /// Whether an area brings its zoom 15 too: *Extra Detail*.
     private(set) var includesDetail: Bool
     private(set) var holdings = Holdings.unread
+    /// The files of each downloaded area that the archives' last opening
+    /// could not open, by area code: still the index's, and on no map.
+    private(set) var unopenable: [String: Set<OfflineCountryManifest.Role>] = [:]
     /// The outlines *Offline Maps* draws on the map behind it.
     @ObservationIgnored let outlines = OfflineCountryOutlines()
 
@@ -108,7 +118,7 @@ final class OfflineCountries {
     /// a later one is dropped rather than put back over it.
     @ObservationIgnored private var archiveGeneration = 0
 
-    static let logger = Logger(subsystem: "OpenHikes", category: "OfflineCountries")
+    nonisolated static let logger = Logger(subsystem: "OpenHikes", category: "OfflineCountries")
     /// Room left over on the volume after a download, so an area never takes
     /// the last of the hiker's storage.
     static let spareBytes: Int64 = 500 * 1024 * 1024
@@ -166,11 +176,14 @@ final class OfflineCountries {
     /// setting. A download under way is left to finish, and brought to it
     /// then. An area the server has a newer build of is left for its update
     /// to bring zoom 15: the server deletes a build it has moved past, and
-    /// asking for that build's files failed at every launch.
+    /// asking for that build's files failed at every launch. So is one with
+    /// a file that would not open, for the hiker's *Try Again*, which brings
+    /// zoom 15 with it: here it would come down again unasked at every
+    /// launch, even where the device only refused a read for the moment.
     private func reconcile() {
         for record in installed.values where downloads[record.country.id] == nil {
             if includesDetail, !record.hasDetail {
-                guard update(for: record.country.id) == nil else { continue }
+                guard update(for: record.country.id) == nil, !needsRepair(record.country.id) else { continue }
                 download(record.country)
             } else if !includesDetail, record.hasDetail {
                 let before = installed
@@ -178,6 +191,7 @@ final class OfflineCountries {
                 stripped.hasDetail = false
                 installed[record.country.id] = stripped
                 guard commitIndex(restoring: before) else { continue }
+                forgetUnopenable(record.files.filter(\.role.isDetail).map(\.role), of: record.country.id)
                 reopenArchives()
                 store.remove(record.files.filter(\.role.isDetail), keeping: Array(installed.values))
             }
@@ -274,11 +288,13 @@ final class OfflineCountries {
     }
 
     /// What downloading `country` asks for: every file *Extra Detail* says,
-    /// less those of the same build already down.
-    private func filesToFetch(for country: Country) -> [OfflineCountryManifest.File] {
+    /// less those of the same build already down and opened. One the map
+    /// could not open is asked for again.
+    func filesToFetch(for country: Country) -> [OfflineCountryManifest.File] {
         let wanted = country.files(withDetail: includesDetail)
         guard let record = installed[country.id], record.country.build == country.build else { return wanted }
-        let held = Set(record.files.map(\.fileName))
+        let failed = unopenable[country.id] ?? []
+        let held = Set(record.files.filter { !failed.contains($0.role) }.map(\.fileName))
         return wanted.filter { !held.contains($0.fileName) }
     }
 
@@ -307,6 +323,7 @@ final class OfflineCountries {
         let before = installed
         guard let record = installed.removeValue(forKey: id), commitIndex(restoring: before) else { return }
         cancel(id)
+        forgetUnopenable(record.files.map(\.role), of: id)
         reopenArchives()
         store.remove(record.files, keeping: Array(installed.values))
     }
@@ -382,6 +399,9 @@ final class OfflineCountries {
             store.remove(previous.files, keeping: Array(installed.values))
         }
         downloads[country.id] = nil
+        // Each was checked whole just now, and the opening under way says
+        // whether it opens; another build's are gone.
+        forgetUnopenable(sameBuild ? download.files.map(\.role) : OfflineCountryManifest.Role.allCases, of: country.id)
         writePending { $0.removeAll { $0.country.id == country.id } }
         reconcile()
     }
@@ -396,22 +416,6 @@ final class OfflineCountries {
             download.forget(file.role)
         }
         download.set(.failed(.space))
-    }
-
-    /// Opens the archives of what is installed now, off the main actor, and
-    /// hands them to the map. Two changes in a row open twice at once, and
-    /// only the later opening is handed over, whichever finishes first.
-    private func reopenArchives() {
-        guard let archives else { return }
-        archiveGeneration += 1
-        let generation = archiveGeneration
-        let records = Array(installed.values)
-        Task {
-            let opened = await Self.open(records, in: store)
-            guard generation == archiveGeneration else { return }
-            archives.replace(with: opened)
-            archivesDidChange()
-        }
     }
 
     /// Writes ``installed`` as the index, or puts back `previous` when the
@@ -452,6 +456,35 @@ final class OfflineCountries {
     }
 }
 
+// MARK: - The archives
+
+extension OfflineCountries {
+    /// Opens the archives of what is installed now, off the main actor, and
+    /// hands them to the map. Two changes in a row open twice at once, and
+    /// only the later opening is handed over, whichever finishes first.
+    private func reopenArchives() {
+        guard let archives else { return }
+        archiveGeneration += 1
+        let generation = archiveGeneration
+        let records = Array(installed.values)
+        Task {
+            let opened = await Self.open(records, in: store)
+            guard generation == archiveGeneration else { return }
+            unopenable = opened.unopenable
+            archives.replace(with: opened.countries)
+            archivesDidChange()
+        }
+    }
+
+    /// Forgets that the files in `roles` of the area `id` would not open:
+    /// they are gone, or checked whole since.
+    private func forgetUnopenable(_ roles: [OfflineCountryManifest.Role], of id: String) {
+        guard let failed = unopenable[id] else { return }
+        let left = failed.subtracting(roles)
+        unopenable[id] = left.isEmpty ? nil : left
+    }
+}
+
 // MARK: - Launch
 
 extension OfflineCountries {
@@ -461,11 +494,17 @@ extension OfflineCountries {
     /// resumed, swept or downloaded, because what a launch cannot read it
     /// cannot call unowned, and the next call starts again. The model asks
     /// again each time a scene becomes active, by when a device that was
-    /// locked since it restarted has been unlocked.
+    /// locked since it restarted has been unlocked. Once started, it opens
+    /// the archives again where one would not open, since the device may
+    /// have refused a read that it allows now.
     func start() async {
+        guard let archives else { return }
         // Read and marked before the first suspension, so a second call
         // meanwhile finds them read.
-        guard holdings != .read, let archives else { return }
+        guard holdings != .read else {
+            if !unopenable.isEmpty { reopenArchives() }
+            return
+        }
         do {
             try store.prepare()
         } catch {
@@ -489,7 +528,8 @@ extension OfflineCountries {
         let generation = archiveGeneration
         let opened = await Self.open(records, in: store)
         if generation == archiveGeneration {
-            archives.replace(with: opened)
+            unopenable = opened.unopenable
+            archives.replace(with: opened.countries)
             if !records.isEmpty { archivesDidChange() }
         }
         await resumePending(waiting)
@@ -522,25 +562,45 @@ extension OfflineCountries {
         try? store.cache(manifest)
     }
 
+    /// What an opening of the archives made of the index: the areas the map
+    /// draws, and the files that would not open.
+    nonisolated struct Opening: Sendable {
+        var countries: [OfflineCountryArchives.Country] = []
+        var unopenable: [String: Set<OfflineCountryManifest.Role>] = [:]
+    }
+
+    /// Opens every file the index names. An area whose basemap will not open
+    /// is on no map, and one whose other files will not open is drawn
+    /// without them.
     @concurrent
-    private static func open(_ records: [Record], in store: OfflineCountryStore) async
-        -> [OfflineCountryArchives.Country] {
-        records.compactMap { record in
-            func archive(_ role: OfflineCountryManifest.Role) -> PMTilesArchive? {
-                guard let file = record.files.first(where: { $0.role == role }) else { return nil }
-                return try? PMTilesArchive(contentsOf: store.fileURL(for: file))
+    private static func open(_ records: [Record], in store: OfflineCountryStore) async -> Opening {
+        var opening = Opening()
+        for record in records {
+            let id = record.country.id
+            var failed = Set<OfflineCountryManifest.Role>()
+            var opened: [OfflineCountryManifest.Role: PMTilesArchive] = [:]
+            for file in record.files {
+                do {
+                    opened[file.role] = try PMTilesArchive(contentsOf: store.fileURL(for: file))
+                } catch {
+                    let reason = String(describing: error)
+                    logger.error("Opening \(file.fileName, privacy: .public): \(reason, privacy: .public)")
+                    failed.insert(file.role)
+                }
             }
-            guard let basemap = archive(.basemap) else { return nil }
-            return OfflineCountryArchives.Country(
-                id: record.country.id,
+            if !failed.isEmpty { opening.unopenable[id] = failed }
+            guard let basemap = opened[.basemap] else { continue }
+            opening.countries.append(OfflineCountryArchives.Country(
+                id: id,
                 bounds: record.country.bounds,
                 basemap: basemap,
-                extras: archive(.extras),
+                extras: opened[.extras],
                 record: record,
-                detail: archive(.detail),
-                detailExtras: archive(.detailExtras)
-            )
+                detail: opened[.detail],
+                detailExtras: opened[.detailExtras]
+            ))
         }
+        return opening
     }
 
     /// Picks up what `pending`, read as the launch began, names. The areas
