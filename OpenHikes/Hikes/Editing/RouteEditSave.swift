@@ -64,8 +64,15 @@ nonisolated struct EditedLine: Equatable, Sendable {
     /// `line` cut down to `range`, or `nil` when that leaves no line.
     ///
     /// - Parameter distances: ``RouteTrim/distances(along:)`` of `line`.
-    init?(trimming line: [RouteCoordinate], distances: [Double], to range: ClosedRange<Double>) {
-        let kept = RouteTrim.trimmed(line, distances: distances, keeping: range)
+    /// - Parameter pauses: the ends where a cut standing on the end takes off
+    ///   the pause there — see ``RouteTrim/EndPauses``.
+    init?(
+        trimming line: [RouteCoordinate],
+        distances: [Double],
+        to range: ClosedRange<Double>,
+        takingOff pauses: RouteTrim.EndPauses = []
+    ) {
+        let kept = RouteTrim.trimmed(line, distances: distances, keeping: range, takingOff: pauses)
         guard kept.count > 1, let total = distances.last else { return nil }
         let length = kept.lengthMeters
         guard length > 0 else { return nil }

@@ -35,6 +35,14 @@ import OpenHikesData
 nonisolated enum RouteTrimHandle: Sendable {
     case end
     case start
+
+    /// The pause on this end of the line — see ``RouteTrim/EndPauses``.
+    var endPause: RouteTrim.EndPauses {
+        switch self {
+        case .end: .end
+        case .start: .start
+        }
+    }
 }
 
 /// The line a session trims, measured once, off the main actor.
@@ -89,28 +97,47 @@ nonisolated struct RouteTrimLine: Sendable {
 
     /// Where a line that begins `meters` along this one begins. Across a
     /// pause that is the fix after it, as ``RouteTrim`` cuts it.
-    func startSpot(at meters: Double) -> Spot {
+    ///
+    /// - Parameter takingOffPause: whether a cut on the line's own first
+    ///   point takes off the pause after it — see ``RouteTrim/EndPauses``.
+    func startSpot(at meters: Double, takingOffPause: Bool = false) -> Spot {
         // An end left alone is the line's own first point, a pause on it
         // included, as ``RouteTrim`` leaves it.
-        if meters <= 0, let first = profile.coordinates.first { return Spot(coordinate: first, drawnFraction: 0) }
+        if isLeftAlone(.start, at: meters, takingOffPause: takingOffPause), let first = profile.coordinates.first {
+            return Spot(coordinate: first, drawnFraction: 0)
+        }
         return spot(at: bracket(meters, for: .start))
     }
 
     /// Where a line that ends `meters` along this one ends: across a pause,
     /// the fix before it.
-    func endSpot(at meters: Double) -> Spot {
-        if meters >= totalMeters, let last = profile.coordinates.last {
+    func endSpot(at meters: Double, takingOffPause: Bool = false) -> Spot {
+        if isLeftAlone(.end, at: meters, takingOffPause: takingOffPause), let last = profile.coordinates.last {
             return Spot(coordinate: last, drawnFraction: 1)
         }
         return spot(at: bracket(meters, for: .end))
     }
 
     /// The clock at a cut `meters` along the line, read off the two points
-    /// either side of it, or `nil` where they carry none.
-    func timestamp(of handle: RouteTrimHandle, at meters: Double) -> Date? {
+    /// either side of it, or `nil` where they carry none. An end left alone
+    /// is its own point's, as the hike's *Duration* reads it.
+    func timestamp(of handle: RouteTrimHandle, at meters: Double, takingOffPause: Bool = false) -> Date? {
+        if isLeftAlone(handle, at: meters, takingOffPause: takingOffPause) {
+            return handle == .start ? route.first?.timestamp : route.last?.timestamp
+        }
         let leg = bracket(meters, for: handle)
         guard let began = route[leg.lower].timestamp, let arrived = route[leg.upper].timestamp else { return nil }
         return began.addingTimeInterval(arrived.timeIntervalSince(began) * leg.fraction)
+    }
+
+    /// Whether a cut `meters` along the line is no cut at all: it stands on
+    /// its own end of the line, and leaves the pause there.
+    private func isLeftAlone(_ handle: RouteTrimHandle, at meters: Double, takingOffPause: Bool) -> Bool {
+        guard !takingOffPause else { return false }
+        return switch handle {
+        case .start: meters <= 0
+        case .end: meters >= totalMeters
+        }
     }
 
     /// The leg a cut falls on, and how far along it.
@@ -196,6 +223,11 @@ final class RouteTrimSession {
     /// Where the kept line begins and ends, in metres along ``line``.
     private(set) var startMeters = 0.0
     private(set) var endMeters = 0.0
+    /// The pauses standing on the line's own two ends that the cuts take
+    /// off, which no distance along the line can say — see
+    /// ``RouteTrim/EndPauses``. Only an offer sets one
+    /// (``takeOff(_:at:)``); placing that handle by hand clears it.
+    private(set) var pausesTakenOff: RouteTrim.EndPauses = []
 
     /// Whether a save or a revert is under way, which holds the buttons.
     var isSaving = false
@@ -211,9 +243,9 @@ final class RouteTrimSession {
 
     var totalMeters: Double { line?.totalMeters ?? 0 }
 
-    /// Whether either cut has left its end, which is when there is anything
-    /// to save.
-    var isTrimmed: Bool { startMeters > 0 || endMeters < totalMeters }
+    /// Whether either cut takes anything off, which is when there is
+    /// anything to save.
+    var isTrimmed: Bool { cuts(.start) || cuts(.end) }
 
     var keptRange: ClosedRange<Double> { startMeters...max(startMeters, endMeters) }
 
@@ -228,6 +260,7 @@ final class RouteTrimSession {
         line = measured
         startMeters = 0
         endMeters = measured.totalMeters
+        pausesTakenOff = []
         lineRevision += 1
     }
 
@@ -240,15 +273,67 @@ final class RouteTrimSession {
         }
     }
 
+    /// Whether the cut at `handle` takes anything off: it has left its end
+    /// of the line, or takes off the pause standing on it.
+    func cuts(_ handle: RouteTrimHandle) -> Bool {
+        if pausesTakenOff.contains(handle.endPause) { return true }
+        return switch handle {
+        case .start: startMeters > 0
+        case .end: endMeters < totalMeters
+        }
+    }
+
     /// Moves one cut, held at least ``minimumKeptMeters`` short of the other
-    /// and inside the line.
+    /// and inside the line. A handle moved by hand stands where it was put,
+    /// so it no longer takes off a pause on its end. A touch that leaves it
+    /// where it was, as the chart's drag makes on the way down, moves
+    /// nothing.
     func move(_ handle: RouteTrimHandle, to meters: Double) {
         let total = totalMeters
         guard total > 0, meters.isFinite else { return }
         let gap = min(Self.minimumKeptMeters, total)
+        let before = position(of: handle)
         switch handle {
         case .start: startMeters = min(max(meters, 0), max(endMeters - gap, 0))
         case .end: endMeters = max(min(meters, total), min(startMeters + gap, total))
+        }
+        if position(of: handle) != before, pausesTakenOff.contains(handle.endPause) {
+            pausesTakenOff.remove(handle.endPause)
+        }
+    }
+
+    /// Cuts `stretch` off the end of the line `handle` stands on: what the
+    /// offer under *Not on Foot* does — see ``RouteCarriedEnds``.
+    ///
+    /// A drive that ends the line paused, with only the fix it took up again
+    /// on after it, has no length on the line, so its inner edge is the
+    /// line's own end. The cut stands there, and takes off the pause.
+    func takeOff(_ stretch: RouteCarriedEnds.Stretch, at handle: RouteTrimHandle) {
+        let edge = Self.innerEdge(of: stretch, at: handle)
+        move(handle, to: edge)
+        let isOnTheEnd = switch handle {
+        case .start: edge <= 0
+        case .end: edge >= totalMeters
+        }
+        if isOnTheEnd { pausesTakenOff.insert(handle.endPause) }
+    }
+
+    /// Whether the cut at `handle` already takes `stretch` off: it stands at
+    /// the stretch's inner edge or past it, and is a cut.
+    func hasTakenOff(_ stretch: RouteCarriedEnds.Stretch, at handle: RouteTrimHandle) -> Bool {
+        let edge = Self.innerEdge(of: stretch, at: handle)
+        let isPast = switch handle {
+        case .start: startMeters >= edge
+        case .end: endMeters <= edge
+        }
+        return isPast && cuts(handle)
+    }
+
+    /// The edge of `stretch` the walk is on.
+    private static func innerEdge(of stretch: RouteCarriedEnds.Stretch, at handle: RouteTrimHandle) -> Double {
+        switch handle {
+        case .start: stretch.range.upperBound
+        case .end: stretch.range.lowerBound
         }
     }
 
@@ -261,15 +346,35 @@ final class RouteTrimSession {
     /// The line the cuts leave, measured for a save — see ``EditedLine``.
     func editedLine() async -> EditedLine? {
         guard let line, isTrimmed else { return nil }
-        return await Self.edited(line, keeping: keptRange)
+        return await Self.edited(line, keeping: keptRange, takingOff: pausesTakenOff)
     }
 
     @concurrent
     nonisolated private static func edited(
         _ line: RouteTrimLine,
-        keeping range: ClosedRange<Double>
+        keeping range: ClosedRange<Double>,
+        takingOff pauses: RouteTrim.EndPauses
     ) async -> EditedLine? {
-        EditedLine(trimming: line.route, distances: line.distances, to: range)
+        EditedLine(trimming: line.route, distances: line.distances, to: range, takingOff: pauses)
+    }
+
+    /// Where the cut at `handle` stands on the map, or `nil` with no line.
+    func spot(of handle: RouteTrimHandle) -> RouteTrimLine.Spot? {
+        guard let line else { return nil }
+        let takesOffPause = pausesTakenOff.contains(handle.endPause)
+        return switch handle {
+        case .start: line.startSpot(at: startMeters, takingOffPause: takesOffPause)
+        case .end: line.endSpot(at: endMeters, takingOffPause: takesOffPause)
+        }
+    }
+
+    /// The clock at the cut at `handle`, or `nil` where the line has none.
+    func timestamp(of handle: RouteTrimHandle) -> Date? {
+        line?.timestamp(
+            of: handle,
+            at: position(of: handle),
+            takingOffPause: pausesTakenOff.contains(handle.endPause)
+        )
     }
 
     // MARK: The map

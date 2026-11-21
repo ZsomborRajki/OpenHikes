@@ -62,6 +62,7 @@ extension MapSheet {
         return recorder.workoutWriter.map { writer in
             RouteEditWorkout.Health(
                 writer: writer,
+                queue: recorder.workoutQueue,
                 container: appModel.container,
                 defaults: appModel.defaults,
                 weatherState: recorder.weatherState

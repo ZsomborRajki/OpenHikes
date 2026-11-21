@@ -110,6 +110,7 @@ extension MapView.Coordinator {
             _ = session?.lineRevision
             _ = session?.startMeters
             _ = session?.endMeters
+            _ = session?.pausesTakenOff
         } onChange: { coordinator, map, model in
             coordinator.trackRouteTrim(model, on: map)
         }
@@ -128,8 +129,7 @@ extension MapView.Coordinator {
             routeTrimMap.lineRevision = session.lineRevision
             addRouteTrim(of: line, to: mapView)
         }
-        let start = line.startSpot(at: session.startMeters)
-        let end = line.endSpot(at: session.endMeters)
+        guard let start = session.spot(of: .start), let end = session.spot(of: .end) else { return }
         if let renderer = routeTrimMap.leadingRenderer { cover(renderer, from: 0, to: start.drawnFraction) }
         if let renderer = routeTrimMap.trailingRenderer { cover(renderer, from: end.drawnFraction, to: 1) }
         move(routeTrimMap.startHandle, to: start.coordinate)
@@ -207,11 +207,11 @@ extension MapView.Coordinator {
         }
         // The cut it is drawn to, which the pass that added the overlay
         // could not set: MapKit asks for the renderer afterwards.
-        if let session = routeTrimMap.session, let line = session.line {
+        if let spot = routeTrimMap.session?.spot(of: isLeading ? .start : .end) {
             if isLeading {
-                cover(renderer, from: 0, to: line.startSpot(at: session.startMeters).drawnFraction)
+                cover(renderer, from: 0, to: spot.drawnFraction)
             } else {
-                cover(renderer, from: line.endSpot(at: session.endMeters).drawnFraction, to: 1)
+                cover(renderer, from: spot.drawnFraction, to: 1)
             }
         }
         return renderer

@@ -42,9 +42,8 @@ struct RouteTrimFigures: View {
     /// is — ``HikeRouteStatistics/duration`` — or `nil` for a line with no
     /// clock.
     private var keptSeconds: TimeInterval? {
-        guard let line = session.line,
-              let began = line.timestamp(of: .start, at: session.startMeters),
-              let ended = line.timestamp(of: .end, at: session.endMeters),
+        guard let began = session.timestamp(of: .start),
+              let ended = session.timestamp(of: .end),
               ended > began
         else { return nil }
         return ended.timeIntervalSince(began)
@@ -61,8 +60,8 @@ struct RouteTrimOffers: View {
         // A new line has its own ends.
         _ = session.lineRevision
         let ends = session.line?.carriedEnds ?? RouteCarriedEnds()
-        let leading = ends.leading.flatMap { session.startMeters < $0.range.upperBound ? $0 : nil }
-        let trailing = ends.trailing.flatMap { session.endMeters > $0.range.lowerBound ? $0 : nil }
+        let leading = ends.leading.flatMap { session.hasTakenOff($0, at: .start) ? nil : $0 }
+        let trailing = ends.trailing.flatMap { session.hasTakenOff($0, at: .end) ? nil : $0 }
         return Group {
             if leading != nil || trailing != nil {
                 PlaceCardList(title: String(localized: "Not on Foot")) {
@@ -71,7 +70,7 @@ struct RouteTrimOffers: View {
                             String(localized: "Remove \(RouteTrimFormat.length(leading.carriedMeters)) at the Start"),
                             identifier: "route-trim-remove-start"
                         ) {
-                            session.move(.start, to: leading.range.upperBound)
+                            session.takeOff(leading, at: .start)
                         }
                     }
                     if let trailing {
@@ -79,7 +78,7 @@ struct RouteTrimOffers: View {
                             String(localized: "Remove \(RouteTrimFormat.length(trailing.carriedMeters)) at the End"),
                             identifier: "route-trim-remove-end"
                         ) {
-                            session.move(.end, to: trailing.range.lowerBound)
+                            session.takeOff(trailing, at: .end)
                         }
                     }
                 }

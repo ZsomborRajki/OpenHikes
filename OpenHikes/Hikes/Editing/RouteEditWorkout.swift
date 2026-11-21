@@ -25,7 +25,17 @@
 //  Two workouts for one walk is the outcome every Health path here exists to
 //  prevent, so the new one is written only once the delete has answered. A
 //  delete that failed leaves the old workout, which is still a true record of
-//  the hike as it was saved.
+//  the hike as it was saved. So the delete is the one a replacement makes
+//  (``HikeWorkoutWriting/deleteWorkoutToReplace(of:)``), which takes the
+//  workout out last and only once nothing after it can fail: the delete a
+//  hike's deletion makes can throw with the workout already gone.
+//
+//  ## One at a time
+//
+//  Each visit to the editor fires off its own replacement, and the recording
+//  may still be writing the first workout. Two of them side by side would
+//  interleave their deletes and writes and leave two workouts, so each takes
+//  its turn on the recorder's ``HikeWorkoutQueue``.
 //
 //  ## Whose figures
 //
@@ -48,6 +58,9 @@ enum RouteEditWorkout {
     /// has none of — see ``OpenHikesModel/makeWorkoutWriter()``.
     struct Health {
         let writer: any HikeWorkoutWriting
+        /// The recorder's, which every other path into Health takes its
+        /// turn on too.
+        let queue: HikeWorkoutQueue
         let container: ModelContainer
         let defaults: UserDefaults
         let weatherState: () -> WeatherBadgeState
@@ -59,11 +72,25 @@ enum RouteEditWorkout {
         hike.localState?.wroteToHealth == true && HikeWorkoutExport.isEnabled(in: defaults)
     }
 
-    /// Replaces the workout of the hike `hikeID` with one of `route`.
+    /// Replaces the workout of the hike `hikeID` with one of `route`, once
+    /// everything asked of Health for the hike before it has finished.
     ///
     /// Awaited by nobody: the caller has saved the hike and fires this off,
     /// as the recorder fires its export.
-    static func replace(
+    ///
+    /// - Returns: The task that makes the replacement, for a suite to wait on.
+    @discardableResult static func replace(
+        of hikeID: UUID,
+        with route: [RouteCoordinate],
+        distanceMeters: Double,
+        through health: Health
+    ) -> Task<Void, Never> {
+        health.queue.enqueue(for: hikeID) {
+            await replaceInTurn(of: hikeID, with: route, distanceMeters: distanceMeters, through: health)
+        }
+    }
+
+    private static func replaceInTurn(
         of hikeID: UUID,
         with route: [RouteCoordinate],
         distanceMeters: Double,
@@ -73,7 +100,7 @@ enum RouteEditWorkout {
             return
         }
         do {
-            try await health.writer.deleteWorkout(of: hikeID)
+            try await health.writer.deleteWorkoutToReplace(of: hikeID)
         } catch {
             logger.error(
                 """

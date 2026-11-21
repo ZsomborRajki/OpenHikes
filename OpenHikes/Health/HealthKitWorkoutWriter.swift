@@ -242,6 +242,25 @@ final class HealthKitWorkoutWriter: HikeWorkoutWriting {
         if let refusal { throw refusal }
     }
 
+    /// The deletion a replacement makes — see
+    /// ``HikeWorkoutWriting/deleteWorkoutToReplace(of:)`` for why it is not
+    /// ``deleteWorkout(of:)``.
+    ///
+    /// The route before the distance: a workout kept because the distance
+    /// would not go has lost only the line on its map.
+    func deleteWorkoutToReplace(of hikeID: UUID) async throws {
+        guard store.isHealthDataAvailable else { throw HikeWorkoutFailure.unavailable }
+        let workout = HKQuantityType.workoutType()
+        guard store.authorizationStatus(for: workout) == .sharingAuthorized else {
+            throw HikeWorkoutFailure.notAuthorized
+        }
+        let attached: [HKSampleType] = [HKSeriesType.workoutRoute(), HKQuantityType(.distanceWalkingRunning)]
+        for type in attached where store.authorizationStatus(for: type) == .sharingAuthorized {
+            try await store.deleteObjects(of: type, predicate: Self.tagged(hikeID))
+        }
+        try await store.deleteObjects(of: workout, predicate: Self.tagged(hikeID))
+    }
+
     /// Takes back what a failed write may have saved, with the deletion the
     /// hike's own would make.
     ///
@@ -509,6 +528,9 @@ private final class HealthKitBuilder: HealthWorkoutBuilding {
 /// no case for a finish that handed nothing back, because that is a write:
 /// see *What a failure leaves* in this file's header.
 nonisolated enum HikeWorkoutFailure: Error, Equatable {
+    /// The hiker does not let this app write workouts, so a workout taken
+    /// out to be replaced could not be written again.
+    case notAuthorized
     /// The device has no Health store.
     case unavailable
 }
