@@ -194,6 +194,11 @@ final class StubCountryDownloader: OfflineCountryDownloading {
     private(set) var cancelled: [String] = []
     /// What a relaunch finds still coming down.
     var stillRunning: [OfflineCountryDownloadKey: Int64] = [:]
+    /// Whether ``running()`` keeps its caller waiting until
+    /// ``releaseListing()``: a session still listing its tasks.
+    var holdsListing = false
+    /// The callers ``running()`` keeps waiting.
+    private(set) var waitingForListing: [CheckedContinuation<Void, Never>] = []
 
     nonisolated deinit { /* intentionally empty */ }
 
@@ -205,8 +210,20 @@ final class StubCountryDownloader: OfflineCountryDownloading {
         cancelled.append(country)
     }
 
-    func running() -> [OfflineCountryDownloadKey: Int64] {
-        stillRunning
+    func running() async -> [OfflineCountryDownloadKey: Int64] {
+        if holdsListing {
+            await withCheckedContinuation { waitingForListing.append($0) }
+        }
+        return stillRunning
+    }
+
+    /// Answers every caller ``running()`` kept waiting, with what is
+    /// still running now.
+    func releaseListing() {
+        holdsListing = false
+        let waiting = waitingForListing
+        waitingForListing = []
+        for caller in waiting { caller.resume() }
     }
 
     /// The last request for `role`'s file came down as `bytes`.

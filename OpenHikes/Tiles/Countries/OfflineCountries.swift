@@ -264,12 +264,20 @@ final class OfflineCountries {
         return wanted.filter { !held.contains($0.fileName) }
     }
 
+    /// Stops `id`'s download and keeps nothing it brought. A launch that has
+    /// yet to pick up what was coming down holds no row for it, so the list
+    /// of downloads under way says whether there is one: taken off that
+    /// list, it is left alone by the launch (``resumePending(_:)``) rather
+    /// than installed after the hiker ended it.
     func cancel(_ id: String) {
-        guard let download = downloads.removeValue(forKey: id) else { return }
+        let download = downloads.removeValue(forKey: id)
+        let waiting = store.pending().filter { $0.country.id == id }
+        guard download != nil || !waiting.isEmpty else { return }
         downloader?.cancel(country: id)
         writePending { $0.removeAll { $0.country.id == id } }
-        for file in download.files {
-            try? FileManager.default.removeItem(at: store.stagedURL(for: file))
+        let files = (download?.files ?? []) + waiting.flatMap(\.files)
+        for staged in Set(files.map(store.stagedURL(for:))) {
+            try? FileManager.default.removeItem(at: staged)
         }
     }
 
@@ -494,10 +502,16 @@ extension OfflineCountries {
         }
     }
 
+    /// Picks up what `pending`, read as the launch began, names. The areas
+    /// are listed before the session has said what it still has, so the
+    /// hiker can delete one meanwhile, or while an earlier entry is checked;
+    /// each entry is read again first, and one no longer on the list is left
+    /// alone.
     private func resumePending(_ pending: [OfflineCountryStore.Pending]) async {
         guard !pending.isEmpty else { return }
         let running = await downloader?.running() ?? [:]
         for entry in pending {
+            guard store.pending().contains(entry) else { continue }
             let country = entry.country
             let download = OfflineCountryDownload(country: country, files: entry.files, phase: .downloading)
             downloads[country.id] = download
