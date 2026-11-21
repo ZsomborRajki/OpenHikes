@@ -22,7 +22,7 @@
 //
 
 import Foundation
-import OpenHikesData
+import OpenHikesVectorTiles
 import os
 import Synchronization
 
@@ -221,7 +221,7 @@ nonisolated final class OfflineCountryDrawing: Sendable {
     init(
         sources: VectorTileArchives,
         archives: OfflineCountryArchives,
-        language: String = VectorTileLabels.appLanguage
+        language: String = VectorMapWording.language
     ) {
         self.sources = sources
         self.archives = archives
@@ -265,21 +265,13 @@ nonisolated final class OfflineCountryDrawing: Sendable {
             deepest: source.maximumZ,
             extrasFrom: source.extras?.minimumZ
         ) else { return nil }
-        let names = VectorTileRasterizer.layerNames
-        let keys = VectorTileRasterizer.propertyKeys(language: language)
-        guard var tile = try? MapboxVectorTile(data: found.basemap, layerNames: names, propertyKeys: keys) else {
-            return nil
-        }
-        if let extras = found.extras,
-           let added = try? MapboxVectorTile(data: extras, layerNames: names, propertyKeys: keys) {
-            tile = tile.merging(added)
-        }
         return VectorTileRasterizer.png(
-            of: tile,
+            ofArchiveTile: found.basemap,
+            extras: found.extras,
             from: found.dataTile,
             drawing: target,
             language: language,
-            height: { HikeFormat.elevation(Measurement(value: $0, unit: .meters)) }
+            height: { VectorMapWording.height($0) }
         )
     }
 }

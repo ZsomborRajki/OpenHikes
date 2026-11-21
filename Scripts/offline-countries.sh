@@ -107,12 +107,16 @@ usage() {
 
 # The app's files the tool is compiled with: the format, the reader and the
 # manifest, as they stand, which is why each imports nothing of the app's.
+# With them, out of the package that draws the map, the one file that says
+# which layouts of the archives its renderer reads, which the manifest
+# holds a country to.
 tool_sources() {
     printf '%s\n' "$repository_root"/Scripts/lib/offline-countries/*.swift \
         "$repository_root/OpenHikes/General/PackedBytes.swift" \
         "$repository_root/OpenHikes/Tiles/Countries/PMTilesFile.swift" \
         "$repository_root/OpenHikes/Tiles/Countries/PMTilesArchive.swift" \
-        "$repository_root/OpenHikes/Tiles/Countries/OfflineCountryManifest.swift"
+        "$repository_root/OpenHikes/Tiles/Countries/OfflineCountryManifest.swift" \
+        "$repository_root/OpenHikesVectorTiles/Sources/OpenHikesVectorTiles/Archives/VectorTileSchema.swift"
 }
 
 prepare_tool() {

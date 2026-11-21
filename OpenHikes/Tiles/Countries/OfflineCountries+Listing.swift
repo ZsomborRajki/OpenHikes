@@ -12,6 +12,7 @@
 
 import CoreLocation
 import Foundation
+import OpenHikesVectorTiles
 
 extension OfflineCountries {
     /// Every area to list: those offered, and those downloaded that no
@@ -64,19 +65,19 @@ extension OfflineCountries {
 
     /// An area's name in `language`: a country's from the device, a
     /// region's from the manifest, in English where it has none in that.
-    nonisolated static func name(of country: Country, language: String = VectorTileLabels.appLanguage) -> String {
+    nonisolated static func name(of country: Country, language: String = VectorMapWording.language) -> String {
         guard !country.names.isEmpty else { return name(ofCountry: country.id, language: language) }
         return country.names[language] ?? country.names["en"] ?? country.id
     }
 
     /// A country's name in `language`, from its ISO code.
-    nonisolated static func name(ofCountry code: String, language: String = VectorTileLabels.appLanguage) -> String {
+    nonisolated static func name(ofCountry code: String, language: String = VectorMapWording.language) -> String {
         Locale(identifier: language).localizedString(forRegionCode: code) ?? code
     }
 
     /// An area's name, and for a region its country's after it, for a list
     /// that does not have it under its country: *Colorado, United States*.
-    nonisolated static func fullName(of country: Country, language: String = VectorTileLabels.appLanguage) -> String {
+    nonisolated static func fullName(of country: Country, language: String = VectorMapWording.language) -> String {
         let area = name(of: country, language: language)
         guard let group = country.group else { return area }
         return String(localized: "\(area), \(name(ofCountry: group, language: language))")

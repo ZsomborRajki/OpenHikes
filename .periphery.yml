@@ -87,7 +87,10 @@ retain_hashable_properties: true
 # on it. `OpenHikesData` is the same: the scheme builds its library into the
 # app, so its sources are scanned, but `OpenHikesData/Tests` is SwiftPM's and
 # never indexed, so check a finding there against that suite too.
-# `redundantPublicAccessibility` is unaffected: both packages' tests use
+# `OpenHikesVectorTiles` is the same again, and more so: nearly all of its
+# suites are SwiftPM's, so a declaration there that only a suite reads is
+# reported unless the app's hosted tests happen to read it too.
+# `redundantPublicAccessibility` is unaffected: the packages' tests use
 # `@testable import`, which reaches internal declarations anyway.
 
 # Writing a `// periphery:ignore`, two rules that are easy to get wrong and

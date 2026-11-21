@@ -19,6 +19,8 @@
 import Foundation
 import MapKit
 @testable import OpenHikes
+import OpenHikesVectorTiles
+@testable import OpenHikesVectorTilesTestSupport
 import Testing
 
 extension TileRendererSavedTileTests {

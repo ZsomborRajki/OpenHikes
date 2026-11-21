@@ -38,7 +38,7 @@ default, so a build with no keys works; the paid providers simply stay locked.
 ## Before you open a pull request
 
 Run strict SwiftLint (`Scripts/lint.sh`), the app and widget unit tests, and
-both local packages with warnings as errors. Copy the commands from *Build and
+the three local packages with warnings as errors. Copy the commands from *Build and
 test* in [`AGENTS.md`](AGENTS.md), which writes them the way CI runs them,
 rather than from memory: the unit tests take a simulator from
 `Scripts/sim-pool.sh` in the same shell and build into the checkout's own

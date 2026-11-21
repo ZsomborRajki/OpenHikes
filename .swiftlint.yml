@@ -12,6 +12,8 @@ included:
   - OpenHikesShared/Tests
   - OpenHikesData/Sources
   - OpenHikesData/Tests
+  - OpenHikesVectorTiles/Sources
+  - OpenHikesVectorTiles/Tests
   - OpenWidget
   - OpenWidgetTests
   - OpenHikesWatch

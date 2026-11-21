@@ -22,6 +22,7 @@
 //
 
 import Foundation
+import OpenHikesVectorTiles
 
 /// The shape of every Overpass request this app makes, and the reading of
 /// every response.

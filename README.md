@@ -90,6 +90,7 @@ The tests, the optional tools and what CI runs are under *Build and test* in [`A
 | `OpenHikes/` | The iPhone and iPad app, one folder per product domain (`Hikes/`, `Recording/`, `Map/`, `Tiles/`, `Community/`…), with `App/` as the composition root |
 | `OpenHikesData/` | A local package: what a hike is, with the SwiftData models, the schema and the route index |
 | `OpenHikesShared/` | A local package compiled by the app, the widget and the watch |
+| `OpenHikesVectorTiles/` | A local package: the OpenHikes map, read from vector tiles and drawn, with the icons it draws with |
 | `OpenWidget/` | The Home Screen widget, the Live Activity and the Control Center toggle |
 | `OpenHikesWatch/`, `OpenHikesWatchWidgets/` | The watch app, and its complication and Smart Stack widget |
 | `OpenHikesTests/`, `OpenWidgetTests/` | App-hosted unit tests, in folders that mirror the app's |

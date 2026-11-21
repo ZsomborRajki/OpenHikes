@@ -12,6 +12,8 @@ import Foundation
 @testable import OpenHikes
 import OpenHikesData
 import OpenHikesShared
+@testable import OpenHikesVectorTiles
+@testable import OpenHikesVectorTilesTestSupport
 import SwiftData
 import Synchronization
 import Testing

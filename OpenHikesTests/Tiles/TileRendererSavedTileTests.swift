@@ -26,6 +26,7 @@ import CoreLocation
 import Foundation
 import MapKit
 @testable import OpenHikes
+@testable import OpenHikesVectorTilesTestSupport
 import Testing
 
 @Suite("Tile renderer saved tiles", .serialized, .timeLimit(.minutes(1)))

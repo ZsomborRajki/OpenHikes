@@ -32,21 +32,28 @@
 //
 
 import Foundation
+// The app reaches `VectorTileSchema` through the package that draws the map.
+// The tool that cuts the countries compiles this file and that one into one
+// module, where there is nothing to import.
+#if canImport(OpenHikesVectorTiles)
+import OpenHikesVectorTiles
+#endif
 
 nonisolated struct OfflineCountryManifest: Codable, Equatable, Sendable {
     /// The manifest format this reader takes. A manifest of another is not
     /// read at all.
     static let currentVersion = 1
-    /// The generation of the Protomaps basemap's layers that
-    /// ``VectorTileRasterizer`` draws. A country cut from a build of another
+    /// The generation of the Protomaps basemap's layers that the map's
+    /// renderer draws, which is the renderer's to say
+    /// (`VectorTileSchema.basemap`). A country cut from a build of another
     /// is left off the list, because it would draw wrong or not at all.
-    static let readableSchema = 4
-    /// The newest layout of the extras' layers that ``VectorTileRasterizer``
-    /// draws, as the tile server's own manifest counts them
-    /// (`VectorTileArchiveManifest`). It draws every earlier one too. An
-    /// area cut from later extras is left off the list, as one of another
-    /// schema is.
-    static let readableExtrasGeneration = 2
+    static let readableSchema = VectorTileSchema.basemap
+    /// The newest layout of the extras' layers that the renderer draws, as
+    /// the tile server's own manifest counts them
+    /// (`VectorTileSchema.extrasGeneration`). It draws every earlier one
+    /// too. An area cut from later extras is left off the list, as one of
+    /// another schema is.
+    static let readableExtrasGeneration = VectorTileSchema.extrasGeneration
 
     var version: Int
     /// The countries, by ISO code.

@@ -20,6 +20,9 @@
 		B10000000000000000000010 /* OpenHikesWatchWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B10000000000000000000008 /* OpenHikesWatchWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		B20000000000000000000003 /* OpenHikesData in Frameworks */ = {isa = PBXBuildFile; productRef = B20000000000000000000002 /* OpenHikesData */; };
 		B20000000000000000000005 /* OpenHikesData in Frameworks */ = {isa = PBXBuildFile; productRef = B20000000000000000000004 /* OpenHikesData */; };
+		B30000000000000000000003 /* OpenHikesVectorTiles in Frameworks */ = {isa = PBXBuildFile; productRef = B30000000000000000000002 /* OpenHikesVectorTiles */; };
+		B30000000000000000000005 /* OpenHikesVectorTiles in Frameworks */ = {isa = PBXBuildFile; productRef = B30000000000000000000004 /* OpenHikesVectorTiles */; };
+		B30000000000000000000007 /* OpenHikesVectorTilesTestSupport in Frameworks */ = {isa = PBXBuildFile; productRef = B30000000000000000000006 /* OpenHikesVectorTilesTestSupport */; };
 		F9B04201302D981D00E03D91 /* DequeModule in Frameworks */ = {isa = PBXBuildFile; productRef = F9B04200302D981D00E03D91 /* DequeModule */; };
 		F9B04203302D981D00E03D91 /* HeapModule in Frameworks */ = {isa = PBXBuildFile; productRef = F9B04202302D981D00E03D91 /* HeapModule */; };
 		F9B04205302D981D00E03D91 /* OrderedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = F9B04204302D981D00E03D91 /* OrderedCollections */; };
@@ -228,6 +231,7 @@
 				F9B04205302D981D00E03D91 /* OrderedCollections in Frameworks */,
 				A8838B92302A302500FAEEEE /* OpenHikesShared in Frameworks */,
 				B20000000000000000000003 /* OpenHikesData in Frameworks */,
+				B30000000000000000000003 /* OpenHikesVectorTiles in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -247,6 +251,8 @@
 			files = (
 				AB000000000000000000000D /* OpenHikesShared in Frameworks */,
 				B20000000000000000000005 /* OpenHikesData in Frameworks */,
+				B30000000000000000000005 /* OpenHikesVectorTiles in Frameworks */,
+				B30000000000000000000007 /* OpenHikesVectorTilesTestSupport in Frameworks */,
 				F9B04231302D981D00E03D91 /* RealModule in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -353,6 +359,7 @@
 			packageProductDependencies = (
 				A8838B91302A302500FAEEEE /* OpenHikesShared */,
 				B20000000000000000000002 /* OpenHikesData */,
+				B30000000000000000000002 /* OpenHikesVectorTiles */,
 				F9B04211302D981D00E03D91 /* Algorithms */,
 				F9B04221302D981D00E03D91 /* AsyncAlgorithms */,
 				F9B04200302D981D00E03D91 /* DequeModule */,
@@ -409,6 +416,8 @@
 			packageProductDependencies = (
 				AB000000000000000000000C /* OpenHikesShared */,
 				B20000000000000000000004 /* OpenHikesData */,
+				B30000000000000000000004 /* OpenHikesVectorTiles */,
+				B30000000000000000000006 /* OpenHikesVectorTilesTestSupport */,
 				F9B04230302D981D00E03D91 /* RealModule */,
 			);
 			productName = OpenHikesTests;
@@ -573,6 +582,7 @@
 			packageReferences = (
 				A8838B90302A302500FAEEEE /* XCLocalSwiftPackageReference "OpenHikesShared" */,
 				B20000000000000000000001 /* XCLocalSwiftPackageReference "OpenHikesData" */,
+				B30000000000000000000001 /* XCLocalSwiftPackageReference "OpenHikesVectorTiles" */,
 				F9B04193302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-collections" */,
 				F9B04210302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-algorithms" */,
 				F9B04220302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-async-algorithms" */,
@@ -1454,6 +1464,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = OpenHikesData;
 		};
+		B30000000000000000000001 /* XCLocalSwiftPackageReference "OpenHikesVectorTiles" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = OpenHikesVectorTiles;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -1548,6 +1562,21 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B20000000000000000000001 /* XCLocalSwiftPackageReference "OpenHikesData" */;
 			productName = OpenHikesData;
+		};
+		B30000000000000000000002 /* OpenHikesVectorTiles */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B30000000000000000000001 /* XCLocalSwiftPackageReference "OpenHikesVectorTiles" */;
+			productName = OpenHikesVectorTiles;
+		};
+		B30000000000000000000004 /* OpenHikesVectorTiles */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B30000000000000000000001 /* XCLocalSwiftPackageReference "OpenHikesVectorTiles" */;
+			productName = OpenHikesVectorTiles;
+		};
+		B30000000000000000000006 /* OpenHikesVectorTilesTestSupport */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B30000000000000000000001 /* XCLocalSwiftPackageReference "OpenHikesVectorTiles" */;
+			productName = OpenHikesVectorTilesTestSupport;
 		};
 		BC64C9A2049F4FA089C19205 /* SwiftLintBuildToolPlugin */ = {
 			isa = XCSwiftPackageProductDependency;

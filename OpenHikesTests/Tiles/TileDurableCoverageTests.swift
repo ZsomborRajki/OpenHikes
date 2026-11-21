@@ -25,6 +25,8 @@
 
 import Foundation
 @testable import OpenHikes
+import OpenHikesVectorTiles
+@testable import OpenHikesVectorTilesTestSupport
 import RealModule
 import Testing
 

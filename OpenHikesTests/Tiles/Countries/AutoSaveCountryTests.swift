@@ -14,6 +14,7 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
+@testable import OpenHikesVectorTiles
 import Testing
 
 @Suite("Auto-save beside a downloaded country")

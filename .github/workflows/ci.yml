@@ -255,6 +255,26 @@ jobs:
             -Xswiftc -warnings-as-errors \
             | xcbeautify --renderer github-actions --disable-logging
 
+      # The package that draws the map, on the same terms. Its suites were
+      # the app's hosted vector tile suites, one at a time on a simulator,
+      # and here they run on the host in a second or two. The icons are an
+      # asset catalog in the package's own bundle, which `swift build`
+      # compiles and the host reads through AppKit (`CatalogPicture`). What
+      # the host cannot see is whether that bundle reaches the app, which
+      # `VectorTileBundledManifestTests` holds in the hosted bundle.
+      - name: Test vector tiles package
+        run: |
+          set -o pipefail
+          swift test --package-path OpenHikesVectorTiles -Xswiftc -warnings-as-errors \
+            | xcbeautify --renderer github-actions --disable-logging
+
+      - name: Test vector tiles package in Release
+        run: |
+          set -o pipefail
+          swift test --package-path OpenHikesVectorTiles --configuration release \
+            -Xswiftc -warnings-as-errors \
+            | xcbeautify --renderer github-actions --disable-logging
+
       - name: Verify resolved packages
         run: |
           xcodebuild -resolvePackageDependencies \
@@ -537,8 +557,15 @@ jobs:
           # `de.lproj`, `fr.lproj`, `es.lproj`, `it.lproj`, `ru.lproj`,
           # `pl.lproj` or `uk.lproj` only while it holds that translation, and
           # one missing here ships that product without it.
+          #
+          # And the app carries what its map is drawn with. The vector tile
+          # package's icons and point table ride in a bundle of the package's
+          # own, and an archive without it draws a map with no points on it
+          # and says nothing.
           for path in \
             "$app/OpenHikes" \
+            "$app/OpenHikesVectorTiles_OpenHikesVectorTiles.bundle/Assets.car" \
+            "$app/OpenHikesVectorTiles_OpenHikesVectorTiles.bundle/VectorTilePoints.json" \
             "$app/PlugIns/OpenWidgetExtension.appex" \
             "$app/Watch/OpenHikesWatch.app/PlugIns/OpenHikesWatchWidgets.appex" \
             "$app/de.lproj" \
@@ -649,6 +676,19 @@ jobs:
 
       - uses: ./.github/actions/verify-xcode
 
+      # The package that draws the map is sanitized where its suites run: on
+      # the host, whole, with no simulator and no list of identifiers to
+      # fall out of date. Its client, its archives and the icon catalog's
+      # lock are what tiles drawn side by side share, and they were four of
+      # the suites selected below until the package took them. First, because
+      # it is seconds and a race here should not wait for the app's build.
+      - name: Run the vector tiles package under TSan
+        run: |
+          set -o pipefail
+          swift test --package-path OpenHikesVectorTiles --sanitize=thread \
+            -Xswiftc -warnings-as-errors \
+            | xcbeautify --renderer github-actions --disable-logging
+
       # A private device rather than the image's shared `iPhone 18 Pro`, and
       # deleted again below. TSan's shadow memory is the heaviest thing this
       # workflow asks a simulator to hold, and the failure it produces when the
@@ -702,24 +742,26 @@ jobs:
       # thread to watch. Measured at 700 tests in 65 suites in 10.8 seconds
       # locally, with no race reported.
       #
-      # The vector map came after, and was absent the same way: the vector
-      # tile client and its archives, the hiking-routes layer's squares and
-      # renderer, the offline countries and the archives they are drawn out
-      # of, and the Map Modes cards, all drawn on the cache's threads and
-      # MapKit's. The rule is the Community block's — the suites with `async`
-      # tests — and `CatalogIconsTests` is one: it holds the lock that keeps
-      # two tiles from reading the asset catalog at once, which crashed the
-      # app when they did (`CatalogIcons`). Measured with them at 88 suites,
+      # The vector map came after, and was absent the same way: the cache's
+      # fallback from the tile server and a retired archive, the
+      # hiking-routes layer's squares and renderer, the offline countries and
+      # the archives they are drawn out of, and the Map Modes cards, all
+      # drawn on the cache's threads and MapKit's. The rule is the Community
+      # block's — the suites with `async` tests. The vector tile client, its
+      # archives and the lock that keeps two tiles from reading the asset
+      # catalog at once (`CatalogIcons`) are the `OpenHikesVectorTiles`
+      # package's now, and its suites run under the sanitizer on the host,
+      # in the step before this one. Measured without them at 84 suites,
       # with no race reported.
       #
       # A mistyped identifier here is silently ignored rather than rejected, so
       # a suite added to this list and never run looks exactly like one that
       # passes. Nested suites need their enclosing type — hence
       # `WidgetFeedSuites`, which is the enclosing type for the suites that
-      # share the App Group file, and which is why 76 entries resolve to 88
-      # suites rather than 76.
+      # share the App Group file, and which is why 72 entries resolve to 84
+      # suites rather than 72.
       #
-      # 88 is the guard, and the step after the run is what enforces it: an
+      # 84 is the guard, and the step after the run is what enforces it: an
       # identifier that resolves to nothing changes nothing about the exit
       # status, so the count has to be read out of the result bundle or it is
       # not a guard at all. Deliberately not the *test* count, which rises
@@ -821,10 +863,6 @@ jobs:
               -only-testing:OpenHikesTests/CommunityShareDisclosureTests \
               -only-testing:OpenHikesTests/CommunitySharePhotoChoiceTests \
               -only-testing:OpenHikesTests/CommunitySharePhotoCountTests \
-              -only-testing:OpenHikesTests/CatalogIconsTests \
-              -only-testing:OpenHikesTests/VectorTileArchivesTests \
-              -only-testing:OpenHikesTests/VectorTileClientKeepingTests \
-              -only-testing:OpenHikesTests/VectorTileClientTests \
               -only-testing:OpenHikesTests/VectorTileFallbackTests \
               -only-testing:OpenHikesTests/VectorTileRetirementTests \
               -only-testing:OpenHikesTests/TilePreviewRendererTests \
@@ -890,16 +928,16 @@ jobs:
       # selection, proximity, region gate, foreground off-trail feed and
       # selected line and selected line import suites all are — is selected by
       # a line that is already there. Selecting that one parent runs thirteen
-      # of the 88 suites, so adding a nested suite moves this number with no
+      # of the 84 suites, so adding a nested suite moves this number with no
       # change to the list at all.
       #
-      # Tests are a floor for the reason the comment above gives: some 960 run
+      # Tests are a floor for the reason the comment above gives: some 940 run
       # today, and 905 sits far enough below that removing a test does not
       # turn the build red on its own, while a suite emptied out under a name
       # that still resolves does. Raise it when the measured number rises.
       - name: Check the sanitized selection actually ran
         env:
-          EXPECTED_SUITES: "88"
+          EXPECTED_SUITES: "84"
           TEST_FLOOR: "905"
         run: |
           set -o pipefail

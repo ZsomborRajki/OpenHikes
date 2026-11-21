@@ -12,6 +12,7 @@ on:
       - "OpenHikes.xcodeproj/**"
       - "OpenHikesShared/Package*"
       - "OpenHikesData/Package*"
+      - "OpenHikesVectorTiles/Package*"
       - ".github/workflows/codeql.yml"
   push:
     branches:
