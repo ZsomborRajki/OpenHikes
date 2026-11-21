@@ -6,7 +6,8 @@
 //  while the line was being drawn, leave a cut where the answer before it
 //  put it, move when the walk began or ended, or be drawn from a trace this
 //  device does not have yet. And a drive off the end with nothing else to
-//  check can be looked at and kept.
+//  check can be looked at and kept, and a pull after an answer is bounded
+//  by the junctions of the line the answer drew.
 //
 
 import Foundation
@@ -257,5 +258,18 @@ extension RouteEditChecksTests {
         #expect(hike.routeEdit?.notOnFoot?.trailingMeters == ends.trailingMeters, "a ride kept on purpose")
         #expect(hike.route == Self.saved)
         #expect(!hike.hasOriginalRoute)
+    }
+
+    @Test("an answer that draws the line again forgets where the junctions on the old one were")
+    func anAnswerForgetsTheJunctions() async throws {
+        let context = try Fixture.modelContext()
+        let hike = try recording(in: context)
+        let session = await visit(hike, in: context)
+        session.junctionMeters = [Self.savedDistances[2], Self.savedDistances[8]]
+
+        await session.choose(.gps, forCheck: Line.checkID)
+
+        #expect(session.line?.choices[Line.checkID] == .gps, "precondition: the line is drawn again")
+        #expect(session.junctionMeters.isEmpty, "they were measured along the line the old answer drew")
     }
 }

@@ -30,6 +30,29 @@
 //  somewhere else keeps its ground and loses its clock, because times that
 //  run backwards along a line are nobody's.
 //
+//  ## The clock a step leaves
+//
+//  A stretch drawn along other ground was still walked, and for as long as
+//  it was: the recorded time across it (``RouteTrim/recordedSeconds(of:)``)
+//  is what it was before, a pause inside it included. A pause the new way
+//  draws over stays with the line as a pause of the same length, standing
+//  where the stretch begins, so the walk's active time and its segments are
+//  what they were. A stretch taken out loses its time, as a cut does.
+//
+//  A line that has lost its clock still had one when the steps before began,
+//  so ``RouteSteps/Applied/recordedSeconds`` carries the figure through a
+//  step that clears it: the same steps give the same figure whichever of
+//  them were saved first.
+//
+//  ## A step that changes nothing
+//
+//  A step that does not fit the line leaves it as it was — its distances lie
+//  outside it, it would leave less than a line, or a line whose ends already
+//  meet is asked to come back again — and so does one that would grow it
+//  past twice its points and the paths the steps may carry
+//  (``RouteSteps/maximumPoints(from:)``): a line doubled back, cut and
+//  doubled back again would otherwise double with every pair.
+//
 //  ## What travels
 //
 //  Only a path drawn along other ground has points of its own to keep, and
@@ -104,6 +127,15 @@ nonisolated public enum RouteStep: Codable, Equatable, Sendable {
         case .outAndBack, .pause, .reverse, .startAt, .trim: 0
         }
     }
+
+    /// Whether the line keeps its times through the step, so what the step
+    /// does to the recorded time can be read off the line it leaves.
+    var keepsClock: Bool {
+        switch self {
+        case .reverse, .startAt: false
+        case .closeLoop, .outAndBack, .pause, .replace, .trim: true
+        }
+    }
 }
 
 nonisolated public enum RouteSteps {
@@ -121,10 +153,24 @@ nonisolated public enum RouteSteps {
         public let movesStart: Bool
         /// The same of its end.
         public let movesEnd: Bool
+        /// How long the line was being recorded, by
+        /// ``RouteTrim/recordedSeconds(of:)``, carried through the steps that
+        /// take its clock away — see *The clock a step leaves* in the file
+        /// header. The line's own figure while every step kept its times.
+        public let recordedSeconds: TimeInterval
+        /// Whether the last step changed the line: one that did not fit it
+        /// is kept with nothing done, and is no step to make.
+        public let lastStepChangedLine: Bool
     }
 
     public static func pathCoordinateCount(of steps: [RouteStep]) -> Int {
         steps.reduce(0) { $0 + $1.pathCoordinateCount }
+    }
+
+    /// The most points the steps may leave a line of `count` points with:
+    /// doubled back once, and every path they may carry.
+    public static func maximumPoints(from count: Int) -> Int {
+        count * 2 + maximumPathCoordinates
     }
 
     /// `line` with every step applied, in order.
@@ -132,10 +178,19 @@ nonisolated public enum RouteSteps {
         var route = line
         var movesStart = false
         var movesEnd = false
+        var clock = RouteTrim.recordedSeconds(of: line)
+        var recorded = clock
+        var lastStepChangedLine = false
+        let limit = maximumPoints(from: line.count)
         for step in steps {
             let before = route
-            route = applying(step, to: before)
-            guard route != before else { continue }
+            let after = applying(step, to: before)
+            lastStepChangedLine = after != before && after.count <= limit
+            guard lastStepChangedLine else { continue }
+            route = after
+            let recordedNow = RouteTrim.recordedSeconds(of: after)
+            if step.keepsClock { recorded += recordedNow - clock }
+            clock = recordedNow
             switch step {
             case .closeLoop, .outAndBack:
                 movesEnd = true
@@ -148,19 +203,25 @@ nonisolated public enum RouteSteps {
                 if route.last != before.last { movesEnd = true }
             }
         }
-        return Applied(route: route, movesStart: movesStart, movesEnd: movesEnd)
+        return Applied(
+            route: route,
+            movesStart: movesStart,
+            movesEnd: movesEnd,
+            recordedSeconds: recorded,
+            lastStepChangedLine: lastStepChangedLine
+        )
     }
 
-    /// `line` with one step applied. A step that does not fit the line — its
-    /// distances lie outside it, or it would leave less than a line — leaves
-    /// the line as it was: a step kept with a hike must never be what loses
-    /// the hike its line.
+    /// `line` with one step applied. A step that does not fit the line — see
+    /// *A step that changes nothing* in the file header — leaves the line as
+    /// it was: a step kept with a hike must never be what loses the hike its
+    /// line.
     public static func applying(_ step: RouteStep, to line: [RouteCoordinate]) -> [RouteCoordinate] {
         guard line.count > 1 else { return line }
         let result: [RouteCoordinate]
         switch step {
         case let .closeLoop(path): result = closed(line, along: path)
-        case .outAndBack: result = line + returning(line).dropFirst()
+        case .outAndBack: result = endsMeet(line) ? line : line + returning(line).dropFirst()
         case let .pause(range): result = paused(line, across: range)
         case let .replace(range, path): result = replaced(line, across: range, with: path)
         case .reverse: result = withoutTimes(turned(line))
@@ -208,7 +269,42 @@ nonisolated public enum RouteSteps {
         sides.tail[0].provenance = .inferred
         sides.tail[0].boundary = nil
         let way = between(path.points, after: sides.head.last, before: sides.tail.first)
-        return sides.head + way + sides.tail
+        let drawn = sides.head + way + sides.tail
+        // The time the stretch stood paused, which its new ground has no
+        // pause to leave out — see *The clock a step leaves* in the file
+        // header.
+        let paused = RouteTrim.recordedSeconds(of: drawn) - RouteTrim.recordedSeconds(of: line)
+        guard paused > 0, let stop = pause(lasting: paused, after: sides.head) else { return drawn }
+        return sides.head + [stop] + way + sides.tail
+    }
+
+    /// A pause of `seconds` on the spot where `head` ends: a leg of no
+    /// length from its last point, stamped that long after the last time
+    /// `head` has. `nil` for a head with no time to count from.
+    private static func pause(lasting seconds: TimeInterval, after head: [RouteCoordinate]) -> RouteCoordinate? {
+        guard let spot = head.last, let began = head.last(where: { $0.timestamp != nil })?.timestamp else {
+            return nil
+        }
+        return RouteCoordinate(
+            latitude: spot.latitude,
+            longitude: spot.longitude,
+            elevation: spot.elevation,
+            timestamp: began.addingTimeInterval(seconds),
+            boundary: .paused
+        )
+    }
+
+    /// Whether `line` already ends where it began, near enough to have come
+    /// back (``RouteShape/closingToleranceMeters``): doubling it back would
+    /// walk the whole of it again to arrive where it is.
+    public static func endsMeet(_ line: [RouteCoordinate]) -> Bool {
+        guard let first = line.first, let last = line.last else { return false }
+        return endsMeet(first.clCoordinate, last.clCoordinate)
+    }
+
+    /// The same, of a line's two ends.
+    public static func endsMeet(_ start: CLLocationCoordinate2D, _ end: CLLocationCoordinate2D) -> Bool {
+        RouteGeometry.distanceMeters(from: start, to: end) <= RouteShape.closingToleranceMeters
     }
 
     private static func paused(_ line: [RouteCoordinate], across range: ClosedRange<Double>) -> [RouteCoordinate] {

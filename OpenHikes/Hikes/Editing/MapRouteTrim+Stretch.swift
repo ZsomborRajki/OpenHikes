@@ -47,6 +47,8 @@ struct RouteStretchMapState {
     #endif
     /// The stretch a pull under way would redraw, in metres along the line.
     var pulled: ClosedRange<Double>?
+    /// What that stretch was measured on, which the step must be made on.
+    var pulledOn: RouteTrimSession.StepGround?
     /// Where the finger came down, so one lifted there asks for nothing.
     var pullOrigin: CGPoint = .zero
     /// The stretch as it is, grayed, and the band through the finger.
@@ -87,6 +89,7 @@ extension MapView.Coordinator {
         routeTrimMap.stretch.pullCover = nil
         routeTrimMap.stretch.pullBand = nil
         routeTrimMap.stretch.pulled = nil
+        routeTrimMap.stretch.pulledOn = nil
     }
 
     /// The renderer for one of this file's polylines, or `nil` for any other.
@@ -168,13 +171,14 @@ extension MapView.Coordinator {
     /// Takes hold of the line under `point`. Split from the recognizer's own
     /// handler so a suite can reach it, as the handles' is.
     @discardableResult func beginRoutePull(at point: CGPoint, in mapView: MKMapView) -> Bool {
-        guard let line = routeTrimMap.session?.line, let stretch = routePullStretch(at: point, in: mapView) else {
-            return false
-        }
+        guard let session = routeTrimMap.session, let line = session.line,
+              let stretch = routePullStretch(at: point, in: mapView)
+        else { return false }
         let ground = line.coordinates(between: stretch)
         guard ground.count > 1 else { return false }
         let cover = MKPolyline(coordinates: ground, count: ground.count)
         routeTrimMap.stretch.pulled = stretch
+        routeTrimMap.stretch.pulledOn = session.stepGround
         routeTrimMap.stretch.pullOrigin = point
         routeTrimMap.stretch.pullCover = cover
         routeTrimMap.stretch.pausedScrolling = mapView.isScrollEnabled
@@ -216,7 +220,7 @@ extension MapView.Coordinator {
         // The band stays while the path is asked for, and goes with the line
         // it was drawn on when the new one arrives — or here, if none does.
         Task { [weak self, weak mapView] in
-            let landed = await session.reroute(stretch, through: via)
+            let landed = await session.reroute(stretch, through: via, on: state.pulledOn)
             guard !landed, let self, let mapView else { return }
             cancelRoutePull(on: mapView)
         }
@@ -230,6 +234,7 @@ extension MapView.Coordinator {
         routeTrimMap.stretch.pullCover = nil
         routeTrimMap.stretch.pullBand = nil
         routeTrimMap.stretch.pulled = nil
+        routeTrimMap.stretch.pulledOn = nil
     }
 
     private func releaseRoutePullScrolling(on mapView: MKMapView) {

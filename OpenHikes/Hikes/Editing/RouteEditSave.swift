@@ -74,6 +74,10 @@ nonisolated struct EditedLine: Equatable, Sendable {
         /// ``RouteSteps/Applied``. An end a step moved is an end cut, for
         /// what a save does to the clock there.
         var moving: Set<RouteTrimHandle> = []
+        /// The recorded time they leave, carried through any that cleared
+        /// the line's clock — see ``RouteSteps/Applied/recordedSeconds``.
+        /// `nil` for the line's own.
+        var recordedSeconds: TimeInterval?
     }
 
     /// What a save does to the clock at one end of the walk: the hike's
@@ -102,7 +106,8 @@ nonisolated struct EditedLine: Equatable, Sendable {
     /// what an earlier save cut off.
     let removedMeters: Double
     /// How much less recorded time it holds than the line the hike has now,
-    /// by ``RouteTrim/recordedSeconds(of:)``. Less than nothing for the same
+    /// by ``RouteTrim/recordedSeconds(of:)`` carried through the steps — see
+    /// ``recordedSeconds(of:cutTo:steps:)``. Less than nothing for the same
     /// edit.
     let removedSeconds: TimeInterval
     /// ``TrailWalkRecord/routeRevision(of:)`` of the new line.
@@ -134,6 +139,9 @@ nonisolated struct EditedLine: Equatable, Sendable {
     ///   - assembly: The whole line's pieces under the answers that made
     ///     `whole`, for a hike that has any.
     ///   - steps: The steps `whole` already has made on it.
+    ///   - recordedBefore: The recorded time of the line the hike has now,
+    ///     carried as ``recordedSeconds(of:cutTo:steps:)`` carries it, or
+    ///     `nil` to read it off `current`.
     init?(
         whole: [RouteCoordinate],
         distances: [Double],
@@ -141,7 +149,8 @@ nonisolated struct EditedLine: Equatable, Sendable {
         replacing current: [RouteCoordinate],
         cutBefore: Set<RouteTrimHandle> = [],
         assembly: RouteAssembly? = nil,
-        steps: Steps = Steps()
+        steps: Steps = Steps(),
+        recordedBefore: TimeInterval? = nil
     ) {
         let kept = cuts.range.map { range in
             RouteTrim.trimmed(whole, distances: distances, keeping: range, takingOff: cuts.takingOff)
@@ -152,12 +161,11 @@ nonisolated struct EditedLine: Equatable, Sendable {
         route = kept
         lengthMeters = length
         removedMeters = current.lengthMeters - length
-        // A line turned round or begun somewhere else has no clock, and is
-        // no less a walk for it: a line with no times leaves the walk's time
-        // as it was, as it always has.
-        let recordedBefore = RouteTrim.recordedSeconds(of: current)
-        let recordedNow = RouteTrim.recordedSeconds(of: kept)
-        removedSeconds = recordedBefore > 0 && recordedNow > 0 ? recordedBefore - recordedNow : 0
+        // A line with no times leaves the walk's time as it was, as it
+        // always has.
+        let before = recordedBefore ?? RouteTrim.recordedSeconds(of: current)
+        let now = Self.recordedSeconds(of: whole, cutTo: kept, steps: steps)
+        removedSeconds = before > 0 && now > 0 ? before - now : 0
         revision = TrailWalkRecord.routeRevision(of: kept)
         let cutNow = cuts.ends(alongWholeOf: distances.last ?? 0).union(steps.moving)
         start = Self.clock(
@@ -180,6 +188,20 @@ nonisolated struct EditedLine: Equatable, Sendable {
             RouteCarriedEnds.found(in: kept, distances: RouteTrim.distances(along: kept)),
             isChecked: true
         )
+    }
+
+    /// The recorded time of `whole` cut down to `kept`: what `steps` carried,
+    /// less what the cuts take off. A line turned round or begun somewhere
+    /// else has no clock and is no less a walk for it, so its figure is the
+    /// one the steps carried through, whichever of them were saved first —
+    /// see *The clock a step leaves* in `RouteStep.swift`.
+    static func recordedSeconds(
+        of whole: [RouteCoordinate],
+        cutTo kept: [RouteCoordinate],
+        steps: Steps = Steps()
+    ) -> TimeInterval {
+        let own = RouteTrim.recordedSeconds(of: whole)
+        return (steps.recordedSeconds ?? own) + RouteTrim.recordedSeconds(of: kept) - own
     }
 
     /// What a save does to the clock at one end — see ``ClockEnd``.

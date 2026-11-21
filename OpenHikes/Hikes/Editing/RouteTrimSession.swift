@@ -80,6 +80,14 @@ final class RouteTrimSession {
     /// the ends off: what *Change a Stretch* turns on. The cuts the hiker
     /// had placed are a step by then, so nothing reads the handles as cuts.
     private(set) var isSelectingStretch = false
+    /// Whether the line the cuts leave already ends where it began
+    /// (``RouteSteps/endsMeet(_:)``), so there is nothing to double back or
+    /// close. Written as the cuts move, and filtered when it stays the same,
+    /// so a handle dragged wakes the menu that reads it only when it turns.
+    private(set) var keptEndsMeet = false
+    /// Whether the handles picking a stretch out have the whole line between
+    /// them, which is nothing to take out. Kept as ``keptEndsMeet`` is.
+    private(set) var picksWholeLine = false
     /// Whether a path is being asked for, which holds the buttons.
     var isRouting = false
 
@@ -94,6 +102,11 @@ final class RouteTrimSession {
     /// How long the line the hike has now is, which the figures measure
     /// what a save would take off, or give back, against.
     @ObservationIgnored private(set) var currentLengthMeters = 0.0
+    /// How long the line the hike has now was being recorded, carried
+    /// through its steps as a save carries the edited line's — see
+    /// ``EditedLine/recordedSeconds(of:cutTo:steps:)``. What a save measures
+    /// the time it takes off the recording's own walk against.
+    @ObservationIgnored private(set) var currentRecordedSeconds: TimeInterval = 0
     /// How long each stretch is under each of its answers, by the stretch's
     /// id: what tells two answers apart in the list.
     @ObservationIgnored private(set) var choiceMeters: [Int: [RouteCheck.Choice: Double]] = [:]
@@ -220,9 +233,9 @@ final class RouteTrimSession {
         else { return }
         // Everything measured before anything is shown: the list draws each
         // answer's length the moment it has the answers.
-        let lengths = await Self.lengths(in: sources)
+        let lengths = await Self.lengths(in: sources, measured: measured)
         guard !Task.isCancelled, mine == loads else { return }
-        (currentLengthMeters, choiceMeters) = lengths
+        (currentLengthMeters, choiceMeters, currentRecordedSeconds) = lengths
         self.sources = sources
         checks = saved?.checks ?? []
         steps = made
@@ -240,6 +253,7 @@ final class RouteTrimSession {
         pausesTakenOff = sources.edit?.endPausesTakenOff ?? []
         anchors = [.start: (measured, startMeters), .end: (measured, endMeters)]
         cutWhenLoaded = Set([RouteTrimHandle.start, .end].filter { cuts($0) }).union(measured.endsMovedBySteps)
+        noteCuts()
         lineRevision += 1
         lookForJunctions()
     }
@@ -295,6 +309,16 @@ final class RouteTrimSession {
         guard moved != before else { return }
         if let line { anchors[handle] = (line, moved) }
         if pausesTakenOff.contains(handle.endPause) { pausesTakenOff.remove(handle.endPause) }
+        noteCuts()
+    }
+
+    /// Says what the cuts now stand on, for what reads it rather than them —
+    /// see ``keptEndsMeet`` and ``picksWholeLine``.
+    private func noteCuts() {
+        guard let line, let start = keptSpot(of: .start), let end = keptSpot(of: .end) else { return }
+        keptEndsMeet = RouteSteps.endsMeet(start.coordinate, end.coordinate)
+        picksWholeLine = isSelectingStretch && startMeters <= Self.endToleranceMeters
+            && endMeters >= line.totalMeters - Self.endToleranceMeters
     }
 
     /// Cuts `stretch` off the end of the line `handle` stands on: what the
@@ -310,7 +334,10 @@ final class RouteTrimSession {
         case .start: edge <= 0
         case .end: edge >= totalMeters
         }
-        if isOnTheEnd { pausesTakenOff.insert(handle.endPause) }
+        if isOnTheEnd {
+            pausesTakenOff.insert(handle.endPause)
+            noteCuts()
+        }
     }
 
     /// Whether the cut at `handle` already takes `stretch` off: it stands at
@@ -423,15 +450,22 @@ extension RouteTrimSession {
         let end = anchors[.end].map { $0.line.meters(matching: $0.meters, on: after, for: .end) } ?? after.totalMeters
         startMeters = min(max(start, 0), after.totalMeters)
         endMeters = min(max(end, startMeters), after.totalMeters)
+        noteCuts()
+        // The junctions a pull is bounded by were measured along the line
+        // the old answer drew.
+        junctionMeters = []
         lineRevision += 1
+        lookForJunctions()
     }
 
     /// The length of the hike's line, and of every stretch under every
-    /// answer it can take.
+    /// answer it can take; and the recorded time of the hike's line, from
+    /// the whole line it was cut from, `measured`.
     @concurrent
     nonisolated private static func lengths(
-        in sources: RouteEditSources
-    ) async -> (current: Double, choices: [Int: [RouteCheck.Choice: Double]]) {
+        in sources: RouteEditSources,
+        measured: RouteTrimLine
+    ) async -> (current: Double, choices: [Int: [RouteCheck.Choice: Double]], recorded: TimeInterval) {
         var choices: [Int: [RouteCheck.Choice: Double]] = [:]
         for check in sources.edit?.assembly?.checks ?? [] {
             for choice in sources.choices(of: check) {
@@ -439,7 +473,12 @@ extension RouteTrimSession {
                 choices[check.id, default: [:]][choice] = stretch.lengthMeters
             }
         }
-        return (sources.current.lengthMeters, choices)
+        let recorded = EditedLine.recordedSeconds(
+            of: measured.route,
+            cutTo: sources.current,
+            steps: EditedLine.Steps(recordedSeconds: measured.recordedSeconds)
+        )
+        return (sources.current.lengthMeters, choices, recorded)
     }
 
     /// Each stretch whose answer differs from the hike's, as the hike's own
@@ -494,7 +533,8 @@ extension RouteTrimSession {
             cuts: cuts,
             assembly: pieces,
             replacing: sources.current,
-            cutBefore: cutWhenLoaded
+            cutBefore: cutWhenLoaded,
+            recordedBefore: currentRecordedSeconds
         )
     }
 
@@ -504,13 +544,16 @@ extension RouteTrimSession {
     /// `cuts` says: on the line's ends unless a step that was a cut is being
     /// given back as one. The one place ``steps`` changes after a load.
     ///
+    /// - Parameter isNewStep: whether the last of `next` is a step being
+    ///   made, which has to change the line it is made on to be kept.
     /// - Returns: whether the line was drawn. A load that overtook it, or a
     ///   list that leaves the very line there was, changes nothing.
     @discardableResult func redraw(
         with next: [RouteStep],
         cuts: EditedLine.Cuts = EditedLine.Cuts(),
         selectingStretch: Bool = false,
-        trimStepIsOnlyForTheStretch onlyForTheStretch: Bool = false
+        trimStepIsOnlyForTheStretch onlyForTheStretch: Bool = false,
+        isNewStep: Bool = false
     ) async -> Bool {
         await settled()
         guard let sources, let before = line else { return false }
@@ -521,7 +564,8 @@ extension RouteTrimSession {
               loaded == loads
         else { return false }
         // A step that does not fit the line leaves the line: it is not one
-        // to keep.
+        // to keep, whatever else it would have changed.
+        if isNewStep, !after.lastStepChangedLine { return false }
         guard after.route != before.route || next.count < steps.count || selectingStretch != isSelectingStretch else {
             return false
         }
@@ -540,6 +584,7 @@ extension RouteTrimSession {
         endMeters = min(max(cuts.range?.upperBound ?? after.totalMeters, startMeters), after.totalMeters)
         pausesTakenOff = cuts.range == nil ? [] : cuts.takingOff
         anchors = [.start: (after, startMeters), .end: (after, endMeters)]
+        noteCuts()
         focusedCheckID = nil
         junctionMeters = []
         staleStretches = stale
@@ -548,31 +593,28 @@ extension RouteTrimSession {
         return true
     }
 
-    /// The stretches of `current` that `line` does not go over: each run of
-    /// its points that are not points of `line`, with the point either side.
-    /// A line turned round or begun somewhere else leaves none, and neither
-    /// does one that only goes on further.
+    /// The stretches of `current` that `line` does not go over as `current`
+    /// draws them: each run of its legs that `line` has no leg for, between
+    /// the same two points, walked or paused alike. A leg taken out as a
+    /// pause keeps both its points, and the hike's own line still strokes it
+    /// whole underneath. A line turned round or begun somewhere else leaves
+    /// none, and neither does one that only goes on further.
     @concurrent
     nonisolated private static func groundLeft(
         of current: [RouteCoordinate],
         by line: [RouteCoordinate]
     ) async -> [[CLLocationCoordinate2D]] {
-        struct Spot: Hashable {
-            let latitude: Double
-            let longitude: Double
-        }
-        let kept = Set(line.map { Spot(latitude: $0.latitude, longitude: $0.longitude) })
+        let kept = Set(line.indices.dropFirst().map { Leg(line[$0 - 1], line[$0]) })
         var runs: [[CLLocationCoordinate2D]] = []
+        // The legs left, by the index of the point each arrives at.
         var run: ClosedRange<Int>?
         func close() {
             guard let open = run else { return }
-            let lower = max(open.lowerBound - 1, 0)
-            let upper = min(open.upperBound + 1, current.count - 1)
-            if upper > lower { runs.append(current[lower...upper].map(\.clCoordinate)) }
+            runs.append(current[(open.lowerBound - 1)...open.upperBound].map(\.clCoordinate))
             run = nil
         }
-        for (index, point) in current.enumerated() {
-            if kept.contains(Spot(latitude: point.latitude, longitude: point.longitude)) {
+        for index in current.indices.dropFirst() {
+            if kept.contains(Leg(current[index - 1], current[index])) {
                 close()
             } else {
                 run = (run?.lowerBound ?? index)...index
@@ -582,12 +624,37 @@ extension RouteTrimSession {
         return runs
     }
 
+    /// A leg of a line, whichever way it is walked, and whether a pause
+    /// opened it.
+    nonisolated private struct Leg: Hashable {
+        struct Spot: Hashable, Comparable {
+            let latitude: Double
+            let longitude: Double
+
+            static func < (one: Self, other: Self) -> Bool {
+                (one.latitude, one.longitude) < (other.latitude, other.longitude)
+            }
+        }
+
+        let ends: [Spot]
+        let isPaused: Bool
+
+        init(_ from: RouteCoordinate, _ to: RouteCoordinate) {
+            ends = [
+                Spot(latitude: from.latitude, longitude: from.longitude),
+                Spot(latitude: to.latitude, longitude: to.longitude),
+            ].sorted()
+            isPaused = to.isPauseBoundary
+        }
+    }
+
     /// Puts both handles on a stretch, where they are picking one out.
     func select(_ stretch: ClosedRange<Double>) {
         guard isSelectingStretch, let line else { return }
         startMeters = min(max(stretch.lowerBound, 0), line.totalMeters)
         endMeters = min(max(stretch.upperBound, startMeters), line.totalMeters)
         anchors = [.start: (line, startMeters), .end: (line, endMeters)]
+        noteCuts()
     }
 
     @concurrent
@@ -596,7 +663,8 @@ extension RouteTrimSession {
         cuts: EditedLine.Cuts,
         assembly: RouteAssembly?,
         replacing current: [RouteCoordinate],
-        cutBefore: Set<RouteTrimHandle>
+        cutBefore: Set<RouteTrimHandle>,
+        recordedBefore: TimeInterval
     ) async -> EditedLine? {
         EditedLine(
             whole: line.route,
@@ -605,7 +673,12 @@ extension RouteTrimSession {
             replacing: current,
             cutBefore: cutBefore,
             assembly: assembly,
-            steps: EditedLine.Steps(made: line.steps, moving: line.endsMovedBySteps)
+            steps: EditedLine.Steps(
+                made: line.steps,
+                moving: line.endsMovedBySteps,
+                recordedSeconds: line.recordedSeconds
+            ),
+            recordedBefore: recordedBefore
         )
     }
 

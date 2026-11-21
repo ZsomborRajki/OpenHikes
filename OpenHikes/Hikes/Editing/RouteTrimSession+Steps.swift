@@ -31,6 +31,14 @@
 //  is known near, a distance the map's zoom gives. See
 //  ``pullBounds(around:reach:)``.
 //
+//  ## An answer to the line it was asked about
+//
+//  A path is asked for between two spots of the line as it stands, and the
+//  handles can move, or the line be drawn again, while it is found. A step
+//  says where it works in metres along the line it is made on, so a path
+//  that comes back to other ground than it was asked about would be put in
+//  the wrong place: it is dropped (``StepGround``).
+//
 
 import CoreLocation
 import Foundation
@@ -47,6 +55,27 @@ extension RouteTrimSession {
 
     /// Whether there is a step to take back.
     var canUndo: Bool { !steps.isEmpty && !isSelectingStretch && canMakeSteps }
+
+    /// What a step would be made on: the line, where the cuts stand on it,
+    /// and whether the handles pick a stretch out. A path asked for on one
+    /// is no answer on another — see the file header.
+    struct StepGround: Equatable {
+        let revision: Int
+        let start: Double
+        let end: Double
+        let pausesTakenOff: RouteTrim.EndPauses
+        let isSelectingStretch: Bool
+    }
+
+    var stepGround: StepGround {
+        StepGround(
+            revision: lineRevision,
+            start: startMeters,
+            end: endMeters,
+            pausesTakenOff: pausesTakenOff,
+            isSelectingStretch: isSelectingStretch
+        )
+    }
 
     /// Whether the line comes back to where it began — see ``RouteShape``.
     var returnsToItsStart: Bool {
@@ -65,9 +94,15 @@ extension RouteTrimSession {
     // MARK: Making a step
 
     /// Makes `step` on the line the cuts leave, keeping the cuts as a step
-    /// of their own first — see the file header.
-    @discardableResult private func make(_ step: RouteStep) async -> Bool {
-        guard line != nil, !isSaving else { return false }
+    /// of their own first — see the file header. A step that leaves the line
+    /// as it was is not made.
+    ///
+    /// - Parameter ground: what the step was worked out on, for one that
+    ///   waited for a path: it is made only on the same — see
+    ///   *An answer to the line it was asked about* in the file header.
+    @discardableResult private func make(_ step: RouteStep, on ground: StepGround? = nil) async -> Bool {
+        await settled()
+        guard line != nil, !isSaving, ground == nil || ground == stepGround else { return false }
         var next = steps
         if let range = trim { next.append(.trim(range, endPauses: pausesTakenOff.rawValue)) }
         next.append(step)
@@ -75,7 +110,7 @@ extension RouteTrimSession {
             refusal = .tooMuchToKeep
             return false
         }
-        return await redraw(with: next)
+        return await redraw(with: next, isNewStep: true)
     }
 
     /// Takes the last step back. A cut that became a step when that one was
@@ -126,9 +161,10 @@ extension RouteTrimSession {
         await make(.replace(keptRange, with: .straight))
     }
 
-    /// Takes the stretch out, as a pause is: no distance and no trail.
+    /// Takes the stretch out, as a pause is: no distance and no trail. Not
+    /// the whole line, which would leave none (``picksWholeLine``).
     func takeOutStretch() async {
-        guard isSelectingStretch, canMakeSteps else { return }
+        guard isSelectingStretch, canMakeSteps, !picksWholeLine else { return }
         await make(.pause(keptRange))
     }
 
@@ -142,18 +178,18 @@ extension RouteTrimSession {
             refusal = .noMappedWay
             return
         }
-        let stretch = keptRange
+        let asked = stepGround
         isRouting = true
         defer { isRouting = false }
         guard let way = await RouteReroute.way(from: from, to: to, using: router) else { return }
+        // Still the stretch that was asked about: a handle moved while the
+        // path was being found is a new question.
+        guard stepGround == asked else { return }
         guard way.isMapped else {
             refusal = .noMappedWay
             return
         }
-        // Still the stretch that was asked about: a handle moved while the
-        // path was being found is a new question.
-        guard isSelectingStretch, keptRange == stretch else { return }
-        await make(.replace(stretch, with: RoutePath(way.coordinates)))
+        await make(.replace(asked.start...asked.end, with: RoutePath(way.coordinates)), on: asked)
     }
 
     // MARK: The whole line
@@ -163,17 +199,21 @@ extension RouteTrimSession {
         await make(.reverse)
     }
 
+    /// Doubles the line back — not one that already ends where it began
+    /// (``keptEndsMeet``), which would walk all of it again to get there.
     func goOutAndBack() async {
-        guard canMakeSteps, !isSelectingStretch else { return }
+        guard canMakeSteps, !isSelectingStretch, !keptEndsMeet else { return }
         await make(.outAndBack)
     }
 
     /// Joins the line's end to its start: along mapped trails where there
-    /// are any between them, and straight where there are none.
+    /// are any between them, and straight where there are none. Not a line
+    /// whose ends already meet.
     func closeLoop() async {
-        guard canMakeSteps, !isSelectingStretch,
+        guard canMakeSteps, !isSelectingStretch, !keptEndsMeet,
               let from = spot(of: .end)?.coordinate, let to = spot(of: .start)?.coordinate
         else { return }
+        let asked = stepGround
         var path = RoutePath.straight
         if let router = routing?.router {
             isRouting = true
@@ -181,7 +221,7 @@ extension RouteTrimSession {
             guard let way = await RouteReroute.way(from: from, to: to, using: router) else { return }
             if way.isMapped { path = RoutePath(way.coordinates) }
         }
-        await make(.closeLoop(path))
+        await make(.closeLoop(path), on: asked)
     }
 
     /// Begins the loop where its start handle stands: what the cut took off
@@ -224,13 +264,18 @@ extension RouteTrimSession {
     /// Draws `stretch` through `via` instead: along mapped trails where the
     /// router finds them, and straight through the spot where it does not.
     ///
-    /// - Parameter stretch: in metres along the line as the handles see it,
-    ///   from ``pullBounds(around:reach:)``.
+    /// - Parameters:
+    ///   - stretch: in metres along the line as the handles see it, from
+    ///     ``pullBounds(around:reach:)``.
+    ///   - ground: what `stretch` was measured on, when that was before now:
+    ///     a pull takes hold of the line before it lets go.
     @discardableResult func reroute(
         _ stretch: ClosedRange<Double>,
-        through via: CLLocationCoordinate2D
+        through via: CLLocationCoordinate2D,
+        on ground: StepGround? = nil
     ) async -> Bool {
-        guard let line, canMakeSteps, !isSelectingStretch,
+        let asked = ground ?? stepGround
+        guard let line, canMakeSteps, !isSelectingStretch, asked == stepGround,
               let from = line.profile.coordinate(atDistance: stretch.lowerBound),
               let to = line.profile.coordinate(atDistance: stretch.upperBound)
         else { return false }
@@ -246,6 +291,6 @@ extension RouteTrimSession {
             coordinates = way.coordinates
         }
         let made = (stretch.lowerBound - begins)...(stretch.upperBound - begins)
-        return await make(.replace(made, with: RoutePath(coordinates)))
+        return await make(.replace(made, with: RoutePath(coordinates)), on: asked)
     }
 }
