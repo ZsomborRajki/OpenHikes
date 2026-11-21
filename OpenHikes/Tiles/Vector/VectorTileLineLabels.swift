@@ -4,7 +4,8 @@
 //
 //  Names along lines: streets, paths, tracks, lifts, rivers, ridges and
 //  cliffs, set letter by letter along the line they name, or beside it where
-//  the name would hide the line: a stream's, a ridge's.
+//  the name would hide the line: a stream's, a ridge's. A protected area's
+//  name goes along the inside of its edge (`VectorTileLineLabels+Areas.swift`).
 //
 //  The archive splits a street wherever its tags change, so a street arrives
 //  as many short ways. Pieces with the same name that meet end to end are
@@ -95,7 +96,7 @@ nonisolated enum VectorTileLineLabels {
         let lines = pieces.flatMap { key, parts in
             joined(parts).map { NamedLine(category: key.category, name: key.name, points: $0) }
         }
-        return lines.sorted(by: precedes)
+        return (lines + areaEdges(in: tile, source: source, target: target, language: language)).sorted(by: precedes)
     }
 
     /// The first of a road's numbers, where it has several.
@@ -200,10 +201,7 @@ nonisolated enum VectorTileLineLabels {
         guard width <= length, spacing > 0, step > 0 else { return [] }
         let middle = length / 2
         let reach = spacing / 4
-        var slides: [CGFloat] = [0]
-        for slide in stride(from: step, through: reach, by: step) {
-            slides += [slide, -slide]
-        }
+        let slides = slides(by: step, upTo: reach)
         let interval = spacing + 2 * reach
         let count = Int((middle / interval).rounded(.down))
         let distances = (-count...count).map { middle + CGFloat($0) * interval }
@@ -320,13 +318,17 @@ nonisolated extension VectorTileLineLabels {
         /// ``VectorTileLabelStyle/LineLook/repeatDistance``.
         init(
             _ lines: [NamedLine],
-            z: Int,
+            target: VectorTileAddress,
             unit: CGFloat,
             bounds: CGRect,
             occupied: [CGRect],
             language: String
         ) {
+            let z = target.z
             let spacing = VectorTileLabelStyle.spacing * unit
+            // The picture's corner on the world's grid at its zoom.
+            let side = CGFloat(VectorTileRasterizer.pixelSize)
+            let origin = CGPoint(x: CGFloat(target.x) * side, y: CGFloat(target.y) * side)
             var room = Room(inner: bounds.insetBy(dx: spacing, dy: spacing), spacing: spacing, taken: occupied)
             var placed: [SetName] = []
             var texts: [String: SetText] = [:]
@@ -346,16 +348,30 @@ nonisolated extension VectorTileLineLabels {
                 let repeatDistance = look.repeatDistance * unit
                 // A name written beside its line is set along the line that
                 // runs beside it, on the side below the name whichever way it
-                // reads.
+                // reads, or an area's on the area's side however it reads.
                 let offset = look.offset(at: z) * unit
-                let forward = MeasuredPath(MeasuredPath.offset(line.points, by: offset))
-                let backward = MeasuredPath(MeasuredPath.offset(line.points.reversed(), by: offset))
-                let marks = VectorTileLineLabels.marks(
-                    length: forward.length,
-                    width: text.width,
-                    spacing: repeatDistance,
-                    step: max(text.width / 4, spacing)
+                let beside = MeasuredPath.offset(line.points, by: offset)
+                let forward = MeasuredPath(beside)
+                let backward = MeasuredPath(
+                    look.isInsideArea ? beside.reversed() : MeasuredPath.offset(line.points.reversed(), by: offset)
                 )
+                let step = max(text.width / 4, spacing)
+                let marks = if let grid = look.gridSpacing {
+                    VectorTileLineLabels.marks(
+                        along: forward,
+                        origin: origin,
+                        every: grid * unit,
+                        width: text.width,
+                        step: step
+                    )
+                } else {
+                    VectorTileLineLabels.marks(
+                        length: forward.length,
+                        width: text.width,
+                        spacing: repeatDistance,
+                        step: step
+                    )
+                }
                 guard !marks.isEmpty else { continue }
                 // A mark outside the tile is the neighbouring tile's to name.
                 for mark in marks where bounds.contains(forward.point(at: mark.distance)) {

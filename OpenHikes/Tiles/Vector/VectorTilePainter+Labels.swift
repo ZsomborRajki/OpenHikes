@@ -156,7 +156,14 @@ nonisolated extension VectorTilePainter {
         _ lines: [VectorTileLineLabels.NamedLine],
         clearOf occupied: [CGRect]
     ) -> VectorTileLineLabels.Layout {
-        VectorTileLineLabels.Layout(lines, z: z, unit: unit, bounds: bounds, occupied: occupied, language: language)
+        VectorTileLineLabels.Layout(
+            lines,
+            target: target,
+            unit: unit,
+            bounds: bounds,
+            occupied: occupied,
+            language: language
+        )
     }
 
     private func pointCandidates() -> [VectorTilePoints.Candidate] {

@@ -276,6 +276,11 @@ layers:
 # as in Carto, until zoom 15, which every deeper zoom is drawn from. The
 # wider buffer keeps the cut edge of an area that runs past a tile outside
 # the band drawn along its border.
+#
+# Carto writes an area's name along the inside of its edge from zoom 13,
+# once it covers 192,000 square pixels (`protected-areas-text`), so the name
+# and the size come in at the first zoom it does, and at zoom 15 at the
+# latest, where the map reads the size for every deeper zoom.
 - id: protected_areas
   buffer: 8
   features:
@@ -284,26 +289,56 @@ layers:
     min_zoom: 8
     min_size: 27
     include_when:
-      boundary: aboriginal_lands
-    attributes:
-    - key: kind
-      value: aboriginal_lands
-  - source: osm
-    geometry: polygon
-    min_zoom: 8
-    min_size: 27
-    include_when:
       __any__:
-      - boundary: national_park
+      - boundary: [aboriginal_lands, national_park]
       - leisure: nature_reserve
       - __all__:
         - boundary: protected_area
         - protect_class: ['1', '1a', '1b', '2', '3', '4', '5', '6']
-    exclude_when:
-      boundary: aboriginal_lands
     attributes:
     - key: kind
-      value: protected_area
+      value: aboriginal_lands
+      include_when:
+        boundary: aboriginal_lands
+      else: protected_area
+    - key: area
+      value: '${ feature.area("z0 tile2") * 65536.0 }'
+      type: double
+      min_zoom: &edge_name_zoom
+      - if: '${ feature.area("z0 tile2") * 65536.0 * 67108864.0 > 192000.0 }'
+        value: 13
+      - if: '${ feature.area("z0 tile2") * 65536.0 * 268435456.0 > 192000.0 }'
+        value: 14
+      - else: 15
+    - key: name
+      min_zoom: *edge_name_zoom
+    - key: 'name:en'
+      tag_value: 'name:en'
+      min_zoom: *edge_name_zoom
+    - key: 'name:de'
+      tag_value: 'name:de'
+      min_zoom: *edge_name_zoom
+    - key: 'name:fr'
+      tag_value: 'name:fr'
+      min_zoom: *edge_name_zoom
+    - key: 'name:es'
+      tag_value: 'name:es'
+      min_zoom: *edge_name_zoom
+    - key: 'name:it'
+      tag_value: 'name:it'
+      min_zoom: *edge_name_zoom
+    - key: 'name:ru'
+      tag_value: 'name:ru'
+      min_zoom: *edge_name_zoom
+    - key: 'name:pl'
+      tag_value: 'name:pl'
+      min_zoom: *edge_name_zoom
+    - key: 'name:uk'
+      tag_value: 'name:uk'
+      min_zoom: *edge_name_zoom
+    - key: 'name:ro'
+      tag_value: 'name:ro'
+      min_zoom: *edge_name_zoom
 
 # What the basemap drops of an area Carto fills with symbols by it: a wood's
 # leaves, a wetland's kind, a beach's surface, a cemetery's religion. The

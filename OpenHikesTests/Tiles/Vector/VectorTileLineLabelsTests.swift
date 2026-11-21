@@ -181,7 +181,7 @@ struct VectorTileLineLabelsTests {
         )
         let layout = VectorTileLineLabels.Layout(
             [street],
-            z: tile.z,
+            target: tile,
             unit: 2,
             bounds: wide,
             occupied: [],
@@ -203,7 +203,7 @@ struct VectorTileLineLabelsTests {
 
         let layout = VectorTileLineLabels.Layout(
             [street],
-            z: tile.z,
+            target: tile,
             unit: 2,
             bounds: bounds,
             occupied: [],
@@ -225,7 +225,7 @@ struct VectorTileLineLabelsTests {
             )
             let layout = VectorTileLineLabels.Layout(
                 [line],
-                z: tile.z,
+                target: tile,
                 unit: 2,
                 bounds: bounds,
                 occupied: [],
@@ -250,10 +250,17 @@ struct VectorTileLineLabelsTests {
             points: [CGPoint(x: 200, y: 256), CGPoint(x: 312, y: 256)]
         )
 
-        let free = VectorTileLineLabels.Layout([line], z: tile.z, unit: 2, bounds: bounds, occupied: [], language: "hu")
+        let free = VectorTileLineLabels.Layout(
+            [line],
+            target: tile,
+            unit: 2,
+            bounds: bounds,
+            occupied: [],
+            language: "hu"
+        )
         let blocked = VectorTileLineLabels.Layout(
             [line],
-            z: tile.z,
+            target: tile,
             unit: 2,
             bounds: bounds,
             occupied: [CGRect(x: 150, y: 200, width: 212, height: 112)],
