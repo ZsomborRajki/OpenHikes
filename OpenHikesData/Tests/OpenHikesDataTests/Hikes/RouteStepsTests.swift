@@ -21,16 +21,16 @@ import Testing
 
 @Suite("Route steps")
 struct RouteStepsTests {
-    private static let start = Date(timeIntervalSinceReferenceDate: 800_000_000)
+    static let start = Date(timeIntervalSinceReferenceDate: 800_000_000)
     /// One thousandth of a degree of longitude on the equator.
-    private static let step = RouteGeometry.distanceMeters(
+    static let step = RouteGeometry.distanceMeters(
         from: CLLocationCoordinate2D(latitude: 0, longitude: 0),
         to: CLLocationCoordinate2D(latitude: 0, longitude: 0.001)
     )
 
     /// A point `longitude` thousandths of a degree along the equator, and
     /// `north` thousandths off it.
-    private static func point(
+    static func point(
         _ longitude: Double,
         north: Double = 0,
         at seconds: TimeInterval? = nil,
@@ -45,17 +45,17 @@ struct RouteStepsTests {
     }
 
     /// Eleven points a step apart, a minute between each.
-    private static let line = (0...10).map { point(Double($0), at: Double($0) * 60) }
+    static let line = (0...10).map { point(Double($0), at: Double($0) * 60) }
     private static let total = step * 10
 
     /// A way round to the north of the line, between its third and sixth
     /// steps.
-    private static let detour = RoutePath([
+    static let detour = RoutePath([
         CLLocationCoordinate2D(latitude: 0.001, longitude: 0.004),
         CLLocationCoordinate2D(latitude: 0.001, longitude: 0.005),
     ])
 
-    private static func places(_ route: [RouteCoordinate]) -> [[Double]] {
+    static func places(_ route: [RouteCoordinate]) -> [[Double]] {
         route.map { [$0.latitude, $0.longitude] }
     }
 

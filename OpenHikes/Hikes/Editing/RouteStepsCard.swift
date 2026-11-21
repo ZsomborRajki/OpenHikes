@@ -81,7 +81,10 @@ struct RouteWholeLineMenu: View {
                     }
                 }
                 .disabled(!session.canStartLoopAtCut)
-            } else {
+            } else if !session.keptEndsMeet {
+                // A line that already ends where it began, across a pause
+                // that moved the walk, has no shape and still nothing to
+                // come back from.
                 Button("Out and Back", systemImage: "arrow.uturn.right") {
                     Task { await session.goOutAndBack() }
                 }
@@ -127,6 +130,8 @@ struct RouteStretchVerbs: View {
                 row(String(localized: "Remove"), systemImage: "scissors", identifier: "route-stretch-remove") {
                     await session.takeOutStretch()
                 }
+                // The whole line taken out would leave no hike.
+                .disabled(session.picksWholeLine)
                 row(String(localized: "Cancel"), systemImage: "xmark", identifier: "route-stretch-cancel") {
                     await session.endStretch()
                 }

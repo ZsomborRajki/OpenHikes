@@ -62,6 +62,12 @@ nonisolated struct RouteTrimLine: Sendable {
     /// The ends of the line a step moved: the hike no longer begins, or
     /// ends, where and when the line it was made from did.
     var endsMovedBySteps: Set<RouteTrimHandle> = []
+    /// Whether the last of ``steps`` changed the line it was made on — see
+    /// ``RouteSteps/Applied/lastStepChangedLine``.
+    var lastStepChangedLine = true
+    /// How long the line was being recorded, carried through any step that
+    /// took its clock away — see ``RouteSteps/Applied/recordedSeconds``.
+    var recordedSeconds: TimeInterval = 0
     /// How far along the drawn polyline each point stands, 0 to 1, by the
     /// length MapKit measures a polyline in: map points, a paused leg's
     /// included, since the polyline is drawn across it.
@@ -91,6 +97,8 @@ nonisolated struct RouteTrimLine: Sendable {
         var line = try await measuring(applied.route)
         line.choices = Self.choices(of: assembly?.checks ?? [])
         line.steps = steps
+        line.lastStepChangedLine = applied.lastStepChangedLine
+        line.recordedSeconds = applied.recordedSeconds
         if applied.movesStart { line.endsMovedBySteps.insert(.start) }
         if applied.movesEnd { line.endsMovedBySteps.insert(.end) }
         return line
@@ -176,13 +184,15 @@ nonisolated struct RouteTrimLine: Sendable {
         let measured = try RouteProfile.cancellable(route: route)
         let carried = RouteCarriedEnds.found(in: route, distances: measured.distances)
         guard !Task.isCancelled else { throw CancellationError() }
-        return Self(
+        var line = Self(
             route: route,
             profile: measured,
             carriedEnds: carried,
             shape: RouteShape.of(route: route),
             drawnFractions: Self.drawnFractions(of: measured.coordinates)
         )
+        line.recordedSeconds = RouteTrim.recordedSeconds(of: route)
+        return line
     }
 
     private static func drawnFractions(of coordinates: [CLLocationCoordinate2D]) -> [Double] {
