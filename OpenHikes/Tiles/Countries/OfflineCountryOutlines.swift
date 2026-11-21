@@ -16,6 +16,7 @@
 import CoreLocation
 import MapKit
 import Observation
+import OpenHikesData
 
 @MainActor
 @Observable
@@ -75,18 +76,41 @@ final class OfflineCountryOutlines {
     }
 }
 
-extension OfflineCountryManifest.Bounds {
-    /// Room round a country, so its outline is inside the frame.
+extension OfflineCountryManifest.Country {
+    /// Room round an area, so its outline is inside the frame.
     static let framePadding = 1.2
 
-    /// The region a country's row shows on the map: the whole of it, with a
-    /// margin.
+    /// The region an area's row shows on the map: the whole of its outline,
+    /// with a margin.
+    ///
+    /// Measured round the outline the short way (``TileBoundingBox``), not
+    /// across the bounds. An area across the antimeridian, such as Fiji,
+    /// Chukotka or Alaska, is listed with bounds round the whole globe, whose
+    /// middle is the far side of the world from it. Its region runs on past
+    /// ±180° instead, and ``MKCoordinateRegion/mapRect`` carries that to
+    /// MapKit. An area listed without an outline is framed by its bounds.
     var framingRegion: MKCoordinateRegion {
+        let vertices = outline.joined().compactMap { vertex in
+            vertex.count >= 2 ? CLLocationCoordinate2D(latitude: vertex[1], longitude: vertex[0]) : nil
+        }
+        guard let box = TileBoundingBox(route: vertices) else {
+            return Self.framing(
+                south: bounds.south, north: bounds.north, west: bounds.west, width: bounds.east - bounds.west
+            )
+        }
+        return Self.framing(south: box.southLat, north: box.northLat, west: box.westLon, width: box.lonSpan)
+    }
+
+    /// A region round a box `width` degrees east of `west`, with the margin.
+    private static func framing(south: Double, north: Double, west: Double, width: Double) -> MKCoordinateRegion {
         MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: (north + south) / 2, longitude: (east + west) / 2),
+            center: CLLocationCoordinate2D(
+                latitude: (north + south) / 2,
+                longitude: RouteGeometry.normalizedLongitude(west + width / 2)
+            ),
             span: MKCoordinateSpan(
-                latitudeDelta: (north - south) * Self.framePadding,
-                longitudeDelta: (east - west) * Self.framePadding
+                latitudeDelta: (north - south) * framePadding,
+                longitudeDelta: min(width * framePadding, 360)
             )
         )
     }

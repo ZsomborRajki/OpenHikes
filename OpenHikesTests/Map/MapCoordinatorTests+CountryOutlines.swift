@@ -93,7 +93,7 @@ extension MapCoordinatorTests {
         var chosen: [String] = []
         let token = outlines.attach { chosen.append($0) }
         outlines.show(Self.outlinedCountries(), installed: [], selected: nil, token: token)
-        map.setRegion(OfflineCountryFixture.bounds.framingRegion, animated: false)
+        map.setRegion(OfflineCountryFixture.country(bytes: Data("SI".utf8)).framingRegion, animated: false)
 
         let ljubljana = map.convert(CLLocationCoordinate2D(latitude: 46.05, longitude: 14.5), toPointTo: map)
         #expect(coordinator.handleCountryOutlineTap(at: ljubljana, in: map))
@@ -101,6 +101,30 @@ extension MapCoordinatorTests {
 
         outlines.detach(token: token)
         #expect(!coordinator.handleCountryOutlineTap(at: ljubljana, in: map))
+    }
+
+    /// The camera move a row's tap makes, as MapKit reads it back: a frame
+    /// across the date line holding both of the area's islands, not the
+    /// world.
+    @Test("an area across the antimeridian is shown round itself")
+    func showsAnAreaAcrossTheAntimeridian() {
+        let coordinator = MapView.Coordinator()
+        let view = mapView()
+        let map = makeMap(view, coordinator)
+        defer { detach(map) }
+        view.update(map, coordinator)
+        let fiji = OfflineCountryFixture.dateLineCountry(bytes: Data("FJ".utf8))
+
+        coordinator.show(fiji.framingRegion, on: map, animated: false)
+
+        #expect(map.region.span.longitudeDelta < 30, "a frame round the area, not round the world")
+        for island in [
+            CLLocationCoordinate2D(latitude: -18, longitude: 178.5),
+            CLLocationCoordinate2D(latitude: -17.25, longitude: -179.25),
+        ] {
+            let point = map.convert(island, toPointTo: map)
+            #expect(map.bounds.contains(point), "both islands are on screen")
+        }
     }
 }
 #endif

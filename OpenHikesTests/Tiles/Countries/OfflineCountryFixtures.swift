@@ -91,6 +91,18 @@ nonisolated enum OfflineCountryFixture {
         return country
     }
 
+    /// Fiji as the list has it: an island either side of the antimeridian,
+    /// each ring cut at it, and bounds from -180° to 180°. The islands run
+    /// from 177° E to 178.5° W, 4.5° across the date line, with their
+    /// middle at 179.25° E.
+    static func dateLineCountry(bytes: Data) -> OfflineCountryManifest.Country {
+        var country = country(bytes: bytes, id: "FJ")
+        country.bounds = OfflineCountryManifest.Bounds(west: -180, south: -19, east: 180, north: -16)
+        country.outline = outline(of: OfflineCountryManifest.Bounds(west: 177, south: -19, east: 180, north: -17))
+            + outline(of: OfflineCountryManifest.Bounds(west: -180, south: -18.5, east: -178.5, north: -16))
+        return country
+    }
+
     /// In the concave country's western arm, its eastern one, and in the
     /// bay between them, where a leg from one arm to the other passes.
     static let westernArm = RouteCoordinate(latitude: 46.3, longitude: 13.65)
