@@ -333,7 +333,7 @@ final class OfflineCountries {
         } catch {
             let reason = String(describing: error)
             Self.logger.error("Installing \(country.id, privacy: .public): \(reason, privacy: .public)")
-            download.set(.failed(.space))
+            stopInstalling(download)
             return
         }
         let before = installed
@@ -347,8 +347,8 @@ final class OfflineCountries {
         // The old build goes only once the index on disk names the new one:
         // otherwise a relaunch finds neither, and sweeps the new one.
         guard commitIndex(restoring: before) else {
-            store.remove(download.files, keeping: Array(installed.values))
-            download.set(.failed(.space))
+            store.unstage(download.files, keeping: Array(installed.values))
+            stopInstalling(download)
             return
         }
         reopenArchives()
@@ -358,6 +358,18 @@ final class OfflineCountries {
         downloads[country.id] = nil
         writePending { $0.removeAll { $0.country.id == country.id } }
         reconcile()
+    }
+
+    /// Fails a download whose files could not be moved into place, or named
+    /// by the index once they were. What went back to staging is installed
+    /// from there by the next try, here or at the next launch, since the
+    /// download is still listed as under way; what did not is asked for
+    /// again.
+    private func stopInstalling(_ download: OfflineCountryDownload) {
+        for file in download.files where !FileManager.default.fileExists(atPath: store.stagedURL(for: file).path) {
+            download.forget(file.role)
+        }
+        download.set(.failed(.space))
     }
 
     /// Opens the archives of what is installed now, off the main actor, and
