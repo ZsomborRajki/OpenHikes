@@ -4,8 +4,7 @@
 //
 //  App-scoped live recording coordinator. The view may come and go; this
 //  object owns Core Location delivery, the crash-safe journal, and the
-//  persisted draft Hike, finalized in place once Stop — and any route review
-//  it opens — has resolved.
+//  persisted draft Hike, finalized in place by Stop.
 //
 
 import CoreLocation
@@ -30,7 +29,6 @@ final class HikeRecorder: NSObject {
         case recording
         case paused
         case saving
-        case reviewing
         case failed(RecordingFailure)
     }
 
@@ -53,7 +51,6 @@ final class HikeRecorder: NSObject {
     var recoveryState: RecoveryState = .absent
     var sessionStartedAt: Date?
     var currentHike: Hike?
-    var routeReview: RecordingRouteReview?
 
     let stats = RecordingStats()
     let trace = RecordingTrace()
@@ -219,7 +216,7 @@ final class HikeRecorder: NSObject {
     /// Kept here beside the parts it was made from rather than carried
     /// with the typed name, because it is read where they are: once, in
     /// ``persist(_:prepared:customName:)``, whether the save follows Stop
-    /// straight away, a route review or a retry.
+    /// straight away or a retry.
     @ObservationIgnored var offeredTitle: String?
     /// Whether a tap on Stop is still counting the walk's fixes — see
     /// ``settledStopStep()``. A second tap in that moment is not a second
@@ -228,13 +225,7 @@ final class HikeRecorder: NSObject {
     @ObservationIgnored var liveMatchingTask: Task<Void, Never>?
     @ObservationIgnored var liveMatchingTaskID: UUID?
     @ObservationIgnored var liveMatchNeedsRun = false
-    @ObservationIgnored var pendingReviewSave: PendingReviewSave?
     @ObservationIgnored var pendingPreparedSave: PendingPreparedSave?
-    /// The in-flight resolution of the review preview. One at a time and
-    /// replaced rather than accumulated: scrubbing through sections issues one
-    /// of these per tap, and only the newest answer is worth drawing.
-    @ObservationIgnored var reviewPreviewTask: Task<Void, Never>?
-    @ObservationIgnored var reviewPreviewTaskID: UUID?
     @ObservationIgnored let journalQueue = SerialAsyncQueue()
     @ObservationIgnored var journalFlushTask: Task<Void, Never>?
     @ObservationIgnored var pendingFixMergeTask: Task<Void, Never>?
@@ -267,7 +258,7 @@ final class HikeRecorder: NSObject {
         switch phase {
         case .idle: false
         case .recovering: true
-        case .waitingForFix, .recording, .paused, .saving, .reviewing, .failed: sessionID != nil || startRequested
+        case .waitingForFix, .recording, .paused, .saving, .failed: sessionID != nil || startRequested
         }
     }
 
@@ -284,7 +275,7 @@ final class HikeRecorder: NSObject {
 
     var canRetrySave: Bool {
         guard case .failed = phase else { return false }
-        return pendingPreparedSave != nil || pendingReviewSave != nil
+        return pendingPreparedSave != nil
     }
 
     /// Whether fixes are actually being taken right now, as opposed to a
@@ -294,7 +285,7 @@ final class HikeRecorder: NSObject {
     var isCapturingFixes: Bool {
         switch phase {
         case .waitingForFix, .recording: true
-        case .idle, .recovering, .paused, .saving, .reviewing, .failed: false
+        case .idle, .recovering, .paused, .saving, .failed: false
         }
     }
 
@@ -533,7 +524,8 @@ extension HikeRecorder {
         publishSharedRecordingSnapshot(force: true)
     }
 
-    /// Ends the walk, and saves it or opens its route review.
+    /// Ends the walk and saves it, with the stretches trail matching left a
+    /// question on kept for *Edit Route* — see ``RouteAssembly``.
     ///
     /// - Parameters:
     ///   - customName: The name the hiker typed, if any. A name field left as
@@ -548,7 +540,7 @@ extension HikeRecorder {
     @discardableResult func stop(
         customName: String? = nil,
         offeredTitle: String? = nil
-    ) async throws -> RecordingStopOutcome {
+    ) async throws -> Hike {
         guard isStoppable else { throw RecordingFailure.save(String(
             localized: "No active recording is ready to stop."
         )) }
@@ -665,9 +657,8 @@ extension HikeRecorder {
     func dismissFailure() {
         guard case .failed = phase else { return }
         guard !canRetrySave else { return }
-        // Past that guard `pendingReviewSave` is necessarily nil — it is one of
-        // the two things `canRetrySave` reports — so there is no review to
-        // return to and the session goes back to being merely paused.
+        // Past that guard there is no prepared save to retry, so the session
+        // goes back to being merely paused.
         if sessionID == nil {
             resetSession()
         } else {

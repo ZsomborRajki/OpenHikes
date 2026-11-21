@@ -3,8 +3,8 @@
 //  OpenHikes
 //
 //  A trail graph that ships with the app instead of arriving from Overpass.
-//  UI automation needs route review to happen the same way every run, and a
-//  network round trip is neither offline-safe nor deterministic. In the app
+//  UI automation needs trail matching to answer the same way every run, and
+//  a network round trip is neither offline-safe nor deterministic. In the app
 //  it is only reachable through the `--ui-test-trail-graph=` launch argument.
 //
 

@@ -3,8 +3,15 @@
 //  OpenHikes
 //
 //  One visit to *Edit Route* on a hike that was recorded or imported: the
-//  line being trimmed, where its two cuts stand, and what the map draws of
-//  them.
+//  whole line it works on, where the two cuts stand on it, how each stretch
+//  to check is answered, and what the map draws of all three.
+//
+//  ## The whole line
+//
+//  Not the line the hike has now but the one it was saved with, put together
+//  under the answers that stand, with the hike's trim as two cuts on it — see
+//  ``RouteEditSources``. Changing an answer puts the line together again and
+//  moves the cuts with the ground they stood on.
 //
 //  ## Whose it is
 //
@@ -58,6 +65,9 @@ nonisolated struct RouteTrimLine: Sendable {
     let route: [RouteCoordinate]
     let profile: RouteProfile
     let carriedEnds: RouteCarriedEnds
+    /// Where each stretch to check is in ``route``, by its id — see
+    /// ``RouteAssembly/Line``. Empty for a line with none.
+    var checkRanges: [Int: ClosedRange<Int>] = [:]
     /// How far along the drawn polyline each point stands, 0 to 1, by the
     /// length MapKit measures a polyline in: map points, a paused leg's
     /// included, since the polyline is drawn across it.
@@ -65,6 +75,30 @@ nonisolated struct RouteTrimLine: Sendable {
 
     var distances: [Double] { profile.distances }
     var totalMeters: Double { profile.totalDistanceMeters }
+
+    /// The whole line of `sources` under `assembly`, measured.
+    @concurrent
+    static func measuring(
+        _ sources: RouteEditSources,
+        under assembly: RouteAssembly?
+    ) async throws(CancellationError) -> Self {
+        let whole = sources.whole(under: assembly)
+        var line = try await measuring(whole.route)
+        line.checkRanges = whole.checkRanges
+        return line
+    }
+
+    /// The part of the line a stretch to check takes up, in metres along it.
+    func meters(ofCheck id: Int) -> ClosedRange<Double>? {
+        guard let range = checkRanges[id], distances.indices.contains(range.upperBound) else { return nil }
+        return distances[range.lowerBound]...distances[range.upperBound]
+    }
+
+    /// The points a stretch to check is drawn with.
+    func coordinates(ofCheck id: Int) -> [CLLocationCoordinate2D] {
+        guard let range = checkRanges[id], profile.coordinates.indices.contains(range.upperBound) else { return [] }
+        return Array(profile.coordinates[range])
+    }
 
     @concurrent
     static func measuring(_ route: [RouteCoordinate]) async throws(CancellationError) -> Self {
@@ -214,11 +248,17 @@ final class RouteTrimSession {
     /// The least a trim may leave: two handles closer than this are one
     /// place, and a line that short is no hike.
     static let minimumKeptMeters = 50.0
+    /// How near its end a cut has to be to count as standing on it.
+    static let endToleranceMeters = 0.5
 
-    /// Moves when a new line is loaded, which is rare; the map and the
-    /// screen read ``line`` when it does.
+    /// Moves when the whole line is put together anew — a load, or an answer
+    /// changed — which is rare; the map and the screen read ``line`` when it
+    /// does.
     private(set) var lineRevision = 0
     @ObservationIgnored private(set) var line: RouteTrimLine?
+    /// What the visit works from. Kept to tell the same hike again from a
+    /// new one, and for what a save compares against.
+    @ObservationIgnored private(set) var sources: RouteEditSources?
 
     /// Where the kept line begins and ends, in metres along ``line``.
     private(set) var startMeters = 0.0
@@ -228,6 +268,23 @@ final class RouteTrimSession {
     /// ``RouteTrim/EndPauses``. Only an offer sets one
     /// (``takeOff(_:at:)``); placing that handle by hand clears it.
     private(set) var pausesTakenOff: RouteTrim.EndPauses = []
+
+    /// The stretches to check, as they are answered now. Empty for a hike
+    /// with none.
+    private(set) var checks: [RouteCheck] = []
+    /// The stretch the hiker is looking at, which the map picks out.
+    private(set) var focusedCheckID: Int?
+    /// Whether the hike still asks for a look — see ``RouteEdit/isOwedALook``.
+    private(set) var isOwedALook = false
+    /// How long the line the hike has now is, which the figures measure
+    /// what a save would take off, or give back, against.
+    @ObservationIgnored private(set) var currentLengthMeters = 0.0
+    /// How long each stretch is under each of its answers, by the stretch's
+    /// id: what tells two answers apart in the list.
+    @ObservationIgnored private(set) var choiceMeters: [Int: [RouteCheck.Choice: Double]] = [:]
+    /// The stretches of the hike's own line, as the map still draws it, that
+    /// an answer changed in this visit has replaced. The map covers them.
+    @ObservationIgnored private(set) var staleStretches: [[CLLocationCoordinate2D]] = []
 
     /// Whether a save or a revert is under way, which holds the buttons.
     var isSaving = false
@@ -240,28 +297,105 @@ final class RouteTrimSession {
 
     @ObservationIgnored private weak var preview: RouteTrimPreview?
     @ObservationIgnored private(set) var isEnded = false
+    /// Which rebuild of the line is the newest, so an older one landing late
+    /// is dropped.
+    @ObservationIgnored private var rebuild = 0
+    /// Whether the line the hike has, which is the one the map draws for it,
+    /// is the whole line this visit opened on: nothing was cut off it before.
+    @ObservationIgnored private var ownLineIsWhole = true
 
     var totalMeters: Double { line?.totalMeters ?? 0 }
 
-    /// Whether either cut takes anything off, which is when there is
-    /// anything to save.
+    /// Whether either cut takes anything off the whole line.
     var isTrimmed: Bool { cuts(.start) || cuts(.end) }
 
     var keptRange: ClosedRange<Double> { startMeters...max(startMeters, endMeters) }
 
+    /// The cuts as a save would store them: `nil` while neither takes
+    /// anything off, which is no trim at all.
+    var trim: ClosedRange<Double>? { isTrimmed ? keptRange : nil }
+
+    /// The pieces of the line with the answers that stand now.
+    var assembly: RouteAssembly? {
+        guard var pieces = sources?.edit?.assembly else { return nil }
+        pieces.checks = checks
+        return pieces
+    }
+
+    /// Whether a save would change the hike: a cut moved, or an answer.
+    var hasChanges: Bool {
+        // Read before anything can return: the Save button asks this before
+        // the line has loaded, and what it read then is all it is told of.
+        // With nothing read, it never heard that there was a line, or that a
+        // cut on it had moved.
+        _ = lineRevision
+        guard let sources, line != nil else { return false }
+        return checks != (sources.edit?.assembly?.checks ?? [])
+            || !Self.isSame(trim, sources.edit?.trim)
+            || pausesTakenOff != (sources.edit?.endPausesTakenOff ?? [])
+    }
+
+    /// Whether the map has to draw the kept line itself, because the hike's
+    /// own line on it is not that line: an earlier trim cut ground off that
+    /// a handle can now be dragged back over, or an answer was changed.
+    var drawsKeptLine: Bool {
+        guard let sources else { return false }
+        return !ownLineIsWhole || checks != (sources.edit?.assembly?.checks ?? [])
+    }
+
+    private static func isSame(_ one: ClosedRange<Double>?, _ other: ClosedRange<Double>?) -> Bool {
+        guard let one, let other else { return one == nil && other == nil }
+        return abs(one.lowerBound - other.lowerBound) <= endToleranceMeters
+            && abs(one.upperBound - other.upperBound) <= endToleranceMeters
+    }
+
     // MARK: The line
 
-    /// Measures `route` and starts over on it, with both cuts at its ends.
-    /// The same line again changes nothing, so coming back to the screen
-    /// keeps the cuts where they were.
-    func load(_ route: [RouteCoordinate]) async {
-        guard route.count > 1, route != line?.route else { return }
-        guard let measured = try? await RouteTrimLine.measuring(route), !Task.isCancelled else { return }
+    /// Starts over on `sources`: the whole line under the hike's answers,
+    /// with the hike's trim as its cuts. The same sources again change
+    /// nothing, so coming back to the screen keeps what was moved.
+    func load(_ sources: RouteEditSources) async {
+        guard sources.current.count > 1, sources != self.sources else { return }
+        if sources.isMissingOriginal {
+            refusal = .notHereYet
+            return
+        }
+        let saved = sources.edit?.assembly
+        guard let measured = await measure(sources, under: saved) else { return }
+        // Everything measured before anything is shown: the list draws each
+        // answer's length the moment it has the answers.
+        let newest = rebuild
+        let lengths = await Self.lengths(in: sources)
+        guard !Task.isCancelled, newest == rebuild else { return }
+        (currentLengthMeters, choiceMeters) = lengths
+        self.sources = sources
+        checks = saved?.checks ?? []
+        isOwedALook = sources.edit?.isOwedALook ?? false
+        focusedCheckID = nil
+        staleStretches = []
+        ownLineIsWhole = measured.route == sources.current
         line = measured
-        startMeters = 0
-        endMeters = measured.totalMeters
-        pausesTakenOff = []
+        let stored = sources.edit?.trim
+        startMeters = min(max(stored?.lowerBound ?? 0, 0), measured.totalMeters)
+        endMeters = min(max(stored?.upperBound ?? measured.totalMeters, startMeters), measured.totalMeters)
+        pausesTakenOff = sources.edit?.endPausesTakenOff ?? []
         lineRevision += 1
+    }
+
+    /// A hike with nothing but its line — see ``load(_:)``.
+    func load(_ route: [RouteCoordinate]) async {
+        await load(RouteEditSources(current: route))
+    }
+
+    /// The newest measuring wins: an answer changed twice quickly must not
+    /// leave the line of the first.
+    private func measure(_ sources: RouteEditSources, under assembly: RouteAssembly?) async -> RouteTrimLine? {
+        rebuild += 1
+        let mine = rebuild
+        guard let measured = try? await RouteTrimLine.measuring(sources, under: assembly),
+              !Task.isCancelled, mine == rebuild
+        else { return nil }
+        return measured
     }
 
     // MARK: The cuts
@@ -343,19 +477,125 @@ final class RouteTrimSession {
         move(handle, to: meters)
     }
 
-    /// The line the cuts leave, measured for a save — see ``EditedLine``.
+    // MARK: The stretches to check
+
+    /// Picks a stretch out on the map, or none.
+    func focus(onCheck id: Int?) {
+        guard focusedCheckID != id else { return }
+        focusedCheckID = id
+    }
+
+    /// Answers for a stretch: the whole line is put together again under
+    /// the new answer, and each cut stays on the ground it stood on.
+    func choose(_ choice: RouteCheck.Choice, forCheck id: Int) async {
+        guard let sources, let before = line, var assembly,
+              let index = assembly.checks.firstIndex(where: { $0.id == id }),
+              assembly.checks[index].choice != choice,
+              assembly.checks[index].availableChoices.contains(choice)
+        else { return }
+        assembly.checks[index].choice = choice
+        guard let after = await measure(sources, under: assembly) else { return }
+        let cuts = Self.cuts(startMeters...endMeters, movedFrom: before, to: after, changing: id)
+        checks = assembly.checks
+        staleStretches = Self.staleStretches(of: assembly, in: sources)
+        line = after
+        startMeters = cuts.lowerBound
+        endMeters = cuts.upperBound
+        focusedCheckID = id
+        lineRevision += 1
+    }
+
+    /// The length of the hike's line, and of every stretch under every
+    /// answer it can take.
+    @concurrent
+    nonisolated private static func lengths(
+        in sources: RouteEditSources
+    ) async -> (current: Double, choices: [Int: [RouteCheck.Choice: Double]]) {
+        var choices: [Int: [RouteCheck.Choice: Double]] = [:]
+        for check in sources.edit?.assembly?.checks ?? [] {
+            for choice in check.availableChoices {
+                let stretch = RouteAssembly.stretch(of: check, choosing: choice, saved: sources.saved, raw: sources.raw)
+                choices[check.id, default: [:]][choice] = stretch.lengthMeters
+            }
+        }
+        return (sources.current.lengthMeters, choices)
+    }
+
+    /// Each stretch whose answer differs from the hike's, as the hike's own
+    /// line draws it. A handful of stretches, each a slice.
+    private static func staleStretches(
+        of assembly: RouteAssembly,
+        in sources: RouteEditSources
+    ) -> [[CLLocationCoordinate2D]] {
+        let stored = sources.edit?.assembly?.checks ?? []
+        return assembly.checks.compactMap { check in
+            guard let before = stored.first(where: { $0.id == check.id }), before.choice != check.choice else {
+                return nil
+            }
+            return RouteAssembly.stretch(of: before, saved: sources.saved, raw: sources.raw).map(\.clCoordinate)
+        }
+    }
+
+    /// Where two cuts stand once the stretch `id` has changed its length.
+    /// Everything before the stretch is where it was, everything after it has
+    /// moved by what the line gained, and a cut inside it goes to the nearer
+    /// side that keeps the stretch whole.
+    static func cuts(
+        _ cuts: ClosedRange<Double>,
+        movedFrom before: RouteTrimLine,
+        to after: RouteTrimLine,
+        changing id: Int
+    ) -> ClosedRange<Double> {
+        guard let old = before.meters(ofCheck: id), let new = after.meters(ofCheck: id) else {
+            return 0...after.totalMeters
+        }
+        let gained = after.totalMeters - before.totalMeters
+        func moved(_ cut: Double, inwardTo inside: Double) -> Double {
+            if cut <= old.lowerBound { return cut }
+            if cut >= old.upperBound { return cut + gained }
+            return inside
+        }
+        let start = min(max(moved(cuts.lowerBound, inwardTo: new.lowerBound), 0), after.totalMeters)
+        let end = min(max(moved(cuts.upperBound, inwardTo: new.upperBound), start), after.totalMeters)
+        return start...end
+    }
+
+    /// Takes `looked` as what the visit works from, where the hike's edit
+    /// record has changed under it and its line has not: the stretches'
+    /// looks, kept on the answers that stand in this visit.
+    func adopt(_ looked: RouteEditSources) {
+        guard looked.current == sources?.current else { return }
+        let stored = looked.edit?.assembly?.checks ?? []
+        sources = looked
+        isOwedALook = looked.edit?.isOwedALook ?? false
+        checks = checks.map { check in
+            var merged = check
+            if let saved = stored.first(where: { $0.id == check.id }) { merged.isChecked = saved.isChecked }
+            return merged
+        }
+    }
+
+    // MARK: Saving
+
+    /// The line the cuts and the answers leave, measured for a save — see
+    /// ``EditedLine``. `nil` while nothing has changed.
     func editedLine() async -> EditedLine? {
-        guard let line, isTrimmed else { return nil }
-        return await Self.edited(line, keeping: keptRange, takingOff: pausesTakenOff)
+        guard let line, let sources, hasChanges else { return nil }
+        var pieces = assembly
+        // A save is a look: the hiker has had every stretch in front of them.
+        for index in (pieces?.checks ?? []).indices { pieces?.checks[index].isChecked = true }
+        let cuts = EditedLine.Cuts(range: trim, takingOff: pausesTakenOff)
+        return await Self.edited(line, cuts: cuts, assembly: pieces, replacing: sources.current)
     }
 
     @concurrent
     nonisolated private static func edited(
         _ line: RouteTrimLine,
-        keeping range: ClosedRange<Double>,
-        takingOff pauses: RouteTrim.EndPauses
+        cuts: EditedLine.Cuts,
+        assembly: RouteAssembly?,
+        replacing current: [RouteCoordinate]
     ) async -> EditedLine? {
-        EditedLine(trimming: line.route, distances: line.distances, to: range, takingOff: pauses)
+        EditedLine(whole: line.route, distances: line.distances, cuts: cuts, replacing: current, assembly: assembly)
     }
 
     /// Where the cut at `handle` stands on the map, or `nil` with no line.

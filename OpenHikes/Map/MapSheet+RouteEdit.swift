@@ -47,6 +47,10 @@ extension MapSheet {
                 presentation.makeRoomForTheMap()
                 mapController.fitToRoute()
             },
+            onShowStretch: { stretch in
+                presentation.makeRoomForTheMap()
+                mapController.showDrawnLine(stretch)
+            },
             onDone: {
                 guard presentation.path.last == route else { return }
                 presentation.path.removeLast()

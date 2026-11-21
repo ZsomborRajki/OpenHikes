@@ -46,43 +46,78 @@ import SwiftData
 /// A line an edit made, measured off the main actor so the save has nothing
 /// to work out.
 nonisolated struct EditedLine: Equatable, Sendable {
+    /// The two cuts an edit makes on the whole line.
+    struct Cuts: Equatable, Sendable {
+        /// Where the kept line begins and ends, in metres along the whole
+        /// line, or `nil` for all of it — see ``RouteEdit/trim``.
+        var range: ClosedRange<Double>?
+        /// The pauses standing on the whole line's own ends that the cuts
+        /// take off — see ``RouteTrim/EndPauses``.
+        var takingOff: RouteTrim.EndPauses = []
+    }
+
     let route: [RouteCoordinate]
     /// Its own length, on ``RouteProfile``'s axis.
     let lengthMeters: Double
-    /// How much shorter it is than the line it was cut from.
+    /// How much shorter it is than the line the hike has now. Less than
+    /// nothing for an edit that gives ground back: a handle dragged out over
+    /// what an earlier save cut off.
     let removedMeters: Double
-    /// How much of the recorded time the cut took — see
-    /// ``RouteTrim/recordedSeconds(of:)``.
+    /// How much less recorded time it holds than the line the hike has now,
+    /// by ``RouteTrim/recordedSeconds(of:)``. Less than nothing for the same
+    /// edit.
     let removedSeconds: TimeInterval
     /// ``TrailWalkRecord/routeRevision(of:)`` of the new line.
     let revision: String
-    /// The time on the new first point, when the start was cut and it has one.
+    /// The time on the new first point, when the start moved and it has one.
     let newStart: Date?
-    /// The time on the new last point, when the end was cut and it has one.
+    /// The time on the new last point, when the end moved and it has one.
     let newEnd: Date?
+    /// The two cuts that made it — see ``Cuts``.
+    let cuts: Cuts
+    /// The whole line's pieces under the answers the edit leaves, or `nil`
+    /// for a hike with no stretches to check.
+    let assembly: RouteAssembly?
+    /// The ends of the new line that were not walked.
+    let notOnFoot: RouteEdit.NotOnFoot?
 
-    /// `line` cut down to `range`, or `nil` when that leaves no line.
+    /// `whole` cut down to `trim`, or `nil` when that leaves no line.
     ///
-    /// - Parameter distances: ``RouteTrim/distances(along:)`` of `line`.
-    /// - Parameter pauses: the ends where a cut standing on the end takes off
-    ///   the pause there — see ``RouteTrim/EndPauses``.
+    /// - Parameters:
+    ///   - whole: The whole line, under the answers of `assembly` — see
+    ///     ``RouteEditSources``.
+    ///   - distances: ``RouteTrim/distances(along:)`` of `whole`.
+    ///   - cuts: Where the kept line begins and ends on it.
+    ///   - current: The line the hike has now, which this one replaces.
+    ///   - assembly: The whole line's pieces under the answers that made
+    ///     `whole`, for a hike that has any.
     init?(
-        trimming line: [RouteCoordinate],
+        whole: [RouteCoordinate],
         distances: [Double],
-        to range: ClosedRange<Double>,
-        takingOff pauses: RouteTrim.EndPauses = []
+        cuts: Cuts,
+        replacing current: [RouteCoordinate],
+        assembly: RouteAssembly? = nil
     ) {
-        let kept = RouteTrim.trimmed(line, distances: distances, keeping: range, takingOff: pauses)
-        guard kept.count > 1, let total = distances.last else { return nil }
+        let kept = cuts.range.map { range in
+            RouteTrim.trimmed(whole, distances: distances, keeping: range, takingOff: cuts.takingOff)
+        } ?? whole
+        guard kept.count > 1 else { return nil }
         let length = kept.lengthMeters
         guard length > 0 else { return nil }
         route = kept
         lengthMeters = length
-        removedMeters = max(0, total - length)
-        removedSeconds = max(0, RouteTrim.recordedSeconds(of: line) - RouteTrim.recordedSeconds(of: kept))
+        removedMeters = current.lengthMeters - length
+        removedSeconds = RouteTrim.recordedSeconds(of: current) - RouteTrim.recordedSeconds(of: kept)
         revision = TrailWalkRecord.routeRevision(of: kept)
-        newStart = kept.first != line.first ? kept.first?.timestamp : nil
-        newEnd = kept.last != line.last ? kept.last?.timestamp : nil
+        newStart = kept.first != current.first ? kept.first?.timestamp : nil
+        newEnd = kept.last != current.last ? kept.last?.timestamp : nil
+        self.cuts = cuts
+        self.assembly = assembly
+        // A save is a look: the hiker has had the line in front of them.
+        notOnFoot = RouteEdit.NotOnFoot(
+            RouteCarriedEnds.found(in: kept, distances: RouteTrim.distances(along: kept)),
+            isChecked: true
+        )
     }
 }
 
@@ -94,6 +129,10 @@ enum RouteEditRefusal: LocalizedError, Equatable, Sendable {
     /// *Revert* found no original on this device: iCloud has brought the
     /// hike and not yet its original line.
     case noOriginal
+    /// *Edit Route* found the same on its way in. The hike's cuts and its
+    /// sections are measured on that line, so nothing can be edited until
+    /// it has come.
+    case notHereYet
     /// The store refused to keep it. No diagnostic, for the reason
     /// ``TrailDraftRefusal/notSaved`` carries none.
     case notSaved
@@ -102,6 +141,7 @@ enum RouteEditRefusal: LocalizedError, Equatable, Sendable {
         switch self {
         case .lineChanged, .notSaved: String(localized: "This route couldn’t be saved.")
         case .noOriginal: String(localized: "The original route couldn’t be restored.")
+        case .notHereYet: String(localized: "This route can’t be edited yet.")
         }
     }
 
@@ -109,7 +149,7 @@ enum RouteEditRefusal: LocalizedError, Equatable, Sendable {
         switch self {
         case .lineChanged:
             String(localized: "The route changed while you were editing it. Check it, then try again.")
-        case .noOriginal:
+        case .noOriginal, .notHereYet:
             String(localized: "It isn’t on this device yet. Try again once iCloud has caught up.")
         case .notSaved:
             String(localized: "Your hike wasn’t changed. Check that the device has storage available, then try again.")
@@ -131,18 +171,18 @@ enum RouteEditOutcome: Equatable, Sendable {
 enum RouteEditSave {
     nonisolated private static let logger = Logger(subsystem: "OpenHikes", category: "RouteEdit")
 
-    /// Writes `edited` in place of `line`, the line `hike` had when it was
-    /// cut — see the file header for everything that goes with it.
+    /// Writes `edited` in place of `line`, the line `hike` has — see the
+    /// file header for everything that goes with it.
     ///
     /// - Parameter line: the hike's line as the editor read it. Handed in
     ///   rather than read here, where reading it would decode all of it on
     ///   the main actor; the caller has checked it is still the hike's.
     /// - Parameter save: the seam the commit goes through, so a suite can
     ///   refuse it, as in ``TrailDraftSave``.
-    @discardableResult static func trim(
-        _ hike: Hike,
-        from line: [RouteCoordinate],
-        to edited: EditedLine,
+    @discardableResult static func write(
+        _ edited: EditedLine,
+        to hike: Hike,
+        replacing line: [RouteCoordinate],
         in context: ModelContext,
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) -> RouteEditOutcome {
@@ -157,10 +197,15 @@ enum RouteEditSave {
             edit.original = RouteEdit.Original(
                 distanceMeters: hike.distanceMeters,
                 date: hike.date,
-                recordedWalk: before.walk?.figures
+                recordedWalk: before.walk?.figures,
+                notOnFoot: edit.notOnFoot
             )
         }
         edit.editedUnderSubmissionID = hike.communitySubmissionID
+        edit.assembly = edited.assembly ?? edit.assembly
+        edit.trim = edited.cuts.range
+        edit.endPausesTakenOff = edited.cuts.range == nil ? [] : edited.cuts.takingOff
+        edit.notOnFoot = edited.notOnFoot
         hike.routeEdit = edit
         replaceLine(of: hike, with: edited.route, before: before)
         hike.distanceMeters = max(0, min(edited.lengthMeters, hike.distanceMeters - edited.removedMeters))
@@ -181,7 +226,7 @@ enum RouteEditSave {
     /// that were its — see ``RouteEdit``.
     ///
     /// - Parameter line: the hike's line now, for the reason
-    ///   ``trim(_:from:to:in:save:)`` takes it.
+    ///   ``write(_:to:replacing:in:save:)`` takes it.
     @discardableResult static func revert(
         _ hike: Hike,
         from line: [RouteCoordinate],
@@ -201,11 +246,43 @@ enum RouteEditSave {
         hike.date = original.date
         if let walk = before.walk?.row { original.recordedWalk?.write(to: walk) }
         edit.original = nil
+        // Every stretch back to the way it was saved, the looks kept: a
+        // stretch the hiker has answered for once is not asked about again.
+        edit.assembly = edit.assembly?.asSaved
+        edit.trim = nil
+        edit.endPausesTakenOff = []
+        edit.notOnFoot = original.notOnFoot
+        edit.notOnFoot?.isChecked = true
         // A revert moves the line as an edit does, so a shared copy made of
         // the edited line is now the one out of date.
         edit.editedUnderSubmissionID = hike.communitySubmissionID
         hike.routeEdit = edit
         return commit(hike, to: originalRoute, before: before, in: context, save: save)
+    }
+
+    /// Says the hiker has looked at everything the hike asked them to, and
+    /// changes nothing else: the answer to "is the line right?" was yes.
+    ///
+    /// - Returns: the hike's edit record as it now stands, or `nil` when the
+    ///   store refused to keep it.
+    @discardableResult static func markChecked(
+        _ hike: Hike,
+        in context: ModelContext,
+        save: (ModelContext) throws -> Void = { try $0.save() }
+    ) -> RouteEdit? {
+        guard let edit = hike.routeEdit?.looked, edit.isOwedALook == false, hike.routeEdit?.isOwedALook == true else {
+            return hike.routeEdit
+        }
+        let before = hike.routeEditData
+        hike.routeEdit = edit
+        do {
+            try save(context)
+            return edit
+        } catch {
+            if hike.routeEditData != before { hike.routeEditData = before }
+            log(error)
+            return nil
+        }
     }
 
     // MARK: The commit

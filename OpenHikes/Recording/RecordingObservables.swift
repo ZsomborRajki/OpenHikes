@@ -106,15 +106,13 @@ final class RecordingTrace {
 
     @ObservationIgnored private(set) var committedChunks: [[CLLocationCoordinate2D]] = []
     @ObservationIgnored private(set) var tail: [CLLocationCoordinate2D] = []
-    @ObservationIgnored private(set) var reviewSegment:
-        [CLLocationCoordinate2D] = []
     @ObservationIgnored private(set) var generation = 0
-    /// Change tokens for the two overlays a consumer draws separately. `revision`
-    /// says "something moved"; these say *which*, so `MapCoordinator` can rebuild
-    /// one `MKPolyline` instead of both. Bumped only on a real change — a token
-    /// that moved for an identical geometry would defeat its own purpose.
+    /// The change token for the tail, which a consumer draws apart from the
+    /// sealed chunks. `revision` says "something moved"; this says the tail
+    /// did, so `MapCoordinator` rebuilds its one `MKPolyline` only then.
+    /// Bumped only on a real change — a token that moved for an identical
+    /// geometry would defeat its own purpose.
     @ObservationIgnored private(set) var tailRevision = 0
-    @ObservationIgnored private(set) var reviewRevision = 0
     /// Drained from the front every time a chunk is sealed, so it's a `Deque`
     /// rather than an `Array`: `removeFirst(_:)` on an array shifts every
     /// surviving element down, and this runs on the main actor once per 255
@@ -131,11 +129,6 @@ final class RecordingTrace {
     /// Scratch for comparing the provisional remainder across a rebuild.
     /// Held rather than allocated per call because this runs once per fix.
     @ObservationIgnored private var previousProvisional: [CLLocationCoordinate2D] = []
-    /// The route last handed to ``showReview(route:highlightedSegment:)``, held
-    /// to compare the next one against. Cleared by ``replace(stable:provisional:)``
-    /// and ``reset()``, which is every way in and out of a review — `append`
-    /// and `applyLiveMatch` cannot run against a stopped recorder.
-    @ObservationIgnored private var reviewRoute: [CLLocationCoordinate2D] = []
     private(set) var revision = 0
 
     /// The whole line drawn so far, as one array, for a reader that wants its
@@ -149,7 +142,7 @@ final class RecordingTrace {
         _ coordinate: CLLocationCoordinate2D,
         provisional: Bool = false
     ) {
-        var changed = clearReviewSegment()
+        var changed = false
         if provisional {
             Self.appendDistinct(coordinate, to: &provisionalTail)
         } else {
@@ -172,8 +165,6 @@ final class RecordingTrace {
     ) {
         generation &+= 1
         committedChunks = []
-        reviewRoute = []
-        _ = clearReviewSegment()
         clearTails()
         guard !stableCoordinates.isEmpty
             || !provisionalCoordinates.isEmpty else {
@@ -195,7 +186,7 @@ final class RecordingTrace {
         expectedGeneration: Int
     ) -> Bool {
         guard generation == expectedGeneration else { return false }
-        var changed = clearReviewSegment()
+        var changed = false
         appendStable(stableCoordinates)
         provisionalTail = []
         for coordinate in provisionalCoordinates {
@@ -211,47 +202,11 @@ final class RecordingTrace {
         return true
     }
 
-    func showReview(
-        route: [CLLocationCoordinate2D],
-        highlightedSegment: [CLLocationCoordinate2D] = []
-    ) {
-        // Change detection, because every caller is a tap handler and
-        // `replace(with:)` has none of its own. Re-tapping the already-selected
-        // review option, or stepping to a section whose alternatives resolve to
-        // the same line, rebuilt both `MKPolyline`s to draw exactly what was
-        // already on screen — and on a long hike that is the whole route. Every
-        // other mutator here moves a token only on a real change; this was the
-        // one path that did not.
-        let routeChanged = !Self.isSame(reviewRoute, route[...])
-        let highlightChanged = !Self.isSame(reviewSegment, highlightedSegment[...])
-        guard routeChanged || highlightChanged else { return }
-
-        if routeChanged {
-            replace(with: route)
-            reviewRoute = route
-        }
-        reviewSegment = highlightedSegment
-        reviewRevision &+= 1
-        revision &+= 1
-    }
-
     func reset() {
         generation &+= 1
         committedChunks = []
-        reviewRoute = []
-        _ = clearReviewSegment()
         clearTails()
         revision &+= 1
-    }
-
-    /// Clears the review highlight, reporting whether there was one to clear.
-    /// The report is what stops a fix from publishing a revision purely to say
-    /// that an already-empty highlight is still empty.
-    private func clearReviewSegment() -> Bool {
-        guard !reviewSegment.isEmpty else { return false }
-        reviewSegment = []
-        reviewRevision &+= 1
-        return true
     }
 
     /// Empties both halves of the tail and invalidates the cached stable

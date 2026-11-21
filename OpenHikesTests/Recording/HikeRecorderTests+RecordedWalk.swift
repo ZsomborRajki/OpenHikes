@@ -37,7 +37,7 @@ extension HikeRecorderTests {
         clock.advance(by: 60)
         source.deliver(fix(latitude: 47.632))
 
-        let hike = try savedHike(from: await recorder.stop())
+        let hike = try await recorder.stop()
         let walks = try storedWalks()
         let walk = try #require(walks.first)
 
@@ -72,7 +72,7 @@ extension HikeRecorderTests {
         source.deliver(fix(latitude: 47.631))
 
         await #expect(throws: RecordingFailure.self) {
-            try await recorder.stop()
+            _ = try await recorder.stop()
         }
         let afterRefusal = try storedWalks()
         #expect(afterRefusal.isEmpty)
@@ -100,7 +100,7 @@ extension HikeRecorderTests {
         source.deliver(fix(latitude: 47.631))
 
         await #expect(throws: RecordingFailure.self) {
-            try await recorder.stop()
+            _ = try await recorder.stop()
         }
         #expect(reported.isEmpty)
 
@@ -150,7 +150,7 @@ extension HikeRecorderTests {
         #expect(source.startCount == 0)
         clock.advance(by: 3600)
 
-        _ = try savedHike(from: await recorder.stop())
+        _ = try await recorder.stop()
         let walks = try storedWalks()
         let walk = try #require(walks.first)
 

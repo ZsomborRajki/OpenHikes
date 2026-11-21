@@ -75,11 +75,9 @@ extension HikeRecorder {
     ) async {
         // The town this walk started in was held by the launch that asked,
         // and went with it, so it is asked again, about the same first point.
-        // Before even a finished walk is prepared: one the matcher moved
-        // comes back to its route review and waits there for the hiker, and
-        // no fix arrives in a review to ask at. A finished walk that needs no
-        // review can be saved before the answer is back, and is then named
-        // as one the lookup found nothing for.
+        // A finished walk is saved here, as Stop would have saved it, which
+        // can be before the answer is back: it is then named as one the
+        // lookup found nothing for.
         nameStartPlace(at: session.points.first?.coordinate)
         if session.metadata.endedAt != nil {
             phase = .saving

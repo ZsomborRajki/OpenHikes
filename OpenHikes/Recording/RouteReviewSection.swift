@@ -7,6 +7,9 @@
 //  thousands of them; what a person can answer for is "this stretch, where
 //  matching moved my line — trail or GPS?".
 //
+//  Stop saves each section at its ``defaultChoice`` and keeps the question
+//  with the hike, where *Edit Route* asks it — see `RecordingAssembly.swift`.
+//
 
 import Foundation
 import OpenHikesData
@@ -131,19 +134,6 @@ nonisolated struct RouteReviewSection: Identifiable, Sendable {
 // MARK: - Building
 
 nonisolated extension RouteReviewSection {
-    /// Groups without occupying the main actor.
-    ///
-    /// `@concurrent` rather than a detached task: grouping walks every leg, so
-    /// it stays off the UI, but it stays in the save task — abandoning the save
-    /// abandons this too, and it runs at the save's own priority.
-    @concurrent
-    static func sectionsOffMain(in result: TrailMatchResult) async -> [Self] {
-        assertOffMainThread(
-            "Route review grouping must stay off the main thread"
-        )
-        return sections(in: result)
-    }
-
     /// Groups the legs matching actually changed into reviewable sections.
     /// Legs the matcher left on the recorded line offer no choice, so they
     /// never become a section of their own — with one exception: a leg that

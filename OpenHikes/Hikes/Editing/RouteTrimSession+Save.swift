@@ -30,25 +30,31 @@ extension RouteTrimSession {
         var save: (ModelContext) throws -> Void = { try $0.save() }
     }
 
-    /// Writes the cuts into the hike. A line edited on the hiker's other
-    /// device while this screen was open is not the line the cuts were made
-    /// on, and is refused rather than cut by distances that were another
-    /// line's.
+    /// Writes the cuts and the answers into the hike. A line edited on the
+    /// hiker's other device while this screen was open is not the line they
+    /// were made on, and is refused rather than cut by distances that were
+    /// another line's.
     ///
     /// - Returns: whether it landed. A refusal is in ``refusal``.
     @discardableResult func save(to destination: Destination) async -> Bool {
-        guard !isSaving, let base = line?.route else { return false }
+        guard !isSaving, let sources else { return false }
         isSaving = true
         defer { isSaving = false }
         guard let edited = await editedLine() else { return false }
-        guard destination.settledLine() == base else {
+        guard destination.settledLine() == sources.current else {
             refusal = .lineChanged
             return false
         }
-        let outcome = RouteEditSave.trim(
-            destination.hike,
-            from: base,
-            to: edited,
+        // Every cut moved back out and every answer put back is the line as
+        // it was saved, and is saved as that: with the figures it had, where
+        // an edit would only come close to them.
+        if edited.route == sources.saved, edited.assembly?.isAsSaved != false, destination.hike.hasOriginalRoute {
+            return land(revertOutcome(in: destination, from: sources.current), in: destination)
+        }
+        let outcome = RouteEditSave.write(
+            edited,
+            to: destination.hike,
+            replacing: sources.current,
             in: destination.context,
             save: destination.save
         )
@@ -63,13 +69,25 @@ extension RouteTrimSession {
             refusal = .lineChanged
             return false
         }
-        let outcome = RouteEditSave.revert(
-            destination.hike,
-            from: base,
-            in: destination.context,
-            save: destination.save
-        )
-        return land(outcome, in: destination)
+        return land(revertOutcome(in: destination, from: base), in: destination)
+    }
+
+    /// Says the line is right as it is: every stretch to check counts as
+    /// looked at, and nothing about the line changes — see
+    /// ``RouteEditSave/markChecked(_:in:save:)``.
+    @discardableResult func confirmChecks(in destination: Destination) -> Bool {
+        guard !isSaving, let sources,
+              let edit = RouteEditSave.markChecked(destination.hike, in: destination.context, save: destination.save)
+        else { return false }
+        // The hike's line has not moved, so nothing reloads this visit: it
+        // takes the looks itself, on what it works from and on what it shows.
+        let looked = RouteEditSources(current: sources.current, saved: sources.saved, raw: sources.raw, edit: edit)
+        adopt(looked)
+        return true
+    }
+
+    private func revertOutcome(in destination: Destination, from base: [RouteCoordinate]) -> RouteEditOutcome {
+        RouteEditSave.revert(destination.hike, from: base, in: destination.context, save: destination.save)
     }
 
     private func land(_ outcome: RouteEditOutcome, in destination: Destination) -> Bool {

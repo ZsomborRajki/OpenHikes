@@ -46,8 +46,6 @@ public enum HapticWalkState: String, CaseIterable, Equatable, Sendable {
     /// both directions, because the hiker did not ask for it and the recording
     /// screen says so in words.
     case recovering = "recovering"
-    /// Over, and the hiker is being asked about the route before it is kept.
-    case reviewing = "reviewing"
     /// Drawing a line.
     case running = "running"
     /// Over, and being written down.
@@ -105,10 +103,9 @@ public extension HapticMoment {
         case (_, .finished), (.saving, .idle):
             return .walkSaved
 
-        // Thrown away. Everything reaching `.idle` without passing through
-        // `.saving` — including from `.reviewing`, where Discard sits beside
-        // the review controls and is the case this clause exists for.
-        case (.running, .idle), (.paused, .idle), (.reviewing, .idle):
+        // Thrown away: everything reaching `.idle` without passing through
+        // `.saving`.
+        case (.running, .idle), (.paused, .idle):
             return .walkDiscarded
 
         // Acknowledging a result, and every internal step of a save: the hiker

@@ -151,9 +151,9 @@ struct HikeIntentPhrasingTests {
 
     @Test("a refusal carries both what went wrong and what to do about it")
     func aRefusalCarriesItsRecovery() {
-        let failure = HikeIntentFailure.awaitingRouteReview
+        let failure = HikeIntentFailure.couldNotSave
 
-        #expect(failure.errorDescription?.contains("pick which trail") == true)
+        #expect(failure.errorDescription?.isEmpty == false)
         #expect(failure.recoverySuggestion?.contains("Open OpenHikes") == true)
     }
 

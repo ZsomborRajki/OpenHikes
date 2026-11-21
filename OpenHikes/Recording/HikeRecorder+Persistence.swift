@@ -2,8 +2,8 @@
 //  HikeRecorder+Persistence.swift
 //  OpenHikes
 //
-//  Persistence, route review, session lifecycle, and failure/reset helpers
-//  for HikeRecorder, split out to keep HikeRecorder+Helpers.swift under the
+//  Persistence, session lifecycle, and failure/reset helpers for
+//  HikeRecorder, split out to keep HikeRecorder+Helpers.swift under the
 //  file-length limit.
 //
 
@@ -21,62 +21,34 @@ extension HikeRecorder {
 
     // MARK: Save preparation
 
+    /// Everything the save writes, worked out off the main actor — see
+    /// ``RecordingPreparation/forSave(points:startedAt:graph:gapDistances:)``.
     func prepareForSave(
-        _ session: TrackJournalSession,
-        customName: String? = nil
-    ) async throws(RecordingFailure) -> (
-        prepared: PreparedRecording,
-        review: PendingReviewSave?
-    ) {
+        _ session: TrackJournalSession
+    ) async throws(RecordingFailure) -> PreparedRecording {
         guard session.metadata.endedAt != nil else { throw .save(String(
             localized: "The recording has not been finished yet."
         )) }
 
         let (normalized, graph, gapEvidence) = await normalizeSession(session)
-        // `prepareOffMain` is typed `throws(RecordingFailure)` and `@concurrent`
+        // `forSave` is typed `throws(RecordingFailure)` and `@concurrent`
         // preserves that, so the failure propagates as itself — no re-catch,
         // no `localizedDescription` round-trip through `any Error`.
-        let prepared = try await RecordingPreparation.prepareOffMain(
+        let prepared = try await RecordingPreparation.forSave(
             points: normalized,
             startedAt: session.metadata.startedAt,
             graph: graph,
             gapDistances: gapEvidence
         )
-
-        let sections = await groupedSections(in: prepared.matchResult)
         Self.logger.debug(
             """
             Prepared recording: points=\(normalized.count, privacy: .public) \
             graph=\(graph != nil, privacy: .public) \
             matched=\(prepared.matchResult != nil, privacy: .public) \
-            sections=\(sections.count, privacy: .public)
+            checks=\(prepared.assembly?.checks.count ?? 0, privacy: .public)
             """
         )
-
-        let review: PendingReviewSave?
-        if graph != nil,
-           let matchResult = prepared.matchResult,
-           !sections.isEmpty {
-            review = PendingReviewSave(
-                session: session,
-                normalizedPoints: normalized,
-                matchResult: matchResult,
-                customName: customName,
-                sections: sections
-            )
-        } else {
-            review = nil
-        }
-        return (prepared, review)
-    }
-
-    /// Grouping walks every leg, so it joins the rest of the save pipeline off
-    /// the main thread rather than running at stop time on the UI.
-    private func groupedSections(
-        in matchResult: TrailMatchResult?
-    ) async -> [RouteReviewSection] {
-        guard let matchResult else { return [] }
-        return await RouteReviewSection.sectionsOffMain(in: matchResult)
+        return prepared
     }
 
     func normalizeSession(
@@ -210,6 +182,7 @@ extension HikeRecorder {
             isRecording: false
         )
         hike.customName = customName
+        hike.routeEdit = Self.routeEdit(of: prepared)
         container.mainContext.insert(hike)
         let walk = insertRecordedWalk(
             for: hike,
@@ -302,11 +275,13 @@ extension HikeRecorder {
         let previousRawRoute = existing.rawRoute
         let previousCustomName = existing.customName
         let previousTitle = existing.title
+        let previousEdit = existing.routeEditData
 
         existing.distanceMeters = prepared.distanceMeters
         existing.date = prepared.startedAt
         existing.replaceRoute(with: prepared.route)
         existing.rawRoute = prepared.rawRoute
+        existing.routeEdit = Self.routeEdit(of: prepared)
         existing.customName = customName
         // The draft was named for the time of day before the first fix
         // arrived, because that was all there was to go on. Replaced here
@@ -337,6 +312,7 @@ extension HikeRecorder {
             existing.date = previousDate
             existing.replaceRoute(with: previousRoute)
             existing.rawRoute = previousRawRoute
+            existing.routeEditData = previousEdit
             existing.customName = previousCustomName
             existing.title = previousTitle
             existing.isRecording = true
@@ -344,46 +320,47 @@ extension HikeRecorder {
         }
     }
 
+    /// What a recording keeps about its line beside the line: the stretches
+    /// trail matching left a question on, and the ends that were not walked.
+    /// `nil` for a walk with neither, which keeps no column.
+    private static func routeEdit(of prepared: PreparedRecording) -> RouteEdit? {
+        let edit = RouteEdit(assembly: prepared.assembly, notOnFoot: prepared.notOnFoot)
+        return edit.isEmpty ? nil : edit
+    }
+
+    /// Saves a stopped recording, at once.
+    ///
+    /// A recording trail matching had moved, bridged or found ambiguous used
+    /// to stop here in a review, and was a hike only once the hiker had
+    /// answered for every such stretch. It is saved now with each stretch at
+    /// its default and the questions kept on the hike — see
+    /// ``RouteAssembly`` — so Stop finishes wherever it is pressed: on a
+    /// screen, by Siri, from the watch.
     func finishPreparedSession(
         _ session: TrackJournalSession,
         journal: TrackJournal,
         customName: String? = nil
-    ) async throws(RecordingFailure) -> RecordingStopOutcome {
+    ) async throws(RecordingFailure) -> Hike {
         if let existing = try existingHike(
             sessionID: session.metadata.sessionID
         ), !existing.isRecording {
             await finishSavedSession(session, journal: journal)
-            return .saved(existing)
-        }
-
-        let result = try await prepareForSave(
-            session,
-            customName: customName
-        )
-        if let pending = result.review {
-            pendingPreparedSave = nil
-            pendingReviewSave = pending
-            routeReview = RecordingRouteReview(sections: pending.sections)
-            phase = .reviewing
-            updateReviewPreview()
-            publishSharedRecordingSnapshot(force: true)
-            return .needsReview
+            return existing
         }
 
         let pending = PendingPreparedSave(
             session: session,
-            prepared: result.prepared,
+            prepared: try await prepareForSave(session),
             customName: customName
         )
         pendingPreparedSave = pending
-        pendingReviewSave = nil
         let hike = try persist(
             session,
             prepared: pending.prepared,
             customName: pending.customName
         )
         await finishSavedSession(session, journal: journal)
-        return .saved(hike)
+        return hike
     }
 
     func existingHike(sessionID: UUID) throws(RecordingFailure) -> Hike? {
@@ -395,81 +372,6 @@ extension HikeRecorder {
         } catch {
             throw .save(error.localizedDescription)
         }
-    }
-
-    // MARK: Route review
-
-    /// Rebuilds the previewed route from the current per-section choices and
-    /// publishes it.
-    ///
-    /// The resolution walks every leg of the whole recording, so it is
-    /// proportional to the length of the hike rather than to the section being
-    /// looked at — which is why it does not run on the main actor even though
-    /// it is triggered by a tap. Superseded rather than queued: a hiker
-    /// scrubbing through sections issues one of these per tap, and an older
-    /// answer arriving after a newer one would draw the wrong section.
-    func updateReviewPreview() {
-        guard let pendingReviewSave, let routeReview else { return }
-        let request = ReviewPreviewRequest(
-            matchResult: pendingReviewSave.matchResult,
-            legChoices: routeReview.legChoices,
-            section: routeReview.current,
-            sectionChoice: routeReview.current.map(routeReview.choice(for:))
-        )
-
-        reviewPreviewTask?.cancel()
-        let taskID = UUID()
-        reviewPreviewTask = Task { [weak self] in
-            let preview = await Self.resolveReviewPreview(request)
-            guard let self, !Task.isCancelled else { return }
-            trace.showReview(
-                route: preview.route,
-                highlightedSegment: preview.highlightedSegment
-            )
-            if reviewPreviewTaskID == taskID { reviewPreviewTask = nil }
-        }
-        reviewPreviewTaskID = taskID
-    }
-
-    func cancelReviewPreview() {
-        reviewPreviewTask?.cancel()
-        reviewPreviewTask = nil
-        reviewPreviewTaskID = nil
-    }
-
-    nonisolated struct ReviewPreviewRequest: Sendable {
-        let matchResult: TrailMatchResult
-        let legChoices: [Int: TrailRouteChoice]
-        let section: RouteReviewSection?
-        let sectionChoice: TrailRouteChoice?
-    }
-
-    nonisolated struct ReviewPreview: Sendable {
-        let route: [CLLocationCoordinate2D]
-        let highlightedSegment: [CLLocationCoordinate2D]
-    }
-
-    /// `@concurrent` rather than a detached task, for the same reason
-    /// ``RouteReviewSection/sectionsOffMain(in:)`` is: the work stays in the
-    /// caller's task, so cancelling the tap cancels this, and it runs at the
-    /// tap's own priority rather than at a default one.
-    @concurrent
-    nonisolated static func resolveReviewPreview(
-        _ request: ReviewPreviewRequest
-    ) async -> ReviewPreview {
-        assertOffMainThread(
-            "Review preview resolution must stay off the main thread"
-        )
-        let route = request.matchResult
-            .points(resolving: request.legChoices)
-            .map(\.coordinate)
-        let highlighted: [CLLocationCoordinate2D]
-        if let section = request.section, let choice = request.sectionChoice {
-            highlighted = section.points(for: choice).map(\.coordinate)
-        } else {
-            highlighted = []
-        }
-        return ReviewPreview(route: route, highlightedSegment: highlighted)
     }
 
     func finishSavedSession(
@@ -540,8 +442,6 @@ extension HikeRecorder {
         sessionStartedAt = nil
         fixWindow = nil
         currentHike = nil
-        routeReview = nil
-        pendingReviewSave = nil
         pendingPreparedSave = nil
         sessionID = nil
         sessionUptimeBase = nil
@@ -567,7 +467,6 @@ extension HikeRecorder {
         liveMatchingTask = nil
         liveMatchingTaskID = nil
         liveMatchNeedsRun = false
-        cancelReviewPreview()
         journalFlushTask?.cancel()
         journalFlushTask = nil
         pendingFixMergeTask?.cancel()
@@ -628,7 +527,6 @@ extension HikeRecorder {
         resetAutoPause()
         lastAcceptedPoint = nil
         recentFixes.removeAll()
-        pendingReviewSave = nil
         pendingPreparedSave = nil
         pendingResumeFlag = false
         recoveryState = .absent

@@ -832,7 +832,6 @@ private extension MapSheetHikes {
         case .recording: HikeRow.Status(title: String(localized: "Recording"), tint: .red)
         case .paused: HikeRow.Status(title: String(localized: "Paused"), tint: .secondary)
         case .saving: HikeRow.Status(title: String(localized: "Saving"), tint: .orange)
-        case .reviewing: HikeRow.Status(title: String(localized: "Review Route"), tint: .orange)
         case .failed: HikeRow.Status(title: String(localized: "Needs Attention"), tint: .red)
         }
     }

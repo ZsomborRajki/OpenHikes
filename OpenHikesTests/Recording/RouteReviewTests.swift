@@ -202,56 +202,78 @@ extension RouteReviewTests {
     }
 }
 
-// MARK: - Resolving a choice
+// MARK: - Kept with the hike
 
+/// What Stop keeps of these sections on the saved hike — see
+/// ``RouteAssembly`` — held to the matcher's own answer for each choice.
 extension RouteReviewTests {
-    @Test("keeping the trail leaves the matched geometry in place")
-    func matchedChoiceKeepsSnappedGeometry() {
-        let fixture = snappedFixture()
-        let review = RecordingRouteReview(
-            sections: RouteReviewSection.sections(in: fixture.result)
-        )
-
-        let resolved = fixture.result.points(resolving: review.legChoices)
-
-        #expect(resolved == fixture.result.points)
-        #expect(resolved.allSatisfy { point in
-            point.longitude.isApproximatelyEqual(to: 12.8600, absoluteTolerance: 0.00001)
-        })
+    private struct Kept {
+        var assembly: RouteAssembly
+        /// The line Stop saves: every section at its default.
+        let saved: [RouteCoordinate]
+        let raw: [RouteCoordinate]
     }
 
-    @Test("handing a section back to GPS restores the recorded fixes")
-    func gpsChoiceRestoresRawGeometry() {
-        let fixture = snappedFixture()
-        let review = RecordingRouteReview(
-            sections: RouteReviewSection.sections(in: fixture.result)
+    private func kept(_ fixture: (result: TrailMatchResult, points: [RecordingPoint])) throws -> Kept {
+        let sections = RouteReviewSection.sections(in: fixture.result)
+        let defaults = RouteReviewSection.defaultLegChoices(of: sections)
+        return Kept(
+            assembly: try #require(RouteAssembly.saved(from: fixture.result, sections: sections)),
+            saved: fixture.result.points(resolving: defaults).map(\.routeCoordinate),
+            raw: fixture.points.map(\.routeCoordinate)
         )
+    }
 
-        review.select(.gps)
-        let resolved = fixture.result.points(resolving: review.legChoices)
+    private func places(_ route: [RouteCoordinate]) -> [[Double]] {
+        route.map { [$0.latitude, $0.longitude] }
+    }
 
-        #expect(resolved.count == fixture.points.count)
-        #expect(resolved.map(\.coordinate.latitude)
-            == fixture.points.map(\.latitude))
-        #expect(resolved.allSatisfy { point in
+    private func places(_ points: [RecordingPoint]) -> [[Double]] {
+        points.map { [$0.latitude, $0.longitude] }
+    }
+
+    @Test("the stretches kept at Stop rebuild the line Stop saved")
+    func theKeptPiecesRebuildTheSavedLine() throws {
+        for fixture in [snappedFixture(), ambiguousFixture()] {
+            let kept = try kept(fixture)
+
+            #expect(kept.assembly.line(saved: kept.saved, raw: kept.raw).route == kept.saved)
+            #expect(kept.assembly.isAsSaved)
+            #expect(kept.assembly.uncheckedCount == kept.assembly.checks.count)
+        }
+    }
+
+    @Test("a confident stretch is saved on the trail, and an ambiguous one as it was recorded")
+    func eachStretchIsSavedTheWayThatNeedsNoAnswer() throws {
+        let snapped = try #require(try kept(snappedFixture()).assembly.checks.first)
+        #expect(snapped.kind == .snapped)
+        #expect(snapped.savedChoice == .matched)
+        #expect(snapped.trailName == "Ridge Path")
+        #expect(snapped.availableChoices == [.matched, .gps])
+
+        let ambiguous = try #require(try kept(ambiguousFixture()).assembly.checks.first)
+        #expect(ambiguous.kind == .ambiguous)
+        #expect(ambiguous.savedChoice == .gps)
+        #expect(ambiguous.alternatives.count >= 2)
+        #expect(ambiguous.availableChoices.first == .gps)
+    }
+
+    @Test("handing a kept stretch back to GPS gives the fixes the matcher would")
+    func gpsOnAKeptStretchIsTheRecordedFixes() throws {
+        let fixture = snappedFixture()
+        var kept = try kept(fixture)
+        let section = try #require(RouteReviewSection.sections(in: fixture.result).first)
+        var choices: [Int: TrailRouteChoice] = [:]
+        for legIndex in section.legIndices { choices[legIndex] = .gps }
+
+        kept.assembly.checks[0].choice = .gps
+        let line = kept.assembly.line(saved: kept.saved, raw: kept.raw)
+
+        #expect(places(line.route) == places(fixture.result.points(resolving: choices)))
+        #expect(line.route.allSatisfy { point in
             point.longitude.isApproximatelyEqual(to: 12.86010, absoluteTolerance: 0.000001)
         })
-    }
-
-    @Test("a section choice reaches every leg the section covers")
-    func choiceExpandsAcrossTheSectionsLegs() throws {
-        let fixture = snappedFixture()
-        let review = RecordingRouteReview(
-            sections: RouteReviewSection.sections(in: fixture.result)
-        )
-        let section = try #require(review.current)
-
-        review.select(.gps)
-
-        #expect(review.legChoices.count == section.legIndices.count)
-        #expect(section.legIndices.allSatisfy { legIndex in
-            review.legChoices[legIndex] == .gps
-        })
+        #expect(line.checkRanges[section.id] == 0...(line.route.count - 1))
     }
 
     @Test("a leg nobody reviewed keeps the matcher's own geometry")
@@ -263,73 +285,31 @@ extension RouteReviewTests {
         #expect(resolved == fixture.result.points)
     }
 
-    @Test("choosing an alternative rewrites only the ambiguous leg")
-    func alternativeChoiceReplacesTheAmbiguousLeg() throws {
+    @Test("an alternative kept with the hike is the route the matcher offered")
+    func aKeptAlternativeIsTheMatchersRoute() throws {
         let fixture = ambiguousFixture()
-        let review = RecordingRouteReview(
-            sections: RouteReviewSection.sections(in: fixture.result)
-        )
-        let section = try #require(review.current)
+        var kept = try kept(fixture)
+        let section = try #require(RouteReviewSection.sections(in: fixture.result).first)
         let alternative = try #require(section.alternatives.first)
+        var choices: [Int: TrailRouteChoice] = [:]
+        for legIndex in section.legIndices { choices[legIndex] = .alternative(alternative.id) }
 
-        review.select(.alternative(alternative.id))
-        let resolved = fixture.result.points(resolving: review.legChoices)
+        kept.assembly.checks[0].choice = .alternative(alternative.id)
+        let line = kept.assembly.line(saved: kept.saved, raw: kept.raw)
 
-        #expect(resolved.count > fixture.points.count)
-        #expect(resolved.first?.coordinate.latitude == fixture.points.first?.latitude)
-        #expect(resolved.last?.coordinate.latitude == fixture.points.last?.latitude)
-    }
-}
+        #expect(places(line.route) == places(fixture.result.points(resolving: choices)))
+        #expect(line.route.count > fixture.points.count)
+        #expect(kept.assembly.checks[0].alternatives.first?.trailNames == alternative.trailNames)
 
-// MARK: - Review navigation
-
-extension RouteReviewTests {
-    @Test("the review starts on the first section and walks forward once")
-    func navigationStaysInsideTheSectionList() {
-        let fixture = snappedFixture()
-        let review = RecordingRouteReview(
-            sections: RouteReviewSection.sections(in: fixture.result)
-        )
-
-        #expect(review.currentIndex == 0)
-        #expect(!review.canMoveBackward)
-        #expect(!review.canMoveForward)
-
-        review.moveForward()
-        #expect(review.currentIndex == 0, "a single section cannot advance")
-
-        review.moveBackward()
-        #expect(review.currentIndex == 0)
+        kept.assembly.checks[0].choice = .gps
+        #expect(kept.assembly.line(saved: kept.saved, raw: kept.raw).route == kept.saved, "and back again")
     }
 
-    @Test("selecting only changes the section being shown")
-    func selectionAppliesToTheCurrentSection() throws {
+    @Test("a recording the matcher left alone keeps nothing")
+    func nothingIsKeptWithoutASection() {
         let fixture = snappedFixture()
-        let sections = RouteReviewSection.sections(in: fixture.result)
-        let review = RecordingRouteReview(sections: sections)
-        let section = try #require(review.current)
 
-        #expect(review.choice(for: section) == .matched)
-        review.select(.gps)
-        #expect(review.choice(for: section) == .gps)
-        #expect(review.choices.count == sections.count)
-    }
-
-    @Test("the highlighted geometry follows the chosen option")
-    func highlightFollowsTheChoice() throws {
-        let fixture = snappedFixture()
-        let review = RecordingRouteReview(
-            sections: RouteReviewSection.sections(in: fixture.result)
-        )
-        let section = try #require(review.current)
-
-        let matched = section.points(for: review.choice(for: section))
-        review.select(.gps)
-        let raw = section.points(for: review.choice(for: section))
-
-        #expect(matched == section.matchedPoints)
-        #expect(raw == section.rawPoints)
-        #expect(matched != raw)
+        #expect(RouteAssembly.saved(from: fixture.result, sections: []) == nil)
     }
 }
 

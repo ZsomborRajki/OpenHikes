@@ -3,8 +3,8 @@
 //  OpenHikesUITests
 //
 //  A walk, from the first fix to the hike it becomes: starting, pausing,
-//  discarding, retrying a refused save, and deciding in review which line the
-//  hike keeps.
+//  discarding, retrying a refused save, and deciding afterwards, in *Edit
+//  Route*, which line the hike keeps.
 //
 //  Split from ``OpenHikesUITests`` because every test here spoofs Core
 //  Location and walks a trace in real time — they are the slow, timing-shaped
@@ -206,10 +206,13 @@ nonisolated final class RecordingUITests: XCTestCase {
         )
     }
 
-    /// The full recording round trip: walk a trace the matcher can snap onto a
-    /// bundled trail, then decide in review which line the hike keeps.
+    /// The full recording round trip: walk a trace the matcher snaps onto a
+    /// bundled trail, stop, and land on the saved hike — then decide in *Edit
+    /// Route*, from the notice the hike carries, which line it keeps.
+    ///
+    /// The recording used to stop in a review before it was a hike at all.
     @MainActor
-    func testReviewsSnappedRouteAfterStopping() {
+    func testASnappedRecordingIsSavedThenCheckedInEditRoute() {
         let app = makeApp(
             arguments: [
                 "--ui-test-expanded-sheet",
@@ -230,25 +233,29 @@ nonisolated final class RecordingUITests: XCTestCase {
             points.waitForExistence(timeout: UITestTimeout.existence)
         )
         walkRecordedTrace(UITestFixture.reviewableTrace, countedBy: points)
-        stopRecording(named: Self.reviewedHikeName, in: app)
+        stopRecording(named: Self.checkedHikeName, in: app)
 
         XCTAssertTrue(
-            element("review-section-title", in: app)
-                .waitForExistence(timeout: Self.reviewTimeout),
-            "a snapped recording should stop in review"
+            app.navigationBars[Self.checkedHikeName].waitForExistence(timeout: Self.saveTimeout),
+            "a snapped recording should be saved at once, under the name it was given"
         )
+        openRouteChecks(in: app, saying: "1 section to check")
+
         let keepTrail = element("review-choice-trail", in: app)
         let useGPS = element("review-choice-gps", in: app)
         XCTAssertTrue(
-            keepTrail.waitForExistence(timeout: UITestTimeout.navigation)
+            keepTrail.waitForExistence(timeout: Self.matchTimeout),
+            "the section the matcher moved should be offered"
         )
         XCTAssertTrue(
             useGPS.waitForExistence(timeout: UITestTimeout.navigation)
         )
         XCTAssertTrue(
             keepTrail.isSelected,
-            "the matched trail is the standing choice"
+            "the matched trail is the line the hike was saved with"
         )
+        let save = element("route-trim-save", in: app)
+        XCTAssertFalse(save.isEnabled, "nothing is changed yet")
 
         scrollToTap(useGPS, in: app)
         XCTAssertTrue(
@@ -256,25 +263,39 @@ nonisolated final class RecordingUITests: XCTestCase {
             "tapping a choice should move the checkmark to it"
         )
         XCTAssertFalse(keepTrail.isSelected)
-
-        scrollToTap(element("review-save-hike", in: app), in: app)
+        XCTAssertTrue(waitUntil { save.isEnabled }, "an answer changed is something to save")
+        save.tap()
 
         XCTAssertTrue(
-            app.navigationBars[Self.reviewedHikeName]
-                .waitForExistence(timeout: Self.saveTimeout),
-            "the reviewed hike should be saved under the name it was given"
+            app.navigationBars[Self.checkedHikeName].waitForExistence(timeout: Self.saveTimeout),
+            "a save goes back to the hike"
+        )
+        expectTheAnswerWasKept(in: app)
+    }
+
+    /// Back on the hike after a saved answer: the notice is gone, and *Edit
+    /// Route* opens on the answer with the saved line kept to go back to.
+    @MainActor
+    private func expectTheAnswerWasKept(in app: XCUIApplication) {
+        XCTAssertTrue(
+            element("hike-route-check", in: app).waitForNonExistence(timeout: UITestTimeout.navigation),
+            "a hike that has been answered for stops asking"
+        )
+        openEditRoute(in: app)
+        XCTAssertTrue(
+            waitUntilSelected(element("review-choice-gps", in: app)),
+            "the answer is kept with the hike"
+        )
+        XCTAssertTrue(
+            element("route-trim-revert", in: app).waitForExistence(timeout: UITestTimeout.navigation),
+            "and the line it was saved with is kept to go back to"
         )
     }
 
-    /// Reviewing a walk that crosses two trails, which is the only shape in
-    /// which Previous and Next mean anything.
-    ///
-    /// The two are asserted as a pair: Previous is disabled on the first
-    /// section — there is nowhere back to go — and the titles either side of a
-    /// Next are different, which is what proves the button moved the review
-    /// rather than merely redrawing it.
+    /// A walk that crosses two trails is saved with a section for each, and
+    /// *Looks Good* answers for both without changing the line.
     @MainActor
-    func testWalkingBetweenReviewSections() {
+    func testATwoTrailWalkKeepsBothSectionsUntilItLooksGood() {
         let app = makeApp(
             arguments: [
                 "--ui-test-expanded-sheet",
@@ -296,34 +317,31 @@ nonisolated final class RecordingUITests: XCTestCase {
             points.waitForExistence(timeout: UITestTimeout.existence)
         )
         walkRecordedTrace(UITestMultiSectionFixture.trace, countedBy: points)
-        stopRecording(named: Self.reviewedHikeName, in: app)
+        stopRecording(named: Self.checkedHikeName, in: app)
 
-        let title = element("review-section-title", in: app)
         XCTAssertTrue(
-            title.waitForExistence(timeout: Self.reviewTimeout),
-            "a walk over two trails should stop in review"
+            app.navigationBars[Self.checkedHikeName].waitForExistence(timeout: Self.saveTimeout),
+            "a walk over two trails should be saved at once"
         )
-        let previous = element("review-previous-section", in: app)
-        let next = element("review-next-section", in: app)
-        XCTAssertTrue(next.waitForExistence(timeout: UITestTimeout.navigation))
-        XCTAssertFalse(
-            previous.isEnabled,
-            "the first section has nothing before it"
-        )
-        XCTAssertTrue(
-            next.isEnabled,
-            "a second section is what this walk was recorded to produce"
-        )
+        openRouteChecks(in: app, saying: "2 sections to check")
 
-        let first = title.label
-        scrollToTap(next, in: app)
+        let trails = app.buttons.matching(identifier: "review-choice-trail")
         XCTAssertTrue(
-            waitUntilLabelChanges(from: first, on: title),
-            "Next should move the review on to the second section"
+            trails.firstMatch.waitForExistence(timeout: Self.matchTimeout),
+            "the sections should be offered"
+        )
+        XCTAssertEqual(trails.count, 2, "a second section is what this walk was recorded to produce")
+        XCTAssertFalse(element("route-trim-revert", in: app).exists, "a question kept is not an edit")
+
+        scrollToTap(element("route-checks-confirm", in: app), in: app, attempts: 12)
+
+        XCTAssertTrue(
+            app.navigationBars[Self.checkedHikeName].waitForExistence(timeout: Self.saveTimeout),
+            "Looks Good goes back to the hike"
         )
         XCTAssertTrue(
-            previous.isEnabled,
-            "and should leave a way back to the first"
+            element("hike-route-check", in: app).waitForNonExistence(timeout: UITestTimeout.navigation),
+            "and the hike stops asking"
         )
     }
 
@@ -355,7 +373,7 @@ nonisolated final class RecordingUITests: XCTestCase {
             points.waitForExistence(timeout: UITestTimeout.existence)
         )
         walkRecordedTrace(UITestFixture.reviewableTrace, countedBy: points)
-        stopRecording(named: Self.reviewedHikeName, in: app)
+        stopRecording(named: Self.checkedHikeName, in: app)
 
         let retry = element("recording-retry-save", in: app)
         XCTAssertTrue(
@@ -365,7 +383,7 @@ nonisolated final class RecordingUITests: XCTestCase {
         retry.tap()
 
         XCTAssertTrue(
-            app.navigationBars[Self.reviewedHikeName]
+            app.navigationBars[Self.checkedHikeName]
                 .waitForExistence(timeout: Self.saveTimeout),
             "the retry should save the hike the first attempt could not"
         )
@@ -373,9 +391,11 @@ nonisolated final class RecordingUITests: XCTestCase {
 
     /// Matching a trace against the bundled graph is real work on a cold
     /// simulator, and saving writes the route plus its widget payload.
-    private static let reviewTimeout: TimeInterval = 30
+    /// Reading the saved line and its trace back, and measuring them, is
+    /// real work on a cold simulator.
+    private static let matchTimeout: TimeInterval = 30
     private static let saveTimeout: TimeInterval = 20
-    private static let reviewedHikeName = "Reviewed Route"
+    private static let checkedHikeName = "Checked Route"
 
     /// `file` and `line` are forwarded, or every phase that never arrived is
     /// reported against this line rather than the step that was waiting.

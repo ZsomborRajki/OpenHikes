@@ -87,7 +87,7 @@ extension HikeRecorderTests {
         clock.advance(by: 10)
         source.deliver(fix(latitude: 47.6332, longitude: 12.8610))
 
-        let hike = try savedHike(from: await hikeRecorder.stop())
+        let hike = try await hikeRecorder.stop()
         #expect(hike.route.count == seed.points.count + 2)
         #expect(hike.date == seed.startedAt)
         #expect(hike.route.first?.timestamp == seed.startedAt)
@@ -114,7 +114,7 @@ extension HikeRecorderTests {
         elevation.deliver(2)
         source.deliver(fix(latitude: 47.6332, longitude: 12.8610))
 
-        let hike = try savedHike(from: await hikeRecorder.stop())
+        let hike = try await hikeRecorder.stop()
         let joined = try #require(hike.route[seed.points.count].elevation)
         let next = try #require(hike.route[seed.points.count + 1].elevation)
         #expect(abs(joined - carriedEnd) < 1, "the receiver's 600 m is let in slowly, not stepped to")

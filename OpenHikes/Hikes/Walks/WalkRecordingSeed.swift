@@ -73,8 +73,8 @@ nonisolated extension RecordingSeed {
     /// (``TrailMatcher/sparseDisplacement``, ``TrailMatcher/sparseInterval``).
     /// A drawn trail can run straight for a kilometre between two points, and
     /// a leg that long would be routed as one the recording has no evidence
-    /// across, with a route review asking which way the hiker went along a
-    /// trail they were following.
+    /// across, with a section to check asking which way the hiker went along
+    /// a trail they were following.
     static let maximumLegMeters = TrailMatcher.sparseDisplacement * sparseLegShare
     static let maximumLegSeconds = TrailMatcher.sparseInterval * sparseLegShare
     private static let sparseLegShare = 0.5

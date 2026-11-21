@@ -62,7 +62,8 @@ struct RouteTrimSessionTests {
         #expect(session.lineRevision == 1)
         #expect(session.startMeters == 0)
         #expect(session.endMeters == session.totalMeters)
-        #expect(!session.isTrimmed)
+        #expect(session.trim == nil)
+        #expect(!session.hasChanges)
         #expect(await session.editedLine() == nil, "nothing is cut, so there is nothing to save")
     }
 
@@ -108,7 +109,8 @@ struct RouteTrimSessionTests {
 
         session.move(.end, to: 0)
         #expect(session.endMeters == session.startMeters + RouteTrimSession.minimumKeptMeters)
-        #expect(session.isTrimmed)
+        #expect(session.trim != nil)
+        #expect(session.hasChanges)
     }
 
     @Test("a handle dragged on the map goes to the spot on the line nearest the finger")
