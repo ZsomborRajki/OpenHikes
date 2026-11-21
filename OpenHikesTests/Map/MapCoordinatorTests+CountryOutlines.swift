@@ -82,6 +82,70 @@ extension MapCoordinatorTests {
         #expect(sloveniaRenderer.lineWidth == plainWidth)
     }
 
+    /// Slovenia's outline as a later list corrects it, east of where the
+    /// first list had it.
+    private static let correctedSlovenia = OfflineCountryManifest.Bounds(
+        west: 14.9, south: 45.4, east: 17.0, north: 46.9 // swiftlint:disable:this no_magic_numbers
+    )
+
+    /// A refreshed list can keep an area's id and place and correct its
+    /// outline. A tap is tested against the list's outline, so the map must
+    /// draw that one, or it chooses by a shape nobody can see.
+    @Test("a list that corrects an area's outline under the same id draws the new outline")
+    func correctedOutlineIsDrawn() async throws {
+        let outlines = OfflineCountryOutlines()
+        var view = mapView()
+        view.countryOutlines = outlines
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(view, coordinator)
+        defer { detach(map) }
+        let token = outlines.attach { _ in /* nothing chosen here */ }
+        var listed = Self.outlinedCountries()
+        outlines.show(listed, installed: [], selected: nil, token: token)
+        await settleDelegateHop(until: "both countries are outlined") { polygons(on: map).count == 2 }
+        let earlier = try #require(polygons(on: map).first { $0.countryID == "SI" })
+
+        listed[1].outline = OfflineCountryFixture.outline(of: Self.correctedSlovenia)
+        outlines.show(listed, installed: [], selected: nil, token: token)
+        await settleDelegateHop(until: "Slovenia is outlined again") {
+            polygons(on: map).contains { $0.countryID == "SI" && $0 !== earlier }
+        }
+
+        let slovenia = try #require(polygons(on: map).first { $0.countryID == "SI" })
+        let ljubljana = CLLocationCoordinate2D(latitude: 46.05, longitude: 14.5)
+        let eastOfTheFirstOutline = CLLocationCoordinate2D(latitude: 46.05, longitude: 16.8)
+        #expect(slovenia.boundingMapRect.contains(MKMapPoint(eastOfTheFirstOutline)))
+        #expect(!slovenia.boundingMapRect.contains(MKMapPoint(ljubljana)))
+        #expect(polygons(on: map).map(\.countryID) == ["AT", "SI"], "in the list's order, and only once")
+    }
+
+    /// A list read again, as a catalog refresh reads it, holds equal
+    /// outlines in new storage, and a new build changes nothing drawn: the
+    /// overlays stay, and choosing a row restyles the one it chose.
+    @Test("a list read again with the same outlines keeps its overlays and only restyles")
+    func unchangedOutlinesAreKept() async throws {
+        let outlines = OfflineCountryOutlines()
+        var view = mapView()
+        view.countryOutlines = outlines
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(view, coordinator)
+        defer { detach(map) }
+        let token = outlines.attach { _ in /* nothing chosen here */ }
+        outlines.show(Self.outlinedCountries(), installed: [], selected: nil, token: token)
+        await settleDelegateHop(until: "both countries are outlined") { polygons(on: map).count == 2 }
+        let drawn = polygons(on: map)
+        let austria = try #require(drawn.first { $0.countryID == "AT" })
+        let renderer = try #require(coordinator.mapView(map, rendererFor: austria) as? MKMultiPolygonRenderer)
+        let plainWidth = renderer.lineWidth
+
+        var refreshed = Self.outlinedCountries()
+        refreshed[0].build = "20261231"
+        outlines.show(refreshed, installed: [], selected: "AT", token: token)
+        await settleDelegateHop(until: "the chosen country is drawn bolder") { renderer.lineWidth > plainWidth }
+
+        #expect(polygons(on: map).elementsEqual(drawn) { $0 === $1 })
+    }
+
     @Test("a tap inside an outline chooses that country, and outside one is the map's")
     func tapChoosesACountry() {
         let outlines = OfflineCountryOutlines()
