@@ -207,7 +207,9 @@ final class OfflineCountries {
 
     /// Starts `country`, its update, or the zoom 15 it lacks. A refusal is
     /// shown on its row. Nothing starts before the device's own lists are
-    /// read (``Holdings``).
+    /// read (``Holdings``), and no transfer before the list of downloads
+    /// under way names it: a relaunch picks up only what that list names,
+    /// and sweeps the staged files of the rest.
     func download(_ country: Country) {
         guard let server, let downloader, holdings == .read,
               downloads[country.id].map(\.hasFailed) ?? true
@@ -220,8 +222,8 @@ final class OfflineCountries {
             files: files,
             phase: decision.isAllowed ? .downloading : .waitingForWiFi
         )
-        // Before either refusal, so that one keeps what an earlier try got
-        // down and the next try asks only for the rest.
+        // Before any refusal, so that one keeps what an earlier try got down
+        // and the next try asks only for the rest.
         if let previous = downloads[country.id] { download.resume(from: previous) }
         downloads[country.id] = download
         if decision.reason == "low-power-mode" || decision.reason == "thermal" {
@@ -235,9 +237,15 @@ final class OfflineCountries {
             download.set(.failed(.space))
             return
         }
-        writePending { pending in
+        // A failed write leaves the list as it was, still naming whatever an
+        // earlier try has out, and Try Again writes it once there is room.
+        let isListed = writePending { pending in
             pending.removeAll { $0.country.id == country.id }
             pending.append(OfflineCountryStore.Pending(country: country, roles: files.map(\.role)))
+        }
+        guard isListed else {
+            download.set(.failed(.space))
+            return
         }
         // A file a transfer is still out for is left to it: a sibling's
         // failure is what this retries.
@@ -390,12 +398,23 @@ final class OfflineCountries {
         }
     }
 
-    /// Changes the list of downloads under way, and never one that is kept
-    /// and cannot be read, which would leave what it names to the sweep.
-    private func writePending(_ change: (inout [OfflineCountryStore.Pending]) -> Void) {
-        guard case var .holding(pending) = store.downloadsUnderWay() else { return }
+    /// Changes the list of downloads under way, and says whether the change
+    /// is on disk. It never writes over a list that is kept and cannot be
+    /// read, which would leave what that list names to the sweep, and a
+    /// write that fails leaves the list as it was, because it is atomic.
+    @discardableResult private func writePending(_ change: (inout [OfflineCountryStore.Pending]) -> Void) -> Bool {
+        guard case var .holding(pending) = store.downloadsUnderWay() else {
+            Self.logger.error("Countries' downloads under way: the list cannot be read")
+            return false
+        }
         change(&pending)
-        try? store.write(pending: pending)
+        do {
+            try store.write(pending: pending)
+            return true
+        } catch {
+            Self.logger.error("Countries' downloads under way: \(String(describing: error), privacy: .public)")
+            return false
+        }
     }
 
     private static func key(_ country: Country, _ file: OfflineCountryManifest.File) -> OfflineCountryDownloadKey {
