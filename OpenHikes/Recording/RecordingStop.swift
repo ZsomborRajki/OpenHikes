@@ -25,6 +25,10 @@
 //  name alert now offers that too — see ``RecordingCard`` — so Stop is the one
 //  place a recording ends, kept or not.
 //
+//  Siri, Control Center and the watch stop by the same step, through
+//  ``HikeIntentCoordinator/stopRecording()``. They cannot ask the discard
+//  question, so a recording that needs it is left running for the screen.
+//
 //  ## The name in the field
 //
 //  The alert opens with the offered name in its field, selected, rather than

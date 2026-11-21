@@ -139,22 +139,53 @@ extension HikeIntentCoordinator {
         return liveReport()
     }
 
-    /// Stops and saves, and reports the hike that was written.
+    /// Stops the recording as the recording screen's Stop button does, and
+    /// reports what that came to (#1535).
+    ///
+    /// The button's first question is ``HikeRecorder/settledStopStep()``, and
+    /// so is this. Going straight to the save failed a recording with no line
+    /// as too short and left its draft running, where only the screen could
+    /// end it. Now a recording with nothing in it ends, as the button ends it.
+    /// One holding photographs or places is left as it was, because only the
+    /// screen can ask whether they go with it. A walk with a line is saved.
     ///
     /// Throws ``HikeIntentFailure/awaitingRouteReview`` when trail matching
     /// found more than one route the walk could have been. The recording is
     /// safe either way — the journal is closed and the draft is on disk — but
     /// the choice is a map with two lines on it, and there is no voice answer
     /// to that question.
-    func stopRecording() async throws(HikeIntentFailure) -> FinishedHikeReport {
+    func stopRecording() async throws(HikeIntentFailure) -> StoppedRecordingReport {
         await settleRecorder()
+        try throwUnlessStoppable()
+        // Acted on without a suspension in between, as the button acts on it:
+        // the wait for the walk's last fixes is inside the step, and
+        // `discard()` stops the sensors before its own first one.
+        switch await recorder.settledStopStep() {
+        case .askName: return .saved(try await saveStoppedRecording())
+        case .endEmpty: return try await endEmptyRecording()
+        case .confirmDiscard: throw .recordingNeedsDiscardChoice
+        case nil:
+            // The recording ended while its fixes were counted, or another
+            // Stop is counting them now and will end it.
+            try throwUnlessStoppable()
+            throw .busyFinishing
+        }
+    }
+
+    /// The phases Stop is offered in, as ``HikeRecorder/isStoppable``, with
+    /// the refusal for every other one. Exhaustive for the reason
+    /// ``startRecording()`` is.
+    private func throwUnlessStoppable() throws(HikeIntentFailure) {
         switch recorder.phase {
-        case .waitingForFix, .recording, .paused: break
+        case .waitingForFix, .recording, .paused: return
         case .idle: throw .noActiveRecording
         case .reviewing: throw .awaitingRouteReview
         case .saving, .recovering: throw .busyFinishing
         case .failed(let failure): throw .recording(failure)
         }
+    }
+
+    private func saveStoppedRecording() async throws(HikeIntentFailure) -> FinishedHikeReport {
         let outcome: RecordingStopOutcome
         do {
             outcome = try await recorder.stop()
@@ -173,6 +204,16 @@ extension HikeIntentCoordinator {
         case .needsReview: throw .awaitingRouteReview
         case .saved(let hike): return Self.report(for: hike)
         }
+    }
+
+    /// Ends a recording with no line and nothing on it, leaving no draft.
+    ///
+    /// The recorder reports a discard it could not finish as `.failed`, so
+    /// the phase is read back rather than the end assumed.
+    private func endEmptyRecording() async throws(HikeIntentFailure) -> StoppedRecordingReport {
+        await recorder.discard()
+        try throwIfRecorderFailed()
+        return .endedEmpty
     }
 
     /// The recording as it stands.
