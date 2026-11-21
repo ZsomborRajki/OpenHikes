@@ -160,23 +160,35 @@ nonisolated enum VectorTileShields {
     static let padding = CGSize(width: 4, height: 3)
     static let cornerRadius: CGFloat = 2
 
-    /// How far along `points` each place lies where the line crosses the
-    /// grid: the lines `spacing` apart, across and down, of a grid whose
-    /// origin lies `origin` before the points' own, so that two tiles that
-    /// hold the same road agree on its crossings.
-    static func crossings(of points: [CGPoint], origin: CGPoint, every spacing: CGFloat) -> [CGFloat] {
-        gridCrossings(of: points, origin: origin, every: spacing).map(\.distance)
-    }
-
-    /// A place where a line crosses the grid: how far along the line, and
-    /// whether the grid's line it crosses there runs down the map.
+    /// A place where a line crosses the grid.
     struct GridCrossing: Equatable {
+        /// How far along the line.
         let distance: CGFloat
+        /// Whether the grid's line it crosses runs down the map.
         let isDown: Bool
+        /// Where that grid line lies, across the map for one that runs down
+        /// it and down the map for one across, in the world's pixels at the
+        /// zoom drawn: a whole multiple of the spacing, and exact where the
+        /// crossing worked out along the line is not.
+        let line: CGFloat
+
+        /// Whether the tile whose picture has its corner at `origin` on the
+        /// grid and its frame at `bounds` holds the crossing, which stands
+        /// at `point` on that picture. On the grid line's own axis the
+        /// line's exact place decides: every so many tiles a grid line runs
+        /// along a seam, and the point worked out along the line lands a
+        /// rounding either side of it, so both tiles beside the seam, or
+        /// neither, would take it.
+        func isHeld(at point: CGPoint, origin: CGPoint, in bounds: CGRect) -> Bool {
+            let exact = isDown ? CGPoint(x: line - origin.x, y: point.y) : CGPoint(x: point.x, y: line - origin.y)
+            return bounds.contains(exact)
+        }
     }
 
-    /// The places ``crossings(of:origin:every:)`` lists, each with the line
-    /// of the grid it crosses.
+    /// Each place along `points` where the line crosses the grid: the lines
+    /// `spacing` apart, across and down, of a grid whose origin lies
+    /// `origin` before the points' own, so that two tiles that hold the same
+    /// road agree on its crossings. Nearest the line's start first.
     static func gridCrossings(of points: [CGPoint], origin: CGPoint, every spacing: CGFloat) -> [GridCrossing] {
         guard spacing > 0 else { return [] }
         var found: [GridCrossing] = []
@@ -189,10 +201,11 @@ nonisolated enum VectorTileShields {
                 let first = Int((min(start, end) / spacing).rounded(.up))
                 let last = Int((max(start, end) / spacing).rounded(.down))
                 guard first <= last else { continue }
-                for line in first...last {
-                    let share = (CGFloat(line) * spacing - start) / (end - start)
+                for index in first...last {
+                    let line = CGFloat(index) * spacing
+                    let share = (line - start) / (end - start)
                     if share >= 0, share < 1 {
-                        found.append(GridCrossing(distance: covered + share * length, isDown: isDown))
+                        found.append(GridCrossing(distance: covered + share * length, isDown: isDown, line: line))
                     }
                 }
             }
@@ -239,10 +252,10 @@ nonisolated extension VectorTileShields {
                 let path = MeasuredPath(line.points)
                 let slides: [CGFloat] = [0, 1, -1, 2, -2].map { $0 * size.width / 2 }
                 // A crossing outside the tile is the neighbouring tile's.
-                for crossing in crossings(of: line.points, origin: origin, every: spacing * unit)
-                where room.bounds.contains(path.point(at: crossing)) {
+                for crossing in gridCrossings(of: line.points, origin: origin, every: spacing * unit)
+                where crossing.isHeld(at: path.point(at: crossing.distance), origin: origin, in: room.bounds) {
                     for slide in slides {
-                        let center = path.point(at: crossing + slide)
+                        let center = path.point(at: crossing.distance + slide)
                         let frame = CGRect(
                             x: center.x - size.width / 2,
                             y: center.y - size.height / 2,

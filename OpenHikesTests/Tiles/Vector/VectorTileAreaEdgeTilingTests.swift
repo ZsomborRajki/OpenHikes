@@ -103,8 +103,8 @@ struct VectorTileAreaEdgeTilingTests {
             clearance: 400
         )
 
-        #expect(crossings.map { ($0 * 10).rounded() / 10 } == [565.7], "the line down, at (1,500, 1,600)")
-        #expect(VectorTileShields.crossings(of: whole, origin: .zero, every: 1500).count == 2)
+        #expect(crossings.map { ($0.distance * 10).rounded() / 10 } == [565.7], "the line down, at (1,500, 1,600)")
+        #expect(VectorTileShields.gridCrossings(of: whole, origin: .zero, every: 1500).count == 2)
         #expect(seen.isEmpty, "the line across, at (1,600, 1,500)")
     }
 
@@ -207,6 +207,75 @@ struct VectorTileAreaEdgeTilingTests {
                 #expect(hypot(first.x - second.x, first.y - second.y) >= 2 * 250, "\(first), \(second)")
             }
         }
+    }
+
+    /// The grid's lines are 1,500 of the pictures' pixels apart and the
+    /// tiles 512, so every 128th line runs along a seam: x = 192,000, between
+    /// the tiles 374 and 375 across. Each tile sees its own stretch of an
+    /// edge, cut at its buffer and on the archive's grid, so where the edge
+    /// crosses the line, worked out along that stretch, lands a rounding
+    /// either side of the seam. The grid line's own place decides which of
+    /// the two names it.
+    @Test("an edge that crosses the grid on a seam is named once")
+    func crossingOnASeam() {
+        for index in 0..<40 {
+            let step = CGFloat(index)
+            let start = CGPoint(x: 191_000.37 + 0.37 * step, y: 180.3 + 1.3 * step)
+            let end = CGPoint(x: 193_000.11 - 0.29 * step, y: 260.7 + 0.7 * step)
+            let placed = (374...375).map { column in
+                let corner = CGFloat(column) * side
+                let seen = frame.insetBy(dx: -16, dy: -16).offsetBy(dx: corner, dy: 0)
+                let line = VectorTileLineLabels.NamedLine(
+                    category: .protectedArea,
+                    name: "Narodni park",
+                    points: clipped(from: start, to: end, inside: seen).map { point in
+                        CGPoint(x: ((point.x - corner) * 8).rounded() / 8, y: (point.y * 8).rounded() / 8)
+                    }
+                )
+                return VectorTileLineLabels.Layout(
+                    [line],
+                    target: VectorTileAddress(z: 13, x: column, y: 0),
+                    unit: 2,
+                    bounds: frame,
+                    occupied: [],
+                    language: "sl"
+                )
+                .count
+            }
+
+            #expect(placed.reduce(0, +) == 1, "edge \(index): \(placed)")
+        }
+    }
+
+    /// An edge that runs along a line of the grid, back and forth across
+    /// it, is named as an edge beside the line would be: where it crosses
+    /// the lines across, and not at each crossing of the line it follows.
+    @Test("an edge that wanders back and forth across one line of the grid is not named at each crossing")
+    func edgeAlongAGridLine() {
+        let wandering = stride(from: 100, through: 6100, by: 150).enumerated().map { index, y in
+            CGPoint(x: index.isMultiple(of: 2) ? 2975 : 3025, y: CGFloat(y))
+        }
+
+        let crossings = VectorTileLineLabels.edgeCrossings(of: wandering, origin: .zero, every: 1500, clearance: 1250)
+
+        #expect(crossings.count == 4, "the lines across at 1,500, 3,000, 4,500 and 6,000")
+    }
+
+    /// A ring crosses a line of the grid in and out: two crossings, both
+    /// kept, where an edge that runs along the line crosses it again and
+    /// again.
+    @Test("an edge that crosses a line of the grid and back is named at both crossings")
+    func ringAcrossAGridLine() {
+        let square = [
+            CGPoint(x: 1300, y: 1300), CGPoint(x: 1700, y: 1300), CGPoint(x: 1700, y: 1700),
+            CGPoint(x: 1300, y: 1700), CGPoint(x: 1300, y: 1300),
+        ]
+
+        let crossings = VectorTileLineLabels.edgeCrossings(of: square, origin: .zero, every: 1500, clearance: 1250)
+        let allDown = crossings.allSatisfy(\.isDown)
+
+        #expect(crossings.map(\.distance) == [200, 1000], "the line down at x = 1,500, out and back")
+        #expect(allDown)
     }
 
     // MARK: Helpers

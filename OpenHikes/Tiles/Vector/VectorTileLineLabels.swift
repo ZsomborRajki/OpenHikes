@@ -188,6 +188,11 @@ nonisolated enum VectorTileLineLabels {
     struct Mark: Equatable {
         let distance: CGFloat
         let spots: [CGFloat]
+        /// Where the line crosses the world's grid, for a mark that stands
+        /// there: the grid line, not the point worked out along the line,
+        /// says which tile holds it
+        /// (``VectorTileShields/GridCrossing/isHeld(at:origin:in:)``).
+        var crossing: VectorTileShields.GridCrossing?
     }
 
     /// Where along a line `length` long a name `width` wide is tried: at its
@@ -363,12 +368,11 @@ nonisolated extension VectorTileLineLabels {
                     along: forward,
                     origin: origin,
                     unit: unit,
-                    width: text.width,
-                    step: max(text.width / 4, spacing)
+                    bounds: bounds,
+                    width: text.width
                 )
                 guard !marks.isEmpty else { continue }
-                // A mark outside the tile is the neighbouring tile's to name.
-                for mark in marks where bounds.contains(forward.point(at: mark.distance)) {
+                for mark in marks {
                     for spot in mark.spots {
                         let letters = VectorTileLineLabels.letters(
                             along: forward,
@@ -389,34 +393,36 @@ nonisolated extension VectorTileLineLabels {
             taken = room.taken
         }
 
-        /// Where along `path` a name `width` wide in `look` is tried: where
-        /// the path crosses the world's grid, for a look that has one, and
-        /// otherwise from the path's middle.
+        /// Where along `path` the tile, `bounds` on its picture, tries a
+        /// name `width` wide in `look`: where the path crosses the world's
+        /// grid, for a look that has one, and otherwise from the path's
+        /// middle. A mark outside the tile is the neighbouring tile's.
         private static func marks(
             of look: VectorTileLabelStyle.LineLook,
             along path: MeasuredPath,
             origin: CGPoint,
             unit: CGFloat,
-            width: CGFloat,
-            step: CGFloat
+            bounds: CGRect,
+            width: CGFloat
         ) -> [Mark] {
             let repeatDistance = look.repeatDistance * unit
-            guard let grid = look.gridSpacing else {
-                return VectorTileLineLabels.marks(
-                    length: path.length,
+            let step = max(width / 4, VectorTileLabelStyle.spacing * unit)
+            let marks = if let grid = look.gridSpacing {
+                VectorTileLineLabels.marks(
+                    along: path,
+                    origin: origin,
+                    every: grid * unit,
+                    apart: repeatDistance,
                     width: width,
-                    spacing: repeatDistance,
                     step: step
                 )
+            } else {
+                VectorTileLineLabels.marks(length: path.length, width: width, spacing: repeatDistance, step: step)
             }
-            return VectorTileLineLabels.marks(
-                along: path,
-                origin: origin,
-                every: grid * unit,
-                apart: repeatDistance,
-                width: width,
-                step: step
-            )
+            return marks.filter { mark in
+                let point = path.point(at: mark.distance)
+                return mark.crossing?.isHeld(at: point, origin: origin, in: bounds) ?? bounds.contains(point)
+            }
         }
 
         /// Draws every name's halo, then every name's letters, so no halo
