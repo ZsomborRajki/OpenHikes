@@ -13,9 +13,9 @@
 //
 //  Reads the countries from the app's model in the environment, so the hike
 //  screen takes no new input; a preview, with no model, draws the tile
-//  disabled. Which countries a trail crosses is worked out off the body, once
-//  a line lands or the list changes, because it tests every few points of
-//  the line against every outline. The list changing is
+//  disabled. Which countries a trail crosses is worked out off the main
+//  actor, once a line lands or the list changes, because it tests every
+//  walked leg of the line against the outlines near it. The list changing is
 //  ``OfflineCountries/catalogRevision``, not the areas' codes: a new build
 //  keeps its area's code. What the tile offers, and what a tap downloads, is
 //  each area as the list has it now, looked up by its code, so a dialog
@@ -76,7 +76,10 @@ struct HikeOfflineCountryTile: View {
         .task(id: TaskKey(revision: line.revision, catalog: countries?.catalogRevision)) {
             guard let countries else { return }
             if countries.listPhase == .idle, countries.listed.isEmpty { await countries.refreshList() }
-            coverage = countries.coverage(alongRoute: line.current?.route ?? [])
+            guard let measured = try? await countries.coverage(alongRoute: line.current?.route ?? []),
+                  !Task.isCancelled
+            else { return }
+            coverage = measured
         }
     }
 

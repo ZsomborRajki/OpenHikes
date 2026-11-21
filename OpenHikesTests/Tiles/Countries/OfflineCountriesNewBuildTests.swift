@@ -76,7 +76,7 @@ struct OfflineCountriesNewBuildTests {
     func offersTheBuildListedNow() async throws {
         try await OfflineCountryFixture.withDirectory { directory in
             let harness = await OfflineCountryHarness.make(in: directory, offering: [built])
-            let kept = harness.countries.coverage(alongRoute: trail)
+            let kept = try await harness.countries.coverage(alongRoute: trail)
             #expect(kept.crossed == [built])
 
             harness.server.serve(OfflineCountryFixture.manifest([rebuilt]))
@@ -94,7 +94,7 @@ struct OfflineCountriesNewBuildTests {
     func downloadsTheBuildListedNow() async throws {
         try await OfflineCountryFixture.withDirectory { directory in
             let harness = await OfflineCountryHarness.make(in: directory, offering: [built])
-            let shown = harness.countries.missing(from: harness.countries.coverage(alongRoute: trail))
+            let shown = try await harness.countries.missing(from: harness.countries.coverage(alongRoute: trail))
             #expect(shown == [built])
 
             harness.server.serve(OfflineCountryFixture.manifest([rebuilt]))
@@ -114,7 +114,7 @@ struct OfflineCountriesNewBuildTests {
     func goneFromTheList() async throws {
         try await OfflineCountryFixture.withDirectory { directory in
             let harness = await OfflineCountryHarness.make(in: directory, offering: [built])
-            let kept = harness.countries.coverage(alongRoute: trail)
+            let kept = try await harness.countries.coverage(alongRoute: trail)
 
             harness.server.serve(OfflineCountryFixture.manifest([]))
             await harness.countries.refreshList()
@@ -129,7 +129,7 @@ struct OfflineCountriesNewBuildTests {
     func downloadedMeanwhile() async throws {
         try await OfflineCountryFixture.withDirectory { directory in
             let harness = await OfflineCountryHarness.make(in: directory, offering: [built])
-            let kept = harness.countries.coverage(alongRoute: trail)
+            let kept = try await harness.countries.coverage(alongRoute: trail)
             harness.countries.download(built)
             try harness.land([.basemap: basemap])
             await settleDelegateHop(until: "the area is installed") { harness.countries.isInstalled("SI") }
