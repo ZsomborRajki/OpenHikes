@@ -4,8 +4,8 @@
 //
 //  The orders *Offline Maps* can be put in, and its search. By name every
 //  country is under the letter its name is filed under; nearest first and
-//  largest first are flat, a region a line of its own; what is downloaded or
-//  coming down is first in each. A search lists what answers it best first,
+//  largest first are flat, a region a line of its own; the downloads not yet
+//  finished and then what is downloaded are first in each. A search lists what answers it best first,
 //  a region answering to its country's name too. And the directory all of it
 //  is read from is built when the list or the hiker's position changes, not
 //  at every pass.
@@ -68,12 +68,23 @@ struct OfflineCountryDirectoryTests {
         )
     }
 
+    /// - Parameters:
+    ///   - downloaded: The areas on the device.
+    ///   - unfinished: The areas whose downloads have not finished.
     private func sections(
         _ directory: OfflineCountryDirectory,
         by sort: OfflineCountrySort,
-        holding held: Set<String> = []
+        holding downloaded: Set<String> = [],
+        unfinished: Set<String> = []
     ) -> OfflineCountrySections {
-        directory.sections(by: sort, isHeld: { held.contains($0.id) }, byteCount: { $0.byteCount(withDetail: true) })
+        directory.sections(
+            by: sort,
+            holding: { country in
+                if downloaded.contains(country.id) { return .downloaded }
+                return unfinished.contains(country.id) ? .unfinished : nil
+            },
+            byteCount: { $0.byteCount(withDetail: true) }
+        )
     }
 
     // MARK: - By name
@@ -92,7 +103,7 @@ struct OfflineCountryDirectoryTests {
     func heldLeavesItsLetter() {
         let byName = sections(directory([slovenia, austria, aland]), by: .name, holding: ["SI", "AX"])
 
-        #expect(byName.held == [aland, slovenia])
+        #expect(byName.downloaded == [aland, slovenia])
         #expect(byName.parts == [Part(heading: .letter("A"), lines: [.area(austria)])])
     }
 
@@ -102,7 +113,7 @@ struct OfflineCountryDirectoryTests {
     func nearestFirst() {
         let nearest = sections(directory(everything, near: ljubljana), by: .nearest)
 
-        #expect(nearest.held.isEmpty)
+        #expect(nearest.downloaded.isEmpty)
         #expect(nearest.parts == [
             Part(heading: .nearby, lines: [.area(slovenia), .area(austria)]),
             Part(heading: .all, lines: [.area(spain), .area(aland), .area(colorado), .area(california)]),
@@ -113,7 +124,7 @@ struct OfflineCountryDirectoryTests {
     func nearestFirstHeld() {
         let nearest = sections(directory(everything, near: ljubljana), by: .nearest, holding: ["ES", "AT"])
 
-        #expect(nearest.held == [austria, spain])
+        #expect(nearest.downloaded == [austria, spain])
         #expect(nearest.parts.first == Part(heading: .nearby, lines: [.area(slovenia)]))
         #expect(nearest.scrollTarget(for: "US-CO").rowID == "US-CO", "a region is a row of its own here")
         #expect(nearest.scrollTarget(for: "US-CO").opening == nil)
@@ -141,8 +152,33 @@ struct OfflineCountryDirectoryTests {
             ),
         ])
         let held = sections(all, by: .largest, holding: ["SI", "ES"])
-        #expect(held.held == [spain, slovenia])
+        #expect(held.downloaded == [spain, slovenia])
         #expect(held.parts.flatMap(\.lines).map(\.id) == ["US-CA", "AX", "AT", "US-CO"])
+    }
+
+    // MARK: - Not yet downloaded
+
+    /// Only what is downloaded draws with no signal (#1533).
+    @Test(
+        "a download not yet finished is listed first, apart from what is downloaded, in the order's order",
+        arguments: [
+            (OfflineCountrySort.nearest, ["SI", "ES"]),
+            (.name, ["SI", "ES"]),
+            (.largest, ["ES", "SI"]),
+        ]
+    )
+    func unfinishedApart(sort: OfflineCountrySort, unfinished: [String]) {
+        let all = sections(
+            directory(everything, near: ljubljana),
+            by: sort,
+            holding: ["AT"],
+            unfinished: ["ES", "SI"]
+        )
+
+        #expect(all.unfinished.map(\.id) == unfinished)
+        #expect(all.downloaded == [austria])
+        #expect(Set(all.parts.flatMap(\.lines).map(\.id)).isDisjoint(with: ["AT", "ES", "SI"]))
+        #expect(all.reveal("ES", expanded: []) == .scroll(to: "ES"))
     }
 
     // MARK: - The order in force

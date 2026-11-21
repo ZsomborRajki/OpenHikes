@@ -41,6 +41,14 @@ nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
     case notPaused
     /// The recorder refused, in its own words.
     case recording(RecordingFailure)
+    /// Asked to stop a recording too short to save that holds photographs or
+    /// places. Ending it would throw them away, which the recording screen
+    /// asks about first (``RecordingStopStep/confirmDiscard``), and Siri, the
+    /// control and the watch cannot ask. So it is left as it was.
+    ///
+    /// The whole sentence is the description, for the reason ``walking(trail:)``
+    /// gives: the watch shows the description alone.
+    case recordingNeedsDiscardChoice
     /// The store could not be read. Carries nothing for the same reason
     /// ``couldNotSave`` does not.
     case storage
@@ -68,6 +76,12 @@ nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
             localized: "You’re hiking \(trail). End the hike in OpenHikes to start recording."
         )
         case .notPaused: String(localized: "That hike isn’t paused.")
+        case .recordingNeedsDiscardChoice: String(
+            localized: """
+                Your recording is too short to save, but it has photos or places on it. \
+                Open OpenHikes to discard it or keep recording.
+                """
+        )
         case .recording(let failure): failure.errorDescription
         case .awaitingRouteReview:
             String(localized: "Your hike is saved, but it needs you to pick which trail you followed.")
@@ -79,7 +93,8 @@ nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
 
     var recoverySuggestion: String? {
         switch self {
-        case .alreadyRecording, .noActiveRecording, .notPaused, .noHikesYet, .nothingWalkedYet, .unknownDay, .walking:
+        case .alreadyRecording, .noActiveRecording, .notPaused, .noHikesYet, .nothingWalkedYet,
+            .recordingNeedsDiscardChoice, .unknownDay, .walking:
             nil
         case .busyFinishing: String(localized: "Try again in a moment.")
         case .recording(let failure): failure.recoverySuggestion

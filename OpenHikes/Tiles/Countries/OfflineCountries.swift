@@ -71,9 +71,19 @@ final class OfflineCountries {
 
     private(set) var listPhase = ListPhase.idle
     /// What the server offers that this app can draw.
-    private(set) var offered: [Country] = []
+    private(set) var offered: [Country] = [] {
+        // Every read of the list writes it, mostly with what it held.
+        didSet { if offered != oldValue { catalogRevision &+= 1 } }
+    }
     /// What is downloaded, by area code.
-    private(set) var installed: [String: Record] = [:]
+    private(set) var installed: [String: Record] = [:] {
+        didSet { catalogRevision &+= 1 }
+    }
+    /// Counts the changes to what ``listed`` is read from. A screen that
+    /// keeps something worked out from the list keys it to this rather than
+    /// to the areas' codes: a new build of an area keeps its code and
+    /// changes its files, its size and maybe its outline.
+    private(set) var catalogRevision = 0
     /// What is coming down, by area code.
     private(set) var downloads: [String: OfflineCountryDownload] = [:]
     /// Whether an area brings its zoom 15 too: *Extra Detail*.
@@ -207,7 +217,9 @@ final class OfflineCountries {
 
     /// Starts `country`, its update, or the zoom 15 it lacks. A refusal is
     /// shown on its row. Nothing starts before the device's own lists are
-    /// read (``Holdings``).
+    /// read (``Holdings``), and no transfer before the list of downloads
+    /// under way names it: a relaunch picks up only what that list names,
+    /// and sweeps the staged files of the rest.
     func download(_ country: Country) {
         guard let server, let downloader, holdings == .read,
               downloads[country.id].map(\.hasFailed) ?? true
@@ -220,8 +232,8 @@ final class OfflineCountries {
             files: files,
             phase: decision.isAllowed ? .downloading : .waitingForWiFi
         )
-        // Before either refusal, so that one keeps what an earlier try got
-        // down and the next try asks only for the rest.
+        // Before any refusal, so that one keeps what an earlier try got down
+        // and the next try asks only for the rest.
         if let previous = downloads[country.id] { download.resume(from: previous) }
         downloads[country.id] = download
         if decision.reason == "low-power-mode" || decision.reason == "thermal" {
@@ -235,9 +247,15 @@ final class OfflineCountries {
             download.set(.failed(.space))
             return
         }
-        writePending { pending in
+        // A failed write leaves the list as it was, still naming whatever an
+        // earlier try has out, and Try Again writes it once there is room.
+        let isListed = writePending { pending in
             pending.removeAll { $0.country.id == country.id }
             pending.append(OfflineCountryStore.Pending(country: country, roles: files.map(\.role)))
+        }
+        guard isListed else {
+            download.set(.failed(.space))
+            return
         }
         // A file a transfer is still out for is left to it: a sibling's
         // failure is what this retries.
@@ -264,12 +282,20 @@ final class OfflineCountries {
         return wanted.filter { !held.contains($0.fileName) }
     }
 
+    /// Stops `id`'s download and keeps nothing it brought. A launch that has
+    /// yet to pick up what was coming down holds no row for it, so the list
+    /// of downloads under way says whether there is one: taken off that
+    /// list, it is left alone by the launch (``resumePending(_:)``) rather
+    /// than installed after the hiker ended it.
     func cancel(_ id: String) {
-        guard let download = downloads.removeValue(forKey: id) else { return }
+        let download = downloads.removeValue(forKey: id)
+        let waiting = store.pending().filter { $0.country.id == id }
+        guard download != nil || !waiting.isEmpty else { return }
         downloader?.cancel(country: id)
         writePending { $0.removeAll { $0.country.id == id } }
-        for file in download.files {
-            try? FileManager.default.removeItem(at: store.stagedURL(for: file))
+        let files = (download?.files ?? []) + waiting.flatMap(\.files)
+        for staged in Set(files.map(store.stagedURL(for:))) {
+            try? FileManager.default.removeItem(at: staged)
         }
     }
 
@@ -333,7 +359,7 @@ final class OfflineCountries {
         } catch {
             let reason = String(describing: error)
             Self.logger.error("Installing \(country.id, privacy: .public): \(reason, privacy: .public)")
-            download.set(.failed(.space))
+            stopInstalling(download)
             return
         }
         let before = installed
@@ -347,8 +373,8 @@ final class OfflineCountries {
         // The old build goes only once the index on disk names the new one:
         // otherwise a relaunch finds neither, and sweeps the new one.
         guard commitIndex(restoring: before) else {
-            store.remove(download.files, keeping: Array(installed.values))
-            download.set(.failed(.space))
+            store.unstage(download.files, keeping: Array(installed.values))
+            stopInstalling(download)
             return
         }
         reopenArchives()
@@ -358,6 +384,18 @@ final class OfflineCountries {
         downloads[country.id] = nil
         writePending { $0.removeAll { $0.country.id == country.id } }
         reconcile()
+    }
+
+    /// Fails a download whose files could not be moved into place, or named
+    /// by the index once they were. What went back to staging is installed
+    /// from there by the next try, here or at the next launch, since the
+    /// download is still listed as under way; what did not is asked for
+    /// again.
+    private func stopInstalling(_ download: OfflineCountryDownload) {
+        for file in download.files where !FileManager.default.fileExists(atPath: store.stagedURL(for: file).path) {
+            download.forget(file.role)
+        }
+        download.set(.failed(.space))
     }
 
     /// Opens the archives of what is installed now, off the main actor, and
@@ -390,12 +428,23 @@ final class OfflineCountries {
         }
     }
 
-    /// Changes the list of downloads under way, and never one that is kept
-    /// and cannot be read, which would leave what it names to the sweep.
-    private func writePending(_ change: (inout [OfflineCountryStore.Pending]) -> Void) {
-        guard case var .holding(pending) = store.downloadsUnderWay() else { return }
+    /// Changes the list of downloads under way, and says whether the change
+    /// is on disk. It never writes over a list that is kept and cannot be
+    /// read, which would leave what that list names to the sweep, and a
+    /// write that fails leaves the list as it was, because it is atomic.
+    @discardableResult private func writePending(_ change: (inout [OfflineCountryStore.Pending]) -> Void) -> Bool {
+        guard case var .holding(pending) = store.downloadsUnderWay() else {
+            Self.logger.error("Countries' downloads under way: the list cannot be read")
+            return false
+        }
         change(&pending)
-        try? store.write(pending: pending)
+        do {
+            try store.write(pending: pending)
+            return true
+        } catch {
+            Self.logger.error("Countries' downloads under way: \(String(describing: error), privacy: .public)")
+            return false
+        }
     }
 
     private static func key(_ country: Country, _ file: OfflineCountryManifest.File) -> OfflineCountryDownloadKey {
@@ -494,10 +543,16 @@ extension OfflineCountries {
         }
     }
 
+    /// Picks up what `pending`, read as the launch began, names. The areas
+    /// are listed before the session has said what it still has, so the
+    /// hiker can delete one meanwhile, or while an earlier entry is checked;
+    /// each entry is read again first, and one no longer on the list is left
+    /// alone.
     private func resumePending(_ pending: [OfflineCountryStore.Pending]) async {
         guard !pending.isEmpty else { return }
         let running = await downloader?.running() ?? [:]
         for entry in pending {
+            guard store.pending().contains(entry) else { continue }
             let country = entry.country
             let download = OfflineCountryDownload(country: country, files: entry.files, phase: .downloading)
             downloads[country.id] = download

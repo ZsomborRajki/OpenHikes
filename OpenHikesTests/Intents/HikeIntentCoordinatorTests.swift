@@ -23,17 +23,18 @@ import Testing
 
 @Suite("Hike intent coordinator")
 final class HikeIntentCoordinatorTests {
-    private let container: ModelContainer
-    private let source = StubRecordingLocationSource()
-    private let clock = TestClock()
+    let container: ModelContainer
+    let source = StubRecordingLocationSource()
+    let clock = TestClock()
     private let directory = FileManager.default.temporaryDirectory
         .appendingPathComponent(
             "intent-sandbox-\(UUID().uuidString)",
             isDirectory: true
         )
-    // periphery:ignore - the strong reference that keeps the recorder alive for
-    // the length of the test; never read back.
-    private var recorder: HikeRecorder?
+    /// The recorder behind the last coordinator made, held so it lives for
+    /// the length of the test, and read where a test needs its phase or
+    /// draft.
+    var recorder: HikeRecorder?
 
     init() throws {
         container = try Fixture.modelContainer()
@@ -208,35 +209,7 @@ final class HikeIntentCoordinatorTests {
         }
     }
 
-    // MARK: - Stopping
-
-    @Test("stopping saves the hike and reports what was walked")
-    func stoppingSavesTheHike() async throws {
-        let coordinator = makeCoordinator()
-        _ = try await coordinator.startRecording()
-        walk()
-
-        let hike = try await coordinator.stopRecording()
-
-        #expect(hike.distance.value > 0)
-        await #expect(throws: HikeIntentFailure.noActiveRecording) {
-            try await coordinator.currentRecording()
-        }
-        // Saved, not merely stopped: the row has to be in the store and no
-        // longer flagged as a draft, which is what makes it the answer to
-        // "what was my last hike".
-        let saved = try await coordinator.lastOuting()
-        #expect(saved.id == hike.id)
-    }
-
-    @Test("stopping nothing is refused")
-    func stoppingWithoutARecordingIsRefused() async {
-        let coordinator = makeCoordinator()
-
-        await #expect(throws: HikeIntentFailure.noActiveRecording) {
-            try await coordinator.stopRecording()
-        }
-    }
+    // MARK: - The control
 
     @Test("the control action starts and then stops the recording")
     func controlTogglesTheRecording() async throws {
@@ -349,7 +322,7 @@ final class HikeIntentCoordinatorTests {
 
     // MARK: - Harness
 
-    private func makeCoordinator(
+    func makeCoordinator(
         calendar: Calendar = Calendar(identifier: .gregorian),
         automaticallyRecovers: Bool = false,
         walkUnderWay: String? = nil
@@ -381,13 +354,13 @@ final class HikeIntentCoordinatorTests {
 
     /// Two fixes a minute and 200-odd metres apart, which is enough for the
     /// distance accumulator to call it walking rather than standing still.
-    private func walk() {
+    func walk() {
         source.deliver(fix(latitude: 47.6300))
         clock.advance(by: 60)
         source.deliver(fix(latitude: 47.6320))
     }
 
-    private func fix(latitude: Double) -> CLLocation {
+    func fix(latitude: Double) -> CLLocation {
         CLLocation(
             coordinate: CLLocationCoordinate2D(
                 latitude: latitude,

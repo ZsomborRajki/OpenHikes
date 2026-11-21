@@ -47,7 +47,7 @@ struct OfflineCountriesListingTests {
             let harness = await OfflineCountryHarness.make(in: directory, offering: [colorado, slovenia, california])
             let sections = harness.countries.sections(of: listing(harness.countries), by: .name)
 
-            #expect(sections.held.isEmpty)
+            #expect(sections.unfinished.isEmpty && sections.downloaded.isEmpty)
             #expect(sections.parts == [
                 OfflineCountrySections.Part(heading: .letter("S"), lines: [.area(slovenia)]),
                 OfflineCountrySections.Part(
@@ -59,15 +59,17 @@ struct OfflineCountriesListingTests {
     }
 
     /// The line under the country is the whole directory of its regions, so
-    /// a region coming down is under it too, as well as in *Downloaded*.
-    @Test("a region coming down is in Downloaded and still under its country")
+    /// a region coming down is under it too, as well as in *Not Yet
+    /// Downloaded*.
+    @Test("a region coming down is in Not Yet Downloaded and still under its country")
     func regionHeld() async throws {
         try await OfflineCountryFixture.withDirectory { directory in
             let harness = await OfflineCountryHarness.make(in: directory, offering: [colorado, california])
             harness.countries.download(colorado)
             let sections = harness.countries.sections(of: listing(harness.countries), by: .name)
 
-            #expect(sections.held == [colorado])
+            #expect(sections.unfinished == [colorado])
+            #expect(sections.downloaded.isEmpty)
             #expect(sections.parts.map(\.lines) == [[.group(id: "US", regions: [california, colorado])]])
             let heldTarget = sections.scrollTarget(for: "US-CO")
             #expect(heldTarget.rowID == "US-CO")
@@ -75,6 +77,69 @@ struct OfflineCountriesListingTests {
             let groupTarget = sections.scrollTarget(for: "US-CA")
             #expect(groupTarget.rowID == OfflineCountrySections.groupRowID("US-CA"))
             #expect(groupTarget.opening == "US")
+        }
+    }
+
+    /// A store in `directory` holding Austria, and the newer build of it the
+    /// server has.
+    private static func storeHoldingAustria(
+        in directory: URL
+    ) throws -> (store: OfflineCountryStore, update: OfflineCountryManifest.Country) {
+        let store = OfflineCountryStore(directory: directory)
+        try store.prepare()
+        let basemap = OfflineCountryFixture.archive(
+            [VectorTileAddress(z: 0, x: 0, y: 0): Data("world".utf8)],
+            maximumZoom: 0
+        )
+        let austria = OfflineCountryFixture.northernCountry(bytes: basemap)
+        var update = OfflineCountryFixture.country(bytes: basemap, id: "AT", build: "20261201")
+        update.bounds = austria.bounds
+        update.outline = austria.outline
+        let file = try #require(austria.files.first)
+        try basemap.write(to: store.fileURL(for: file))
+        try store.write(installed: [OfflineCountryStore.Record(country: austria, installedAt: .now)])
+        return (store, update)
+    }
+
+    /// Only what is downloaded draws with no signal, so *Downloaded* holds
+    /// nothing else, whatever a download is doing, in any order (#1533).
+    @Test("a download waiting for Wi-Fi or refused for room is not yet downloaded, and an area updating still is")
+    func notYetDownloaded() async throws {
+        try await OfflineCountryFixture.withDirectory { directory in
+            let (store, update) = try Self.storeHoldingAustria(in: directory)
+            var decision = TileNetworkDecision.allowed
+            var freeBytes: Int64 = 1 << 40
+            let countries = OfflineCountries(
+                store: store,
+                server: StubCountryServer(OfflineCountryFixture.manifest([update, slovenia, colorado, california])),
+                downloader: StubCountryDownloader(),
+                archives: OfflineCountryArchives(),
+                networkDecision: { decision },
+                freeSpace: { freeBytes }
+            )
+            await countries.start()
+            await countries.refreshList()
+
+            countries.download(update)
+            decision = .denied("cellular-speculative")
+            countries.download(slovenia)
+            (decision, freeBytes) = (.allowed, 0)
+            countries.download(colorado)
+            #expect(countries.downloads["AT"]?.phase == .downloading)
+            #expect(countries.downloads["SI"]?.phase == .waitingForWiFi)
+            #expect(countries.downloads["US-CO"]?.phase == .failed(.space))
+
+            let ljubljana = CLLocationCoordinate2D(latitude: 46.05, longitude: 14.5)
+            for sort in [OfflineCountrySort.nearest, .name, .largest] {
+                let sections = countries.sections(of: listing(countries, near: ljubljana), by: sort)
+                #expect(sections.downloaded.map(\.id) == ["AT"], "\(sort)")
+                #expect(Set(sections.unfinished.map(\.id)) == ["SI", "US-CO"], "\(sort)")
+                let below = Set(sections.parts.flatMap(\.lines).map(\.id))
+                #expect(below.isDisjoint(with: ["AT", "SI", "US-CO"]), "\(sort)")
+                for id in ["AT", "SI", "US-CO"] {
+                    #expect(sections.reveal(id, expanded: []) == .scroll(to: id), "\(sort) \(id)")
+                }
+            }
         }
     }
 

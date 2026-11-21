@@ -128,6 +128,48 @@ struct OfflineCountriesLaunchTests {
         }
     }
 
+    /// The installed areas are listed before the session has said what it
+    /// still has, so the hiker can delete one while its update waits to be
+    /// picked up. The launch read the update from the list as it began, and
+    /// installed it again from staging (#1530).
+    @Test("an area deleted while the launch is picking up its update stays deleted")
+    func deletedDuringRecovery() async throws {
+        try await OfflineCountryFixture.withDirectory { directory in
+            let store = OfflineCountryStore(directory: directory)
+            try store.prepare()
+            let old = OfflineCountryFixture.country(bytes: basemap, build: "20261001")
+            let oldFile = try #require(old.files.first)
+            try basemap.write(to: store.fileURL(for: oldFile))
+            try store.write(installed: [OfflineCountryStore.Record(country: old, installedAt: .now)])
+            let new = OfflineCountryFixture.country(bytes: basemap, build: "20261117")
+            let newFile = try #require(new.files.first)
+            try store.write(pending: [OfflineCountryStore.Pending(country: new, roles: [.basemap])])
+            try basemap.write(to: store.stagedURL(for: newFile))
+            let downloader = StubCountryDownloader()
+            downloader.holdsListing = true
+            let countries = countries(store, server: StubCountryServer(nil), downloader: downloader)
+
+            let launch = Task { await countries.start() }
+            await settleDelegateHop(until: "the launch waits on the session's tasks") {
+                !downloader.waitingForListing.isEmpty
+            }
+            #expect(countries.isInstalled("SI"))
+            countries.delete("SI")
+            #expect(!countries.isInstalled("SI"))
+            #expect(downloader.cancelled == ["SI"])
+            downloader.releaseListing()
+            await launch.value
+
+            #expect(!countries.isInstalled("SI"))
+            #expect(countries.downloads["SI"] == nil)
+            #expect(store.installed().isEmpty)
+            #expect(store.pending().isEmpty)
+            #expect(!FileManager.default.fileExists(atPath: store.fileURL(for: oldFile).path))
+            #expect(!FileManager.default.fileExists(atPath: store.fileURL(for: newFile).path))
+            #expect(!FileManager.default.fileExists(atPath: store.stagedURL(for: newFile).path))
+        }
+    }
+
     @Test("a country still downloaded stays listed after the server stops offering it")
     func listsWhatIsInstalled() async throws {
         try await OfflineCountryFixture.withDirectory { directory in
@@ -176,14 +218,14 @@ struct OfflineCountriesLaunchTests {
                 by: .nearest
             )
             #expect(fromLjubljana == OfflineCountrySections(
-                held: [slovenia],
+                downloaded: [slovenia],
                 parts: [
                     OfflineCountrySections.Part(heading: .nearby, lines: [.area(austria)]),
                     OfflineCountrySections.Part(heading: .all, lines: [.area(spain)]),
                 ]
             ))
             let nowhere = countries.sections(of: listing(nil), by: .nearest)
-            #expect(nowhere.held == [slovenia])
+            #expect(nowhere.downloaded == [slovenia])
             #expect(nowhere.parts.map(\.heading) == [.letter("A"), .letter("S")], "by name, with no position")
             #expect(nowhere.parts.flatMap(\.lines).map(\.id) == ["AT", "ES"])
         }
