@@ -3,9 +3,10 @@
 //  OpenHikesTests
 //
 //  What the hike screen's *Offline* tile says of a trail: *Saved* only when
-//  every tested point of the line is inside a downloaded country, and partly
-//  saved when a country it crosses is down but the line runs on into one
-//  that is not, or into ground no country on offer covers.
+//  every walked leg of the line is inside downloaded countries from end to
+//  end, and partly saved when a country it crosses is down but the line runs
+//  on into one that is not, or into ground no country on offer covers. How
+//  a leg is tested is `OfflineRouteLegCoverageTests`'.
 //
 
 import CoreLocation
@@ -60,7 +61,7 @@ struct OfflineRouteCoverageTests {
             let slovenia = OfflineCountryFixture.country(bytes: basemap)
             let countries = try await countries(in: directory, offering: [slovenia], installed: [slovenia])
 
-            let coverage = countries.coverage(alongRoute: Array(northward.prefix(1)))
+            let coverage = try await countries.coverage(alongRoute: Array(northward.prefix(1)))
 
             #expect(coverage == OfflineRouteCoverage(crossed: [slovenia], leavesThem: false))
             #expect(countries.saving(coverage) == .whole)
@@ -75,7 +76,7 @@ struct OfflineRouteCoverageTests {
             let slovenia = OfflineCountryFixture.country(bytes: basemap)
             let countries = try await countries(in: directory, offering: [slovenia], installed: [slovenia])
 
-            let coverage = countries.coverage(alongRoute: northward)
+            let coverage = try await countries.coverage(alongRoute: northward)
 
             #expect(coverage == OfflineRouteCoverage(crossed: [slovenia], leavesThem: true))
             #expect(countries.saving(coverage) == .part)
@@ -93,7 +94,7 @@ struct OfflineRouteCoverageTests {
                 installed: [slovenia]
             )
 
-            let coverage = countries.coverage(alongRoute: northward)
+            let coverage = try await countries.coverage(alongRoute: northward)
 
             #expect(coverage.crossed.map(\.id) == ["SI", "AT"])
             #expect(!coverage.leavesThem)
@@ -108,7 +109,7 @@ struct OfflineRouteCoverageTests {
             let slovenia = OfflineCountryFixture.country(bytes: basemap)
             let countries = try await countries(in: directory, offering: [austria, slovenia], installed: [])
 
-            let coverage = countries.coverage(alongRoute: [RouteCoordinate(latitude: 40, longitude: -3)])
+            let coverage = try await countries.coverage(alongRoute: [RouteCoordinate(latitude: 40, longitude: -3)])
 
             #expect(coverage == OfflineRouteCoverage(crossed: [], leavesThem: true))
             #expect(countries.saving(coverage) == .unsaved)
@@ -121,13 +122,13 @@ struct OfflineRouteCoverageTests {
             let slovenia = OfflineCountryFixture.country(bytes: basemap)
             let countries = try await countries(in: directory, offering: [slovenia], installed: [])
 
-            #expect(countries.saving(countries.coverage(alongRoute: northward)) == .unsaved)
-            #expect(countries.coverage(alongRoute: []) == OfflineRouteCoverage())
+            #expect(try await countries.saving(countries.coverage(alongRoute: northward)) == .unsaved)
+            #expect(try await countries.coverage(alongRoute: []) == OfflineRouteCoverage())
         }
     }
 
-    /// The line is thinned before it is tested, and its last point is always
-    /// among those tested, so a step over the edge at the very end counts.
+    /// Every leg is tested, the last among them, so a step over the edge at
+    /// the very end of a long line counts.
     @Test("a trail that leaves the countries only at its last point is partly saved")
     func leavesAtTheEnd() async throws {
         try await OfflineCountryFixture.withDirectory { directory in
@@ -136,15 +137,15 @@ struct OfflineRouteCoverageTests {
             var route = (0..<1000).map { RouteCoordinate(latitude: 46.0 + Double($0) * 0.0009, longitude: 14.0) }
             route.append(RouteCoordinate(latitude: 47.0, longitude: 14.0))
 
-            let coverage = countries.coverage(alongRoute: route, testing: 3)
+            let coverage = try await countries.coverage(alongRoute: route)
 
             #expect(coverage.leavesThem)
             #expect(countries.saving(coverage) == .part)
         }
     }
 
-    /// The same thinning: a trail that only just crosses a border at its last
-    /// point still names the country it ends in.
+    /// The same: a trail that only just crosses a border on its last leg
+    /// still names the country it ends in.
     @Test("a trail's countries include the one it ends in")
     func endsInTheNextCountry() async throws {
         try await OfflineCountryFixture.withDirectory { directory in
@@ -154,10 +155,28 @@ struct OfflineRouteCoverageTests {
             var route = (0..<1000).map { RouteCoordinate(latitude: 46.0 + Double($0) * 0.0009, longitude: 14.0) }
             route.append(RouteCoordinate(latitude: 47.0, longitude: 14.0))
 
-            let coverage = countries.coverage(alongRoute: route, testing: 3)
+            let coverage = try await countries.coverage(alongRoute: route)
 
             #expect(coverage.crossed.map(\.id) == ["SI", "AT"])
             #expect(!coverage.leavesThem)
+        }
+    }
+
+    /// #1531: both ends of the one walked leg are inside the downloaded
+    /// country, and its middle crosses the bay of the outline, where the map
+    /// goes blank. Tested at its ends alone, the line read as saved.
+    @Test("a sparse leg across the bay of a downloaded country's outline is only partly saved")
+    func sparseLegLeavesAConcaveCountry() async throws {
+        try await OfflineCountryFixture.withDirectory { directory in
+            let slovenia = OfflineCountryFixture.concaveCountry(bytes: basemap)
+            let countries = try await countries(in: directory, offering: [slovenia], installed: [slovenia])
+
+            let coverage = try await countries.coverage(
+                alongRoute: [OfflineCountryFixture.westernArm, OfflineCountryFixture.easternArm]
+            )
+
+            #expect(coverage == OfflineRouteCoverage(crossed: [slovenia], leavesThem: true))
+            #expect(countries.saving(coverage) == .part)
         }
     }
 }

@@ -17,6 +17,7 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 @MainActor
@@ -152,11 +153,12 @@ struct SeededOfflineCountryServerTests {
     }
 
     @Test("the fixture's trail is in Germany and in no other area")
-    func trailIsInGermanyAlone() async {
+    func trailIsInGermanyAlone() async throws {
         let countries = countries(.seeded)
         await countries.refreshList()
 
-        #expect(countries.coverage(along: [Self.trailhead]).crossed.map(\.id) == ["DE"])
+        let coverage = try await countries.coverage(alongRoute: [RouteCoordinate(Self.trailhead)])
+        #expect(coverage.crossed.map(\.id) == ["DE"])
     }
 
     @Test("a refused list fails, and the seeded one downloads nothing")

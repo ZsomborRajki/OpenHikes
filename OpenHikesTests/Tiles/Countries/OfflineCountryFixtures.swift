@@ -11,6 +11,7 @@
 import CryptoKit
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import Synchronization
 
 // swiftlint:disable no_magic_numbers
@@ -73,6 +74,28 @@ nonisolated enum OfflineCountryFixture {
         country.outline = outline(of: northernBounds)
         return country
     }
+
+    /// A country shaped like a U inside ``bounds``: two arms joined across
+    /// the south, with a bay between them open to the north, which a
+    /// straight leg from one arm to the other crosses.
+    static func concaveCountry(bytes: Data) -> OfflineCountryManifest.Country {
+        var country = country(bytes: bytes)
+        country.bounds = OfflineCountryManifest.Bounds(west: 13.5, south: 45.6, east: 14.4, north: 46.5)
+        country.outline = [
+            [
+                [13.5, 45.6], [14.4, 45.6], [14.4, 46.5], [14.1, 46.5],
+                [14.1, 45.9], [13.8, 45.9], [13.8, 46.5], [13.5, 46.5],
+                [13.5, 45.6],
+            ],
+        ]
+        return country
+    }
+
+    /// In the concave country's western arm, its eastern one, and in the
+    /// bay between them, where a leg from one arm to the other passes.
+    static let westernArm = RouteCoordinate(latitude: 46.3, longitude: 13.65)
+    static let easternArm = RouteCoordinate(latitude: 46.3, longitude: 14.25)
+    static let bay = RouteCoordinate(latitude: 46.3, longitude: 13.95)
 
     static func file(_ role: OfflineCountryManifest.Role, name: String, bytes: Data) -> OfflineCountryManifest.File {
         OfflineCountryManifest.File(
