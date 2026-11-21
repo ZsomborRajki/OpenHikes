@@ -134,11 +134,18 @@ final class OfflineCountryDownload {
     /// The file in `role` came down and is not the one the manifest
     /// describes, so it is asked for again from the start.
     func discard(_ role: OfflineCountryManifest.Role) {
+        forget(role)
+        phase = .failed(.damaged)
+    }
+
+    /// Nothing of the file in `role` is left where it was staged, so the
+    /// next try asks for all of it, rather than checking a path with no
+    /// file at it.
+    func forget(_ role: OfflineCountryManifest.Role) {
         staged[role] = nil
         written[role] = 0
         resumeData[role] = nil
         sumWritten()
-        phase = .failed(.damaged)
     }
 
     private func sumWritten() {

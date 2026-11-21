@@ -15,7 +15,11 @@
 //
 //  A download is staged first and moved into place only once its SHA-256
 //  matches the manifest's, so an archive under the directory's own names is
-//  always a whole one.
+//  always a whole one. Until the index names it, a file that came down is
+//  one the download can install again: an install that fails part of the
+//  way, or that the index then cannot be written for, puts its files back
+//  in staging (#1528), where the next try, or the next launch, finds them
+//  still whole rather than asking for gigabytes again.
 //
 //  A list that is there and cannot be read is not an empty one. The device
 //  may not have been unlocked since it restarted, when a launch the system
@@ -145,15 +149,45 @@ nonisolated struct OfflineCountryStore: Sendable {
 
     // MARK: - Changes
 
-    /// Moves staged files into place. Call only once every one has been
-    /// checked with ``isWhole(_:at:)``.
+    /// Moves staged files into place, all or none: where one cannot be
+    /// moved, those moved before it go back to staging, and the error is
+    /// thrown. Call only once every one has been checked with
+    /// ``isWhole(_:at:)``.
     func install(_ files: [OfflineCountryManifest.File]) throws {
-        for file in files {
-            let destination = fileURL(for: file)
-            if FileManager.default.fileExists(atPath: destination.path) {
-                try FileManager.default.removeItem(at: destination)
+        var moved: [OfflineCountryManifest.File] = []
+        do {
+            for file in files {
+                let destination = fileURL(for: file)
+                if FileManager.default.fileExists(atPath: destination.path) {
+                    try FileManager.default.removeItem(at: destination)
+                }
+                try FileManager.default.moveItem(at: stagedURL(for: file), to: destination)
+                moved.append(file)
             }
-            try FileManager.default.moveItem(at: stagedURL(for: file), to: destination)
+        } catch {
+            unstage(moved)
+            throw error
+        }
+    }
+
+    /// Moves installed files back to staging, except any a record in
+    /// `keeping` still holds: files the index could not be written to name,
+    /// which the next try installs from there rather than bringing down
+    /// again. One that cannot be moved back is deleted, because nothing
+    /// names it, and the download it was for asks for it again.
+    func unstage(_ files: [OfflineCountryManifest.File], keeping: [Record] = []) {
+        let kept = Set(keeping.flatMap(\.files).map(\.fileName))
+        for file in files where !kept.contains(file.fileName) {
+            let installed = fileURL(for: file)
+            let staged = stagedURL(for: file)
+            do {
+                if FileManager.default.fileExists(atPath: staged.path) {
+                    try FileManager.default.removeItem(at: staged)
+                }
+                try FileManager.default.moveItem(at: installed, to: staged)
+            } catch {
+                try? FileManager.default.removeItem(at: installed)
+            }
         }
     }
 
