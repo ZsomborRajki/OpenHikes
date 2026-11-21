@@ -34,6 +34,30 @@ extension AccessibilityUITests {
         try audit(app)
     }
 
+    /// The same screen with a stretch picked out: the card of what can be
+    /// done with it, and the handles saying what they now mark.
+    @MainActor
+    func testEditRouteStretchPassesAccessibilityAudit() throws {
+        let app = launchApp(
+            arguments: [
+                "--ui-test-expanded-sheet",
+                "--ui-test-import-gpx=\(UITestFixture.walkThenDriveName)",
+            ]
+        )
+        openHikeDetail(in: app, titled: UITestFixture.walkThenDriveTitle)
+        openEditRoute(in: app)
+        scrollToTap(element("route-stretch-begin", in: app), in: app, attempts: 8)
+        XCTAssertTrue(
+            element("route-stretch-follow", in: app).waitForExistence(timeout: UITestTimeout.existence),
+            "the stretch should be picked out before the audit"
+        )
+        let end = element("route-trim-end", in: app)
+        XCTAssertTrue(waitUntil { end.label == "End of stretch" })
+        XCTAssertFalse((end.value as? String ?? "").isEmpty, "a handle says how far along the route it stands")
+
+        try audit(app)
+    }
+
     /// The sections to check, which is the one place in the app where a
     /// decision is drawn as a checkmark.
     ///

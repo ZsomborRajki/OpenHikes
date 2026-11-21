@@ -127,18 +127,27 @@ nonisolated public enum RouteTrim {
         trimmed(route, distances: distances(along: route), keeping: range, takingOff: pauses)
     }
 
-    /// How long `route` was being recorded: the gaps between its consecutive
-    /// stamped points, with every leg a pause opened left out. The figure a
+    /// How long `route` was being recorded: the gaps between its stamped
+    /// points, with every gap a pause opened left out. The figure a
     /// recording's own walk is measured by, read off a saved line — see
     /// `PreparedRecording.recordedSeconds` for why it is the points and not
     /// the clock.
+    ///
+    /// Points with no time between two that have one are inside the gap, not
+    /// the end of it: a stretch drawn along another path (``RouteStep``) has
+    /// none, and the hiker was walking for as long as it took to cross.
     public static func recordedSeconds(of route: [RouteCoordinate]) -> TimeInterval {
-        route.adjacentPairs().reduce(0) { total, leg in
-            guard !leg.1.isPauseBoundary, let began = leg.0.timestamp, let arrived = leg.1.timestamp,
-                  arrived > began
-            else { return total }
-            return total + arrived.timeIntervalSince(began)
+        var total = 0.0
+        var began: Date?
+        var isPaused = false
+        for point in route {
+            if point.isPauseBoundary { isPaused = true }
+            guard let arrived = point.timestamp else { continue }
+            if let began, !isPaused, arrived > began { total += arrived.timeIntervalSince(began) }
+            began = arrived
+            isPaused = false
         }
+        return total
     }
 
     // MARK: The two cuts

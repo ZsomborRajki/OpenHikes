@@ -526,17 +526,23 @@ a change to recording, the map, the sheet or the render path; the PR template,
   The maker routes legs one at a time through one worker, since nineteen
   parallel Overpass requests earn a `429`, and nothing on that path may block
   drawing.
-- **A line somebody walked is trimmed, never re-routed** (`RouteTrim`,
-  `RouteEditSave`). *Edit Route* on a recording or an import cuts its ends and
-  keeps every other point as it was saved. The line it had goes to
+- **A line somebody walked is never changed without saying so**
+  (`RouteTrim`, `RouteStep`, `RouteEditSave`). *Edit Route* on a recording or
+  an import keeps every point it does not touch as it was saved. A stretch
+  drawn where nobody recorded the hiker is `RouteProvenance.inferred` and
+  carries no times, and a line turned round or begun elsewhere loses its
+  clock rather than run it backwards. The line it had goes to
   `Hike.originalRoute`, written by the first edit and by no later one, which
   is what *Revert to Original* puts back. A drawn trail is edited by its
   stops, in the maker, and carries neither.
   - **The hike's line is derived, never patched**: the line as it was saved,
     put together under the answers that stand
-    (`RouteAssembly.line(saved:raw:)`), then cut (`RouteEdit.trim`). A
-    section names its points in the saved line and in `Hike.rawRoute` by
-    index, so no edit trims or rewrites either of them.
+    (`RouteAssembly.line(saved:raw:)`), then each step in the order it was
+    made (`RouteSteps`), then cut (`RouteEdit.trim`). A section names its
+    points in the saved line and in `Hike.rawRoute` by index, and a step its
+    place in metres along the line the step before it left. So no edit trims
+    or rewrites the saved line or the trace, and an answer stands while a
+    step is made on the line it drew.
 - **Places** (`Hikes/Places/`): `TrailPlace` is the value and `TrailPoint` the
   mirrored row. The owner's rule: a place from OpenStreetMap takes photographs
   and nothing else, and a place the hiker made can also be renamed, re-kinded

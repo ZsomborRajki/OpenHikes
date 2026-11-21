@@ -241,6 +241,33 @@ struct TrailJunctionFinderTests {
         #expect(junctions.last?.towardsStart == .keepLeft)
     }
 
+    /// What a stretch pulled onto another path is bounded by: a fork is where
+    /// a line could have gone another way, whether or not there is anything
+    /// to say to a hiker walking through it.
+    @Test("every junction a line passes is found for a reroute, the ones nothing is said at too")
+    func everyPassIsABound() async throws {
+        let crossroads = Self.graph(
+            [0: (0, -200), 1: (0, 0), 2: (0, 200), 3: (-200, 0), 4: (200, 0)],
+            trails: [[0, 1, 2], [3, 1, 4]]
+        )
+        let line = Self.profile([(0, -200), (0, 200)])
+        #expect(TrailJunctionFinder.junctions(along: line, in: crossroads).isEmpty, "precondition: nothing is said")
+
+        let passes = try await TrailJunctionFinder.passDistances(
+            along: line,
+            from: StubTrailGraphProvider(graph: crossroads)
+        )
+
+        #expect(passes.count == 1)
+        #expect(try #require(passes.first).isApproximatelyEqual(to: 200, absoluteTolerance: 1))
+        #expect(try await TrailJunctionFinder.passDistances(along: line, from: nil).isEmpty)
+        let nowhere = try await TrailJunctionFinder.passDistances(
+            along: line,
+            from: StubTrailGraphProvider(graph: .empty)
+        )
+        #expect(nowhere.isEmpty)
+    }
+
     @Test("a hiker facing north sees a north-west way to the left and a north-east one to the right")
     func relativeAngles() {
         #expect(TrailJunctionFinder.relative(315, to: 0).isApproximatelyEqual(to: -45, absoluteTolerance: 1e-9))

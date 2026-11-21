@@ -107,14 +107,22 @@ struct RouteTrimRange: View {
             let startX = Self.handleWidth + plot * session.startMeters / total
             let endX = Self.handleWidth + plot * session.endMeters / total
             ZStack(alignment: .topLeading) {
-                dim(from: 0, to: startX)
-                dim(from: endX, to: proxy.size.width)
+                // Picking a stretch out, the handles cut nothing off, so
+                // nothing either side of them is dimmed.
+                if !session.isSelectingStretch {
+                    dim(from: 0, to: startX)
+                    dim(from: endX, to: proxy.size.width)
+                }
                 frame(from: startX, to: endX, height: proxy.size.height)
                 handle(.start, at: startX - Self.handleWidth, height: proxy.size.height, metersPerPoint: total / plot)
                 handle(.end, at: endX, height: proxy.size.height, metersPerPoint: total / plot)
             }
         }
     }
+
+    /// The route's own colour for the cuts, and the orange a picked-out
+    /// stretch is drawn in on the map for the handles that pick it.
+    private var accent: Color { session.isSelectingStretch ? .orange : tint }
 
     private func dim(from start: CGFloat, to end: CGFloat) -> some View {
         Rectangle()
@@ -128,9 +136,9 @@ struct RouteTrimRange: View {
     /// The rails along the top and the bottom of the kept part.
     private func frame(from start: CGFloat, to end: CGFloat, height: CGFloat) -> some View {
         VStack(spacing: 0) {
-            Rectangle().fill(tint).frame(height: Self.frameWidth)
+            Rectangle().fill(accent).frame(height: Self.frameWidth)
             Spacer(minLength: 0)
-            Rectangle().fill(tint).frame(height: Self.frameWidth)
+            Rectangle().fill(accent).frame(height: Self.frameWidth)
         }
         .frame(width: max(end - start, 0), height: height)
         .offset(x: start)
@@ -151,7 +159,7 @@ struct RouteTrimRange: View {
             bottomTrailingRadius: isStart ? 0 : Self.cornerRadius,
             topTrailingRadius: isStart ? 0 : Self.cornerRadius
         )
-        .fill(tint)
+        .fill(accent)
         .overlay {
             Image(systemName: isStart ? "chevron.compact.left" : "chevron.compact.right")
                 .font(.body.weight(.bold))
@@ -164,7 +172,7 @@ struct RouteTrimRange: View {
         .offset(x: leading - Self.reach)
         .gesture(drag(handle, metersPerPoint: metersPerPoint))
         .accessibilityElement()
-        .accessibilityLabel(isStart ? Text("Start of route") : Text("End of route"))
+        .accessibilityLabel(label(of: handle))
         .accessibilityValue(RouteTrimFormat.length(session.position(of: handle)))
         .accessibilityAdjustableAction { direction in
             let step = session.totalMeters * Self.stepFraction
@@ -175,6 +183,15 @@ struct RouteTrimRange: View {
             }
         }
         .accessibilityIdentifier(isStart ? "route-trim-start" : "route-trim-end")
+    }
+
+    private func label(of handle: RouteTrimHandle) -> Text {
+        switch (handle, session.isSelectingStretch) {
+        case (.start, false): Text("Start of route")
+        case (.end, false): Text("End of route")
+        case (.start, true): Text("Start of stretch")
+        case (.end, true): Text("End of stretch")
+        }
     }
 
     private func drag(_ handle: RouteTrimHandle, metersPerPoint: Double) -> some Gesture {

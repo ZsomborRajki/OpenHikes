@@ -50,7 +50,8 @@ extension RouteTrimSession {
         // Every cut moved back out and every answer put back is the line as
         // it was saved, and is saved as that: with the figures it had, where
         // an edit would only come close to them.
-        if edited.route == sources.saved, edited.assembly?.isAsSaved != false, destination.hike.hasOriginalRoute {
+        if edited.route == sources.saved, edited.steps.isEmpty, edited.assembly?.isAsSaved != false,
+           destination.hike.hasOriginalRoute {
             return land(revertOutcome(in: destination, from: sources.current), in: destination)
         }
         let outcome = RouteEditSave.write(

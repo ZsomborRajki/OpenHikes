@@ -35,6 +35,13 @@ struct RouteChecksCard: View {
                 ForEach(checks) { check in
                     RouteCheckRow(check: check, session: session, onShow: onShow)
                 }
+                // A step was made on the line the answers drew — see
+                // ``RouteTrimSession/choose(_:forCheck:)``.
+                if !session.steps.isEmpty {
+                    Text("To choose differently for a section, undo the changes to the route first.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
     }
@@ -121,7 +128,7 @@ struct RouteCheckRow: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .disabled(session.isSaving)
+        .disabled(session.isSaving || !session.steps.isEmpty)
         .accessibilityAddTraits(isChosen ? .isSelected : [])
         .accessibilityIdentifier(RouteCheckWording.identifier(for: choice))
     }

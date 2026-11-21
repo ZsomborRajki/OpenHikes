@@ -222,6 +222,9 @@ final class TrailDraftController {
 
     /// Each mode has its own provider and therefore its own geometry cache.
     @ObservationIgnored private let routers: [TrailTravelMode: any TrailLegRouting]
+    /// The router a hiking leg is asked of, for *Edit Route*, which asks the
+    /// same question of a stretch of a line — see ``RouteReroute``.
+    var hikingRouter: (any TrailLegRouting)? { routers[.hiking] }
     /// Where legs waiting for an answer go, or `nil` when no reader is running.
     @ObservationIgnored private var routingRequests: AsyncStream<TrailLegEnds>.Continuation?
     /// The one reader asking about them, in order. Readable by tests, so a

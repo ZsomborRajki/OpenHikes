@@ -251,6 +251,12 @@
 # `RouteCheckWording`'s, and what an answer does is `RouteTrimSession`'s and
 # `RouteEditSave`'s (`RouteEditChecksTests`).
 #
+# What *Edit Route* does beyond its two cuts arrived as one card
+# (`RouteStepsCard`): rows and a menu, each one call into
+# `RouteTrimSession+Steps.swift`, which stays measured
+# (`RouteEditStepsTests`), as the rules of a step do in the package
+# (`RouteStepsTests`) and the pull on the map (`MapCoordinatorTests+RouteStretch`).
+#
 # The UI suites still exist and still run locally:
 #
 #   Scripts/run-ui-tests.sh --all
@@ -371,3 +377,4 @@ OpenHikes/Hikes/Editing/RouteTrimDetails.swift
 OpenHikes/Map/MapSheet+RouteEdit.swift
 OpenHikes/Hikes/Editing/RouteChecksCard.swift
 OpenHikes/Hikes/Detail/HikeRouteCheckNotice.swift
+OpenHikes/Hikes/Editing/RouteStepsCard.swift
