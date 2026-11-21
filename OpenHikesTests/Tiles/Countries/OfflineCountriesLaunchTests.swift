@@ -176,14 +176,14 @@ struct OfflineCountriesLaunchTests {
                 by: .nearest
             )
             #expect(fromLjubljana == OfflineCountrySections(
-                held: [slovenia],
+                downloaded: [slovenia],
                 parts: [
                     OfflineCountrySections.Part(heading: .nearby, lines: [.area(austria)]),
                     OfflineCountrySections.Part(heading: .all, lines: [.area(spain)]),
                 ]
             ))
             let nowhere = countries.sections(of: listing(nil), by: .nearest)
-            #expect(nowhere.held == [slovenia])
+            #expect(nowhere.downloaded == [slovenia])
             #expect(nowhere.parts.map(\.heading) == [.letter("A"), .letter("S")], "by name, with no position")
             #expect(nowhere.parts.flatMap(\.lines).map(\.id) == ["AT", "ES"])
         }

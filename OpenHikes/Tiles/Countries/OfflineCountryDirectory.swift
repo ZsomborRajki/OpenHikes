@@ -11,8 +11,14 @@
 //
 //  ## The three orders
 //
-//  Whatever the order (``OfflineCountrySort``), what is downloaded or coming
-//  down is listed first.
+//  Whatever the order (``OfflineCountrySort``), the areas the hiker has asked
+//  for are listed first, in two sections that each keep the order's order:
+//  those not yet downloaded, whose download is waiting for Wi-Fi, coming
+//  down, being checked or stopped short, and then those downloaded. The two
+//  are apart because only the second draws with no signal, and a heading
+//  over both said so of the first too (#1533). An area downloaded stays one
+//  while an update or its zoom 15 comes down, because what it has draws
+//  meanwhile.
 //
 //  - **By name** the rest is a directory: every country under the letter its
 //    name is filed under, which the list's index jumps to, and a country
@@ -116,27 +122,37 @@ struct OfflineCountryDirectory {
 
     // MARK: - The orders
 
-    /// The list in `sort`'s order: what `isHeld` says is downloaded or coming
-    /// down first, then the rest under the order's headings. By name where
-    /// the order is nearest first and no position is known.
+    /// What an order puts at the head of the list, and the rest under its
+    /// headings.
+    private typealias Ordered = (held: [Country], parts: [OfflineCountrySections.Part])
+
+    /// The list in `sort`'s order: what `holding` says is not yet downloaded,
+    /// then what it says is downloaded, then the rest under the order's
+    /// headings. By name where the order is nearest first and no position is
+    /// known.
     ///
-    /// - Parameter byteCount: What an area takes or costs, for largest first.
+    /// - Parameters:
+    ///   - holding: Where an area the hiker has asked for stands, and `nil`
+    ///     for every other.
+    ///   - byteCount: What an area takes or costs, for largest first.
     func sections(
         by sort: OfflineCountrySort,
-        isHeld: (Country) -> Bool,
+        holding: (Country) -> OfflineCountrySections.Holding?,
         byteCount: (Country) -> Int64
     ) -> OfflineCountrySections {
-        switch sort {
-        case .nearest where hasPosition:
-            return nearest(isHeld: isHeld)
-        case .name, .nearest:
-            return named(isHeld: isHeld)
-        case .largest:
-            return largest(isHeld: isHeld, byteCount: byteCount)
+        let isHeld = { holding($0) != nil }
+        let ordered: Ordered = switch sort {
+        case .nearest where hasPosition: nearest(isHeld: isHeld)
+        case .name, .nearest: named(isHeld: isHeld)
+        case .largest: largest(isHeld: isHeld, byteCount: byteCount)
         }
+        // `partitioned(by:)` answers (does not satisfy, satisfies), and each
+        // half keeps the order's order.
+        let (downloaded, unfinished) = ordered.held.partitioned { holding($0) == .unfinished }
+        return OfflineCountrySections(unfinished: unfinished, downloaded: downloaded, parts: ordered.parts)
     }
 
-    private func largest(isHeld: (Country) -> Bool, byteCount: (Country) -> Int64) -> OfflineCountrySections {
+    private func largest(isHeld: (Country) -> Bool, byteCount: (Country) -> Int64) -> Ordered {
         // Each measured once, and the name's order kept among equals.
         let sized: [(bytes: Int64, index: Int)] = entries.indices.map { (byteCount(entries[$0].country), $0) }
         let largestFirst = sized
@@ -147,13 +163,13 @@ struct OfflineCountryDirectory {
         // `partitioned(by:)` answers (does not satisfy, satisfies), and each
         // half keeps the order above.
         let (rest, held) = largestFirst.partitioned(by: isHeld)
-        return OfflineCountrySections(held: held, parts: Self.parts([(.all, rest)]))
+        return (held, Self.parts([(.all, rest)]))
     }
 
-    private func named(isHeld: (Country) -> Bool) -> OfflineCountrySections {
+    private func named(isHeld: (Country) -> Bool) -> Ordered {
         let listed = lines.filter { line in
-            // A country downloaded is listed above. A split country is never
-            // one, and keeps every region under it, the downloaded ones too.
+            // A country asked for is listed above. A split country is never
+            // one, and keeps every region under it, those asked for too.
             guard case let .area(country) = line.listing else { return true }
             return !isHeld(country)
         }
@@ -161,10 +177,10 @@ struct OfflineCountryDirectory {
         let parts = listed.chunked(on: \.letter.title).map { title, run in
             OfflineCountrySections.Part(heading: .letter(title), lines: run.map(\.listing))
         }
-        return OfflineCountrySections(held: entries.map(\.country).filter(isHeld), parts: parts)
+        return (entries.map(\.country).filter(isHeld), parts)
     }
 
-    private func nearest(isHeld: (Country) -> Bool) -> OfflineCountrySections {
+    private func nearest(isHeld: (Country) -> Bool) -> Ordered {
         var held: [Country] = []
         var nearby: [Country] = []
         var rest: [Country] = []
@@ -177,7 +193,7 @@ struct OfflineCountryDirectory {
                 rest.append(entry.country)
             }
         }
-        return OfflineCountrySections(held: held, parts: Self.parts([(.nearby, nearby), (.all, rest)]))
+        return (held, Self.parts([(.nearby, nearby), (.all, rest)]))
     }
 
     /// Flat parts, each area a line of its own, without the empty ones.
@@ -226,6 +242,16 @@ struct OfflineCountryLetter {
 
 /// What *Offline Maps* lists, in the order it lists it.
 struct OfflineCountrySections: Equatable {
+    /// Where an area the hiker has asked for stands.
+    enum Holding {
+        /// It is on the device, whether or not an update or its zoom 15 is
+        /// coming down to it.
+        case downloaded
+        /// Its download has not finished: it is waiting for Wi-Fi, coming
+        /// down, being checked or stopped short.
+        case unfinished
+    }
+
     /// One heading of the list, and the lines under it.
     struct Part: Equatable, Identifiable {
         enum Heading: Hashable {
@@ -243,16 +269,20 @@ struct OfflineCountrySections: Equatable {
         var id: Heading { heading }
     }
 
-    /// What is downloaded or coming down.
-    var held: [OfflineCountryManifest.Country]
+    /// What *Not Yet Downloaded* lists: the downloads asked for that have
+    /// not finished.
+    var unfinished: [OfflineCountryManifest.Country] = []
+    /// What *Downloaded* lists: the areas on the device.
+    var downloaded: [OfflineCountryManifest.Country] = []
     /// Everything else, under the order's headings.
     var parts: [Part]
 
-    /// Where the list goes to show `id`: its row in *Downloaded* if it has
-    /// one there, else its line further down, opening the country a region
-    /// is under.
+    /// Where the list goes to show `id`: its row in *Not Yet Downloaded* or
+    /// *Downloaded* if it has one there, else its line further down, opening
+    /// the country a region is under.
     func scrollTarget(for id: String) -> (rowID: String, opening: String?) {
-        if held.contains(where: { $0.id == id }) { return (id, nil) }
+        let isID = { (country: OfflineCountryManifest.Country) in country.id == id }
+        if unfinished.contains(where: isID) || downloaded.contains(where: isID) { return (id, nil) }
         for line in parts.flatMap(\.lines) {
             if case let .group(group, regions) = line, regions.contains(where: { $0.id == id }) {
                 return (Self.groupRowID(id), group)
@@ -261,8 +291,8 @@ struct OfflineCountrySections: Equatable {
         return (id, nil)
     }
 
-    /// A region's row under its country, apart from the same region's row in
-    /// *Downloaded*.
+    /// A region's row under its country, apart from the same region's row at
+    /// the head of the list.
     static func groupRowID(_ id: String) -> String { "group-\(id)" }
 
     /// The list's next step towards showing an area.
