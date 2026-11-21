@@ -73,6 +73,25 @@ struct AutoSaveDrainTests {
         controller.flushPendingKeys()
     }
 
+    /// Each call is a stream of its own: one that has ended takes nothing
+    /// with it, and a claim wakes every reader still waiting. Awaited for the
+    /// reason the test above is, under the same time limit.
+    @Test("a claim wakes every reader", .timeLimit(.minutes(1)))
+    func everyReaderHearsAClaim() async throws {
+        let context = try Fixture.modelContext()
+        let (_, controller) = await activeHike(in: context)
+        _ = sandbox.store.pendingKeySignals()
+        var one = sandbox.store.pendingKeySignals().makeAsyncIterator()
+        var other = sandbox.store.pendingKeySignals().makeAsyncIterator()
+        #expect(sandbox.store.pendingSignalObserverCount == 2, "precondition: the stream let go has ended")
+
+        try await persistTile(key: tileKey(UUID().uuidString))
+
+        await one.next()
+        await other.next()
+        controller.flushPendingKeys()
+    }
+
     /// And the half that is the point of the change: browsing that saves
     /// nothing wakes nobody. A tile outside the hike's corridor is declined
     /// before it is ever claimed, so there is nothing to fold and no reason to
