@@ -144,10 +144,10 @@ struct OfflineCountryDirectory {
                 first.bytes == second.bytes ? first.index < second.index : first.bytes > second.bytes
             }
             .map { entries[$0.index].country }
-        return OfflineCountrySections(
-            held: largestFirst.filter(isHeld),
-            parts: Self.parts([(.all, largestFirst.filter { !isHeld($0) })])
-        )
+        // `partitioned(by:)` answers (does not satisfy, satisfies), and each
+        // half keeps the order above.
+        let (rest, held) = largestFirst.partitioned(by: isHeld)
+        return OfflineCountrySections(held: held, parts: Self.parts([(.all, rest)]))
     }
 
     private func named(isHeld: (Country) -> Bool) -> OfflineCountrySections {
