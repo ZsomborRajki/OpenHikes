@@ -54,6 +54,34 @@ nonisolated struct EditedLine: Equatable, Sendable {
         /// The pauses standing on the whole line's own ends that the cuts
         /// take off — see ``RouteTrim/EndPauses``.
         var takingOff: RouteTrim.EndPauses = []
+
+        /// The ends of a whole line `wholeMeters` long that these take
+        /// anything off, by the rule ``RouteTrimSession/cuts(_:)`` keeps.
+        func ends(alongWholeOf wholeMeters: Double) -> Set<RouteTrimHandle> {
+            var ends: Set<RouteTrimHandle> = []
+            guard let range else { return ends }
+            if range.lowerBound > 0 || takingOff.contains(.start) { ends.insert(.start) }
+            if range.upperBound < wholeMeters || takingOff.contains(.end) { ends.insert(.end) }
+            return ends
+        }
+    }
+
+    /// What a save does to the clock at one end of the walk: the hike's
+    /// date at its start, and the recording's own walk at both.
+    ///
+    /// Moved only by a cut, never by what an answer draws: a stretch at the
+    /// end of the line drawn as its fixes instead of the trail has a first
+    /// point of its own, and the walk still began when Start was pressed,
+    /// which is before any fix.
+    enum ClockEnd: Equatable, Sendable {
+        /// Left as it is: the end was not cut and is not, or is cut where it
+        /// was.
+        case unchanged
+        /// Cut, so the walk begins or ends at this time, the cut's.
+        case cut(Date)
+        /// An earlier cut is gone: the end goes back to the one the hike had
+        /// before its first edit — see ``RouteEdit/Original``.
+        case uncut
     }
 
     let route: [RouteCoordinate]
@@ -69,10 +97,10 @@ nonisolated struct EditedLine: Equatable, Sendable {
     let removedSeconds: TimeInterval
     /// ``TrailWalkRecord/routeRevision(of:)`` of the new line.
     let revision: String
-    /// The time on the new first point, when the start moved and it has one.
-    let newStart: Date?
-    /// The time on the new last point, when the end moved and it has one.
-    let newEnd: Date?
+    /// What the save does to when the walk began — see ``ClockEnd``.
+    let start: ClockEnd
+    /// What the save does to when it ended.
+    let end: ClockEnd
     /// The two cuts that made it — see ``Cuts``.
     let cuts: Cuts
     /// The whole line's pieces under the answers the edit leaves, or `nil`
@@ -89,6 +117,8 @@ nonisolated struct EditedLine: Equatable, Sendable {
     ///   - distances: ``RouteTrim/distances(along:)`` of `whole`.
     ///   - cuts: Where the kept line begins and ends on it.
     ///   - current: The line the hike has now, which this one replaces.
+    ///   - cutBefore: The ends of the whole line the hike's trim took
+    ///     something off when the edit began — see ``ClockEnd``.
     ///   - assembly: The whole line's pieces under the answers that made
     ///     `whole`, for a hike that has any.
     init?(
@@ -96,6 +126,7 @@ nonisolated struct EditedLine: Equatable, Sendable {
         distances: [Double],
         cuts: Cuts,
         replacing current: [RouteCoordinate],
+        cutBefore: Set<RouteTrimHandle> = [],
         assembly: RouteAssembly? = nil
     ) {
         let kept = cuts.range.map { range in
@@ -109,8 +140,19 @@ nonisolated struct EditedLine: Equatable, Sendable {
         removedMeters = current.lengthMeters - length
         removedSeconds = RouteTrim.recordedSeconds(of: current) - RouteTrim.recordedSeconds(of: kept)
         revision = TrailWalkRecord.routeRevision(of: kept)
-        newStart = kept.first != current.first ? kept.first?.timestamp : nil
-        newEnd = kept.last != current.last ? kept.last?.timestamp : nil
+        let cutNow = cuts.ends(alongWholeOf: distances.last ?? 0)
+        start = Self.clock(
+            isCut: cutNow.contains(.start),
+            wasCut: cutBefore.contains(.start),
+            at: kept.first?.timestamp,
+            before: current.first?.timestamp
+        )
+        end = Self.clock(
+            isCut: cutNow.contains(.end),
+            wasCut: cutBefore.contains(.end),
+            at: kept.last?.timestamp,
+            before: current.last?.timestamp
+        )
         self.cuts = cuts
         self.assembly = assembly
         // A save is a look: the hiker has had the line in front of them.
@@ -118,6 +160,18 @@ nonisolated struct EditedLine: Equatable, Sendable {
             RouteCarriedEnds.found(in: kept, distances: RouteTrim.distances(along: kept)),
             isChecked: true
         )
+    }
+
+    /// What a save does to the clock at one end — see ``ClockEnd``.
+    ///
+    /// - Parameters:
+    ///   - time: The time on the kept line's point at that end.
+    ///   - before: The time on the point the hike's line has there now.
+    private static func clock(isCut: Bool, wasCut: Bool, at time: Date?, before: Date?) -> ClockEnd {
+        guard isCut else { return wasCut ? .uncut : .unchanged }
+        // A line with no times leaves the clock as it was, as it always has.
+        guard let time, !wasCut || time != before else { return .unchanged }
+        return .cut(time)
     }
 }
 
@@ -129,9 +183,10 @@ enum RouteEditRefusal: LocalizedError, Equatable, Sendable {
     /// *Revert* found no original on this device: iCloud has brought the
     /// hike and not yet its original line.
     case noOriginal
-    /// *Edit Route* found the same on its way in. The hike's cuts and its
-    /// sections are measured on that line, so nothing can be edited until
-    /// it has come.
+    /// *Edit Route* found the same on its way in, of the original or of the
+    /// recorded trace a section's answer is drawn from. The hike's cuts and
+    /// its sections are measured on those, so nothing can be edited until
+    /// they have come.
     case notHereYet
     /// The store refused to keep it. No diagnostic, for the reason
     /// ``TrailDraftRefusal/notSaved`` carries none.
@@ -209,10 +264,8 @@ enum RouteEditSave {
         hike.routeEdit = edit
         replaceLine(of: hike, with: edited.route, before: before)
         hike.distanceMeters = max(0, min(edited.lengthMeters, hike.distanceMeters - edited.removedMeters))
-        if let newStart = edited.newStart { hike.date = newStart }
+        moveClocks(of: hike, walk: before.walk?.row, to: edited, original: edit.original)
         if let walk = before.walk?.row {
-            if let newStart = edited.newStart { walk.startedAt = newStart }
-            if let newEnd = edited.newEnd { walk.endedAt = newEnd }
             walk.activeSeconds = max(0, walk.activeSeconds - edited.removedSeconds)
             walk.coveredIntervals = [0, edited.lengthMeters]
             walk.furthestDistanceMeters = edited.lengthMeters
@@ -282,6 +335,33 @@ enum RouteEditSave {
             if hike.routeEditData != before { hike.routeEditData = before }
             log(error)
             return nil
+        }
+    }
+
+    /// When the hike began, and when its recording's own walk began and
+    /// ended, as `edited` moves them — see ``EditedLine/ClockEnd``. An end
+    /// uncut goes back to what it was before the first edit.
+    private static func moveClocks(
+        of hike: Hike,
+        walk: HikeWalk?,
+        to edited: EditedLine,
+        original: RouteEdit.Original?
+    ) {
+        let walked = original?.recordedWalk
+        switch edited.start {
+        case .unchanged:
+            break
+        case .cut(let time):
+            hike.date = time
+            walk?.startedAt = time
+        case .uncut:
+            if let original { hike.date = original.date }
+            if let walked { walk?.startedAt = walked.startedAt }
+        }
+        switch edited.end {
+        case .unchanged: break
+        case .cut(let time): walk?.endedAt = time
+        case .uncut: if let walked { walk?.endedAt = walked.endedAt }
         }
     }
 

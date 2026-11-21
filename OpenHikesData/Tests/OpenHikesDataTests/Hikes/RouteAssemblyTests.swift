@@ -43,6 +43,7 @@ struct RouteAssemblyTests {
 
         #expect(line.route == Self.saved)
         #expect(line.checkRanges == [0: 2...4])
+        #expect(line.pieceRanges == [0...2, 2...4, 4...6], "the pieces share the points they meet at")
         #expect(Self.snapped.isAsSaved)
     }
 
@@ -57,6 +58,7 @@ struct RouteAssemblyTests {
         // where the two meet they are different places, so both are kept.
         #expect(line.route == Array(Self.saved[0...2]) + Array(Self.raw[2...4]) + Array(Self.saved[4...6]))
         #expect(line.checkRanges == [0: 3...5])
+        #expect(line.pieceRanges == [0...2, 3...5, 6...8], "and are joined by legs of their own where they do not")
         #expect(!assembly.isAsSaved)
     }
 
@@ -197,6 +199,26 @@ struct RouteAssemblyTests {
 
         #expect(line.route == Self.saved)
         #expect(line.checkRanges[0] == 2...4)
+    }
+
+    @Test("an answer drawn from the trace cannot be drawn before the trace has come")
+    func aMissingTraceDrawsNoFixes() {
+        var assembly = Self.snapped
+        let check = assembly.checks[0]
+        #expect(RouteAssembly.canDraw(.matched, of: check, raw: []), "as it was saved, it needs nothing")
+        #expect(!RouteAssembly.canDraw(.gps, of: check, raw: []))
+        #expect(!RouteAssembly.canDraw(.gps, of: check, raw: Array(Self.raw.prefix(2))), "nor from part of it")
+        #expect(RouteAssembly.canDraw(.gps, of: check, raw: Self.raw))
+        #expect(assembly.isDrawable(raw: []))
+
+        assembly.checks[0].choice = .gps
+
+        #expect(!assembly.isDrawable(raw: []), "the fixes it is answered with are not on this device")
+        #expect(assembly.isDrawable(raw: Self.raw))
+        // A stretch saved as its fixes is drawn as it was saved, trace or none.
+        let measured = RouteCheck(id: 1, kind: .ambiguous, savedChoice: .gps, savedRange: 2...4, rawRange: 2...4)
+        #expect(RouteAssembly.canDraw(.gps, of: measured, raw: []))
+        #expect(!RouteAssembly.canDraw(.alternative(3), of: measured, raw: Self.raw), "a route it was never offered")
     }
 }
 

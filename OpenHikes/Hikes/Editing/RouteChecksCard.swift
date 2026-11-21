@@ -84,7 +84,7 @@ struct RouteCheckRow: View {
             .buttonStyle(.plain)
             .accessibilityHint("Shows the section on the map")
             .accessibilityIdentifier("route-check-show")
-            ForEach(check.availableChoices, id: \.self) { choice in
+            ForEach(session.choices(of: check), id: \.self) { choice in
                 choiceButton(choice)
             }
         }

@@ -37,10 +37,12 @@ extension RouteTrimSession {
     ///
     /// - Returns: whether it landed. A refusal is in ``refusal``.
     @discardableResult func save(to destination: Destination) async -> Bool {
-        guard !isSaving, let sources else { return false }
+        guard !isSaving else { return false }
         isSaving = true
         defer { isSaving = false }
-        guard let edited = await editedLine() else { return false }
+        // After the line has caught up with the last answer given — see
+        // ``editedLine()``.
+        guard let edited = await editedLine(), let sources else { return false }
         guard destination.settledLine() == sources.current else {
             refusal = .lineChanged
             return false
@@ -74,9 +76,15 @@ extension RouteTrimSession {
 
     /// Says the line is right as it is: every stretch to check counts as
     /// looked at, and nothing about the line changes — see
-    /// ``RouteEditSave/markChecked(_:in:save:)``.
-    @discardableResult func confirmChecks(in destination: Destination) -> Bool {
-        guard !isSaving, let sources,
+    /// ``RouteEditSave/markChecked(_:in:save:)``. Once the line has caught
+    /// up with the last answer given, and only if that left nothing changed:
+    /// an answer given on the way to it is the hiker's, and Save keeps it.
+    @discardableResult func confirmChecks(in destination: Destination) async -> Bool {
+        guard !isSaving else { return false }
+        isSaving = true
+        defer { isSaving = false }
+        await settled()
+        guard let sources, !hasChanges,
               let edit = RouteEditSave.markChecked(destination.hike, in: destination.context, save: destination.save)
         else { return false }
         // The hike's line has not moved, so nothing reloads this visit: it
