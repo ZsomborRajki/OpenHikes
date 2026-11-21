@@ -34,6 +34,12 @@
             "value" : "Anuluj"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anulați"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -79,6 +85,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Gotowe"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
           }
         },
         "ru" : {
@@ -128,6 +140,12 @@
             "value" : "Wędrówka"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drumeție"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -169,6 +187,12 @@
           }
         },
         "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes"
+          }
+        },
+        "ro" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes"
@@ -221,6 +245,12 @@
             "value" : "OpenHikes potrzebuje Twojego położenia, zanim będzie można nagrać wędrówkę."
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes are nevoie de localizarea dvs. pentru a putea înregistra o drumeție."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -266,6 +296,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wstrzymaj wędrówkę"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suspendați drumeția"
           }
         },
         "ru" : {
@@ -314,6 +350,12 @@
             "value" : "Wstrzymano"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "În pauză"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -358,6 +400,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wstrzymano, %@"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suspendată, %@"
           }
         },
         "ru" : {
@@ -407,6 +455,12 @@
             "value" : "Wstrzymuje nagrywaną wędrówkę z jej panelu na ekranie blokady."
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suspendă drumeția în curs de înregistrare, din panoul de pe ecranul de blocare."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -453,6 +507,12 @@
             "value" : "Trwa nagrywanie"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Înregistrare"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -497,6 +557,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Trwa nagrywanie, %@"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Înregistrare, %@"
           }
         },
         "ru" : {
@@ -546,6 +612,12 @@
             "value" : "Wznów wędrówkę"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continuați drumeția"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -591,6 +663,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wznawia wstrzymaną wędrówkę z jej panelu na ekranie blokady."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continuă drumeția suspendată, din panoul de pe ecranul de blocare."
           }
         },
         "ru" : {
@@ -640,6 +718,12 @@
             "value" : "Pokazuje szlak, który wskażesz, szlak wybrany w aplikacji albo wędrówkę, która jest właśnie nagrywana."
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afișează un traseu ales de dvs., traseul selectat sau o drumeție în curs de înregistrare."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -686,6 +770,12 @@
             "value" : "Rozpocznij nagrywanie albo zobacz to, które trwa."
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Începeți o înregistrare sau vedeți-o pe cea în curs."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -730,6 +820,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Stuknij, aby nagrać wędrówkę"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apăsați pentru a înregistra"
           }
         },
         "ru" : {
@@ -779,6 +875,12 @@
             "value" : "Przełącz nagrywanie wędrówki"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comutați înregistrarea"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -824,6 +926,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Szlak"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Traseu"
           }
         },
         "ru" : {

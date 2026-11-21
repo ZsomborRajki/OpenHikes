@@ -67,6 +67,12 @@
             "value" : "OpenHikes odczytuje Twoje tętno z aplikacji Zdrowie, gdy nagrywasz wędrówkę, aby zegarek mógł je pokazywać w trakcie marszu. Nic innego z aplikacji Zdrowie nie jest odczytywane."
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes citește ritmul cardiac din Sănătate cât timp înregistrați o drumeție, pentru ca ceasul să vi-l arate pe parcurs. Nimic altceva din Sănătate nu este citit."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -119,6 +125,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Gdy nagrywasz na zegarku, OpenHikes rozpoczyna w aplikacji Zdrowie trening typu Wędrówka, bo to on podtrzymuje nagrywanie przy wyłączonym ekranie. Sam trening nie jest zapisywany – ukończoną wędrówkę zapisuje Twój iPhone."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes începe un exercițiu de drumeție în Sănătate cât timp înregistrați pe ceas, iar acesta menține înregistrarea activă cu ecranul stins. Exercițiul în sine nu este salvat – iPhone‑ul salvează drumeția încheiată."
           }
         },
         "ru" : {
@@ -175,6 +187,12 @@
             "value" : "OpenHikes używa Twojego położenia, aby pokazywać, gdzie jesteś na szlaku, którym idziesz, i nagrywać Twoją wędrówkę."
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes folosește localizarea dvs. pentru a arăta unde vă aflați pe traseul pe care îl urmați și pentru a înregistra drumeția."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -227,6 +245,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes używa czujników ruchu, aby poprawiać wysokość nagraną podczas wędrówki."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes folosește senzorii de mișcare pentru a îmbunătăți altitudinea înregistrată în timpul drumeției."
           }
         },
         "ru" : {

@@ -57,6 +57,9 @@ definitions:
   - &name_uk
     key: 'name:uk'
     tag_value: 'name:uk'
+  - &name_ro
+    key: 'name:ro'
+    tag_value: 'name:ro'
   # An area's size, in the square pixels of the whole world drawn as one
   # 256-pixel tile: times 4 to the power of a zoom, its size at that zoom,
   # which Carto calls `way_pixels`. Web Mercator's, as Carto's is. Measured
@@ -421,6 +424,7 @@ layers:
     - *name_ru
     - *name_pl
     - *name_uk
+    - *name_ro
 
 # Each point keeps the id Planetiler gives it, the OpenStreetMap element's
 # times ten plus 1 for a node, 2 for a way and 3 for a relation, by which the
@@ -462,6 +466,7 @@ layers:
     - *name_ru
     - *name_pl
     - *name_uk
+    - *name_ro
 
   # The names of areas — forests, parks, nature reserves, national parks,
   # islands, meadows, schools — at a point inside each, with its size, which
@@ -520,6 +525,7 @@ layers:
     - *name_ru
     - *name_pl
     - *name_uk
+    - *name_ro
   - source: osm
     geometry: polygon_point_on_surface
     min_zoom: *named_area_zoom
@@ -583,6 +589,7 @@ layers:
     - *name_ru
     - *name_pl
     - *name_uk
+    - *name_ro
   - source: osm
     geometry: polygon_point_on_surface
     min_zoom: *named_area_zoom
@@ -748,6 +755,7 @@ layers:
     - *name_ru
     - *name_pl
     - *name_uk
+    - *name_ro
   - source: osm
     geometry: polygon_point_on_surface
     min_zoom: *named_area_zoom
@@ -893,6 +901,7 @@ layers:
     - *name_ru
     - *name_pl
     - *name_uk
+    - *name_ro
 
   - source: osm
     geometry: point
@@ -932,6 +941,7 @@ layers:
     - *name_ru
     - *name_pl
     - *name_uk
+    - *name_ro
   - source: osm
     geometry: polygon_point_on_surface
     min_zoom: 15
@@ -956,6 +966,7 @@ layers:
     - *name_ru
     - *name_pl
     - *name_uk
+    - *name_ro
   - source: osm
     geometry: polygon_point_on_surface
     min_zoom: 15
@@ -995,6 +1006,7 @@ layers:
     - *name_ru
     - *name_pl
     - *name_uk
+    - *name_ro
   - source: osm
     geometry: polygon_point_on_surface
     min_zoom: 15
@@ -1034,6 +1046,7 @@ layers:
     - *name_ru
     - *name_pl
     - *name_uk
+    - *name_ro
 
   # The stops Carto draws from zoom 12: a railway station, from 13 a halt and
   # from 14 a tram stop. The basemap keeps a station from zoom 15 and without
@@ -1059,6 +1072,7 @@ layers:
     - *name_ru
     - *name_pl
     - *name_uk
+    - *name_ro
   - source: osm
     geometry: polygon_point_on_surface
     min_zoom: 12
@@ -1110,6 +1124,7 @@ layers:
     - *name_ru
     - *name_pl
     - *name_uk
+    - *name_ro
   - source: osm
     geometry: polygon_point_on_surface
     min_zoom: 13
@@ -1143,6 +1158,7 @@ layers:
     - *name_ru
     - *name_pl
     - *name_uk
+    - *name_ro
   - source: osm
     geometry: polygon_point_on_surface
     min_zoom: 13
@@ -1171,6 +1187,7 @@ layers:
     - *name_ru
     - *name_pl
     - *name_uk
+    - *name_ro
   - source: osm
     geometry: polygon_point_on_surface
     min_zoom: 15
@@ -1214,6 +1231,7 @@ layers:
     - *name_ru
     - *name_pl
     - *name_uk
+    - *name_ro
   - source: osm
     geometry: point
     min_zoom: 14
@@ -1232,6 +1250,7 @@ layers:
     - *name_ru
     - *name_pl
     - *name_uk
+    - *name_ro
 
   # A pass marked on a road or a path rather than as a saddle, and a ford,
   # neither of which the basemap has a kind for.
@@ -1257,6 +1276,7 @@ layers:
     - *name_ru
     - *name_pl
     - *name_uk
+    - *name_ro
   - source: osm
     geometry: point
     min_zoom: 15
@@ -1655,6 +1675,7 @@ layers:
     - *name_ru
     - *name_pl
     - *name_uk
+    - *name_ro
 
 # Cliffs, which Carto draws from zoom 13, and embankments, from 15: a line
 # with teeth down the side that falls away, which is the right of the way's
@@ -1813,3 +1834,4 @@ layers:
     - *name_ru
     - *name_pl
     - *name_uk
+    - *name_ro
