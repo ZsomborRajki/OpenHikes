@@ -184,7 +184,9 @@ struct OfflineRouteLegCoverageTests {
     func cancelledMeasurementStops() async {
         let route = [west, east]
         let countries = [concave]
-        let task = Task { try await OfflineRouteCoverage.measuring(route, through: countries) }
+        let task = Task {
+            try await OfflineCountries.coverage(alongRoute: route, offered: countries, installed: [:])
+        }
         task.cancel()
 
         let result = await task.result

@@ -162,6 +162,27 @@ struct OfflineRouteCoverageTests {
         }
     }
 
+    /// #1537: the list is every area there is, and putting it together
+    /// names and orders all of them, so it is put together beside the
+    /// measuring, off the main thread. That work asserts it is off the main
+    /// thread, so awaiting it from this main-actor suite is the check. The
+    /// list is still ``OfflineCountries/listed``'s, an area on the device
+    /// that the server no longer offers among it.
+    @Test("a trail is measured off the main thread, against the list as listed has it")
+    func measuredOffTheMainThread() async throws {
+        try await OfflineCountryFixture.withDirectory { directory in
+            let austria = OfflineCountryFixture.northernCountry(bytes: basemap)
+            let slovenia = OfflineCountryFixture.country(bytes: basemap)
+            let countries = try await countries(in: directory, offering: [austria], installed: [slovenia])
+
+            let coverage = try await countries.coverage(alongRoute: northward)
+
+            #expect(coverage == (try OfflineRouteCoverage(walking: northward, through: countries.listed)))
+            #expect(coverage.crossed.map(\.id) == ["SI", "AT"])
+            #expect(countries.saving(coverage) == .part)
+        }
+    }
+
     /// #1531: both ends of the one walked leg are inside the downloaded
     /// country, and its middle crosses the bay of the outline, where the map
     /// goes blank. Tested at its ends alone, the line read as saved.
