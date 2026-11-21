@@ -59,6 +59,15 @@
             ]
           }
         },
+        "ro" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Cât am mers astăzi în ${applicationName}",
+              "Distanța mea de azi în ${applicationName}"
+            ]
+          }
+        },
         "ru" : {
           "stringSet" : {
             "state" : "translated",
@@ -136,6 +145,15 @@
               "Ile już przeszedłem w ${applicationName}",
               "Ile już przeszłam w ${applicationName}",
               "Jak idzie moja wędrówka w ${applicationName}"
+            ]
+          }
+        },
+        "ro" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Cât am mers până acum în ${applicationName}",
+              "Cum merge drumeția mea în ${applicationName}"
             ]
           }
         },
@@ -221,6 +239,16 @@
               "Jak długo trwała moja wędrówka w ${applicationName}",
               "Jak długa była moja wędrówka w ${applicationName}",
               "Podsumuj wędrówkę w ${applicationName}"
+            ]
+          }
+        },
+        "ro" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Cât a durat drumeția mea în ${applicationName}",
+              "Cât de lungă a fost drumeția mea în ${applicationName}",
+              "Rezumă o drumeție în ${applicationName}"
             ]
           }
         },
@@ -315,6 +343,17 @@
             ]
           }
         },
+        "ro" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Deschide o drumeție în ${applicationName}",
+              "Arată o drumeție în ${applicationName}",
+              "Deschide ${hike} în ${applicationName}",
+              "Arată-mi ${hike} în ${applicationName}"
+            ]
+          }
+        },
         "ru" : {
           "stringSet" : {
             "state" : "translated",
@@ -393,6 +432,15 @@
             "values" : [
               "Wstrzymaj moją wędrówkę w ${applicationName}",
               "Wstrzymaj moje nagrywanie w ${applicationName}"
+            ]
+          }
+        },
+        "ro" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Pune pe pauză drumeția în ${applicationName}",
+              "Pune pe pauză înregistrarea din ${applicationName}"
             ]
           }
         },
@@ -479,6 +527,16 @@
             ]
           }
         },
+        "ro" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Înregistrează pe un traseu în ${applicationName}",
+              "Începe înregistrarea pe ${hike} în ${applicationName}",
+              "Parcurge ${hike} cu ${applicationName}"
+            ]
+          }
+        },
         "ru" : {
           "stringSet" : {
             "state" : "translated",
@@ -555,6 +613,15 @@
             "values" : [
               "Wznów moją wędrówkę w ${applicationName}",
               "Wznów moje nagrywanie w ${applicationName}"
+            ]
+          }
+        },
+        "ro" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Reia drumeția în ${applicationName}",
+              "Reia înregistrarea din ${applicationName}"
             ]
           }
         },
@@ -638,6 +705,16 @@
               "Rozpocznij wędrówkę w ${applicationName}",
               "Rozpocznij nagrywanie wędrówki w ${applicationName}",
               "Nagraj wędrówkę w ${applicationName}"
+            ]
+          }
+        },
+        "ro" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Începe o drumeție în ${applicationName}",
+              "Începe înregistrarea unei drumeții în ${applicationName}",
+              "Înregistrează o drumeție cu ${applicationName}"
             ]
           }
         },
@@ -726,6 +803,16 @@
             ]
           }
         },
+        "ro" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Oprește drumeția în ${applicationName}",
+              "Încheie drumeția în ${applicationName}",
+              "Salvează drumeția în ${applicationName}"
+            ]
+          }
+        },
         "ru" : {
           "stringSet" : {
             "state" : "translated",
@@ -802,6 +889,15 @@
             "values" : [
               "Jaka była moja ostatnia wędrówka w ${applicationName}",
               "Pokaż moją ostatnią wędrówkę w ${applicationName}"
+            ]
+          }
+        },
+        "ro" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Care a fost ultima mea drumeție în ${applicationName}",
+              "Arată ultima mea drumeție în ${applicationName}"
             ]
           }
         },

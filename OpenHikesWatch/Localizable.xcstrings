@@ -43,6 +43,12 @@
             "value" : "Łącznie %@"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ în total"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -93,6 +99,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Podejście: %1$@, zejście: %2$@"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Urcare: %1$@, coborâre: %2$@"
           }
         },
         "ru" : {
@@ -249,6 +261,30 @@
             }
           }
         },
+        "ro" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld drumeții așteaptă iPhone‑ul"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld drumeție așteaptă iPhone‑ul"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld de drumeții așteaptă iPhone‑ul"
+                }
+              }
+            }
+          }
+        },
         "ru" : {
           "variations" : {
             "plural" : {
@@ -367,6 +403,12 @@
             }
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld la sută"
+          }
+        },
         "ru" : {
           "variations" : {
             "plural" : {
@@ -461,6 +503,12 @@
             "value" : "Wędrówka została przerwana – zobacz „Nagrywanie”"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drumeție întreruptă – vedeți „Înregistrare”"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -505,6 +553,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nie udało się rozpocząć treningu, więc nagrywanie nie przetrwałoby wygaszenia ekranu."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nu s-a putut începe un exercițiu, deci înregistrarea nu ar continua cu ecranul stins."
           }
         },
         "ru" : {
@@ -553,6 +607,12 @@
             "value" : "Pobieranie Twoich szlaków z iPhone’a…"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se solicită traseele de la iPhone…"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -597,6 +657,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Automatyczna przerwa – nagrywanie zostanie wznowione, gdy ruszysz dalej."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suspendare automată – înregistrarea se reia când porniți din nou."
           }
         },
         "ru" : {
@@ -645,6 +711,12 @@
             "value" : "Średnia prędkość"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viteză medie"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -691,6 +763,12 @@
             "value" : "Śr. prędkość"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viteză medie"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -735,6 +813,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zbliż iPhone’a z zainstalowaną aplikacją OpenHikes, aby przesłać szlaki."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apropiați iPhone‑ul, cu OpenHikes instalat, pentru a transfera traseele."
           }
         },
         "ru" : {
@@ -784,6 +868,12 @@
             "value" : "Anuluj"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anulați"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -828,6 +918,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Podejście"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Urcare"
           }
         },
         "ru" : {
@@ -876,6 +972,12 @@
             "value" : "Kontynuuj"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continuați"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -920,6 +1022,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Odrzuć"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abandonați"
           }
         },
         "ru" : {
@@ -968,6 +1076,12 @@
             "value" : "Odrzuć wędrówkę"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abandonați drumeția"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1014,6 +1128,12 @@
             "value" : "Odrzucić tę wędrówkę?"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abandonați această drumeție?"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1058,6 +1178,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dystans"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Distanță"
           }
         },
         "ru" : {
@@ -1107,6 +1233,12 @@
             "value" : "Gotowe"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1151,6 +1283,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pobieranie tego szlaku z iPhone’a…"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se preia traseul de pe iPhone…"
           }
         },
         "ru" : {
@@ -1199,6 +1337,12 @@
             "value" : "Ustalanie Twojego miejsca na szlaku…"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se determină poziția pe traseu…"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1243,6 +1387,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ustalanie położenia…"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se determină poziția…"
           }
         },
         "ru" : {
@@ -1291,6 +1441,12 @@
             "value" : "Meta"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sosire"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1335,6 +1491,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Podążaj za położeniem"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Urmăriți poziția"
           }
         },
         "ru" : {
@@ -1390,6 +1552,12 @@
             "value" : "Przebyto"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finalizat"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1434,6 +1602,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Na skrzyżowaniu idź prosto"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La intersecție, continuați tot înainte"
           }
         },
         "ru" : {
@@ -1482,6 +1656,12 @@
             "value" : "Tętno"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Puls"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1526,6 +1706,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ukrywa tę wskazówkę."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ascunde acest avertisment."
           }
         },
         "ru" : {
@@ -1575,6 +1761,12 @@
             "value" : "Wędrówka"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drumeție"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1619,6 +1811,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wędrówka przerwana"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drumeție întreruptă"
           }
         },
         "ru" : {
@@ -1667,6 +1865,12 @@
             "value" : "Wędrówka zachowana"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drumeție păstrată"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1711,6 +1915,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wędrówka niezapisana"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drumeție nesalvată"
           }
         },
         "ru" : {
@@ -1759,6 +1969,12 @@
             "value" : "Zaimportuj plik GPX lub nagraj wędrówkę na iPhonie, a pojawi się tutaj."
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importați un fișier GPX sau înregistrați o drumeție pe iPhone și va apărea aici."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1803,6 +2019,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zainstaluj OpenHikes na iPhonie połączonym w parę z tym zegarkiem, aby przesyłać szlaki."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Instalați OpenHikes pe iPhone‑ul asociat cu acest ceas pentru a transfera traseele."
           }
         },
         "ru" : {
@@ -1851,6 +2073,12 @@
             "value" : "Nie została nigdzie zapisana, więc nie da się jej odzyskać."
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nu a fost salvată nicăieri, deci nu poate fi recuperată."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1895,6 +2123,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Na rozwidleniu trzymaj się lewej"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La bifurcație, țineți stânga"
           }
         },
         "ru" : {
@@ -1943,6 +2177,12 @@
             "value" : "Na rozwidleniu trzymaj się prawej"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La bifurcație, țineți dreapta"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1987,6 +2227,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ostatnia wędrówka niezapisana"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ultima drumeție nu a fost salvată"
           }
         },
         "ru" : {
@@ -2035,6 +2281,12 @@
             "value" : "Ostatni szlak: %@"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ultima dată pe %@"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2079,6 +2331,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pozostało"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rămas"
           }
         },
         "ru" : {
@@ -2127,6 +2385,12 @@
             "value" : "Dostęp do położenia jest wyłączony, więc nie widać, gdzie jesteś."
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Localizarea este dezactivată, deci poziția nu este afișată."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2171,6 +2435,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mapa: %@"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Harta traseului %@"
           }
         },
         "ru" : {
@@ -2219,6 +2489,12 @@
             "value" : "Brak OpenHikes na Twoim iPhonie"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes nu este pe iPhone"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2263,6 +2539,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nie ma jeszcze szlaków"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Niciun traseu încă"
           }
         },
         "ru" : {
@@ -2311,6 +2593,12 @@
             "value" : "Nagrywanie nie trwa"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nu se poate înregistra"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2355,6 +2643,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Od szlaku"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abatere"
           }
         },
         "ru" : {
@@ -2404,6 +2698,12 @@
             "value" : "Na szlaku"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Niciuna"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2448,6 +2748,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Na Twoim iPhonie"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pe iPhone"
           }
         },
         "ru" : {
@@ -2496,6 +2802,12 @@
             "value" : "OpenHikes potrzebuje dostępu do położenia, aby nagrać wędrówkę."
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes necesită acces la localizare pentru a înregistra o drumeție."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2540,6 +2852,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes potrzebuje pozwolenia na rozpoczęcie treningu, bo to on podtrzymuje nagrywanie."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes necesită permisiunea de a începe un exercițiu, ceea ce menține înregistrarea activă."
           }
         },
         "ru" : {
@@ -2589,6 +2907,12 @@
             "value" : "OpenHikes potrzebuje Twojego położenia, zanim będzie można nagrać wędrówkę."
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes are nevoie de localizarea dvs. pentru a putea înregistra o drumeție."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2633,6 +2957,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wstrzymaj"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suspendați"
           }
         },
         "ru" : {
@@ -2682,6 +3012,12 @@
             "value" : "Wstrzymaj wędrówkę"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suspendați drumeția"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2726,6 +3062,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wstrzymaj nagrywanie"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suspendați înregistrarea"
           }
         },
         "ru" : {
@@ -2774,6 +3116,12 @@
             "value" : "Wstrzymaj nagrywanie na iPhonie"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suspendați înregistrarea pe iPhone"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2818,6 +3166,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wstrzymano. Droga, którą teraz pokonujesz, nie jest częścią wędrówki."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Înregistrare suspendată. Ce parcurgeți acum nu intră în drumeție."
           }
         },
         "ru" : {
@@ -2867,6 +3221,12 @@
             "value" : "Wstrzymuje nagrywaną wędrówkę z jej panelu na ekranie blokady."
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suspendă drumeția în curs de înregistrare, din panoul de pe ecranul de blocare."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2911,6 +3271,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Postęp na szlaku"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Progresul pe traseu"
           }
         },
         "ru" : {
@@ -2959,6 +3325,12 @@
             "value" : "Nagrywanie"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Înregistrare"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3003,6 +3375,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nagraj tę wędrówkę"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Înregistrați această drumeție"
           }
         },
         "ru" : {
@@ -3051,6 +3429,12 @@
             "value" : "Trwa nagrywanie"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Înregistrare în curs"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3095,6 +3479,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nagrywanie zatrzymało się o %@. Wszystko sprzed tej chwili zostało zachowane."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Înregistrarea s-a oprit la %@. Tot ce era înainte se păstrează."
           }
         },
         "ru" : {
@@ -3143,6 +3533,12 @@
             "value" : "Nagrywa na tym zegarku, z iPhone’em lub bez niego. Wędrówka trafi na iPhone’a, gdy znów będzie w zasięgu."
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Înregistrează pe acest ceas, cu sau fără iPhone. Drumeția ajunge pe iPhone când acesta revine în raza de acțiune."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3187,6 +3583,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wznów"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continuați"
           }
         },
         "ru" : {
@@ -3236,6 +3638,12 @@
             "value" : "Wznów wędrówkę"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continuați drumeția"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3282,6 +3690,12 @@
             "value" : "Wznów nagrywanie"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continuați înregistrarea"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3326,6 +3740,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wznów nagrywanie na iPhonie"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continuați înregistrarea pe iPhone"
           }
         },
         "ru" : {
@@ -3375,6 +3795,12 @@
             "value" : "Wznawia wstrzymaną wędrówkę z jej panelu na ekranie blokady."
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continuă drumeția suspendată, din panoul de pe ecranul de blocare."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3419,6 +3845,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zapisz wędrówkę"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salvați drumeția"
           }
         },
         "ru" : {
@@ -3467,6 +3899,12 @@
             "value" : "Zapisywanie…"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se salvează…"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3511,6 +3949,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wysłano na Twojego iPhone’a."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trimisă pe iPhone."
           }
         },
         "ru" : {
@@ -3560,6 +4004,12 @@
             "value" : "Pokazuje szlak, który wskażesz, szlak wybrany w aplikacji albo wędrówkę, która jest właśnie nagrywana."
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afișează un traseu ales de dvs., traseul selectat sau o drumeție în curs de înregistrare."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3604,6 +4054,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Start"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plecare"
           }
         },
         "ru" : {
@@ -3652,6 +4108,12 @@
             "value" : "Rozpocznij wędrówkę"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Începeți drumeția"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3696,6 +4158,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Uruchamianie…"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se pornește…"
           }
         },
         "ru" : {
@@ -3744,6 +4212,12 @@
             "value" : "Zatrzymaj"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opriți"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3788,6 +4262,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Przestań podążać za położeniem"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nu mai urmăriți poziția"
           }
         },
         "ru" : {
@@ -3836,6 +4316,12 @@
             "value" : "Zatrzymaj nagrywanie"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opriți înregistrarea"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3880,6 +4366,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zatrzymaj nagrywanie na iPhonie"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opriți înregistrarea pe iPhone"
           }
         },
         "ru" : {
@@ -3928,6 +4420,12 @@
             "value" : "To nie dotarło do Twojego iPhone’a."
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comanda nu a ajuns la iPhone."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3972,6 +4470,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ta wędrówka była zbyt krótka, aby ją zachować."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drumeția a fost prea scurtă pentru a fi păstrată."
           }
         },
         "ru" : {
@@ -4020,6 +4524,12 @@
             "value" : "Ten zegarek nie może rozpocząć treningu, więc nagrywanie nie mogłoby trwać."
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acest ceas nu poate începe un exercițiu, deci înregistrarea nu ar putea continua."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -4066,6 +4576,12 @@
             "value" : "Na tym zegarku zabrakło miejsca. Zwolnij trochę miejsca i spróbuj ponownie."
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spațiul de stocare al acestui ceas este plin. Eliberați spațiu, apoi reîncercați."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -4110,6 +4626,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Czas wędrówki"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durata drumeției"
           }
         },
         "ru" : {
@@ -4159,6 +4681,12 @@
             "value" : "Przełącz nagrywanie wędrówki"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comutați înregistrarea"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -4203,6 +4731,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Szlak"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Traseu"
           }
         },
         "ru" : {
@@ -4251,6 +4785,12 @@
             "value" : "Dane szlaku"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Datele traseului"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -4295,6 +4835,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Szlaki"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trasee"
           }
         },
         "ru" : {
@@ -4343,6 +4889,12 @@
             "value" : "Spróbuj ponownie"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reîncercați"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -4387,6 +4939,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Na skrzyżowaniu skręć w lewo"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La intersecție, virați la stânga"
           }
         },
         "ru" : {
@@ -4435,6 +4993,12 @@
             "value" : "Na skrzyżowaniu skręć w prawo"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La intersecție, virați la dreapta"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -4479,6 +5043,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Na skrzyżowaniu skręć ostro w lewo"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La intersecție, virați strâns la stânga"
           }
         },
         "ru" : {
@@ -4527,6 +5097,12 @@
             "value" : "Na skrzyżowaniu skręć ostro w prawo"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La intersecție, virați strâns la dreapta"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -4571,6 +5147,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Obracaj mapę podczas wędrówki"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rotiți harta în direcția de mers"
           }
         },
         "ru" : {
@@ -4619,6 +5201,12 @@
             "value" : "Oczekiwanie na iPhone’a"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se așteaptă iPhone‑ul"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -4663,6 +5251,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Oczekiwanie, aż Twój iPhone znów będzie w zasięgu…"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se așteaptă revenirea iPhone‑ului în raza de acțiune…"
           }
         },
         "ru" : {
@@ -4711,6 +5305,12 @@
             "value" : "Oczekiwanie na iPhone’a. Przesyłanie rozpocznie się samo."
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se așteaptă iPhone‑ul. Transferul se va face automat."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -4755,6 +5355,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Twój iPhone nie mógł na to odpowiedzieć."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iPhone‑ul nu a putut răspunde."
           }
         },
         "ru" : {
@@ -4803,6 +5409,12 @@
             "value" : "Twój iPhone jest poza zasięgiem."
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iPhone‑ul este în afara razei de acțiune."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -4847,6 +5459,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Twój iPhone nagrywa"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iPhone‑ul înregistrează"
           }
         },
         "ru" : {

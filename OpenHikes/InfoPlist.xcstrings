@@ -46,6 +46,12 @@
             "value" : "Plik GPX"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fișier GPX"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -98,6 +104,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes używa aparatu, aby można było fotografować wędrówkę w jej trakcie. Zdjęcia są przechowywane razem z tą wędrówką i przypinane do punktu na szlaku, który był wtedy zaznaczony."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes folosește camera pentru a vă permite să fotografiați o drumeție în timp ce o parcurgeți. Pozele sunt păstrate împreună cu drumeția respectivă și fixate în punctul de pe traseu pe care îl aveați selectat."
           }
         },
         "ru" : {
@@ -154,6 +166,12 @@
             "value" : "OpenHikes łączy się z aplikacją Zdrowie, aby zapisywać ukończone wędrówki jako treningi, wraz z dystansem i trasą, gdy włączysz opcję „Zapisuj wędrówki w Zdrowiu”. OpenHikes niczego nie odczytuje z aplikacji Zdrowie na Twoim iPhonie."
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes se conectează la Sănătate pentru a salva drumețiile încheiate ca exerciții, inclusiv distanța și ruta, atunci când activați „Salvare drumeții în Sănătate”. OpenHikes nu citește nimic din Sănătate pe iPhone."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -206,6 +224,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes zapisuje ukończone wędrówki w aplikacji Zdrowie jako treningi typu Wędrówka, wraz z dystansem i trasą, gdy włączysz opcję „Zapisuj wędrówki w Zdrowiu”. OpenHikes niczego nie odczytuje z aplikacji Zdrowie na Twoim iPhonie."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes salvează drumețiile încheiate în Sănătate ca exerciții de drumeție, cu distanța și ruta lor, atunci când activați „Salvare drumeții în Sănătate”. OpenHikes nu citește nimic din Sănătate pe iPhone."
           }
         },
         "ru" : {
@@ -262,6 +286,12 @@
             "value" : "OpenHikes używa dostępu do położenia „Zawsze” tylko wtedy, gdy włączysz w ustawieniach aplikacji opcję „Śledzenie szlaku w tle”, aby widżet na ekranie głównym i wydarzenie na żywo pokazywały Twój postęp na szlaku, gdy aplikacja nie jest otwarta."
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes folosește accesul „Întotdeauna” la localizare, doar dacă activați „Urmărirea traseului în fundal” în configurările aplicației, pentru ca widgetul de pe ecranul principal și activitatea live să vă arate progresul pe traseu cât timp aplicația nu este deschisă."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -314,6 +344,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes używa Twojego położenia, aby pokazywać, gdzie jesteś na mapie, nagrywać wędrówki, które postanowisz rozpocząć, i – gdy wskazówki na skrzyżowaniach są włączone – mówić, którędy iść na każdym skrzyżowaniu szlaku, którym idziesz."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes folosește localizarea dvs. pentru a arăta unde vă aflați pe hartă, pentru a înregistra drumețiile pe care alegeți să le începeți și, cu avertizările la intersecții activate, pentru a vă spune încotro s-o luați la fiecare intersecție a traseului pe care îl urmați."
           }
         },
         "ru" : {
@@ -370,6 +406,12 @@
             "value" : "OpenHikes używa czujników ruchu, aby poprawiać nagraną wysokość, odtwarzać przebyty szlak tam, gdzie zabrakło sygnału GPS, i wstrzymywać nagrywanie, gdy się zatrzymasz."
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes folosește senzorii de mișcare pentru a îmbunătăți altitudinea înregistrată, pentru a deduce traseul parcurs acolo unde lipsește semnalul GPS și pentru a suspenda înregistrarea când vă opriți."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -422,6 +464,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Włącz opcję „Zapisuj też w Zdjęciach”, aby kopia każdego zdjęcia z wędrówki trafiała do Twojej biblioteki zdjęć, z datą i miejscem wykonania."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activați „Salvare și în Poze” pentru a păstra în biblioteca foto o copie a fiecărei poze din drumeție, cu data, ora și locul în care a fost făcută."
           }
         },
         "ru" : {
@@ -478,6 +526,12 @@
             "value" : "OpenHikes szuka w Twojej bibliotece zdjęć tych, które powstały podczas wędrówki, aby przypiąć każde do punktu na szlaku, w którym je zrobiono. Odczytywane są tylko zdjęcia zrobione podczas tej wędrówki."
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes caută în biblioteca foto pozele făcute în timpul unei drumeții, pentru a fixa fiecare poză în punctul de pe traseu în care vă aflați atunci. Citește doar pozele făcute în timpul drumeției respective."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -530,6 +584,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes potrzebuje Twojego dokładnego położenia, aby nagrać szlak, którym idziesz."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes are nevoie de localizarea precisă pentru a înregistra traseul pe care îl parcurgeți."
           }
         },
         "ru" : {
