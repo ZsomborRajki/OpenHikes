@@ -279,8 +279,12 @@ layers:
 #
 # Carto writes an area's name along the inside of its edge from zoom 13,
 # once it covers 192,000 square pixels (`protected-areas-text`), so the name
-# and the size come in at the first zoom it does, and at zoom 15 at the
-# latest, where the map reads the size for every deeper zoom.
+# and the size come in at zoom 13 for an area that large by then, and at
+# zoom 14 for every other area: the deepest zoom every offline download
+# holds, which the map draws each deeper zoom from without Extra Detail,
+# reading the size again for the zoom it draws. The map takes this layer's
+# buffer for where the archive cuts an area
+# (`VectorTileLineLabels.areaEdgeBuffer`), so the two change together.
 - id: protected_areas
   buffer: 8
   features:
@@ -307,9 +311,7 @@ layers:
       min_zoom: &edge_name_zoom
       - if: '${ feature.area("z0 tile2") * 65536.0 * 67108864.0 > 192000.0 }'
         value: 13
-      - if: '${ feature.area("z0 tile2") * 65536.0 * 268435456.0 > 192000.0 }'
-        value: 14
-      - else: 15
+      - else: 14
     - key: name
       min_zoom: *edge_name_zoom
     - key: 'name:en'

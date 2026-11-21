@@ -165,24 +165,39 @@ nonisolated enum VectorTileShields {
     /// origin lies `origin` before the points' own, so that two tiles that
     /// hold the same road agree on its crossings.
     static func crossings(of points: [CGPoint], origin: CGPoint, every spacing: CGFloat) -> [CGFloat] {
+        gridCrossings(of: points, origin: origin, every: spacing).map(\.distance)
+    }
+
+    /// A place where a line crosses the grid: how far along the line, and
+    /// whether the grid's line it crosses there runs down the map.
+    struct GridCrossing: Equatable {
+        let distance: CGFloat
+        let isDown: Bool
+    }
+
+    /// The places ``crossings(of:origin:every:)`` lists, each with the line
+    /// of the grid it crosses.
+    static func gridCrossings(of points: [CGPoint], origin: CGPoint, every spacing: CGFloat) -> [GridCrossing] {
         guard spacing > 0 else { return [] }
-        var found: [CGFloat] = []
+        var found: [GridCrossing] = []
         var covered: CGFloat = 0
         for (from, to) in points.adjacentPairs() {
             let length = hypot(to.x - from.x, to.y - from.y)
             defer { covered += length }
-            for (start, end) in [(origin.x + from.x, origin.x + to.x), (origin.y + from.y, origin.y + to.y)]
-            where start != end {
+            let runs = [(origin.x + from.x, origin.x + to.x, true), (origin.y + from.y, origin.y + to.y, false)]
+            for (start, end, isDown) in runs where start != end {
                 let first = Int((min(start, end) / spacing).rounded(.up))
                 let last = Int((max(start, end) / spacing).rounded(.down))
                 guard first <= last else { continue }
                 for line in first...last {
                     let share = (CGFloat(line) * spacing - start) / (end - start)
-                    if share >= 0, share < 1 { found.append(covered + share * length) }
+                    if share >= 0, share < 1 {
+                        found.append(GridCrossing(distance: covered + share * length, isDown: isDown))
+                    }
                 }
             }
         }
-        return found.sorted()
+        return found.sorted { $0.distance < $1.distance }
     }
 
     private struct Key: Hashable {

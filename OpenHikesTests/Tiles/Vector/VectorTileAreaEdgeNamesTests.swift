@@ -3,10 +3,10 @@
 //  OpenHikesTests
 //
 //  A protected area's name along the inside of its edge, as OpenStreetMap
-//  Carto writes it: which areas are named at which zoom, that the archive's
-//  cut at its tile is never named as an edge, that the name stands on the
-//  area's side of the edge however it reads, and that it is drawn in the
-//  border's color. Tiles are written by `VectorTileFixture`.
+//  Carto writes it: which areas are named at which zoom, that the name stands
+//  on the area's side of the edge however it reads, and that it is drawn in
+//  the border's color. How the tiles share an edge between them is
+//  `VectorTileAreaEdgeTilingTests`. Tiles are written by `VectorTileFixture`.
 //
 
 import CoreGraphics
@@ -42,23 +42,24 @@ struct VectorTileAreaEdgeNamesTests {
         #expect(names(in: tile, z: 14) == ["Blejski vintgar", "Triglavski narodni park"])
     }
 
-    /// The archive goes to zoom 15 and every deeper zoom is drawn from it,
-    /// where an area covers four times as much at each zoom.
-    @Test("the size is read at the zoom drawn, deeper than the archive goes")
-    func sizeAtTheZoomDrawn() throws {
-        let tile = try protectedAreas([area("Naturschutzgebiet", size: size(50_000, atZ: 15))])
-        let archive = VectorTileAddress(z: 15, x: 0, y: 0)
+    /// The archive goes to zoom 15, and an offline download without Extra
+    /// Detail to zoom 14, and every deeper zoom is drawn from the deepest
+    /// there is, where an area covers four times as much at each zoom.
+    @Test("the size is read at the zoom drawn, deeper than the archive goes", arguments: [14, 15])
+    func sizeAtTheZoomDrawn(archiveZ: Int) throws {
+        let tile = try protectedAreas([area("Naturschutzgebiet", size: size(50_000, atZ: archiveZ))])
+        let archive = VectorTileAddress(z: archiveZ, x: 0, y: 0)
 
         let atArchive = VectorTileLineLabels.areaEdges(in: tile, source: archive, target: archive, language: "de")
         let deeper = VectorTileLineLabels.areaEdges(
             in: tile,
             source: archive,
-            target: VectorTileAddress(z: 16, x: 0, y: 0),
+            target: VectorTileAddress(z: archiveZ + 1, x: 0, y: 0),
             language: "de"
         )
 
-        #expect(atArchive.isEmpty, "50,000 square pixels at zoom 15")
-        #expect(!deeper.isEmpty, "200,000 at zoom 16")
+        #expect(atArchive.isEmpty, "50,000 square pixels at the archive's zoom")
+        #expect(!deeper.isEmpty, "200,000 a zoom deeper")
     }
 
     /// Extras built before the edges were named give no area its size or
@@ -101,9 +102,12 @@ struct VectorTileAreaEdgeNamesTests {
 
     // MARK: The extras' schema
 
-    /// The archive gives an area its size and names from the first zoom it
-    /// is large enough to be named along its edge, by the map's own figure,
-    /// in every language the extras keep names in.
+    /// The archive gives an area its size and names from zoom 13 if it is
+    /// large enough by the map's own figure to be named along its edge
+    /// then, and every area both at zoom 14, which an offline download
+    /// without Extra Detail draws every deeper zoom from, in every language
+    /// the extras keep names in. The map reads the layer's buffer as the
+    /// place the archive cuts an area.
     @Test("the extras give an area its size and names from the zoom it is named along its edge")
     func schemaGivesSizeAndNames() throws {
         let schema = try String(
@@ -121,58 +125,14 @@ struct VectorTileAreaEdgeNamesTests {
         let scale = Int(pow(4, Double(firstZoom)))
 
         #expect(layer.contains("* \(scale).0 > \(VectorTileLineLabels.areaEdgeSize) }'\n        value: \(firstZoom)"))
+        #expect(layer.contains("value: \(firstZoom)\n      - else: \(VectorTileLineLabels.areaEdgeEveryAreaZ)\n"))
+        #expect(layer.hasPrefix("  buffer: \(Int(VectorTileLineLabels.areaEdgeBuffer))\n"))
         #expect(layer.contains("- key: area\n"))
         #expect(layer.contains("- key: name\n      min_zoom: *edge_name_zoom"))
         #expect(languages.count > 1)
         for language in languages {
             #expect(layer.contains("- \(language)\n      tag_value:"), "\(language)")
         }
-    }
-
-    // MARK: The archive's cut
-
-    /// The archive cuts an area that runs past its tile a little outside the
-    /// tile, and that cut is not the area's edge.
-    @Test("an area that covers the archive's tile has no edge on it")
-    func coveringAreaHasNoEdge() {
-        let around = [
-            CGPoint(x: -16, y: -16), CGPoint(x: side + 16, y: -16),
-            CGPoint(x: side + 16, y: side + 16), CGPoint(x: -16, y: side + 16),
-        ]
-
-        #expect(VectorTileLineLabels.stretches(of: around, inside: frame).isEmpty)
-    }
-
-    @Test("an edge that leaves the archive's tile is named only where it runs inside it")
-    func edgeCutAtTheTile() {
-        let corner = [
-            CGPoint(x: -10, y: -10), CGPoint(x: 100, y: -10), CGPoint(x: 100, y: 100), CGPoint(x: -10, y: 100),
-        ]
-
-        let stretches = VectorTileLineLabels.stretches(of: corner, inside: frame)
-
-        #expect(stretches == [[CGPoint(x: 100, y: 0), CGPoint(x: 100, y: 100), CGPoint(x: 0, y: 100)]])
-    }
-
-    @Test("a stretch that runs on across the ring's first point is one stretch")
-    func stretchAcrossTheStart() {
-        let ring = [CGPoint(x: 50, y: 50), CGPoint(x: 600, y: 50), CGPoint(x: 600, y: 100), CGPoint(x: 50, y: 100)]
-
-        let stretches = VectorTileLineLabels.stretches(of: ring, inside: frame)
-
-        let expected = [
-            CGPoint(x: side, y: 100), CGPoint(x: 50, y: 100), CGPoint(x: 50, y: 50), CGPoint(x: side, y: 50),
-        ]
-        #expect(stretches == [expected])
-    }
-
-    @Test("a ring wholly inside the tile is one stretch, back to its start")
-    func ringInside() {
-        let ring = [CGPoint(x: 50, y: 50), CGPoint(x: 150, y: 50), CGPoint(x: 150, y: 150)]
-
-        let stretches = VectorTileLineLabels.stretches(of: ring, inside: frame)
-
-        #expect(stretches == [ring + [CGPoint(x: 50, y: 50)]])
     }
 
     // MARK: Placing and drawing
@@ -192,32 +152,6 @@ struct VectorTileAreaEdgeNamesTests {
         #expect(rightward - 256 > 10, "below a top edge")
         #expect(256 - leftward > 10, "above a bottom edge")
         #expect(stream > 256, "a stream's name is below it whichever way it runs")
-    }
-
-    /// Carto spaces the names 750 pixels apart along the whole edge. A tile
-    /// sees only its stretch, so a name stands where the edge crosses the
-    /// world's grid: a straight edge across six tiles, 1,536 of a 256-pixel
-    /// tile's pixels, crosses it three times, and the tiles agree on where.
-    @Test("an edge's name stands about every 750 pixels, however the tiles cut the edge")
-    func namesFollowTheWorldsGrid() {
-        let placed = (0..<6).map { column in
-            let line = VectorTileLineLabels.NamedLine(
-                category: .protectedArea,
-                name: "Narodni park",
-                points: [CGPoint(x: 0, y: 256), CGPoint(x: side, y: 256)]
-            )
-            return VectorTileLineLabels.Layout(
-                [line],
-                target: VectorTileAddress(z: 13, x: column, y: 0),
-                unit: 2,
-                bounds: frame,
-                occupied: [],
-                language: "sl"
-            )
-            .count
-        }
-
-        #expect(placed == [1, 0, 1, 0, 0, 1])
     }
 
     @Test("an area's name is drawn in its border's color, and not without one")
