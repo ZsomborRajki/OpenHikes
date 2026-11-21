@@ -155,17 +155,18 @@ nonisolated final class VectorTileClient: Sendable {
     ///     drawn from.
     ///   - session: the cache's own, so the tile server is told who is asking
     ///     as every tile server is.
-    ///   - language: the language whose names the map prefers.
     ///   - now: the clock ``failurePause`` is measured on, injected for tests.
+    ///
+    /// The names are drawn in the archives' language, which is what the
+    /// cache's copies are kept current by (``VectorTileArchives/language``).
     init(
         archives: VectorTileArchives,
         session: URLSession,
-        language: String = VectorTileLabels.appLanguage,
         now: @escaping @Sendable () -> ContinuousClock.Instant = { .now }
     ) {
         self.archives = archives
         self.session = session
-        self.language = language
+        language = archives.language
         self.now = now
     }
 
