@@ -213,6 +213,8 @@ nonisolated extension VectorTileLabelStyle {
     /// What a line's name names. Ordered by ``importance``.
     enum LineCategory: Comparable, Sendable {
         case aerialway
+        /// Aboriginal lands, named along their edge as a protected area is.
+        case aboriginalLands
         case canal
         /// A ditch or a drain.
         case ditch
@@ -221,6 +223,9 @@ nonisolated extension VectorTileLabelStyle {
         /// The number of a residential or an unclassified road.
         case minorRoadNumber
         case path
+        /// A national park, a nature reserve or another protected area,
+        /// named along the inside of its edge.
+        case protectedArea
         /// A ridge, an arête or a cliff.
         case ridge
         case river
@@ -233,15 +238,16 @@ nonisolated extension VectorTileLabelStyle {
         /// would overlap.
         private static let importance: [Self] = [
             .majorRoad, .tertiaryRoad, .minorRoad, .minorRoadNumber, .path, .trackNumber, .aerialway, .ridge,
-            .river, .canal, .stream, .ditch,
+            .river, .canal, .stream, .ditch, .protectedArea, .aboriginalLands,
         ]
 
         /// Whether the line's name is placed after every point's, as Carto
-        /// places a waterway's (`water-lines-text`), where the streets' and
+        /// places a waterway's (`water-lines-text`) and, after those, a
+        /// protected area's (`protected-areas-text`), where the streets' and
         /// a ridge's or a cliff's (`text-line`) come before the points.
         var isPlacedAfterPoints: Bool {
             switch self {
-            case .river, .canal, .stream, .ditch: true
+            case .river, .canal, .stream, .ditch, .protectedArea, .aboriginalLands: true
             case .majorRoad, .tertiaryRoad, .minorRoad, .minorRoadNumber, .path, .trackNumber, .aerialway, .ridge: false
             }
         }
@@ -295,6 +301,17 @@ nonisolated extension VectorTileLabelStyle {
         var offset: CGFloat = 0
         /// The same where it changes with the zoom, as a path's does.
         var offsets: ZoomCurve?
+        /// Whether the offset is to the inside of the area the line goes
+        /// round, whichever way the name reads, rather than below the name:
+        /// a protected area's, which Carto writes inside its edge. The
+        /// archive winds every ring with the area on its right.
+        var isInsideArea = false
+        /// Where the name is tried on a line each tile sees only a stretch
+        /// of, an area's edge: where the line crosses a grid laid over the
+        /// whole world, this far apart, which every tile works out alike
+        /// (``VectorTileShields/crossings(of:origin:every:)``). `nil` for
+        /// marks measured from the line's middle.
+        var gridSpacing: CGFloat?
 
         func offset(at z: Int) -> CGFloat {
             offsets?.value(at: z) ?? offset
@@ -366,8 +383,35 @@ nonisolated extension VectorTileLabelStyle {
                 repeatDistance: waterNameRepeat,
                 bend: waterNameBend
             )
+        case .protectedArea:
+            areaEdgeLook(color: VectorTileStyle.protectedArea)
+        case .aboriginalLands:
+            areaEdgeLook(color: VectorTileStyle.aboriginalLands)
         }
     }
+
+    /// A protected area's name along the inside of its edge, in its
+    /// border's `color`: 10 pixels inside, Carto's `text-dy` for one, and
+    /// about every 750 pixels along it, its `text-spacing` (`admin.mss`).
+    /// Carto measures that along the whole edge, which no tile here sees,
+    /// so the name stands where the edge crosses a grid that far apart.
+    private static func areaEdgeLook(color: CGColor) -> LineLook {
+        LineLook(
+            size: ZoomCurve([(VectorTileLineLabels.areaEdgeZ, 10)]),
+            color: color,
+            face: .regular,
+            minimumZ: VectorTileLineLabels.areaEdgeZ,
+            offset: areaEdgeOffset,
+            isInsideArea: true,
+            gridSpacing: areaEdgeSpacing,
+            repeatDistance: areaEdgeRepeat
+        )
+    }
+
+    private static let areaEdgeOffset: CGFloat = 10
+    static let areaEdgeSpacing: CGFloat = 750
+    /// Carto's `text-repeat-distance` for a protected area's name.
+    private static let areaEdgeRepeat: CGFloat = 250
 
     /// A lift's name every 900 pixels and 4 beside its line, 5 from zoom
     /// 19, from zoom 17 (`aerialways.mss`): until then its stations' names

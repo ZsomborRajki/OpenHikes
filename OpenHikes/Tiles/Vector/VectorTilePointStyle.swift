@@ -35,7 +35,7 @@
 //  extras give an area's size; a point the basemap gives has none, and is
 //  drawn as a point is. An area past ``areaLimit`` is not drawn at a point at
 //  all, as in Carto, which names a protected area that large along its edge
-//  instead; the map does not draw those names.
+//  instead (`VectorTileLineLabels+Areas.swift`).
 //
 
 import CoreGraphics

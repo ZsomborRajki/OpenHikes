@@ -359,11 +359,15 @@ nonisolated extension VectorTileStyle {
 
     /// Carto draws a protected area's border from this zoom.
     static let protectedAreaZ = 8
+    /// The green of a protected area's border and of its name, and the
+    /// brown of aboriginal lands'.
+    static let protectedArea = color("#008000")
+    static let aboriginalLands = color("#82643A")
 
     /// The border of a feature in the extras' `protected_areas` layer.
     static func protectedBorder(kind: String?) -> ProtectedBorder {
         ProtectedBorder(
-            color: color(kind == "aboriginal_lands" ? "#82643A" : "#008000"),
+            color: kind == VectorTileLineLabels.aboriginalLandsKind ? aboriginalLands : protectedArea,
             line: ZoomCurve([
                 (8, protectedLineZ8), (9, protectedLineZ9), (10, protectedLineZ10), (11, protectedLineZ10), (12, 2),
             ]),
