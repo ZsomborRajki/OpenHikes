@@ -167,9 +167,11 @@ struct SeededOfflineCountryServerTests {
         await refused.refreshList()
         #expect(refused.listPhase == .failed)
         #expect(refused.listed.isEmpty)
+        #expect(refused.listsNothing)
 
         let seeded = countries(.seeded)
         await seeded.refreshList()
+        #expect(!seeded.listsNothing)
         let germany = try #require(seeded.listed.first { $0.id == "DE" })
         seeded.download(germany)
         #expect(seeded.downloads.isEmpty)

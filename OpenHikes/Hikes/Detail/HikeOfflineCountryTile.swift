@@ -75,7 +75,7 @@ struct HikeOfflineCountryTile: View {
         }
         .task(id: TaskKey(revision: line.revision, catalog: countries?.catalogRevision)) {
             guard let countries else { return }
-            if countries.listPhase == .idle, countries.listed.isEmpty { await countries.refreshList() }
+            if countries.listPhase == .idle, countries.listsNothing { await countries.refreshList() }
             guard let measured = try? await countries.coverage(alongRoute: line.current?.route ?? []),
                   !Task.isCancelled
             else { return }

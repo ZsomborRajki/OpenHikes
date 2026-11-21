@@ -10,14 +10,37 @@
 //  countries, from end to end (``OfflineRouteCoverage``), and *Partly Saved*
 //  for one that leaves them.
 //
+//  Nothing of it is worked out on the main actor (#1537). The tile asks as
+//  the hike screen opens, while the screen is being laid out, and the list
+//  is every area there is: putting it together names and orders hundreds
+//  of them, before a leg is tested. So the main actor hands over what the
+//  list is read from, two values it copies for nothing, and the list is
+//  put together beside the measuring.
+//
 
 import OpenHikesData
 
 extension OfflineCountries {
     /// The countries on the list a saved line passes through, and whether
-    /// it leaves them, measured off the main actor.
+    /// it leaves them, worked out off the main actor from the list as it
+    /// stands when asked.
     func coverage(alongRoute route: [RouteCoordinate]) async throws(CancellationError) -> OfflineRouteCoverage {
-        try await OfflineRouteCoverage.measuring(route, through: listed)
+        try await Self.coverage(alongRoute: route, offered: offered, installed: installed)
+    }
+
+    /// The same, of what a caller has already read: the list ``listed``
+    /// would give, in its order, and the line measured against it.
+    ///
+    /// It asserts it is off the main thread, so a debug build traps the day
+    /// the `@concurrent` hop stops happening.
+    @concurrent
+    nonisolated static func coverage(
+        alongRoute route: [RouteCoordinate],
+        offered: [Country],
+        installed: [String: Record]
+    ) async throws(CancellationError) -> OfflineRouteCoverage {
+        assertOffMainThread("A line's coverage puts the whole list together and tests every walked leg")
+        return try OfflineRouteCoverage(walking: route, through: listed(offered: offered, installed: installed))
     }
 
     /// Whether the downloaded countries draw all of `coverage`'s line, part

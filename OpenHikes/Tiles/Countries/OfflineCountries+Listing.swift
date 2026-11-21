@@ -18,6 +18,10 @@ extension OfflineCountries {
     /// longer are, by name in the app's language.
     var listed: [Country] { Self.listed(offered: offered, installed: installed) }
 
+    /// Whether ``listed`` is empty, without putting it together and naming
+    /// every area to find out.
+    var listsNothing: Bool { offered.isEmpty && installed.isEmpty }
+
     /// The same, of what a caller has already read.
     nonisolated static func listed(offered: [Country], installed: [String: Record]) -> [Country] {
         var byID = Dictionary(offered.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })

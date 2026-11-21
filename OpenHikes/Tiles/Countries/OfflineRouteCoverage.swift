@@ -28,8 +28,9 @@
 //  driven, or not travelled at all, and is not tested. A lone fix between
 //  two pauses is tested as the point it is, because the hiker stood there.
 //
-//  Pure, and measured off the main actor: a long line is many legs, and the
-//  hike screen measures it as it opens.
+//  Pure, and measured off the main actor
+//  (``OfflineCountries/coverage(alongRoute:offered:installed:)``): a long
+//  line is many legs, and the hike screen measures it as it opens.
 //
 
 import Algorithms
@@ -51,15 +52,6 @@ nonisolated extension OfflineRouteCoverage {
     /// within their box, so a leg is tested against the few near it rather
     /// than against every edge of a country.
     static let legsPerStretch = 64
-
-    /// ``init(walking:through:)``, off the main actor.
-    @concurrent
-    static func measuring(
-        _ route: [RouteCoordinate],
-        through countries: [OfflineCountryManifest.Country]
-    ) async throws(CancellationError) -> Self {
-        try Self(walking: route, through: countries)
-    }
 
     /// What `countries` make of every walked leg of `route`, and of every
     /// lone fix in it. Throws as soon as the task doing it is cancelled: a
