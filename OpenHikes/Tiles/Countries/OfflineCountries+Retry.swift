@@ -2,8 +2,8 @@
 //  OfflineCountries+Retry.swift
 //  OpenHikes
 //
-//  Trying a failed download again, and the room a download has to leave for
-//  the others.
+//  Trying a failed download again, starting one from an area a screen kept,
+//  and the room a download has to leave for the others.
 //
 //  The tile server deletes a build's files once it has moved past it
 //  (`Scripts/offline-countries.sh prune`), so a download left waiting across
@@ -11,7 +11,10 @@
 //  answer 404 again, at every launch, because the list of downloads under
 //  way brings the row back. Trying again therefore goes by what the server
 //  offers now, read at the tap: *Offline Maps* reads the list as it opens,
-//  and can stay open across a move.
+//  and can stay open across a move. For the same reason a download asked
+//  for by a screen that kept an area from an earlier list, as the hike
+//  screen's *Offline* tile does, goes by the area listed under its code at
+//  the tap (#1532).
 //
 
 import Foundation
@@ -34,6 +37,15 @@ extension OfflineCountries {
         // What came down of the old build is no part of the new one.
         cancel(id)
         download(current)
+    }
+
+    /// Downloads the area `id` as the list has it now, where it is not
+    /// downloaded already: a dialog asked for it before the list last
+    /// changed, and the build it was shown may be one the server has
+    /// deleted.
+    func downloadListed(_ id: String) {
+        guard !isInstalled(id), let country = listedCountry(id) else { return }
+        download(country)
     }
 
     /// What the areas coming down, other than `id`, have yet to bring: room

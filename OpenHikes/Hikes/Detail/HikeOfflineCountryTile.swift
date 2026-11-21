@@ -15,7 +15,12 @@
 //  screen takes no new input; a preview, with no model, draws the tile
 //  disabled. Which countries a trail crosses is worked out off the body, once
 //  a line lands or the list changes, because it tests every few points of
-//  the line against every outline.
+//  the line against every outline. The list changing is
+//  ``OfflineCountries/catalogRevision``, not the areas' codes: a new build
+//  keeps its area's code. What the tile offers, and what a tap downloads, is
+//  each area as the list has it now, looked up by its code, so a dialog
+//  opened before the list moved on asks for no build the server has deleted
+//  (#1532).
 //
 
 import OpenHikesData
@@ -30,11 +35,7 @@ struct HikeOfflineCountryTile: View {
 
     var body: some View {
         let countries = appModel?.offlineCountries
-        // None to offer where the device's own list cannot be read: nothing
-        // downloads then, and what it holds is not known.
-        let missing = countries?.isAvailable == true
-            ? coverage.crossed.filter { countries?.isInstalled($0.id) == false }
-            : []
+        let missing = countries?.missing(from: coverage) ?? []
         let download = coverage.crossed.lazy.compactMap { countries?.downloads[$0.id] }.first
         let saving = countries?.saving(coverage) ?? .unsaved
         Button {
@@ -61,7 +62,7 @@ struct HikeOfflineCountryTile: View {
                 ForEach(missing) { country in
                     let name = OfflineCountries.fullName(of: country)
                     Button("Download \(name) · \(OfflineCountryRow.bytes(countries.byteCount(of: country)))") {
-                        countries.download(country)
+                        countries.downloadListed(country.id)
                     }
                 }
             }
@@ -72,7 +73,7 @@ struct HikeOfflineCountryTile: View {
                 Text("The OpenHikes map draws a downloaded country with no signal. Downloads use Wi-Fi.")
             }
         }
-        .task(id: TaskKey(revision: line.revision, listed: countries?.listed.map(\.id) ?? [])) {
+        .task(id: TaskKey(revision: line.revision, catalog: countries?.catalogRevision)) {
             guard let countries else { return }
             if countries.listPhase == .idle, countries.listed.isEmpty { await countries.refreshList() }
             coverage = countries.coverage(alongRoute: line.current?.route ?? [])
@@ -86,7 +87,7 @@ struct HikeOfflineCountryTile: View {
 
     private struct TaskKey: Equatable {
         let revision: Int
-        let listed: [String]
+        let catalog: Int?
     }
 
     @ViewBuilder
