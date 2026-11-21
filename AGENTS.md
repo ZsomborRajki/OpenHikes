@@ -870,6 +870,10 @@ a change to recording, the map, the sheet or the render path; the PR template,
   `VectorTileRasterizer` draws it. The cache then files the picture as any
   tile, under the raster style's id and keys, so saved coverage keeps
   answering.
+- **A drawn tile's key names neither its archives nor its language.**
+  `VectorTileArchives` keeps both, and since when, and every drawing, the
+  server's and a country's, takes its language from there, so a copy drawn
+  before either changed is drawn again.
 - **The look is OpenStreetMap Carto's**, and each rule is argued in the file
   that draws it, under `OpenHikes/Tiles/Vector/`. Points, icons and patterns
   are read out of Carto's style, never written by hand

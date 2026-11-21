@@ -24,6 +24,17 @@
 //  only redraws more, so a move that could not be written down is simply
 //  made again at the next launch.
 //
+//  The key says nothing of the language the names were drawn in either, so
+//  that is kept with the archives too, and every drawing reads it from here:
+//  the server's and the downloaded countries' alike (`language`). The app's
+//  language changes only between launches, so a launch in another one moves
+//  as a launch onto other archives does, and everything drawn before it is
+//  drawn again. A saved tile stays on disk all the while, the coverage drawn
+//  until its redraw lands. What a launch starts from is written down at
+//  once rather than at the next read of the manifest, which a device offline
+//  or in Low Data Mode never makes: until then, every launch would draw
+//  everything again.
+//
 
 import Foundation
 import os
@@ -79,6 +90,8 @@ nonisolated final class VectorTileArchives: Sendable {
         var source: VectorTileSource
         /// When the device moved to that.
         var since: Date
+        /// The language the names have been drawn in since then.
+        var language: String
 
         static func read(from file: URL) -> Self? {
             guard let data = try? Data(contentsOf: file) else { return nil }
@@ -110,6 +123,10 @@ nonisolated final class VectorTileArchives: Sendable {
     }
 
     private static let logger = Logger(subsystem: "OpenHikes", category: "VectorTiles")
+    /// The language whose names every provider is drawn in, by the tile
+    /// server's archives and the downloaded countries' alike: the app's, which
+    /// holds for the launch.
+    let language: String
     private let state: Mutex<State>
     private let server: URL
     private let manifests: (any VectorTileManifestServing)?
@@ -123,6 +140,7 @@ nonisolated final class VectorTileArchives: Sendable {
         since: Date,
         manifest: VectorTileArchiveManifest?,
         written: Kept?,
+        language: String,
         server: URL,
         manifests: (any VectorTileManifestServing)?,
         file: URL?,
@@ -131,6 +149,7 @@ nonisolated final class VectorTileArchives: Sendable {
         didMove: @escaping @Sendable () -> Void
     ) {
         state = Mutex(State(sources: sources, manifest: manifest, since: since, written: written))
+        self.language = language
         self.server = server
         self.manifests = manifests
         self.file = file
@@ -139,10 +158,12 @@ nonisolated final class VectorTileArchives: Sendable {
         self.didMove = didMove
     }
 
-    /// Fixed `sources`, by provider id, which a read of `manifests` moves,
-    /// every one of them, to what the manifest names on `server`.
+    /// Fixed `sources`, by provider id, drawn in `language`, which a read of
+    /// `manifests` moves, every one of them, to what the manifest names on
+    /// `server`.
     convenience init(
         sources: [String: VectorTileSource],
+        language: String = VectorTileLabels.appLanguage,
         server: URL = VectorTileArchives.server,
         manifests: (any VectorTileManifestServing)? = nil,
         now: @escaping @Sendable () -> ContinuousClock.Instant = { .now },
@@ -153,6 +174,7 @@ nonisolated final class VectorTileArchives: Sendable {
             since: .distantPast,
             manifest: nil,
             written: nil,
+            language: language,
             server: server,
             manifests: manifests,
             file: nil,
@@ -164,11 +186,14 @@ nonisolated final class VectorTileArchives: Sendable {
 
     /// What a launch draws `providerIDs` from: the newer of `bundled` and the
     /// manifest kept in `file`, or `nil` where neither names a basemap this
-    /// build draws.
+    /// build draws. Kept in `file` at once where it is not what is kept
+    /// there already.
     ///
     /// - Parameters:
     ///   - manifests: where the manifest is read from then on; `nil` reads none.
-    ///   - file: where the newest manifest read is kept; `nil` keeps none.
+    ///   - file: where the newest manifest read is kept, with what this build
+    ///     draws by it and the language it draws in; `nil` keeps none.
+    ///   - language: the language the names are drawn in.
     ///   - server: where the archives a manifest names are.
     ///   - mayAsk: whether the network may be asked now.
     ///   - now: the clock the read intervals run on.
@@ -180,6 +205,7 @@ nonisolated final class VectorTileArchives: Sendable {
         bundled: VectorTileArchiveManifest,
         manifests: (any VectorTileManifestServing)?,
         file: URL?,
+        language: String = VectorTileLabels.appLanguage,
         server: URL = VectorTileArchives.server,
         mayAsk: @escaping @Sendable () -> Bool = { true },
         now: @escaping @Sendable () -> ContinuousClock.Instant = { .now },
@@ -187,12 +213,15 @@ nonisolated final class VectorTileArchives: Sendable {
         launchedAt date: Date = Date()
     ) {
         let kept = file.flatMap(Kept.read(from:))
-        guard let start = Self.start(bundled: bundled, kept: kept, server: server, at: date) else { return nil }
+        guard let start = Self.start(bundled: bundled, kept: kept, server: server, language: language, at: date)
+        else { return nil }
+        if let file, start != kept { start.write(to: file) }
         self.init(
             sources: Dictionary(uniqueKeysWithValues: providerIDs.map { ($0, start.source) }),
             since: start.since,
             manifest: start.manifest,
-            written: kept,
+            written: file == nil ? nil : start,
+            language: language,
             server: server,
             manifests: manifests,
             file: file,
@@ -224,11 +253,12 @@ nonisolated final class VectorTileArchives: Sendable {
     /// What a launch draws from: the kept manifest where it is at least as
     /// new as the bundled one and names something this build draws, as the
     /// server's, and the bundled one otherwise. It moved at `date` unless it
-    /// is what the device drew from before.
+    /// is what the device drew from before, in the same `language`.
     static func start(
         bundled: VectorTileArchiveManifest,
         kept: Kept?,
         server: URL,
+        language: String,
         at date: Date
     ) -> Kept? {
         let manifest = if let kept, kept.manifest.revision >= bundled.revision,
@@ -238,8 +268,8 @@ nonisolated final class VectorTileArchives: Sendable {
             bundled
         }
         guard let source = manifest.source(on: server) else { return nil }
-        let since = if let kept, kept.source == source { kept.since } else { date }
-        return Kept(manifest: manifest, source: source, since: since)
+        let since = if let kept, kept.source == source, kept.language == language { kept.since } else { date }
+        return Kept(manifest: manifest, source: source, since: since, language: language)
     }
 
     /// What `providerID` is drawn from now, or `nil` for a provider not drawn
@@ -249,7 +279,8 @@ nonisolated final class VectorTileArchives: Sendable {
     }
 
     /// Whether the cache's copy of the tile `key` names, drawn at `storedAt`,
-    /// is to be drawn again: its provider has moved to other archives since.
+    /// is to be drawn again: its provider has moved to other archives since,
+    /// or this launch draws names in another language than it did.
     /// Safe in the map's draw pass, which it is asked from.
     func redraws(_ key: String, drawnAt storedAt: Date) -> Bool {
         guard let named = TileCacheKey.named(key) else { return false }
@@ -290,7 +321,7 @@ nonisolated final class VectorTileArchives: Sendable {
                 state.since = date
             }
             state.manifest = manifest
-            let kept = Kept(manifest: manifest, source: source, since: state.since)
+            let kept = Kept(manifest: manifest, source: source, since: state.since, language: language)
             guard file != nil, kept != state.written else { return (moved, nil) }
             state.written = kept
             return (moved, kept)

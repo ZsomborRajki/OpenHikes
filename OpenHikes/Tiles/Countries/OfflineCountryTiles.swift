@@ -10,8 +10,10 @@
 //  did.
 //
 //  The drawing is the one ``VectorTileClient`` does for a tile off the
-//  server — the same rasterizer, language and heights — so a tile drawn from
-//  a country is the tile the server's bytes would have drawn.
+//  server — the same rasterizer, heights and language, the archives' — so a
+//  tile drawn from a country is the tile the server's bytes would have drawn,
+//  and is kept current by the same rule when the language changes
+//  (``VectorTileArchives/language``).
 //
 //  The cache files a drawn tile under the provider's key, which says nothing
 //  of the build it was drawn from, so a tile drawn before a country's build
@@ -218,14 +220,10 @@ nonisolated final class OfflineCountryDrawing: Sendable {
     private let archives: OfflineCountryArchives
     private let language: String
 
-    init(
-        sources: VectorTileArchives,
-        archives: OfflineCountryArchives,
-        language: String = VectorTileLabels.appLanguage
-    ) {
+    init(sources: VectorTileArchives, archives: OfflineCountryArchives) {
         self.sources = sources
         self.archives = archives
-        self.language = language
+        language = sources.language
     }
 
     /// Whether the cache's copy of the tile `key` names, drawn at `storedAt`,

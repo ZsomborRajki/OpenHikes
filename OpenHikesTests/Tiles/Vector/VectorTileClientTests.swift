@@ -44,9 +44,8 @@ struct VectorTileClientTests {
         StubTileProtocol.reset()
         let now = clock
         return VectorTileClient(
-            archives: VectorTileArchives(sources: ["osm": source ?? self.source]),
+            archives: VectorTileArchives(sources: ["osm": source ?? self.source], language: "en"),
             session: URLSession(configuration: StubTileProtocol.sessionConfiguration()),
-            language: "en",
             now: { now.now }
         )
     }
