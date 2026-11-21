@@ -4,15 +4,21 @@ import PackageDescription
 /// The OpenHikes map, drawn: a Mapbox Vector Tile read, drawn in
 /// OpenStreetMap Carto's look with Carto's own icons, and handed back as a
 /// picture a raster tile pipeline can file. With it, where the tiles are: the
-/// client that asks a tile server for them, the reading of that server's
-/// manifest, and the PMTiles reader a downloaded archive is read through.
-/// See issue #1488 and *Layout and targets* in the repository instructions.
+/// client that asks a tile server for them and the reading of that server's
+/// manifest. See issue #1488 and *Layout and targets* in the repository
+/// instructions.
 ///
 /// **What the app keeps** is everything that makes this *its* map: which
 /// server and which archives (the manifest it bundles), the cache the
 /// pictures are filed in, the raster fallback, the network policy and the
 /// downloaded countries. Nothing here names a tile provider, a cache key or
 /// a setting. The app hands in its language and its height formatter.
+///
+/// **The PMTiles reader is the app's too**, though a downloaded country is
+/// drawn here: it is built on the packed-bytes reader, writer and deflate
+/// that the app's four sets of squares share. So a tile comes out of an
+/// archive on the app's side of the boundary, unpacked, and only then
+/// crosses it (`VectorTileRasterizer.png(ofArchiveTile:…)`).
 ///
 /// **Not main-actor by default**, unlike the app and `OpenHikesData`: every
 /// tile is read and drawn on MapKit's drawing threads or a detached task, and

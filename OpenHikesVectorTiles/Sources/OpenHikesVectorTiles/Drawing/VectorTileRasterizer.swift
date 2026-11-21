@@ -83,10 +83,16 @@ public enum VectorTileRasterizer {
     /// as a PNG: for a host that has the bytes out of an archive of its own,
     /// as OpenHikes has a downloaded country's. `nil` if `basemap` cannot be
     /// read or a picture could not be made.
+    ///
+    /// Both tiles are the Mapbox Vector Tile itself, already unpacked. A
+    /// PMTiles archive usually stores its tiles gzipped, and nothing here
+    /// unpacks them: a packed basemap reads as no tile, and packed extras
+    /// are left out of the picture without a word. OpenHikes' reader hands
+    /// them over unpacked (`PMTilesArchive.tile(z:x:y:)`).
     /// - Parameters:
-    ///   - basemap: the basemap's tile at `source`, as an archive holds it.
-    ///   - extras: the extras' tile at `source`, drawn into the basemap's
-    ///     where there is one and it can be read.
+    ///   - basemap: the basemap's tile at `source`, unpacked.
+    ///   - extras: the extras' tile at `source`, unpacked, drawn into the
+    ///     basemap's where there is one and it can be read.
     ///   - target: `source` or a tile inside it.
     ///   - language: the language whose names the map prefers.
     ///   - height: a summit's height in meters as the reader reads one.
