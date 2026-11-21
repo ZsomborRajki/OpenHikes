@@ -486,8 +486,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
     stub is a child of `VectorTileServerSuites`.
   - **No test seam behind `#if DEBUG`.** CI runs the package's suites
     against a Release build too.
-  - The PMTiles reader stays in the app, because it shares `PackedBytes`
-    with the squares.
+  - The PMTiles reader stays in the app, because it shares
+    `PackedBytes.swift` with the squares. So a tile crosses into the
+    package unpacked (`VectorTileRasterizer.png(ofArchiveTile:…)`).
 - **Targets: iPhone and iPad, plus a watch companion, and nothing else.** The
   shipping targets are `OpenHikes`, `OpenWidgetExtension` (the widget, the Live
   Activity views and the Control Center toggle), `OpenHikesWatch` (watchOS 11)

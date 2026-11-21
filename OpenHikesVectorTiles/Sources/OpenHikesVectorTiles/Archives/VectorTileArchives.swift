@@ -8,11 +8,12 @@
 //  newest one this device has read, which is kept on disk with what it named.
 //
 //  The manifest is read when the host asks (``refresh()``, which OpenHikes
-//  calls as it comes to the front), at most once an hour, and whenever the server answers that an archive it was asked for is
-//  gone: a 410, which is what an archive retired since the last read looks
-//  like (`VectorTileClient`). A tile that meets a retired archive waits for
-//  that read and is drawn from the archive it names, so a build whose names
-//  are out of date draws today's map from its first screen rather than the
+//  calls as it comes to the front), at most once an hour, and whenever the
+//  server answers that an archive it was asked for is gone: a 410, which is
+//  what an archive retired since the last read looks like
+//  (`VectorTileClient`). A tile that meets a retired archive waits for that
+//  read and is drawn from the archive it names, so a build whose names are
+//  out of date draws today's map from its first screen rather than the
 //  raster fallback.
 //
 //  A host's cache files a drawn tile under the provider's key, which says
