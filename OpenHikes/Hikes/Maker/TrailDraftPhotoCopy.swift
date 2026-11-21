@@ -23,6 +23,7 @@
 //  for the reason that file gives.
 //
 
+import DequeModule
 import Foundation
 import Observation
 import OpenHikesData
@@ -44,7 +45,10 @@ final class TrailDraftPhotoCopy {
     /// What the alert offers again, or `nil` the rest of the time.
     private(set) var missed: Missed?
 
-    @ObservationIgnored private var pending: [Missed] = []
+    /// Trails missed while the alert was answering an earlier one, oldest
+    /// first. Only ``attach(_:along:to:)`` adds to it: a retry that misses
+    /// again keeps the alert rather than joining the back.
+    @ObservationIgnored private var pending: Deque<Missed> = []
     @ObservationIgnored private var tail: Task<Void, Never>?
     private var isRetrying = false
     @ObservationIgnored private let store: HikePhotoStore
@@ -113,8 +117,10 @@ final class TrailDraftPhotoCopy {
     }
 
     private func showNext() {
-        guard missed == nil, !pending.isEmpty else { return }
-        missed = pending.removeFirst()
+        // `Missed` is not `Equatable`, so every write to `missed` reaches its
+        // observers: write only a trail that is there to show.
+        guard missed == nil, let next = pending.popFirst() else { return }
+        missed = next
     }
 
     private func copy(_ handOff: TrailDraftPhotoHandOff, to hike: Hike) async -> Missed? {
