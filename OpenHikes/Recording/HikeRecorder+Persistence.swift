@@ -276,7 +276,7 @@ extension HikeRecorder {
             ),
             route: prepared.route
         )
-        Task { [container] in
+        workoutQueue.enqueue(for: hike.id) { [container] in
             await HikeWorkoutExport.write(request, with: workoutWriter, filingInto: container)
         }
     }

@@ -138,6 +138,61 @@ struct RouteTrimSessionTests {
         #expect(session.endMeters.isApproximatelyEqual(to: total * 0.8, absoluteTolerance: 2))
     }
 
+    // MARK: A drive on an end
+
+    /// The walk, then the drive home with the recording paused through it,
+    /// stopped on the first fix after it, about 14 km on.
+    private static let drivenHome = route + [
+        RouteCoordinate(
+            latitude: Line.latitude + 140 * Line.spacing,
+            longitude: Line.longitude,
+            timestamp: Line.start.addingTimeInterval(3 * 3600),
+            boundary: .paused
+        ),
+    ]
+
+    /// The drive has no length on the line, since a paused leg has none, so
+    /// it stands on the line's own end: the offer was hidden, and moving the
+    /// end there took nothing off.
+    @Test("a drive the line ends on, paused, comes off in one tap and the walk keeps its length")
+    func aDriveOnTheEndComesOff() async throws {
+        let session = await Self.loaded(Self.drivenHome)
+        let drive = try #require(session.line?.carriedEnds.trailing)
+        let walked = try #require(Self.route.last)
+        #expect(!session.hasTakenOff(drive, at: .end))
+
+        session.takeOff(drive, at: .end)
+
+        #expect(session.isTrimmed)
+        #expect(session.hasTakenOff(drive, at: .end))
+        #expect(session.spot(of: .end)?.coordinate.latitude == walked.latitude)
+        #expect(session.timestamp(of: .end) == walked.timestamp)
+        let edited = try #require(await session.editedLine())
+        #expect(edited.route == Self.route)
+        #expect(edited.removedMeters.isApproximatelyEqual(to: 0, absoluteTolerance: 0.01))
+        #expect(edited.newEnd == walked.timestamp)
+    }
+
+    @Test("a handle dragged back to the end leaves the pause there, and a touch alone moves nothing")
+    func aHandleByHandKeepsThePause() async throws {
+        let session = await Self.loaded(Self.drivenHome)
+        let drive = try #require(session.line?.carriedEnds.trailing)
+        session.takeOff(drive, at: .end)
+
+        // The chart's drag moves the cut to where it stands as a finger
+        // comes down.
+        session.move(.end, to: session.totalMeters)
+        #expect(session.hasTakenOff(drive, at: .end))
+
+        session.move(.end, to: Self.step(9, of: session))
+        session.move(.end, to: session.totalMeters)
+
+        #expect(!session.isTrimmed)
+        #expect(!session.hasTakenOff(drive, at: .end))
+        #expect(session.spot(of: .end)?.coordinate.latitude == Self.drivenHome.last?.latitude)
+        #expect(session.timestamp(of: .end) == Self.drivenHome.last?.timestamp)
+    }
+
     // MARK: Saving
 
     private func destination(

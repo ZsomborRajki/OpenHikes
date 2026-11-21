@@ -211,6 +211,7 @@ struct WatchWalkHealthExportTests {
             self.container = try container ?? Fixture.modelContainer()
             export = WatchWalkHealthExport(
                 writer: writer,
+                queue: HikeWorkoutQueue(),
                 container: self.container,
                 defaults: Self.defaults(savesToHealth: savesToHealth),
                 weatherState: { .idle }

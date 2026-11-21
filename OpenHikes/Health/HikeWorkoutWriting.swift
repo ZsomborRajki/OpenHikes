@@ -127,4 +127,21 @@ protocol HikeWorkoutWriting: Sendable {
     /// would be refusing to delete a hike because a second store would not
     /// co-operate — so the caller logs and moves on.
     func deleteWorkout(of hikeID: UUID) async throws
+
+    /// Takes out what a write for `hikeID` saved, so that a write of the
+    /// hike's new line can take its place — see ``RouteEditWorkout``.
+    ///
+    /// **Not ``deleteWorkout(of:)``**, which asks for every type whatever the
+    /// one before it answered and can throw after the workout is gone. A
+    /// replacement writes only once this returns, so a throw after the
+    /// workout went would cost the hike its workout for good. Here the
+    /// workout goes last, and only once its route and its distance are out:
+    /// a failure before it keeps the workout, still a true record of the
+    /// hike as it was saved.
+    ///
+    /// **Only what can be written again.** It takes nothing out unless the
+    /// hiker still lets this app write workouts, and it passes over a type
+    /// they do not let it write: its delete would be refused, and that
+    /// refusal is no reason to keep the workout.
+    func deleteWorkoutToReplace(of hikeID: UUID) async throws
 }
