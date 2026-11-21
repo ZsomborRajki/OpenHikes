@@ -31,6 +31,13 @@
 //  is known near, a distance the map's zoom gives. See
 //  ``pullBounds(around:reach:)``.
 //
+//  ## One change at a time
+//
+//  Working a step out awaits — a path, the line measured again — and every
+//  step is made on the line the one before it left, so nothing else that
+//  changes the line starts until it has landed: no second step, no Undo, no
+//  answer to a section and no Save (``RouteTrimSession/isMakingStep``).
+//
 //  ## An answer to the line it was asked about
 //
 //  A path is asked for between two spots of the line as it stands, and the
@@ -51,7 +58,7 @@ extension RouteTrimSession {
     static let maximumPullMeters = 3000.0
 
     /// Whether a button that makes a step may be pressed.
-    var canMakeSteps: Bool { !isSaving && !isRouting }
+    var canMakeSteps: Bool { !isSaving && !isRouting && !isMakingStep }
 
     /// Whether there is a step to take back.
     var canUndo: Bool { !steps.isEmpty && !isSelectingStretch && canMakeSteps }
@@ -83,12 +90,11 @@ extension RouteTrimSession {
         return line?.shape == .loop || line?.shape == .outAndBack
     }
 
-    /// Whether the start handle marks where a loop could begin instead: the
-    /// line is a loop, its start is cut and its end is not.
-    var canStartLoopAtCut: Bool {
+    /// Whether the line is a loop, which can be begun anywhere along it: an
+    /// out and back begun at its far end is the same walk the other way.
+    var isLoop: Bool {
         _ = lineRevision
-        return line?.shape == .loop && !isSelectingStretch && cuts(.start) && !cuts(.end)
-            && pausesTakenOff.isEmpty
+        return line?.shape == .loop
     }
 
     // MARK: Making a step
@@ -117,6 +123,10 @@ extension RouteTrimSession {
     /// made is a cut again.
     func undo() async {
         guard canUndo else { return }
+        await holdingSteps { await takeBackLastStep() }
+    }
+
+    private func takeBackLastStep() async {
         var next = steps
         var cuts = EditedLine.Cuts()
         if case let .trim(range, endPauses)? = next.popLast() {
@@ -134,12 +144,15 @@ extension RouteTrimSession {
     /// of the line the cuts leave.
     func beginStretch() async {
         guard line != nil, canMakeSteps, !isSelectingStretch else { return }
-        var next = steps
-        let cut = trim
-        if let cut { next.append(.trim(cut, endPauses: pausesTakenOff.rawValue)) }
-        guard await redraw(with: next, selectingStretch: true, trimStepIsOnlyForTheStretch: cut != nil) else { return }
-        let total = totalMeters
-        select((total / Self.thirds)...(total * 2 / Self.thirds))
+        await holdingSteps {
+            var next = steps
+            let cut = trim
+            if let cut { next.append(.trim(cut, endPauses: pausesTakenOff.rawValue)) }
+            let picking = await redraw(with: next, selectingStretch: true, trimStepIsOnlyForTheStretch: cut != nil)
+            guard picking else { return }
+            let total = totalMeters
+            select((total / Self.thirds)...(total * 2 / Self.thirds))
+        }
     }
 
     private static let thirds = 3.0
@@ -147,25 +160,27 @@ extension RouteTrimSession {
     /// Leaves the stretch alone, and gives the handles back to the cuts.
     func endStretch() async {
         guard isSelectingStretch, !isSaving else { return }
-        if trimStepIsOnlyForTheStretch, case let .trim(range, endPauses)? = steps.last {
-            let cuts = EditedLine.Cuts(range: range, takingOff: RouteTrim.EndPauses(rawValue: endPauses))
-            await redraw(with: Array(steps.dropLast()), cuts: cuts)
-        } else {
-            await redraw(with: steps)
+        await holdingSteps {
+            if trimStepIsOnlyForTheStretch, case let .trim(range, endPauses)? = steps.last {
+                let cuts = EditedLine.Cuts(range: range, takingOff: RouteTrim.EndPauses(rawValue: endPauses))
+                await redraw(with: Array(steps.dropLast()), cuts: cuts)
+            } else {
+                await redraw(with: steps)
+            }
         }
     }
 
     /// Draws the stretch straight from one handle to the other.
     func straightenStretch() async {
         guard isSelectingStretch, canMakeSteps else { return }
-        await make(.replace(keptRange, with: .straight))
+        await holdingSteps { await make(.replace(keptRange, with: .straight)) }
     }
 
     /// Takes the stretch out, as a pause is: no distance and no trail. Not
     /// the whole line, which would leave none (``picksWholeLine``).
     func takeOutStretch() async {
         guard isSelectingStretch, canMakeSteps, !picksWholeLine else { return }
-        await make(.pause(keptRange))
+        await holdingSteps { await make(.pause(keptRange)) }
     }
 
     /// Draws the stretch along mapped trails from one handle to the other,
@@ -178,10 +193,19 @@ extension RouteTrimSession {
             refusal = .noMappedWay
             return
         }
+        await holdingSteps { await follow(from: from, to: to, using: router) }
+    }
+
+    private func follow(
+        from: CLLocationCoordinate2D,
+        to: CLLocationCoordinate2D,
+        using router: any TrailLegRouting
+    ) async {
         let asked = stepGround
         isRouting = true
-        defer { isRouting = false }
-        guard let way = await RouteReroute.way(from: from, to: to, using: router) else { return }
+        let found = await RouteReroute.way(from: from, to: to, using: router)
+        isRouting = false
+        guard let way = found else { return }
         // Still the stretch that was asked about: a handle moved while the
         // path was being found is a new question.
         guard stepGround == asked else { return }
@@ -196,14 +220,14 @@ extension RouteTrimSession {
 
     func reverse() async {
         guard canMakeSteps, !isSelectingStretch else { return }
-        await make(.reverse)
+        await holdingSteps { await make(.reverse) }
     }
 
     /// Doubles the line back — not one that already ends where it began
     /// (``keptEndsMeet``), which would walk all of it again to get there.
     func goOutAndBack() async {
         guard canMakeSteps, !isSelectingStretch, !keptEndsMeet else { return }
-        await make(.outAndBack)
+        await holdingSteps { await make(.outAndBack) }
     }
 
     /// Joins the line's end to its start: along mapped trails where there
@@ -213,22 +237,25 @@ extension RouteTrimSession {
         guard canMakeSteps, !isSelectingStretch, !keptEndsMeet,
               let from = spot(of: .end)?.coordinate, let to = spot(of: .start)?.coordinate
         else { return }
-        let asked = stepGround
-        var path = RoutePath.straight
-        if let router = routing?.router {
-            isRouting = true
-            defer { isRouting = false }
-            guard let way = await RouteReroute.way(from: from, to: to, using: router) else { return }
-            if way.isMapped { path = RoutePath(way.coordinates) }
+        await holdingSteps {
+            let asked = stepGround
+            var path = RoutePath.straight
+            if let router = routing?.router {
+                isRouting = true
+                let way = await RouteReroute.way(from: from, to: to, using: router)
+                isRouting = false
+                guard let way else { return }
+                if way.isMapped { path = RoutePath(way.coordinates) }
+            }
+            await make(.closeLoop(path), on: asked)
         }
-        await make(.closeLoop(path), on: asked)
     }
 
     /// Begins the loop where its start handle stands: what the cut took off
     /// the start goes on after the end. Not a cut, so it is not kept as one.
     func startLoopAtCut() async {
         guard canStartLoopAtCut, canMakeSteps else { return }
-        await redraw(with: steps + [.startAt(startMeters)])
+        await holdingSteps { await redraw(with: steps + [.startAt(startMeters)]) }
     }
 
     // MARK: A pull on the map
@@ -275,22 +302,25 @@ extension RouteTrimSession {
         on ground: StepGround? = nil
     ) async -> Bool {
         let asked = ground ?? stepGround
-        guard let line, canMakeSteps, !isSelectingStretch, asked == stepGround,
-              let from = line.profile.coordinate(atDistance: stretch.lowerBound),
-              let to = line.profile.coordinate(atDistance: stretch.upperBound)
-        else { return false }
+        guard let line, canMakeSteps, !isSelectingStretch, asked == stepGround else { return false }
+        // The spots either side of the stretch the line before it ends on
+        // and the line after it begins on: across a pause, the walk's side
+        // of it — see `RouteStep.swift`.
+        let from = line.startSpot(at: stretch.lowerBound, takingOffPause: true).coordinate
+        let to = line.endSpot(at: stretch.upperBound, takingOffPause: true).coordinate
         // The line a step is made on begins at the start cut.
         let begins = cuts(.start) ? startMeters : 0
-        var coordinates = [via]
-        if let router = routing?.router {
-            isRouting = true
-            defer { isRouting = false }
-            guard let way = await RouteReroute.way(from: from, to: to, using: router, through: via) else {
-                return false
-            }
-            coordinates = way.coordinates
-        }
         let made = (stretch.lowerBound - begins)...(stretch.upperBound - begins)
-        return await make(.replace(made, with: RoutePath(coordinates)), on: asked)
+        return await holdingSteps {
+            var coordinates = [via]
+            if let router = routing?.router {
+                isRouting = true
+                let way = await RouteReroute.way(from: from, to: to, using: router, through: via)
+                isRouting = false
+                guard let way else { return false }
+                coordinates = way.coordinates
+            }
+            return await make(.replace(made, with: RoutePath(coordinates)), on: asked)
+        } ?? false
     }
 }

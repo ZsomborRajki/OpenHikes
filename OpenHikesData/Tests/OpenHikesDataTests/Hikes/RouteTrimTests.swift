@@ -87,7 +87,7 @@ struct RouteTrimTests {
         #expect(kept == Array(Self.line[1...3]))
     }
 
-    @Test("a made point has no height or time where an end of its leg has none")
+    @Test("a made point has no height where an end of its leg has none, and the time of the stamps either side")
     func madePointWithoutHeights() throws {
         let route = [Self.point(0, at: 0, elevation: 500), Self.point(2), Self.point(4, at: 240, elevation: 540)]
 
@@ -95,9 +95,15 @@ struct RouteTrimTests {
 
         try #require(kept.count == 3)
         #expect(kept[0].elevation == nil)
-        #expect(kept[0].timestamp == nil)
         #expect(kept[2].elevation == nil)
-        #expect(kept[2].timestamp == nil)
+        // A way drawn with no times was crossed at one pace, as far as
+        // anyone knows: a quarter of the way is a quarter of the time.
+        #expect(kept[0].timestamp == Self.point(0, at: 60).timestamp)
+        #expect(kept[2].timestamp == Self.point(0, at: 180).timestamp)
+
+        let withAPause = [Self.point(0, at: 0), Self.point(2), Self.point(3, resumed: true), Self.point(4, at: 240)]
+        let acrossAPause = RouteTrim.trimmed(withAPause, keeping: Self.step...(4 * Self.step))
+        #expect(acrossAPause.first?.timestamp == nil, "nobody knows which side of the pause the time was spent")
     }
 
     @Test("a made end is inferred where the leg it stands on was")

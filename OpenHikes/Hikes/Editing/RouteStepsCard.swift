@@ -42,7 +42,7 @@ struct RouteStepsCard: View {
                 .disabled(!session.canMakeSteps)
                 .accessibilityIdentifier("route-stretch-begin")
                 RouteWholeLineMenu(session: session)
-                if session.canUndo {
+                if !session.steps.isEmpty {
                     Button {
                         Task { await session.undo() }
                     } label: {
@@ -52,6 +52,9 @@ struct RouteStepsCard: View {
                         )
                     }
                     .buttonStyle(.plain)
+                    // Held, not hidden, while a step is drawn: one change at
+                    // a time.
+                    .disabled(!session.canUndo)
                     .accessibilityIdentifier("route-step-undo")
                 }
             }
@@ -69,7 +72,7 @@ struct RouteWholeLineMenu: View {
             Button("Reverse", systemImage: "arrow.left.arrow.right") {
                 Task { await session.reverse() }
             }
-            if session.returnsToItsStart {
+            if session.isLoop {
                 // The start handle says where: a loop has no other place to
                 // point at one.
                 Button {

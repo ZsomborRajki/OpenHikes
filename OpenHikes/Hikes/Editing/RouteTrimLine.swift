@@ -68,6 +68,9 @@ nonisolated struct RouteTrimLine: Sendable {
     /// How long the line was being recorded, carried through any step that
     /// took its clock away — see ``RouteSteps/Applied/recordedSeconds``.
     var recordedSeconds: TimeInterval = 0
+    /// The line as it stood before a step took its clock away, or empty —
+    /// see ``RouteSteps/Applied/clockedRoute``.
+    var clockedRoute: [RouteCoordinate] = []
     /// How far along the drawn polyline each point stands, 0 to 1, by the
     /// length MapKit measures a polyline in: map points, a paused leg's
     /// included, since the polyline is drawn across it.
@@ -99,6 +102,7 @@ nonisolated struct RouteTrimLine: Sendable {
         line.steps = steps
         line.lastStepChangedLine = applied.lastStepChangedLine
         line.recordedSeconds = applied.recordedSeconds
+        line.clockedRoute = applied.clockedRoute
         if applied.movesStart { line.endsMovedBySteps.insert(.start) }
         if applied.movesEnd { line.endsMovedBySteps.insert(.end) }
         return line
