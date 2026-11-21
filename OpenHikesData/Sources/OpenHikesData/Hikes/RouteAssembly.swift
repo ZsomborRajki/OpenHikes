@@ -34,6 +34,15 @@
 //  (``maximumAlternativeCoordinates``), because this travels in a field of
 //  the hike's record and not as an asset.
 //
+//  ## A trace that has not come yet
+//
+//  Both lines are assets, and iCloud can bring the hike before the trace. A
+//  stretch drawn as its fixes then has nothing to be drawn from, and drawing
+//  it as it was saved instead would put the old line back under the new
+//  answer, for the next save to keep. So an answer is drawn only where
+//  ``canDraw(_:of:raw:)`` says it can be, and a line whose answers cannot
+//  all be (``isDrawable(raw:)``) is not edited until they can.
+//
 
 import CoreLocation
 import Foundation
@@ -152,10 +161,20 @@ nonisolated public struct RouteAssembly: Codable, Equatable, Sendable {
         public let route: [RouteCoordinate]
         /// Where each check's stretch is in ``route``, by its id.
         public let checkRanges: [Int: ClosedRange<Int>]
+        /// Where each of the assembly's ``RouteAssembly/pieces`` is in
+        /// ``route``, in their order, or `nil` for one that drew nothing.
+        /// Two pieces either share a point, or are joined by a leg of their
+        /// own that neither piece holds.
+        public let pieceRanges: [ClosedRange<Int>?]
 
-        public init(route: [RouteCoordinate], checkRanges: [Int: ClosedRange<Int>] = [:]) {
+        public init(
+            route: [RouteCoordinate],
+            checkRanges: [Int: ClosedRange<Int>] = [:],
+            pieceRanges: [ClosedRange<Int>?] = []
+        ) {
             self.route = route
             self.checkRanges = checkRanges
+            self.pieceRanges = pieceRanges
         }
     }
 
@@ -189,30 +208,61 @@ nonisolated public struct RouteAssembly: Codable, Equatable, Sendable {
         return reset
     }
 
+    /// Whether every stretch can be drawn the way it is answered from `raw`
+    /// — see ``canDraw(_:of:raw:)``.
+    public func isDrawable(raw: [RouteCoordinate]) -> Bool {
+        checks.allSatisfy { Self.canDraw($0.choice, of: $0, raw: raw) }
+    }
+
+    /// Whether `check` can be drawn under `choice` from the recorded trace
+    /// `raw`: as it was saved, always; as one of its alternatives, which
+    /// travel with it; as its fixes only where `raw` holds them — see the
+    /// file header.
+    ///
+    /// A hike that kept no trace kept none because its saved line never left
+    /// it, so no stretch of it was saved as anything but its fixes, and
+    /// drawing one as its fixes is drawing it as it was saved.
+    public static func canDraw(_ choice: RouteCheck.Choice, of check: RouteCheck, raw: [RouteCoordinate]) -> Bool {
+        guard choice != check.savedChoice else { return true }
+        switch choice {
+        case .matched:
+            // Only ever the saved choice: a stretch saved as its fixes has
+            // no mapped trail kept for it.
+            return false
+        case .alternative(let id):
+            return check.alternatives.contains { $0.id == id && !$0.points.isEmpty }
+        case .gps:
+            return check.rawRange.lowerBound >= 0 && check.rawRange.upperBound < raw.count
+        }
+    }
+
     /// The line under the choices that stand — see the file header.
+    ///
+    /// A stretch that cannot be drawn under its choice (see
+    /// ``canDraw(_:of:raw:)``) keeps the points it was saved with, so the
+    /// line is never shorter than it was; a caller about to keep the line
+    /// asks ``isDrawable(raw:)`` first.
     ///
     /// - Parameters:
     ///   - saved: The line as it was saved at Stop.
     ///   - raw: The recorded trace, or nothing where the hike kept none
-    ///     because its saved line never left it; a stretch's fixes are then
-    ///     its saved points.
+    ///     because its saved line never left it.
     public func line(saved: [RouteCoordinate], raw: [RouteCoordinate]) -> Line {
         var route: [RouteCoordinate] = []
         route.reserveCapacity(saved.count)
         var ranges: [Int: ClosedRange<Int>] = [:]
+        var pieceRanges: [ClosedRange<Int>?] = []
         let checksByID = Dictionary(checks.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         for piece in pieces {
-            switch piece {
-            case .kept(let range):
-                Self.append(Self.slice(saved, range), to: &route)
-            case .check(let id):
-                guard let check = checksByID[id] else { continue }
-                let stretch = Self.stretch(of: check, saved: saved, raw: raw)
-                guard let first = Self.append(stretch, to: &route) else { continue }
-                ranges[id] = first...(route.count - 1)
+            let points: [RouteCoordinate] = switch piece {
+            case .kept(let range): Self.slice(saved, range)
+            case .check(let id): checksByID[id].map { Self.stretch(of: $0, saved: saved, raw: raw) } ?? []
             }
+            let drawn = Self.append(points, to: &route).map { $0...(route.count - 1) }
+            pieceRanges.append(drawn)
+            if case .check(let id) = piece, let drawn { ranges[id] = drawn }
         }
-        return Line(route: route, checkRanges: ranges)
+        return Line(route: route, checkRanges: ranges, pieceRanges: pieceRanges)
     }
 
     /// The points one check's stretch is drawn with under the choice it has.
@@ -232,18 +282,14 @@ nonisolated public struct RouteAssembly: Codable, Equatable, Sendable {
         raw: [RouteCoordinate]
     ) -> [RouteCoordinate] {
         let savedStretch = slice(saved, check.savedRange)
-        guard choice != check.savedChoice else { return savedStretch }
+        guard choice != check.savedChoice, canDraw(choice, of: check, raw: raw) else { return savedStretch }
         switch choice {
         case .matched:
-            // Only ever the saved choice: a stretch saved as its fixes has no
-            // mapped trail kept for it.
             return savedStretch
         case .alternative(let id):
             return check.alternatives.first { $0.id == id }?.points ?? savedStretch
         case .gps:
-            var fixes = raw.isEmpty ? savedStretch : slice(raw, check.rawRange)
-            // A trace that does not hold the stretch is no reason to lose
-            // it: the line keeps what it was saved with there.
+            var fixes = slice(raw, check.rawRange)
             guard !fixes.isEmpty else { return savedStretch }
             // A straight line across ground nobody observed is no measurement
             // whichever way it was chosen, so it says so on the point it

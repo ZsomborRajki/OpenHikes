@@ -68,6 +68,20 @@ nonisolated struct RouteEditSources: Equatable, Sendable {
         assembly?.line(saved: saved, raw: raw) ?? RouteAssembly.Line(route: saved, checkRanges: [:])
     }
 
+    /// Whether a stretch is answered with fixes the recorded trace is not on
+    /// this device to give: iCloud has brought the hike and not yet its
+    /// trace. Nothing can be edited until it has, for the reason
+    /// ``isMissingOriginal`` gives — see ``RouteAssembly``.
+    var isMissingTrace: Bool {
+        edit?.assembly.map { !$0.isDrawable(raw: raw) } ?? false
+    }
+
+    /// The ways `check` can be drawn here, in the order it offers them: an
+    /// answer drawn from a trace that has not come yet is not one of them.
+    func choices(of check: RouteCheck) -> [RouteCheck.Choice] {
+        check.availableChoices.filter { RouteAssembly.canDraw($0, of: check, raw: raw) }
+    }
+
     /// The sources of `hike`, whose line its screens hold as `current`.
     @MainActor
     static func reading(
@@ -75,8 +89,11 @@ nonisolated struct RouteEditSources: Equatable, Sendable {
         drawn current: [RouteCoordinate],
         in container: ModelContainer
     ) async -> Self {
-        guard let record = hike.routeEdit, record.original != nil || record.assembly != nil else {
-            return Self(current: current)
+        guard let record = hike.routeEdit else { return Self(current: current) }
+        // Nothing stored to read, but still a record: a drive off the end is
+        // a look the hike owes without an edit or a stretch to check.
+        guard record.original != nil || record.assembly != nil else {
+            return Self(current: current, saved: current, raw: [], edit: record)
         }
         let stored = await storedLines(of: hike.persistentModelID, in: container)
         // A hike never edited has no original: the line it has is the one it

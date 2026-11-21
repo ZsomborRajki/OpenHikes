@@ -25,7 +25,7 @@ import Testing
 @MainActor
 @Suite("Route edit checks")
 struct RouteEditChecksTests {
-    private enum Line {
+    enum Line {
         static let start = Date(timeIntervalSince1970: 1_750_000_000)
         static let latitude = 47.63
         static let longitude = 12.86
@@ -40,7 +40,7 @@ struct RouteEditChecksTests {
         static let stretch = 3...6
     }
 
-    private static func point(_ index: Int, east: Double = 0) -> RouteCoordinate {
+    static func point(_ index: Int, east: Double = 0) -> RouteCoordinate {
         RouteCoordinate(
             latitude: Line.latitude + Double(index) * Line.spacing,
             longitude: Line.longitude + east,
@@ -49,13 +49,13 @@ struct RouteEditChecksTests {
     }
 
     /// The line Stop saved: eleven points north along the trail.
-    private static let saved = (0...10).map { point($0) }
+    static let saved = (0...10).map { point($0) }
     /// The fixes it was recorded as, beside the trail.
-    private static let raw = (0...10).map { point($0, east: Line.traceOffset) }
-    private static let savedDistances = RouteTrim.distances(along: saved)
+    static let raw = (0...10).map { point($0, east: Line.traceOffset) }
+    static let savedDistances = RouteTrim.distances(along: saved)
 
     /// The middle of the line was moved onto a trail; the ends were left.
-    private static let assembly = RouteAssembly(
+    static let assembly = RouteAssembly(
         pieces: [.kept(0...Line.stretch.lowerBound), .check(Line.checkID), .kept(Line.stretch.upperBound...10)],
         checks: [
             RouteCheck(
@@ -70,24 +70,25 @@ struct RouteEditChecksTests {
     )
 
     /// A recording as Stop saves it: its line, its trace and its question.
-    private func recording(
+    func recording(
         in context: ModelContext,
-        notOnFoot: RouteEdit.NotOnFoot? = nil
+        notOnFoot: RouteEdit.NotOnFoot? = nil,
+        assembly: RouteAssembly = Self.assembly
     ) throws -> Hike {
         let hike = Fixture.hike(in: context, route: Self.saved)
         hike.rawRoute = Self.raw
-        hike.routeEdit = RouteEdit(assembly: Self.assembly, notOnFoot: notOnFoot)
+        hike.routeEdit = RouteEdit(assembly: assembly, notOnFoot: notOnFoot)
         try context.save()
         return hike
     }
 
-    private func visit(_ hike: Hike, in context: ModelContext) async -> RouteTrimSession {
+    func visit(_ hike: Hike, in context: ModelContext) async -> RouteTrimSession {
         let session = RouteTrimSession()
         await session.load(RouteEditSources.reading(hike, drawn: hike.route, in: context.container))
         return session
     }
 
-    private func destination(for hike: Hike, in context: ModelContext) -> RouteTrimSession.Destination {
+    func destination(for hike: Hike, in context: ModelContext) -> RouteTrimSession.Destination {
         RouteTrimSession.Destination(hike: hike, context: context) { hike.route }
     }
 
@@ -175,14 +176,16 @@ struct RouteEditChecksTests {
         let new = try #require(after.meters(ofCheck: Line.checkID))
         let inside = (old.lowerBound + old.upperBound) / 2
 
-        let startInside = RouteTrimSession.cuts(
-            inside...before.totalMeters, movedFrom: before, to: after, changing: Line.checkID
-        )
-        let endInside = RouteTrimSession.cuts(0...inside, movedFrom: before, to: after, changing: Line.checkID)
-
-        #expect(startInside.lowerBound == new.lowerBound)
-        #expect(startInside.upperBound == after.totalMeters)
-        #expect(endInside == 0...new.upperBound)
+        #expect(before.meters(matching: inside, on: after, for: .start) == new.lowerBound)
+        #expect(before.meters(matching: inside, on: after, for: .end) == new.upperBound)
+        #expect(before.meters(matching: before.totalMeters, on: after, for: .end) == after.totalMeters)
+        #expect(before.meters(matching: 0, on: after, for: .start) == 0)
+        // Past the stretch and the legs joining it, by all the line gained.
+        let beyond = Self.savedDistances[8]
+        #expect(before.meters(matching: beyond, on: after, for: .end).isApproximatelyEqual(
+            to: beyond + after.totalMeters - before.totalMeters,
+            absoluteTolerance: 0.001
+        ))
     }
 
     @Test("the answer a stretch has, and one it does not offer, change nothing")
@@ -324,7 +327,7 @@ struct RouteEditChecksTests {
         let session = await visit(hike, in: context)
         let revision = session.lineRevision
 
-        #expect(session.confirmChecks(in: destination(for: hike, in: context)))
+        #expect(await session.confirmChecks(in: destination(for: hike, in: context)))
 
         #expect(hike.route == Self.saved)
         #expect(hike.originalRoute.isEmpty)
@@ -358,7 +361,7 @@ struct RouteEditChecksTests {
     }
 
     /// A drive off the end of a walk, as ``RouteCarriedEnds`` reports one.
-    private static let carriedEnds = RouteCarriedEnds(
+    static let carriedEnds = RouteCarriedEnds(
         trailing: RouteCarriedEnds.Stretch(range: 1000...9000, carriedMeters: 8000)
     )
 }

@@ -172,7 +172,7 @@ struct RouteTrimSessionTests {
         let edited = try #require(await session.editedLine())
         #expect(edited.route == Self.route)
         #expect(edited.removedMeters.isApproximatelyEqual(to: 0, absoluteTolerance: 0.01))
-        #expect(edited.newEnd == walked.timestamp)
+        #expect(edited.end == .cut(try #require(walked.timestamp)))
     }
 
     @Test("a handle dragged back to the end leaves the pause there, and a touch alone moves nothing")

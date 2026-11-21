@@ -128,7 +128,10 @@ struct RouteTrimView: View {
     }
 
     private func confirm() {
-        if session.confirmChecks(in: destination) { onDone() }
+        let target = destination
+        Task {
+            if await session.confirmChecks(in: target) { onDone() }
+        }
     }
 }
 

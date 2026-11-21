@@ -176,7 +176,8 @@ extension MapCoordinatorTests {
         defer { detach(map) }
 
         #expect(session.drawsKeptLine)
-        let kept = try #require(coordinator.routeTrimMap.keptLine)
+        #expect(coordinator.routeTrimMap.keptPieces.count == 1, "a line never paused is one run")
+        let kept = try #require(coordinator.routeTrimMap.keptPieces.first?.polyline)
         #expect(map.overlays.contains { $0 === kept })
         #expect(kept.pointCount == whole.count)
         let renderer = try #require(coordinator.mapView(map, rendererFor: kept) as? MKPolylineRenderer)
@@ -184,17 +185,52 @@ extension MapCoordinatorTests {
         #expect(renderer.strokeEnd.isApproximatelyEqual(to: 0.6, absoluteTolerance: 0.01))
 
         session.move(.end, to: total * 0.8)
-        await settle(until: "the kept line to follow its cut") {
-            (coordinator.routeTrimMap.keptRenderer?.strokeEnd ?? 0) > 0.7
-        }
-        #expect(coordinator.routeTrimMap.keptRenderer?.strokeEnd.isApproximatelyEqual(
-            to: 0.8,
-            absoluteTolerance: 0.01
-        ) == true)
+        await settle(until: "the kept line to follow its cut") { renderer.strokeEnd > 0.7 }
+        #expect(renderer.strokeEnd.isApproximatelyEqual(to: 0.8, absoluteTolerance: 0.01))
 
         session.end()
         await settle(until: "the trim to leave the map") { coordinator.routeTrimMap.endHandle == nil }
         #expect(!map.overlays.contains { $0 === kept })
+    }
+
+    /// A pause is not trail, so the kept line is cut at one as the route is,
+    /// and the paused leg between the runs is dotted as the route's is.
+    @Test("a kept line with a pause in it is drawn run by run, with the pause dotted between")
+    func theKeptLineKeepsItsPauses() async throws {
+        let coordinator = MapView.Coordinator()
+        var whole = Fixture.ridgeRoute
+        let resumed = whole.count / 2
+        whole[resumed].boundary = .paused
+        let total = try #require(RouteTrim.distances(along: whole).last)
+        let sources = RouteEditSources(
+            current: Array(whole.prefix(resumed)),
+            saved: whole,
+            raw: [],
+            edit: RouteEdit(trim: 0...(total * 0.3))
+        )
+        let (map, session) = await trimming(coordinator, route: whole, sources: sources)
+        defer { detach(map) }
+
+        let pieces = coordinator.routeTrimMap.keptPieces
+        #expect(pieces.map(\.isPaused) == [false, false, true])
+        #expect(pieces.map(\.polyline.pointCount) == [resumed, whole.count - resumed, 2])
+        let renderers = try pieces.map { piece in
+            try #require(coordinator.mapView(map, rendererFor: piece.polyline) as? MKPolylineRenderer)
+        }
+        #expect(renderers[2].lineDashPattern != nil, "the pause is dotted, as the route's own pauses are")
+        #expect(renderers[0].lineDashPattern == nil)
+        // The end cut stands inside the first run, so nothing after it is
+        // drawn: neither the pause nor the run beyond.
+        #expect(renderers[0].strokeEnd > 0 && renderers[0].strokeEnd < 1)
+        #expect(renderers[1].alpha == 0)
+        #expect(renderers[2].alpha == 0)
+
+        session.move(.end, to: total)
+        await settle(until: "the rest of the line to be drawn") { renderers[1].alpha == 1 }
+        #expect(renderers[0].strokeEnd == 1)
+        #expect(renderers[1].strokeEnd == 1)
+        #expect(renderers[2].alpha == 1)
+        #expect(renderers[2].strokeEnd == 1)
     }
 
     @Test("a hike whose own line is the kept one is not drawn over")
@@ -204,7 +240,7 @@ extension MapCoordinatorTests {
         defer { detach(map) }
 
         #expect(!session.drawsKeptLine)
-        #expect(coordinator.routeTrimMap.keptLine == nil)
+        #expect(coordinator.routeTrimMap.keptPieces.isEmpty)
         #expect(coordinator.routeTrimMap.staleCovers.isEmpty)
         #expect(coordinator.routeTrimMap.focus == nil)
     }
@@ -237,7 +273,7 @@ extension MapCoordinatorTests {
         await settle(until: "the old stretch to be covered") { !coordinator.routeTrimMap.staleCovers.isEmpty }
 
         #expect(coordinator.routeTrimMap.staleCovers.map(\.pointCount) == [stretch.count])
-        #expect(coordinator.routeTrimMap.keptLine != nil, "the hike's own line there is no longer the kept one")
+        #expect(!coordinator.routeTrimMap.keptPieces.isEmpty, "the hike's own line there is no longer the kept one")
         let moved = try #require(coordinator.routeTrimMap.focus)
         #expect(moved !== focus, "the section is picked out where it is drawn now")
         #expect(map.overlays.contains { $0 === moved })
