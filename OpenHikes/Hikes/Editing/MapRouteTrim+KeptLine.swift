@@ -110,7 +110,8 @@ extension MapView.Coordinator {
         routeTrimMap.keptPieces[index].renderer = renderer
         // The cuts it is drawn to, which the pass that added the overlay
         // could not set: MapKit asks for the renderer afterwards.
-        if let session = routeTrimMap.session, let start = session.spot(of: .start), let end = session.spot(of: .end) {
+        if let session = routeTrimMap.session,
+           let start = session.keptSpot(of: .start), let end = session.keptSpot(of: .end) {
             coverKept(piece, with: renderer, from: start, to: end)
         }
         return renderer

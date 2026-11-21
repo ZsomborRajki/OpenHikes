@@ -38,279 +38,6 @@ import Foundation
 import MapKit
 import OpenHikesData
 
-/// Which end of the line a cut is.
-nonisolated enum RouteTrimHandle: Sendable {
-    case end
-    case start
-
-    /// The pause on this end of the line — see ``RouteTrim/EndPauses``.
-    var endPause: RouteTrim.EndPauses {
-        switch self {
-        case .end: .end
-        case .start: .start
-        }
-    }
-}
-
-/// The line a session trims, measured once, off the main actor.
-nonisolated struct RouteTrimLine: Sendable {
-    /// Where a cut stands on the map.
-    struct Spot: Sendable {
-        let coordinate: CLLocationCoordinate2D
-        /// How far along the polyline MapKit draws it, 0 to 1: the scale
-        /// `MKPolylineRenderer.strokeStart` and `strokeEnd` are in.
-        let drawnFraction: Double
-    }
-
-    let route: [RouteCoordinate]
-    let profile: RouteProfile
-    let carriedEnds: RouteCarriedEnds
-    /// Where each stretch to check is in ``route``, by its id — see
-    /// ``RouteAssembly/Line``. Empty for a line with none.
-    var checkRanges: [Int: ClosedRange<Int>] = [:]
-    /// The answer each stretch to check is drawn under, by its id.
-    var choices: [Int: RouteCheck.Choice] = [:]
-    /// The pieces the line was put together from, and where each is in
-    /// ``route`` — see ``RouteAssembly/Line/pieceRanges``. Empty for a line
-    /// with no stretches to check.
-    var pieces: [RouteAssembly.Piece] = []
-    var pieceRanges: [ClosedRange<Int>?] = []
-    /// How far along the drawn polyline each point stands, 0 to 1, by the
-    /// length MapKit measures a polyline in: map points, a paused leg's
-    /// included, since the polyline is drawn across it.
-    let drawnFractions: [Double]
-
-    var distances: [Double] { profile.distances }
-    var totalMeters: Double { profile.totalDistanceMeters }
-
-    /// The whole line of `sources` under `assembly`, measured.
-    @concurrent
-    static func measuring(
-        _ sources: RouteEditSources,
-        under assembly: RouteAssembly?
-    ) async throws(CancellationError) -> Self {
-        let whole = sources.whole(under: assembly)
-        var line = try await measuring(whole.route)
-        line.checkRanges = whole.checkRanges
-        line.choices = Self.choices(of: assembly?.checks ?? [])
-        line.pieces = assembly?.pieces ?? []
-        line.pieceRanges = whole.pieceRanges
-        return line
-    }
-
-    /// The answers `checks` stand under, by stretch: what tells two lines
-    /// put together from the same pieces apart.
-    static func choices(of checks: [RouteCheck]) -> [Int: RouteCheck.Choice] {
-        Dictionary(checks.map { ($0.id, $0.choice) }, uniquingKeysWith: { first, _ in first })
-    }
-
-    /// The part of the line a stretch to check takes up, in metres along it.
-    func meters(ofCheck id: Int) -> ClosedRange<Double>? {
-        guard let range = checkRanges[id], distances.indices.contains(range.upperBound) else { return nil }
-        return distances[range.lowerBound]...distances[range.upperBound]
-    }
-
-    /// Where the spot `distance` metres along this line is on `other`: the
-    /// same pieces put together under other answers. A piece the two draw
-    /// alike — kept ground, or a stretch answered alike — is the same ground
-    /// on both, so a spot on it is the same spot. The leg joining two pieces
-    /// is neither's, and changes with the pieces it joins, so a spot on it
-    /// keeps its share of it.
-    ///
-    /// A spot inside a stretch the two draw differently is on no ground
-    /// `other` has, so it goes to the edge of that stretch `handle` keeps it
-    /// whole from: a start to its beginning, an end to its finish. Either end
-    /// of the line is the same end of `other`.
-    func meters(matching distance: Double, on other: Self, for handle: RouteTrimHandle) -> Double {
-        if distance <= 0 { return 0 }
-        if distance >= totalMeters { return other.totalMeters }
-        guard choices != other.choices, pieces == other.pieces, pieceRanges.count == other.pieceRanges.count else {
-            return min(distance, other.totalMeters)
-        }
-        var behind = (here: 0.0, there: 0.0)
-        for (index, piece) in pieces.enumerated() {
-            guard let here = meters(ofPiece: index), let there = other.meters(ofPiece: index) else { continue }
-            if distance <= here.lowerBound {
-                let leg = behind.there...there.lowerBound
-                return Self.share(of: distance, from: behind.here, to: here.lowerBound, on: leg)
-            }
-            if distance < here.upperBound {
-                if case .check(let id) = piece, choices[id] != other.choices[id] {
-                    return handle == .start ? there.lowerBound : there.upperBound
-                }
-                return min(there.lowerBound + distance - here.lowerBound, there.upperBound)
-            }
-            behind = (here.upperBound, there.upperBound)
-        }
-        return Self.share(of: distance, from: behind.here, to: totalMeters, on: behind.there...other.totalMeters)
-    }
-
-    /// The part of the line one of ``pieces`` takes up, in metres along it.
-    private func meters(ofPiece index: Int) -> ClosedRange<Double>? {
-        guard pieceRanges.indices.contains(index), let range = pieceRanges[index],
-              distances.indices.contains(range.upperBound)
-        else { return nil }
-        return distances[range.lowerBound]...distances[range.upperBound]
-    }
-
-    /// The spot on `there` that is as far along it as `distance` is from
-    /// `start` to `end`.
-    private static func share(
-        of distance: Double,
-        from start: Double,
-        to end: Double,
-        on there: ClosedRange<Double>
-    ) -> Double {
-        guard end > start else { return there.upperBound }
-        let fraction = min(max((distance - start) / (end - start), 0), 1)
-        return there.lowerBound + fraction * (there.upperBound - there.lowerBound)
-    }
-
-    /// The points a stretch to check is drawn with.
-    func coordinates(ofCheck id: Int) -> [CLLocationCoordinate2D] {
-        guard let range = checkRanges[id], profile.coordinates.indices.contains(range.upperBound) else { return [] }
-        return Array(profile.coordinates[range])
-    }
-
-    @concurrent
-    static func measuring(_ route: [RouteCoordinate]) async throws(CancellationError) -> Self {
-        assertOffMainThread("A route is measured for trimming off the main thread")
-        let measured = try RouteProfile.cancellable(route: route)
-        let carried = RouteCarriedEnds.found(in: route, distances: measured.distances)
-        guard !Task.isCancelled else { throw CancellationError() }
-        return Self(
-            route: route,
-            profile: measured,
-            carriedEnds: carried,
-            drawnFractions: Self.drawnFractions(of: measured.coordinates)
-        )
-    }
-
-    private static func drawnFractions(of coordinates: [CLLocationCoordinate2D]) -> [Double] {
-        var lengths: [Double] = []
-        lengths.reserveCapacity(coordinates.count)
-        var cumulative = 0.0
-        var previous: MKMapPoint?
-        for coordinate in coordinates {
-            let point = MKMapPoint(coordinate)
-            if let previous { cumulative += hypot(point.x - previous.x, point.y - previous.y) }
-            lengths.append(cumulative)
-            previous = point
-        }
-        guard cumulative > 0 else { return lengths }
-        return lengths.map { $0 / cumulative }
-    }
-
-    /// Where a line that begins `meters` along this one begins. Across a
-    /// pause that is the fix after it, as ``RouteTrim`` cuts it.
-    ///
-    /// - Parameter takingOffPause: whether a cut on the line's own first
-    ///   point takes off the pause after it — see ``RouteTrim/EndPauses``.
-    func startSpot(at meters: Double, takingOffPause: Bool = false) -> Spot {
-        // An end left alone is the line's own first point, a pause on it
-        // included, as ``RouteTrim`` leaves it.
-        if isLeftAlone(.start, at: meters, takingOffPause: takingOffPause), let first = profile.coordinates.first {
-            return Spot(coordinate: first, drawnFraction: 0)
-        }
-        return spot(at: bracket(meters, for: .start))
-    }
-
-    /// Where a line that ends `meters` along this one ends: across a pause,
-    /// the fix before it.
-    func endSpot(at meters: Double, takingOffPause: Bool = false) -> Spot {
-        if isLeftAlone(.end, at: meters, takingOffPause: takingOffPause), let last = profile.coordinates.last {
-            return Spot(coordinate: last, drawnFraction: 1)
-        }
-        return spot(at: bracket(meters, for: .end))
-    }
-
-    /// The clock at a cut `meters` along the line, read off the two points
-    /// either side of it, or `nil` where they carry none. An end left alone
-    /// is its own point's, as the hike's *Duration* reads it.
-    func timestamp(of handle: RouteTrimHandle, at meters: Double, takingOffPause: Bool = false) -> Date? {
-        if isLeftAlone(handle, at: meters, takingOffPause: takingOffPause) {
-            return handle == .start ? route.first?.timestamp : route.last?.timestamp
-        }
-        let leg = bracket(meters, for: handle)
-        guard let began = route[leg.lower].timestamp, let arrived = route[leg.upper].timestamp else { return nil }
-        return began.addingTimeInterval(arrived.timeIntervalSince(began) * leg.fraction)
-    }
-
-    /// Whether a cut `meters` along the line is no cut at all: it stands on
-    /// its own end of the line, and leaves the pause there.
-    private func isLeftAlone(_ handle: RouteTrimHandle, at meters: Double, takingOffPause: Bool) -> Bool {
-        guard !takingOffPause else { return false }
-        return switch handle {
-        case .start: meters <= 0
-        case .end: meters >= totalMeters
-        }
-    }
-
-    /// The leg a cut falls on, and how far along it.
-    private struct Bracket {
-        let lower: Int
-        let upper: Int
-        let fraction: Double
-    }
-
-    /// Of the points standing at one distance, either side of a pause, a
-    /// start takes the last and an end the first — see ``RouteTrim``.
-    private func bracket(_ meters: Double, for handle: RouteTrimHandle) -> Bracket {
-        let past = switch handle {
-        case .start: distances.partitioningIndex { $0 > meters }
-        case .end: distances.partitioningIndex { $0 >= meters }
-        }
-        let upper = min(past, distances.count - 1)
-        let lower = max(upper - 1, 0)
-        let length = distances[upper] - distances[lower]
-        let fraction = length > 0 ? min(max((meters - distances[lower]) / length, 0), 1) : 0
-        return Bracket(lower: lower, upper: upper, fraction: fraction)
-    }
-
-    private func spot(at leg: Bracket) -> Spot {
-        Spot(
-            coordinate: RouteGeometry.interpolate(
-                from: profile.coordinates[leg.lower],
-                to: profile.coordinates[leg.upper],
-                fraction: leg.fraction
-            ),
-            drawnFraction: drawnFractions[leg.lower]
-                + (drawnFractions[leg.upper] - drawnFractions[leg.lower]) * leg.fraction
-        )
-    }
-
-    /// How far along the line the spot nearest `coordinate` is, looking only
-    /// around `anchor`, where the handle being dragged stands.
-    ///
-    /// A handle slides along its line, so a finger that crosses to the other
-    /// side of a loop must not take it there: the search stays inside
-    /// ``RouteProfile/candidateSegmentRange(near:)``, and inside it a spot
-    /// further along the line has to be nearer the finger to win, by
-    /// ``continuityWeight``. That is what keeps the handle on its own leg of
-    /// an out-and-back, whose two legs lie on top of each other.
-    func distance(nearest coordinate: CLLocationCoordinate2D, around anchor: Double) -> Double? {
-        var best: (cost: Double, meters: Double)?
-        for index in profile.candidateSegmentRange(near: anchor) {
-            let length = distances[index + 1] - distances[index]
-            // A paused leg is no part of the line — see ``RouteBoundary``.
-            guard length > 0 else { continue }
-            let projection = RouteGeometry.project(
-                coordinate,
-                onSegmentFrom: profile.coordinates[index],
-                to: profile.coordinates[index + 1]
-            )
-            let meters = distances[index] + projection.fraction * length
-            let cost = projection.offRouteMeters + Self.continuityWeight * abs(meters - anchor)
-            if cost < best?.cost ?? .greatestFiniteMagnitude { best = (cost, meters) }
-        }
-        return best?.meters
-    }
-
-    /// How many metres nearer the finger a spot has to be for each metre
-    /// further along the line it is from the handle.
-    static let continuityWeight = 0.02
-}
-
 @Observable
 final class RouteTrimSession {
     /// Non-isolated so releasing the last reference never requires proving
@@ -322,6 +49,10 @@ final class RouteTrimSession {
     static let minimumKeptMeters = 50.0
     /// How near its end a cut has to be to count as standing on it.
     static let endToleranceMeters = 0.5
+    /// The least a stretch picked out may be: shorter than the least a trim
+    /// leaves, because a tangle of fixes at a rest is a stretch worth
+    /// straightening.
+    static let minimumStretchMeters = 10.0
 
     /// Moves when the whole line is put together anew — a load, or an answer
     /// changed — which is rare; the map and the screen read ``line`` when it
@@ -340,6 +71,17 @@ final class RouteTrimSession {
     /// ``RouteTrim/EndPauses``. Only an offer sets one
     /// (``takeOff(_:at:)``); placing that handle by hand clears it.
     private(set) var pausesTakenOff: RouteTrim.EndPauses = []
+
+    /// What has been done to the whole line beyond its cuts, in the order it
+    /// was done — see ``RouteStep`` and `RouteTrimSession+Steps.swift`. The
+    /// hike's own when the visit opens.
+    private(set) var steps: [RouteStep] = []
+    /// Whether the two handles are picking a stretch out rather than cutting
+    /// the ends off: what *Change a Stretch* turns on. The cuts the hiker
+    /// had placed are a step by then, so nothing reads the handles as cuts.
+    private(set) var isSelectingStretch = false
+    /// Whether a path is being asked for, which holds the buttons.
+    var isRouting = false
 
     /// The stretches to check, as the hiker has answered them. Empty for a
     /// hike with none. An answer is here the moment it is given, and the
@@ -389,6 +131,18 @@ final class RouteTrimSession {
     /// Whether the line the hike has, which is the one the map draws for it,
     /// is the whole line this visit opened on: nothing was cut off it before.
     @ObservationIgnored private var ownLineIsWhole = true
+    /// Whether the cuts the hiker had placed became a step only so a stretch
+    /// could be picked out, with nothing made on them since: leaving the
+    /// stretch alone gives them back as cuts.
+    @ObservationIgnored private(set) var trimStepIsOnlyForTheStretch = false
+    /// Who draws a path, and who knows where the junctions are. `nil` on a
+    /// launch with neither, where a stretch can still be straightened or
+    /// taken out — see ``RouteReroute``.
+    @ObservationIgnored var routing: RouteReroute.Services?
+    /// How far along the line each junction it passes is, once that is
+    /// known: what a pull on the map is bounded by.
+    @ObservationIgnored var junctionMeters: [Double] = []
+    @ObservationIgnored private var junctionSearch: Task<Void, Never>?
 
     var totalMeters: Double { line?.totalMeters ?? 0 }
 
@@ -408,15 +162,18 @@ final class RouteTrimSession {
         return pieces
     }
 
-    /// Whether a save would change the hike: a cut moved, or an answer.
+    /// Whether a save would change the hike: a cut moved, an answer, or a
+    /// step made or undone. Not while a stretch is being picked out: what
+    /// is done to it comes first, or leaving it alone.
     var hasChanges: Bool {
         // Read before anything can return: the Save button asks this before
         // the line has loaded, and what it read then is all it is told of.
         // With nothing read, it never heard that there was a line, or that a
         // cut on it had moved.
         _ = lineRevision
-        guard let sources, line != nil else { return false }
-        return checks != (sources.edit?.assembly?.checks ?? [])
+        guard let sources, line != nil, !isSelectingStretch else { return false }
+        return steps != (sources.edit?.routeSteps ?? [])
+            || checks != (sources.edit?.assembly?.checks ?? [])
             || !Self.isSame(trim, sources.edit?.trim)
             || pausesTakenOff != (sources.edit?.endPausesTakenOff ?? [])
     }
@@ -427,7 +184,8 @@ final class RouteTrimSession {
     /// answer changed in this visit.
     var drawsKeptLine: Bool {
         guard let sources, let line else { return false }
-        return !ownLineIsWhole || line.choices != RouteTrimLine.choices(of: sources.edit?.assembly?.checks ?? [])
+        return !ownLineIsWhole || line.steps != (sources.edit?.routeSteps ?? [])
+            || line.choices != RouteTrimLine.choices(of: sources.edit?.assembly?.checks ?? [])
     }
 
     /// The ways `check` can be drawn on this device, in the order it offers
@@ -456,7 +214,8 @@ final class RouteTrimSession {
         loads += 1
         let mine = loads
         let saved = sources.edit?.assembly
-        guard let measured = try? await RouteTrimLine.measuring(sources, under: saved),
+        let made = sources.edit?.routeSteps ?? []
+        guard let measured = try? await RouteTrimLine.measuring(sources, under: saved, steps: made),
               !Task.isCancelled, mine == loads
         else { return }
         // Everything measured before anything is shown: the list draws each
@@ -466,6 +225,10 @@ final class RouteTrimSession {
         (currentLengthMeters, choiceMeters) = lengths
         self.sources = sources
         checks = saved?.checks ?? []
+        steps = made
+        isSelectingStretch = false
+        trimStepIsOnlyForTheStretch = false
+        junctionMeters = []
         isOwedALook = sources.edit?.isOwedALook ?? false
         focusedCheckID = nil
         staleStretches = []
@@ -476,8 +239,16 @@ final class RouteTrimSession {
         endMeters = min(max(stored?.upperBound ?? measured.totalMeters, startMeters), measured.totalMeters)
         pausesTakenOff = sources.edit?.endPausesTakenOff ?? []
         anchors = [.start: (measured, startMeters), .end: (measured, endMeters)]
-        cutWhenLoaded = Set([RouteTrimHandle.start, .end].filter { cuts($0) })
+        cutWhenLoaded = Set([RouteTrimHandle.start, .end].filter { cuts($0) }).union(measured.endsMovedBySteps)
         lineRevision += 1
+        lookForJunctions()
+    }
+
+    /// Reads where the new line's junctions are, for the next pull on the
+    /// map — see ``findJunctions()``. On its own time: nothing waits for it.
+    private func lookForJunctions() {
+        junctionSearch?.cancel()
+        junctionSearch = Task { [weak self] in await self?.findJunctions() }
     }
 
     /// A hike with nothing but its line — see ``load(_:)``.
@@ -497,6 +268,8 @@ final class RouteTrimSession {
     /// Whether the cut at `handle` takes anything off: it has left its end
     /// of the line, or takes off the pause standing on it.
     func cuts(_ handle: RouteTrimHandle) -> Bool {
+        // Picking a stretch out, the handles cut nothing.
+        guard !isSelectingStretch else { return false }
         if pausesTakenOff.contains(handle.endPause) { return true }
         return switch handle {
         case .start: startMeters > 0
@@ -512,7 +285,7 @@ final class RouteTrimSession {
     func move(_ handle: RouteTrimHandle, to meters: Double) {
         let total = totalMeters
         guard total > 0, meters.isFinite else { return }
-        let gap = min(Self.minimumKeptMeters, total)
+        let gap = min(isSelectingStretch ? Self.minimumStretchMeters : Self.minimumKeptMeters, total)
         let before = position(of: handle)
         switch handle {
         case .start: startMeters = min(max(meters, 0), max(endMeters - gap, 0))
@@ -565,6 +338,27 @@ final class RouteTrimSession {
         move(handle, to: meters)
     }
 
+    // MARK: The map
+
+    /// Puts the cuts on the map. An ended session is never shown again: the
+    /// pop that ended it builds its screen once more on the way out.
+    func show(on preview: RouteTrimPreview) {
+        guard !isEnded else { return }
+        self.preview = preview
+        preview.present(self)
+    }
+
+    /// Takes the cuts off the map, for good — see the file header.
+    func end() {
+        isEnded = true
+        preview?.withdraw(self)
+    }
+}
+
+// What a visit does beyond placing its two cuts. An extension rather than
+// more of the class for its length alone; in this file because it writes the
+// state the class keeps to itself.
+extension RouteTrimSession {
     // MARK: The stretches to check
 
     /// Picks a stretch out on the map, or none.
@@ -577,7 +371,10 @@ final class RouteTrimSession {
     /// put together again under it, and each cut goes back to the ground
     /// it was placed on — see ``anchors``.
     func choose(_ choice: RouteCheck.Choice, forCheck id: Int) async {
-        guard line != nil, !isSaving,
+        // An answer puts the line together again under the steps made on
+        // it, whose distances were measured on the line the old answer
+        // drew: with a step made, the answers stand.
+        guard line != nil, !isSaving, steps.isEmpty,
               let index = checks.firstIndex(where: { $0.id == id }),
               checks[index].choice != choice,
               choices(of: checks[index]).contains(choice)
@@ -648,9 +445,10 @@ final class RouteTrimSession {
     /// Each stretch whose answer differs from the hike's, as the hike's own
     /// line draws it. A handful of stretches, each a slice.
     private static func staleStretches(
-        of assembly: RouteAssembly,
+        of assembly: RouteAssembly?,
         in sources: RouteEditSources
     ) -> [[CLLocationCoordinate2D]] {
+        guard let assembly else { return [] }
         let stored = sources.edit?.assembly?.checks ?? []
         return assembly.checks.compactMap { check in
             guard let before = stored.first(where: { $0.id == check.id }), before.choice != check.choice else {
@@ -684,7 +482,9 @@ final class RouteTrimSession {
         await settled()
         // A line drawn under other answers than the ones it would be saved
         // with is no line to keep.
-        guard let line, let sources, hasChanges, line.choices == RouteTrimLine.choices(of: checks) else { return nil }
+        guard let line, let sources, hasChanges, line.choices == RouteTrimLine.choices(of: checks),
+              line.steps == steps, !isSelectingStretch
+        else { return nil }
         var pieces = assembly
         // A save is a look: the hiker has had every stretch in front of them.
         for index in (pieces?.checks ?? []).indices { pieces?.checks[index].isChecked = true }
@@ -696,6 +496,98 @@ final class RouteTrimSession {
             replacing: sources.current,
             cutBefore: cutWhenLoaded
         )
+    }
+
+    // MARK: Steps
+
+    /// Draws the line again with `next` made on it, and puts the cuts where
+    /// `cuts` says: on the line's ends unless a step that was a cut is being
+    /// given back as one. The one place ``steps`` changes after a load.
+    ///
+    /// - Returns: whether the line was drawn. A load that overtook it, or a
+    ///   list that leaves the very line there was, changes nothing.
+    @discardableResult func redraw(
+        with next: [RouteStep],
+        cuts: EditedLine.Cuts = EditedLine.Cuts(),
+        selectingStretch: Bool = false,
+        trimStepIsOnlyForTheStretch onlyForTheStretch: Bool = false
+    ) async -> Bool {
+        await settled()
+        guard let sources, let before = line else { return false }
+        var pieces = sources.edit?.assembly
+        pieces?.checks = checks
+        let loaded = loads
+        guard let after = try? await RouteTrimLine.measuring(sources, under: pieces, steps: next),
+              loaded == loads
+        else { return false }
+        // A step that does not fit the line leaves the line: it is not one
+        // to keep.
+        guard after.route != before.route || next.count < steps.count || selectingStretch != isSelectingStretch else {
+            return false
+        }
+        // The hike's own line is still on the map under this one, and is
+        // not this one: what this one no longer has of it is covered. Worked
+        // out before anything changes, so nothing is seen half changed.
+        let stale = next == (sources.edit?.routeSteps ?? [])
+            ? Self.staleStretches(of: pieces, in: sources)
+            : await Self.groundLeft(of: sources.current, by: after.route)
+        guard loaded == loads else { return false }
+        steps = next
+        isSelectingStretch = selectingStretch
+        trimStepIsOnlyForTheStretch = onlyForTheStretch
+        line = after
+        startMeters = min(max(cuts.range?.lowerBound ?? 0, 0), after.totalMeters)
+        endMeters = min(max(cuts.range?.upperBound ?? after.totalMeters, startMeters), after.totalMeters)
+        pausesTakenOff = cuts.range == nil ? [] : cuts.takingOff
+        anchors = [.start: (after, startMeters), .end: (after, endMeters)]
+        focusedCheckID = nil
+        junctionMeters = []
+        staleStretches = stale
+        lineRevision += 1
+        lookForJunctions()
+        return true
+    }
+
+    /// The stretches of `current` that `line` does not go over: each run of
+    /// its points that are not points of `line`, with the point either side.
+    /// A line turned round or begun somewhere else leaves none, and neither
+    /// does one that only goes on further.
+    @concurrent
+    nonisolated private static func groundLeft(
+        of current: [RouteCoordinate],
+        by line: [RouteCoordinate]
+    ) async -> [[CLLocationCoordinate2D]] {
+        struct Spot: Hashable {
+            let latitude: Double
+            let longitude: Double
+        }
+        let kept = Set(line.map { Spot(latitude: $0.latitude, longitude: $0.longitude) })
+        var runs: [[CLLocationCoordinate2D]] = []
+        var run: ClosedRange<Int>?
+        func close() {
+            guard let open = run else { return }
+            let lower = max(open.lowerBound - 1, 0)
+            let upper = min(open.upperBound + 1, current.count - 1)
+            if upper > lower { runs.append(current[lower...upper].map(\.clCoordinate)) }
+            run = nil
+        }
+        for (index, point) in current.enumerated() {
+            if kept.contains(Spot(latitude: point.latitude, longitude: point.longitude)) {
+                close()
+            } else {
+                run = (run?.lowerBound ?? index)...index
+            }
+        }
+        close()
+        return runs
+    }
+
+    /// Puts both handles on a stretch, where they are picking one out.
+    func select(_ stretch: ClosedRange<Double>) {
+        guard isSelectingStretch, let line else { return }
+        startMeters = min(max(stretch.lowerBound, 0), line.totalMeters)
+        endMeters = min(max(stretch.upperBound, startMeters), line.totalMeters)
+        anchors = [.start: (line, startMeters), .end: (line, endMeters)]
     }
 
     @concurrent
@@ -712,7 +604,8 @@ final class RouteTrimSession {
             cuts: cuts,
             replacing: current,
             cutBefore: cutBefore,
-            assembly: assembly
+            assembly: assembly,
+            steps: EditedLine.Steps(made: line.steps, moving: line.endsMovedBySteps)
         )
     }
 
@@ -726,6 +619,16 @@ final class RouteTrimSession {
         }
     }
 
+    /// Where the kept line ends on the map: the cut at `handle`, or the
+    /// line's own end while the handles pick a stretch out and cut nothing.
+    func keptSpot(of handle: RouteTrimHandle) -> RouteTrimLine.Spot? {
+        guard isSelectingStretch, let line else { return spot(of: handle) }
+        return switch handle {
+        case .start: line.startSpot(at: 0)
+        case .end: line.endSpot(at: line.totalMeters)
+        }
+    }
+
     /// The clock at the cut at `handle`, or `nil` where the line has none.
     func timestamp(of handle: RouteTrimHandle) -> Date? {
         line?.timestamp(
@@ -733,22 +636,6 @@ final class RouteTrimSession {
             at: position(of: handle),
             takingOffPause: pausesTakenOff.contains(handle.endPause)
         )
-    }
-
-    // MARK: The map
-
-    /// Puts the cuts on the map. An ended session is never shown again: the
-    /// pop that ended it builds its screen once more on the way out.
-    func show(on preview: RouteTrimPreview) {
-        guard !isEnded else { return }
-        self.preview = preview
-        preview.present(self)
-    }
-
-    /// Takes the cuts off the map, for good — see the file header.
-    func end() {
-        isEnded = true
-        preview?.withdraw(self)
     }
 }
 

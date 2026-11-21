@@ -15046,6 +15046,52 @@
         }
       }
     },
+    "Change a Stretch" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Teilstück ändern"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cambiar un trecho"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modifier un tronçon"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modifica una parte"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zmień fragment"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Изменить отрезок"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Змінити відтинок"
+          }
+        }
+      }
+    },
     "Check access between the stops and the route" : {
       "localizations" : {
         "de" : {
@@ -16238,6 +16284,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Закрити"
+          }
+        }
+      }
+    },
+    "Close Loop" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rundweg schließen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cerrar el circuito"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fermer la boucle"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chiudi l’anello"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zamknij pętlę"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Замкнуть кольцо"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Замкнути кільце"
           }
         }
       }
@@ -21455,36 +21547,36 @@
         }
       }
     },
-    "Drag either end of the route, here or on the map, to cut it off. The original is kept." : {
+    "Drag either end of the route to cut it off, or hold the line on the map and pull it onto another path. The original is kept." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ziehe ein Ende der Route, hier oder auf der Karte, um es abzuschneiden. Das Original bleibt erhalten."
+            "value" : "Ziehe ein Ende der Route, um es abzuschneiden, oder halte die Linie auf der Karte und ziehe sie auf einen anderen Weg. Das Original bleibt erhalten."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Arrastra un extremo de la ruta, aquí o en el mapa, para recortarlo. El original se conserva."
+            "value" : "Arrastra un extremo de la ruta para recortarlo, o mantén pulsada la línea en el mapa y llévala a otro camino. El original se conserva."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Faites glisser une extrémité de l’itinéraire, ici ou sur la carte, pour la couper. L’original est conservé."
+            "value" : "Faites glisser une extrémité de l’itinéraire pour la couper, ou maintenez la ligne sur la carte et tirez-la sur un autre chemin. L’original est conservé."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Trascina un’estremità del percorso, qui o sulla mappa, per tagliarla. L’originale viene conservato."
+            "value" : "Trascina un’estremità del percorso per tagliarla, oppure tieni premuta la linea sulla mappa e spostala su un altro sentiero. L’originale viene conservato."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Przeciągnij dowolny koniec trasy, tutaj lub na mapie, aby go odciąć. Oryginał zostaje zachowany."
+            "value" : "Przeciągnij dowolny koniec trasy, aby go odciąć, albo przytrzymaj linię na mapie i przeciągnij ją na inną ścieżkę. Oryginał zostaje zachowany."
           }
         },
         "ro" : {
@@ -21496,13 +21588,105 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Перетяните любой конец маршрута, здесь или на карте, чтобы отрезать его. Оригинал сохраняется."
+            "value" : "Перетяните любой конец маршрута, чтобы отрезать его, или удерживайте линию на карте и перетяните ее на другую тропу. Оригинал сохраняется."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Перетягніть будь-який кінець маршруту, тут або на карті, щоб відрізати його. Оригінал зберігається."
+            "value" : "Перетягніть будь-який кінець маршруту, щоб відрізати його, або утримуйте лінію на карті й перетягніть її на іншу стежку. Оригінал зберігається."
+          }
+        }
+      }
+    },
+    "Drag the start handle to the new start first." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ziehe zuerst den Anfangsgriff an den neuen Start."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Primero arrastra el tirador de inicio hasta el nuevo comienzo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Faites d’abord glisser la poignée de début jusqu’au nouveau départ."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prima trascina la maniglia iniziale sul nuovo punto di partenza."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Najpierw przeciągnij uchwyt początku na nowy start."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сначала перетяните начальный маркер на новое начало."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Спершу перетягніть початковий маркер на новий початок."
+          }
+        }
+      }
+    },
+    "Drag the two handles to the ends of the stretch, here or on the map." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ziehe die beiden Griffe an die Enden des Teilstücks, hier oder auf der Karte."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrastra los dos tiradores hasta los extremos del trecho, aquí o en el mapa."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Faites glisser les deux poignées jusqu’aux extrémités du tronçon, ici ou sur la carte."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trascina le due maniglie alle estremità della parte, qui o sulla mappa."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Przeciągnij oba uchwyty na końce fragmentu, tutaj lub na mapie."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перетяните оба маркера к концам отрезка, здесь или на карте."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перетягніть обидва маркери до кінців відтинка, тут або на карті."
           }
         }
       }
@@ -22907,6 +23091,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Кінець маршруту"
+          }
+        }
+      }
+    },
+    "End of stretch" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ende des Teilstücks"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fin del trecho"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fin du tronçon"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fine della parte"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Koniec fragmentu"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Конец отрезка"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Кінець відтинка"
           }
         }
       }
@@ -24675,6 +24905,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Іти цією стежкою"
+          }
+        }
+      }
+    },
+    "Follow Trails" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wegen folgen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seguir los senderos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suivre les sentiers"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Segui i sentieri"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Poprowadź szlakami"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вести по тропам"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вести стежками"
           }
         }
       }
@@ -33974,6 +34250,52 @@
         }
       }
     },
+    "Move the handles onto mapped trails, or straighten the stretch instead." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verschiebe die Griffe auf kartierte Wege oder begradige das Teilstück stattdessen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mueve los tiradores a senderos cartografiados o endereza el trecho."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Placez les poignées sur des sentiers cartographiés, ou rendez plutôt le tronçon rectiligne."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sposta le maniglie su sentieri mappati, oppure raddrizza la parte."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Przesuń uchwyty na szlaki naniesione na mapę albo wyprostuj fragment."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Переместите маркеры на тропы, нанесенные на карту, или выпрямите отрезок."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перемістіть маркери на стежки, нанесені на карту, або випряміть відтинок."
+          }
+        }
+      }
+    },
     "Move the map and tap Search This Area to look somewhere else." : {
       "localizations" : {
         "de" : {
@@ -37298,6 +37620,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "У цьому файлі не знайдено точок треку."
+          }
+        }
+      }
+    },
+    "No trail was found between these points." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zwischen diesen Punkten wurde kein Weg gefunden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se ha encontrado ningún sendero entre estos puntos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun sentier n’a été trouvé entre ces points."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessun sentiero trovato tra questi punti."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Między tymi punktami nie znaleziono szlaku."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Между этими точками тропа не найдена."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Між цими точками стежку не знайдено."
           }
         }
       }
@@ -43186,6 +43554,52 @@
         }
       }
     },
+    "Out and Back" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hin und zurück"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ida y vuelta"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aller-retour"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Andata e ritorno"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tam i z powrotem"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Туда и обратно"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Туди й назад"
+          }
+        }
+      }
+    },
     "Over the Limit" : {
       "localizations" : {
         "de" : {
@@ -45969,6 +46383,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Тут зʼявляються фото, які ви знімаєте в цьому поході."
+          }
+        }
+      }
+    },
+    "Pick a shorter stretch, or undo an earlier change first." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wähle ein kürzeres Teilstück oder mache zuerst eine frühere Änderung rückgängig."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige un trecho más corto o deshaz antes un cambio anterior."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisissez un tronçon plus court, ou annulez d’abord une modification précédente."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scegli una parte più corta, oppure annulla prima una modifica precedente."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wybierz krótszy fragment albo najpierw cofnij wcześniejszą zmianę."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выберите отрезок короче или сначала отмените одно из прежних изменений."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Виберіть коротший відтинок або спершу скасуйте одну з попередніх змін."
           }
         }
       }
@@ -51670,6 +52130,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Повторити збереження"
+          }
+        }
+      }
+    },
+    "Reverse" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Umkehren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invertir"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inverser"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inverti"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Odwróć"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Развернуть"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Розвернути"
           }
         }
       }
@@ -58130,6 +58636,52 @@
         }
       }
     },
+    "Start Loop Here" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rundweg hier beginnen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empezar el circuito aquí"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Commencer la boucle ici"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inizia l’anello qui"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zacznij pętlę tutaj"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Начать кольцо здесь"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Почати кільце тут"
+          }
+        }
+      }
+    },
     "Start of route" : {
       "localizations" : {
         "de" : {
@@ -58178,6 +58730,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Початок маршруту"
+          }
+        }
+      }
+    },
+    "Start of stretch" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anfang des Teilstücks"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inicio del trecho"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Début du tronçon"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inizio della parte"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Początek fragmentu"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Начало отрезка"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Початок відтинка"
           }
         }
       }
@@ -59114,6 +59712,98 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Напряму через розрив · %@"
+          }
+        }
+      }
+    },
+    "Straighten" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Begradigen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enderezar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rendre rectiligne"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Raddrizza"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wyprostuj"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выпрямить"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Випрямити"
+          }
+        }
+      }
+    },
+    "Stretch" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Teilstück"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trecho"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tronçon"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parte"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fragment"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отрезок"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Відтинок"
           }
         }
       }
@@ -65752,6 +66442,52 @@
         }
       }
     },
+    "This stretch is too long to redraw." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Teilstück ist zu lang, um es neu zu zeichnen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este trecho es demasiado largo para volver a trazarlo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce tronçon est trop long pour être redessiné."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questa parte è troppo lunga per essere ridisegnata."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ten fragment jest za długi, by narysować go od nowa."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Этот отрезок слишком длинный, чтобы провести его заново."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цей відтинок задовгий, щоб провести його наново."
+          }
+        }
+      }
+    },
     "This submission has no creator recorded, so a published listing would be invisible and nobody could block its author. It cannot be published." : {
       "localizations" : {
         "de" : {
@@ -66425,6 +67161,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Куди: %@"
+          }
+        }
+      }
+    },
+    "To choose differently for a section, undo the changes to the route first." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Um für einen Abschnitt anders zu wählen, mache zuerst die Änderungen an der Route rückgängig."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Para elegir otra opción para un tramo, deshaz antes los cambios de la ruta."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pour faire un autre choix pour une section, annulez d’abord les modifications de l’itinéraire."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Per scegliere diversamente per un tratto, annulla prima le modifiche al percorso."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aby wybrać inaczej dla odcinka, najpierw cofnij zmiany trasy."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Чтобы выбрать иначе для участка, сначала отмените изменения маршрута."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Щоб вибрати інакше для ділянки, спершу скасуйте зміни маршруту."
           }
         }
       }
@@ -68774,6 +69556,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Розблокувати всіх?"
+          }
+        }
+      }
+    },
+    "Undo" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Widerrufen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deshacer"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annuler"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annulla"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cofnij"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отменить"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скасувати"
           }
         }
       }
@@ -71790,6 +72618,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Біле"
+          }
+        }
+      }
+    },
+    "Whole Route" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ganze Route"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toda la ruta"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Itinéraire entier"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Intero percorso"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cała trasa"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Весь маршрут"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Увесь маршрут"
           }
         }
       }

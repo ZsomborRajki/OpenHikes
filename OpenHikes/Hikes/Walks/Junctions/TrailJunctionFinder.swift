@@ -113,6 +113,32 @@ nonisolated enum TrailJunctionFinder {
         return junctions(along: profile, in: graph)
     }
 
+    /// How far along `profile`'s line each junction it passes is: every node
+    /// three trails share that the line goes by, whether or not there is
+    /// anything to say there. What a stretch pulled onto another path is
+    /// bounded by — see ``RouteReroute`` — because a fork is where a line
+    /// could have gone another way, and a hiker needs no telling to walk
+    /// straight on at one.
+    ///
+    /// Throws for the reason ``junctions(along:from:)`` does.
+    @concurrent
+    static func passDistances(
+        along profile: RouteProfile,
+        from provider: (any TrailGraphProviding)?
+    ) async throws -> [Double] {
+        guard let provider, profile.coordinates.count > 1 else { return [] }
+        let coordinates = profile.coordinates
+        let graph = if await provider.hasCompleteCachedGraph(covering: coordinates) {
+            try await provider.cachedGraph(covering: coordinates)
+        } else {
+            try await provider.graph(covering: coordinates)
+        }
+        guard let graph, !graph.isEmpty else { return [] }
+        let network = Network(graph)
+        guard !network.junctionNodes.isEmpty else { return [] }
+        return passes(along: profile, of: network).map(\.distanceMeters)
+    }
+
     /// Every junction along `profile`'s line that something should be said
     /// about, ordered by distance, on the line's own scale.
     static func junctions(along profile: RouteProfile, in graph: TrailGraph) -> [TrailJunction] {

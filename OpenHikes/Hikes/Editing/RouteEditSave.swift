@@ -66,6 +66,16 @@ nonisolated struct EditedLine: Equatable, Sendable {
         }
     }
 
+    /// The steps made on the whole line before it was cut — see
+    /// ``RouteStep``.
+    struct Steps: Equatable, Sendable {
+        var made: [RouteStep] = []
+        /// The ends of the line they moved — see
+        /// ``RouteSteps/Applied``. An end a step moved is an end cut, for
+        /// what a save does to the clock there.
+        var moving: Set<RouteTrimHandle> = []
+    }
+
     /// What a save does to the clock at one end of the walk: the hike's
     /// date at its start, and the recording's own walk at both.
     ///
@@ -103,6 +113,8 @@ nonisolated struct EditedLine: Equatable, Sendable {
     let end: ClockEnd
     /// The two cuts that made it — see ``Cuts``.
     let cuts: Cuts
+    /// The steps made on the whole line before the cuts.
+    let steps: [RouteStep]
     /// The whole line's pieces under the answers the edit leaves, or `nil`
     /// for a hike with no stretches to check.
     let assembly: RouteAssembly?
@@ -121,13 +133,15 @@ nonisolated struct EditedLine: Equatable, Sendable {
     ///     something off when the edit began — see ``ClockEnd``.
     ///   - assembly: The whole line's pieces under the answers that made
     ///     `whole`, for a hike that has any.
+    ///   - steps: The steps `whole` already has made on it.
     init?(
         whole: [RouteCoordinate],
         distances: [Double],
         cuts: Cuts,
         replacing current: [RouteCoordinate],
         cutBefore: Set<RouteTrimHandle> = [],
-        assembly: RouteAssembly? = nil
+        assembly: RouteAssembly? = nil,
+        steps: Steps = Steps()
     ) {
         let kept = cuts.range.map { range in
             RouteTrim.trimmed(whole, distances: distances, keeping: range, takingOff: cuts.takingOff)
@@ -138,9 +152,14 @@ nonisolated struct EditedLine: Equatable, Sendable {
         route = kept
         lengthMeters = length
         removedMeters = current.lengthMeters - length
-        removedSeconds = RouteTrim.recordedSeconds(of: current) - RouteTrim.recordedSeconds(of: kept)
+        // A line turned round or begun somewhere else has no clock, and is
+        // no less a walk for it: a line with no times leaves the walk's time
+        // as it was, as it always has.
+        let recordedBefore = RouteTrim.recordedSeconds(of: current)
+        let recordedNow = RouteTrim.recordedSeconds(of: kept)
+        removedSeconds = recordedBefore > 0 && recordedNow > 0 ? recordedBefore - recordedNow : 0
         revision = TrailWalkRecord.routeRevision(of: kept)
-        let cutNow = cuts.ends(alongWholeOf: distances.last ?? 0)
+        let cutNow = cuts.ends(alongWholeOf: distances.last ?? 0).union(steps.moving)
         start = Self.clock(
             isCut: cutNow.contains(.start),
             wasCut: cutBefore.contains(.start),
@@ -154,6 +173,7 @@ nonisolated struct EditedLine: Equatable, Sendable {
             before: current.last?.timestamp
         )
         self.cuts = cuts
+        self.steps = steps.made
         self.assembly = assembly
         // A save is a look: the hiker has had the line in front of them.
         notOnFoot = RouteEdit.NotOnFoot(
@@ -180,6 +200,9 @@ enum RouteEditRefusal: LocalizedError, Equatable, Sendable {
     /// The hike's line is no longer the one the edit was made to: it was
     /// edited on the hiker's other device while the editor was open.
     case lineChanged
+    /// *Follow Trails* found no mapped path between the two ends of the
+    /// stretch — see ``RouteReroute``.
+    case noMappedWay
     /// *Revert* found no original on this device: iCloud has brought the
     /// hike and not yet its original line.
     case noOriginal
@@ -192,12 +215,17 @@ enum RouteEditRefusal: LocalizedError, Equatable, Sendable {
     /// The store refused to keep it. No diagnostic, for the reason
     /// ``TrailDraftRefusal/notSaved`` carries none.
     case notSaved
+    /// The paths drawn across the hike's stretches would be more than a
+    /// hike's record keeps — see ``RouteSteps/maximumPathCoordinates``.
+    case tooMuchToKeep
 
     var errorDescription: String? {
         switch self {
         case .lineChanged, .notSaved: String(localized: "This route couldn’t be saved.")
         case .noOriginal: String(localized: "The original route couldn’t be restored.")
         case .notHereYet: String(localized: "This route can’t be edited yet.")
+        case .noMappedWay: String(localized: "No trail was found between these points.")
+        case .tooMuchToKeep: String(localized: "This stretch is too long to redraw.")
         }
     }
 
@@ -209,6 +237,10 @@ enum RouteEditRefusal: LocalizedError, Equatable, Sendable {
             String(localized: "It isn’t on this device yet. Try again once iCloud has caught up.")
         case .notSaved:
             String(localized: "Your hike wasn’t changed. Check that the device has storage available, then try again.")
+        case .noMappedWay:
+            String(localized: "Move the handles onto mapped trails, or straighten the stretch instead.")
+        case .tooMuchToKeep:
+            String(localized: "Pick a shorter stretch, or undo an earlier change first.")
         }
     }
 }
@@ -264,6 +296,7 @@ enum RouteEditSave {
         edit.assembly = edited.assembly ?? edit.assembly
         edit.trim = edited.cuts.range
         edit.endPausesTakenOff = edited.cuts.range == nil ? [] : edited.cuts.takingOff
+        edit.routeSteps = edited.steps
         edit.notOnFoot = edited.notOnFoot
         hike.routeEdit = edit
         replaceLine(of: hike, with: edited.route, before: before)
@@ -308,6 +341,7 @@ enum RouteEditSave {
         edit.assembly = edit.assembly?.asSaved
         edit.trim = nil
         edit.endPausesTakenOff = []
+        edit.routeSteps = []
         edit.notOnFoot = original.notOnFoot
         edit.notOnFoot?.isChecked = true
         // A revert moves the line as an edit does, so a shared copy made of

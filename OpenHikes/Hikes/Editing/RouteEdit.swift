@@ -62,6 +62,13 @@ nonisolated struct RouteEdit: Codable, Equatable, Sendable {
         }
     }
 
+    /// The steps made on a line, in a value of their own so that a hike
+    /// with none keeps no key for them, and a record written before there
+    /// were steps reads as one with none.
+    struct Steps: Codable, Equatable, Sendable {
+        var made: [RouteStep]
+    }
+
     /// What goes back with ``Hike/originalRoute``.
     struct Original: Codable, Equatable, Sendable {
         /// ``Hike/distanceMeters`` before the first edit.
@@ -97,6 +104,12 @@ nonisolated struct RouteEdit: Codable, Equatable, Sendable {
     /// take off, which no distance along the line can say. Read through
     /// ``endPausesTakenOff``.
     var trimEndPauses: Int?
+    /// What was done to the whole line beyond its cuts, in the order it was
+    /// done, or `nil` for nothing: a stretch drawn along another path or
+    /// taken out, the line turned round or closed — see ``RouteStep``. They
+    /// are made on the line ``assembly`` rebuilds, and ``trim`` cuts the line
+    /// they leave. Read through ``routeSteps``.
+    var steps: Steps?
     /// The ends of the line as it is drawn now that were not walked.
     var notOnFoot: NotOnFoot?
 
@@ -104,6 +117,13 @@ nonisolated struct RouteEdit: Codable, Equatable, Sendable {
     /// shared, and had nothing to check, keeps no column at all.
     var isEmpty: Bool {
         original == nil && editedUnderSubmissionID == nil && assembly == nil && trim == nil && notOnFoot == nil
+            && routeSteps.isEmpty
+    }
+
+    /// The steps made on the whole line, none for a hike with none.
+    var routeSteps: [RouteStep] {
+        get { steps?.made ?? [] }
+        set { steps = newValue.isEmpty ? nil : Steps(made: newValue) }
     }
 
     /// The pauses on the whole line's ends that ``trim`` takes off.

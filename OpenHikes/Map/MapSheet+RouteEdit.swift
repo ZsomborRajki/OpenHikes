@@ -40,6 +40,10 @@ extension MapSheet {
             session: presentation.routeTrim(for: route),
             preview: appModel.routeTrim,
             health: routeEditHealth,
+            routing: RouteReroute.Services(
+                router: appModel.trailMaker.hikingRouter,
+                graph: appModel.trailGraphProvider
+            ),
             onFirstAppear: {
                 // Once a visit: a turn of the phone appears the screen again,
                 // and must not take the camera off where the hiker has it.

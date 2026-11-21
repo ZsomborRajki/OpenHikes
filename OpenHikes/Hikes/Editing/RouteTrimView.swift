@@ -5,18 +5,22 @@
 //  *Edit Route* on a hike that was recorded or imported, pushed from the
 //  closing actions of its screen: drag either end of the line inward, take
 //  off a stretch that was not walked in one tap, answer for the stretches
-//  trail matching left a question on, and put the original back.
+//  trail matching left a question on, change a stretch or the whole line,
+//  and put the original back.
 //
-//  ## Why a trim, and only a trim
+//  ## A walked line is never changed without saying so
 //
 //  A drawn trail is edited by its stops, in the maker. A line somebody walked
-//  has none, and re-routing it would replace it with a guess, which was the
-//  owner's reason for giving it no *Edit Route* at all. A trim keeps that
-//  promise: every point it leaves is the point that was saved — see
-//  ``RouteTrim`` — and the line it cut from is kept beside it, so *Revert to
-//  Original* undoes the whole of it on any of the hiker's devices. A stretch
-//  to check is no re-routing either: each of its answers is a line the
-//  recording itself came with — see ``RouteAssembly``.
+//  has none, and re-routing it replaces ground the hiker covered with a
+//  guess, which was the owner's reason for giving it no *Edit Route* at all.
+//  Three things answer that. A trim guesses nothing: every point it leaves
+//  is the point that was saved — see ``RouteTrim``. A stretch to check is no
+//  guess either: each of its answers is a line the recording itself came
+//  with — see ``RouteAssembly``. And a stretch drawn along another path,
+//  which is one, says so: it is marked inferred and carries no times, only
+//  the hiker's own hand makes it, and it is taken back with *Undo* — see
+//  ``RouteStep``. The line all of it was done to is kept beside the hike, so
+//  *Revert to Original* undoes the whole of it on any of the hiker's devices.
 //
 //  ## Pushed, not presented
 //
@@ -49,6 +53,9 @@ struct RouteTrimView: View {
     /// What an edit needs to replace the hike's workout, or `nil` on a launch
     /// with no Health.
     var health: RouteEditWorkout.Health?
+    /// Who draws a stretch along another path, and who knows where the
+    /// junctions are — see ``RouteReroute``.
+    var routing: RouteReroute.Services?
     /// Brings the whole line into view above the sheet, the first time this
     /// screen appears.
     var onFirstAppear: () -> Void = { /* no-op default */ }
@@ -65,6 +72,7 @@ struct RouteTrimView: View {
                 RouteTrimChart(session: session, tint: hike.tintOpaque)
                 RouteTrimFigures(session: session, hikeDistanceMeters: hike.distanceMeters)
                 RouteTrimOffers(session: session)
+                RouteStepsCard(session: session)
                 RouteChecksCard(session: session) { id in
                     onShowStretch(session.line?.coordinates(ofCheck: id) ?? [])
                 }
@@ -74,7 +82,12 @@ struct RouteTrimView: View {
                         RouteRevertButton(session: session, revert: revert)
                     }
                 }
-                Text("Drag either end of the route, here or on the map, to cut it off. The original is kept.")
+                Text(
+                    """
+                    Drag either end of the route to cut it off, or hold the line on the map and pull it onto \
+                    another path. The original is kept.
+                    """
+                )
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -98,6 +111,7 @@ struct RouteTrimView: View {
         .task(id: RouteTrimLineKey(line, edit: hike.routeEditData)) {
             let drawn = line.current?.route ?? []
             guard drawn.count > 1 else { return }
+            session.routing = routing
             await session.load(RouteEditSources.reading(hike, drawn: drawn, in: modelContext.container))
         }
         .onAppear {
@@ -158,7 +172,7 @@ struct RouteTrimSaveButton: View {
 
     var body: some View {
         RoleButton(.confirm, title: "Save", action: save)
-            .disabled(!session.hasChanges || session.isSaving)
+            .disabled(!session.hasChanges || session.isSaving || session.isRouting)
             .accessibilityIdentifier("route-trim-save")
     }
 }

@@ -64,7 +64,11 @@ nonisolated struct RouteEditSources: Equatable, Sendable {
     /// The whole line the editor opens on — see the file header — with where
     /// each stretch to check is in it.
     var whole: RouteAssembly.Line {
-        whole(under: edit?.assembly)
+        let assembled = whole(under: edit?.assembly)
+        guard let steps = edit?.routeSteps, !steps.isEmpty else { return assembled }
+        // A step moves the ground a stretch to check stood on, so a line
+        // with steps has no stretches to point at.
+        return RouteAssembly.Line(route: RouteSteps.applying(steps, to: assembled.route).route)
     }
 
     /// The same, under the choices of `assembly`.

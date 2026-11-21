@@ -29,15 +29,24 @@ struct RouteTrimFigures: View {
         let kept = max(session.endMeters - session.startMeters, 0)
         let removed = max(total - kept, 0)
         let lost = session.currentLengthMeters - kept
+        // Picking a stretch out, the figures are the stretch's: nothing is
+        // cut, so there is nothing removed to count.
+        let picks = session.isSelectingStretch
         return StatStrip {
-            StatFigure(
-                label: "Distance",
-                value: RouteTrimFormat.length(max(0, min(kept, hikeDistanceMeters - lost)))
-            )
+            if picks {
+                StatFigure(label: "Stretch", value: RouteTrimFormat.length(kept))
+            } else {
+                StatFigure(
+                    label: "Distance",
+                    value: RouteTrimFormat.length(max(0, min(kept, hikeDistanceMeters - lost)))
+                )
+            }
             if let seconds = keptSeconds {
                 StatFigure(label: "Duration", value: HikeFormat.duration(seconds))
             }
-            StatFigure(label: "Removed", value: RouteTrimFormat.length(removed))
+            if !picks {
+                StatFigure(label: "Removed", value: RouteTrimFormat.length(removed))
+            }
         }
         .accessibilityIdentifier("route-trim-figures")
     }
@@ -64,8 +73,10 @@ struct RouteTrimOffers: View {
         // A new line has its own ends.
         _ = session.lineRevision
         let ends = session.line?.carriedEnds ?? RouteCarriedEnds()
-        let leading = ends.leading.flatMap { session.hasTakenOff($0, at: .start) ? nil : $0 }
-        let trailing = ends.trailing.flatMap { session.hasTakenOff($0, at: .end) ? nil : $0 }
+        // Not while the handles pick a stretch out: they are not cuts then.
+        let offers = !session.isSelectingStretch
+        let leading = ends.leading.flatMap { offers && !session.hasTakenOff($0, at: .start) ? $0 : nil }
+        let trailing = ends.trailing.flatMap { offers && !session.hasTakenOff($0, at: .end) ? $0 : nil }
         return Group {
             if leading != nil || trailing != nil {
                 PlaceCardList(title: String(localized: "Not on Foot")) {

@@ -87,6 +87,8 @@ struct RouteTrimMapState {
     /// The stretch to check the hiker is looking at, and which it is.
     var focus: MKPolyline?
     var focusedCheckID: Int?
+    /// A stretch picked out, and a pull — see `MapRouteTrim+Stretch.swift`.
+    var stretch = RouteStretchMapState()
     var startHandle: RouteTrimHandleAnnotation?
     var endHandle: RouteTrimHandleAnnotation?
 
@@ -106,7 +108,7 @@ extension MapView.Coordinator {
     /// Wide enough to hide the line and its border underneath.
     private static let trimCoverWidthFactor: CGFloat = 2.6
     /// The stretch being looked at, as the review before a save drew it.
-    private static let trimFocusWidth: CGFloat = 7
+    static let trimFocusWidth: CGFloat = 7
     private static let trimHandleDiameter: CGFloat = 30
     private static let trimHandleRingWidth: CGFloat = 4
     /// How long a finger rests on a handle before it takes hold: long enough
@@ -121,6 +123,7 @@ extension MapView.Coordinator {
         routeTrimMap.isObserving = true
         #if canImport(UIKit)
         installRouteTrimDrag(on: mapView)
+        installRoutePull(on: mapView)
         #endif
         trackRouteTrim(preview, on: mapView)
     }
@@ -152,12 +155,17 @@ extension MapView.Coordinator {
             routeTrimMap.lineRevision = session.lineRevision
             addRouteTrim(of: line, in: session, to: mapView)
         }
-        guard let start = session.spot(of: .start), let end = session.spot(of: .end) else { return }
-        if let renderer = routeTrimMap.leadingRenderer { cover(renderer, from: 0, to: start.drawnFraction) }
-        if let renderer = routeTrimMap.trailingRenderer { cover(renderer, from: end.drawnFraction, to: 1) }
+        guard let start = session.spot(of: .start), let end = session.spot(of: .end),
+              let keptStart = session.keptSpot(of: .start), let keptEnd = session.keptSpot(of: .end)
+        else { return }
+        if let renderer = routeTrimMap.leadingRenderer { cover(renderer, from: 0, to: keptStart.drawnFraction) }
+        if let renderer = routeTrimMap.trailingRenderer { cover(renderer, from: keptEnd.drawnFraction, to: 1) }
         for piece in routeTrimMap.keptPieces {
             guard let renderer = piece.renderer else { continue }
-            coverKept(piece, with: renderer, from: start, to: end)
+            coverKept(piece, with: renderer, from: keptStart, to: keptEnd)
+        }
+        if let renderer = routeTrimMap.stretch.pickedRenderer {
+            cover(renderer, from: start.drawnFraction, to: end.drawnFraction)
         }
         move(routeTrimMap.startHandle, to: start.coordinate)
         move(routeTrimMap.endHandle, to: end.coordinate)
@@ -193,8 +201,9 @@ extension MapView.Coordinator {
         let trailing = MKPolyline(coordinates: coordinates, count: coordinates.count)
         routeTrimMap.leadingCover = leading
         routeTrimMap.trailingCover = trailing
+        let picked = [routeStretchOverlay(of: line, in: session)].compactMap(\.self)
         // Above the route, which is at the top of the same level.
-        mapView.addOverlays(stale + kept.map(\.polyline) + [leading, trailing], level: .aboveLabels)
+        mapView.addOverlays(stale + kept.map(\.polyline) + [leading, trailing] + picked, level: .aboveLabels)
         guard let first = coordinates.first, let last = coordinates.last else { return }
         let start = RouteTrimHandleAnnotation(handle: .start, coordinate: first)
         let end = RouteTrimHandleAnnotation(handle: .end, coordinate: last)
@@ -209,7 +218,8 @@ extension MapView.Coordinator {
         #endif
         let covers = [routeTrimMap.leadingCover, routeTrimMap.trailingCover, routeTrimMap.focus]
         let kept = routeTrimMap.keptPieces.map(\.polyline)
-        mapView.removeOverlays(routeTrimMap.staleCovers + kept + covers.compactMap(\.self))
+        mapView.removeOverlays(routeTrimMap.staleCovers + kept + covers.compactMap(\.self) + routeStretchOverlays())
+        forgetRouteStretchOverlays()
         mapView.removeAnnotations([routeTrimMap.startHandle, routeTrimMap.endHandle].compactMap(\.self))
         routeTrimMap.leadingCover = nil
         routeTrimMap.trailingCover = nil
@@ -247,11 +257,30 @@ extension MapView.Coordinator {
     func routeTrimRenderer(for polyline: MKPolyline) -> MKPolylineRenderer? {
         if routeTrimMap.focus === polyline { return routeTrimFocusRenderer(for: polyline) }
         if let kept = routeTrimKeptRenderer(for: polyline) { return kept }
+        if let stretch = routeStretchRenderer(for: polyline) { return stretch }
         let isLeading = routeTrimMap.leadingCover === polyline
         let isTrailing = routeTrimMap.trailingCover === polyline
         guard isLeading || isTrailing || routeTrimMap.staleCovers.contains(where: { $0 === polyline }) else {
             return nil
         }
+        let renderer = routeTrimCoverRenderer(for: polyline)
+        if isLeading {
+            routeTrimMap.leadingRenderer = renderer
+        } else if isTrailing {
+            routeTrimMap.trailingRenderer = renderer
+        }
+        // The cut it is drawn to, which the pass that added the overlay
+        // could not set: MapKit asks for the renderer afterwards.
+        if isLeading, let spot = routeTrimMap.session?.keptSpot(of: .start) {
+            cover(renderer, from: 0, to: spot.drawnFraction)
+        } else if isTrailing, let spot = routeTrimMap.session?.keptSpot(of: .end) {
+            cover(renderer, from: spot.drawnFraction, to: 1)
+        }
+        return renderer
+    }
+
+    /// Gray, and wide enough to hide the line and its border underneath.
+    func routeTrimCoverRenderer(for polyline: MKPolyline) -> MKPolylineRenderer {
         let renderer = MKPolylineRenderer(polyline: polyline)
         #if os(macOS)
         renderer.strokeColor = NSColor.systemGray
@@ -261,18 +290,6 @@ extension MapView.Coordinator {
         renderer.lineWidth = CGFloat(routeWidth) * Self.trimCoverWidthFactor
         renderer.lineJoin = .round
         renderer.lineCap = .butt
-        if isLeading {
-            routeTrimMap.leadingRenderer = renderer
-        } else if isTrailing {
-            routeTrimMap.trailingRenderer = renderer
-        }
-        // The cut it is drawn to, which the pass that added the overlay
-        // could not set: MapKit asks for the renderer afterwards.
-        if isLeading, let spot = routeTrimMap.session?.spot(of: .start) {
-            cover(renderer, from: 0, to: spot.drawnFraction)
-        } else if isTrailing, let spot = routeTrimMap.session?.spot(of: .end) {
-            cover(renderer, from: spot.drawnFraction, to: 1)
-        }
         return renderer
     }
 

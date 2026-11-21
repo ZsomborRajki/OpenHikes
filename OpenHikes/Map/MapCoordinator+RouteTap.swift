@@ -207,6 +207,11 @@ extension MapView.Coordinator: UIGestureRecognizerDelegate {
         if recognizer === routeTrimMap.dragRecognizer {
             return routeTrimHandle(at: point, in: mapView) != nil
         }
+        // And the one that pulls a trim's line only on the line, away from
+        // its handles — see `MapRouteTrim+Stretch.swift`.
+        if recognizer === routeTrimMap.stretch.pullRecognizer {
+            return routePullStretch(at: point, in: mapView) != nil
+        }
         // The press that drops a pin begins everywhere the drag does not —
         // see `MapTrailDraftSelection.swift`.
         if recognizer is TrailDraftPinDropRecognizer {
