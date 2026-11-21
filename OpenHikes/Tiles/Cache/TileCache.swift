@@ -9,6 +9,7 @@
 import Foundation
 import MapKit
 import Network
+import OpenHikesVectorTiles
 import os
 import Synchronization
 
@@ -795,15 +796,10 @@ nonisolated extension TileCache {
         // A provider drawn from vector tiles asks the tile server first, and
         // comes down to its raster template below whenever that brings nothing,
         // unless the device itself is offline, which the template would be too.
-        switch await vectorTiles?.drawing(forKey: key) {
-        case let .png(drawn):
-            if let image = TileImage(data: drawn) { return FetchedTile(data: drawn, image: image) }
-        case let .provisional(drawn):
-            if let image = TileImage(data: drawn) { return FetchedTile(data: drawn, image: image, isProvisional: true) }
-        case .offline:
-            return nil
-        case .fallBack, nil:
-            break
+        switch await vectorFetch(forKey: key) {
+        case let .tile(fetched): return fetched
+        case .offline: return nil
+        case .fallBack: break
         }
         // A deadline a raster server named stands for its URL, whichever
         // style is asking: the comparison style asks the very URL the vector

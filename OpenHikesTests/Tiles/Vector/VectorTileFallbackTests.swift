@@ -12,6 +12,8 @@
 import CoreGraphics
 import Foundation
 @testable import OpenHikes
+@testable import OpenHikesVectorTiles
+@testable import OpenHikesVectorTilesTestSupport
 import Synchronization
 import Testing
 import UIKit
@@ -69,6 +71,19 @@ struct VectorTileFallbackTests {
     }
 
     private var hosts: [String?] { StubTileProtocol.requests.map { $0.url?.host() } }
+
+    /// The client is asked by provider and tile, so reading the key is the
+    /// cache's: one that names no tile asks the tile server nothing.
+    @Test("a key of another shape is not the tile server's", arguments: ["osm/14/8800", "not a key"])
+    func otherKeysAreLeftAlone(key: String) async {
+        let stub = StubbedTileCache(vectorSources: sources)
+        defer { stub.tearDown() }
+        script(vector: .init(data: landTile))
+
+        #expect(!stub.cache.isDrawnFromVectorTiles(key))
+        #expect(await stub.cache.vectorDrawing(forKey: key) == .fallBack)
+        #expect(StubTileProtocol.requestCount == 0)
+    }
 
     @Test("a tile the server answers is drawn, filed, and costs no raster request")
     func servedTileIsDrawn() async throws {

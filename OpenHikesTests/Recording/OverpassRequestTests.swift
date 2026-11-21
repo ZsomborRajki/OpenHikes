@@ -18,6 +18,7 @@
 
 import Foundation
 @testable import OpenHikes
+import OpenHikesVectorTiles
 import Testing
 
 @Suite("Overpass request")

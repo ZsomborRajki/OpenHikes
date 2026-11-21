@@ -18,6 +18,7 @@
 
 import Foundation
 @testable import OpenHikes
+@testable import OpenHikesVectorTilesTestSupport
 import Testing
 
 @Suite("Tile user agent", .serialized)

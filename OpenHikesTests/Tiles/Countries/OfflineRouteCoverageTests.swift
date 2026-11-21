@@ -12,6 +12,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+@testable import OpenHikesVectorTiles
 import Testing
 
 @MainActor

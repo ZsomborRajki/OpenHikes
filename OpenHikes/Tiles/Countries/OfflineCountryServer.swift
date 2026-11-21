@@ -8,6 +8,7 @@
 //
 
 import Foundation
+import OpenHikesVectorTiles
 
 /// Where the manifest and the files are. A suite hands the model its own.
 protocol OfflineCountryServing: Sendable {

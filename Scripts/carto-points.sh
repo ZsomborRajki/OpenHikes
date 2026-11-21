@@ -5,10 +5,11 @@
 # The OpenStreetMap style's points — every icon, its color and the zoom it
 # appears at, and the name written under it — are OpenStreetMap Carto's, the
 # style tile.openstreetmap.org draws. This reads them out of a pinned Carto
-# release with Scripts/lib/carto-points.swift and writes the table the app
-# reads (OpenHikes/Tiles/Vector/VectorTilePoints.json) and the icons it names
-# (OpenHikes/Tiles/Vector/CartoIcons.xcassets, replaced whole), with the
-# pictures Carto fills an area with or lays along a line, as
+# release with Scripts/lib/carto-points.swift and writes the table the map's
+# renderer reads and the icons it names, into the resources of the package
+# that draws the map (OpenHikesVectorTiles/Sources/OpenHikesVectorTiles/
+# Resources: VectorTilePoints.json, and CartoIcons.xcassets, replaced whole),
+# with the pictures Carto fills an area with or lays along a line, as
 # `carto-pattern-…` (`VectorTilePatterns`). Carto's style, icons and patterns
 # are CC0.
 #
@@ -23,7 +24,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CARTO_VERSION="v6.1.0"
-VECTOR="$REPO_ROOT/OpenHikes/Tiles/Vector"
+VECTOR="$REPO_ROOT/OpenHikesVectorTiles/Sources/OpenHikesVectorTiles/Resources"
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT

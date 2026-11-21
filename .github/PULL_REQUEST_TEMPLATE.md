@@ -18,7 +18,7 @@ test*).
 
 - [ ] `Scripts/lint.sh` passes
 - [ ] The app and widget unit tests pass, run as *Build and test* in AGENTS.md shows (a `Scripts/sim-pool.sh acquire` device, `-derivedDataPath DerivedData`, `-only-testing:OpenHikesTests -only-testing:OpenWidgetTests`)
-- [ ] `swift test --package-path OpenHikesShared -Xswiftc -warnings-as-errors` and `swift test --package-path OpenHikesData -Xswiftc -warnings-as-errors` pass
+- [ ] `swift test --package-path <package> -Xswiftc -warnings-as-errors` passes for `OpenHikesShared`, `OpenHikesData` and `OpenHikesVectorTiles`
 - [ ] `Scripts/run-ui-tests.sh --all --device "$udid" --derived-data DerivedData` — needed for a change to recording, the map or the sheet
 - [ ] `Scripts/render-trace.sh` on `main` and on this branch, compared with `--baseline` — for a change on the render path; the counts that moved are in the description
 - [ ] New behaviour has a test that fails without the change

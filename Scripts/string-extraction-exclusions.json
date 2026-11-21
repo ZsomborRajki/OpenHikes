@@ -396,21 +396,21 @@
     ]
   },
   {
-    "path": "OpenHikes/Tiles/Vector/VectorTileArchiveManifest.swift",
+    "path": "OpenHikes/Tiles/Vector/VectorTileArchives+OpenHikes.swift",
     "reason": "The bundled JSON resource name of the manifest this build was made with.",
     "literals": [
       "\"VectorTileArchiveManifest\""
     ]
   },
   {
-    "path": "OpenHikes/Tiles/Vector/VectorTileLabelStyle.swift",
+    "path": "OpenHikesVectorTiles/Sources/OpenHikesVectorTiles/Labels/VectorTileLabelStyle.swift",
     "reason": "A Core Text font name, the fallback when the system font cannot be had, not display text.",
     "literals": [
       "\"Helvetica\""
     ]
   },
   {
-    "path": "OpenHikes/Tiles/Vector/VectorTilePointStyle.swift",
+    "path": "OpenHikesVectorTiles/Sources/OpenHikesVectorTiles/Points/VectorTilePointStyle.swift",
     "reason": "The bundled JSON resource name of the map's point table.",
     "literals": [
       "\"VectorTilePoints\""

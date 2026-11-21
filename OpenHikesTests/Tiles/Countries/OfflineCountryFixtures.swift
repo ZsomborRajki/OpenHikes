@@ -11,6 +11,7 @@
 import CryptoKit
 import Foundation
 @testable import OpenHikes
+@testable import OpenHikesVectorTiles
 import Synchronization
 
 // swiftlint:disable no_magic_numbers

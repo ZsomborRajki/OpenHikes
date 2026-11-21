@@ -13,6 +13,8 @@
 import CoreGraphics
 import Foundation
 @testable import OpenHikes
+@testable import OpenHikesVectorTiles
+@testable import OpenHikesVectorTilesTestSupport
 import Testing
 import UIKit
 

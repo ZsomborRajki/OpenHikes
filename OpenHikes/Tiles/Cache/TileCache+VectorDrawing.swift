@@ -15,6 +15,7 @@
 //
 
 import Foundation
+import OpenHikesVectorTiles
 import UIKit
 
 nonisolated extension TileCache {
@@ -29,7 +30,12 @@ nonisolated extension TileCache {
     ) -> (VectorTileClient?, OfflineCountryDrawing?) {
         guard let sources else { return (nil, nil) }
         return (
-            VectorTileClient(archives: sources, session: session),
+            VectorTileClient(
+                archives: sources,
+                session: session,
+                language: VectorMapWording.language,
+                height: { VectorMapWording.height($0) }
+            ),
             countries.map { OfflineCountryDrawing(sources: sources, archives: $0) }
         )
     }
@@ -44,7 +50,47 @@ nonisolated extension TileCache {
     /// Whether a load of `key` asks the OpenHikes tile server for a vector
     /// tile before the provider's raster template.
     func isDrawnFromVectorTiles(_ key: String) -> Bool {
-        vectorTiles?.draws(key) ?? false
+        guard let vectorTiles, let named = TileCacheKey.named(key) else { return false }
+        return vectorTiles.draws(named.providerID)
+    }
+
+    /// What a load of `key` takes from the tile server.
+    enum VectorFetch {
+        /// The tile, drawn and decoded.
+        case tile(FetchedTile)
+        /// The device reached no server, so the load fails without asking
+        /// the raster template, which would fail the same way.
+        case offline
+        /// Nothing was drawn: the provider's raster template is asked.
+        case fallBack
+    }
+
+    /// The tile server's answer for `key`, as a load takes it: a picture
+    /// that cannot be decoded falls back as one that could not be drawn.
+    func vectorFetch(forKey key: String) async -> VectorFetch {
+        let drawn: Data
+        let isProvisional: Bool
+        switch await vectorDrawing(forKey: key) {
+        case let .png(data): (drawn, isProvisional) = (data, false)
+        case let .provisional(data): (drawn, isProvisional) = (data, true)
+        case .offline: return .offline
+        case .fallBack, nil: return .fallBack
+        }
+        guard let image = TileImage(data: drawn) else { return .fallBack }
+        return .tile(FetchedTile(data: drawn, image: image, isProvisional: isProvisional))
+    }
+
+    /// The tile `key` names off the tile server, drawn, or what to do
+    /// instead: the client's answer for the provider and tile the key names.
+    /// `nil` for a cache with no vector source, and the raster template for
+    /// a key of any other shape.
+    func vectorDrawing(forKey key: String) async -> VectorTileClient.Drawing? {
+        guard let vectorTiles else { return nil }
+        guard let named = TileCacheKey.named(key) else { return .fallBack }
+        return await vectorTiles.drawing(
+            of: VectorTileAddress(z: named.z, x: named.x, y: named.y),
+            for: named.providerID
+        )
     }
 
     /// Whether the copy of `key` stored at `storedAt` was drawn before a
@@ -53,8 +99,11 @@ nonisolated extension TileCache {
     /// the disk ask the same question, so a copy one turns away the other
     /// never hands back. Safe in the draw pass.
     func isRedrawn(_ key: String, storedAt: Date) -> Bool {
-        vectorTiles?.archives.redraws(key, drawnAt: storedAt) == true
-            || countryTiles?.redraws(key, drawnAt: storedAt) == true
+        if let vectorTiles, let named = TileCacheKey.named(key),
+           vectorTiles.archives.redraws(named.providerID, drawnAt: storedAt) {
+            return true
+        }
+        return countryTiles?.redraws(key, drawnAt: storedAt) == true
     }
 
     /// Whether a downloaded country holds the tile `key` names, and so draws

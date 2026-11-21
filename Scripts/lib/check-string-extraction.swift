@@ -276,7 +276,8 @@ private func run() throws -> Int32 {
     }
     let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
     let folders = ["OpenHikes", "OpenWidget", "OpenHikesWatch", "OpenHikesWatchWidgets",
-                   "OpenHikesData/Sources", "OpenHikesShared/Sources"]
+                   "OpenHikesData/Sources", "OpenHikesShared/Sources",
+                   "OpenHikesVectorTiles/Sources/OpenHikesVectorTiles"]
     let paths = folders.flatMap { folder -> [String] in
         guard let files = FileManager.default.enumerator(atPath: root.appending(path: folder).path)
         else { return [] }

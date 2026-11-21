@@ -67,6 +67,7 @@
 //
 
 import Foundation
+import OpenHikesVectorTiles
 
 /// Which sources a nearby question reaches.
 ///

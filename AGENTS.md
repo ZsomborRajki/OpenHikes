@@ -62,11 +62,12 @@ xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes \
 #   -only-testing:OpenHikesTests/HikeStatisticsTests
 #   -only-testing:'OpenHikesTests/HikeStatisticsTests/elevationGainAndLoss()'
 
-# The two local packages, on the macOS host, with warnings as errors as CI runs
-# them (CI repeats both with --configuration release). Add --filter <Suite> for
-# one suite, such as MercatorTests in OpenHikesShared.
+# The three local packages, on the macOS host, with warnings as errors as CI
+# runs them (CI repeats each with --configuration release). Add --filter <Suite>
+# for one suite, such as MercatorTests in OpenHikesShared.
 swift test --package-path OpenHikesShared -Xswiftc -warnings-as-errors
 swift test --package-path OpenHikesData -Xswiftc -warnings-as-errors
+swift test --package-path OpenHikesVectorTiles -Xswiftc -warnings-as-errors
 
 # The shell scripts, against stubbed xcrun, xcodebuild, swiftlint, periphery, osmium and pyosmium
 Scripts/run-script-tests.sh
@@ -87,7 +88,7 @@ Scripts/run-ui-tests.sh --all --device "$udid" --derived-data DerivedData
 Scripts/sim-pool.sh release
 ```
 
-CI runs the lint, the unit tests on the same device, both packages, the
+CI runs the lint, the unit tests on the same device, the three packages, the
 script tests and the page check.
 
 ### Before trusting a run
@@ -110,11 +111,12 @@ script tests and the page check.
 ### CI
 
 `.github/workflows/ci.yml` has eight jobs that can fail a run: `Published
-legal pages`, `Lint and shared package` (with the script tests, and both
+legal pages`, `Lint and shared package` (with the script tests, and the three
 packages in Debug and Release), `App and widget tests` (with strict suite
 preconditions, the string-catalog check and the coverage floor), `iOS Debug
-build`, `iOS Release build`, `Unsigned iOS archive`, `Thread sanitizer` and
-`Accessibility UI tests`.
+build`, `iOS Release build`, `Unsigned iOS archive`, `Thread sanitizer` (with
+`OpenHikesVectorTiles` sanitized whole, on the host) and `Accessibility UI
+tests`.
 
 - **None of them is a required check.** `main`'s branch protection has no
   `required_status_checks`, so a red run reports a problem but blocks nothing.
@@ -459,6 +461,34 @@ a change to recording, the map, the sheet or the render path; the PR template,
     `canImport(UIKit)` is true, and `swift test` compiles its macOS side.
     Guard iOS-only API there with `os(iOS)` (or
     `canImport(UIKit) && !os(watchOS)`).
+- **`OpenHikesVectorTiles` is the map, drawn** (#1488): a vector tile read
+  and drawn (*Tiles*), Carto's icons and point table as its resources, and
+  the tile server's client and the reading of its manifest. The app alone
+  links it, and its `Package.swift` argues the boundary.
+  - **It names nothing of the app's:** no provider, cache key, setting,
+    server or archive. The app hands in its language and its height
+    (`VectorMapWording`) and keeps the server, the bundled manifest and the
+    launch's archives (`VectorTileArchives+OpenHikes.swift`). `TileCache`
+    reads the key and asks by provider and tile.
+  - It is **not** main-actor by default, and it has no words to extract.
+  - **`public` is what a host uses:** what the app's sources name, and the
+    manifest's fields. A suite reaches the rest through `@testable import`,
+    the app's hosted ones included.
+  - **Its suites run on the Mac**, where the icons are read through AppKit
+    (`CatalogPicture`). What needs `TileCache` stays in the hosted bundle,
+    and `VectorTileBundledManifestTests` there holds that the package's
+    resources are in the app, which no suite on the Mac can see.
+  - **`OpenHikesVectorTilesTestSupport` is for both bundles:** the tiles a
+    suite writes in code (`VectorTileFixture`) and the server it scripts
+    (`StubTileProtocol`). It reads the package by its `public` declarations
+    alone, or a Release build of the package stops compiling. `swift test`
+    runs suites side by side, so a suite of the package that scripts the
+    stub is a child of `VectorTileServerSuites`.
+  - **No test seam behind `#if DEBUG`.** CI runs the package's suites
+    against a Release build too.
+  - The PMTiles reader stays in the app, because it shares
+    `PackedBytes.swift` with the squares. So a tile crosses into the
+    package unpacked (`VectorTileRasterizer.png(ofArchiveTile:…)`).
 - **Targets: iPhone and iPad, plus a watch companion, and nothing else.** The
   shipping targets are `OpenHikes`, `OpenWidgetExtension` (the widget, the Live
   Activity views and the Control Center toggle), `OpenHikesWatch` (watchOS 11)
@@ -866,8 +896,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
   tile, under the raster style's id and keys, so saved coverage keeps
   answering.
 - **The look is OpenStreetMap Carto's**, and each rule is argued in the file
-  that draws it, under `OpenHikes/Tiles/Vector/`. Points, icons and patterns
-  are read out of Carto's style, never written by hand
+  that draws it, in the `OpenHikesVectorTiles` package (*Layout and
+  targets*). Points, icons and patterns are read out of Carto's style into
+  the package's resources, never written by hand
   (`Scripts/carto-points.sh`). The archive's landcover is ESA WorldCover's,
   under CC BY 4.0, so the style credits it beside OpenStreetMap.
 - **The extras fill in what the basemap leaves out**
@@ -944,7 +975,9 @@ Maps*. `OfflineCountries` is the one owner, on the main actor.
   file as it arrived and reads tiles out of it (`PMTilesArchive`).
 - **The tool compiles the app's format files as they stand**
   (`PMTilesFile.swift`, `PMTilesArchive.swift`, `OfflineCountryManifest.swift`
-  and `PackedBytes.swift`), which import nothing of the app's.
+  and `PackedBytes.swift`), which import nothing of the app's, with the
+  vector tile package's `VectorTileSchema.swift`: the layouts of the
+  archives the renderer reads, which the manifest holds an area to.
   `Scripts/run-script-tests.sh` builds it and runs its `selftest`.
 - **An area is drawn before the network is asked.** `TileCache` asks the
   downloaded areas (`OfflineCountryArchives`) ahead of the network policy and

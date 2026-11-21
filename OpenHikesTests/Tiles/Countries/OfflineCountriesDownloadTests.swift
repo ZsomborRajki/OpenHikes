@@ -10,6 +10,7 @@
 
 import Foundation
 @testable import OpenHikes
+@testable import OpenHikesVectorTiles
 import Testing
 
 @MainActor

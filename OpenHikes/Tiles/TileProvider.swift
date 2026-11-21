@@ -10,6 +10,7 @@
 
 import Algorithms
 import Foundation
+import OpenHikesVectorTiles
 
 /// A raster tile source the map can render. Add new sources to ``all``.
 ///
