@@ -398,7 +398,7 @@ extension HikeRecorderTests {
         let hikeRecorder = await autoPausedRecorder()
         walk(from: Self.stopMeters + 20, fixes: 4)
 
-        let hike = try savedHike(from: try await hikeRecorder.stop())
+        let hike = try await hikeRecorder.stop()
 
         #expect(hike.route.count == Self.stopFixCount + 4)
         #expect(hike.route.indices.filter { hike.route[$0].isPauseBoundary } == [Self.stopFixCount])
@@ -417,7 +417,7 @@ extension HikeRecorderTests {
         let began = clock.now
         let hikeRecorder = await autoPausedRecorder()
 
-        let hike = try savedHike(from: try await hikeRecorder.stop())
+        let hike = try await hikeRecorder.stop()
 
         #expect(hike.route.count == Self.stopFixCount)
         #expect(hike.route.last?.timestamp == began.addingTimeInterval(Self.stoppedAfter))

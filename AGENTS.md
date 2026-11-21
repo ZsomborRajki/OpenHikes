@@ -492,8 +492,10 @@ a change to recording, the map, the sheet or the render path; the PR template,
     paused leg none (`RouteCoordinate.legMeters(from:)`), nothing projects a
     fix or a place onto it, the watch's tracker included, and no surface,
     difficulty or steepness stretch is measured across it.
-  - A recording that the matcher moved or found ambiguous stops in
-    `.reviewing`, and only `saveReviewedRecording()` writes it.
+  - Stop saves, always, wherever it is pressed. A stretch the matcher
+    moved, bridged or could not decide is saved the way that needs no
+    answer, and the question is kept on the hike for *Edit Route* to ask
+    (`RouteAssembly`, `RecordingAssembly.swift`).
 - **Stop is where a recording ends, kept or not** (`RecordingStop.swift`).
   A recording with no line is ended without being named, and *no line* is
   the journal's answer once every pending fix has merged
@@ -529,6 +531,11 @@ a change to recording, the map, the sheet or the render path; the PR template,
   `Hike.originalRoute`, written by the first edit and by no later one, which
   is what *Revert to Original* puts back. A drawn trail is edited by its
   stops, in the maker, and carries neither.
+  - **The hike's line is derived, never patched**: the line as it was saved,
+    put together under the answers that stand
+    (`RouteAssembly.line(saved:raw:)`), then cut (`RouteEdit.trim`). A
+    section names its points in the saved line and in `Hike.rawRoute` by
+    index, so no edit trims or rewrites either of them.
 - **Places** (`Hikes/Places/`): `TrailPlace` is the value and `TrailPoint` the
   mirrored row. The owner's rule: a place from OpenStreetMap takes photographs
   and nothing else, and a place the hiker made can also be renamed, re-kinded

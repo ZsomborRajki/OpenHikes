@@ -25,8 +25,8 @@
 //  asked again: the town is a nicety, and the name without it is one every
 //  recording could already have. A relaunch that recovers the walk asks once
 //  more, about the same first point, because the answer was only ever held in
-//  memory. That includes a walk already stopped, which comes back to its
-//  route review, where no fix arrives to ask at.
+//  memory. A walk already stopped is saved by that relaunch, which can be
+//  before the answer is back.
 //
 //  ## Held, not written
 //
@@ -42,8 +42,8 @@
 //  The town can still be on its way when the hiker stops: from a trailhead
 //  with poor signal, or soon after a relaunch. So the stop alert hands the
 //  recorder the name it showed, and a field left as it opened saves that name
-//  even if the town answers while the alert is up or during the route review
-//  after it — see ``HikeRecorder/stop(customName:offeredTitle:)``. Only a
+//  even if the town answers while the alert is up — see
+//  ``HikeRecorder/stop(customName:offeredTitle:)``. Only a
 //  Stop that showed no name, such as Siri's, takes whatever has arrived by
 //  the save.
 //

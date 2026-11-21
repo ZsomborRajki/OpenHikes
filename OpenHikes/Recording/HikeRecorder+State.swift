@@ -405,11 +405,6 @@ nonisolated struct RecordingRecoverySummary: Equatable, Sendable {
     let pointCount: Int
 }
 
-enum RecordingStopOutcome {
-    case needsReview
-    case saved(Hike)
-}
-
 nonisolated struct TrailGraphPrefetchRetryPolicy: Sendable {
     static let standard = Self()
 
@@ -458,79 +453,4 @@ nonisolated struct PendingPreparedSave: Sendable {
     let session: TrackJournalSession
     let prepared: PreparedRecording
     let customName: String?
-}
-
-/// The sections of a finished recording the hiker can still change, and what
-/// they are currently set to. The recording is not saved until this is
-/// resolved, so a review that vanishes silently would lose the hike.
-@Observable
-final class RecordingRouteReview {
-    nonisolated deinit { /* intentionally ignored */ }
-
-    let sections: [RouteReviewSection]
-    private(set) var currentIndex = 0
-    private(set) var choices: [Int: TrailRouteChoice]
-
-    init(sections: [RouteReviewSection]) {
-        self.sections = sections
-        choices = Dictionary(
-            uniqueKeysWithValues: sections.map { ($0.id, $0.defaultChoice) }
-        )
-    }
-
-    var current: RouteReviewSection? {
-        sections.indices.contains(currentIndex)
-            ? sections[currentIndex]
-            : nil
-    }
-
-    var canMoveBackward: Bool {
-        currentIndex > 0
-    }
-
-    var canMoveForward: Bool {
-        currentIndex + 1 < sections.count
-    }
-
-    /// The section choices expanded onto the legs they cover, which is the
-    /// form ``TrailMatchResult/points(resolving:)`` consumes.
-    var legChoices: [Int: TrailRouteChoice] {
-        var expanded: [Int: TrailRouteChoice] = [:]
-        for section in sections {
-            let choice = choices[section.id] ?? section.defaultChoice
-            for legIndex in section.legIndices {
-                expanded[legIndex] = choice
-            }
-        }
-        return expanded
-    }
-
-    func choice(for section: RouteReviewSection) -> TrailRouteChoice {
-        choices[section.id] ?? section.defaultChoice
-    }
-
-    func select(_ choice: TrailRouteChoice) {
-        guard let current else { return }
-        choices[current.id] = choice
-    }
-
-    func moveBackward() {
-        guard canMoveBackward else { return }
-        currentIndex -= 1
-    }
-
-    func moveForward() {
-        guard canMoveForward else { return }
-        currentIndex += 1
-    }
-}
-
-nonisolated struct PendingReviewSave: Sendable {
-    let session: TrackJournalSession
-    let normalizedPoints: [RecordingPoint]
-    let matchResult: TrailMatchResult
-    let customName: String?
-    /// Grouped once off the main actor, so the decision to review and the
-    /// review itself cannot disagree about what there is to review.
-    let sections: [RouteReviewSection]
 }

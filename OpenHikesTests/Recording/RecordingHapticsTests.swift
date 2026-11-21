@@ -52,16 +52,6 @@ struct RecordingHapticsTests {
         #expect(moment(.paused, .idle) == .walkDiscarded)
     }
 
-    /// Discard sits beside the review controls, so a thrown-away walk can
-    /// reach `.idle` from `.reviewing` — which a saved one also passes
-    /// through on its way to `.saving`.
-    @Test("Discarding from the review screen is not a save")
-    func discardingFromReview() {
-        #expect(moment(.reviewing, .idle) == .walkDiscarded)
-        #expect(moment(.reviewing, .saving) == nil)
-        #expect(moment(.saving, .reviewing) == nil)
-    }
-
     @Test("Every failure is reported, and retrying one begins a walk")
     func failingAndRetrying() {
         #expect(moment(.recording, .failed(.storageUnavailable)) == .walkFailed)

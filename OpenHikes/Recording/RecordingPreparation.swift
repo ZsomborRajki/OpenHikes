@@ -54,6 +54,13 @@ nonisolated struct PreparedRecording: Sendable {
     let startedAt: Date
     let matchedTrailName: String?
     let matchResult: TrailMatchResult?
+    /// What the line was put together from, where trail matching left a
+    /// stretch the hiker can still answer for — see ``RouteAssembly``. Set
+    /// by ``RecordingPreparation/forSave(points:startedAt:graph:gapDistances:)``.
+    var assembly: RouteAssembly?
+    /// The ends of the line that were not walked, for the saved hike to say
+    /// so — see ``RouteEdit/NotOnFoot``.
+    var notOnFoot: RouteEdit.NotOnFoot?
     /// What kind of line the saved route is — see ``RouteShape`` — for a
     /// name made at the save. Read here, off the main thread with the rest of
     /// the walk, rather than in ``HikeRecorder/persist(_:prepared:customName:)``.
@@ -65,34 +72,6 @@ nonisolated enum RecordingPreparation {
     /// point is a place, not a line. Stop asks this before it offers a
     /// name — see ``RecordingStopStep``.
     static let minimumPointCount = 2
-
-    /// Prepares without occupying the main actor.
-    ///
-    /// `@concurrent` rather than a detached task: the matching and distance
-    /// work stays in the caller's task, so the caller's priority carries
-    /// through, and — because the typed `throws(RecordingFailure)` survives —
-    /// the failure propagates as itself. A detached task erases it to
-    /// `any Error`, which forced the caller to re-catch and re-wrap a value
-    /// it had already typed.
-    @concurrent
-    static func prepareOffMain(
-        points: [RecordingPoint],
-        startedAt: Date,
-        graph: TrailGraph? = nil,
-        gapDistances: [Int: Double] = [:],
-        routeChoices: [Int: TrailRouteChoice] = [:]
-    ) async throws(RecordingFailure) -> PreparedRecording {
-        assertOffMainThread(
-            "Recording preparation must stay off the main thread"
-        )
-        return try prepare(
-            points: points,
-            startedAt: startedAt,
-            graph: graph,
-            gapDistances: gapDistances,
-            routeChoices: routeChoices
-        )
-    }
 
     /// Turns journalled fixes into the values a `Hike` is built from.
     static func prepare(
@@ -120,24 +99,60 @@ nonisolated enum RecordingPreparation {
         )
     }
 
-    /// Resolves review choices without occupying the main actor. `@concurrent`
-    /// for the same reasons as ``prepareOffMain(points:startedAt:graph:gapDistances:routeChoices:)``.
+    /// Everything a Stop saves, without occupying the main actor: the line
+    /// with each stretch trail matching touched at its default, the pieces
+    /// that line was put together from, and whether its ends were walked.
+    ///
+    /// The defaults are ``RouteReviewSection/defaultChoice``: an ambiguous
+    /// stretch keeps the measurement, a confident one the trail, a gap the
+    /// mapped route where there is one. That is the line a hiker who changed
+    /// nothing used to save from the review this replaces, and
+    /// ``PreparedRecording/assembly`` is what lets them change it afterwards.
+    ///
+    /// `@concurrent` rather than a detached task: the matching and distance
+    /// work stays in the caller's task, so the caller's priority carries
+    /// through, and — because the typed `throws(RecordingFailure)` survives —
+    /// the failure propagates as itself. A detached task erases it to
+    /// `any Error`, which forced the caller to re-catch and re-wrap a value
+    /// it had already typed.
     @concurrent
-    static func prepareResolvedOffMain(
+    static func forSave(
         points: [RecordingPoint],
         startedAt: Date,
-        matchResult: TrailMatchResult,
-        choices: [Int: TrailRouteChoice]
+        graph: TrailGraph?,
+        gapDistances: [Int: Double]
     ) async throws(RecordingFailure) -> PreparedRecording {
-        assertOffMainThread(
-            "Route review resolution must stay off the main thread"
-        )
-        return try prepareResolved(
-            points: points,
-            startedAt: startedAt,
-            matchResult: matchResult,
-            choices: choices
-        )
+        assertOffMainThread("Recording preparation must stay off the main thread")
+        var prepared = try prepare(points: points, startedAt: startedAt, graph: graph, gapDistances: gapDistances)
+        if graph != nil, let match = prepared.matchResult {
+            let sections = RouteReviewSection.sections(in: match)
+            if !sections.isEmpty {
+                prepared = try prepareResolved(
+                    points: points,
+                    startedAt: startedAt,
+                    matchResult: match,
+                    choices: RouteReviewSection.defaultLegChoices(of: sections)
+                )
+                prepared.assembly = assembly(of: match, sections: sections, rebuilding: prepared)
+            }
+        }
+        let distances = RouteTrim.distances(along: prepared.route)
+        prepared.notOnFoot = RouteEdit.NotOnFoot(RouteCarriedEnds.found(in: prepared.route, distances: distances))
+        return prepared
+    }
+
+    /// The pieces of `prepared`'s line, kept only if they put that very line
+    /// together again: a hike whose pieces describe some other line would
+    /// have its answers changed on ground they are not about.
+    private static func assembly(
+        of match: TrailMatchResult,
+        sections: [RouteReviewSection],
+        rebuilding prepared: PreparedRecording
+    ) -> RouteAssembly? {
+        guard let assembly = RouteAssembly.saved(from: match, sections: sections),
+              assembly.line(saved: prepared.route, raw: prepared.rawRoute).route == prepared.route
+        else { return nil }
+        return assembly
     }
 
     static func prepareResolved(

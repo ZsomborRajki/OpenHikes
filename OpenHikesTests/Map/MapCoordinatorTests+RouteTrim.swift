@@ -21,7 +21,8 @@ extension MapCoordinatorTests {
     /// it.
     private func trimming(
         _ coordinator: MapView.Coordinator,
-        route: [RouteCoordinate] = Fixture.ridgeRoute
+        route: [RouteCoordinate] = Fixture.ridgeRoute,
+        sources: RouteEditSources? = nil
     ) async -> (map: MKMapView, session: RouteTrimSession) {
         let view = mapView(route: Self.route(coordinates: route))
         let map = makeMap(view, coordinator)
@@ -34,7 +35,7 @@ extension MapCoordinatorTests {
         region.span.longitudeDelta = max(region.span.longitudeDelta * 2, region.span.latitudeDelta)
         map.setRegion(region, animated: false)
         let session = RouteTrimSession()
-        await session.load(route)
+        await session.load(sources ?? RouteEditSources(current: route))
         session.show(on: routeTrim)
         await settle(until: "the trim's handles to be on the map") {
             coordinator.routeTrimMap.endHandle != nil
@@ -156,5 +157,94 @@ extension MapCoordinatorTests {
 
         #expect(coordinator.routeTrimHandle(at: onBoth, in: map) == .end)
         #endif
+    }
+
+    /// A hike trimmed before has less of a line on the map than a handle can
+    /// be dragged over, so the visit draws the kept line itself.
+    @Test("a hike trimmed before has its kept line drawn between the cuts")
+    func theKeptLineIsDrawnWhereTheHikesIsNot() async throws {
+        let coordinator = MapView.Coordinator()
+        let whole = Fixture.ridgeRoute
+        let total = try #require(RouteTrim.distances(along: whole).last)
+        let sources = RouteEditSources(
+            current: Array(whole.prefix(4)),
+            saved: whole,
+            raw: [],
+            edit: RouteEdit(trim: 0...(total * 0.6))
+        )
+        let (map, session) = await trimming(coordinator, sources: sources)
+        defer { detach(map) }
+
+        #expect(session.drawsKeptLine)
+        let kept = try #require(coordinator.routeTrimMap.keptLine)
+        #expect(map.overlays.contains { $0 === kept })
+        #expect(kept.pointCount == whole.count)
+        let renderer = try #require(coordinator.mapView(map, rendererFor: kept) as? MKPolylineRenderer)
+        #expect(renderer.strokeStart == 0)
+        #expect(renderer.strokeEnd.isApproximatelyEqual(to: 0.6, absoluteTolerance: 0.01))
+
+        session.move(.end, to: total * 0.8)
+        await settle(until: "the kept line to follow its cut") {
+            (coordinator.routeTrimMap.keptRenderer?.strokeEnd ?? 0) > 0.7
+        }
+        #expect(coordinator.routeTrimMap.keptRenderer?.strokeEnd.isApproximatelyEqual(
+            to: 0.8,
+            absoluteTolerance: 0.01
+        ) == true)
+
+        session.end()
+        await settle(until: "the trim to leave the map") { coordinator.routeTrimMap.endHandle == nil }
+        #expect(!map.overlays.contains { $0 === kept })
+    }
+
+    @Test("a hike whose own line is the kept one is not drawn over")
+    func noKeptLineOverAnUneditedHike() async {
+        let coordinator = MapView.Coordinator()
+        let (map, session) = await trimming(coordinator)
+        defer { detach(map) }
+
+        #expect(!session.drawsKeptLine)
+        #expect(coordinator.routeTrimMap.keptLine == nil)
+        #expect(coordinator.routeTrimMap.staleCovers.isEmpty)
+        #expect(coordinator.routeTrimMap.focus == nil)
+    }
+
+    @Test("the section being looked at is dashed over the line, and an answer changed covers the old one")
+    func theSectionLookedAtIsPickedOut() async throws {
+        let coordinator = MapView.Coordinator()
+        let whole = Fixture.ridgeRoute
+        let stretch = 1...3
+        // The fixes, a little east of the saved line.
+        let raw = whole.map { RouteCoordinate(latitude: $0.latitude, longitude: $0.longitude + 0.0001) }
+        let assembly = RouteAssembly(
+            pieces: [.kept(0...stretch.lowerBound), .check(7), .kept(stretch.upperBound...(whole.count - 1))],
+            checks: [RouteCheck(id: 7, kind: .snapped, savedChoice: .matched, savedRange: stretch, rawRange: stretch)]
+        )
+        let sources = RouteEditSources(current: whole, saved: whole, raw: raw, edit: RouteEdit(assembly: assembly))
+        let (map, session) = await trimming(coordinator, sources: sources)
+        defer { detach(map) }
+        #expect(coordinator.routeTrimMap.focus == nil, "nothing is picked out until the hiker looks")
+
+        session.focus(onCheck: 7)
+        await settle(until: "the section to be picked out") { coordinator.routeTrimMap.focus != nil }
+
+        let focus = try #require(coordinator.routeTrimMap.focus)
+        #expect(focus.pointCount == stretch.count)
+        let renderer = try #require(coordinator.mapView(map, rendererFor: focus) as? MKPolylineRenderer)
+        #expect(renderer.lineDashPattern == [3, 5])
+
+        await session.choose(.gps, forCheck: 7)
+        await settle(until: "the old stretch to be covered") { !coordinator.routeTrimMap.staleCovers.isEmpty }
+
+        #expect(coordinator.routeTrimMap.staleCovers.map(\.pointCount) == [stretch.count])
+        #expect(coordinator.routeTrimMap.keptLine != nil, "the hike's own line there is no longer the kept one")
+        let moved = try #require(coordinator.routeTrimMap.focus)
+        #expect(moved !== focus, "the section is picked out where it is drawn now")
+        #expect(map.overlays.contains { $0 === moved })
+        #expect(!map.overlays.contains { $0 === focus })
+
+        session.focus(onCheck: nil)
+        await settle(until: "the section to be let go") { coordinator.routeTrimMap.focus == nil }
+        #expect(!map.overlays.contains { $0 === moved })
     }
 }

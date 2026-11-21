@@ -26,11 +26,11 @@
 //
 //  ## Why pause and resume and not stop
 //
-//  Stop does not earn its place. Stopping ends in `.reviewing` rather than in
-//  the store whenever trail matching moved the line or found it ambiguous, so
-//  a Stop on the Lock Screen would either drop that review silently or open
-//  the app anyway — and opening the app is exactly what tapping the panel
-//  already does.
+//  Stop does not earn its place. In the app it asks first — a name, with
+//  *Discard Recording* and *Keep Recording* beside it — and a button on the
+//  Lock Screen can ask nothing, so a tap there, in a pocket as easily as on
+//  purpose, would end a walk with no way back into it. Opening the app to be
+//  asked is exactly what tapping the panel already does.
 //
 //  ## Why a refusal has to be *said*
 //

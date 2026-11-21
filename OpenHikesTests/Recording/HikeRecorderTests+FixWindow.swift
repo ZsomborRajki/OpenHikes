@@ -35,7 +35,7 @@ extension HikeRecorderTests {
         clock.advance(by: 10)
         source.deliver(fix(latitude: 47.6302))
 
-        let hike = try savedHike(from: await hikeRecorder.stop())
+        let hike = try await hikeRecorder.stop()
         #expect(hike.route.count == 2)
         #expect(hike.route.allSatisfy { ($0.timestamp ?? .distantPast) >= startedAt })
         #expect(hike.distanceMeters.isApproximatelyEqual(to: 22, absoluteTolerance: 5))
@@ -55,7 +55,7 @@ extension HikeRecorderTests {
         ])
 
         #expect(hikeRecorder.stats.pointCount == 2)
-        let hike = try savedHike(from: await hikeRecorder.stop())
+        let hike = try await hikeRecorder.stop()
         #expect(hike.route.first?.timestamp == startedAt)
         #expect(hike.distanceMeters.isApproximatelyEqual(to: 22, absoluteTolerance: 5))
     }
@@ -75,7 +75,7 @@ extension HikeRecorderTests {
         ])
 
         #expect(hikeRecorder.stats.pointCount == 3)
-        let hike = try savedHike(from: await hikeRecorder.stop())
+        let hike = try await hikeRecorder.stop()
         #expect(hike.distanceMeters.isApproximatelyEqual(to: 44, absoluteTolerance: 5))
     }
 
@@ -101,7 +101,7 @@ extension HikeRecorderTests {
         clock.advance(by: 60)
         source.deliver(fix(latitude: 47.641))
 
-        let hike = try savedHike(from: await hikeRecorder.stop())
+        let hike = try await hikeRecorder.stop()
         #expect(hike.route.count == 4)
         #expect(hike.distanceMeters.isApproximatelyEqual(to: 222, absoluteTolerance: 5))
     }

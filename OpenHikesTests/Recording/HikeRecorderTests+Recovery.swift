@@ -19,8 +19,10 @@ import Testing
 
 extension HikeRecorderTests {
 
-    @Test("a completed ambiguous journal returns to review after relaunch")
-    func ambiguousCompletedJournalRecoversIntoReview() async throws {
+    /// A walk stopped and then closed before it was saved used to come back
+    /// to a review. It is saved at relaunch now, as Stop would have saved it.
+    @Test("a completed ambiguous journal is saved at relaunch, with its stretch kept to check")
+    func ambiguousCompletedJournalIsSavedAtRelaunch() async throws {
         let sessionID = UUID()
         let journal = TrackJournal(directory: directory, clock: clock.read)
         try await journal.start(
@@ -53,14 +55,17 @@ extension HikeRecorderTests {
         )
         await recorder.recoverOpenSession()
 
-        #expect(recorder.phase == .reviewing)
-        #expect(recorder.routeReview?.sections.count == 1)
-        #expect(recorder.currentHike?.id == sessionID)
-        #expect(recorder.currentHike?.isRecording == true)
-        #expect(try context.fetch(FetchDescriptor<Hike>()).count == 1)
-        #expect(FileManager.default.fileExists(atPath: journal.journalURL.path))
-        await recorder.discard()
-        #expect(try context.fetch(FetchDescriptor<Hike>()).isEmpty)
+        #expect(recorder.phase == .idle)
+        let hikes = try context.fetch(FetchDescriptor<Hike>())
+        #expect(hikes.count == 1)
+        let hike = try #require(hikes.first)
+        #expect(hike.id == sessionID)
+        #expect(!hike.isRecording)
+        #expect(hike.route.count == 2, "the measurement, until somebody says which way it went")
+        let check = try #require(hike.routeEdit?.assembly?.checks.first)
+        #expect(check.kind == .ambiguous)
+        #expect(!check.isChecked)
+        #expect(!FileManager.default.fileExists(atPath: journal.journalURL.path))
     }
 
     @Test("an explicitly paused session stays paused after relaunch")
@@ -213,7 +218,8 @@ extension HikeRecorderTests {
         clock.advance(by: 10)
         source.deliver(fix(latitude: 47.6302))
 
-        let firstStop = Task { try await recorder.stop() }
+        // The id rather than the hike: a model does not cross out of a task.
+        let firstStop = Task { try await recorder.stop().id }
         // A bare `while … { await Task.yield() }` has no deadline: if the
         // phase never arrives the test hangs instead of failing.
         await settleDelegateHop(until: "the first Stop to reach saving") {
@@ -231,7 +237,9 @@ extension HikeRecorderTests {
             Issue.record("the second Stop returned an unexpected error")
             return
         }
-        let hike = try savedHike(from: await firstStop.value)
+        let savedID = try await firstStop.value
+        let saved = try context.fetch(FetchDescriptor<Hike>())
+        let hike = try #require(saved.first { $0.id == savedID })
 
         #expect(hike.route.count == 2)
         #expect(try context.fetch(FetchDescriptor<Hike>()).count == 1)
@@ -359,7 +367,6 @@ extension HikeRecorderTests {
         #expect(hikes.count == 1)
         #expect(hikes.first?.title == "Already Saved")
         #expect(recorder.phase == .idle)
-        #expect(recorder.routeReview == nil)
         #expect(!FileManager.default.fileExists(atPath: journal.journalURL.path))
     }
 

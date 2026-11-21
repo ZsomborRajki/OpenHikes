@@ -86,7 +86,7 @@ serial_tests=(
   RecordingUITests/testPausingAndResumingARecording
 )
 default_suite="RecordingUITests"
-default_test="testReviewsSnappedRouteAfterStopping"
+default_test="testASnappedRecordingIsSavedThenCheckedInEditRoute"
 # Four, not "one per core". xcodebuild spreads whole *classes*, so the floor of
 # a parallel run is the longest single class. When this was three, that floor
 # was RecordingUITests at 274s of a 787s serial `--all`, which three workers

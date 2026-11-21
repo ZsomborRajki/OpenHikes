@@ -31,7 +31,7 @@ extension HikeRecorderTests {
         clock.advance(by: 60)
         source.deliver(fix(latitude: 47.632))
 
-        let hike = try savedHike(from: await recorder.stop())
+        let hike = try await recorder.stop()
 
         // Seven minutes from the first fix to the last, five of them paused:
         // the *Duration* the hike's own screen works out from its route.
@@ -50,7 +50,7 @@ extension HikeRecorderTests {
         source.deliver(fix(latitude: 47.631))
 
         await #expect(throws: RecordingFailure.self) {
-            try await recorder.stop()
+            _ = try await recorder.stop()
         }
         #expect(draft.isRecording)
         #expect(draft.route.isEmpty)

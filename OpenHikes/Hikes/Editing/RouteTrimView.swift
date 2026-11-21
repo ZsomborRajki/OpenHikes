@@ -4,7 +4,8 @@
 //
 //  *Edit Route* on a hike that was recorded or imported, pushed from the
 //  closing actions of its screen: drag either end of the line inward, take
-//  off a stretch that was not walked in one tap, and put the original back.
+//  off a stretch that was not walked in one tap, answer for the stretches
+//  trail matching left a question on, and put the original back.
 //
 //  ## Why a trim, and only a trim
 //
@@ -13,7 +14,9 @@
 //  owner's reason for giving it no *Edit Route* at all. A trim keeps that
 //  promise: every point it leaves is the point that was saved — see
 //  ``RouteTrim`` — and the line it cut from is kept beside it, so *Revert to
-//  Original* undoes the whole of it on any of the hiker's devices.
+//  Original* undoes the whole of it on any of the hiker's devices. A stretch
+//  to check is no re-routing either: each of its answers is a line the
+//  recording itself came with — see ``RouteAssembly``.
 //
 //  ## Pushed, not presented
 //
@@ -30,6 +33,7 @@
 //  ``SheetPresentation``, so a turn of the phone keeps the cuts.
 //
 
+import CoreLocation
 import OpenHikesData
 import OpenHikesShared
 import SwiftData
@@ -48,6 +52,8 @@ struct RouteTrimView: View {
     /// Brings the whole line into view above the sheet, the first time this
     /// screen appears.
     var onFirstAppear: () -> Void = { /* no-op default */ }
+    /// Brings one stretch into view above the sheet.
+    var onShowStretch: ([CLLocationCoordinate2D]) -> Void = { _ in /* no-op default */ }
     /// Leaves the screen, once a save or a revert has landed.
     var onDone: () -> Void = { /* no-op default */ }
 
@@ -59,6 +65,10 @@ struct RouteTrimView: View {
                 RouteTrimChart(session: session, tint: hike.tintOpaque)
                 RouteTrimFigures(session: session, hikeDistanceMeters: hike.distanceMeters)
                 RouteTrimOffers(session: session)
+                RouteChecksCard(session: session) { id in
+                    onShowStretch(session.line?.coordinates(ofCheck: id) ?? [])
+                }
+                RouteLooksGoodButton(session: session, confirm: confirm)
                 if hike.hasOriginalRoute {
                     PlaceCardList {
                         RouteRevertButton(session: session, revert: revert)
@@ -82,10 +92,13 @@ struct RouteTrimView: View {
                 RouteTrimSaveButton(session: session, save: save)
             }
         }
-        // Keyed on the line itself, so an edit that lands while this screen
-        // is up — here, or on the hiker's other device — starts over on it.
-        .task(id: RouteTrimLineKey(line)) {
-            await session.load(line.current?.route ?? [])
+        // Keyed on the line itself and on what the hike remembers of its
+        // edits, so an edit that lands while this screen is up — here, or on
+        // the hiker's other device — starts over on it.
+        .task(id: RouteTrimLineKey(line, edit: hike.routeEditData)) {
+            let drawn = line.current?.route ?? []
+            guard drawn.count > 1 else { return }
+            await session.load(RouteEditSources.reading(hike, drawn: drawn, in: modelContext.container))
         }
         .onAppear {
             session.show(on: preview)
@@ -113,6 +126,10 @@ struct RouteTrimView: View {
     private func revert() {
         if session.revert(in: destination) { onDone() }
     }
+
+    private func confirm() {
+        if session.confirmChecks(in: destination) { onDone() }
+    }
 }
 
 /// What ``RouteTrimView``'s loading is keyed on: the line ``ShownLine`` has
@@ -120,21 +137,25 @@ struct RouteTrimView: View {
 /// reason.
 nonisolated struct RouteTrimLineKey: Equatable, Sendable {
     let route: [RouteCoordinate]
+    /// ``Hike/routeEditData``, which names the whole line the hike's is cut
+    /// from and the answers it stands under.
+    let edit: Data?
 
     @MainActor
-    init(_ line: ShownLine) {
+    init(_ line: ShownLine, edit: Data?) {
         route = line.current?.route ?? []
+        self.edit = edit
     }
 }
 
-/// *Save*, which is there to press once a cut has left its end.
+/// *Save*, which is there to press once a cut or an answer has moved.
 struct RouteTrimSaveButton: View {
     let session: RouteTrimSession
     let save: () -> Void
 
     var body: some View {
         RoleButton(.confirm, title: "Save", action: save)
-            .disabled(!session.isTrimmed || session.isSaving)
+            .disabled(!session.hasChanges || session.isSaving)
             .accessibilityIdentifier("route-trim-save")
     }
 }

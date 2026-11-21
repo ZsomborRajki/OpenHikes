@@ -144,7 +144,7 @@ extension HikeRecorderTests {
         walk(recorder, to: 47.632, on: "Ridge Path")
         let offered = try name("Ridge Path", of: recorder)
 
-        let hike = try savedHike(from: await recorder.stop())
+        let hike = try await recorder.stop()
 
         #expect(hike.title == offered)
         #expect(hike.displayTitle == offered)
@@ -165,7 +165,7 @@ extension HikeRecorderTests {
         walk(recorder, to: 47.632, on: "Ridge Path")
         let offered = try name("Ridge Path", of: recorder)
 
-        let hike = try savedHike(from: await recorder.stop(customName: "Sunday Walk"))
+        let hike = try await recorder.stop(customName: "Sunday Walk")
 
         #expect(hike.displayTitle == "Sunday Walk")
         #expect(hike.title == offered)
@@ -185,7 +185,7 @@ extension HikeRecorderTests {
         walk(recorder, to: 47.635, on: nil)
 
         #expect(await recorder.suggestedTitle() == nil)
-        let hike = try savedHike(from: await recorder.stop())
+        let hike = try await recorder.stop()
         #expect(hike.title == HikeRecorder.defaultTitle(for: hike.date))
     }
 
@@ -201,7 +201,7 @@ extension HikeRecorderTests {
         source.deliver(fix(latitude: 47.631))
 
         #expect(await recorder.suggestedTitle() == nil)
-        let hike = try savedHike(from: await recorder.stop())
+        let hike = try await recorder.stop()
         #expect(hike.title == HikeRecorder.defaultTitle(for: hike.date))
     }
 
@@ -247,7 +247,7 @@ extension HikeRecorderTests {
         let offered = try name("Ridge Path", of: recorder)
 
         #expect(await recorder.suggestedTitle() == offered)
-        let hike = try savedHike(from: await recorder.stop())
+        let hike = try await recorder.stop()
         #expect(hike.title == offered, "nor from its saved line")
     }
 
@@ -260,7 +260,7 @@ extension HikeRecorderTests {
         walkRoundABlock(recorder, on: "Ridge Path")
         let offered = try name("Ridge Path Loop", of: recorder)
 
-        let hike = try savedHike(from: await recorder.stop())
+        let hike = try await recorder.stop()
 
         #expect(hike.title == offered)
         #expect(hike.customName == nil, "nobody typed this name")

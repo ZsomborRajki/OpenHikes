@@ -17,10 +17,6 @@ import Foundation
 nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
     /// Asked to start a recording while one is already running.
     case alreadyRecording
-    /// The recording stopped and saved, but trail matching found more than one
-    /// route it could have been and is waiting for the hiker to choose. There
-    /// is no way to answer that by voice, so the app has to be opened.
-    case awaitingRouteReview
     /// The last recording is still being written, or an interrupted one is
     /// still being recovered. Both are brief, and both are states in which
     /// starting a new hike would silently do nothing.
@@ -83,8 +79,6 @@ nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
                 """
         )
         case .recording(let failure): failure.errorDescription
-        case .awaitingRouteReview:
-            String(localized: "Your hike is saved, but it needs you to pick which trail you followed.")
         case .noHikesYet: String(localized: "There aren’t any hikes in OpenHikes yet.")
         case .nothingWalkedYet: String(localized: "You haven’t walked any of your hikes yet.")
         case .storage: String(localized: "Your hikes couldn’t be read.")
@@ -98,7 +92,6 @@ nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
             nil
         case .busyFinishing: String(localized: "Try again in a moment.")
         case .recording(let failure): failure.recoverySuggestion
-        case .awaitingRouteReview: String(localized: "Open OpenHikes to finish reviewing it.")
         // Fixed rather than the store's own words: what SwiftData has to say
         // about a failed fetch is a sentence for a developer, and this one is
         // spoken. It is logged in `HikeIntentCoordinator.fetch(_:)` instead.

@@ -331,6 +331,9 @@ struct HikeDetailView: View {
         ScrollViewReader { scroller in
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
+                    // First, where a hiker who has just pressed Stop lands:
+                    // it is there only while the line asks for a look.
+                    HikeRouteCheckNotice(hike: hike)
                     elevationSection
                     progressSection
                     header

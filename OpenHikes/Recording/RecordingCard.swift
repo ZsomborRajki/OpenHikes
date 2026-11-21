@@ -63,10 +63,9 @@ struct RecordingCard: View {
             } trailing: {
                 titleControls
             }
-            // Straight under the title: a stopped hike's route review is what
-            // the hiker is deciding, and the section it is about is drawn on
-            // the map above the sheet, so it has to be the first thing in view
-            // at the sheet's middle height rather than under the numbers.
+            // Straight under the title: a save that failed is what the hiker
+            // is deciding about, so it has to be the first thing in view at
+            // the sheet's middle height rather than under the numbers.
             phaseContent
             RecordingRecoveryNotice(recorder: recorder)
             RecordingConditionsNotice(recorder: recorder)
@@ -177,7 +176,7 @@ struct RecordingCard: View {
                     stopButton
                 }
             }
-        case .reviewing, .failed:
+        case .failed:
             EmptyView()
         }
     }
@@ -185,16 +184,6 @@ struct RecordingCard: View {
     /// The phases whose decision does not fit on the title row.
     @ViewBuilder private var phaseContent: some View {
         switch recorder.phase {
-        case .reviewing:
-            if let review = recorder.routeReview {
-                RecordingRouteReviewControls(
-                    recorder: recorder,
-                    review: review
-                ) { hike in
-                    onSaved(hike)
-                }
-            }
-            discardButton
         case .failed(let failure):
             if recorder.canRetrySave {
                 VStack(alignment: .leading, spacing: 12) {
@@ -278,10 +267,7 @@ struct RecordingCard: View {
     private func stopAndSave() async {
         let customName = RecordingStopName.typed(stopNameDraft, over: offeredTitle)
         do {
-            let outcome = try await recorder.stop(customName: customName, offeredTitle: offeredTitle)
-            if case .saved(let hike) = outcome {
-                onSaved(hike)
-            }
+            onSaved(try await recorder.stop(customName: customName, offeredTitle: offeredTitle))
         } catch {
             HikeRecorder.logger.error(
                 "Recording save failed: \(error.localizedDescription, privacy: .public)"
@@ -377,7 +363,6 @@ private struct RecordingPhaseTitle: View {
         case .recording: .red
         case .recovering, .waitingForFix, .saving: .orange
         case .paused: .secondary
-        case .reviewing: .orange
         case .idle: .green
         case .failed: .red
         }
@@ -393,7 +378,6 @@ extension HikeRecorder.Phase {
         case .recording: String(localized: "Recording")
         case .paused: String(localized: "Paused")
         case .saving: String(localized: "Saving")
-        case .reviewing: String(localized: "Review Route")
         case .failed: String(localized: "Needs Attention")
         }
     }

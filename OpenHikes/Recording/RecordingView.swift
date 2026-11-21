@@ -9,8 +9,6 @@ import OpenHikesData
 import SwiftUI
 
 struct RecordingView: View {
-    private static let cardID = "recording-card"
-
     let recorder: HikeRecorder
     /// What the card's idle Start goes through, so that it asks before ending
     /// a walk as the map's record button does — see ``RecordingEntry``.
@@ -65,41 +63,29 @@ struct RecordingView: View {
     }
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                // The first-run tips about the bar's two places buttons, right
-                // under the bar — see ``RecordingPlaceTips``.
-                RecordingPlaceTips(recorder: recorder)
-                RecordingCard(
-                    recorder: recorder,
-                    entry: entry,
-                    onSaved: onSaved,
-                    onDiscarded: onDiscarded
-                )
-                .padding()
-                .id(Self.cardID)
-                // The places added so far on this walk, each opening its own
-                // screen. Nothing at all until the first one.
-                if let hike = recorder.currentHike {
-                    HikePlaceSection(hike: hike, mapPins: placePins, onOpen: { placeID in
+        ScrollView {
+            // The first-run tips about the bar's two places buttons, right
+            // under the bar — see ``RecordingPlaceTips``.
+            RecordingPlaceTips(recorder: recorder)
+            RecordingCard(
+                recorder: recorder,
+                entry: entry,
+                onSaved: onSaved,
+                onDiscarded: onDiscarded
+            )
+            .padding()
+            // The places added so far on this walk, each opening its own
+            // screen. Nothing at all until the first one.
+            if let hike = recorder.currentHike {
+                HikePlaceSection(hike: hike, mapPins: placePins, onOpen: { placeID in
+                    onOpenPlace(hike, placeID)
+                })
+                .padding(.horizontal)
+                .background {
+                    HikePlacePinClaim(hike: hike, controller: placePins) { placeID in
                         onOpenPlace(hike, placeID)
-                    })
-                    .padding(.horizontal)
-                    .background {
-                        HikePlacePinClaim(hike: hike, controller: placePins) { placeID in
-                            onOpenPlace(hike, placeID)
-                        }
                     }
                 }
-            }
-            // The review is drawn at the top of the card, which is only where
-            // the hiker is looking if the card is scrolled to its top: one who
-            // was reading the numbers when they stopped would otherwise be
-            // left below the decision. A reader rather than a bound scroll
-            // position, so scrolling writes no state into this body.
-            .onChange(of: recorder.phase) { _, phase in
-                guard phase == .reviewing else { return }
-                withAnimation { proxy.scrollTo(Self.cardID, anchor: .top) }
             }
         }
         // What the side panel stands as tall as — see ``SidePanelFit``.

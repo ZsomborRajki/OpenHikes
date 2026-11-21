@@ -45,15 +45,6 @@ struct HapticWalkStateTests {
         #expect(HapticMoment.walk(from: .paused, to: .idle) == .walkDiscarded)
     }
 
-    /// Discard sits beside the review controls, so this reaches `.idle` from
-    /// `.reviewing` — which is *also* a state a save passes through, and would
-    /// be reported as a save by any table keyed on the destination.
-    @Test("Discarding from the review screen is not a save")
-    func discardingFromReview() {
-        #expect(HapticMoment.walk(from: .reviewing, to: .idle) == .walkDiscarded)
-        #expect(HapticMoment.walk(from: .reviewing, to: .saving) == nil)
-    }
-
     /// The watch's shape: it stops on a screen showing the walk rather than
     /// returning to an idle recorder, and acknowledging that screen is not
     /// news.

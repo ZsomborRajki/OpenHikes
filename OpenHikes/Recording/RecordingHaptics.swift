@@ -44,7 +44,6 @@ extension HikeRecorder.Phase {
         case .waitingForFix: .preparing
         case .recording: .running
         case .paused: .paused
-        case .reviewing: .reviewing
         case .saving: .saving
         case .failed: .failed
         }

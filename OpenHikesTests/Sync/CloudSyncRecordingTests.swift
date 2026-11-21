@@ -85,7 +85,7 @@ final class CloudSyncRecordingTests {
         source.deliver(fix(latitude: 47.6304))
         #expect(hikeRecorder.stats.pointCount == 3)
 
-        let hike = try savedHike(from: await hikeRecorder.stop())
+        let hike = try await hikeRecorder.stop()
         #expect(hike.id == draft.id)
         #expect(hike.route.count == 3)
         #expect(try context.fetch(FetchDescriptor<Hike>()).count == 1)
@@ -117,16 +117,6 @@ final class CloudSyncRecordingTests {
         )
         recorder = instance
         return instance
-    }
-
-    private func savedHike(from outcome: RecordingStopOutcome) throws -> Hike {
-        guard case .saved(let hike) = outcome else {
-            Issue.record("the recording unexpectedly required review")
-            throw RecordingFailure.save(
-                "The recording unexpectedly required review."
-            )
-        }
-        return hike
     }
 
     private func fix(latitude: Double) -> CLLocation {

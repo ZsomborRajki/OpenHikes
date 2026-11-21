@@ -39,7 +39,7 @@ extension HikeRecorderTests {
         )
         #expect(hikeRecorder.stats.pointCount == 2)
 
-        let hike = try savedHike(from: await hikeRecorder.stop())
+        let hike = try await hikeRecorder.stop()
 
         #expect(try context.fetch(FetchDescriptor<Hike>()).count == 1)
         #expect(hike.id == draft.id)
@@ -62,7 +62,8 @@ extension HikeRecorderTests {
         clock.advance(by: 10)
         source.deliver(fix(latitude: 47.6302))
 
-        let stop = Task { try await hikeRecorder.stop() }
+        // The id rather than the hike: a model does not cross out of a task.
+        let stop = Task { try await hikeRecorder.stop().id }
         await sharedStore.waitForClearToStart()
 
         let hike = try #require(hikeRecorder.currentHike)
@@ -75,7 +76,7 @@ extension HikeRecorderTests {
         )
 
         await sharedStore.releaseClear()
-        _ = try savedHike(from: try await stop.value)
+        _ = try await stop.value
 
         #expect(hikeRecorder.currentHike == nil)
         #expect(!hike.belongsToActiveRecording(currentHikeID: nil))
@@ -163,7 +164,7 @@ extension HikeRecorderTests {
         source.deliver(locations)
 
         let acceptedPointCount = hikeRecorder.stats.pointCount
-        let hike = try savedHike(from: await hikeRecorder.stop())
+        let hike = try await hikeRecorder.stop()
         let first = try #require(hike.route.first)
         let last = try #require(hike.route.last)
         let sourceFirst = try #require(track.points.first)
@@ -330,7 +331,7 @@ extension HikeRecorderTests {
         clock.advance(by: 60)
         source.deliver(fix(latitude: 47.641))
 
-        let hike = try savedHike(from: await hikeRecorder.stop())
+        let hike = try await hikeRecorder.stop()
         #expect(hike.distanceMeters.isApproximatelyEqual(to: 222, absoluteTolerance: 5))
         #expect(hike.route.count == 4, "the drawn route remains continuous in v1")
     }

@@ -69,7 +69,7 @@ extension HikeRecorderTests {
         let liveElevationGain = hikeRecorder.stats.elevationGainMeters
         let widgetPolyline = hikeRecorder.trace.widgetPolyline()
 
-        let hike = try savedHike(from: await hikeRecorder.stop())
+        let hike = try await hikeRecorder.stop()
 
         expectRouteIsWhole(hike.route, matches: walk, delivered: delivered)
         expectDistanceSurvived(hike, live: liveDistance, walk: walk)

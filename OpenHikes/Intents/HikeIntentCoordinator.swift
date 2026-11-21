@@ -88,10 +88,10 @@ extension HikeIntentCoordinator {
     }
 
     /// Switched over exhaustively rather than gated on `isActive`, which is
-    /// true for a *failed* and a *reviewing* session as well — that is how the
-    /// recording screen offers the hiker their way back to one. Neither is a
-    /// hike underway, and answering "already recording" to either would be the
-    /// wrong sentence about the wrong problem. Exhaustive so that a phase
+    /// true for a *failed* session as well — that is how the recording screen
+    /// offers the hiker their way back to one. It is not a hike underway, and
+    /// answering "already recording" to it would be the wrong sentence about
+    /// the wrong problem. Exhaustive so that a phase
     /// added later fails to compile here rather than falling into a default
     /// that quietly reports success.
     func startRecording() async throws(HikeIntentFailure) -> LiveRecordingReport {
@@ -102,7 +102,6 @@ extension HikeIntentCoordinator {
         // cleanly on the second ask.
         case .idle, .failed: break
         case .waitingForFix, .recording, .paused: throw .alreadyRecording
-        case .reviewing: throw .awaitingRouteReview
         case .saving, .recovering: throw .busyFinishing
         }
         // After the phase, so a recording already running is reported as
@@ -149,11 +148,10 @@ extension HikeIntentCoordinator {
     /// One holding photographs or places is left as it was, because only the
     /// screen can ask whether they go with it. A walk with a line is saved.
     ///
-    /// Throws ``HikeIntentFailure/awaitingRouteReview`` when trail matching
-    /// found more than one route the walk could have been. The recording is
-    /// safe either way — the journal is closed and the draft is on disk — but
-    /// the choice is a map with two lines on it, and there is no voice answer
-    /// to that question.
+    /// A stretch trail matching could not decide no longer holds the save up:
+    /// the hike is written with the measurement there and the question kept
+    /// on it, for *Edit Route* to ask — see ``RouteAssembly``. A choice
+    /// between two lines on a map has no voice answer, and now needs none.
     func stopRecording() async throws(HikeIntentFailure) -> StoppedRecordingReport {
         await settleRecorder()
         try throwUnlessStoppable()
@@ -179,16 +177,14 @@ extension HikeIntentCoordinator {
         switch recorder.phase {
         case .waitingForFix, .recording, .paused: return
         case .idle: throw .noActiveRecording
-        case .reviewing: throw .awaitingRouteReview
         case .saving, .recovering: throw .busyFinishing
         case .failed(let failure): throw .recording(failure)
         }
     }
 
     private func saveStoppedRecording() async throws(HikeIntentFailure) -> FinishedHikeReport {
-        let outcome: RecordingStopOutcome
         do {
-            outcome = try await recorder.stop()
+            return Self.report(for: try await recorder.stop())
         } catch let failure as RecordingFailure {
             throw .recording(failure)
         } catch {
@@ -199,10 +195,6 @@ extension HikeIntentCoordinator {
                 "Stopping a recording for an intent failed: \(error.localizedDescription, privacy: .public)"
             )
             throw .couldNotSave
-        }
-        switch outcome {
-        case .needsReview: throw .awaitingRouteReview
-        case .saved(let hike): return Self.report(for: hike)
         }
     }
 
@@ -229,7 +221,7 @@ extension HikeIntentCoordinator {
         switch recorder.phase {
         case .waitingForFix, .recording, .paused: return liveReport()
         case .failed(let failure): throw .recording(failure)
-        case .idle, .saving, .reviewing, .recovering: throw .noActiveRecording
+        case .idle, .saving, .recovering: throw .noActiveRecording
         }
     }
 
@@ -306,8 +298,6 @@ extension HikeIntentCoordinator: HikeRecordingControlHandling {
             _ = try await startRecording()
         case .waitingForFix, .recording, .paused:
             _ = try await stopRecording()
-        case .reviewing:
-            throw HikeIntentFailure.awaitingRouteReview
         case .saving, .recovering:
             throw HikeIntentFailure.busyFinishing
         }

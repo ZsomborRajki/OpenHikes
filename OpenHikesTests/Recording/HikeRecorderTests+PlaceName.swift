@@ -93,7 +93,7 @@ extension HikeRecorderTests {
         let draft = try #require(recorder.currentHike)
         #expect(draft.title == HikeRecorder.defaultTitle(for: draft.date))
 
-        let hike = try savedHike(from: await recorder.stop())
+        let hike = try await recorder.stop()
 
         #expect(hike.title == townsName)
         #expect(hike.customName == nil, "nobody typed this name")
@@ -115,7 +115,7 @@ extension HikeRecorderTests {
         let startedAt = try #require(recorder.sessionStartedAt)
         let offered = name("Budapest – Ridge Path", on: startedAt)
         #expect(await recorder.suggestedTitle() == offered)
-        let hike = try savedHike(from: await recorder.stop())
+        let hike = try await recorder.stop()
         #expect(hike.title == offered)
     }
 
@@ -128,7 +128,7 @@ extension HikeRecorderTests {
         source.deliver(fix(latitude: 47.631))
         await settleStartPlace(of: recorder)
 
-        let hike = try savedHike(from: await recorder.stop(customName: "Sunday Walk"))
+        let hike = try await recorder.stop(customName: "Sunday Walk")
 
         #expect(hike.displayTitle == "Sunday Walk")
         #expect(hike.title == name("Budapest", on: hike.date))
@@ -151,7 +151,7 @@ extension HikeRecorderTests {
         }
 
         #expect(await recorder.suggestedTitle() == nil)
-        let hike = try savedHike(from: await recorder.stop())
+        let hike = try await recorder.stop()
         #expect(hike.title == HikeRecorder.defaultTitle(for: hike.date))
     }
 
@@ -171,7 +171,7 @@ extension HikeRecorderTests {
         source.deliver(fix(latitude: 47.6312, longitude: 19.05))
         // A question a later fix asked would have been answered by the time
         // the save that follows it is.
-        _ = try savedHike(from: await recorder.stop())
+        _ = try await recorder.stop()
 
         let asked = try #require(places.askedCoordinates.first)
         #expect(places.askedCoordinates.count == 1)
@@ -238,41 +238,9 @@ extension HikeRecorderTests {
 
         clock.advance(by: 60)
         source.deliver(fix(latitude: 47.502, longitude: 19.05))
-        let hike = try savedHike(from: await recorder.stop())
+        let hike = try await recorder.stop()
 
         #expect(places.askedCoordinates.count == 1, "the fix after a recovered start is not another start")
-        #expect(hike.title == name("Budapest", on: hike.date))
-    }
-
-    /// A walk stopped and then closed during its route review comes back to
-    /// that review, where no fix arrives to ask at. The relaunch asks first,
-    /// so the review's save still has the town to name the walk for.
-    @Test("a walk recovered into its route review is named for its town")
-    func aWalkRecoveredIntoReviewIsNamedForItsTown() async throws {
-        let journal = TrackJournal(directory: directory, clock: clock.read)
-        try await journal.start(sessionID: UUID(), startedAt: clock.now)
-        try await journal.append(
-            RecordingPoint(latitude: 47.63, longitude: 12.86, timestamp: clock.now, horizontalAccuracy: 8)
-        )
-        clock.advance(by: 720)
-        try await journal.append(
-            RecordingPoint(latitude: 47.63, longitude: 12.864, timestamp: clock.now, horizontalAccuracy: 8)
-        )
-        try await journal.finish(at: clock.now)
-
-        let places = StubRecordingPlaceNaming(city: "Budapest")
-        let recorder = makeRecorder(
-            trailGraphProvider: StubTrailGraphProvider(graph: ambiguityGraph()),
-            placeNames: places
-        )
-        await recorder.recoverOpenSession()
-        #expect(recorder.phase == .reviewing)
-        await settleStartPlace(of: recorder)
-
-        let asked = try #require(places.askedCoordinates.first)
-        #expect(asked.latitude.isApproximatelyEqual(to: 47.63, absoluteTolerance: 1e-7))
-        #expect(asked.longitude.isApproximatelyEqual(to: 12.86, absoluteTolerance: 1e-7))
-        let hike = try await recorder.saveReviewedRecording()
         #expect(hike.title == name("Budapest", on: hike.date))
     }
 
@@ -301,49 +269,12 @@ extension HikeRecorderTests {
         await settleStartPlace(of: recorder)
         // The field still says what it opened with, which is how the alert
         // hands it over — see ``RecordingStopName``.
-        let hike = try savedHike(
-            from: await recorder.stop(
-                customName: RecordingStopName.typed(shown, over: shown),
-                offeredTitle: shown
-            )
+        let hike = try await recorder.stop(
+            customName: RecordingStopName.typed(shown, over: shown),
+            offeredTitle: shown
         )
 
         #expect(hike.title == shown)
         #expect(hike.customName == nil, "nobody typed this name")
-    }
-
-    /// The same promise across a route review, where a late answer is the
-    /// likeliest to land: the hiker can sit in one for minutes.
-    @Test("the name a stop alert showed outlasts the route review")
-    func theShownNameOutlastsTheRouteReview() async throws {
-        let places = StubRecordingPlaceNaming(city: "Budapest")
-        places.holdsAnswers = true
-        let recorder = makeRecorder(
-            trailGraphProvider: StubTrailGraphProvider(graph: matchedPathGraph()),
-            placeNames: places
-        )
-        await recorder.start()
-        // The trace `HikeRecorderTests+Review.swift` walks, which the matcher
-        // moves onto the trail beside it.
-        source.deliver(fix(latitude: 47.63))
-        clock.advance(by: 10)
-        source.deliver(fix(latitude: 47.6302))
-        await settleDelegateHop(until: "the town to be asked about") {
-            places.askedCoordinates.count == 1
-        }
-        #expect(await recorder.suggestedTitle() == nil)
-        let shown = try #require(recorder.currentHike?.title)
-
-        guard case .needsReview = try await recorder.stop(offeredTitle: shown) else {
-            Issue.record("the moved route did not enter review")
-            return
-        }
-        places.releaseAnswers()
-        await settleDelegateHop(until: "the town to answer during the review") {
-            recorder.startPlaceName != nil
-        }
-        let hike = try await recorder.saveReviewedRecording()
-
-        #expect(hike.title == shown)
     }
 }

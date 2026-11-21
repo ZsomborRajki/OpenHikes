@@ -23,7 +23,7 @@ nonisolated enum UITestFixture {
     static let gpxName = "ThumseeLoopFast"
     /// The title the fixture GPX imports under.
     static let importedHikeTitle = "Thumsee Loop (fast, simulated)"
-    /// Matched against through `--ui-test-trail-graph`, so a review section
+    /// Matched against through `--ui-test-trail-graph`, so a section to check
     /// does not depend on reaching Overpass.
     static let trailGraphName = "ThumseeRidgePath"
 
@@ -97,12 +97,12 @@ nonisolated enum UITestFixture {
     private static let offTrailOffsetDegrees = 0.01
 }
 
-/// The two-trail walk behind the review screen's Previous and Next buttons.
+/// The two-trail walk that is saved with two sections to check.
 ///
-/// Those buttons do nothing with one section, and one is all
-/// ``UITestFixture/reviewableTrace`` can produce. Two need a walk that snaps,
-/// then wanders far enough from any trail for long enough that the matcher
-/// leaves it alone — closing the first run — then snaps onto a second trail.
+/// One section is all ``UITestFixture/reviewableTrace`` can produce. Two
+/// need a walk that snaps, then wanders far enough from any trail for long
+/// enough that the matcher leaves it alone — closing the first run — then
+/// snaps onto a second trail.
 ///
 /// Mirrors `UITestMultiSectionFixture` in `OpenHikesTests`, which asserts in
 /// milliseconds that these numbers still produce exactly two sections. That
@@ -307,9 +307,7 @@ extension XCTestCase {
 
     /// Polls an element's label until it differs from `previous`.
     ///
-    /// Which section a review is showing is drawn as a title and nothing
-    /// else, so a Next that redrew without moving is indistinguishable from
-    /// one that worked — unless the title is watched for a change.
+    /// For a control whose label is the only thing a change to it moves.
     @MainActor
     func waitUntilLabelChanges(
         from previous: String,
@@ -850,11 +848,7 @@ extension XCTestCase {
     }
 
     /// Stops a recording and names it, which is where every walk this bundle
-    /// records either ends or moves on to review.
-    ///
-    /// The name is typed before either happens, so a test that finds it on the
-    /// saved hike afterwards has also proved the review step carried it
-    /// through.
+    /// records ends: the save follows at once.
     @MainActor
     func stopRecording(named name: String, in app: XCUIApplication) {
         app.buttons["Stop"].tap()

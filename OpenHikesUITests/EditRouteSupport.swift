@@ -31,4 +31,23 @@ extension XCTestCase {
         scrollToTap(editRoute, in: app, attempts: 12)
         XCTAssertTrue(app.navigationBars["Edit Route"].waitForExistence(timeout: UITestTimeout.navigation))
     }
+
+    /// From the open detail of a recording that was saved with something to
+    /// look at, pushes *Edit Route* through the notice that says so.
+    ///
+    /// - Parameter expected: what the notice has to say, in part.
+    @MainActor
+    func openRouteChecks(in app: XCUIApplication, saying expected: String) {
+        let notice = element("hike-route-check", in: app)
+        XCTAssertTrue(
+            notice.waitForExistence(timeout: UITestTimeout.existence),
+            "a recording the matcher moved should say there is something to check"
+        )
+        XCTAssertTrue(
+            notice.label.contains(expected),
+            "the notice should say \"\(expected)\", said \"\(notice.label)\""
+        )
+        scrollToTap(notice, in: app)
+        XCTAssertTrue(app.navigationBars["Edit Route"].waitForExistence(timeout: UITestTimeout.navigation))
+    }
 }

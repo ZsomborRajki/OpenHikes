@@ -500,18 +500,6 @@ final class HikeRecorderTests {
         return TrailGraph(nodes: nodes, edges: edges)
     }
 
-    func savedHike(
-        from outcome: RecordingStopOutcome
-    ) throws -> Hike {
-        guard case .saved(let hike) = outcome else {
-            Issue.record("the recording unexpectedly required review")
-            throw RecordingFailure.save(
-                "The recording unexpectedly required review."
-            )
-        }
-        return hike
-    }
-
     func fix(
         latitude: Double,
         longitude: Double = 12.86,

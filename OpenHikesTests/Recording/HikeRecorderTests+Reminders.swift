@@ -278,7 +278,7 @@ extension HikeRecorderTests {
         let write = TestGate()
         hikeRecorder.journalQueue.enqueue { await write.wait() }
 
-        let stopping = Task { try await hikeRecorder.stop() }
+        let stopping = Task { try await hikeRecorder.stop().id }
         await settleDelegateHop(until: "Stop to start saving") { hikeRecorder.phase == .saving }
         harness.notifier.answerPrompt(allowing: true)
         await harness.controller.settle()

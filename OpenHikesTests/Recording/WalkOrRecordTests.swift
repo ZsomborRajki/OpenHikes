@@ -211,11 +211,7 @@ final class WalkOrRecordTests {
         await settleDelegateHop(until: "the recording's screen to be asked for") { sent.received.count == 1 }
         #expect(walked.walks?.count == 1, "precondition: the walk was kept")
 
-        let saved = try await hikeRecorder.stop()
-        guard case let .saved(recording) = saved else {
-            Issue.record("the recording unexpectedly required review")
-            return
-        }
+        let recording = try await hikeRecorder.stop()
 
         let library = try await LibraryTotalsSweep.outings(from: container)
         #expect(library.outings.map(\.hikeID) == [recording.id])

@@ -215,64 +215,6 @@ nonisolated final class AccessibilityUITests: XCTestCase {
         try audit(app)
     }
 
-    /// The review screen, which is the one place in the app where a decision
-    /// is drawn as a tint and a checkmark.
-    ///
-    /// A choice that reads as two identical unnamed rows is unusable without
-    /// sight, and this screen has no second way to tell them apart: the
-    /// difference between them is the shape of a line on a map.
-    @MainActor
-    func testRouteReviewIsReadable() throws {
-        let app = makeApp(
-            arguments: [
-                "--ui-test-expanded-sheet",
-                "--ui-test-enable-location",
-                "--ui-test-trail-graph=\(UITestFixture.trailGraphName)",
-            ]
-        )
-        app.resetAuthorizationStatus(for: .location)
-        addLocationPermissionMonitor()
-        setSimulatedLocation(UITestFixture.reviewableTrace[0])
-        defer { XCUIDevice.shared.location = nil }
-
-        launch(app)
-        startRecording(in: app)
-
-        let points = element("recording-point-count", in: app)
-        XCTAssertTrue(
-            points.waitForExistence(timeout: UITestTimeout.existence)
-        )
-        walkRecordedTrace(UITestFixture.reviewableTrace, countedBy: points)
-        stopRecording(named: Self.reviewedHikeName, in: app)
-
-        let title = element("review-section-title", in: app)
-        XCTAssertTrue(
-            title.waitForExistence(timeout: Self.reviewTimeout),
-            "a snapped recording should stop in review"
-        )
-        XCTAssertFalse(
-            title.label.isEmpty,
-            "which stretch is being decided has to be said, not just drawn"
-        )
-
-        let keepTrail = element("review-choice-trail", in: app)
-        let useGPS = element("review-choice-gps", in: app)
-        XCTAssertTrue(keepTrail.waitForExistence(timeout: UITestTimeout.existence))
-        XCTAssertFalse(
-            keepTrail.label.isEmpty,
-            "each option has to name the line it would keep"
-        )
-        XCTAssertFalse(useGPS.label.isEmpty)
-        XCTAssertTrue(
-            keepTrail.isSelected,
-            "the standing choice is drawn as a checkmark, which is decoration "
-                + "— the trait is what carries it"
-        )
-        XCTAssertFalse(useGPS.isSelected)
-
-        try audit(app)
-    }
-
     /// The photo strip and the viewer it opens, seeded because the Simulator
     /// has no camera.
     ///
@@ -420,10 +362,6 @@ nonisolated final class AccessibilityUITests: XCTestCase {
         try audit(app)
     }
 
-    /// Matching a trace against the bundled graph is real work on a cold
-    /// simulator.
-    private static let reviewTimeout: TimeInterval = 30
-    private static let reviewedHikeName = "Reviewed Route"
 }
 
 // MARK: - The trail maker

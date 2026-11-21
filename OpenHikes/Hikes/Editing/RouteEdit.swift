@@ -42,6 +42,26 @@ nonisolated struct RouteEdit: Codable, Equatable, Sendable {
         var routeRevision: String?
     }
 
+    /// The ends of a line that were not walked, by how far the hiker was
+    /// carried over each — see ``RouteCarriedEnds``. Kept so the hike's own
+    /// screen can say so without reading the line.
+    struct NotOnFoot: Codable, Equatable, Sendable {
+        var leadingMeters: Double?
+        var trailingMeters: Double?
+        /// Whether the hiker has looked: saved an edit, or said the line is
+        /// right as it is. A ride on a cable car is a line that is right.
+        var isChecked = false
+
+        var totalMeters: Double { (leadingMeters ?? 0) + (trailingMeters ?? 0) }
+
+        init?(_ ends: RouteCarriedEnds, isChecked: Bool = false) {
+            guard !ends.isEmpty else { return nil }
+            leadingMeters = ends.leading?.carriedMeters
+            trailingMeters = ends.trailing?.carriedMeters
+            self.isChecked = isChecked
+        }
+    }
+
     /// What goes back with ``Hike/originalRoute``.
     struct Original: Codable, Equatable, Sendable {
         /// ``Hike/distanceMeters`` before the first edit.
@@ -51,6 +71,8 @@ nonisolated struct RouteEdit: Codable, Equatable, Sendable {
         /// The recording's own walk before the first edit, or `nil` for a
         /// hike with none: an import, or a recording too short for one.
         var recordedWalk: RecordedWalk?
+        /// ``RouteEdit/notOnFoot`` before the first edit.
+        var notOnFoot: NotOnFoot?
     }
 
     /// The hike before its first edit, or `nil` once it has been reverted:
@@ -60,10 +82,59 @@ nonisolated struct RouteEdit: Codable, Equatable, Sendable {
     /// changed, by an edit or by a revert, or `nil` for a line never changed
     /// while shared.
     var editedUnderSubmissionID: String?
+    /// What a recording's line was put together from at Stop, with the
+    /// stretches the hiker can still answer for, or `nil` for a hike trail
+    /// matching never touched — see ``RouteAssembly``. Written by the save
+    /// that makes the hike, so it is here on a hike nobody has edited.
+    var assembly: RouteAssembly?
+    /// The part of the whole line that is kept, in metres along it, or `nil`
+    /// for all of it. The whole line is the one ``assembly`` rebuilds from
+    /// the line as it was saved, or that line itself: a trim is a pair of
+    /// cuts on it, so *Edit Route* can move them back out as well as in.
+    var trim: ClosedRange<Double>?
+    /// ``RouteTrim/EndPauses`` of ``trim``, as its raw value, or `nil` for
+    /// none: the pauses standing on the whole line's own ends that the cuts
+    /// take off, which no distance along the line can say. Read through
+    /// ``endPausesTakenOff``.
+    var trimEndPauses: Int?
+    /// The ends of the line as it is drawn now that were not walked.
+    var notOnFoot: NotOnFoot?
 
     /// Whether anything is left to keep: a reverted hike that was never
-    /// shared keeps no column at all.
-    var isEmpty: Bool { original == nil && editedUnderSubmissionID == nil }
+    /// shared, and had nothing to check, keeps no column at all.
+    var isEmpty: Bool {
+        original == nil && editedUnderSubmissionID == nil && assembly == nil && trim == nil && notOnFoot == nil
+    }
+
+    /// The pauses on the whole line's ends that ``trim`` takes off.
+    var endPausesTakenOff: RouteTrim.EndPauses {
+        get { RouteTrim.EndPauses(rawValue: trimEndPauses ?? 0) }
+        set { trimEndPauses = newValue.isEmpty ? nil : newValue.rawValue }
+    }
+
+    /// How many stretches trail matching left for the hiker to look at,
+    /// and has not been looked at yet. What the hike's screen counts — see
+    /// ``HikeRouteCheckNotice``.
+    var uncheckedCount: Int { assembly?.uncheckedCount ?? 0 }
+
+    /// The ends that were not walked, while the hiker has not looked at them.
+    var uncheckedNotOnFoot: NotOnFoot? {
+        notOnFoot.flatMap { $0.isChecked ? nil : $0 }
+    }
+
+    /// Whether the hike's screen has anything to say about the line.
+    var isOwedALook: Bool { uncheckedCount > 0 || uncheckedNotOnFoot != nil }
+
+    /// Everything looked at, and nothing else changed.
+    var looked: Self {
+        var seen = self
+        if var pieces = seen.assembly {
+            for index in pieces.checks.indices { pieces.checks[index].isChecked = true }
+            seen.assembly = pieces
+        }
+        seen.notOnFoot?.isChecked = true
+        return seen
+    }
 }
 
 extension RouteEdit.RecordedWalk {

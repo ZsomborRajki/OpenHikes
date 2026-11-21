@@ -36,7 +36,7 @@ extension HikeRecorderTests {
         elevation.deliver(10)
         source.deliver(fix(latitude: 47.6302))
 
-        let hike = try savedHike(from: await recorder.stop())
+        let hike = try await recorder.stop()
 
         #expect(elevation.stopCount >= 2)
         #expect(hike.route.count == 2)
@@ -61,7 +61,7 @@ extension HikeRecorderTests {
         )
 
         #expect(recorder.stats.pointCount == 2)
-        let hike = try savedHike(from: await recorder.stop())
+        let hike = try await recorder.stop()
         #expect(hike.route.allSatisfy { $0.motion == .nonPedestrian })
         #expect(motion.startCount == 1)
         #expect(motion.stopCount >= 2)
@@ -85,13 +85,9 @@ extension HikeRecorderTests {
             coord.longitude.isApproximatelyEqual(to: 12.8599, absoluteTolerance: 0.00001)
         })
 
-        // A moved route is reviewed before it is stored; keeping the default
-        // choice is what makes the matched line canonical.
-        guard case .needsReview = try await recorder.stop() else {
-            Issue.record("a moved route should be reviewed before saving")
-            return
-        }
-        let hike = try await recorder.saveReviewedRecording()
+        // A moved route is saved at once, on the trail: the confident
+        // match is the stretch's default — see ``RouteAssembly``.
+        let hike = try await recorder.stop()
 
         #expect(hike.rawRoute.count == 2)
         #expect(hike.route.count == 2)
@@ -162,14 +158,12 @@ extension HikeRecorderTests {
         await recorder.discard()
     }
 
-    @Test("ambiguous gaps keep the recording draft until review finishes")
-    func ambiguityReviewKeepsDraft() async throws {
-        let sharedStore = StubRecordingSharedStateStore()
+    @Test("an ambiguous gap is saved as it was recorded, with its other routes kept to choose from")
+    func anAmbiguousGapIsSavedWithItsRoutes() async throws {
         let recorder = makeRecorder(
             trailGraphProvider: StubTrailGraphProvider(
                 graph: ambiguityGraph()
-            ),
-            sharedStateStore: sharedStore
+            )
         )
         await recorder.start()
         let draft = try #require(recorder.currentHike)
@@ -177,44 +171,29 @@ extension HikeRecorderTests {
         clock.advance(by: 720)
         source.deliver(fix(latitude: 47.63, longitude: 12.864))
 
-        let outcome = try await recorder.stop()
-        guard case .needsReview = outcome else {
-            Issue.record("the sparse fork should require review")
-            return
-        }
+        let hike = try await recorder.stop()
 
-        #expect(recorder.phase == .reviewing)
-        #expect(try context.fetch(FetchDescriptor<Hike>()).count == 1)
-        #expect(draft.isRecording)
-        #expect(draft.route.isEmpty)
-        let section = try #require(recorder.routeReview?.current)
-        #expect(section.kind == .ambiguous)
-        #expect(section.alternatives.count >= 2)
-        await settleDelegateHop(until: "the review preview to be drawn") {
-            !recorder.trace.reviewSegment.isEmpty
-        }
-        #expect(recorder.trace.reviewSegment.count == 2)
-        #expect(FileManager.default.fileExists(atPath: TrackJournal(directory: directory).journalURL.path))
-        try await expectLateWidgetFixIsRefused(by: recorder, sharedStore: sharedStore)
-
-        let alternative = try #require(section.alternatives.first)
-        recorder.selectRouteChoice(
-            .alternative(alternative.id)
-        )
-        await settleDelegateHop(until: "the preview to redraw as the chosen alternative") {
-            recorder.trace.reviewSegment.count > 2
-        }
-        #expect(recorder.trace.reviewSegment.count > 2)
-
-        let hike = try await recorder.saveReviewedRecording()
-
-        #expect(hike.route.count > 2)
-        #expect(hike.rawRoute.count == 2)
+        #expect(recorder.phase == .idle)
         #expect(hike.id == draft.id)
         #expect(!hike.isRecording)
+        #expect(hike.route.count == 2, "the measurement, until somebody says which way it went")
         #expect(try context.fetch(FetchDescriptor<Hike>()).count == 1)
-        #expect(recorder.phase == .idle)
         #expect(!FileManager.default.fileExists(atPath: TrackJournal(directory: directory).journalURL.path))
+
+        var assembly = try #require(hike.routeEdit?.assembly)
+        #expect(assembly.uncheckedCount == 1)
+        let check = try #require(assembly.checks.first)
+        #expect(check.kind == .ambiguous)
+        #expect(check.choice == .gps)
+        #expect(check.alternatives.count >= 2)
+        #expect(assembly.line(saved: hike.route, raw: hike.rawRoute).route == hike.route)
+
+        let alternative = try #require(check.alternatives.first)
+        assembly.checks[0].choice = .alternative(alternative.id)
+        let chosen = assembly.line(saved: hike.route, raw: hike.rawRoute).route
+        #expect(chosen.count > 2, "the route the matcher offered, kept with the hike")
+        #expect(chosen.first?.latitude == hike.route.first?.latitude)
+        #expect(chosen.last?.longitude == hike.route.last?.longitude)
     }
 
     @Test("trail graph prefetch follows the recording into new regions")
@@ -325,54 +304,6 @@ extension HikeRecorderTests {
         while !(await condition()), ContinuousClock.now < deadline {
             guard await settlePollTick() else { break }
         }
-    }
-
-    /// Hands a recording that is already in review a widget fix that arrived
-    /// too late, and proves it is refused.
-    ///
-    /// Becoming active republishes the widget snapshot unconditionally, so that
-    /// republish is the positive effect proving the whole scene-active path
-    /// ran — and only then is "the fix was not folded in" a claim rather than a
-    /// race. The merge task is awaited for the same reason: a reviewing
-    /// recorder that stopped refusing the merge assigns it synchronously, so it
-    /// would have finished folding by the time the expectations below are read.
-    ///
-    /// The review state is asserted alongside the point count because folding
-    /// into a finished journal is what a regression here actually does: the
-    /// merge throws, the recorder fails, and the review the hiker is halfway
-    /// through disappears.
-    private func expectLateWidgetFixIsRefused(
-        by recorder: HikeRecorder,
-        sharedStore: StubRecordingSharedStateStore
-    ) async throws {
-        let sessionID = try #require(
-            await settle(sharedStore) { !$0.isEmpty }.last?.sessionID
-        )
-        let lateLatitude = 47.631
-        let lateLongitude = 12.862
-        let lateWidgetFix = SharedRecordingFix(
-            sessionID: sessionID,
-            latitude: lateLatitude,
-            longitude: lateLongitude,
-            timestamp: clock.now.addingTimeInterval(60),
-            horizontalAccuracy: 50
-        )
-        await sharedStore.setPendingFixes([lateWidgetFix])
-        let published = (await sharedStore.savedSnapshots()).count
-        recorder.sceneDidBecomeActive()
-        let snapshots = await settle(sharedStore) { $0.count > published }
-        #expect(
-            snapshots.count > published,
-            "becoming active must republish the recording snapshot"
-        )
-        await recorder.pendingFixMergeTask?.value
-        #expect(recorder.stats.pointCount == 2)
-        #expect(!(await sharedStore.removedIDs()).contains(lateWidgetFix.id))
-        #expect(recorder.phase == .reviewing)
-        #expect(
-            recorder.routeReview?.current != nil,
-            "the review must survive the scene becoming active"
-        )
     }
 
     @Test("trail graph prefetch is cancelled when the recording is discarded")
@@ -602,7 +533,7 @@ extension HikeRecorderTests {
 
         clock.advance(by: 40)
         source.deliver(fix(latitude: 47.6304))
-        let hike = try savedHike(from: await recorder.stop())
+        let hike = try await recorder.stop()
 
         #expect(hike.route.count == 3)
         #expect(await sharedStore.removedIDs().contains(widgetFix.id))

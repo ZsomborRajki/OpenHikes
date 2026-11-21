@@ -244,6 +244,13 @@
 # (`RouteEditWorkoutTests`), and the handles on the map are
 # `MapRouteTrim.swift`'s (`MapCoordinatorTests+RouteTrim`).
 #
+# The review a stopped recording used to wait in went, with its screen
+# (`RecordingRouteReviewControls`). What took its place is a card on *Edit
+# Route* (`RouteChecksCard`) and a row on the hike's own screen
+# (`HikeRouteCheckNotice`), both body code: their words are
+# `RouteCheckWording`'s, and what an answer does is `RouteTrimSession`'s and
+# `RouteEditSave`'s (`RouteEditChecksTests`).
+#
 # The UI suites still exist and still run locally:
 #
 #   Scripts/run-ui-tests.sh --all
@@ -322,7 +329,6 @@ OpenHikes/Photos/PhotoLicenseCredit.swift
 OpenHikes/Photos/PhotoStepButton.swift
 OpenHikes/Purchases/ElevationProPrompt.swift
 OpenHikes/Purchases/MapPaywallView.swift
-OpenHikes/Recording/RecordingRouteReviewControls.swift
 OpenHikes/Settings/AboutSection.swift
 OpenHikes/Settings/BackgroundTrackingSection.swift
 OpenHikes/Settings/BlockedHikersSection.swift
@@ -363,3 +369,5 @@ OpenHikes/Hikes/Editing/RouteTrimView.swift
 OpenHikes/Hikes/Editing/RouteTrimChart.swift
 OpenHikes/Hikes/Editing/RouteTrimDetails.swift
 OpenHikes/Map/MapSheet+RouteEdit.swift
+OpenHikes/Hikes/Editing/RouteChecksCard.swift
+OpenHikes/Hikes/Detail/HikeRouteCheckNotice.swift

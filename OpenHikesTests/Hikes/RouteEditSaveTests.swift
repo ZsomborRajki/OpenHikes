@@ -51,9 +51,10 @@ struct RouteEditSaveTests {
     /// The route cut to the points `range` names.
     private static func edited(keeping range: ClosedRange<Int>) throws -> EditedLine {
         try #require(EditedLine(
-            trimming: route,
+            whole: route,
             distances: distances,
-            to: distances[range.lowerBound]...distances[range.upperBound]
+            cuts: EditedLine.Cuts(range: distances[range.lowerBound]...distances[range.upperBound]),
+            replacing: route
         ))
     }
 
@@ -87,7 +88,7 @@ struct RouteEditSaveTests {
         let hike = Fixture.hike(in: context, route: Self.route)
         let date = hike.date
 
-        let outcome = RouteEditSave.trim(hike, from: Self.route, to: try Self.edited(keeping: 0...6), in: context)
+        let outcome = RouteEditSave.write(try Self.edited(keeping: 0...6), to: hike, replacing: Self.route, in: context)
 
         #expect(outcome == .saved(Array(Self.route[0...6])))
         #expect(hike.route == Array(Self.route[0...6]))
@@ -104,15 +105,17 @@ struct RouteEditSaveTests {
     func aSecondTrimKeepsTheFirstOriginal() throws {
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context, route: Self.route)
-        RouteEditSave.trim(hike, from: Self.route, to: try Self.edited(keeping: 0...8), in: context)
+        RouteEditSave.write(try Self.edited(keeping: 0...8), to: hike, replacing: Self.route, in: context)
         let once = hike.route
+        // The cuts are on the whole line, whatever an earlier save left of it.
         let again = try #require(EditedLine(
-            trimming: once,
-            distances: RouteTrim.distances(along: once),
-            to: Self.distances[2]...Self.distances[8]
+            whole: Self.route,
+            distances: Self.distances,
+            cuts: EditedLine.Cuts(range: Self.distances[2]...Self.distances[8]),
+            replacing: once
         ))
 
-        RouteEditSave.trim(hike, from: once, to: again, in: context)
+        RouteEditSave.write(again, to: hike, replacing: once, in: context)
 
         #expect(hike.route == Array(Self.route[2...8]))
         #expect(hike.originalRoute == Self.route)
@@ -127,7 +130,7 @@ struct RouteEditSaveTests {
         // Shorter than its line, as a recording's is: see `PreparedRecording`.
         hike.distanceMeters = Self.length - 40
 
-        RouteEditSave.trim(hike, from: Self.route, to: try Self.edited(keeping: 0...6), in: context)
+        RouteEditSave.write(try Self.edited(keeping: 0...6), to: hike, replacing: Self.route, in: context)
 
         #expect(hike.distanceMeters.isApproximatelyEqual(to: Self.distances[6] - 40, absoluteTolerance: 0.01))
     }
@@ -138,7 +141,7 @@ struct RouteEditSaveTests {
         let (hike, walk) = try recording(in: context)
         let ended = walk.endedAt
 
-        RouteEditSave.trim(hike, from: Self.route, to: try Self.edited(keeping: 2...10), in: context)
+        RouteEditSave.write(try Self.edited(keeping: 2...10), to: hike, replacing: Self.route, in: context)
 
         let began = Line.start.addingTimeInterval(2 * Line.secondsPerPoint)
         #expect(hike.date == began)
@@ -167,7 +170,7 @@ struct RouteEditSaveTests {
         try context.save()
 
         let edited = try Self.edited(keeping: 0...6)
-        RouteEditSave.trim(hike, from: Self.route, to: edited, in: context)
+        RouteEditSave.write(edited, to: hike, replacing: Self.route, in: context)
 
         #expect(walk.startedAt == started)
         #expect(walk.endedAt == Line.start.addingTimeInterval(6 * Line.secondsPerPoint))
@@ -191,7 +194,7 @@ struct RouteEditSaveTests {
             hike.elevationRouteRevision = "the-old-line"
         }
 
-        RouteEditSave.trim(hike, from: Self.route, to: try Self.edited(keeping: 0...6), in: context)
+        RouteEditSave.write(try Self.edited(keeping: 0...6), to: hike, replacing: Self.route, in: context)
 
         #expect(hike.surfaceMetersByCategory.isEmpty)
         #expect(hike.difficultyMetersByGrade.isEmpty)
@@ -202,8 +205,9 @@ struct RouteEditSaveTests {
 
     @Test("cuts that leave no line make no edit")
     func noLineNoEdit() {
-        #expect(EditedLine(trimming: Self.route, distances: Self.distances, to: 100...100) == nil)
-        #expect(EditedLine(trimming: [], distances: [], to: 0...100) == nil)
+        let nowhere = EditedLine.Cuts(range: 100...100)
+        #expect(EditedLine(whole: Self.route, distances: Self.distances, cuts: nowhere, replacing: Self.route) == nil)
+        #expect(EditedLine(whole: [], distances: [], cuts: EditedLine.Cuts(range: 0...100), replacing: []) == nil)
     }
 
     // MARK: Reverting
@@ -215,7 +219,7 @@ struct RouteEditSaveTests {
         hike.distanceMeters = Self.length - 40
         let date = hike.date
         let recorded = RouteEdit.RecordedWalk(walk)
-        RouteEditSave.trim(hike, from: Self.route, to: try Self.edited(keeping: 2...6), in: context)
+        RouteEditSave.write(try Self.edited(keeping: 2...6), to: hike, replacing: Self.route, in: context)
 
         let outcome = RouteEditSave.revert(hike, from: hike.route, in: context)
 
@@ -247,7 +251,7 @@ struct RouteEditSaveTests {
         hike.communitySubmissionID = "submission-1"
         #expect(!hike.isSharedCopyOutOfDate)
 
-        RouteEditSave.trim(hike, from: Self.route, to: try Self.edited(keeping: 0...6), in: context)
+        RouteEditSave.write(try Self.edited(keeping: 0...6), to: hike, replacing: Self.route, in: context)
         #expect(hike.isSharedCopyOutOfDate)
 
         hike.communitySubmissionID = "submission-2"
@@ -271,10 +275,10 @@ struct RouteEditSaveTests {
         let date = hike.date
         let recorded = RouteEdit.RecordedWalk(walk)
 
-        let outcome = RouteEditSave.trim(
-            hike,
-            from: Self.route,
-            to: try Self.edited(keeping: 2...6),
+        let outcome = RouteEditSave.write(
+            try Self.edited(keeping: 2...6),
+            to: hike,
+            replacing: Self.route,
             in: context
         ) { _ in throw Refused() }
 
@@ -293,7 +297,7 @@ struct RouteEditSaveTests {
     func aRefusedRevertChangesNothing() throws {
         let context = try Fixture.modelContext()
         let (hike, walk) = try recording(in: context)
-        RouteEditSave.trim(hike, from: Self.route, to: try Self.edited(keeping: 0...6), in: context)
+        RouteEditSave.write(try Self.edited(keeping: 0...6), to: hike, replacing: Self.route, in: context)
         let trimmed = hike.route
         let distance = hike.distanceMeters
         let edit = hike.routeEditData

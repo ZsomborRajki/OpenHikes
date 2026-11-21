@@ -97,7 +97,7 @@ extension HikeRecorderTests {
         source.deliver(fix(latitude: 47.63))
         clock.advance(by: 10)
         source.deliver(fix(latitude: 47.6302))
-        _ = try savedHike(from: await hikeRecorder.stop())
+        _ = try await hikeRecorder.stop()
 
         clock.advance(by: 60)
         await hikeRecorder.start()

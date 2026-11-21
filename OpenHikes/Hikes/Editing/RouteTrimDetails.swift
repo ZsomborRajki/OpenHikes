@@ -16,19 +16,23 @@ import SwiftUI
 /// clock where the line has one, and how much comes off.
 struct RouteTrimFigures: View {
     let session: RouteTrimSession
-    /// ``Hike/distanceMeters`` as it is now. A save takes what is cut off
-    /// this figure rather than measuring the kept line again — see
-    /// ``RouteEditSave`` — and so does this.
+    /// ``Hike/distanceMeters`` as it is now. A save takes what it cuts off
+    /// the hike's line off this figure, or adds what it gives back, rather
+    /// than measuring the kept line again — see ``RouteEditSave`` — and so
+    /// does this.
     let hikeDistanceMeters: Double
 
     var body: some View {
+        // An answer changed is a new whole line, of another length.
+        _ = session.lineRevision
         let total = session.totalMeters
         let kept = max(session.endMeters - session.startMeters, 0)
         let removed = max(total - kept, 0)
-        StatStrip {
+        let lost = session.currentLengthMeters - kept
+        return StatStrip {
             StatFigure(
                 label: "Distance",
-                value: RouteTrimFormat.length(max(0, min(kept, hikeDistanceMeters - removed)))
+                value: RouteTrimFormat.length(max(0, min(kept, hikeDistanceMeters - lost)))
             )
             if let seconds = keptSeconds {
                 StatFigure(label: "Duration", value: HikeFormat.duration(seconds))
