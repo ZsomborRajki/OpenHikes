@@ -13,6 +13,7 @@ import Foundation
 import Observation
 import OpenHikesData
 import OpenHikesShared
+import RealModule
 
 nonisolated struct RecordingPointFlags: OptionSet, Codable, Hashable, Sendable {
     let rawValue: UInt32
@@ -203,7 +204,7 @@ nonisolated enum RecordingFixPolicy {
         // the escape cannot admit one.
         if impliedSpeed > maximumSpeed,
            motionState != .nonPedestrian,
-           !reportedSpeedSupports(impliedSpeed, location.speed),
+           !reportedSpeed(location.speed, corroborates: impliedSpeed),
            interval < maximumInterval { return false }
 
         let displacementGate = max(
@@ -218,12 +219,24 @@ nonisolated enum RecordingFixPolicy {
         return RouteGeometry.bearingDifference(previousCourse, nextCourse) > bearingChangeDegrees
     }
 
-    private static func reportedSpeedSupports(
-        _ impliedSpeed: CLLocationSpeed,
-        _ reportedSpeed: CLLocationSpeed
+    /// Whether the speed the receiver reports bears out the speed two fixes
+    /// imply: within `speedToleranceBase` of it or `speedToleranceFraction` of
+    /// it, whichever is wider, the edge included.
+    ///
+    /// A negative reported speed is Core Location's *unavailable*, and bears
+    /// out nothing, however close the number sits. An implied speed that is
+    /// not finite is refused before the comparison, which takes only a finite
+    /// tolerance; the `interval > 0` guard in
+    /// ``accepts(_:after:motionState:now:)`` already keeps one from arriving.
+    ///
+    /// Internal rather than private so that its suite can stand on the edge
+    /// exactly, which a fix's measured displacement never lands on.
+    static func reportedSpeed(
+        _ reported: CLLocationSpeed,
+        corroborates implied: CLLocationSpeed
     ) -> Bool {
-        guard reportedSpeed >= 0 else { return false }
-        let tolerance = max(speedToleranceBase, impliedSpeed * speedToleranceFraction)
-        return abs(reportedSpeed - impliedSpeed) <= tolerance
+        guard reported >= 0, implied.isFinite else { return false }
+        let tolerance = max(speedToleranceBase, implied * speedToleranceFraction)
+        return reported.isApproximatelyEqual(to: implied, absoluteTolerance: tolerance)
     }
 }
