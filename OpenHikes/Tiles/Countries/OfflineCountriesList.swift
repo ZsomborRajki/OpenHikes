@@ -4,8 +4,9 @@
 //
 //  *Offline Maps*' list: a field to search the areas by name and the order
 //  they are in, over the list itself, which says which map the downloads are
-//  for, holds *Extra Detail*, and then lists what is downloaded or coming
-//  down and every other area in the order chosen (``OfflineCountrySort``).
+//  for, holds *Extra Detail*, and then lists the downloads not yet in, what
+//  is downloaded, and every other area in the order chosen
+//  (``OfflineCountrySort``).
 //  By name the countries stand under their letters, with the letters down
 //  the trailing edge to jump by, and the few split by size open to their
 //  states or provinces. The same list under the map, where a row shows its
@@ -128,8 +129,12 @@ struct OfflineCountriesList: View {
             List {
                 Group {
                     OfflineCountriesHead(countries: countries)
-                    if !sections.held.isEmpty {
-                        Section("Downloaded") { rows(sections.held) }
+                    // Apart, because only the second draws with no signal.
+                    if !sections.unfinished.isEmpty {
+                        Section("Not Yet Downloaded") { rows(sections.unfinished) }
+                    }
+                    if !sections.downloaded.isEmpty {
+                        Section("Downloaded") { rows(sections.downloaded) }
                     }
                     ForEach(sections.parts) { part in
                         section(part, isLast: part.id == sections.parts.last?.id)

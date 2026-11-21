@@ -110,12 +110,17 @@ extension OfflineCountries {
 
     // MARK: - Sections
 
-    /// *Offline Maps*' list in `sort`'s order: what is downloaded or coming
-    /// down, then every other area as the order heads it.
+    /// *Offline Maps*' list in `sort`'s order: the downloads not yet in, what
+    /// is downloaded, then every other area as the order heads it. Only
+    /// whether an area has a download is read here, never its phase, so a
+    /// download that fails or waits moves no row.
     func sections(of directory: OfflineCountryDirectory, by sort: OfflineCountrySort) -> OfflineCountrySections {
         directory.sections(
             by: sort,
-            isHeld: { isInstalled($0.id) || downloads[$0.id] != nil },
+            holding: { country in
+                if isInstalled(country.id) { return .downloaded }
+                return downloads[country.id] == nil ? nil : .unfinished
+            },
             byteCount: { listedByteCount(of: $0) }
         )
     }
