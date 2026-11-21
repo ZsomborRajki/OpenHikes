@@ -9,9 +9,9 @@
 //  else, keeping every file that was checked.
 //
 
-import CoreLocation
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
 import Testing
 
 @MainActor
@@ -26,7 +26,7 @@ struct OfflineCountriesUnopenableTests {
         maximumZoom: 0
     )
     /// Inside the fixture's Slovenia.
-    private let ljubljana = [CLLocationCoordinate2D(latitude: 46.05, longitude: 14.5)]
+    private let ljubljana = [RouteCoordinate(latitude: 46.05, longitude: 14.5)]
 
     /// Slovenia's basemap and extras on the device as `files` has them,
     /// named by the index, and the model started over them with the same
@@ -61,7 +61,7 @@ struct OfflineCountriesUnopenableTests {
             #expect(countries.isInstalled("SI"))
             #expect(!countries.isDrawn("SI"))
             #expect(countries.needsRepair("SI"))
-            let coverage = countries.coverage(along: ljubljana)
+            let coverage = try await countries.coverage(alongRoute: ljubljana)
             #expect(countries.saving(coverage) == .unsaved)
             #expect(countries.missing(from: coverage) == [country], "the hike's tile offers it")
             #expect(countries.byteCount(of: country) == Int64(basemap.count))
@@ -113,7 +113,8 @@ struct OfflineCountriesUnopenableTests {
 
             #expect(!harness.archives.isEmpty)
             #expect(countries.isDrawn("SI"))
-            #expect(countries.saving(countries.coverage(along: ljubljana)) == .whole)
+            let coverage = try await countries.coverage(alongRoute: ljubljana)
+            #expect(countries.saving(coverage) == .whole)
             #expect(countries.needsRepair("SI"))
 
             countries.repair("SI")
