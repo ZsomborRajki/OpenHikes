@@ -56,11 +56,11 @@ extension OfflineCountries {
     }
 
     /// Whether the downloaded countries draw all of `coverage`'s line, part
-    /// of it, or none.
+    /// of it, or none: one whose basemap would not open draws none of it.
     func saving(_ coverage: OfflineRouteCoverage) -> OfflineRouteSaving {
-        let installed = coverage.crossed.filter { isInstalled($0.id) }
-        if installed.isEmpty { return .unsaved }
-        guard installed.count == coverage.crossed.count, !coverage.leavesThem else { return .part }
+        let drawn = coverage.crossed.filter { isDrawn($0.id) }
+        if drawn.isEmpty { return .unsaved }
+        guard drawn.count == coverage.crossed.count, !coverage.leavesThem else { return .part }
         return .whole
     }
 }

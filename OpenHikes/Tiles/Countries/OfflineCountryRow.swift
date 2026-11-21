@@ -36,7 +36,7 @@ struct OfflineCountryRow: View {
                         .foregroundStyle(.primary)
                     status(download)
                         .font(.footnote)
-                        .foregroundStyle(download?.hasFailed == true ? .red : .secondary)
+                        .foregroundStyle(download?.hasFailed == true || isDamaged(download) ? .red : .secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(.rect)
@@ -70,6 +70,13 @@ struct OfflineCountryRow: View {
         }
     }
 
+    /// Whether the row says that a file on the device would not open, and
+    /// offers it again: with no download under way, and no update, which
+    /// replaces every file.
+    private func isDamaged(_ download: OfflineCountryDownload?) -> Bool {
+        download == nil && countries.update(for: country.id) == nil && countries.needsRepair(country.id)
+    }
+
     @ViewBuilder
     private func status(_ download: OfflineCountryDownload?) -> some View {
         if let download {
@@ -82,6 +89,8 @@ struct OfflineCountryRow: View {
             }
         } else if let update = countries.update(for: country.id) {
             Text("Update available · \(Self.bytes(countries.byteCount(of: update)))")
+        } else if isDamaged(download) {
+            Text(Self.message(for: .damaged))
         } else if let record = countries.installed[country.id] {
             Text("Downloaded · \(Self.bytes(record.byteCount))")
         } else {
@@ -125,6 +134,10 @@ struct OfflineCountryRow: View {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
                 .accessibilityLabel("Update \(name)")
+        } else if isDamaged(download) {
+            glyphButton("Try Again", systemImage: "arrow.clockwise") {
+                countries.repair(country.id)
+            }
         } else if countries.isInstalled(country.id) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.title3)

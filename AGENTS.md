@@ -966,6 +966,12 @@ Maps*. `OfflineCountries` is the one owner, on the main actor.
   `OfflineCountryStore` keeps a JSON index beside the archives under
   Application Support, out of the backup. The launch sweep deletes every
   archive the index does not hold, and never a file the index on disk names.
+- **A file the index names stays its owner's even when it will not open.**
+  The map's opening judges it, never the index: an area keeps every file
+  that opened, offers the rest again (`OfflineCountries.unopenable`), and
+  counts as drawn only if its basemap opened (`isDrawn`). Filtering the index
+  instead would let the sweep delete checked files over a read the device
+  refused for the moment.
 - **An index that cannot be read is not an empty one.** Before the device's
   first unlock, a launch the system makes can list and delete files and read
   none. So a launch that cannot read the index, or the list of downloads

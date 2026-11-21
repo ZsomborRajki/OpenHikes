@@ -39,12 +39,13 @@ extension OfflineCountries {
         download(current)
     }
 
-    /// Downloads the area `id` as the list has it now, where it is not
-    /// downloaded already: a dialog asked for it before the list last
-    /// changed, and the build it was shown may be one the server has
-    /// deleted.
+    /// Downloads the area `id` as the list has it now, where the map does not
+    /// draw it already: a dialog asked for it before the list last changed,
+    /// and the build it was shown may be one the server has deleted. Of an
+    /// area on the device whose basemap would not open, the same build
+    /// brings only what would not open.
     func downloadListed(_ id: String) {
-        guard !isInstalled(id), let country = listedCountry(id) else { return }
+        guard !isDrawn(id), let country = listedCountry(id) else { return }
         download(country)
     }
 

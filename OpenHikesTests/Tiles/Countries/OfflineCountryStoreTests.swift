@@ -5,7 +5,8 @@
 //  Where the downloaded countries are kept, and the sweep that owns them
 //  (*Files outside SwiftData need an owner and a sweep* in AGENTS.md): an
 //  archive the index does not name goes, a half-download nothing is waiting
-//  for goes, and a record whose file has gone reads as not downloaded.
+//  for goes, and a record whose file has gone is still the index's, so its
+//  other files are kept.
 //
 
 import CryptoKit
@@ -92,15 +93,22 @@ struct OfflineCountryStoreTests {
         }
     }
 
-    @Test("a record whose file has gone reads as not downloaded")
+    /// Left out, it took the area's other files with it at the next sweep,
+    /// checked as they were (#1534). The map's opening finds the gap instead.
+    @Test("a record whose file has gone is still listed, and the sweep keeps its other files")
     func missingFile() async throws {
         try await OfflineCountryFixture.withDirectory { directory in
             let store = OfflineCountryStore(directory: directory)
             try store.prepare()
-            let country = OfflineCountryFixture.country(bytes: Data("basemap".utf8))
-            try store.write(installed: [OfflineCountryStore.Record(country: country, installedAt: .now)])
+            let country = OfflineCountryFixture.country(bytes: Data("basemap".utf8), extras: Data("extras".utf8))
+            let extras = try #require(country.files.first { $0.role == .extras })
+            try Data("extras".utf8).write(to: store.fileURL(for: extras))
+            let record = OfflineCountryStore.Record(country: country, installedAt: .now)
+            try store.write(installed: [record])
 
-            #expect(store.installed().isEmpty)
+            #expect(store.installed() == [record])
+            store.sweep(keeping: store.installed(), pending: [])
+            #expect(FileManager.default.fileExists(atPath: store.fileURL(for: extras).path))
         }
     }
 
