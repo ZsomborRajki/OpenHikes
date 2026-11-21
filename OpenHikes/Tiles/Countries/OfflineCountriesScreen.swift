@@ -93,6 +93,6 @@ struct OfflineCountriesScreen: View {
         showOutlines()
         guard framing, let country = countries.listed.first(where: { $0.id == id }) else { return }
         presentation.makeRoomForTheMap()
-        mapController.show(country.bounds.framingRegion)
+        mapController.show(country.framingRegion)
     }
 }
