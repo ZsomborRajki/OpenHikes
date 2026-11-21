@@ -333,10 +333,14 @@ nonisolated extension VectorTileLineLabels {
             var placed: [SetName] = []
             var texts: [String: SetText] = [:]
             var fonts = LabelFonts(language: language)
-            // A tile deeper than the archive holds the whole archive tile's
-            // lines, most of them nowhere near it.
-            for line in lines where line.box.intersects(bounds) {
+            for line in lines {
                 let look = VectorTileLabelStyle.look(of: line.category)
+                let offset = look.offset(at: z) * unit
+                // A tile deeper than the archive holds the whole archive
+                // tile's lines, most of them nowhere near it. A name set
+                // beside its line can stand inside the tile when the line
+                // runs just outside it.
+                guard line.box.insetBy(dx: -abs(offset), dy: -abs(offset)).intersects(bounds) else { continue }
                 let size = look.size.value(at: z) * unit
                 // A name about as long as its line will not fit it, so it is
                 // never set letter by letter: most of a city's ways are that.
@@ -349,29 +353,19 @@ nonisolated extension VectorTileLineLabels {
                 // A name written beside its line is set along the line that
                 // runs beside it, on the side below the name whichever way it
                 // reads, or an area's on the area's side however it reads.
-                let offset = look.offset(at: z) * unit
                 let beside = MeasuredPath.offset(line.points, by: offset)
                 let forward = MeasuredPath(beside)
                 let backward = MeasuredPath(
                     look.isInsideArea ? beside.reversed() : MeasuredPath.offset(line.points.reversed(), by: offset)
                 )
-                let step = max(text.width / 4, spacing)
-                let marks = if let grid = look.gridSpacing {
-                    VectorTileLineLabels.marks(
-                        along: forward,
-                        origin: origin,
-                        every: grid * unit,
-                        width: text.width,
-                        step: step
-                    )
-                } else {
-                    VectorTileLineLabels.marks(
-                        length: forward.length,
-                        width: text.width,
-                        spacing: repeatDistance,
-                        step: step
-                    )
-                }
+                let marks = Self.marks(
+                    of: look,
+                    along: forward,
+                    origin: origin,
+                    unit: unit,
+                    width: text.width,
+                    step: max(text.width / 4, spacing)
+                )
                 guard !marks.isEmpty else { continue }
                 // A mark outside the tile is the neighbouring tile's to name.
                 for mark in marks where bounds.contains(forward.point(at: mark.distance)) {
@@ -393,6 +387,36 @@ nonisolated extension VectorTileLineLabels {
             }
             names = placed
             taken = room.taken
+        }
+
+        /// Where along `path` a name `width` wide in `look` is tried: where
+        /// the path crosses the world's grid, for a look that has one, and
+        /// otherwise from the path's middle.
+        private static func marks(
+            of look: VectorTileLabelStyle.LineLook,
+            along path: MeasuredPath,
+            origin: CGPoint,
+            unit: CGFloat,
+            width: CGFloat,
+            step: CGFloat
+        ) -> [Mark] {
+            let repeatDistance = look.repeatDistance * unit
+            guard let grid = look.gridSpacing else {
+                return VectorTileLineLabels.marks(
+                    length: path.length,
+                    width: width,
+                    spacing: repeatDistance,
+                    step: step
+                )
+            }
+            return VectorTileLineLabels.marks(
+                along: path,
+                origin: origin,
+                every: grid * unit,
+                apart: repeatDistance,
+                width: width,
+                step: step
+            )
         }
 
         /// Draws every name's halo, then every name's letters, so no halo

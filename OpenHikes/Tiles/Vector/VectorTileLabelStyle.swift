@@ -309,8 +309,8 @@ nonisolated extension VectorTileLabelStyle {
         /// Where the name is tried on a line each tile sees only a stretch
         /// of, an area's edge: where the line crosses a grid laid over the
         /// whole world, this far apart, which every tile works out alike
-        /// (``VectorTileShields/crossings(of:origin:every:)``). `nil` for
-        /// marks measured from the line's middle.
+        /// (``VectorTileLineLabels/edgeCrossings(of:origin:every:clearance:)``).
+        /// `nil` for marks measured from the line's middle.
         var gridSpacing: CGFloat?
 
         func offset(at z: Int) -> CGFloat {
