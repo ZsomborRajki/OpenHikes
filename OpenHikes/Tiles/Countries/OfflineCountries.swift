@@ -71,9 +71,19 @@ final class OfflineCountries {
 
     private(set) var listPhase = ListPhase.idle
     /// What the server offers that this app can draw.
-    private(set) var offered: [Country] = []
+    private(set) var offered: [Country] = [] {
+        // Every read of the list writes it, mostly with what it held.
+        didSet { if offered != oldValue { catalogRevision &+= 1 } }
+    }
     /// What is downloaded, by area code.
-    private(set) var installed: [String: Record] = [:]
+    private(set) var installed: [String: Record] = [:] {
+        didSet { catalogRevision &+= 1 }
+    }
+    /// Counts the changes to what ``listed`` is read from. A screen that
+    /// keeps something worked out from the list keys it to this rather than
+    /// to the areas' codes: a new build of an area keeps its code and
+    /// changes its files, its size and maybe its outline.
+    private(set) var catalogRevision = 0
     /// What is coming down, by area code.
     private(set) var downloads: [String: OfflineCountryDownload] = [:]
     /// Whether an area brings its zoom 15 too: *Extra Detail*.

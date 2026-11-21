@@ -34,6 +34,24 @@ extension OfflineCountries {
 
     func isInstalled(_ id: String) -> Bool { installed[id] != nil }
 
+    /// The area listed now under `id`, as ``listed`` has it: the build the
+    /// server offers, or the one downloaded where it offers none. What a
+    /// screen kept from an earlier list is looked up again by its code
+    /// before it is shown or downloaded, because the server deletes a build
+    /// it has moved past.
+    func listedCountry(_ id: String) -> Country? {
+        offered.first { $0.id == id } ?? installed[id]?.country
+    }
+
+    /// The areas `coverage` found a line crossing that are not downloaded,
+    /// as the list has them now, in the order the line reaches them. None
+    /// where the device's own lists cannot be read: nothing downloads then,
+    /// and what it holds is not known.
+    func missing(from coverage: OfflineRouteCoverage) -> [Country] {
+        guard isAvailable else { return [] }
+        return coverage.crossed.compactMap { listedCountry($0.id) }.filter { !isInstalled($0.id) }
+    }
+
     /// Whether the server has a newer build of an area downloaded.
     func update(for id: String) -> Country? {
         guard let record = installed[id],
