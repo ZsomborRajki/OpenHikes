@@ -431,8 +431,9 @@ final class WatchModel {
         await recorder.retrySave()
     }
 
-    /// Throws away a walk that could not be written.
-    func discardUnsavedWalk() {
+    /// Throws away a walk that could not be written, and answers whether it
+    /// went — see ``WatchRecorder/discardUnsaved()``.
+    func discardUnsavedWalk() -> Bool {
         recorder.discardUnsaved()
     }
 
@@ -451,7 +452,9 @@ final class WatchModel {
         await recorder.saveInterrupted()
     }
 
-    func discardInterruptedRecording() {
+    /// Throws away a walk the last process never finished, and answers
+    /// whether it went — see ``WatchRecorder/discardInterrupted()``.
+    func discardInterruptedRecording() -> Bool {
         recorder.discardInterrupted()
     }
 

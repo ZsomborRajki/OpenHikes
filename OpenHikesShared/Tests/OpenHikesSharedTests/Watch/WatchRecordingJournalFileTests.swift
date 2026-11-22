@@ -72,7 +72,7 @@ struct WatchRecordingJournalFileTests {
     func removedJournalRecoversNothing() throws {
         try withJournal { journal in
             try journal.begin(Fixture.header)
-            journal.remove()
+            try journal.remove()
             #expect(try journal.recover() == nil)
         }
     }
@@ -95,6 +95,29 @@ struct WatchRecordingJournalFileTests {
             let recovered = try #require(try journal.recover())
             #expect(recovered.header == Fixture.header)
             #expect(recovered.accumulator.fixes.count == 2)
+        }
+    }
+
+    /// A removal the disk refused used to read as done, so a hiker's Discard
+    /// went back to Start with the walk still on disk, to be offered again at
+    /// the next launch (#1573). A directory that takes no changes refuses the
+    /// removal and still lets the journal be read.
+    @Test("A journal the disk will not remove throws and is still there; one already gone does not throw")
+    func refusedRemovalThrows() throws {
+        try withJournal { journal in
+            try journal.remove()
+            try journal.begin(Fixture.header)
+            let manager = FileManager.default
+            let directory = journal.url.deletingLastPathComponent().path
+            try manager.setAttributes([.posixPermissions: 0o555], ofItemAtPath: directory)
+            defer { try? manager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: directory) }
+
+            #expect(throws: CocoaError.self) { try journal.remove() }
+            #expect(try journal.recover()?.header == Fixture.header)
+
+            try manager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: directory)
+            try journal.remove()
+            #expect(try journal.recover() == nil)
         }
     }
 
