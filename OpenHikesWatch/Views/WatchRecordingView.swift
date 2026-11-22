@@ -101,7 +101,7 @@ struct WatchRecordingView: View {
                 ProgressView("Starting…")
             case .saving:
                 ProgressView("Saving…")
-            case .checkingQueue:
+            case .checkingJournal:
                 ProgressView()
             case .recording, .paused:
                 RecordingFigures()

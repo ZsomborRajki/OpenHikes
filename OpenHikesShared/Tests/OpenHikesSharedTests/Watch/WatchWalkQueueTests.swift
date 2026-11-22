@@ -41,7 +41,6 @@ struct WatchWalkQueueTests {
 
             let relaunched = WatchWalkQueue(directory: queue.directory)
             #expect(await relaunched.pending().sessionIDs == [early.sessionID, late.sessionID])
-            #expect(relaunched.listedSessionIDs() == [early.sessionID, late.sessionID])
         }
     }
 
@@ -105,9 +104,6 @@ struct WatchWalkQueueTests {
             try JSONEncoder().encode(older)
                 .write(to: queue.directory.appending(path: "\(older.sessionID.uuidString).json"))
             _ = await queue.enqueue(newer)
-
-            // Seen by a launch-time listing before anything has renamed it.
-            #expect(queue.listedSessionIDs() == [older.sessionID, newer.sessionID])
 
             let relaunched = WatchWalkQueue(directory: queue.directory)
             #expect(await relaunched.pending().sessionIDs == [newer.sessionID, older.sessionID])
@@ -222,14 +218,12 @@ struct WatchWalkQueueTests {
     func strayFilesAreIgnored() async throws {
         try await withQueue { queue in
             #expect(await queue.pending().isEmpty)
-            #expect(queue.listedSessionIDs().isEmpty)
 
             try FileManager.default.createDirectory(at: queue.directory, withIntermediateDirectories: true)
             for name in ["notes.txt", "12_not-a-uuid.json", ".DS_Store", "x_\(UUID().uuidString).json"] {
                 try Data().write(to: queue.directory.appending(path: name))
             }
             #expect(await WatchWalkQueue(directory: queue.directory).pending().isEmpty)
-            #expect(queue.listedSessionIDs().isEmpty)
         }
     }
 

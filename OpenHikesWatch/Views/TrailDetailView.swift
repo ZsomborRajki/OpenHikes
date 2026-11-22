@@ -156,7 +156,7 @@ private struct RecordAlongTrailButton: View {
             Label("Last hike not saved", systemImage: "exclamationmark.triangle")
                 .font(.footnote)
                 .foregroundStyle(.orange)
-        case .preparing, .saving, .checkingQueue:
+        case .preparing, .saving, .checkingJournal:
             ProgressView()
         case .interrupted:
             // Not a second Start. The interrupted walk is on the Record
