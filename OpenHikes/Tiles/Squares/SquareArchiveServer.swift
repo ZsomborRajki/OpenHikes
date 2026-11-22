@@ -35,6 +35,9 @@
 //  - Anything else is a square that could not be read. When every square
 //    asked for in one call fails to arrive at all, the call throws, as a
 //    request to the public database did that failed as a whole.
+//  - A call that is cancelled throws `CancellationError`, whatever had
+//    arrived, as the public database's request did: a search superseded
+//    while its squares were out is no answer, and none of them failed.
 //
 //  A call's squares are asked for several at a time, because the day hikes'
 //  widest search reads hundreds, and the server answers each in its own
@@ -277,6 +280,11 @@ nonisolated final class SquareArchiveServer: TrailCellFetching {
         }
         guard !asked.isEmpty else { return unnamed }
         var batch = await ask(asked, in: archive, until: deadline)
+        // A call given up on is no answer, however many of its squares came:
+        // the rest were cancelled with it, not refused, and read as squares
+        // that could not be read they would send a superseded search on to
+        // Overpass and log a server that never failed.
+        try Task.checkCancellation()
         // Never asked: the deadline came first.
         for (name, _) in asked where batch.answers[name] == nil {
             batch.answers[name] = .cell(.failed)

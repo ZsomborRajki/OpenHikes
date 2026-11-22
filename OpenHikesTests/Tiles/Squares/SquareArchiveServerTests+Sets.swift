@@ -250,6 +250,37 @@ extension SquareArchiveServerTests {
         }
     }
 
+    /// A search the hiker panned away from is cancelled with its squares
+    /// out. The ones still out were not refused, and read as squares that
+    /// could not be read they would send the search on to Overpass, which
+    /// ``TrailCellLibrary`` throws a cancellation to prevent.
+    @Test(
+        "a call cancelled while a square is out ends as a cancellation, whatever had arrived",
+        .timeLimit(.minutes(1)),
+        arguments: [nil, TrailCellLibrary.resourceTimeout] as [TimeInterval?]
+    )
+    func aCancelledCall(callTimeout: TimeInterval?) async throws {
+        let held = HeldRequest("trails-20261122-00/11/797/550.bin")
+        let tiles = StubTileServer([
+            "manifest.json": [StubTileServer.manifest(revision: 11, Self.everySet)],
+            "trails-20261122-00/11/796/550.bin": [.ok(Self.square)],
+            "trails-20261122-00/11/797/550.bin": [.ok(Self.otherSquare)],
+        ])
+        let reader = SquareArchiveServer(
+            set: .trails,
+            server: try #require(Self.server),
+            bundled: nil,
+            requestTimeout: TrailCellLibrary.requestTimeout,
+            callTimeout: callTimeout,
+            transport: tiles.transport(holding: held)
+        )
+        let superseded = Task { try await reader.fetch(cellsNamed: ["trails1_550_796", "trails1_550_797"]) }
+        await held.arrived()
+        superseded.cancel()
+
+        await #expect(throws: CancellationError.self) { try await superseded.value }
+    }
+
     @Test("a launch's reader holds each call to the library's limit for a whole request")
     func theLiveCallTimeout() {
         let server = SquareArchiveServer.live(.trails, requestTimeout: 15, resourceTimeout: 30)

@@ -962,8 +962,11 @@ a change to recording, the map, the sheet or the render path; the PR template,
      commit the manifest.
   4. `Scripts/offline-countries.sh publish` cuts every area again from the
      new archives and puts it up.
-  5. `prune` in both scripts, once the apps have read the new manifests. An
-     archive leaves the manifest before it leaves the bucket.
+  5. `prune` in `Scripts/vector-archives.sh` and
+     `Scripts/offline-countries.sh`, once the apps have read the new
+     manifests. An archive leaves the manifest before it leaves the bucket.
+     `Scripts/trail-cells.sh prune` is no part of a refresh: it takes the
+     public database's copies from 1.5–1.7 (*The trail squares*).
 - **The server is not in this repository.** It is a Worker and an R2 bucket.
 
 ### The offline countries
