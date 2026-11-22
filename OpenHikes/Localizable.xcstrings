@@ -15078,6 +15078,12 @@
             "value" : "Zmień fragment"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modificați o porțiune"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -16318,6 +16324,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zamknij pętlę"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Închideți circuitul"
           }
         },
         "ru" : {
@@ -21582,7 +21594,7 @@
         "ro" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Trageți de un capăt al rutei, aici sau pe hartă, pentru a-l tăia. Originalul este păstrat."
+            "value" : "Trageți de un capăt al rutei pentru a-l tăia sau țineți apăsat pe linie pe hartă și trageți-o pe altă potecă. Originalul este păstrat."
           }
         },
         "ru" : {
@@ -21631,6 +21643,12 @@
             "value" : "Najpierw przeciągnij uchwyt początku na nowy start."
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trageți mai întâi mânerul de început la noul punct de plecare."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -21675,6 +21693,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Przeciągnij oba uchwyty na końce fragmentu, tutaj lub na mapie."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trageți cele două mânere la capetele porțiunii, aici sau pe hartă."
           }
         },
         "ru" : {
@@ -23125,6 +23149,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Koniec fragmentu"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sfârșitul porțiunii"
           }
         },
         "ru" : {
@@ -24939,6 +24969,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Poprowadź szlakami"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Urmați traseele"
           }
         },
         "ru" : {
@@ -34282,6 +34318,12 @@
             "value" : "Przesuń uchwyty na szlaki naniesione na mapę albo wyprostuj fragment."
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mutați mânerele pe trasee cartografiate sau îndreptați porțiunea."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -37654,6 +37696,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Między tymi punktami nie znaleziono szlaku."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nu s-a găsit niciun traseu între aceste puncte."
           }
         },
         "ru" : {
@@ -43586,6 +43634,12 @@
             "value" : "Tam i z powrotem"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dus-întors"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -46417,6 +46471,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wybierz krótszy fragment albo najpierw cofnij wcześniejszą zmianę."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alegeți o porțiune mai scurtă sau anulați mai întâi o modificare anterioară."
           }
         },
         "ru" : {
@@ -52164,6 +52224,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Odwróć"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inversați"
           }
         },
         "ru" : {
@@ -58668,6 +58734,12 @@
             "value" : "Zacznij pętlę tutaj"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Începeți circuitul aici"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -58764,6 +58836,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Początek fragmentu"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Începutul porțiunii"
           }
         },
         "ru" : {
@@ -59748,6 +59826,12 @@
             "value" : "Wyprostuj"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Îndreptați"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -59792,6 +59876,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fragment"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Porțiune"
           }
         },
         "ru" : {
@@ -66474,6 +66564,12 @@
             "value" : "Ten fragment jest za długi, by narysować go od nowa."
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Această porțiune este prea lungă pentru a fi redesenată."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -67195,6 +67291,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aby wybrać inaczej dla odcinka, najpierw cofnij zmiany trasy."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pentru a alege altceva pentru o secțiune, anulați mai întâi modificările rutei."
           }
         },
         "ru" : {
@@ -69590,6 +69692,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cofnij"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anulați modificarea"
           }
         },
         "ru" : {
@@ -72652,6 +72760,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cała trasa"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toată ruta"
           }
         },
         "ru" : {
