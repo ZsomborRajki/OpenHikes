@@ -186,7 +186,8 @@ enum RouteEditRefusal: LocalizedError, Equatable, Sendable {
     /// *Edit Route* found the same on its way in, of the original or of the
     /// recorded trace a section's answer is drawn from. The hike's cuts and
     /// its sections are measured on those, so nothing can be edited until
-    /// they have come.
+    /// they have come. Or it found an edit record that does not read, which
+    /// a later build wrote — see ``Hike/hasUnreadableRouteEdit``.
     case notHereYet
     /// The store refused to keep it. No diagnostic, for the reason
     /// ``TrailDraftRefusal/notSaved`` carries none.
@@ -242,6 +243,9 @@ enum RouteEditSave {
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) -> RouteEditOutcome {
         guard edited.route.count > 1 else { return .refused(.notSaved) }
+        // A record that is there and does not read is not a hike never
+        // edited, whose first edit writes the original.
+        guard !hike.hasUnreadableRouteEdit else { return .refused(.notHereYet) }
         guard commitPending(in: context, save: save) else { return .refused(.notSaved) }
         var edit = hike.routeEdit ?? RouteEdit()
         // Only the first edit writes the original, so only it has one to put

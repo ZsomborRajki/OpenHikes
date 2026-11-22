@@ -449,7 +449,7 @@ final class RouteTrimSession {
     /// nothing, so coming back to the screen keeps what was moved.
     func load(_ sources: RouteEditSources) async {
         guard sources.current.count > 1, sources != self.sources else { return }
-        if sources.isMissingOriginal || sources.isMissingTrace {
+        if sources.isMissingOriginal || sources.isMissingTrace || sources.isUnreadable {
             refusal = .notHereYet
             return
         }

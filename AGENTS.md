@@ -492,10 +492,11 @@ a change to recording, the map, the sheet or the render path; the PR template,
     paused leg none (`RouteCoordinate.legMeters(from:)`), nothing projects a
     fix or a place onto it, the watch's tracker included, and no surface,
     difficulty or steepness stretch is measured across it.
-  - Stop saves, always, wherever it is pressed. A stretch the matcher
-    moved, bridged or could not decide is saved the way that needs no
-    answer, and the question is kept on the hike for *Edit Route* to ask
-    (`RouteAssembly`, `RecordingAssembly.swift`).
+  - A walk with a line is saved at Stop wherever Stop is pressed, and
+    nothing waits for a review. A stretch the matcher moved, bridged or
+    could not decide is saved the way that needs no answer, and the
+    question is kept on the hike for *Edit Route* to ask (`RouteAssembly`,
+    `RecordingAssembly.swift`).
 - **Stop is where a recording ends, kept or not** (`RecordingStop.swift`).
   A recording with no line is ended without being named, and *no line* is
   the journal's answer once every pending fix has merged

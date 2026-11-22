@@ -42,6 +42,10 @@ nonisolated struct RouteEditSources: Equatable, Sendable {
     /// Nothing can be edited until it has, because the hike's trim and its
     /// stretches are measured on that line.
     var isMissingOriginal = false
+    /// Whether the hike has an edit record this build cannot read — see
+    /// ``Hike/hasUnreadableRouteEdit``. Opened as a hike never edited, a
+    /// save would write over its original.
+    var isUnreadable = false
 
     private static let logger = Logger(subsystem: "OpenHikes", category: "RouteEdit")
 
@@ -89,7 +93,11 @@ nonisolated struct RouteEditSources: Equatable, Sendable {
         drawn current: [RouteCoordinate],
         in container: ModelContainer
     ) async -> Self {
-        guard let record = hike.routeEdit else { return Self(current: current) }
+        guard let record = hike.routeEdit else {
+            var sources = Self(current: current)
+            sources.isUnreadable = hike.routeEditData != nil
+            return sources
+        }
         // Nothing stored to read, but still a record: a drive off the end is
         // a look the hike owes without an edit or a stretch to check.
         guard record.original != nil || record.assembly != nil else {
