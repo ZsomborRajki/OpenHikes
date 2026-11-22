@@ -77,6 +77,10 @@ public actor WatchWalkQueue {
     private var entries: [UUID: Entry] = [:]
     private var isIndexed = false
     private var revision = 0
+    /// Every session a receipt has taken off the queue since this process
+    /// began — see ``hasTaken(_:)``. A handful of walks at most, so never
+    /// pruned.
+    private var confirmed: Set<UUID> = []
 
     public init(directory: URL) {
         self.directory = directory
@@ -107,6 +111,20 @@ public actor WatchWalkQueue {
             return nil
         }
         return walk
+    }
+
+    /// Whether the walk recorded under `sessionID` needs nothing more from
+    /// the journal it was recorded into: it is on the queue and reads back
+    /// — see ``walk(_:)`` — or the phone has confirmed it since this
+    /// process began.
+    ///
+    /// The second half is for a launch that finds a journal beside its
+    /// queued walk. The launch drain can send that walk while the journal is
+    /// still being replayed, and the phone's receipt can take it off the
+    /// queue before anything asks about it. Asked as one question on the
+    /// actor, so a receipt cannot land between the two halves of the answer.
+    public func hasTaken(_ sessionID: UUID) -> Bool {
+        confirmed.contains(sessionID) || walk(sessionID) != nil
     }
 
     // MARK: Changing
@@ -143,7 +161,11 @@ public actor WatchWalkQueue {
     }
 
     /// Takes a walk off the queue, which only a receipt from the phone does.
+    ///
+    /// Remembered whether or not the walk was still here, because a receipt
+    /// says the phone has it either way — see ``hasTaken(_:)``.
     public func remove(_ sessionID: UUID) -> WatchQueuedWalks {
+        confirmed.insert(sessionID)
         var updated = index()
         if let entry = updated.removeValue(forKey: sessionID) {
             try? FileManager.default.removeItem(at: url(of: entry.fileName))

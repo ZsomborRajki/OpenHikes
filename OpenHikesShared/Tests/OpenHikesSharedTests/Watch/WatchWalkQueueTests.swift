@@ -61,6 +61,26 @@ struct WatchWalkQueueTests {
         }
     }
 
+    @Test("A walk is taken while it reads back, and after its receipt, for this process only")
+    func takenOutlivesTheReceipt() async throws {
+        try await withQueue { queue in
+            let walk = Fixture.walk(endingAfter: 100)
+            let neverQueued = UUID()
+            #expect(await !queue.hasTaken(walk.sessionID))
+
+            _ = await queue.enqueue(walk)
+            #expect(await queue.hasTaken(walk.sessionID))
+            _ = await queue.remove(walk.sessionID)
+            #expect(await queue.hasTaken(walk.sessionID))
+            // A receipt says the phone has the walk whether or not this
+            // queue still held it.
+            _ = await queue.remove(neverQueued)
+            #expect(await queue.hasTaken(neverQueued))
+
+            #expect(await !WatchWalkQueue(directory: queue.directory).hasTaken(walk.sessionID))
+        }
+    }
+
     @Test("Every change moves the revision on, and a read does not")
     func revisionOrdersAnswers() async throws {
         try await withQueue { queue in

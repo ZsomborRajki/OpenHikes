@@ -200,7 +200,8 @@ private struct JournalLines: IteratorProtocol {
 /// What to do with a journal found at launch.
 public enum WatchRecordingRecovery: Sendable, Equatable {
     /// The walk already reached the outbound queue, and only the journal's
-    /// removal was lost. Offering it again would be offering it twice.
+    /// removal was lost — whether it is still on the queue or the phone has
+    /// confirmed it since. Offering it again would be offering it twice.
     case alreadyQueued
     /// No journal, or none that could be read.
     case nothing
@@ -224,10 +225,17 @@ public enum WatchRecordingRecovery: Sendable, Equatable {
     /// hands its walk back — one that cannot be read just now included,
     /// because offering a walk that is already queued costs the hiker a
     /// question, and the other mistake costs the walk.
+    ///
+    /// Or unless the phone has already confirmed it. The launch drain does
+    /// not wait for this check, so the walk can cross and its receipt take
+    /// it off the queue while the journal is still replaying. Offered then,
+    /// Continue would carry on under a session the phone already holds, and
+    /// the phone would drop everything after as a second arrival — see
+    /// ``WatchWalkQueue/hasTaken(_:)``.
     @concurrent
     public static func checking(_ journal: WatchRecordingJournalFile, against queue: WatchWalkQueue) async -> Self {
         guard let recording = journal.recover() else { return .nothing }
-        return await queue.walk(recording.sessionID) == nil ? .offer(recording) : .alreadyQueued
+        return await queue.hasTaken(recording.sessionID) ? .alreadyQueued : .offer(recording)
     }
 }
 

@@ -51,6 +51,25 @@ struct WatchRecordingRecoveryTests {
         }
     }
 
+    /// The launch drain can send the queued walk while the journal is still
+    /// replaying, and the phone's receipt can take it off the queue before
+    /// the check asks. Offered then, Continue would carry on a walk the phone
+    /// already has under the same session, and the phone would drop what
+    /// came after as a second arrival.
+    @Test("A walk the phone confirmed before the check asked is not offered again")
+    func walkConfirmedDuringTheCheckIsNotOffered() async throws {
+        try await withStore { journal, queue in
+            try Fixture.write(steps: 3, to: journal)
+            let recovered = try #require(journal.recover())
+            let walk = try #require(recovered.finishedWalk())
+            #expect(await queue.enqueue(walk) != nil)
+
+            let relaunched = WatchWalkQueue(directory: queue.directory)
+            #expect(await relaunched.remove(walk.sessionID).isEmpty)
+            #expect(await WatchRecordingRecovery.checking(journal, against: relaunched) == .alreadyQueued)
+        }
+    }
+
     @Test(
         "A file named for the walk that is not one leaves the journal offered",
         arguments: [false, true]
