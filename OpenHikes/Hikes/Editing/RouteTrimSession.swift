@@ -108,6 +108,10 @@ final class RouteTrimSession {
     private(set) var focusedCheckID: Int?
     /// Whether the hike still asks for a look — see ``RouteEdit/isOwedALook``.
     private(set) var isOwedALook = false
+    /// Whether the line the editor opened on has an original to go back to,
+    /// which is what *Revert to Original* is offered for. A record that no
+    /// longer describes the hike's line has none — see ``RouteEditSources``.
+    private(set) var hasOriginal = false
     /// How long the line the hike has now is, which the figures measure
     /// what a save would take off, or give back, against.
     @ObservationIgnored private(set) var currentLengthMeters = 0.0
@@ -252,6 +256,7 @@ final class RouteTrimSession {
         trimStepIsOnlyForTheStretch = false
         junctionMeters = []
         isOwedALook = sources.edit?.isOwedALook ?? false
+        hasOriginal = sources.edit?.original != nil
         focusedCheckID = nil
         staleStretches = []
         ownLineIsWhole = measured.route == sources.current

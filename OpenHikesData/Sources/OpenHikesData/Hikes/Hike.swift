@@ -292,6 +292,22 @@ public final class Hike {
     /// together: see that one.
     public var difficultyMetersByGrade: [String: Double] = [:]
 
+    /// What a 1.6 build's trail maker kept of how it drew this trail, as
+    /// JSON, or `nil`: the stops, the ways chosen between them, the travel
+    /// mode, and the submission the trail was last edited under while it was
+    /// shared.
+    ///
+    /// Nothing writes it any more but *Edit Route*, which clears it. This
+    /// build's maker saves a line and nothing of how it was drawn, the
+    /// owner's decision. The column stays for the 1.6 installs the owner
+    /// keeps working, against *Schema and migration policy*, for two reasons.
+    /// Its submission is the only record that a shared trail's listing shows
+    /// a line the trail was since edited away from, which the app reads.
+    /// And clearing it is what tells a 1.6 device that the line is no longer
+    /// one to reopen in its maker, which would route it afresh over the
+    /// edit.
+    public var drawnRouteData: Data?
+
     /// The line as it stood before *Edit Route* first trimmed it, or empty
     /// for a hike whose line was never edited: what *Revert to Original* puts
     /// back, on whichever device the hiker reverts on.

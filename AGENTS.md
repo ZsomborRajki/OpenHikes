@@ -523,7 +523,11 @@ a change to recording, the map, the sheet or the render path; the PR template,
   a GPX import does and nothing more: no stops, no chosen ways and no travel
   mode, by the owner's decision. The library is lines with walks on them, so a
   saved trail is edited in *Edit Route* like every other line, and the maker
-  only ever makes a new one. The draft, `TrailDraft`, persists as a
+  only ever makes a new one. `Hike.drawnRouteData` stays only for 1.6
+  installs, which the owner keeps working: its shared-copy marker is read,
+  and an *Edit Route* save clears it. A line another writer replaced since
+  the last edit is edited afresh, never rebuilt from that edit's history
+  (`RouteEdit.lineRevision`). The draft, `TrailDraft`, persists as a
   `TrailDraftRecord` in the **unmirrored** store, because a half-drawn line is
   one device's work. The maker routes legs one at a time through one worker,
   since nineteen parallel Overpass requests earn a `429`, and nothing on that
@@ -1323,10 +1327,9 @@ in its source header. Do not weaken one without a measurement.
   column for every attribute in `MirroredCloudKitSchema.recordTypes`. The
   only live columns the contract does not name are SwiftData's own
   `CD_entityName`, the to-one reference columns that the contract lists as
-  relationships, the `CD_route_ckAsset`, `CD_rawRoute_ckAsset` and
+  relationships, and the `CD_route_ckAsset`, `CD_rawRoute_ckAsset` and
   `CD_originalRoute_ckAsset` asset fields of the three external-storage
-  attributes, and `CD_drawnRouteData`, a column the model no longer has and a
-  production schema cannot delete. Re-export before believing these numbers, and update this
+  attributes. Re-export before believing these numbers, and update this
   paragraph when they move. Deployment facts live here, not in code.
 
 ## The community feature

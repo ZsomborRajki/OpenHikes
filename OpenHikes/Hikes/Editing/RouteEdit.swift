@@ -18,6 +18,19 @@
 //  addition costs no schema change. Every hike can carry one, a trail drawn
 //  in the maker included: once saved it is a line like any import's.
 //
+//  ## A line somebody else wrote
+//
+//  The record describes the line the last edit saved, and nothing else may
+//  change that line without changing the record. A 1.6 build does: it
+//  reopens a drawn trail in its maker and saves the line it routes there,
+//  knowing nothing of this record, and a CloudKit conflict can keep one
+//  device's line beside the other's record. Rebuilt from such a record, the
+//  editor would write a line made of history over the one the hike has. So
+//  every edit and revert stamps the line it saved (``lineRevision``), and a
+//  record that no longer describes the hike's line starts over from that
+//  line (``rebased``): the editor opens on it, and the next save keeps it as
+//  the original.
+//
 //  ## A shared hike that was edited
 //
 //  A submission is write-once, so an edit changes the hike and not the
@@ -111,12 +124,32 @@ nonisolated struct RouteEdit: Codable, Equatable, Sendable {
     var steps: Steps?
     /// The ends of the line as it is drawn now that were not walked.
     var notOnFoot: NotOnFoot?
+    /// The line the last edit or revert saved, as
+    /// ``TrailWalkRecord/routeRevision(of:)``, or `nil` for a record no edit
+    /// has saved, which describes the line the hike was saved with — see the
+    /// file header and ``describes(_:)``.
+    var lineRevision: String?
 
     /// Whether anything is left to keep: a reverted hike that was never
     /// shared, and had nothing to check, keeps no column at all.
     var isEmpty: Bool {
         original == nil && editedUnderSubmissionID == nil && assembly == nil && trim == nil && notOnFoot == nil
             && routeSteps.isEmpty
+    }
+
+    /// Whether this record describes `line`, the hike's line as it is drawn
+    /// now: whether the line the last edit saved is still the hike's.
+    func describes(_ line: [RouteCoordinate]) -> Bool {
+        lineRevision.map { $0 == TrailWalkRecord.routeRevision(of: line) } ?? true
+    }
+
+    /// This record for a hike whose line it no longer describes: only what is
+    /// about the hike rather than its line, so the line the hike has is the
+    /// one the next edit starts from and keeps as its original.
+    var rebased: Self {
+        var kept = Self()
+        kept.editedUnderSubmissionID = editedUnderSubmissionID
+        return kept
     }
 
     /// The steps made on the whole line, none for a hike with none.
@@ -235,14 +268,30 @@ extension Hike {
     var hasOriginalRoute: Bool { routeEdit?.original != nil }
 
     /// Whether the shared copy of this hike shows a route it has since been
-    /// edited away from — see ``RouteEdit/editedUnderSubmissionID``.
+    /// edited away from — see ``RouteEdit/editedUnderSubmissionID``, and
+    /// ``Hike/drawnRouteData`` for a trail a 1.6 build's maker edited while
+    /// it was shared.
     var isSharedCopyOutOfDate: Bool {
         guard let submission = communitySubmissionID else { return false }
         return routeEdit?.editedUnderSubmissionID == submission
+            || drawnEditedUnderSubmissionID == submission
+    }
+
+    /// The submission a 1.6 build's maker last edited this trail under,
+    /// which is all this build reads of what that build drew it from.
+    private var drawnEditedUnderSubmissionID: String? {
+        guard let drawnRouteData else { return nil }
+        return (try? JSONDecoder().decode(DrawnTrailMarker.self, from: drawnRouteData))?.editedUnderSubmissionID
     }
 
     /// The walk this hike's recording wrote for itself, if it was recorded.
     var recordedWalk: HikeWalk? {
         walks?.first { $0.endReason == .recorded }
     }
+}
+
+/// The one field of a 1.6 build's drawn plan this build reads — see
+/// ``Hike/drawnRouteData``. Every other key in the JSON is ignored.
+nonisolated private struct DrawnTrailMarker: Decodable {
+    var editedUnderSubmissionID: String?
 }

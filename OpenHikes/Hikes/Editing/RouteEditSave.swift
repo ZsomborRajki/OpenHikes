@@ -16,14 +16,17 @@
 //    (`PreparedRecording.distanceMeters`), and nothing saved says where
 //    those were.
 //  - **The original**, kept by the first edit and never written again — see
-//    ``Hike/originalRoute`` and ``RouteEdit``.
+//    ``Hike/originalRoute`` and ``RouteEdit`` — unless another writer has
+//    replaced the line since, when the record starts over from the line it
+//    left (``RouteEdit/rebased``).
 //  - **The recording's own walk.** Every other walk along the hike is a
 //    record of a walk that happened, measured against the line as it stood
 //    then, and is left as it was. This one *is* the line, so a drive cut off
 //    the line comes off the walk too: its coverage, its active time and the
 //    end it was cut at.
 //  - **What described the old line**: the surface and difficulty breakdowns
-//    and the cached climb, emptied so the next open measures the new one.
+//    and the cached climb, emptied so the next open measures the new one,
+//    and how a 1.6 build drew it (``Hike/drawnRouteData``), cleared.
 //
 //  Places and photographs are left alone. A place stays on the hike wherever
 //  the line now ends, and a photograph taken on a stretch that was cut is in
@@ -317,10 +320,20 @@ enum RouteEditSave {
         // edited, whose first edit writes the original.
         guard !hike.hasUnreadableRouteEdit else { return .refused(.notHereYet) }
         guard commitPending(in: context, save: save) else { return .refused(.notSaved) }
-        var edit = hike.routeEdit ?? RouteEdit()
+        // A record that no longer describes the line starts over from it, so
+        // this edit keeps the line it replaces as the original — see
+        // ``RouteEdit/rebased``.
+        let stored = hike.routeEdit
+        let isRebased = stored.map { !$0.describes(line) } ?? false
+        var edit = stored.map { isRebased ? $0.rebased : $0 } ?? RouteEdit()
         // Only the first edit writes the original, so only it has one to put
-        // back: none.
-        let before = Unedited(hike, route: line, original: edit.original == nil ? .was([]) : .untouched)
+        // back: none, or the one a record starting over leaves behind, read
+        // here for that rare refusal alone.
+        let before = Unedited(
+            hike,
+            route: line,
+            original: edit.original == nil ? .was(isRebased ? hike.originalRoute : []) : .untouched
+        )
         if edit.original == nil {
             hike.originalRoute = line
             edit.original = RouteEdit.Original(
@@ -336,6 +349,7 @@ enum RouteEditSave {
         edit.endPausesTakenOff = edited.cuts.range == nil ? [] : edited.cuts.takingOff
         edit.routeSteps = edited.steps
         edit.notOnFoot = edited.notOnFoot
+        edit.lineRevision = edited.revision
         hike.routeEdit = edit
         replaceLine(of: hike, with: edited.route, before: before)
         hike.distanceMeters = max(0, min(edited.lengthMeters, hike.distanceMeters - edited.removedMeters))
@@ -362,6 +376,9 @@ enum RouteEditSave {
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) -> RouteEditOutcome {
         guard var edit = hike.routeEdit, let original = edit.original else { return .refused(.noOriginal) }
+        // The original of a line another writer has since replaced is not
+        // this line's to put back — see ``RouteEdit/describes(_:)``.
+        guard edit.describes(line) else { return .refused(.noOriginal) }
         // Read here, and on the main actor: it is the one read of it there
         // is, on the tap that asks for it.
         let originalRoute = hike.originalRoute
@@ -385,6 +402,7 @@ enum RouteEditSave {
         // A revert moves the line as an edit does, so a shared copy made of
         // the edited line is now the one out of date.
         edit.editedUnderSubmissionID = hike.communitySubmissionID
+        edit.lineRevision = TrailWalkRecord.routeRevision(of: originalRoute)
         hike.routeEdit = edit
         return commit(hike, to: originalRoute, before: before, in: context, save: save)
     }
@@ -462,6 +480,9 @@ enum RouteEditSave {
         // only the route to be recomputed from.
         hike.pinUnboxedDownloads()
         hike.replaceRoute(with: route)
+        // How a 1.6 build drew the old line, which that build would reopen
+        // and route afresh over this one — see ``Hike/drawnRouteData``.
+        if hike.drawnRouteData != nil { hike.drawnRouteData = nil }
         hike.surfaceMetersByCategory = [:]
         hike.difficultyMetersByGrade = [:]
         if before.climb != nil || before.descent != nil {
@@ -513,6 +534,7 @@ enum RouteEditSave {
         let distance: Double
         let date: Date
         let edit: Data?
+        let drawn: Data?
         let surface: [String: Double]
         let difficulty: [String: Double]
         let climb: Double?
@@ -526,6 +548,7 @@ enum RouteEditSave {
             distance = hike.distanceMeters
             date = hike.date
             edit = hike.routeEditData
+            drawn = hike.drawnRouteData
             surface = hike.surfaceMetersByCategory
             difficulty = hike.difficultyMetersByGrade
             climb = hike.climbMeters
@@ -555,6 +578,7 @@ enum RouteEditSave {
             if hike.distanceMeters != distance { hike.distanceMeters = distance }
             if hike.date != date { hike.date = date }
             if hike.routeEditData != edit { hike.routeEditData = edit }
+            if hike.drawnRouteData != drawn { hike.drawnRouteData = drawn }
             if hike.surfaceMetersByCategory != surface { hike.surfaceMetersByCategory = surface }
             if hike.difficultyMetersByGrade != difficulty { hike.difficultyMetersByGrade = difficulty }
             if hike.climbMeters != climb { hike.climbMeters = climb }

@@ -76,11 +76,7 @@ struct RouteTrimView: View {
                     onShowStretch(session.line?.coordinates(ofCheck: id) ?? [])
                 }
                 RouteLooksGoodButton(session: session, confirm: confirm)
-                if hike.hasOriginalRoute {
-                    PlaceCardList {
-                        RouteRevertButton(session: session, revert: revert)
-                    }
-                }
+                RouteRevertRow(session: session, revert: revert)
                 Text(
                     """
                     Drag either end of the route to cut it off, or hold the line on the map and pull it onto \
@@ -173,6 +169,22 @@ struct RouteTrimSaveButton: View {
         RoleButton(.confirm, title: "Save", action: save)
             .disabled(!session.hasChanges || session.isSaving || session.isRouting || session.isMakingStep)
             .accessibilityIdentifier("route-trim-save")
+    }
+}
+
+/// *Revert to Original*, while the line the editor opened on has an
+/// original to go back to — ``RouteTrimSession/hasOriginal``. Its own view so
+/// that read is its body's and not the screen's.
+struct RouteRevertRow: View {
+    let session: RouteTrimSession
+    let revert: () -> Void
+
+    var body: some View {
+        if session.hasOriginal {
+            PlaceCardList {
+                RouteRevertButton(session: session, revert: revert)
+            }
+        }
     }
 }
 

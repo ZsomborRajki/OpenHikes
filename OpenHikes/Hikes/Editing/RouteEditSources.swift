@@ -14,6 +14,13 @@
 //  a handle can be dragged back out over ground an earlier save cut off, and
 //  a stretch's answer can be changed on a hike that has since been trimmed.
 //
+//  ## Only history that still describes the line
+//
+//  A record whose line another writer has since replaced — a 1.6 build's
+//  maker, or a CloudKit conflict — is opened as a hike never edited: on the
+//  line it has, with no trim, no steps and no original to revert to. See
+//  ``RouteEdit/describes(_:)``.
+//
 //  ## Read off the main actor, and only when there is something to read
 //
 //  The saved line and the trace are external storage, read whole, so they
@@ -102,6 +109,9 @@ nonisolated struct RouteEditSources: Equatable, Sendable {
             sources.isUnreadable = hike.routeEditData != nil
             return sources
         }
+        guard await describes(current, record) else {
+            return Self(current: current, saved: current, raw: [], edit: record.rebased)
+        }
         // Nothing stored to read, but still a record: a drive off the end is
         // a look the hike owes without an edit or a stretch to check.
         guard record.original != nil || record.assembly != nil else {
@@ -120,6 +130,13 @@ nonisolated struct RouteEditSources: Equatable, Sendable {
         )
         sources.isMissingOriginal = isEdited && !hasOriginal
         return sources
+    }
+
+    /// Whether `record` describes `current`, measured off the main actor
+    /// because it hashes the whole line.
+    @concurrent
+    private static func describes(_ current: [RouteCoordinate], _ record: RouteEdit) async -> Bool {
+        record.describes(current)
     }
 
     @concurrent

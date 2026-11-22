@@ -51,7 +51,7 @@ extension RouteTrimSession {
         // it was saved, and is saved as that: with the figures it had, where
         // an edit would only come close to them.
         if edited.route == sources.saved, edited.steps.isEmpty, edited.assembly?.isAsSaved != false,
-           destination.hike.hasOriginalRoute {
+           sources.edit?.original != nil {
             return land(revertOutcome(in: destination, from: sources.current), in: destination)
         }
         let outcome = RouteEditSave.write(
