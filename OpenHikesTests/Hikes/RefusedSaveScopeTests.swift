@@ -101,51 +101,33 @@ struct RefusedSaveScopeTests {
     func aRefusedEditKeepsPendingWork(refusesEverySave: Bool) throws {
         let container = try Fixture.modelContainer()
         let context = Self.mainContext(of: container)
-        let draft = TrailDraft()
-        draft.append(CLLocationCoordinate2D(latitude: Line.south, longitude: Line.longitude))
-        draft.append(CLLocationCoordinate2D(latitude: Line.north, longitude: Line.longitude))
-        let spring = TrailPlace(latitude: Line.middle, longitude: Line.longitude, name: "Spring")
-        draft.addPlaces([spring])
-        let hike = try #require(TrailDraftSave.hike(from: draft, named: "Ridge", into: context).hike)
-        var photo = HikePhoto()
-        photo.placeID = spring.id
-        hike.addPhoto(photo)
+        let hike = try Self.measuredTrail(in: context)
         let other = Fixture.hike(in: context, title: "Other hike")
         try context.save()
         let route = hike.route
         let pending = PendingWork(beside: other, in: context)
 
-        // Redrawn along a line the spring is nowhere near, so the edit also
-        // deletes its row and unfiles its photograph — the edit's own rows,
-        // which the rollback still has to put back.
-        let away = TrailDraft()
-        away.append(CLLocationCoordinate2D(latitude: Line.south, longitude: Line.longitude + 0.02))
-        away.append(CLLocationCoordinate2D(latitude: Line.north, longitude: Line.longitude + 0.02))
         let editedID = hike.id
-        let outcome = TrailDraftSave.update(
-            hike,
-            from: away,
-            openedWith: [spring.id],
-            into: context,
+        let outcome = RouteEditSave.write(
+            try Self.middleThird(of: route),
+            to: hike,
+            replacing: route,
+            in: context,
             save: Self.save(refusingEverySave: refusesEverySave) { context in
                 context.changedModelsArray.contains { ($0 as? Hike)?.id == editedID }
             }
         )
 
-        guard case .refused(.notSaved) = outcome else {
-            Issue.record("expected the store's refusal, got \(outcome)")
-            return
-        }
+        #expect(outcome == .refused(.notSaved))
         #expect(hike.route == route)
-        #expect(hike.places.map(\.name) == ["Spring"])
-        #expect(hike.photos.first?.placeID == spring.id)
+        #expect(hike.routeEditData == nil)
         #expect(other.customName == "Renamed meanwhile")
         try pending.expectKept(in: context, hikesOnDisk: 3)
         let stored = try #require(
             try ModelContext(container).fetch(FetchDescriptor<Hike>()).first { $0.id == editedID }
         )
         #expect(stored.route == route, "the refused edit is not what the later save writes")
-        #expect(stored.places.map(\.name) == ["Spring"])
+        #expect(stored.routeEditData == nil)
     }
 
     // MARK: Deletion
@@ -344,40 +326,34 @@ extension RefusedSaveScopeTests {
     nonisolated private static let measuredMeters: Double = 400
     nonisolated private static let measuredClimb: Double = 120
     nonisolated private static let measuredDescent: Double = 80
-    /// How far east the edit moves the line: a kilometre and a half, much
-    /// further than a place can sit off a line and still be kept.
-    nonisolated private static let eastward: Double = 0.02
 
     /// The rollback takes back what it can, and the refused edit writes back
     /// only what it left. iOS 27.0 takes every column back, which leaves the
     /// edit nothing to write. Written back anyway, a column left the hike
     /// changed in the shared context — `@Model` filters no same-value write —
-    /// and that context's next save put the pre-edit gallery over a
-    /// photograph another context had saved since, as the hiker's other
-    /// device would. The iOS 18 floor takes no column back, and there every
-    /// one is written back by hand.
+    /// and that context's next save put the pre-edit figures over ones
+    /// another context had saved since, as the hiker's other device would.
+    /// The iOS 18 floor takes no column back, and there every one is written
+    /// back by hand.
     @Test("a refused route edit writes back only what its rollback left", arguments: [true, false])
     func aRefusedEditWritesBackOnlyWhatTheRollbackLeft(refusesEverySave: Bool) throws {
         let container = try Fixture.modelContainer()
         let context = Self.mainContext(of: container)
-        let (hike, spring) = try Self.measuredTrail(in: context)
+        let hike = try Self.measuredTrail(in: context)
         let before = EditedColumns(hike)
 
         let editedID = hike.id
-        let outcome = TrailDraftSave.update(
-            hike,
-            from: Self.lineAway(),
-            openedWith: [spring.id],
-            into: context,
+        let outcome = RouteEditSave.write(
+            try Self.middleThird(of: hike.route),
+            to: hike,
+            replacing: hike.route,
+            in: context,
             save: Self.save(refusingEverySave: refusesEverySave) { context in
                 context.changedModelsArray.contains { ($0 as? Hike)?.id == editedID }
             }
         )
 
-        guard case .refused(.notSaved) = outcome else {
-            Issue.record("expected the store's refusal, got \(outcome)")
-            return
-        }
+        #expect(outcome == .refused(.notSaved))
         #expect(EditedColumns(hike) == before, "every column is back")
         // On the floor nothing was taken back, so everything had to be written.
         guard try Self.rollbackTakesBackWrites() else { return }
@@ -386,68 +362,25 @@ extension RefusedSaveScopeTests {
 
         let elsewhere = ModelContext(container)
         let copy = try #require(try elsewhere.fetch(FetchDescriptor<Hike>()).first { $0.id == editedID })
-        copy.addPhoto(HikePhoto())
+        copy.surfaceMetersByCategory = ["gravel": Self.measuredMeters]
         try elsewhere.save()
         _ = Fixture.hike(in: context, title: "Added meanwhile")
         try context.save()
         let stored = try #require(
             try ModelContext(container).fetch(FetchDescriptor<Hike>()).first { $0.id == editedID }
         )
-        #expect(stored.photos.count == 2, "the photograph saved elsewhere is not written over")
+        #expect(
+            stored.surfaceMetersByCategory == ["gravel": Self.measuredMeters],
+            "the breakdown measured elsewhere is not written over"
+        )
     }
 
-    /// A refused edit that put a place row in leaves the hike's walks
-    /// readable. On iOS 27.0, rolling back that row beside the columns the
-    /// edit wrote left a list nothing had read yet unreadable: the next read
-    /// of the hike's walks trapped inside SwiftData, and the hike's photo
-    /// section reads them on every pass, as the delete confirmation does to
-    /// count them. The trail is made in a context of its own and fetched
-    /// into the main one, as after a relaunch with the edit kept, so nothing
-    /// in the main context has read its walks.
-    @Test("a refused route edit leaves the hike's walks readable", arguments: [true, false])
-    func aRefusedEditLeavesTheWalksReadable(refusesEverySave: Bool) throws {
-        let container = try Fixture.modelContainer()
-        let maker = ModelContext(container)
-        let (made, spring) = try Self.measuredTrail(in: maker)
-        let walk = HikeWalk(
-            hikeID: made.id,
-            startedAt: .now,
-            endedAt: .now,
-            activeSeconds: 60,
-            coveredIntervals: [0, 10],
-            furthestDistanceMeters: 10,
-            routeDistanceMeters: 10,
-            endReason: .ended
-        )
-        maker.insert(walk)
-        walk.hike = made
-        try maker.save()
-        let context = Self.mainContext(of: container)
-        let editedID = made.id
-        let hike = try #require(try context.fetch(FetchDescriptor<Hike>()).first { $0.id == editedID })
-
-        let outcome = TrailDraftSave.update(
-            hike,
-            from: Self.lineAway(),
-            openedWith: [spring.id],
-            into: context,
-            save: Self.save(refusingEverySave: refusesEverySave) { context in
-                context.changedModelsArray.contains { ($0 as? Hike)?.id == editedID }
-            }
-        )
-
-        guard case .refused(.notSaved) = outcome else {
-            Issue.record("expected the store's refusal, got \(outcome)")
-            return
-        }
-        #expect(hike.places.map(\.name) == ["Spring"])
-        #expect(hike.walks?.count == 1, "the walk is still the hike's, and its list can be read")
-    }
-
-    /// A drawn trail with every column an edit writes filled in — a place
-    /// with a photograph filed under it, both breakdowns, a cached climb —
-    /// and saved, so a refused edit has all of it to put back.
-    private static func measuredTrail(in context: ModelContext) throws -> (Hike, TrailPlace) {
+    /// A trail drawn in the maker — edited in *Edit Route* like any other
+    /// line — with every column an edit writes filled in: both breakdowns and
+    /// a cached climb, beside a place with a photograph filed under it that
+    /// the edit must not touch. Saved, so a refused edit has all of it to put
+    /// back.
+    private static func measuredTrail(in context: ModelContext) throws -> Hike {
         let draft = TrailDraft()
         draft.append(CLLocationCoordinate2D(latitude: Line.south, longitude: Line.longitude))
         draft.append(CLLocationCoordinate2D(latitude: Line.north, longitude: Line.longitude))
@@ -463,21 +396,21 @@ extension RefusedSaveScopeTests {
         hike.descentMeters = Self.measuredDescent
         hike.elevationRouteRevision = "measured-route"
         try context.save()
-        return (hike, spring)
+        return hike
     }
 
-    /// A line the spring is nowhere near, with a hut on it, so the edit also
-    /// deletes the spring's row, unfiles its photograph and inserts a row for
-    /// the hut: the rollback has a row of each kind to take back. The
-    /// inserted one is the case to watch on iOS 27.0, where rolling it back
-    /// beside the columns written over its hike left the hike's walks
-    /// unreadable — see ``aRefusedEditLeavesTheWalksReadable(refusesEverySave:)``.
-    private static func lineAway() -> TrailDraft {
-        let away = TrailDraft()
-        away.append(CLLocationCoordinate2D(latitude: Line.south, longitude: Line.longitude + Self.eastward))
-        away.append(CLLocationCoordinate2D(latitude: Line.north, longitude: Line.longitude + Self.eastward))
-        away.addPlaces([TrailPlace(latitude: Line.middle, longitude: Line.longitude + Self.eastward, name: "Hut")])
-        return away
+    /// `route` cut to its middle third: an edit that writes the line, its
+    /// length, the original and the edit record, and empties what was
+    /// measured along the old line.
+    private static func middleThird(of route: [RouteCoordinate]) throws -> EditedLine {
+        let distances = RouteTrim.distances(along: route)
+        let length = try #require(distances.last)
+        return try #require(EditedLine(
+            whole: route,
+            distances: distances,
+            cuts: EditedLine.Cuts(range: length / 3...length * 2 / 3),
+            replacing: route
+        ))
     }
 
     /// Whether a rollback on this OS takes back what was written over saved
@@ -495,13 +428,16 @@ extension RefusedSaveScopeTests {
     }
 }
 
-/// Every column a route edit writes, and the hike's places, as one value to
-/// hold before and after a refusal.
+/// Every column a route edit writes, and the hike's places and photographs,
+/// which it must leave alone, as one value to hold before and after a
+/// refusal.
 private struct EditedColumns: Equatable {
     let route: [RouteCoordinate]
+    let original: [RouteCoordinate]
+    let edit: Data?
     let duration: Double?
     let distance: Double
-    let drawn: Data?
+    let date: Date
     let surface: [String: Double]
     let difficulty: [String: Double]
     let photos: [HikePhoto]
@@ -512,9 +448,11 @@ private struct EditedColumns: Equatable {
 
     init(_ hike: Hike) {
         route = hike.route
+        original = hike.originalRoute
+        edit = hike.routeEditData
         duration = hike.durationSeconds
         distance = hike.distanceMeters
-        drawn = hike.drawnRouteData
+        date = hike.date
         surface = hike.surfaceMetersByCategory
         difficulty = hike.difficultyMetersByGrade
         photos = hike.photos

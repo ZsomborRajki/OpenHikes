@@ -2,18 +2,17 @@
 //  RouteTrimView.swift
 //  OpenHikes
 //
-//  *Edit Route* on a hike that was recorded or imported, pushed from the
-//  closing actions of its screen: drag either end of the line inward, take
+//  *Edit Route* on any hike — recorded, imported or drawn in the maker —
+//  pushed from the closing actions of its screen: drag either end of the line inward, take
 //  off a stretch that was not walked in one tap, answer for the stretches
 //  trail matching left a question on, change a stretch or the whole line,
 //  and put the original back.
 //
 //  ## A walked line is never changed without saying so
 //
-//  A drawn trail is edited by its stops, in the maker. A line somebody walked
-//  has none, and re-routing it replaces ground the hiker covered with a
-//  guess, which was the owner's reason for giving it no *Edit Route* at all.
-//  Three things answer that. A trim guesses nothing: every point it leaves
+//  Re-routing a line somebody walked replaces ground the hiker covered with
+//  a guess, which was the owner's reason for giving it no *Edit Route* at
+//  all. Three things answer that. A trim guesses nothing: every point it leaves
 //  is the point that was saved — see ``RouteTrim``. A stretch to check is no
 //  guess either: each of its answers is a line the recording itself came
 //  with — see ``RouteAssembly``. And a stretch drawn along another path,
@@ -177,9 +176,8 @@ struct RouteTrimSaveButton: View {
     }
 }
 
-/// *Revert to Original*, and the question it asks first. Its own view for
-/// the reason ``HikeRouteEditButton`` is one: the dialog's state belongs
-/// here and nowhere above.
+/// *Revert to Original*, and the question it asks first. Its own view so the
+/// dialog's state belongs here and nowhere above.
 struct RouteRevertButton: View {
     let session: RouteTrimSession
     let revert: () -> Void

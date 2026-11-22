@@ -4,8 +4,8 @@
 //
 //  What *Edit Route* does to the library's totals (#912).
 //
-//  A drawn trail can be redrawn under walks already made along it, and those
-//  walks are kept as history — but what one of them climbed was a fact about
+//  A hike's line can be redrawn in *Edit Route* under walks already made
+//  along it, and those walks are kept as history — but what one of them climbed was a fact about
 //  the line it walked, which the trail no longer draws. So a walk along a line
 //  its trail has been redrawn from since keeps its outing, its distance and
 //  its time, adds no climb, and is never the Highest or Steepest record: the
@@ -110,14 +110,8 @@ struct LibraryTotalsRouteEditTests {
         #expect(before.allTime.outingsWithoutClimb == 0)
 
         let redrawn = Self.draft([Line.start, Line.middle, Line.end])
-        let saved = TrailDraftSave.update(
-            hike,
-            from: redrawn,
-            openedWith: [],
-            into: context,
-            heights: Self.heights(for: redrawn, of: Heights.redrawn)
-        )
-        #expect(saved.hike?.id == hike.id)
+        let line = Self.heights(for: redrawn, of: Heights.redrawn).interpolating(redrawn.routeCoordinates)
+        #expect(Fixture.redraw(hike, as: line, in: context))
         let current = TrailWalkRecord.routeRevision(of: hike.route)
         #expect(!walk.isAlong(revision: current), "the walk was along the line the trail used to draw")
 

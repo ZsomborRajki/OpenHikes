@@ -504,7 +504,6 @@ struct MapSheet: View {
                 photoPins: photoPins,
                 placePins: placePins,
                 communityTransport: appModel.communityTransport,
-                trailMaker: trailMaker,
                 onOpenPhoto: { photo in presentation.path.append(.photo(hike, photo.id)) },
                 onOpenPlace: { placeID in openPlace(placeID, of: hike) },
                 onFindPlaces: { presentation.path.append(.placesAround(hike)) },

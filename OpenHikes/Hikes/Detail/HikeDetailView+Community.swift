@@ -428,7 +428,7 @@ extension HikeDetailView {
         // A published trail edited since it was sent: the listing still shows
         // the old line, and a submission cannot be amended. Said here, over
         // the removal request it points to — the owner's decision, and the
-        // only path to publishing an amended route. See ``DrawnRoute``.
+        // only path to publishing an amended route. See ``RouteEdit``.
         if hike.isSharedCopyOutOfDate {
             Section("The shared copy shows the route before your edit. Ask for its removal, then share this one.") {
                 Button("Ask for Removal", systemImage: "envelope", role: .destructive) {

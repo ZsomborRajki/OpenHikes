@@ -51,11 +51,6 @@ nonisolated struct StoredTrailDraft: Equatable, Sendable {
     var snapsToPaths: Bool
     var travelMode: TrailTravelMode = .hiking
     var startIsOpen = false
-    /// The hike this drawing is an edit of — see
-    /// ``TrailDraftRecord/editingHikeID``.
-    var editingHikeID: UUID?
-    /// See ``TrailDraftRecord/editingPlaceIDs``.
-    var editingPlaceIDs: [UUID] = []
     /// See ``TrailDraft/chosenLegs``.
     var chosenLegs: [TrailLegChoice] = []
 
@@ -109,8 +104,6 @@ struct TrailDraftStore {
                 snapsToPaths: record.snapsToPaths,
                 travelMode: record.travelMode,
                 startIsOpen: record.startIsOpen,
-                editingHikeID: record.editingHikeID,
-                editingPlaceIDs: record.editingPlaceIDs,
                 chosenLegs: record.chosenLegs
             )
         } catch {
@@ -135,8 +128,6 @@ struct TrailDraftStore {
         snapsToPaths: Bool,
         travelMode: TrailTravelMode = .hiking,
         startIsOpen: Bool = false,
-        editingHikeID: UUID? = nil,
-        editingPlaceIDs: [UUID] = [],
         chosenLegs: [TrailLegChoice] = []
     ) {
         let points = waypoints.map(\.routeCoordinate)
@@ -154,8 +145,6 @@ struct TrailDraftStore {
                 record.snapsToPaths = snapsToPaths
                 record.travelMode = travelMode
                 record.startIsOpen = startIsOpen
-                record.editingHikeID = editingHikeID
-                record.editingPlaceIDs = editingPlaceIDs
                 record.chosenLegs = chosenLegs
                 record.updatedAt = .now
             } else {
@@ -168,8 +157,6 @@ struct TrailDraftStore {
                         updatedAt: .now,
                         travelMode: travelMode,
                         startIsOpen: startIsOpen,
-                        editingHikeID: editingHikeID,
-                        editingPlaceIDs: editingPlaceIDs,
                         chosenLegs: chosenLegs
                     )
                 )

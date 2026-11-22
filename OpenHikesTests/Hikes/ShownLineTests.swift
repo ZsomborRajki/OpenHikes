@@ -274,7 +274,7 @@ final class ShownLineTests {
         await shown.landing?.value
 
         draft.append(CLLocationCoordinate2D(latitude: 47.6400, longitude: 12.86))
-        try #require(TrailDraftSave.update(hike, from: draft, openedWith: [], into: container.mainContext).hike != nil)
+        try #require(Fixture.redraw(hike, as: draft.routeCoordinates, in: container.mainContext))
         await settleDelegateHop(until: "the edited line is shown") { shown.revision == 1 }
         await shown.landing?.value
 

@@ -33,10 +33,9 @@ struct HikeRouteCheckNotice: View {
     let hike: Hike
 
     var body: some View {
-        // The columns first: most hikes have neither, and a body pass should
-        // not decode JSON to learn that. A drawn trail is edited in the maker
-        // and has nothing here.
-        if hike.drawnRouteData == nil, hike.routeEditData != nil, let edit = hike.routeEdit, edit.isOwedALook {
+        // The column first: most hikes have none, and a body pass should not
+        // decode JSON to learn that.
+        if hike.routeEditData != nil, let edit = hike.routeEdit, edit.isOwedALook {
             NavigationLink(value: SheetRoute.routeEdit(hike)) {
                 HStack(alignment: .top, spacing: 12) {
                     Image(systemName: "exclamationmark.triangle.fill")

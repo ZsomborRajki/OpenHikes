@@ -67,9 +67,6 @@ struct HikeDetailView: View {
     /// rather than read from the environment, like everything else this screen
     /// needs, so a preview or a suite decides it outright.
     var communityTransport: (any CommunityTransporting)?
-    /// The maker, for *Edit Route* on a trail drawn in it — see
-    /// ``HikeRouteEditButton``. `nil` withholds the button.
-    var trailMaker: TrailDraftController?
     /// Pushes the full-space viewer for a tapped thumbnail.
     var onOpenPhoto: (HikePhoto) -> Void = { _ in /* no-op default */ }
     /// Pushes one of this hike's places. See ``HikePlaceView``.
@@ -510,13 +507,10 @@ private extension HikeDetailView {
         PlaceCardList {
             archiveButton
             communityShareButton
-            // The column rather than the decoded value: a body pass should
-            // not decode JSON to ask whether there is any.
-            if hike.drawnRouteData != nil {
-                if let trailMaker { HikeRouteEditButton(hike: hike, maker: trailMaker) }
-            } else if line.pointCount > 1 {
-                // A line somebody walked or imported is edited where it
-                // lies, never reopened in the maker — see ``RouteTrimView``.
+            // Every line is edited where it lies, whichever way it arrived:
+            // a trail drawn in the maker keeps nothing to reopen there — see
+            // ``TrailDraftSave``.
+            if line.pointCount > 1 {
                 HikeRouteTrimLink(hike: hike)
             }
             renameButton(scroller)

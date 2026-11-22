@@ -520,21 +520,22 @@ a change to recording, the map, the sheet or the render path; the PR template,
   renderer draw them all (`LibraryLinesRenderer`), so hikes over the same
   trail do not stack into a solid line.
 - **A drawn trail is an ordinary `Hike`.** `TrailDraftSave` writes the same row
-  a GPX import does, plus `Hike.drawnRouteData` (a `DrawnRoute`), which is what
-  *Edit Route* reads. The draft, `TrailDraft`, persists as a `TrailDraftRecord`
-  in the **unmirrored** store, because a half-drawn line is one device's work.
-  The maker routes legs one at a time through one worker, since nineteen
-  parallel Overpass requests earn a `429`, and nothing on that path may block
-  drawing.
+  a GPX import does and nothing more: no stops, no chosen ways and no travel
+  mode, by the owner's decision. The library is lines with walks on them, so a
+  saved trail is edited in *Edit Route* like every other line, and the maker
+  only ever makes a new one. The draft, `TrailDraft`, persists as a
+  `TrailDraftRecord` in the **unmirrored** store, because a half-drawn line is
+  one device's work. The maker routes legs one at a time through one worker,
+  since nineteen parallel Overpass requests earn a `429`, and nothing on that
+  path may block drawing.
 - **A line somebody walked is never changed without saying so**
-  (`RouteTrim`, `RouteStep`, `RouteEditSave`). *Edit Route* on a recording or
-  an import keeps every point it does not touch as it was saved. A stretch
-  drawn where nobody recorded the hiker is `RouteProvenance.inferred` and
-  carries no times, and a line turned round or begun elsewhere loses its
-  clock rather than run it backwards. The line it had goes to
-  `Hike.originalRoute`, written by the first edit and by no later one, which
-  is what *Revert to Original* puts back. A drawn trail is edited by its
-  stops, in the maker, and carries neither.
+  (`RouteTrim`, `RouteStep`, `RouteEditSave`). *Edit Route* keeps every point
+  it does not touch as it was saved. A stretch drawn where nobody recorded
+  the hiker is `RouteProvenance.inferred` and carries no times, and a line
+  turned round or begun elsewhere loses its clock rather than run it
+  backwards. The line it had goes to `Hike.originalRoute`, written by the
+  first edit and by no later one, which is what *Revert to Original* puts
+  back.
   - **The hike's line is derived, never patched**: the line as it was saved,
     put together under the answers that stand
     (`RouteAssembly.line(saved:raw:)`), then each step in the order it was
@@ -1322,9 +1323,10 @@ in its source header. Do not weaken one without a measurement.
   column for every attribute in `MirroredCloudKitSchema.recordTypes`. The
   only live columns the contract does not name are SwiftData's own
   `CD_entityName`, the to-one reference columns that the contract lists as
-  relationships, and the `CD_route_ckAsset`, `CD_rawRoute_ckAsset` and
+  relationships, the `CD_route_ckAsset`, `CD_rawRoute_ckAsset` and
   `CD_originalRoute_ckAsset` asset fields of the three external-storage
-  attributes. Re-export before believing these numbers, and update this
+  attributes, and `CD_drawnRouteData`, a column the model no longer has and a
+  production schema cannot delete. Re-export before believing these numbers, and update this
   paragraph when they move. Deployment facts live here, not in code.
 
 ## The community feature

@@ -4,10 +4,9 @@
 //
 //  Writing a trimmed line into its hike, and putting the original back.
 //
-//  **The same row**, for the reason ``TrailDraftSave/update(_:from:openedWith:into:heights:keepingPlaces:save:)``
-//  writes into one: every walk, place, photograph, widget pin and publication
-//  pointing at the hike still does. What changes is what the line is, and the
-//  figures that are about the line.
+//  **The same row**, so every walk, place, photograph, widget pin and
+//  publication pointing at the hike still does. What changes is what the
+//  line is, and the figures that are about the line.
 //
 //  ## What a trim rewrites
 //
@@ -19,10 +18,10 @@
 //  - **The original**, kept by the first edit and never written again — see
 //    ``Hike/originalRoute`` and ``RouteEdit``.
 //  - **The recording's own walk.** Every other walk along the hike is a
-//    record of a walk that happened and is left as it was, as the maker's
-//    edit leaves it. This one *is* the line, so a drive cut off the line
-//    comes off the walk too: its coverage, its active time and the end it
-//    was cut at.
+//    record of a walk that happened, measured against the line as it stood
+//    then, and is left as it was. This one *is* the line, so a drive cut off
+//    the line comes off the walk too: its coverage, its active time and the
+//    end it was cut at.
 //  - **What described the old line**: the surface and difficulty breakdowns
 //    and the cached climb, emptied so the next open measures the new one.
 //
@@ -32,10 +31,18 @@
 //
 //  ## A refused save
 //
-//  Puts everything back, by the two steps the maker's edit takes and for the
-//  reasons it gives: the context's rollback, then by hand whatever the
-//  rollback left as the edit wrote it, compared first so nothing it did take
-//  back is written again.
+//  Puts everything back in two steps: the context's rollback, then by hand
+//  whatever of the hike's columns the rollback left as the edit wrote them,
+//  and nothing else — see ``Unedited/putBack(into:)``. Which that is depends
+//  on the OS. Measured on iOS 27.0, the rollback takes all of it back
+//  itself; measured on 18.6, the iOS 18 floor takes back none of it. iOS 26
+//  was not measured, and need not be: comparing before writing is right
+//  whichever way an OS goes. The rollback has nothing else to take, because
+//  what the context already held is committed first, in a commit of its own
+//  (``commitPending(in:save:)``): this is the shared main context, and a
+//  rename waiting there for its autosave is not this edit's to roll back.
+//  ``HikeDeletion/delete(_:store:workouts:save:)`` does the same for the
+//  same reason.
 //
 
 import Foundation
@@ -528,8 +535,18 @@ enum RouteEditSave {
         }
 
         /// Writes back what a refused edit's rollback left as the edit wrote
-        /// it, and nothing the rollback took back — see
-        /// ``TrailDraftSave``'s own, which says why each is compared first.
+        /// it, and nothing the rollback took back.
+        ///
+        /// A column the rollback took back — on iOS 27.0, every one — is not
+        /// written again, because `@Model` filters no same-value write
+        /// (AGENTS.md *Render isolation, in practice*). Written anyway, it
+        /// left the hike changed in the shared context, and that context's
+        /// next save — an autosave, a rename — put the pre-edit line and
+        /// figures over ones another context had saved since, as an import
+        /// or the hiker's other device would: measured on iOS 27.0. A column
+        /// the rollback left as the edit wrote it — on the iOS 18 floor,
+        /// every one, with no change pending — is put back, or the next save
+        /// that writes the hike for any reason would write the refused edit.
         func putBack(into hike: Hike) {
             if hike.route != route { hike.replaceRoute(with: route) }
             if case .was(let originalRoute) = original, hike.originalRoute != originalRoute {

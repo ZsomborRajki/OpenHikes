@@ -7,9 +7,9 @@
 //  The router answers the same two stops the same way every time, so a
 //  drawing reopened from its stops comes back as the router's default unless
 //  something remembered that the hiker preferred the other way. These pin that
-//  something across the three ways a drawing is reopened — *Edit Route*, a
-//  draft restored after a relaunch, and the switch turned off and on — against
-//  a router that always offers the same two ways. See ``TrailLegChoice``.
+//  something across the two ways a drawing is reopened — a draft restored
+//  after a relaunch, and the switch turned off and on — against a router that
+//  always offers the same two ways. See ``TrailLegChoice``.
 //
 
 import CoreLocation
@@ -106,29 +106,6 @@ struct TrailDraftChosenWayTests {
 
     // MARK: Reopening
 
-    @Test("Edit Route reopens a saved trail on the way chosen, and saving keeps it")
-    func editRouteKeepsTheChosenWay() async throws {
-        let context = try Fixture.modelContext()
-        let maker = try await Self.drawnEast()
-        let hike = try #require(TrailDraftSave.hike(from: maker.draft, named: "Ridge", into: context).hike)
-        #expect(hike.route.contains { $0.longitude > Line.longitude }, "the hike is the east way")
-
-        let reopened = TrailDraftController(router: TwoWayRouter())
-        #expect(reopened.edit(hike))
-        reopened.setEditing(true)
-        await settleDelegateHop(until: "the reopened leg to be answered") { Self.settled(reopened) }
-
-        let leg = try #require(reopened.draft.legs.first)
-        #expect(leg.coordinates == Self.east.coordinates, "not the router's default")
-        #expect(leg.alternatives.map(\.coordinates) == [Self.west.coordinates], "which is offered instead")
-
-        let saved = try #require(
-            TrailDraftSave.update(hike, from: reopened.draft, openedWith: [], into: context).hike
-        )
-        #expect(saved.route.contains { $0.longitude > Line.longitude })
-        #expect(!saved.route.contains { $0.longitude < Line.longitude }, "an unchanged edit does not swap ways")
-    }
-
     @Test("a draft restored after a relaunch comes back on the way chosen")
     func aRestoredDraftKeepsTheChosenWay() async throws {
         let store = TrailDraftStore(context: try Fixture.modelContext())
@@ -201,14 +178,14 @@ struct TrailDraftChosenWayTests {
         draft.chooseAlternative(0, forLegAt: 0)
         try #require(draft.legs.first?.snap == chosenSnap)
 
-        let saved = try JSONEncoder().encode(DrawnRoute(draft))
-        let drawn = try JSONDecoder().decode(DrawnRoute.self, from: saved)
+        // Through JSON, as the stored draft keeps its choices.
+        let saved = try JSONEncoder().encode(draft.chosenLegs)
         let reopened = TrailDraft()
         reopened.replace(
-            with: drawn.trailWaypoints,
+            with: draft.waypoints,
             places: [],
-            snapsToPaths: drawn.snapsToPaths,
-            chosenLegs: drawn.chosenLegs
+            snapsToPaths: true,
+            chosenLegs: try JSONDecoder().decode([TrailLegChoice].self, from: saved)
         )
         reopened.beginRouting([Self.ends])
         reopened.apply(
@@ -299,30 +276,5 @@ struct TrailDraftChosenWayTests {
 
         draft.remove(atOffsets: IndexSet([1]))
         #expect(draft.chosenLegs.isEmpty)
-    }
-
-    /// The hike's copy is a field of its CloudKit record rather than an asset,
-    /// so the ways it carries are bounded — see ``DrawnRoute``. A way that
-    /// would pass the bound is left out, and the ones after it still go.
-    @Test("the saved route leaves out a chosen way that would pass the bound, and keeps the rest")
-    func theSavedRouteBoundsTheChosenWays() {
-        let stops = [Line.south, Line.middle, Line.north, Line.north + 0.002]
-            .map { TrailWaypoint(coordinate: Self.coordinate($0)) }
-        let choices = zip(zip(stops, stops.dropFirst()), [DrawnRoute.maximumChosenCoordinates - 2, 3, 2])
-            .map { pair, count in
-                let leg = TrailLegEnds(from: pair.0, to: pair.1)
-                return TrailLegChoice(
-                    start: leg.start,
-                    end: leg.end,
-                    coordinates: Array(repeating: leg.start, count: count),
-                    distanceMeters: 0,
-                    travelTime: nil
-                )
-            }
-        let draft = TrailDraft()
-        draft.replace(with: stops, places: [], snapsToPaths: true, chosenLegs: choices)
-        #expect(draft.chosenLegs == choices, "the draft on this device keeps them all")
-
-        #expect(DrawnRoute(draft).chosenLegs == [choices[0], choices[2]])
     }
 }

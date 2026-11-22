@@ -187,7 +187,7 @@ struct TrailDraftView: View {
             search.end()
             completer.clear()
         }
-        .navigationTitle(maker.editingHikeID == nil ? String(localized: "New Trail") : String(localized: "Edit Trail"))
+        .navigationTitle("New Trail")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -199,7 +199,7 @@ struct TrailDraftView: View {
             // Save and close share one glass pill on the trailing edge, the ✕
             // outermost, where Apple Maps puts its own.
             ToolbarItemGroup(placement: .topBarTrailing) {
-                RoleButton(.confirm, title: "Save", action: saveTapped)
+                RoleButton(.confirm, title: "Save", action: startNaming)
                     .disabled(!draft.canBeSaved)
                     .accessibilityIdentifier("trail-draft-save")
                 RoleButton(.close, title: "Close", action: close)
@@ -211,16 +211,11 @@ struct TrailDraftView: View {
         // from inside the sheet's contents*, and which ``RecordingView``'s own
         // alerts already follow.
         .confirmationDialog(
-            maker.editingHikeID == nil ? String(localized: "Close this trail?") : String(localized: "Close this edit?"),
+            "Close this trail?",
             isPresented: $isConfirmingClose,
             titleVisibility: .visible
         ) {
-            Button(
-                maker.editingHikeID == nil
-                    ? String(localized: "Discard Trail")
-                    : String(localized: "Discard Changes"),
-                role: .destructive
-            ) {
+            Button("Discard Trail", role: .destructive) {
                 maker.discard()
                 onClose()
             }
@@ -527,34 +522,6 @@ struct TrailDraftView: View {
         isConfirmingClose = true
     }
 
-    /// Save: a new trail asks for its name, an edit is written straight back
-    /// under the name it already has — rename lives on the hike's own screen.
-    ///
-    /// An edit whose hike has gone — deleted on this device or another while
-    /// the drawing was open — is saved as a new trail instead, because the
-    /// drawing is still the hiker's work and there is nothing left to write
-    /// it into. One the store could not read is refused instead, with the
-    /// drawing kept for the next Save — see ``TrailDraftSaveTarget``.
-    private func saveTapped() {
-        switch TrailDraftSaveTarget.resolve(editing: maker.editingHikeID, in: modelContext) {
-        case .newTrail:
-            startNaming()
-        case .edit(let hike):
-            finish(
-                TrailDraftSave.update(
-                    hike,
-                    from: draft,
-                    openedWith: maker.editingPlaceIDs,
-                    into: modelContext,
-                    heights: maker.elevation.samples,
-                    keepingPlaces: maker.finder.filter.placesShown
-                )
-            )
-        case .refused(let refusal):
-            finish(.refused(refusal))
-        }
-    }
-
     /// Asks what to call it, with the field blank.
     ///
     /// Blank rather than pre-filled with the default, which is the trap
@@ -588,7 +555,7 @@ struct TrailDraftView: View {
         ))
     }
 
-    /// What either save comes to: the drawing cleared and the hike shown, or
+    /// What the save comes to: the drawing cleared and the hike shown, or
     /// the refusal said and the drawing left exactly where it was.
     private func finish(_ outcome: TrailDraftSaveOutcome) {
         switch outcome {

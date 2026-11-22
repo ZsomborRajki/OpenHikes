@@ -194,22 +194,6 @@ final class TrailDraftController {
     /// closes.
     private(set) var droppedPin: TrailDraftDroppedPinSpot?
 
-    /// The saved hike this drawing is an edit of, or `nil` for a new trail.
-    ///
-    /// Set by ``edit(_:)`` and by nothing else, cleared by ``discard()`` and
-    /// by emptying the drawing, and written down with the drawing, so a
-    /// half-finished edit comes back as one. What it changes is where Save writes: back into the same row —
-    /// same `id`, so walks, places, photographs, a widget pin and a
-    /// publication all keep pointing at it — rather than a second trail. See
-    /// ``TrailDraftSave/update(_:from:openedWith:into:heights:save:)``.
-    private(set) var editingHikeID: UUID?
-
-    /// The places ``editingHikeID``'s hike held when the edit opened, which is
-    /// how its save tells a place the maker removed from one the hike gained
-    /// since — see ``TrailDraftSave/places(of:drawn:atOpen:)``. Read by Save
-    /// alone, so nothing observes it.
-    @ObservationIgnored private(set) var editingPlaceIDs: Set<UUID> = []
-
     /// Whether this maker can make a leg follow a path at all.
     ///
     /// False when this launch has no provider for the selected mode. A
@@ -385,45 +369,6 @@ final class TrailDraftController {
             // been asked — see ``TrailStopNamer/clear()``.
             namer.clear()
         }
-    }
-
-    /// Opens the maker on a saved trail's own stops — *Edit Route*.
-    ///
-    /// The drawing is rebuilt from ``Hike/drawnRoute`` and the hike's places,
-    /// and its legs are asked about again when the screen opens, exactly as a
-    /// restored draft's are. A second tap on the same hike's Edit Route while
-    /// its edit is already in progress resumes it rather than starting over.
-    ///
-    /// Whatever else was being drawn is replaced — the caller asks first, see
-    /// ``HikeRouteEditButton``. Not gated on ``isAvailable``: the request
-    /// comes from the hike's own screen, which is a pushed screen, and the
-    /// push that follows replaces that path rather than stacking on it.
-    ///
-    /// - Returns: whether there was a route to edit.
-    @discardableResult func edit(_ hike: Hike) -> Bool {
-        guard let drawn = hike.drawnRoute, drawn.waypoints.count > 1 else { return false }
-        if editingHikeID != hike.id {
-            cancelRouting()
-            finder.clear()
-            // Photographs of wherever the last drawing was.
-            photos.clear()
-            forgetMeasurements()
-            namer.clear()
-            selection = nil
-            droppedPin = nil
-            draft.replace(
-                with: drawn.trailWaypoints,
-                places: hike.places,
-                snapsToPaths: drawn.snapsToPaths,
-                travelMode: drawn.travelMode,
-                chosenLegs: drawn.chosenLegs
-            )
-            editingHikeID = hike.id
-            editingPlaceIDs = Set(hike.places.map(\.id))
-            persist()
-        }
-        openFeed.send(())
-        return true
     }
 
     /// Asks for the maker. Refused when the pill isn't available, so a tap
@@ -714,7 +659,6 @@ final class TrailDraftController {
         namer.clear()
         selection = nil
         droppedPin = nil
-        endEdit()
     }
 
     /// Runs one edit to the points and, only if it changed them, ends it the
@@ -756,11 +700,6 @@ final class TrailDraftController {
     private func persist() {
         guard !draft.isEmpty else {
             store?.clear()
-            // An emptied drawing is no longer an edit of anything, as the
-            // cleared store already says: left set, the next trail drawn from
-            // the pill would be saved over this hike under an *Edit Trail*
-            // title, and only until a relaunch.
-            endEdit()
             return
         }
         guard let store else { return }
@@ -770,8 +709,6 @@ final class TrailDraftController {
             snapsToPaths: draft.snapsToPaths,
             travelMode: draft.travelMode,
             startIsOpen: draft.startIsOpen,
-            editingHikeID: editingHikeID,
-            editingPlaceIDs: Array(editingPlaceIDs),
             chosenLegs: draft.chosenLegs
         )
     }
@@ -904,11 +841,6 @@ extension TrailDraftController {
         shading.clear()
     }
 
-    private func endEdit() {
-        editingHikeID = nil
-        editingPlaceIDs = []
-    }
-
     private func restoreIfNeeded() {
         // Only into an empty draft. Leaving the maker and coming back within a
         // launch finds the line still in memory, and overwriting it with the
@@ -922,8 +854,6 @@ extension TrailDraftController {
             startIsOpen: stored.startIsOpen,
             chosenLegs: stored.chosenLegs
         )
-        editingHikeID = stored.editingHikeID
-        editingPlaceIDs = Set(stored.editingPlaceIDs)
     }
 }
 
@@ -971,9 +901,8 @@ extension TrailDraftController {
     /// The photograph goes onto the maker's map with it, so a save whose line
     /// passes it keeps it, credited — see ``TrailDraftPhotos/adopt(_:)``.
     ///
-    /// Not gated on ``isAvailable``, for the reason ``edit(_:)`` is not: the
-    /// request comes from a pushed screen, and the push that follows replaces
-    /// it.
+    /// Not gated on ``isAvailable``: the request comes from a pushed screen,
+    /// and the push that follows replaces it.
     func plan(to photo: CommonsPhoto) {
         guard let camera = photo.pin.coordinate else { return }
         // A drawing left from an earlier launch is the one this joins, and it
