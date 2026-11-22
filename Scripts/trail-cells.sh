@@ -104,7 +104,9 @@
 #             2026-11-22: 53 minutes (8 to find the ways, 14 to cut the bands,
 #             25 to read them and 6 to write the tiles), a cut of 20 GB, a
 #             spool of some 43 GB, and an archive of 18.7 GB in 1.78 million
-#             tiles; about 65 GB of disk at the most.
+#             tiles; about 65 GB of disk at the most. The build is written
+#             into <dir>.work and replaces an earlier one in <dir> only once
+#             it is whole, so that one needs room beside it until then.
 #   upload-routing
 #             Put the archive build-routing wrote in <dir> in the R2 bucket
 #             openhikes-tiles under its own name, refusing a build that is not
@@ -367,6 +369,10 @@ build_routing() {
     command -v osmium >/dev/null 2>&1 \
         || die "osmium is not installed. It reads the extract: brew install osmium-tool"
 
+    # Before an hour of osmium rather than after it, as the tool would.
+    routing_output_is_replaceable "$out" || die "$out holds files and no routing-build.json, so it is not an \
+earlier routing build to replace. Name an empty directory, or a previous build's."
+
     prepare_tool
     local work="$out.work"
     mkdir -p "$work"
@@ -411,22 +417,47 @@ build_routing() {
         name="routing-${BASH_REMATCH[1]}${BASH_REMATCH[2]}${BASH_REMATCH[3]}-${BASH_REMATCH[4]}"
     fi
 
-    local arguments=(build-routing --relations "$work/relations.opl" --ways - --out "$out" --name "$name")
+    # The build is staged in the work directory and replaces what --out held
+    # only once both sides of the pipe succeeded. A band osmium gave up on ends
+    # the tool's input as the last band would, so the tool writes a build
+    # missing it, which is thrown away with the stage; and a build that fails
+    # either way leaves an earlier one in --out as it was.
+    local staged="$work/build"
+    rm -rf "$staged"
+    local arguments=(build-routing --relations "$work/relations.opl" --ways - --out "$staged" --name "$name")
     [[ "$world" == false ]] || arguments+=(--world)
     [[ -z "$timestamp" ]] || arguments+=(--osm-timestamp "$timestamp")
     echo "Putting positions on their ways a band at a time, and filing them …"
-    # A band osmium gave up on ends the tool's input as the last band would,
-    # so what it wrote from the rest is taken away rather than left for
-    # upload-routing to find.
     if ! located_bands "$work/bands" "$bands" "$keep_work" | "$tool" "${arguments[@]}"; then
-        rm -f "$out/routing-build.json" "$out/$name.pmtiles"
+        rm -rf "$staged"
         die "the trail maker's graph was not built."
     fi
+
+    # Checked again, since the build took the best part of an hour. The record
+    # goes first and comes back last, so --out never holds a record without
+    # the archive it names.
+    routing_output_is_replaceable "$out" || die "$out holds files and no routing-build.json any more, so \
+it was not replaced. The build is in $staged."
+    mkdir -p "$out"
+    rm -f "$out/routing-build.json" "$out"/*.pmtiles
+    mv "$staged/$name.pmtiles" "$out/"
+    mv "$staged/routing-build.json" "$out/"
 
     if [[ "$keep_work" == false ]]; then
         rm -rf "$work"
     fi
     echo "Wrote $out"
+}
+
+# Whether build-routing may put its build in a directory: none there yet, an
+# empty one, or an earlier build's, which routing-build.json marks. The
+# trail-cells tool refuses any other directory the same way.
+routing_output_is_replaceable() {
+    local directory="$1" entries
+    [[ -d "$directory" ]] || return 0
+    [[ -f "$directory/routing-build.json" ]] && return 0
+    entries="$(find "$directory" -mindepth 1 -maxdepth 1 ! -name '.*' -print -quit)"
+    [[ -z "$entries" ]]
 }
 
 # Every band's ways, with their nodes' positions, as OPL on standard output.

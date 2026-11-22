@@ -63,6 +63,14 @@ nonisolated final class StubTileServer: Sendable {
         { request in self.respond(to: request) }
     }
 
+    /// ``transport``, with the request `held` holds kept until it is let go.
+    func transport(holding held: HeldRequest) -> RoutingGraphServer.Transport {
+        { request in
+            try await held.hold(request)
+            return self.respond(to: request)
+        }
+    }
+
     private func respond(to request: URLRequest) -> (Data, HTTPURLResponse) {
         let url = request.url ?? URL(filePath: "/")
         let path = String(url.path().dropFirst())
@@ -84,5 +92,45 @@ nonisolated final class StubTileServer: Sendable {
     static func manifest(revision: Int, routing: [RoutingGraphServer.Listing.Archive]) -> Answer {
         let listing = RoutingGraphServer.Listing(version: 1, revision: revision, routing: routing)
         return .ok((try? JSONEncoder().encode(listing)) ?? Data())
+    }
+}
+
+/// The first request for one path, kept from its answer until a case lets it
+/// go, as a slow server keeps it. Cancelling the task that waits on it ends
+/// it with a `CancellationError`, as cancelling a `URLSession` request does.
+nonisolated final class HeldRequest: Sendable {
+    private let path: String
+    private let isTaken = Mutex(false)
+    private let arrivals: AsyncStream<Void>
+    private let arrival: AsyncStream<Void>.Continuation
+    private let gate: AsyncStream<Void>
+    private let opener: AsyncStream<Void>.Continuation
+
+    /// - Parameter path: From the server's root, without its leading slash.
+    init(_ path: String) {
+        self.path = path
+        (arrivals, arrival) = AsyncStream.makeStream(of: Void.self)
+        (gate, opener) = AsyncStream.makeStream(of: Void.self)
+    }
+
+    /// Returns once the request has come.
+    func arrived() async {
+        for await _ in arrivals { break }
+    }
+
+    /// Lets the request go on to its answer.
+    func release() { opener.yield() }
+
+    /// Keeps `request` until ``release()`` if it is the first for the path.
+    func hold(_ request: URLRequest) async throws {
+        guard request.url?.path() == "/\(path)" else { return }
+        let isFirst = isTaken.withLock { taken in
+            defer { taken = true }
+            return !taken
+        }
+        guard isFirst else { return }
+        arrival.yield()
+        for await _ in gate { break }
+        try Task.checkCancellation()
     }
 }

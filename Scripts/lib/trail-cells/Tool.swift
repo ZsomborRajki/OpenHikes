@@ -246,6 +246,12 @@ private extension TrailCellsTool {
         guard let x = Int(try options.positional("a tile's x")), let y = Int(try options.positional("a tile's y")) else {
             throw UsageError(description: "a tile's x and y are whole numbers.")
         }
+        // A tile id is made of the bits of x and y the zoom has, so one past
+        // the grid would read another tile, and a negative one would trap.
+        let side = TrailGraphSquareGrid.tilesPerSide(atZoom: RoutingGraphArchive.zoom)
+        guard (0..<side).contains(x), (0..<side).contains(y) else {
+            throw UsageError(description: "a tile at zoom \(RoutingGraphArchive.zoom) has an x and a y from 0 to \(side - 1).")
+        }
         try options.finish()
         guard let bytes = try RoutingArchiveReader.tile(at: URL(fileURLWithPath: path), x: x, y: y) else {
             print("no tile \(RoutingGraphArchive.zoom)/\(x)/\(y)")

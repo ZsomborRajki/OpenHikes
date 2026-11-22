@@ -5086,6 +5086,16 @@ if expect_status 0 && expect_contains "$output" "no tile 12/2196/1430" "the outp
     pass
 fi
 
+# 6290 is 2194 with a bit the zoom does not have, which would read that tile.
+for routing_tile_args in "-1 1430" "6290 1430" "2194 4096"; do
+    read -r routing_tile_x routing_tile_y <<< "$routing_tile_args"
+    run_script "trail-cells routing-tile refuses a tile off the grid, $routing_tile_x $routing_tile_y" \
+        "$trail_cells" routing-tile "$routing_out/routing-20261122-00.pmtiles" "$routing_tile_x" "$routing_tile_y"
+    if expect_status 2 && expect_contains "$output" "has an x and a y from 0 to 4095" "the error"; then
+        pass
+    fi
+done
+
 # A band osmium gave up on ends the tool's input like the last band, and the
 # tool writes what it had. The script takes it away again, so upload-routing
 # never finds a world build missing a band.
@@ -5100,6 +5110,65 @@ if expect_status 1 && expect_contains "$output" "the trail maker's graph was not
         fail "a build missing a band was left to upload" "$(ls "$cells_work/routing-failed")"
     else
         pass
+    fi
+fi
+
+# A failed build leaves an earlier one where it was, and a whole one replaces
+# it, archive and record together.
+routing_earlier="$cells_work/routing-earlier"
+mkdir -p "$routing_earlier"
+cp "$routing_out/routing-build.json" "$routing_earlier/routing-build.json"
+cp "$routing_out/routing-20261122-00.pmtiles" "$routing_earlier/routing-20261115-00.pmtiles"
+STUB_OSMIUM_WAYS="$cells_work/routing-ways.opl" \
+    STUB_OSMIUM_RELATIONS="$cells_work/graph-relations.opl" \
+    STUB_OSMIUM_TIMESTAMP="2026-11-22T00:00:00Z" STUB_OSMIUM_FAIL_BAND=band-3 \
+    run_script "trail-cells build-routing keeps an earlier build when a band fails" \
+    "$trail_cells" build-routing "$cells_work/extract.osm.pbf" --out "$routing_earlier" --world
+if expect_status 1 && expect_contains "$output" "the trail maker's graph was not built" "the error"; then
+    if ! cmp -s "$routing_earlier/routing-20261115-00.pmtiles" "$routing_out/routing-20261122-00.pmtiles" \
+        || ! cmp -s "$routing_earlier/routing-build.json" "$routing_out/routing-build.json"; then
+        fail "the earlier build was not kept as it was" "$(ls "$routing_earlier")"
+    elif [[ -e "$routing_earlier/routing-20261122-00.pmtiles" ]]; then
+        fail "the build missing a band was left beside it" "$(ls "$routing_earlier")"
+    else
+        pass
+    fi
+fi
+
+STUB_OSMIUM_WAYS="$cells_work/routing-ways.opl" \
+    STUB_OSMIUM_RELATIONS="$cells_work/graph-relations.opl" \
+    STUB_OSMIUM_TIMESTAMP="2026-11-22T00:00:00Z" \
+    run_script "trail-cells build-routing replaces an earlier build once the new one is whole" \
+    "$trail_cells" build-routing "$cells_work/extract.osm.pbf" --out "$routing_earlier" --world
+if expect_status 0; then
+    if [[ -e "$routing_earlier/routing-20261115-00.pmtiles" ]]; then
+        fail "the earlier archive was left beside the new one" "$(ls "$routing_earlier")"
+    elif ! cmp -s "$routing_earlier/routing-20261122-00.pmtiles" "$routing_out/routing-20261122-00.pmtiles"; then
+        fail "the new archive is not the build's" "$(ls "$routing_earlier")"
+    elif [[ "$(cat "$routing_earlier/routing-build.json")" != *'"name" : "routing-20261122-00"'* ]]; then
+        fail "the record is not the new build's" "$(cat "$routing_earlier/routing-build.json")"
+    else
+        pass
+    fi
+fi
+
+# A directory that holds files and no record is not a build to replace, and
+# is refused before osmium is asked anything, with its files as they were.
+routing_foreign="$cells_work/routing-foreign"
+mkdir -p "$routing_foreign"
+printf 'not ours' > "$routing_foreign/routing-20261122-00.pmtiles"
+STUB_OSMIUM_WAYS="$cells_work/routing-ways.opl" \
+    STUB_OSMIUM_RELATIONS="$cells_work/graph-relations.opl" \
+    STUB_OSMIUM_TIMESTAMP="2026-11-22T00:00:00Z" \
+    run_script "trail-cells build-routing refuses a directory that is not an earlier build, and leaves it as it was" \
+    "$trail_cells" build-routing "$cells_work/extract.osm.pbf" --out "$routing_foreign" --world
+if expect_status 1 \
+    && expect_contains "$output" "is not an earlier routing build to replace" "the error" \
+    && expect_absent "$calls" "osmium" "the recorded calls"; then
+    if [[ "$(cat "$routing_foreign/routing-20261122-00.pmtiles" 2>/dev/null)" == "not ours" ]]; then
+        pass
+    else
+        fail "the file in the directory was changed" "$(ls "$routing_foreign")"
     fi
 fi
 
