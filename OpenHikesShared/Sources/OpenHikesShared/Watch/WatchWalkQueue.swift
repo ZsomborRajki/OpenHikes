@@ -113,10 +113,11 @@ public actor WatchWalkQueue {
         return walk
     }
 
-    /// Whether the walk recorded under `sessionID` needs nothing more from
-    /// the journal it was recorded into: it is on the queue and reads back
-    /// — see ``walk(_:)`` — or the phone has confirmed it since this
-    /// process began.
+    /// Whether the walk `recording` was recorded into needs nothing more from
+    /// its journal: it is on the queue, reads back — see ``walk(_:)`` — and
+    /// holds every fix the journal does — see
+    /// ``WatchRecoveredRecording/tail(in:)`` — or the phone has confirmed it
+    /// since this process began.
     ///
     /// The second half is for a launch that finds a journal beside its
     /// queued walk. The drain holds every walk back until the journal has
@@ -125,8 +126,10 @@ public actor WatchWalkQueue {
     /// take the walk off the queue before anything asks about it. Asked as
     /// one question on the actor, so a receipt cannot land between the two
     /// halves of the answer.
-    public func hasTaken(_ sessionID: UUID) -> Bool {
-        confirmed.contains(sessionID) || walk(sessionID) != nil
+    public func hasTaken(_ recording: WatchRecoveredRecording) -> Bool {
+        if confirmed.contains(recording.sessionID) { return true }
+        guard let queued = walk(recording.sessionID) else { return false }
+        return recording.tail(in: queued) != nil
     }
 
     // MARK: Changing
@@ -138,7 +141,14 @@ public actor WatchWalkQueue {
     /// said out loud rather than sent hopefully and forgotten.
     public func enqueue(_ walk: WatchRecordedWalk) -> WatchQueuedWalks? {
         var updated = index()
-        let entry = Entry(sessionID: walk.sessionID, endedAt: walk.endedAt)
+        // A session written again — a walk carried on, or saved with another
+        // end — goes over the file it already has, in the one atomic write,
+        // and keeps its place in the queue. Written beside it and the old one
+        // removed after, a process killed between the two left both, and the
+        // next launch's index, which reads names alone, kept whichever it
+        // listed first (#1572).
+        var entry = updated[walk.sessionID] ?? Entry(sessionID: walk.sessionID, endedAt: walk.endedAt)
+        entry.isUndecodable = false
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             try JSONEncoder().encode(walk).write(to: url(of: entry.fileName), options: .atomic)
@@ -150,11 +160,6 @@ public actor WatchWalkQueue {
                 """
             )
             return nil
-        }
-        // The same session written again under another name — a walk saved
-        // with a different end — leaves one file, not two.
-        if let previous = updated[walk.sessionID], previous.fileName != entry.fileName {
-            try? FileManager.default.removeItem(at: url(of: previous.fileName))
         }
         updated[walk.sessionID] = entry
         entries = updated
@@ -211,13 +216,15 @@ public actor WatchWalkQueue {
 
         let sessionID: UUID
         /// To the millisecond the name carries, so a walk sorts the same
-        /// whether it was enqueued in this process or listed from disk.
+        /// whether it was enqueued in this process or listed from disk. The
+        /// first write's, for a session written again — see ``enqueue(_:)``.
         let endedAt: Date
-        /// Its own name, except for an older file whose rename failed or
-        /// that would not decode.
+        /// The name its session was first written under, which every later
+        /// write goes over, or an older file's whose rename failed or that
+        /// would not decode.
         var fileName: String
         /// Read, and found not to be a walk. Never counted or read again, but
-        /// kept so the next write of its session removes the file.
+        /// kept so the next write of its session goes over the file.
         var isUndecodable = false
 
         init(sessionID: UUID, endedAt: Date) {
