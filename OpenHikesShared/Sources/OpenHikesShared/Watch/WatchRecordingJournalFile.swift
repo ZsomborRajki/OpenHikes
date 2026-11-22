@@ -48,11 +48,10 @@ public struct WatchRecordingJournalFile: Sendable {
     /// lose the retry and everything written after it.
     public func append(_ entries: [WatchRecordingJournalEntry]) throws {
         guard !entries.isEmpty else { return }
-        // Opened before anything is encoded. A journal whose header never
-        // landed refuses every write for the rest of the walk, and the
-        // writer retries with every line while what it has waiting grows, so
-        // encoding first would encode the whole backlog again per fix only to
-        // be refused.
+        // Opened before anything is encoded. A journal that is not there
+        // refuses every write, and the writer retries with every line while
+        // what it has waiting grows, so encoding first would encode the whole
+        // backlog again per fix only to be refused.
         let handle = try FileHandle(forWritingTo: url)
         defer { try? handle.close() }
         var data = Data()
@@ -96,36 +95,62 @@ public struct WatchRecordingJournalFile: Sendable {
 /// write loses nothing either: its lines stay waiting, in order, and go to
 /// disk with the next write that succeeds. Until then they are missing only
 /// from a recovery — the accumulator still has them, and a Stop keeps them.
+///
+/// The header too (#1542). A header the disk refused at Start waits like any
+/// line, and the next write starts the journal with it before anything is
+/// appended; without that, every append after it would be refused for want
+/// of a file, and the whole walk would have no journal however soon the disk
+/// recovered. Until it lands nothing is appended at all, because whatever
+/// file is there is not this recording's: a ``begin(_:)`` that failed left
+/// the last journal in place, and its lines would replay under its header.
+/// A writer that never began — a relaunch taking up the journal it found —
+/// has no header waiting, and appends to that journal.
 public struct WatchRecordingJournalWriter: Sendable {
     public let file: WatchRecordingJournalFile
     private var buffer = WatchRecordingJournalBuffer()
+    /// The header of a recording whose journal is not on disk yet.
+    private var waitingHeader: WatchRecordingJournalHeader?
 
     public init(file: WatchRecordingJournalFile) {
         self.file = file
     }
 
     /// Starts a fresh journal, and forgets anything the last one had waiting.
+    ///
+    /// The header is kept if this throws, and written with the next line.
     public mutating func begin(_ header: WatchRecordingJournalHeader) throws {
         buffer = WatchRecordingJournalBuffer()
-        try file.begin(header)
+        waitingHeader = header
+        try flush()
     }
 
     /// Writes lines down, now or with the next batch — see
-    /// ``WatchRecordingJournalBuffer``.
+    /// ``WatchRecordingJournalBuffer``. Now, while the header is still
+    /// waiting: a recording with no journal at all has more to lose than a
+    /// batch's worth of line.
     ///
     /// Every line is waiting before anything is written, so lines that belong
     /// together — a recovery's pause and resume — are kept together by a
     /// write that throws, rather than the first kept and the rest never added.
     public mutating func record(_ entries: WatchRecordingJournalEntry..., at date: Date) throws {
-        var isDue = false
+        var isDue = waitingHeader != nil
         for entry in entries {
             isDue = buffer.add(entry, at: date) || isDue
         }
         if isDue { try flush() }
     }
 
-    /// Writes everything still waiting, and keeps it waiting if that throws.
+    /// Writes everything still waiting, header first, and keeps it waiting
+    /// if that throws.
+    ///
+    /// The header goes in a write of its own, ahead of the lines. Retried
+    /// with every line for as long as the disk refuses it, it is one short
+    /// line each time rather than the whole backlog encoded again.
     public mutating func flush() throws {
+        if let header = waitingHeader {
+            try file.begin(header)
+            waitingHeader = nil
+        }
         try file.append(buffer.pending)
         buffer.written()
     }
@@ -134,6 +159,7 @@ public struct WatchRecordingJournalWriter: Sendable {
     /// hiker has thrown it away.
     public mutating func close() {
         buffer = WatchRecordingJournalBuffer()
+        waitingHeader = nil
         file.remove()
     }
 }
