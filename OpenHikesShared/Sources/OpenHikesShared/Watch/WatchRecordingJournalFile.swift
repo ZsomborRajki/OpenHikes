@@ -91,8 +91,17 @@ public struct WatchRecordingJournalFile: Sendable {
 
     /// Removes the journal, once its walk is on the outbound queue or the
     /// hiker has thrown it away.
-    public func remove() {
-        try? FileManager.default.removeItem(at: url)
+    ///
+    /// Throws when the journal is still there. One the disk refused to remove
+    /// is still the walk, and the next launch would offer it again, so a
+    /// hiker's Discard has to hear that it did not take (#1573). A journal
+    /// that was not there to remove is gone, which is all that was asked.
+    public func remove() throws {
+        do {
+            try FileManager.default.removeItem(at: url)
+        } catch CocoaError.fileNoSuchFile {
+            return
+        }
     }
 }
 
@@ -176,10 +185,11 @@ public struct WatchRecordingJournalWriter: Sendable {
     }
 
     /// Lets the journal go, once its walk is on the outbound queue or the
-    /// hiker has thrown it away.
-    public mutating func close() {
+    /// hiker has thrown it away. Throws when it is still on disk — see
+    /// ``WatchRecordingJournalFile/remove()``.
+    public mutating func close() throws {
         buffer = WatchRecordingJournalBuffer()
         waitingHeader = nil
-        file.remove()
+        try file.remove()
     }
 }

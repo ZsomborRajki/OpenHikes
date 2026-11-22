@@ -690,11 +690,12 @@ extension WatchRecorder {
 
     /// Throws away a walk that could not be written, which only the hiker
     /// decides. Its journal goes with it, or the next launch would offer the
-    /// discarded walk back as an interrupted one.
-    func discardUnsaved() {
-        guard case .unsaved = phase else { return }
-        journal.close()
+    /// discarded walk back as an interrupted one — so the walk stays until
+    /// the journal is gone. Answers whether it went.
+    @discardableResult func discardUnsaved() -> Bool {
+        guard case .unsaved = phase, closeJournal() else { return false }
         phase = .idle
+        return true
     }
 
     /// The phase a stopped walk leaves behind, and what becomes of its journal.
@@ -718,7 +719,7 @@ extension WatchRecorder {
         }
         switch stopped {
         case .tooShort:
-            journal.close()
+            closeJournal()
             phase = .failed(String(localized: "That hike was too short to keep."))
             return nil
         case .unsaved(let walk):
@@ -732,7 +733,7 @@ extension WatchRecorder {
             // After the enqueue, never before. A process killed between the
             // two leaves both, which ``WatchRecordingRecovery`` recognises;
             // the other order would leave neither.
-            journal.close()
+            closeJournal()
             phase = .saved(walk)
             if let queued { onWalkQueued?(walk, queued) }
             return walk
@@ -754,7 +755,7 @@ extension WatchRecorder {
         case .nothing:
             phase = .idle
         case .alreadyQueued:
-            journal.close()
+            closeJournal()
             phase = .idle
         case .offer(let recovered):
             phase = .interrupted(recovered)
@@ -826,14 +827,21 @@ extension WatchRecorder {
 
     /// Throws an interrupted walk away, which only the hiker decides — one
     /// whose journal could not be read too, or a journal that never reads
-    /// would keep this watch from recording again.
-    func discardInterrupted() {
+    /// would keep this watch from recording again. Answers whether it went.
+    ///
+    /// Only once the journal is gone. The disk can refuse the removal for
+    /// the reason it refused the read, and a journal left behind is still
+    /// the walk: back at Start, the next launch that could read it would
+    /// offer the discarded walk again (#1573). So the choice stays on
+    /// screen, and Start stays held, until a Discard takes.
+    @discardableResult func discardInterrupted() -> Bool {
         switch phase {
         case .interrupted, .unreadableJournal:
-            journal.close()
+            guard closeJournal() else { return false }
             phase = .idle
+            return true
         case .idle, .preparing, .recording, .paused, .saving, .checkingJournal, .saved, .unsaved, .failed:
-            return
+            return false
         }
     }
 
@@ -922,6 +930,21 @@ extension WatchRecorder {
     }
 
     // MARK: The journal
+
+    /// Lets the journal go, and answers whether it is gone — see
+    /// ``WatchRecordingJournalFile/remove()``. A walk already on the queue,
+    /// or too short to keep, carries on either way: a journal left beside
+    /// a queued walk is recognised at the next launch, and one too short to
+    /// keep is let go there again. A Discard waits on the answer.
+    @discardableResult private func closeJournal() -> Bool {
+        do {
+            try journal.close()
+            return true
+        } catch {
+            Self.logger.error("Recording journal not removed: \(error.localizedDescription, privacy: .public)")
+            return false
+        }
+    }
 
     private func beginJournal() {
         let header = WatchRecordingJournalHeader(

@@ -56,7 +56,7 @@ struct WatchRecordingJournalWriterTests {
         try withWriter { writer in
             try writer.begin(Fixture.header)
             try writer.record(.fix(Fixture.fix(step: 0)), at: Fixture.time(step: 0))
-            writer.close()
+            try writer.close()
             #expect(try writer.file.recover() == nil)
             // Nothing was left waiting to be flushed into a journal that no
             // longer has a header.

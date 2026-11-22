@@ -47,6 +47,32 @@ struct WatchRecordingRecoveryTests {
         }
     }
 
+    /// What a Discard met when the journal's directory would not open: the
+    /// read and the removal both refused. Had the refused removal read as
+    /// done, Start would have come back with the walk still on disk, and the
+    /// next launch that could read it would offer the discarded walk again.
+    @Test("A journal that can be neither read nor removed is still there, and offered once it reads")
+    func journalNeitherReadNorRemovedIsOfferedLater() async throws {
+        try await withStore { journal, queue in
+            try Fixture.write(steps: 3, to: journal)
+            let manager = FileManager.default
+            let directory = journal.url.deletingLastPathComponent().path
+            try manager.setAttributes([.posixPermissions: 0o000], ofItemAtPath: directory)
+            defer { try? manager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: directory) }
+
+            #expect(await WatchRecordingRecovery.checking(journal, against: queue) == .unreadable)
+            #expect(throws: CocoaError.self) { try journal.remove() }
+
+            try manager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: directory)
+            let recovery = await WatchRecordingRecovery.checking(journal, against: queue)
+            guard case .offer(let recovered) = recovery else {
+                Issue.record("Expected an offer, got \(recovery)")
+                return
+            }
+            #expect(recovered.header == Fixture.header)
+        }
+    }
+
     @Test("A journal whose walk is not on the queue is offered")
     func unqueuedJournalIsOffered() async throws {
         try await withStore { journal, queue in

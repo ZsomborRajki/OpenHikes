@@ -4596,6 +4596,58 @@
         }
       }
     },
+    "This watch couldn’t discard the hike. Try again later." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Watch konnte die Wanderung nicht verwerfen. Versuche es später erneut."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este reloj no ha podido descartar la excursión. Inténtalo de nuevo más tarde."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette montre n’a pas pu supprimer la randonnée. Réessayez plus tard."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo orologio non è riuscito a scartare l’escursione. Riprova più tardi."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ten zegarek nie mógł odrzucić wędrówki. Spróbuj ponownie później."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acest ceas nu a putut abandona drumeția. Reîncercați mai târziu."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Часам не удалось удалить поход. Повторите попытку позже."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Годиннику не вдалося видалити похід. Спробуйте ще раз пізніше."
+          }
+        }
+      }
+    },
     "This watch is out of storage. Free up some space, then try again." : {
       "localizations" : {
         "de" : {

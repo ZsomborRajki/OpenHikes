@@ -111,9 +111,9 @@ struct WatchRecordingView: View {
             case .unsaved(let walk):
                 UnsavedWalkPanel(walk: walk)
             case .interrupted(let recovered):
-                interrupted(recovered)
+                InterruptedWalkPanel(recovered: recovered)
             case .unreadableJournal:
-                unreadableJournal
+                UnreadableJournalPanel()
             case .failed(let message):
                 failed(message)
             }
@@ -208,54 +208,6 @@ struct WatchRecordingView: View {
         }
     }
 
-    /// A walk the last process never finished, and the three things that
-    /// can become of it.
-    ///
-    /// The time it stopped is said, because what is kept ends there: nothing
-    /// was recorded while the watch was not running, and a Continue picks up
-    /// from where the hiker is now rather than drawing a line across the gap.
-    private func interrupted(_ recovered: WatchRecoveredRecording) -> some View {
-        VStack(spacing: 6) {
-            Label("Hike Interrupted", systemImage: "exclamationmark.arrow.circlepath")
-                .foregroundStyle(.orange)
-            Text(WidgetFormat.length(meters: recovered.accumulator.distanceMeters))
-                .font(.title3.monospacedDigit())
-            Text("Recording stopped at \(recovered.lastRecordedAt, style: .time). Everything before then is kept.")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            Button {
-                Task { await model.continueInterruptedRecording() }
-            } label: {
-                Label("Continue", systemImage: "play.fill")
-                    .frame(maxWidth: .infinity)
-            }
-            .tint(.green)
-            .disabled(model.isPhoneRecording)
-            Button("Save Hike") { Task { await model.saveInterruptedRecording() } }
-            Button("Discard", role: .destructive) { model.discardInterruptedRecording() }
-        }
-    }
-
-    /// A walk the last process never finished whose journal could not be
-    /// read, so all there is to say is that it is there (#1573).
-    ///
-    /// Read again whenever the app comes to the front, and on Try Again.
-    /// Discard is the way out for a journal that never reads, as it is for
-    /// one that does.
-    private var unreadableJournal: some View {
-        VStack(spacing: 6) {
-            Label("Hike Interrupted", systemImage: "exclamationmark.arrow.circlepath")
-                .foregroundStyle(.orange)
-            Text("This watch can’t read the interrupted hike right now. Try again, or discard it to record a new one.")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            Button("Try Again") { model.checkInterruptedRecordingAgain() }
-            Button("Discard", role: .destructive) { model.discardInterruptedRecording() }
-        }
-    }
-
     private func failed(_ message: String) -> some View {
         VStack(spacing: 6) {
             Label("Not Recording", systemImage: "exclamationmark.triangle.fill")
@@ -280,6 +232,9 @@ private struct UnsavedWalkPanel: View {
 
     @Environment(WatchModel.self) private var model
     @State private var isConfirmingDiscard = false
+    /// Whether the last Discard left the walk, because its journal would not
+    /// go — see ``InterruptedWalkPanel``'s header.
+    @State private var isDiscardRefused = false
 
     var body: some View {
         VStack(spacing: 6) {
@@ -293,13 +248,14 @@ private struct UnsavedWalkPanel: View {
                 .multilineTextAlignment(.center)
             Button("Try Again") { Task { await model.retrySavingWalk() } }
             Button("Discard Hike", role: .destructive) { isConfirmingDiscard = true }
+            if isDiscardRefused { DiscardRefusedNote() }
         }
         .confirmationDialog(
             "Discard this hike?",
             isPresented: $isConfirmingDiscard,
             titleVisibility: .visible
         ) {
-            Button("Discard Hike", role: .destructive) { model.discardUnsavedWalk() }
+            Button("Discard Hike", role: .destructive) { isDiscardRefused = !model.discardUnsavedWalk() }
         } message: {
             Text("It hasn’t been saved anywhere, so it can’t be recovered.")
         }
