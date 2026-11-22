@@ -110,6 +110,46 @@ struct CloudSyncOutcomeTests {
         #expect(!CloudSyncOutcome.isTransient(CKError(.partialFailure, partial: [])))
     }
 
+    /// A full account is said in the hiker's words, with the way out, rather
+    /// than in CloudKit's.
+    @Test("a full iCloud account is named as one")
+    func fullAccountIsNamed() {
+        #expect(
+            CloudSyncOutcome.reason(for: CKError(.quotaExceeded))
+                == "Your iCloud storage is full. Free up space to keep syncing your hikes."
+        )
+    }
+
+    /// The shape a refused save takes: the records that did not fit, and the
+    /// rest of the batch failing with them. The wrapper's own description is
+    /// only `Partial Failure`, which is what the row used to show.
+    @Test("a full account inside a partial failure is still named as one")
+    func fullAccountInsidePartialFailureIsNamed() {
+        let errors: [any Error] = [CKError(.batchRequestFailed), CKError(.quotaExceeded)]
+        let error = CKError(.partialFailure, partial: errors)
+        #expect(CloudSyncOutcome.isStorageFull(error))
+        #expect(CloudSyncOutcome.reason(for: error) != error.localizedDescription)
+    }
+
+    /// Every other failure keeps CloudKit's description, so the storage
+    /// sentence cannot become a catch-all.
+    @Test(
+        "any other failure keeps CloudKit's own description",
+        arguments: [
+            CKError.Code.notAuthenticated,
+            .permissionFailure,
+            .batchRequestFailed,
+            .partialFailure,
+        ]
+    )
+    func otherFailuresKeepTheirDescription(code: CKError.Code) {
+        let error = code == .partialFailure
+            ? CKError(code, partial: [CKError(.notAuthenticated)])
+            : CKError(code)
+        #expect(!CloudSyncOutcome.isStorageFull(error))
+        #expect(CloudSyncOutcome.reason(for: error) == error.localizedDescription)
+    }
+
     /// A notification carrying no event is the shape `NotificationCenter`
     /// hands over when something else posts on the same name. It must not be
     /// read as a pass.

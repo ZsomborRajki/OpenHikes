@@ -74868,6 +74868,58 @@
         }
       }
     },
+    "Your iCloud storage is full. Free up space to keep syncing your hikes." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dein iCloud-Speicher ist voll. Gib Speicherplatz frei, damit deine Wanderungen weiter synchronisiert werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu almacenamiento de iCloud está lleno. Libera espacio para seguir sincronizando tus excursiones."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre espace de stockage iCloud est saturé. Libérez de l’espace pour continuer à synchroniser vos randonnées."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hai esaurito lo spazio libero su iCloud. Liberane un po’ per continuare a sincronizzare le tue escursioni."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Brak miejsca w iCloud. Zwolnij miejsce, aby dalej synchronizować swoje wędrówki."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spațiul dvs. de stocare iCloud este plin. Eliberați spațiu pentru a continua sincronizarea drumețiilor."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Хранилище iCloud заполнено. Освободите место, чтобы продолжить синхронизацию походов."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сховище iCloud заповнено. Звільніть місце, щоб продовжити синхронізацію походів."
+          }
+        }
+      }
+    },
     "Your library couldn’t be read just now." : {
       "localizations" : {
         "de" : {
