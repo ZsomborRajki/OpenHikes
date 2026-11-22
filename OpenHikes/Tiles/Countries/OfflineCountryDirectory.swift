@@ -103,15 +103,12 @@ nonisolated struct OfflineCountryDirectory: Sendable {
         entries = measured.entries
         hasPosition = measured.hasPosition
         nearestFirst = measured.nearestFirst
-        // In their names' order already, so a letter's lines keep it: ordered
-        // by the letter alone, and among equals by where they stood.
-        let filed = measured.named.map { Line(letter: letter($0.name), listing: $0.listing) }
-        lines = filed.indices
-            .sorted { first, second in
-                let (one, other) = (filed[first].letter.order, filed[second].letter.order)
-                return one == other ? first < second : one < other
-            }
-            .map { filed[$0] }
+        // In their names' order already, and each letter's group keeps it, so
+        // filing is grouping by letter and putting the letters in order.
+        let byLetter = measured.named
+            .map { Line(letter: letter($0.name), listing: $0.listing) }
+            .grouped(by: \.letter.order)
+        lines = byLetter.keys.sorted().flatMap { byLetter[$0] ?? [] }
     }
 }
 
