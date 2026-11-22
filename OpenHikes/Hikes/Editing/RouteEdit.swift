@@ -137,6 +137,34 @@ nonisolated struct RouteEdit: Codable, Equatable, Sendable {
     }
 }
 
+nonisolated extension RouteEdit {
+    /// Spelled out rather than refused: a height a receiver reported as not
+    /// a number, on a point a stretch's answer keeps, would otherwise make
+    /// the whole record unwritable, and a hike edited with no record has its
+    /// original written over by the next edit.
+    private static let nonFinite = (positiveInfinity: "inf", negativeInfinity: "-inf", nan: "nan")
+
+    static func encoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.nonConformingFloatEncodingStrategy = .convertToString(
+            positiveInfinity: nonFinite.positiveInfinity,
+            negativeInfinity: nonFinite.negativeInfinity,
+            nan: nonFinite.nan
+        )
+        return encoder
+    }
+
+    static func decoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.nonConformingFloatDecodingStrategy = .convertFromString(
+            positiveInfinity: nonFinite.positiveInfinity,
+            negativeInfinity: nonFinite.negativeInfinity,
+            nan: nonFinite.nan
+        )
+        return decoder
+    }
+}
+
 extension RouteEdit.RecordedWalk {
     @MainActor
     init(_ walk: HikeWalk) {
@@ -164,15 +192,23 @@ extension RouteEdit.RecordedWalk {
 extension Hike {
     /// What this hike was before its line was edited, or `nil` for a line
     /// never edited — see ``RouteEdit``. A value that fails to decode reads
-    /// as `nil`, as ``drawnRoute`` does.
+    /// as `nil`, as ``drawnRoute`` does, and is never taken for a hike with
+    /// no record: ``hasUnreadableRouteEdit``.
     var routeEdit: RouteEdit? {
         get {
             guard let routeEditData else { return nil }
-            return try? JSONDecoder().decode(RouteEdit.self, from: routeEditData)
+            return try? RouteEdit.decoder().decode(RouteEdit.self, from: routeEditData)
         }
         set {
-            routeEditData = newValue.flatMap { $0.isEmpty ? nil : try? JSONEncoder().encode($0) }
+            routeEditData = newValue.flatMap { $0.isEmpty ? nil : try? RouteEdit.encoder().encode($0) }
         }
+    }
+
+    /// Whether the hike has an edit record that does not read: one a later
+    /// build wrote on the hiker's other device. Taken for a hike never
+    /// edited, the next save would write its own line over the original.
+    var hasUnreadableRouteEdit: Bool {
+        routeEditData != nil && routeEdit == nil
     }
 
     /// Whether *Edit Route* has changed this hike's line and kept the one it

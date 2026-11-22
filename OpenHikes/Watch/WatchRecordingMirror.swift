@@ -166,10 +166,9 @@ final class WatchRecordingMirror {
     /// `noActiveRecording` is not a failure here: it is the ordinary answer
     /// for a hiker who is not recording, and it is exactly what the watch's
     /// idle screen draws. Every *other* refusal is also reported as idle,
-    /// because from the watch's side "busy finishing" and "waiting for a route
-    /// review" are both states in which there is no running hike to show — and
-    /// the one place those sentences matter is the reply to a button, which
-    /// carries them.
+    /// because from the watch's side "busy finishing" is a state in which
+    /// there is no running hike to show — and the one place that sentence
+    /// matters is the reply to a button, which carries it.
     private func currentState() async -> WatchPhoneRecording {
         guard let coordinator else { return .idle() }
         do {
