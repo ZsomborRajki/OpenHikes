@@ -15,10 +15,10 @@ struct WatchRecordingJournalWriterTests {
             try writer.begin(Fixture.header)
             try writer.record(.fix(Fixture.fix(step: 0)), at: Fixture.time(step: 0))
             try writer.record(.fix(Fixture.fix(step: 1)), at: Fixture.time(step: 1))
-            #expect(try #require(writer.file.recover()).accumulator.fixes.isEmpty)
+            #expect(try #require(try writer.file.recover()).accumulator.fixes.isEmpty)
 
             try writer.flush()
-            #expect(try #require(writer.file.recover()).accumulator.fixes.count == 2)
+            #expect(try #require(try writer.file.recover()).accumulator.fixes.count == 2)
         }
     }
 
@@ -30,7 +30,7 @@ struct WatchRecordingJournalWriterTests {
             try writer.record(.fix(Fixture.fix(step: 1)), at: Fixture.time(step: 1))
             try writer.record(.paused(Fixture.time(step: 2)), at: Fixture.time(step: 2))
 
-            let recovered = try #require(writer.file.recover())
+            let recovered = try #require(try writer.file.recover())
             #expect(recovered.accumulator.fixes.count == 2)
             #expect(recovered.wasPaused)
         }
@@ -45,7 +45,7 @@ struct WatchRecordingJournalWriterTests {
             let next = WatchRecordingJournalHeader(sessionID: UUID(), startedAt: Fixture.time(step: 5))
             try writer.begin(next)
             try writer.flush()
-            let recovered = try #require(writer.file.recover())
+            let recovered = try #require(try writer.file.recover())
             #expect(recovered.header == next)
             #expect(recovered.accumulator.fixes.isEmpty)
         }
@@ -57,7 +57,7 @@ struct WatchRecordingJournalWriterTests {
             try writer.begin(Fixture.header)
             try writer.record(.fix(Fixture.fix(step: 0)), at: Fixture.time(step: 0))
             writer.close()
-            #expect(writer.file.recover() == nil)
+            #expect(try writer.file.recover() == nil)
             // Nothing was left waiting to be flushed into a journal that no
             // longer has a header.
             try writer.flush()
@@ -83,7 +83,7 @@ struct WatchRecordingJournalWriterTests {
             #expect(failedWrites > 0)
             try writer.record(.paused(Fixture.time(step: count)), at: Fixture.time(step: count))
 
-            let recovered = try #require(writer.file.recover())
+            let recovered = try #require(try writer.file.recover())
             #expect(recovered.accumulator.fixes.count == count)
             #expect(recovered.wasPaused)
         }
@@ -105,7 +105,7 @@ struct WatchRecordingJournalWriterTests {
             }
             try writer.record(.fix(Fixture.fix(step: 4)), at: Fixture.time(step: 4))
 
-            let recovered = try #require(writer.file.recover())
+            let recovered = try #require(try writer.file.recover())
             #expect(!recovered.wasPaused)
             #expect(recovered.accumulator.fixes.count == 3)
             #expect(recovered.accumulator.fixes.dropFirst().first?.resumesAfterPause == true)
@@ -126,7 +126,7 @@ struct WatchRecordingJournalWriterTests {
             }
             try writer.record(.fix(Fixture.fix(step: 2)), at: Fixture.time(step: 2))
 
-            let recovered = try #require(writer.file.recover())
+            let recovered = try #require(try writer.file.recover())
             #expect(recovered.accumulator.fixes.count == 2)
             #expect(recovered.accumulator.fixes.last?.resumesAfterPause == true)
             #expect(!recovered.wasPaused)
@@ -151,7 +151,7 @@ struct WatchRecordingJournalWriterTests {
             // all is not one to keep waiting.
             try writer.record(.fix(Fixture.fix(step: 1)), at: Fixture.time(step: 1))
 
-            let recovered = try #require(writer.file.recover())
+            let recovered = try #require(try writer.file.recover())
             #expect(recovered.header == Fixture.header)
             #expect(recovered.accumulator.fixes.count == 2)
         }
@@ -172,7 +172,7 @@ struct WatchRecordingJournalWriterTests {
                 #expect(throws: (any Error).self) {
                     try writer.record(.fix(Fixture.fix(step: 0)), at: Fixture.time(step: 0))
                 }
-                let headerOnly = try #require(writer.file.recover())
+                let headerOnly = try #require(try writer.file.recover())
                 #expect(headerOnly.header == Fixture.header)
                 #expect(headerOnly.accumulator.fixes.isEmpty)
             }
@@ -180,7 +180,7 @@ struct WatchRecordingJournalWriterTests {
             // One more fix, well short of a batch.
             try writer.record(.fix(Fixture.fix(step: 1)), at: Fixture.time(step: 1))
 
-            let recovered = try #require(writer.file.recover())
+            let recovered = try #require(try writer.file.recover())
             #expect(recovered.header == Fixture.header)
             #expect(recovered.accumulator.fixes.count == 2)
         }
@@ -201,12 +201,12 @@ struct WatchRecordingJournalWriterTests {
                 }
             }
             // The last journal could still be appended to, and was left alone.
-            let earlier = try #require(writer.file.recover())
+            let earlier = try #require(try writer.file.recover())
             #expect(earlier.header == Fixture.header)
             #expect(earlier.accumulator.fixes.count == 1)
 
             try writer.record(.fix(Fixture.fix(step: 7)), at: Fixture.time(step: 7))
-            let recovered = try #require(writer.file.recover())
+            let recovered = try #require(try writer.file.recover())
             #expect(recovered.header == next)
             #expect(recovered.accumulator.fixes.map(\.timestamp) == [Fixture.time(step: 6), Fixture.time(step: 7)])
         }
@@ -221,13 +221,13 @@ struct WatchRecordingJournalWriterTests {
 
             // What a relaunch holds: the same file, and a writer that never began.
             var relaunched = WatchRecordingJournalWriter(file: writer.file)
-            #expect(relaunched.file.recover() != nil)
+            #expect(try relaunched.file.recover() != nil)
             let breakAt = Fixture.time(step: 1)
             try relaunched.record(.paused(breakAt), .resumed(breakAt), at: breakAt)
             try relaunched.record(.fix(Fixture.fix(step: 2)), at: Fixture.time(step: 2))
             try relaunched.flush()
 
-            let recovered = try #require(relaunched.file.recover())
+            let recovered = try #require(try relaunched.file.recover())
             #expect(recovered.header == Fixture.header)
             #expect(recovered.accumulator.fixes.count == 2)
             #expect(recovered.accumulator.fixes.last?.resumesAfterPause == true)

@@ -11,7 +11,8 @@
 //
 //  One recording at a time, which is all a watch has: a new header replaces
 //  whatever was here, so a recording is never started over a journal the
-//  hiker has not answered for — ``WatchRecordingRecovery`` is asked first.
+//  hiker has not answered for — ``WatchRecordingRecovery`` is asked first,
+//  and a journal it could not read is one the hiker has not answered for.
 //
 
 import Foundation
@@ -66,11 +67,20 @@ public struct WatchRecordingJournalFile: Sendable {
     }
 
     /// The recording this journal holds, with a torn tail cut off so the next
-    /// ``append(_:)`` lands after a whole line.
-    public func recover() -> WatchRecoveredRecording? {
-        guard let data = try? Data(contentsOf: url),
-              let (recording, validByteCount) = WatchRecoveredRecording.replaying(data)
-        else { return nil }
+    /// ``append(_:)`` lands after a whole line, or `nil` when there is no
+    /// journal or no recording in it.
+    ///
+    /// Throws when the journal is there and could not be read, which is not
+    /// the same answer as none (#1573). Taken for none, it let Start write a
+    /// fresh journal over what may be the only copy of a walk.
+    public func recover() throws -> WatchRecoveredRecording? {
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch CocoaError.fileReadNoSuchFile {
+            return nil
+        }
+        guard let (recording, validByteCount) = WatchRecoveredRecording.replaying(data) else { return nil }
         if validByteCount < data.count,
            let handle = try? FileHandle(forWritingTo: url) {
             try? handle.truncate(atOffset: UInt64(validByteCount))

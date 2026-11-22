@@ -112,6 +112,8 @@ struct WatchRecordingView: View {
                 UnsavedWalkPanel(walk: walk)
             case .interrupted(let recovered):
                 interrupted(recovered)
+            case .unreadableJournal:
+                unreadableJournal
             case .failed(let message):
                 failed(message)
             }
@@ -231,6 +233,25 @@ struct WatchRecordingView: View {
             .tint(.green)
             .disabled(model.isPhoneRecording)
             Button("Save Hike") { Task { await model.saveInterruptedRecording() } }
+            Button("Discard", role: .destructive) { model.discardInterruptedRecording() }
+        }
+    }
+
+    /// A walk the last process never finished whose journal could not be
+    /// read, so all there is to say is that it is there (#1573).
+    ///
+    /// Read again whenever the app comes to the front, and on Try Again.
+    /// Discard is the way out for a journal that never reads, as it is for
+    /// one that does.
+    private var unreadableJournal: some View {
+        VStack(spacing: 6) {
+            Label("Hike Interrupted", systemImage: "exclamationmark.arrow.circlepath")
+                .foregroundStyle(.orange)
+            Text("This watch can’t read the interrupted hike right now. Try again, or discard it to record a new one.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Button("Try Again") { model.checkInterruptedRecordingAgain() }
             Button("Discard", role: .destructive) { model.discardInterruptedRecording() }
         }
     }

@@ -158,7 +158,7 @@ private struct RecordAlongTrailButton: View {
                 .foregroundStyle(.orange)
         case .preparing, .saving, .checkingJournal:
             ProgressView()
-        case .interrupted:
+        case .interrupted, .unreadableJournal:
             // Not a second Start. The interrupted walk is on the Record
             // screen, and a recording begun here would be begun over it.
             Label("A hike was interrupted — see Record", systemImage: "exclamationmark.arrow.circlepath")

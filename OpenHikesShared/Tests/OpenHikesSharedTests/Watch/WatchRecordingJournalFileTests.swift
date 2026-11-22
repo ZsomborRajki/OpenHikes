@@ -16,7 +16,7 @@ struct WatchRecordingJournalFileTests {
             try journal.append([.fix(Fixture.fix(step: 0)), .fix(Fixture.fix(step: 1))])
             try journal.append([.paused(Fixture.time(step: 2))])
 
-            let recovered = try #require(journal.recover())
+            let recovered = try #require(try journal.recover())
             #expect(recovered.header == Fixture.header)
             #expect(recovered.accumulator.fixes.count == 2)
             #expect(recovered.wasPaused)
@@ -35,11 +35,11 @@ struct WatchRecordingJournalFileTests {
             try handle.write(contentsOf: torn.prefix(torn.count - 7))
             try handle.close()
 
-            #expect(try #require(journal.recover()).accumulator.fixes.count == 2)
+            #expect(try #require(try journal.recover()).accumulator.fixes.count == 2)
             // Without the cut this line would be glued onto the torn one, and
             // lost with it.
             try journal.append([.fix(Fixture.fix(step: 3))])
-            #expect(try #require(journal.recover()).accumulator.fixes.count == 3)
+            #expect(try #require(try journal.recover()).accumulator.fixes.count == 3)
         }
     }
 
@@ -51,7 +51,7 @@ struct WatchRecordingJournalFileTests {
 
             let next = WatchRecordingJournalHeader(sessionID: UUID(), startedAt: Fixture.time(step: 9))
             try journal.begin(next)
-            let recovered = try #require(journal.recover())
+            let recovered = try #require(try journal.recover())
             #expect(recovered.header == next)
             #expect(recovered.accumulator.fixes.isEmpty)
         }
@@ -63,7 +63,8 @@ struct WatchRecordingJournalFileTests {
             #expect(throws: (any Error).self) {
                 try journal.append([.fix(Fixture.fix(step: 0))])
             }
-            #expect(journal.recover() == nil)
+            let recovered = try journal.recover()
+            #expect(recovered == nil)
         }
     }
 
@@ -72,7 +73,28 @@ struct WatchRecordingJournalFileTests {
         try withJournal { journal in
             try journal.begin(Fixture.header)
             journal.remove()
-            #expect(journal.recover() == nil)
+            #expect(try journal.recover() == nil)
+        }
+    }
+
+    /// Answered `nil`, a journal that would not read was taken for none, and
+    /// the next Start wrote over what may have been the only copy of a walk
+    /// (#1573). A file with no permissions is one that is there and refuses
+    /// to be read.
+    @Test("A journal that is there and cannot be read throws, and reads whole once it can")
+    func unreadableJournalThrows() throws {
+        try withJournal { journal in
+            try journal.begin(Fixture.header)
+            try journal.append([.fix(Fixture.fix(step: 0)), .fix(Fixture.fix(step: 1))])
+            let manager = FileManager.default
+            try manager.setAttributes([.posixPermissions: 0o000], ofItemAtPath: journal.url.path)
+
+            #expect(throws: CocoaError.self) { try journal.recover() }
+
+            try manager.setAttributes([.posixPermissions: 0o644], ofItemAtPath: journal.url.path)
+            let recovered = try #require(try journal.recover())
+            #expect(recovered.header == Fixture.header)
+            #expect(recovered.accumulator.fixes.count == 2)
         }
     }
 

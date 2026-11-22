@@ -33,6 +33,7 @@
 //
 
 import Foundation
+import OSLog
 
 /// What a recording is, as its first journal line says.
 public struct WatchRecordingJournalHeader: Codable, Sendable, Equatable {
@@ -231,9 +232,18 @@ public enum WatchRecordingRecovery: Sendable, Equatable {
     /// removal was lost — whether it is still on the queue or the phone has
     /// confirmed it since. Offering it again would be offering it twice.
     case alreadyQueued
-    /// No journal, or none that could be read.
+    /// No journal, or one with no recording in it.
     case nothing
     case offer(WatchRecoveredRecording)
+    /// A journal that is there and could not be read just now (#1573).
+    ///
+    /// Not ``nothing``, because Start would write a fresh journal over it,
+    /// and it may be the only copy of a walk. Whatever kept it from reading
+    /// may have passed by the next time it is asked, and a hiker shown it
+    /// can throw it away, which is the way out for one that never reads.
+    case unreadable
+
+    private static let logger = Logger(subsystem: "OpenHikesWatch", category: "Recorder")
 
     /// Reads and replays `journal`, cutting a torn tail off, and asks `queue`
     /// whether its walk already went — all of it off the main actor.
@@ -268,7 +278,14 @@ public enum WatchRecordingRecovery: Sendable, Equatable {
     /// arrival — see ``WatchWalkQueue/hasTaken(_:)``.
     @concurrent
     public static func checking(_ journal: WatchRecordingJournalFile, against queue: WatchWalkQueue) async -> Self {
-        guard let recording = journal.recover() else { return .nothing }
+        let recording: WatchRecoveredRecording
+        do {
+            guard let recovered = try journal.recover() else { return .nothing }
+            recording = recovered
+        } catch {
+            logger.error("The recording journal could not be read: \(error.localizedDescription, privacy: .public)")
+            return .unreadable
+        }
         return await queue.hasTaken(recording) ? .alreadyQueued : .offer(recording)
     }
 }
