@@ -3,18 +3,18 @@
 //  OpenHikes
 //
 //  The graph the trail maker routes over, built ahead of time and kept on the
-//  OpenHikes tile server: what an archive of it is called there, which tile
-//  of it answers for a region, and what that tile is called on the way.
+//  OpenHikes tile server: what an archive of it is called there, where a
+//  tile of it is, and what that tile is called on the way.
 //
 //  The maker routes a leg over trails and the roads that join them (see
 //  ``TrailGraphHighway``), which the trail graph's squares in the public
-//  database leave out: the roads were most of the planet, and ten thousand
-//  times as many records as CloudKit is asked to hold. So that graph was a
-//  question for Overpass, one z12 region at a time, from every phone drawing
-//  a trail. It is built from the planet instead, by `Scripts/trail-cells.sh
-//  build-routing`, as one PMTiles archive in the tile server's bucket, and
-//  read a tile at a time through the server (`RoutingGraphServer`), with
-//  Overpass behind it only where the server cannot answer.
+//  database leave out, because the roads were most of the planet. So that
+//  graph was a question for Overpass, one z12 region at a time, from every
+//  phone drawing a trail. It is built from the planet instead, by
+//  `Scripts/trail-cells.sh build-routing`, as one PMTiles archive in the tile
+//  server's bucket, and read a tile at a time through the server
+//  (`RoutingGraphServer`), with Overpass behind it only where the server
+//  cannot answer.
 //
 //  ## A tile is a region
 //
@@ -24,10 +24,13 @@
 //  squares hold, read by the same library (``TrailGraphSquareLibrary``).
 //  The squares in the public database are four levels up, because a record
 //  there cost an upload and the roads were not in them. A tile here costs
-//  nothing to hold, and a square four levels up with the roads in it was
-//  the most a leg would ever download: measured on the planet of
-//  2026-11-22, see `Scripts/trail-cells.sh` for the figures, the median
-//  region is a few kilobytes and the one in a hundred over a few hundred.
+//  nothing to hold, and a square four levels up with the roads in it is what
+//  a leg would download. Measured on the planet of 2026-11-22: 1.78 million
+//  tiles and 18.7 GB, the median tile 3.4 KB, one in a hundred over 118 KB,
+//  and the largest, over Paris, 1.7 MB for 56,925 ways. Filed four levels up,
+//  the same ways were 141,281 squares and 14.5 GB, the median 15 KB, one in a
+//  hundred over 1.4 MB, and the largest 10.6 MB. The tiles hold 29% more in
+//  all, for a quarter of the median download and a sixth of the largest.
 //
 //  ## Compiled twice
 //

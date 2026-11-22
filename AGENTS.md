@@ -1026,12 +1026,13 @@ Maps*. `OfflineCountries` is the one owner, on the main actor.
   one way past the server is
   `--ui-test-offline-countries=<seeded|showcase|refused>`
   (`SeededOfflineCountryServer`), and still no session, so nothing downloads.
-- **Deployment state, checked 2026-11-21.** The bucket holds every area of
-  build `20261121`, cut from `planet-20261118` and `extras-20261121-00`: 381
+- **Deployment state, checked 2026-11-22.** The bucket holds every area of
+  build `20261122`, cut from `planet-20261118` and `extras-20261122-00`: 381
   of them (234 countries, and the 51 states, 13 provinces and 83 regions of
-  the three split ones), 1,524 files and 179.3 GB, and no other country
-  file. Beside them it holds those two archives and the map's manifest at
-  revision 8, which names them, and nothing else.
+  the three split ones), 1,524 files and 180.6 GB, and no other country
+  file. Beside them it holds those two archives, the trail maker's
+  `routing-20261122-00` (*The trail maker's graph*), and the manifest at
+  revision 10, which names all three, and nothing else.
 
 ### Accessibility
 
@@ -1624,7 +1625,8 @@ on the tile server, a z12 tile a region of the graph, each tile a
   generation.
 - **The build streams bands of longitude** (`build-routing`), because no
   index of the planet's 2.5 billion such nodes fits in memory. The bands'
-  edges are measured; a band past 2²⁹ nodes is split. ROUTING_AGENTS_FIGURES
+  edges are measured; a band past 2²⁹ nodes is split. A planet's build took
+  53 minutes and some 65 GB of disk at the most, for an archive of 18.7 GB.
 
 ## The watch app
 
