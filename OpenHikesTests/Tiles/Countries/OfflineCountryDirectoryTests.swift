@@ -246,6 +246,24 @@ struct OfflineCountryDirectoryTests {
         let nearest = sections(directory(everything, near: ljubljana), by: .nearest)
         #expect(nearest.reveal("US-CO", expanded: []) == .scroll(to: "US-CO"), "a region is a row of its own there")
     }
+
+    /// The map outlines the list off the server as it is now, and the list
+    /// draws the directory last prepared until the next is, so an area
+    /// chosen on the map can be one the list does not hold yet. A scroll to
+    /// it then found no row, and the area was no longer owed one.
+    @Test("an area the list does not hold yet is waited for, and gone to once a list holds it")
+    func revealWaitsForAListThatHoldsIt() {
+        let before = sections(directory([austria, slovenia]), by: .name)
+
+        #expect(before.holds("AT"))
+        #expect(!before.holds("ES"))
+        #expect(before.reveal("ES", expanded: []) == .wait)
+        #expect(before.reveal("US-CO", expanded: ["US"]) == .wait, "nor a region of a country it does not hold")
+
+        let after = sections(directory(everything), by: .name, holding: ["ES"])
+        #expect(after.reveal("ES", expanded: []) == .scroll(to: "ES"))
+        #expect(after.reveal("US-CO", expanded: []) == .open("US"))
+    }
 }
 
 // swiftlint:enable no_magic_numbers

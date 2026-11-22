@@ -66,7 +66,25 @@ struct OfflineCountriesList: View {
             ))
             prepared
                 .task(id: revision) { await directories.prepare(revision) }
+                // Here rather than on the list, which is not drawn until the
+                // first directory is prepared: the map outlines the list off
+                // the server, and an area chosen there before then is owed a
+                // scroll all the same.
+                .onChange(of: selectedID) { _, id in choose(id) }
         }
+    }
+
+    /// Owes the list a scroll to an area chosen on the map, and clears a
+    /// search that would hide it. With no directory yet, whether the search
+    /// holds the area is not known, so it is cleared.
+    private func choose(_ id: String?) {
+        guard let id else { return }
+        revealing = id
+        let asked = state.query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !asked.isEmpty,
+              directories.directory?.areas(matching: asked).contains(where: { $0.id == id }) != true
+        else { return }
+        state.query = ""
     }
 
     /// The list, once a directory is prepared and has areas in it.
@@ -122,15 +140,15 @@ struct OfflineCountriesList: View {
         .onChange(of: hasFullHeight) { _, hasHeight in
             if !hasHeight { isSearchFocused = false }
         }
-        .onChange(of: selectedID) { _, id in
-            guard let id else { return }
-            revealing = id
-            // An area chosen on the map is shown in the list, which a search
-            // that does not hold it would hide.
-            if !asked.isEmpty, !directory.areas(matching: asked).contains(where: { $0.id == id }) {
-                state.query = ""
-            }
-        }
+    }
+
+    /// What the list goes to an area again on: the area it owes a scroll to,
+    /// and the directory it draws. One change, so that a directory drawn as
+    /// an area is chosen asks once, and a country opened is not scrolled
+    /// into before its regions are in the list.
+    private struct OwedScroll: Equatable {
+        let id: String?
+        let directory: Int?
     }
 
     // MARK: - The list
@@ -166,8 +184,9 @@ struct OfflineCountriesList: View {
             .fitsSidePanel()
             .scrollDismissesKeyboard(.immediately)
             // As the list comes up too: a search gives way to it with the
-            // area it owes a scroll to already chosen.
-            .onChange(of: revealing, initial: true) {
+            // area it owes a scroll to already chosen. And as a newer
+            // directory is drawn, which may be the first to hold it.
+            .onChange(of: OwedScroll(id: revealing, directory: directories.shownRevision), initial: true) {
                 reveal(in: sections, with: scroller)
             }
             // A region's row is in the list only once its country is open.
@@ -187,6 +206,9 @@ struct OfflineCountriesList: View {
         case let .scroll(rowID):
             revealing = nil
             withAnimation { scroller.scrollTo(rowID, anchor: .center) }
+        case .wait:
+            // Still owed, until a directory that holds it is drawn.
+            break
         }
     }
 
