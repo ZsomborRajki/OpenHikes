@@ -19,7 +19,9 @@
 //  is asked for a tile and an hour after each read, and reads it at once,
 //  at most once a minute, when the server answers that the archive is gone:
 //  a 410, which is what an archive retired since the last read looks like.
-//  The tile is then asked of the archive the new list names.
+//  The tile is then asked of the archive the new list names. A tile asked
+//  for while the list is read waits for that read, and the read is not
+//  cancelled with the region that started it.
 //
 //  ## What the answers mean
 //
@@ -125,6 +127,9 @@ nonisolated final class RoutingGraphServer: TrailCellFetching {
         var listing: Listing?
         /// When the server's list was last asked for, read or not.
         var lastRead: Date?
+        /// The read of the list under way, which every tile that wants the
+        /// list meanwhile waits on.
+        var reading: Task<Void, Never>?
     }
 
     private let server: URL
@@ -192,14 +197,29 @@ nonisolated final class RoutingGraphServer: TrailCellFetching {
     /// Reads the server's list unless it was asked for within `interval`,
     /// and keeps it unless it is older than the one held. A read that fails
     /// keeps the list held, and waits as long as one that did not.
+    ///
+    /// A read under way is waited on rather than passed by, so a tile asked
+    /// for meanwhile is asked of the archive the new list names, not of one
+    /// it may have retired. And it is a task of its own, which no tile's
+    /// cancellation reaches: a region given up on while the list was read
+    /// would otherwise end the read, and leave the list unread for as long
+    /// as a read that had finished.
     private func readListing(unlessReadWithin interval: TimeInterval) async {
         let now = clock()
-        let due = state.withLock { state -> Bool in
-            if let last = state.lastRead, now.timeIntervalSince(last) < interval, now >= last { return false }
+        let reading = state.withLock { state -> Task<Void, Never>? in
+            if let reading = state.reading { return reading }
+            if let last = state.lastRead, now.timeIntervalSince(last) < interval, now >= last { return nil }
             state.lastRead = now
-            return true
+            let reading = Task { await self.fetchListing() }
+            state.reading = reading
+            return reading
         }
-        guard due else { return }
+        await reading?.value
+    }
+
+    @concurrent
+    private func fetchListing() async {
+        defer { state.withLock { $0.reading = nil } }
         do {
             let (data, response) = try await transport(Self.request(server.appending(path: "manifest.json")))
             guard response.statusCode == Self.ok else { throw Failure.status(response.statusCode) }

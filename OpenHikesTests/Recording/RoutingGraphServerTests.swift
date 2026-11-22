@@ -41,13 +41,35 @@ struct RoutingGraphServerTests {
     /// hiking route it is part of, and not way 11, which is private.
     static let squareFile = TrailGraphSquareFile(ways: [TrailGraphSquareLibraryTests.localPath]).encoded()
 
-    /// A clock a case moves by hand.
+    /// A clock a case moves by hand, and can wait to be read: the reader
+    /// reads it first thing whenever it considers the list.
     final class Clock: Sendable {
         private let now = Mutex(Date(timeIntervalSince1970: 1_800_000_000))
+        private let readings: AsyncStream<Void>
+        private let reading: AsyncStream<Void>.Continuation
 
-        var read: @Sendable () -> Date { { self.now.withLock { $0 } } }
+        init() {
+            (readings, reading) = AsyncStream.makeStream(of: Void.self)
+        }
+
+        var read: @Sendable () -> Date {
+            {
+                self.reading.yield()
+                return self.now.withLock { $0 }
+            }
+        }
 
         func advance(by seconds: TimeInterval) { now.withLock { $0 += seconds } }
+
+        /// Returns once the clock has been read `count` times since it was
+        /// made.
+        func waitForReads(_ count: Int) async {
+            var seen = 0
+            for await _ in readings {
+                seen += 1
+                if seen >= count { break }
+            }
+        }
     }
 
     static func reader(
@@ -253,6 +275,65 @@ struct RoutingGraphServerTests {
 
         #expect(fetch == TrailCellFetch(manifest: .unread, cells: [:]))
         #expect(tiles.paths == ["manifest.json", Self.tilePath(Self.current)])
+    }
+
+    // MARK: - While the list is read
+
+    /// A build whose bundled archive is pruned, at its first read of the
+    /// list: the server lists the next archive, and the bundled one is gone.
+    static func prunedSinceBuilt(clock: Clock, held: HeldRequest) throws -> (StubTileServer, RoutingGraphServer) {
+        let tiles = StubTileServer([
+            "manifest.json": [StubTileServer.manifest(revision: 10, routing: [Self.next])],
+            Self.tilePath(Self.current): [.init(status: 410)],
+            Self.tilePath(Self.next): [.ok(Self.squareFile)],
+        ])
+        let reader = RoutingGraphServer(
+            server: try #require(server),
+            bundled: Self.listing(revision: 9, [Self.current]),
+            clock: clock.read,
+            transport: tiles.transport(holding: held)
+        )
+        return (tiles, reader)
+    }
+
+    /// The maker closed while its first region waited on the list. Ended
+    /// with that region's request, the read would count as made, and every
+    /// tile for the next minute would be asked of the pruned archive and
+    /// left to Overpass.
+    @Test("a region given up on while the list is read does not end the read")
+    func aRegionGivenUpOnLeavesTheRead() async throws {
+        let held = HeldRequest("manifest.json")
+        let (tiles, reader) = try Self.prunedSinceBuilt(clock: Clock(), held: held)
+        let givenUp = Task { try await reader.fetch(cellsNamed: [Self.tileName]) }
+        await held.arrived()
+        givenUp.cancel()
+        held.release()
+        _ = try? await givenUp.value
+
+        let fetch = try await reader.fetch(cellsNamed: [Self.tileName])
+
+        #expect(fetch == TrailCellFetch(manifest: .complete, cells: [Self.tileName: .found(Self.squareFile)]))
+        #expect(tiles.paths.filter { $0 == "manifest.json" }.count == 1)
+        #expect(!tiles.paths.contains(Self.tilePath(Self.current)))
+    }
+
+    @Test("a tile asked for while the list is read waits on that read, rather than asking the archive held before it")
+    func aTileWaitsOnTheRead() async throws {
+        let clock = Clock()
+        let held = HeldRequest("manifest.json")
+        let (tiles, reader) = try Self.prunedSinceBuilt(clock: clock, held: held)
+        let first = Task { try await reader.fetch(cellsNamed: [Self.tileName]) }
+        await held.arrived()
+        let second = Task { try await reader.fetch(cellsNamed: [Self.tileName]) }
+        // The second has come to the list, as the first did.
+        await clock.waitForReads(2)
+        held.release()
+
+        let found = TrailCellFetch(manifest: .complete, cells: [Self.tileName: .found(Self.squareFile)])
+        #expect(try await first.value == found)
+        #expect(try await second.value == found)
+        #expect(tiles.paths.filter { $0 == "manifest.json" }.count == 1)
+        #expect(!tiles.paths.contains(Self.tilePath(Self.current)))
     }
 
     // MARK: - Through the library
