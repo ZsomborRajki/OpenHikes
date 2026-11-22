@@ -257,6 +257,16 @@
 # (`RouteEditStepsTests`), as the rules of a step do in the package
 # (`RouteStepsTests`) and the pull on the map (`MapCoordinatorTests+RouteStretch`).
 #
+# The recording's and the walk's controls moved to the bar of their own
+# screen and to a capsule on the map (`RecordingBar`, `MapActivityCapsuleView`),
+# the Stop question is put up by a modifier of its own (`RecordingStopAlerts`),
+# and *Delete Hike* came to the foot of a hike's screen (`HikeDeleteRow`), all
+# body code. What they decide stays measured: what Stop asks and sends is
+# `RecordingStopQuestion`'s (`HikeRecorderTests+StopQuestion`), what End does
+# is `WalkEndQuestion`'s (`TrailWalkSessionTests+EndQuestion`), when the
+# capsule stands for what is `MapActivityCapsule`'s (`MapActivityCapsuleTests`),
+# and how a phase is said is `HikeRecorder+PhaseWording.swift`.
+#
 # The UI suites still exist and still run locally:
 #
 #   Scripts/run-ui-tests.sh --all
@@ -378,3 +388,7 @@ OpenHikes/Map/MapSheet+RouteEdit.swift
 OpenHikes/Hikes/Editing/RouteChecksCard.swift
 OpenHikes/Hikes/Detail/HikeRouteCheckNotice.swift
 OpenHikes/Hikes/Editing/RouteStepsCard.swift
+OpenHikes/Recording/RecordingBar.swift
+OpenHikes/Map/ActivityCapsule/MapActivityCapsuleView.swift
+OpenHikes/Recording/RecordingStopAlerts.swift
+OpenHikes/Hikes/Detail/HikeDeleteRow.swift

@@ -8,8 +8,9 @@
 //  Three things are worth pinning and none is visible from the sheet. It is
 //  the *lower* of the two, so it is the one nearest a thumb and the credit
 //  line; a tap on it raises the request the view tree answers rather than
-//  doing anything to the map; and it turns red with a recording under way
-//  without anything re-rendering, including on a map built mid-recording.
+//  doing anything to the map; and it steps aside with a recording under way,
+//  for the recording's capsule to stand where it was, without anything
+//  re-rendering, including on a map built mid-recording.
 //
 
 import Foundation
@@ -19,6 +20,9 @@ import Observation
 import OpenHikesShared
 import RealModule
 import Testing
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// Stands in for ``HikeRecorder/isActive``: something observable a test can
 /// flip by hand, read through the closure ``RecordingEntry`` takes.
@@ -101,7 +105,10 @@ extension MapCoordinatorTests {
         #endif
     }
 
-    @Test("the record button turns red while a recording is live, and back")
+    /// The recording's capsule stands where the button stood, with its Stop
+    /// where the button was — a red button above it that only opened the
+    /// recording would be a second Stop that does not stop.
+    @Test("the record button steps aside while a recording is live, and comes back")
     func recordButtonFollowsTheRecording() async throws {
         #if os(iOS)
         let coordinator = MapView.Coordinator()
@@ -110,30 +117,46 @@ extension MapCoordinatorTests {
         let pill = try #require(coordinator.trailDraftControls)
         let record = try #require(pill.recordButton)
         #expect(!pill.isRecording)
+        #expect(!isHiddenInItsPill(record))
         #expect(record.accessibilityLabel == "Record a hike")
 
         recordingState.isLive = true
-        await settle(until: "the button to show the live recording") { pill.isRecording }
-        #expect(record.accessibilityLabel == "Open hike recording")
+        await settle(until: "the button to step aside") { pill.isRecording }
+        #expect(isHiddenInItsPill(record))
 
         recordingState.isLive = false
-        await settle(until: "the button to go back to rest") { !pill.isRecording }
-        #expect(record.accessibilityLabel == "Record a hike")
+        await settle(until: "the button to come back") { !pill.isRecording }
+        #expect(!isHiddenInItsPill(record))
         #endif
     }
 
     /// A rotation rebuilds the map, and nothing about the recording changes to
     /// prompt a second pass — so the first one has to get it right.
-    @Test("a map built mid-recording draws the button red at once")
-    func recordButtonRedOnFirstBuild() throws {
+    @Test("a map built mid-recording has no record button from the start")
+    func recordButtonAsideOnFirstBuild() throws {
         #if os(iOS)
         recordingState.isLive = true
         let coordinator = MapView.Coordinator()
         let map = makeMap(mapView(), coordinator)
         defer { detach(map) }
         let pill = try #require(coordinator.trailDraftControls)
+        let record = try #require(pill.recordButton)
 
         #expect(pill.isRecording)
+        #expect(isHiddenInItsPill(record))
         #endif
     }
+
+    #if os(iOS)
+    /// Whether the button's capsule of glass is out of its pill's stack: a
+    /// hidden arranged subview leaves the stack, and the glass is what the
+    /// stack arranges.
+    private func isHiddenInItsPill(_ button: UIButton) -> Bool {
+        var view: UIView? = button
+        while let current = view, !(current.superview is UIStackView) {
+            view = current.superview
+        }
+        return view?.isHidden ?? false
+    }
+    #endif
 }

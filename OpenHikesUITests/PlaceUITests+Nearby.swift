@@ -39,7 +39,7 @@ extension PlaceUITests {
         )
         walkRecordedTrace([UITestFixture.trailheadCoordinate], countedBy: points)
 
-        tapWhenReady(element("recording-places-nearby", in: app))
+        openRecordingPlacesNearby(in: app)
         XCTAssertTrue(
             element("places-nearby-list", in: app).waitForExistence(timeout: UITestTimeout.navigation),
             "opening asks about the area around the walk, with no tap on the map"

@@ -70,7 +70,7 @@ extension OrientationUITests {
         let points = element("recording-point-count", in: app)
         XCTAssertTrue(points.waitForExistence(timeout: UITestTimeout.existence), "precondition: the walk has a fix")
         walkRecordedTrace([UITestFixture.trailheadCoordinate], countedBy: points)
-        tapWhenReady(element("recording-places-nearby", in: app))
+        openRecordingPlacesNearby(in: app)
         let list = element("places-nearby-list", in: app)
         XCTAssertTrue(list.waitForExistence(timeout: UITestTimeout.navigation), "precondition: the area is asked about")
 

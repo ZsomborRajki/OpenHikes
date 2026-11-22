@@ -44,15 +44,13 @@ final class MapTrailDraftControlsView: UIView {
     /// about these two buttons draw the same glyphs — see ``MakeTrailTip`` —
     /// and a tip is not main-actor isolated.
     nonisolated static let symbolName = "point.topleft.down.to.point.bottomright.curvepath"
-    /// The record button's glyph at rest, and while a recording is under way —
-    /// the two the sheet's button drew before it moved here.
+    /// The record button's glyph.
     nonisolated static let recordSymbolName = "record.circle"
-    static let recordingSymbolName = "stop.circle.fill"
 
     private let onDraw: () -> Void
     private let onRecord: () -> Void
     private let onEndWalkAndRecord: () -> Void
-    /// Kept for ``setRecording(_:)``, which re-dresses it in place.
+    /// Kept for ``setWalkToEnd(_:)``, which gives it its question.
     private(set) var recordButton: UIButton?
     private var recordGlass: UIVisualEffectView?
     /// What ``setRecording(_:)`` last drew, so a repeat is free.
@@ -78,11 +76,15 @@ final class MapTrailDraftControlsView: UIView {
         fatalError("MapTrailDraftControlsView is created in code only")
     }
 
-    /// Dresses the record button for a recording under way, or for none.
+    /// Takes the record button out of the pill while a recording is under
+    /// way, and puts it back when there is none.
     ///
-    /// Red glass with a white glyph while one is live — the same red the map's
-    /// trace and the row badge use — rather than a red glyph on red glass,
-    /// which is a glyph nobody can see.
+    /// The recording's capsule stands where it stood then, at the foot of the
+    /// column, with Stop where the button was — see
+    /// `MapCoordinator+ActivityCapsule.swift`. A red button above it that only
+    /// opened the recording would be a second Stop that does not stop. The
+    /// map is told to lay out, as ``MapPhotoControlsView/setAddPlaceVisible(_:)``
+    /// tells it, so the pill is one button tall at once.
     func setRecording(_ recording: Bool) {
         guard recording != isRecording else { return }
         isRecording = recording
@@ -116,17 +118,9 @@ final class MapTrailDraftControlsView: UIView {
     }
 
     private func applyRecordingAppearance() {
-        guard let recordButton, let recordGlass else { return }
-        // The configuration's colour rather than the button's tint, which a
-        // plain button on glass does not carry to its glyph.
-        recordButton.configuration?.image = MapGlassPill.symbol(
-            isRecording ? Self.recordingSymbolName : Self.recordSymbolName
-        )
-        recordButton.configuration?.baseForegroundColor = isRecording ? .white : .systemRed
-        MapGlass.tint(recordGlass, with: isRecording ? .systemRed : nil)
-        recordButton.accessibilityLabel = isRecording
-            ? String(localized: "Open hike recording")
-            : String(localized: "Record a hike")
+        guard let recordGlass, recordGlass.isHidden != isRecording else { return }
+        recordGlass.isHidden = isRecording
+        superview?.setNeedsLayout()
     }
 
     private func buildHierarchy() {
@@ -144,6 +138,9 @@ final class MapTrailDraftControlsView: UIView {
             identifier: "record-hike-button",
             action: onRecord
         )
+        // The configuration's colour rather than the button's tint, which a
+        // plain button on glass does not carry to its glyph.
+        record.button.configuration?.baseForegroundColor = .systemRed
         recordGlass = record.glass
         recordButton = record.button
 

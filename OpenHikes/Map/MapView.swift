@@ -141,6 +141,11 @@ struct MapView: MapViewRepresentable, Equatable {
     /// a recording starting turns the button red and re-renders nothing — see
     /// ``RecordingEntry``.
     var recordingEntry: RecordingEntry
+    /// The recording's or the walk's controls, at the foot of the leading
+    /// column while their own screen is not in front — see
+    /// ``MapActivityCapsule``. Optional so the map's suite can build a map
+    /// without a recorder behind it.
+    var activityCapsule: MapActivityCapsule?
 
     /// Told where the map came to rest, so community results can follow the
     /// map without any SwiftUI body reading the region.
@@ -293,6 +298,9 @@ struct MapView: MapViewRepresentable, Equatable {
         // The record button in that pill comes with it, so a map rebuilt
         // mid-recording draws it red at once.
         coordinator.observeTrailDraftControls(trailMaker, recording: recordingEntry)
+        // And the capsule under them, while a recording or a walk is under
+        // way and its own screen is not in front.
+        if let activityCapsule { coordinator.observeActivityCapsule(activityCapsule) }
         // The line and its numbered pins, which are drawn only while the
         // maker's screen is up — including on a map rebuilt underneath one, as
         // a rotation rebuilds it.
@@ -460,6 +468,11 @@ struct MapView: MapViewRepresentable, Equatable {
         // rather than against a constant of its own, so it has to exist by the
         // time the pill's constraints are made.
         addAttribution(to: mapView, coordinator, alignedTo: guide)
+        // Before the two pills, which stand on it while it is up — see
+        // `MapCoordinator+ActivityCapsule.swift`.
+        if let activityCapsule {
+            addActivityCapsule(activityCapsule, to: mapView, coordinator, alignedTo: guide, beside: glass)
+        }
         addPhotoControls(to: mapView, coordinator, alignedTo: guide)
         addTrailDraftControls(to: mapView, coordinator, alignedTo: guide)
         addAreaSearchControl(to: mapView, coordinator, alignedTo: guide)
@@ -890,6 +903,7 @@ extension MapView {
             && lhs.placePins === rhs.placePins
             && lhs.trailMaker === rhs.trailMaker
             && lhs.recordingEntry === rhs.recordingEntry
+            && lhs.activityCapsule === rhs.activityCapsule
             && lhs.community === rhs.community
             && lhs.searchCompleter === rhs.searchCompleter
             && lhs.libraryLines === rhs.libraryLines

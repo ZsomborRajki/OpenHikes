@@ -39,11 +39,15 @@ extension View {
     ///   - placeAnchor: Where the pill's *Add Place* would put a place,
     ///     evaluated at the tap. `nil` offers no *Add Place* — see
     ///     ``PhotoCaptureController/Subject/placeAnchor``.
+    ///   - placeRequest: What the pill's *Add Place* does instead, for a
+    ///     screen that adds a place its own way — see
+    ///     ``PhotoCaptureController/Subject/placeRequest``.
     func photoCaptureSubject(
         _ controller: PhotoCaptureController?,
         for hike: Hike?,
         place: UUID? = nil,
         placeAnchor: (() -> CLLocationCoordinate2D?)? = nil,
+        placeRequest: (() -> Void)? = nil,
         anchor: @escaping PhotoCaptureController.Anchor
     ) -> some View {
         modifier(
@@ -52,6 +56,7 @@ extension View {
                 hike: hike,
                 place: place,
                 placeAnchor: placeAnchor,
+                placeRequest: placeRequest,
                 anchor: anchor
             )
         )
@@ -106,6 +111,7 @@ private struct PhotoCaptureSubject: ViewModifier {
     let hike: Hike?
     let place: UUID?
     let placeAnchor: (() -> CLLocationCoordinate2D?)?
+    let placeRequest: (() -> Void)?
     let anchor: PhotoCaptureController.Anchor
 
     @State private var token: Int?
@@ -135,7 +141,14 @@ private struct PhotoCaptureSubject: ViewModifier {
         // A screen SwiftUI appears twice without a disappear between holds
         // one claim, not two — see ``ScreenClaims``.
         if let token { controller.detach(token: token) }
-        token = controller.attach(to: hike, place: place, placeAnchor: placeAnchor, depth: depth, anchor: anchor)
+        token = controller.attach(
+            to: hike,
+            place: place,
+            placeAnchor: placeAnchor,
+            placeRequest: placeRequest,
+            depth: depth,
+            anchor: anchor
+        )
     }
 
     private func release() {

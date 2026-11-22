@@ -127,9 +127,10 @@ nonisolated final class FirstRunTipsUITests: XCTestCase {
         XCTAssertFalse(record.exists, "the record button's tip was used")
     }
 
-    /// *Add Place* first, once the walk has a fix to put a place at, then
-    /// *Places Nearby* beside it — and a closed tip stays closed when the
-    /// screen comes back.
+    /// *Add Place* first, on the recording screen once the walk has a fix to
+    /// put a place at, then *Places Nearby* at the head of the sheet the
+    /// camera pill's *Add Place* opens — and a closed tip stays closed when
+    /// the screen comes back.
     @MainActor
     func testTheRecordingTipsComeOneAtATime() {
         let app = makeApp(
@@ -157,8 +158,9 @@ nonisolated final class FirstRunTipsUITests: XCTestCase {
         awaitTip(markAPlace, in: app, "a walk with a fix explains Add Place")
         closeTip(in: app)
 
+        openRecordingPlaces(in: app)
         let around = app.staticTexts["What’s Around You"]
-        awaitTip(around, in: app, "then Places Nearby, beside it")
+        awaitTip(around, in: app, "then Places Nearby, at the head of Add Place's sheet")
         closeTip(in: app)
         XCTAssertTrue(around.waitForNonExistence(timeout: UITestTimeout.existence), "a closed tip goes")
 

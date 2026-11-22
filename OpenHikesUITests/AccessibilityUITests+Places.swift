@@ -172,7 +172,7 @@ extension AccessibilityUITests {
         )
         walkRecordedTrace([UITestFixture.trailheadCoordinate], countedBy: points)
 
-        tapWhenReady(element("recording-add-place", in: app))
+        openRecordingPlaces(in: app)
         XCTAssertTrue(
             element("recording-place-suggestion", in: app).waitForExistence(timeout: UITestTimeout.navigation),
             "what is mapped at the trailhead should be offered before it is swept"

@@ -78,6 +78,12 @@ struct HikeDetailView: View {
     var onOpenWalk: (HikeWalk) -> Void = { _ in /* no-op default */ }
     /// Collapses the sheet so the map is visible when zooming to the route.
     var onZoomToRoute: () -> Void = { /* no-op default */ }
+    /// Deletes the hike, from the row at the foot of this screen — see
+    /// ``HikeDeleteRow``. The list's swipe deletes through the same.
+    var onDelete: (Hike) -> Void = { _ in /* no-op default */ }
+    /// Asks for a sent hike's shared copy to be taken down, the delete
+    /// question's other answer.
+    var onWithdraw: (Hike) -> Void = { _ in /* no-op default */ }
     /// Whether the sheet this screen is pushed into is resting at its smallest
     /// detent, where only the search field's worth of height is on screen.
     ///
@@ -216,15 +222,19 @@ struct HikeDetailView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        // Start / Pause in the bar, which is still showing at the sheet's
-        // smallest detent — see ``WalkToggleButton``. Handed the session as a
-        // reference, like ``WalkControls`` below: this closure is inlined
-        // into the body, and neither dereferences it.
+        // Start, then Pause or Resume and End, in the bar, which is still
+        // showing at the sheet's smallest detent — see ``WalkToggleButton``
+        // and ``WalkEndButton``. Handed the session as a reference, like
+        // ``WalkControls`` below: this closure is inlined into the body, and
+        // neither dereferences it.
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 WalkToggleButton(
                     hike: hike, profile: profile, walkRevision: preparedLine?.walkRevision, session: walkSession
                 )
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                WalkEndButton(hike: hike, session: walkSession)
             }
         }
         // On the container rather than on the Details face, so flipping to
@@ -346,6 +356,7 @@ struct HikeDetailView: View {
                     statList
                     mapSection
                     closingActions(scroller)
+                    HikeDeleteRow(hike: hike, onDelete: onDelete, onWithdraw: onWithdraw)
                 }
                 .padding()
             }
@@ -535,8 +546,7 @@ private extension HikeDetailView {
 
     // MARK: Header
 
-    /// The same place-card title row the recording screen opens with, so a
-    /// hike looks the same while it is recorded as after it is saved.
+    /// The place-card title row: the hike's mark, its name and its day.
     ///
     /// The title is a view of its own, and must stay one: this is built inside
     /// the card's `ScrollViewReader`, and the rename field's binding made here

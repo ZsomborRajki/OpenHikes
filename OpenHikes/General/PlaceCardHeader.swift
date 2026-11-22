@@ -4,8 +4,8 @@
 //
 //  The title row of an Apple Maps place card: a bold title over a secondary
 //  line, and the screen's own controls on the trailing edge, where Maps puts
-//  Share and Close. The hike detail, a walk's summary and the recording screen
-//  all open with one, over the stats ``StatSummary`` draws.
+//  Share and Close. The hike detail and a walk's summary both open with one,
+//  over the stats ``StatSummary`` draws.
 //
 
 import SwiftUI
@@ -55,18 +55,6 @@ extension PlaceCardHeader where Trailing == EmptyView {
         @ViewBuilder subtitle: () -> Subtitle
     ) {
         self.init(leading: leading, title: title, subtitle: subtitle) { EmptyView() }
-    }
-}
-
-extension PlaceCardHeader where Leading == EmptyView {
-    /// A header with no mark ahead of the title — the recording screen's,
-    /// whose status dot is part of the title it colours.
-    init(
-        @ViewBuilder title: () -> Title,
-        @ViewBuilder subtitle: () -> Subtitle,
-        @ViewBuilder trailing: () -> Trailing
-    ) {
-        self.init(leading: { EmptyView() }, title: title, subtitle: subtitle, trailing: trailing)
     }
 }
 

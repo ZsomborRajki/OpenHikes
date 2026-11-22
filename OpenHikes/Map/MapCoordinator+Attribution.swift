@@ -32,23 +32,33 @@ import UIKit
 #endif
 
 #if os(iOS)
-/// One pill's two ways of standing on the credit line: a fixed gap above it,
-/// and — when there is no line drawn — flush with where its bottom would be.
+/// One pill's ways of standing at the foot of the leading column: a fixed gap
+/// above the credit line, flush with where the line's bottom would be when
+/// there is no line drawn, and — while the activity capsule is up — a fixed
+/// gap above the capsule, which takes the foot of the column then. See
+/// `MapCoordinator+ActivityCapsule.swift`.
 ///
-/// A constraint belongs to one view, so each pill in the slot carries a pair of
-/// its own, built against the same two anchors by
-/// ``MapView/placeInCreditLineSlot(_:on:_:alignedTo:)``.
+/// A constraint belongs to one view, so each pill in the slot carries a set of
+/// its own, built against the same anchors by
+/// ``MapView/placeInCreditLineSlot(_:on:_:alignedTo:)``. The capsule's own has
+/// no third, because it is what the third stands on.
 struct CreditLineClearance {
     let above: NSLayoutConstraint
     let flush: NSLayoutConstraint
+    var onCapsule: NSLayoutConstraint?
 
-    /// Turns on whichever of the two `wantsFlush` calls for, and does nothing
-    /// when it is already the one that is on.
-    func apply(flush wantsFlush: Bool) {
-        let wanted = wantsFlush ? flush : above
+    /// Turns on whichever of the three `wantsFlush` and `standsOnCapsule`
+    /// call for, and does nothing when it is already the one that is on.
+    func apply(flush wantsFlush: Bool, onCapsule standsOnCapsule: Bool = false) {
+        let wanted = if standsOnCapsule, let onCapsule { onCapsule } else { wantsFlush ? flush : above }
         guard !wanted.isActive else { return }
-        NSLayoutConstraint.deactivate([above, flush])
+        deactivate()
         NSLayoutConstraint.activate([wanted])
+    }
+
+    /// Turns all of them off, for a view standing on something else.
+    func deactivate() {
+        NSLayoutConstraint.deactivate([above, flush] + [onCapsule].compactMap(\.self))
     }
 }
 
@@ -87,7 +97,14 @@ extension MapView {
                 equalTo: attribution.topAnchor,
                 constant: -Self.creditLineSpacing
             ),
-            flush: pill.bottomAnchor.constraint(equalTo: attribution.bottomAnchor)
+            flush: pill.bottomAnchor.constraint(equalTo: attribution.bottomAnchor),
+            // Placed before the pills, so each of them can name it.
+            onCapsule: coordinator.activityCapsule.host.map { capsule in
+                pill.bottomAnchor.constraint(
+                    equalTo: capsule.topAnchor,
+                    constant: -Self.creditLineSpacing
+                )
+            }
         )
     }
 }
@@ -107,8 +124,12 @@ extension MapView.Coordinator {
     func applyCreditLineClearance() {
         guard let attributionView else { return }
         let wantsFlush = attributionView.isHidden
-        photoControlsClearance?.apply(flush: wantsFlush)
-        trailDraftClearance?.apply(flush: wantsFlush)
+        // The capsule takes the line's place at the foot of the column while
+        // it is up, and the pills stand on it.
+        activityCapsule.clearance?.apply(flush: wantsFlush)
+        let onCapsule = activityCapsule.isUp
+        photoControlsClearance?.apply(flush: wantsFlush, onCapsule: onCapsule)
+        trailDraftClearance?.apply(flush: wantsFlush, onCapsule: onCapsule)
         // The junction warnings button stands on the line when neither pill
         // is up, so it takes the same answer.
         applyJunctionButtonPlacement()

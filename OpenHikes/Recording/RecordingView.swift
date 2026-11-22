@@ -10,9 +10,12 @@ import SwiftUI
 
 struct RecordingView: View {
     let recorder: HikeRecorder
-    /// What the card's idle Start goes through, so that it asks before ending
+    /// What the bar's idle Start goes through, so that it asks before ending
     /// a walk as the map's record button does — see ``RecordingEntry``.
     let entry: RecordingEntry
+    /// What the bar's Stop asks, which the map's capsule asks too — see
+    /// ``RecordingStopQuestion``.
+    let stopQuestion: RecordingStopQuestion
     var mapController: MapController
     /// Offers the map's camera pill while a walk is being recorded. Optional
     /// so previews and tests can build this view without one.
@@ -21,16 +24,17 @@ struct RecordingView: View {
     /// the same way a saved hike's detail screen draws its own. Optional for
     /// the same reason as above.
     var photoPins: PhotoMapPinController?
+    /// A failed save that was retried. A Stop's save is said through
+    /// ``ActivityEnding``, wherever it was tapped.
     var onSaved: (Hike) -> Void
-    var onDiscarded: (UUID?) -> Void
     /// Pushes the gallery when one of those pins is tapped. Carries the draft
     /// with it because the caller builds a route out of the pair, and the
     /// recorder's hike is this screen's to know, not the sheet's.
     var onOpenPhoto: (Hike, HikePhoto) -> Void = { _, _ in /* no-op default */ }
     /// Draws the places added on this walk. See ``RecordingPlaceSheet``.
     var placePins: TrailPlacePinController?
-    /// Where *Add Place* asks OpenStreetMap what is here, or `nil` for a
-    /// launch that must not ask.
+    /// Where the camera pill's *Add Place* asks OpenStreetMap what is here,
+    /// or `nil` for a launch that must not ask.
     var placeSource: (any TrailPointSourcing)?
     /// Pushes one of the walk's places, where its photographs are taken.
     var onOpenPlace: (Hike, UUID) -> Void = { _, _ in /* no-op default */ }
@@ -64,16 +68,11 @@ struct RecordingView: View {
 
     var body: some View {
         ScrollView {
-            // The first-run tips about the bar's two places buttons, right
-            // under the bar — see ``RecordingPlaceTips``.
+            // The first-run tip about *Add Place*, on the camera pill — see
+            // ``RecordingPlaceTips``.
             RecordingPlaceTips(recorder: recorder)
-            RecordingCard(
-                recorder: recorder,
-                entry: entry,
-                onSaved: onSaved,
-                onDiscarded: onDiscarded
-            )
-            .padding()
+            RecordingCard(recorder: recorder, question: stopQuestion, onSaved: onSaved)
+                .padding()
             // The places added so far on this walk, each opening its own
             // screen. Nothing at all until the first one.
             if let hike = recorder.currentHike {
@@ -95,11 +94,20 @@ struct RecordingView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .softScrollEdgeEffect(for: .top)
-        // *Add Place* and *Places Nearby*, in the bar while a walk is under
-        // way — see ``RecordingPlaceSheet``. Nearby only where the map can
-        // ask OpenStreetMap, which a test launch cannot.
+        // Status, Pause or Resume, and Stop, at every detent — see
+        // ``RecordingBar``.
+        .toolbar {
+            RecordingBar(recorder: recorder, entry: entry, question: stopQuestion)
+        }
+        // *Add Place* on the camera pill while a walk is under way, and
+        // *Places Nearby* in the sheet it opens — see
+        // ``RecordingPlaceSheet``. Nearby only where the map can ask
+        // OpenStreetMap, which a test launch cannot. It claims the pill for
+        // the photographs too, which are pinned where the walk was when the
+        // shutter fired.
         .recordingAddPlace(
             recorder: recorder,
+            photoCapture: photoCapture,
             source: placeSource,
             onAdded: onOpenPlace,
             onAddOwn: onAddOwnPlace,
@@ -116,17 +124,6 @@ struct RecordingView: View {
         // modifier's body, though this one is free either way: the body above
         // already reads `phase`.
         .keepsScreenAwake { recorder.isActive }
-        // Each photo is pinned where the walk was when its shutter fired, so
-        // a picture taken twenty minutes in is pinned twenty minutes along —
-        // and one handed over a minute after it was taken is not pinned a
-        // minute further on. The recorder's own fixes, not the draft `Hike`'s
-        // `route`: that is only written when the recording stops. See
-        // ``HikeRecorder/photoCoordinate(atShutter:)``. A draft only exists
-        // once recording starts, which is why the modifier takes an optional
-        // hike.
-        .photoCaptureSubject(photoCapture, for: recorder.currentHike) { shutter in
-            recorder.photoCoordinate(atShutter: shutter)
-        }
         // …and each one stands on the map as soon as it is taken, rather than
         // only once the walk has been saved. A background because the claim is
         // all this draws — see ``HikePhotoPinClaim`` for why it is a separate
@@ -141,8 +138,8 @@ struct RecordingView: View {
         // The walk's whole haptic vocabulary, and a boundary for the same
         // reason the pins above are one — see ``RecordingHaptics``.
         .background { RecordingHaptics(recorder: recorder) }
-        // The phase is a coloured dot and a word at the top of a scrolling
-        // card, so a change nobody is looking at is a change nobody hears.
+        // The phase is a coloured dot and a word in the bar, so a change
+        // nobody is looking at is a change nobody hears.
         .onChange(of: recorder.phase) { _, phase in
             AccessibilityNotification.Announcement(phase.accessibilityTitle)
                 .post()

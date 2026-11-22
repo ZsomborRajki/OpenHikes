@@ -29,7 +29,7 @@ extension PlaceUITests {
         )
         walkRecordedTrace([UITestFixture.trailheadCoordinate], countedBy: points)
 
-        tapWhenReady(element("recording-add-place", in: app))
+        openRecordingPlaces(in: app)
         scrollToTap(app.buttons["recording-place-add-own"], in: app)
 
         XCTAssertTrue(

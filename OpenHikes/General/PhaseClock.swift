@@ -31,3 +31,30 @@ struct PhaseClock: View {
             .foregroundStyle(.secondary)
     }
 }
+
+/// A recording's or a walk's clock in the space of a caption — the recording
+/// screen's bar and the map's activity capsule — that ticks by itself while
+/// it runs and stands still while it does not.
+///
+/// It ticks as the Live Activity's does, through `Text(timerInterval:)`: no
+/// body runs for it, and nothing ticks while it is not drawn, so it needs
+/// neither the `TimelineView` nor the scene-phase gate ``PhaseClock``'s
+/// readers keep.
+///
+/// Started from the figure handed in rather than from a start date: a
+/// recording counts from a monotonic source wherever it has one — see
+/// ``HikeRecorder/elapsedSeconds()`` — and a walk leaves its pauses out. The
+/// figure is read when this is built, which is when the phase moves.
+struct ActivityClock: View {
+    let elapsed: TimeInterval
+    let isRunning: Bool
+
+    var body: some View {
+        if isRunning {
+            let start = Date.now.addingTimeInterval(-elapsed)
+            Text(timerInterval: start...Date.distantFuture, countsDown: false)
+        } else {
+            Text(Duration.seconds(elapsed.rounded(.down)).formatted(.time(pattern: .hourMinuteSecond)))
+        }
+    }
+}

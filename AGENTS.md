@@ -510,6 +510,13 @@ a change to recording, the map, the sheet or the render path; the PR template,
     ends an empty recording as the button does. It leaves one holding
     photographs or places running, because only the screen can ask before
     they go.
+- **A recording's or a walk's controls are on its own screen's bar, or on
+  the map's capsule, never both** (`MapActivityCapsule`), by the owner's
+  decision. Stop or End is beside Pause in each. Both Stops ask one
+  `RecordingStopQuestion` and both Ends one `WalkEndQuestion`, put up with
+  what the map's controls open, and how either ended reaches the sheet's
+  path as an `ActivityEnding`. The capsule stands at the foot of the leading
+  column, where the record button stood, and the pills stand on it.
 - **The map is imperative MapKit behind `MapView`.** `MapView.Coordinator`
   observes stable controllers and updates `MKMapView` directly. Tiles flow
   through `CachingTileOverlayRenderer` into `TileCache`, auto-saves through
@@ -833,10 +840,10 @@ a change to recording, the map, the sheet or the render path; the PR template,
   permanently in portrait. A `.sheet`, cover, picker, importer or alert attached
   beside it never presents, and an alert can even take the sheet down. Every map
   alert lives in `MapScreenAlerts`, and `MapScreenAlertUITests` checks them,
-  except three attached beside them on the same contents: the trail maker's
+  except those attached beside them on the same contents: the trail maker's
   missed-photo alert, which carries an object rather than a binding, and the
-  refused location button's and a walk's off-trail question, which go with
-  the map controls' (below).
+  refused location button's, a walk's off-trail question and the Stop and
+  End questions, which go with the map controls' (below).
 - **What a map control opens goes through `MapControlModals`.** A place card
   leaves the map live behind it, and the map sheet is already presenting the
   card. A sheet asked for from under it waits until the card is closed; an

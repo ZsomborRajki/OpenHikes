@@ -65,9 +65,9 @@ nonisolated final class WalkUITests: XCTestCase {
     }
 
     /// The navigation bar's Start begins a walk off the route, where no fix could,
-    /// and becomes its Pause — the only one on the screen (#679) — with End in
-    /// the controls group under the progress row, and no pill announcing a
-    /// start the hiker asked for.
+    /// and becomes its Pause — the only one on the screen (#679) — with End
+    /// beside it in the bar, and no pill announcing a start the hiker asked
+    /// for.
     @MainActor
     func testStartingAWalkByHandTurnsTheButtonIntoPause() {
         let app = makeApp(arguments: [
@@ -92,11 +92,11 @@ nonisolated final class WalkUITests: XCTestCase {
         XCTAssertTrue(phase.waitForExistence(timeout: UITestTimeout.existence))
         expectPhase(phase, contains: "Active")
         expectLabel(toggle, contains: "Pause Hike")
-        XCTAssertTrue(element("walk-controls", in: app).exists, "End is still in the controls group")
+        XCTAssertTrue(element("walk-controls", in: app).exists, "End is beside it in the bar")
         XCTAssertEqual(
             app.buttons.matching(NSPredicate(format: "label == %@", "Pause Hike")).count,
             1,
-            "Pause is the bar's alone; the controls group carries none of its own"
+            "Pause is the bar's alone; neither the controls group nor the map's capsule carries one here"
         )
         XCTAssertFalse(element("walk-started-pill", in: app).exists)
 
@@ -167,8 +167,7 @@ nonisolated final class WalkUITests: XCTestCase {
             )
         }
 
-        scrollToTap(app.buttons["End and Save Hike"], in: app)
-        confirmEndWalk(in: app)
+        endWalk(in: app)
         XCTAssertTrue(
             app.navigationBars["Hike Summary"].waitForExistence(timeout: UITestTimeout.navigation)
         )
@@ -348,8 +347,7 @@ nonisolated final class WalkUITests: XCTestCase {
         launch(app)
         openHikeDetail(in: app)
         let phase = startWalkByHand(in: app)
-        scrollToTap(app.buttons["End and Save Hike"], in: app)
-        confirmEndWalk(in: app)
+        endWalk(in: app)
         XCTAssertTrue(phase.waitForNonExistence(timeout: UITestTimeout.navigation))
 
         let follow = app.switches["Follow This Trail"]
@@ -379,23 +377,18 @@ nonisolated final class WalkUITests: XCTestCase {
         expectLabel(phase, contains: text, file: file, line: line)
     }
 
-    /// Confirms the "End this hike?" dialog, found the way `confirmDiscard`
-    /// finds its own: the confirming button shares its title with the one
-    /// that raised it, so it has to be found inside the presentation.
+    /// Taps the bar's End and confirms the question it asks. The confirming
+    /// button shares its title with the one that raised it, so it is found
+    /// inside the question rather than by title alone.
     @MainActor
-    private func confirmEndWalk(in app: XCUIApplication) {
-        let title = "End and Save Hike"
-        for container in [app.sheets, app.alerts] {
-            let presented = container.firstMatch
-            guard presented.waitForExistence(timeout: UITestTimeout.navigation)
-            else { continue }
-            let confirm = presented.buttons[title]
-            guard confirm.waitForExistence(timeout: UITestTimeout.navigation)
-            else { continue }
-            confirm.tap()
-            return
-        }
-        XCTFail("ending a hike should ask before closing its record")
+    private func endWalk(in app: XCUIApplication) {
+        tapWhenReady(element("walk-controls", in: app))
+        let question = app.alerts["End this hike?"]
+        XCTAssertTrue(
+            question.waitForExistence(timeout: UITestTimeout.navigation),
+            "ending a hike should ask before closing its record"
+        )
+        question.buttons["End and Save Hike"].tap()
     }
 
 }
