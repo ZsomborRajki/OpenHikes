@@ -95,13 +95,13 @@ nonisolated struct TrailCellLibrary: Sendable {
     /// The most squares one request names.
     ///
     /// The tile server answers a square at a time, a few of a request's at
-    /// once (``SquareArchiveServer/concurrentRequests``), and each square has
-    /// ``requestTimeout`` and ``resourceTimeout`` to itself, so a slow
-    /// connection no longer runs a whole request out of time: what arrived
-    /// is kept. Thirty-five is what the widest search named before the
-    /// ceiling was raised, at 47°N, and what a request to the public
-    /// database, which gave back nothing when it failed as a whole, was cut
-    /// to. A wider search is four requests at 47°N and five at 60°N, sent
+    /// once (``SquareArchiveServer/concurrentRequests``), each square with
+    /// ``requestTimeout`` to itself and the request with ``resourceTimeout``
+    /// in all, so a slow connection that runs a request out of time loses
+    /// only the squares still out: what arrived is kept. Thirty-five is what
+    /// the widest search named before the ceiling was raised, at 47°N, and
+    /// what a request to the public database, which gave back nothing when
+    /// it failed as a whole, was cut to. A wider search is four requests at 47°N and five at 60°N, sent
     /// one after another, so a superseded search is heard of between them,
     /// and each one's squares are kept as it lands. Around Stuttgart, the
     /// busiest ground measured, 117 squares were 12 MB of files.
