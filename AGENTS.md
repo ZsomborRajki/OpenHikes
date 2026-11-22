@@ -1610,8 +1610,9 @@ this before changing `OpenHikesWatch/`, `OpenHikes/Watch/` or the shared
   and does not bring the hike back. Until Stop, `WatchRecorder` journals
   fixes, pauses and resumes. The import keeps a session's first arrival, so
   the drain never sends a walk the recorder may still replace: none while
-  the launch reads the journal, and never the session the recorder holds
-  (`WatchQueueHold`).
+  the launch reads the journal or cannot, and never the session the
+  recorder holds (`WatchQueueHold`). A journal that cannot be read is not
+  a missing one, and holds Start until it reads or the hiker discards it.
 - **The watch matches against the trail itself.** `WatchRouteTracker` uses one
   polyline. It is not `TrailMatcher` and must not grow toward it. Its
   thresholds are `RouteProfile`'s (`WatchFixPolicyParityTests`).
