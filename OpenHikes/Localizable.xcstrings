@@ -2457,6 +2457,110 @@
         }
       }
     },
+    "%@, no longer on Wikimedia Commons" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, nicht mehr auf Wikimedia Commons"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, ya no está en Wikimedia Commons"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, plus disponible sur Wikimedia Commons"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, non più disponibile su Wikimedia Commons"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, niedostępne już w Wikimedia Commons"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, nu mai este pe Wikimedia Commons"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, больше нет на Wikimedia Commons"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, більше немає у Wikimedia Commons"
+          }
+        }
+      }
+    },
+    "%@, not downloaded" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, nicht heruntergeladen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, sin descargar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, non téléchargée"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, non scaricata"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, nie pobrano"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, nedescărcată"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, не загружено"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, не викачано"
+          }
+        }
+      }
+    },
     "%@, not on this device" : {
       "localizations" : {
         "de" : {
@@ -36470,6 +36574,58 @@
         }
       }
     },
+    "No Longer on Wikimedia Commons" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht mehr auf Wikimedia Commons"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ya no está en Wikimedia Commons"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plus disponible sur Wikimedia Commons"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non più disponibile su Wikimedia Commons"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Niedostępne już w Wikimedia Commons"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nu mai este pe Wikimedia Commons"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Больше нет на Wikimedia Commons"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Більше немає у Wikimedia Commons"
+          }
+        }
+      }
+    },
     "No longer published" : {
       "localizations" : {
         "de" : {
@@ -37870,6 +38026,58 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Недоступно"
+          }
+        }
+      }
+    },
+    "Not Downloaded" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht heruntergeladen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin descargar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non téléchargée"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non scaricata"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nie pobrano"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nedescărcată"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не загружено"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не викачано"
           }
         }
       }
@@ -65752,6 +65960,58 @@
         }
       }
     },
+    "This photo comes from Wikimedia Commons and couldn’t be downloaded just now. Check your connection and try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Foto stammt aus Wikimedia Commons und konnte gerade nicht heruntergeladen werden. Prüfe deine Verbindung und versuche es erneut."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta foto es de Wikimedia Commons y no se ha podido descargar ahora. Comprueba tu conexión y vuelve a intentarlo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette photo provient de Wikimedia Commons et n’a pas pu être téléchargée pour l’instant. Vérifiez votre connexion et réessayez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questa foto proviene da Wikimedia Commons e al momento non è stato possibile scaricarla. Verifica la connessione e riprova."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "To zdjęcie pochodzi z Wikimedia Commons i nie udało się go teraz pobrać. Sprawdź połączenie i spróbuj ponownie."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Această poză provine de pe Wikimedia Commons și nu a putut fi descărcată acum. Verificați conexiunea și reîncercați."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Это фото из Wikimedia Commons, и сейчас его не удалось загрузить. Проверьте подключение и повторите попытку."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Це фото з Wikimedia Commons, і зараз його не вдалося викачати. Перевірте підключення й спробуйте ще раз."
+          }
+        }
+      }
+    },
     "This photo couldn’t be opened." : {
       "localizations" : {
         "de" : {
@@ -72622,6 +72882,58 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Сервіс Wikimedia Commons перевантажений."
+          }
+        }
+      }
+    },
+    "Wikimedia Commons no longer offers this photo, so it can’t be downloaded again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wikimedia Commons bietet dieses Foto nicht mehr an, daher kann es nicht erneut heruntergeladen werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wikimedia Commons ya no ofrece esta foto, así que no se puede volver a descargar."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wikimedia Commons ne propose plus cette photo : elle ne peut pas être téléchargée à nouveau."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wikimedia Commons non offre più questa foto, quindi non può essere scaricata di nuovo."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wikimedia Commons nie udostępnia już tego zdjęcia, więc nie da się go ponownie pobrać."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wikimedia Commons nu mai oferă această poză, așa că nu poate fi descărcată din nou."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wikimedia Commons больше не предоставляет это фото, поэтому его нельзя загрузить снова."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wikimedia Commons більше не надає це фото, тому його не можна викачати знову."
           }
         }
       }

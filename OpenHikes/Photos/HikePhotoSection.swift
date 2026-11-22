@@ -328,6 +328,10 @@ struct HikePhotoThumbnail: View {
             return "photo"
         case .unavailable(.notOnThisDevice):
             return "icloud.slash"
+        case .unavailable(.notDownloaded):
+            return "icloud.and.arrow.down"
+        case .unavailable(.goneFromCommons):
+            return "photo.badge.exclamationmark"
         case .unavailable(.unreadable):
             return "exclamationmark.triangle"
         case .unavailable(.placeOnly):
@@ -341,6 +345,10 @@ struct HikePhotoThumbnail: View {
             return label
         case .unavailable(.notOnThisDevice):
             return String(localized: "\(label), not on this device")
+        case .unavailable(.notDownloaded):
+            return String(localized: "\(label), not downloaded")
+        case .unavailable(.goneFromCommons):
+            return String(localized: "\(label), no longer on Wikimedia Commons")
         case .unavailable(.unreadable):
             return String(localized: "\(label), unavailable")
         case .unavailable(.placeOnly):

@@ -1470,6 +1470,9 @@ is world-readable, because browsing needs no account.
     (`CommonsPhotoQuery.imageHosts`), sending `TileCache.userAgent`.
   - Make one API request at a time, and fetch nothing in Low Data Mode.
   - Never offer one for community sharing: `HikePhoto.isOwn` is false.
+  - A saved copy whose file this device lacks is downloaded again, by the
+    name its page gives, where it is shown and never for a list
+    (`CommonsPhotoRefetch`, reached only through `HikePhotoStore.shared`).
 - **Wikipedia on a place's card** (`Hikes/Places/Wikidata/`) is asked for when
   a card opens, never for a list, and never in Low Data Mode. What comes back
   is kept in memory only (`WikidataPlaceLookup`): the words are Wikipedia's,
@@ -1775,7 +1778,9 @@ Reopening one needs new evidence, not a fresh reading of the same code.
   app-owned zone and fetch-on-demand were each rejected, because the private
   quota belongs to the hiker. Another device shows the photo as unavailable
   (`PhotoUnavailability`), with no retry and no remove. The community's public
-  copies do not reopen this.
+  copies do not reopen this. A Wikimedia Commons copy is the one exception:
+  it is somebody else's picture that Commons still holds, so a device without
+  its file downloads it again (`HikePhotoStore.restore(_:)`).
 - **The live average speed keeps its clock, and is spoken in full.** Every
   *Avg Speed* that is not named for a clock divides by the walk's active
   clock: the time between kept fixes, which leaves pauses out and counts a
