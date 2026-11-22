@@ -21157,6 +21157,12 @@
             "value" : "Przeciągnij dowolny koniec trasy, tutaj lub na mapie, aby go odciąć. Oryginał zostaje zachowany."
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trageți de un capăt al rutei, aici sau pe hartă, pentru a-l tăia. Originalul este păstrat."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -22555,6 +22561,12 @@
             "value" : "Koniec trasy"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sfârșitul rutei"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -23171,6 +23183,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wszystko, co zostało odcięte od trasy, wróci."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tot ce a fost tăiat din rută revine."
           }
         },
         "ru" : {
@@ -28085,6 +28103,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nie ma jej jeszcze na tym urządzeniu. Spróbuj ponownie, gdy iCloud zakończy synchronizację."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nu se află încă pe acest dispozitiv. Reîncercați după ce iCloud termină sincronizarea."
           }
         },
         "ru" : {
@@ -37602,6 +37626,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nie pieszo"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nu pe jos"
           }
         },
         "ru" : {
@@ -49785,6 +49815,12 @@
             "value" : "Usuń na końcu: %@"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminați %@ de la sfârșit"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -49829,6 +49865,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Usuń na początku: %@"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminați %@ de la început"
           }
         },
         "ru" : {
@@ -50135,6 +50177,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Usunięto"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminat"
           }
         },
         "ru" : {
@@ -51484,6 +51532,12 @@
             "value" : "Przywróć"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reveniți"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -51530,6 +51584,12 @@
             "value" : "Przywróć oryginał"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reveniți la original"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -51574,6 +51634,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Przywrócić pierwotną trasę?"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reveniți la ruta originală?"
           }
         },
         "ru" : {
@@ -57980,6 +58046,12 @@
             "value" : "Początek trasy"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Începutul rutei"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -62372,6 +62444,12 @@
             "value" : "Nie udało się przywrócić pierwotnej trasy."
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ruta originală nu a putut fi restabilită."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -63196,6 +63274,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Trasa zmieniła się w trakcie edycji. Sprawdź ją i spróbuj ponownie."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ruta s-a modificat în timp ce o editați. Verificați-o, apoi reîncercați."
           }
         },
         "ru" : {
@@ -65426,6 +65510,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nie udało się zapisać tej trasy."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Această rută nu a putut fi salvată."
           }
         },
         "ru" : {
@@ -73392,6 +73482,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wędrówka nie została zmieniona. Sprawdź, czy na urządzeniu jest wolne miejsce, i spróbuj ponownie."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drumeția nu a fost modificată. Verificați dacă dispozitivul are spațiu de stocare disponibil, apoi reîncercați."
           }
         },
         "ru" : {
