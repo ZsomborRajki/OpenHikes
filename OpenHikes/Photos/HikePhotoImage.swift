@@ -207,6 +207,12 @@ nonisolated enum HikePhotoLoader {
         reading read: () -> PhotoImage?
     ) async -> PhotoDisplay {
         let reason = unavailability(of: photo, in: store)
+        // A file that is there now and was not when the read failed is one
+        // another view's download has just written, and is read again rather
+        // than called unreadable.
+        if reason == .unreadable, let image = read() {
+            return .ready(LoadedPhotoImage(image: image))
+        }
         guard reason == .notOnThisDevice, photo.license != nil, !Task.isCancelled else {
             return .unavailable(reason)
         }

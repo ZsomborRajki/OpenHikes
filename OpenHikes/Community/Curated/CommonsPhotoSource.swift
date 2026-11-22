@@ -154,12 +154,23 @@ nonisolated struct WikimediaCommonsSource: CommonsPhotoSourcing {
     /// What earlier searches learned about each file, or `nil` to keep
     /// nothing — see ``CommonsPhotoStore``.
     private let store: CommonsPhotoStore?
+    /// Where each Action API request waits its turn — see
+    /// ``CommonsRequestGate``.
+    private let gate: CommonsRequestGate
 
     /// - Parameter store: `nil` keeps nothing, which is what a suite about the
     ///   wire format wants and why it is the default here. The composition
     ///   root hands the live source the one in `Caches` — see
     ///   ``OpenHikesModel/makeTrailPhotoSource()``.
-    init(transport: Transport? = nil, pause: Pause? = nil, store: CommonsPhotoStore? = nil) {
+    /// - Parameter gate: The app's own when `nil` and the source reaches the
+    ///   network, and one of its own for a suite's transport.
+    init(
+        transport: Transport? = nil,
+        pause: Pause? = nil,
+        store: CommonsPhotoStore? = nil,
+        gate: CommonsRequestGate? = nil
+    ) {
+        self.gate = gate ?? .forSource(reachingNetwork: transport == nil)
         self.transport = transport ?? { request in
             let (data, response) = try await Self.session.data(for: request)
             return (data, (response as? HTTPURLResponse)?.statusCode ?? 0)
@@ -392,14 +403,16 @@ nonisolated private extension WikimediaCommonsSource {
         return url
     }
 
-    /// One request read by `read`, asked once more after
+    /// One Action API request read by `read`, asked once more after
     /// ``WikimediaCommonsSource/busyRetryDelay`` when the answer was *busy*.
+    /// Each try waits its turn at the gate, and the pause between them holds
+    /// nobody else up.
     func answer<Answer>(_ request: URLRequest, reading read: (Data) throws -> Answer) async throws -> Answer {
         do {
-            return try await once(request, reading: read)
+            return try await gate.run { try await once(request, reading: read) }
         } catch CommonsPhotoFailure.busy {
             try await pause(Self.busyRetryDelay)
-            return try await once(request, reading: read)
+            return try await gate.run { try await once(request, reading: read) }
         }
     }
 

@@ -1468,11 +1468,13 @@ is world-readable, because browsing needs no account.
     `PhotoLicenseCredit`.
   - Fetch over HTTPS from the two hosts the privacy policy names
     (`CommonsPhotoQuery.imageHosts`), sending `TileCache.userAgent`.
-  - Make one API request at a time, and fetch nothing in Low Data Mode.
+  - Make one Action API request at a time, across the whole app
+    (`CommonsRequestGate`), and fetch nothing in Low Data Mode.
   - Never offer one for community sharing: `HikePhoto.isOwn` is false.
-  - A saved copy whose file this device lacks is downloaded again, by the
-    name its page gives, where it is shown and never for a list
-    (`CommonsPhotoRefetch`, reached only through `HikePhotoStore.shared`).
+  - A saved copy whose file this device lacks is downloaded again where it
+    is shown, never for a list, and only as the revision its credit
+    describes (`HikePhotoLicense.fileSHA1`, `CommonsCopy`). It is reached
+    only through `HikePhotoStore.shared` (`CommonsPhotoRefetch`).
 - **Wikipedia on a place's card** (`Hikes/Places/Wikidata/`) is asked for when
   a card opens, never for a list, and never in Low Data Mode. What comes back
   is kept in memory only (`WikidataPlaceLookup`): the words are Wikipedia's,

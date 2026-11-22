@@ -48,6 +48,23 @@ struct HikePhotoLicenseTests {
         #expect(decoded.first?.isOwn == true)
     }
 
+    /// The revision a copy was made from, which the copy is downloaded again
+    /// as — and its absence on every copy saved before it was kept.
+    @Test("a licence keeps the revision it was copied from, and an older one decodes without it")
+    func revisionIsKept() throws {
+        var pinned = Self.license
+        pinned.fileSHA1 = "5fe1a8"
+        let photo = HikePhoto(importedAuthorName: "Anna", license: pinned)
+
+        let decoded = try JSONDecoder().decode([HikePhoto].self, from: JSONEncoder().encode([photo]))
+        let older = try JSONDecoder().decode([HikePhoto].self, from: JSONEncoder().encode([
+            HikePhoto(importedAuthorName: "Anna", license: Self.license),
+        ]))
+
+        #expect(decoded.first?.license?.fileSHA1 == "5fe1a8")
+        #expect(older.first?.license?.fileSHA1 == nil)
+    }
+
     /// The property is spelled `license` and the blob still says `licence`,
     /// the key every copy saved before #847 was written with. A key that
     /// followed the rename would read those copies as having no licence, and
