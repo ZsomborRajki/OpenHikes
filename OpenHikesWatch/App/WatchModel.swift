@@ -32,6 +32,11 @@
 //  to send it, so a queue that grew while the phone was away costs this
 //  actor nothing to count.
 //
+//  A drain never sends a walk the recorder may yet replace: every walk while
+//  the launch reads the journal, and the session the recorder holds after
+//  that. When the recorder lets one go, it says so and the drain runs again —
+//  see ``WatchQueueHold``.
+//
 
 import CoreLocation
 import Foundation
@@ -115,6 +120,7 @@ final class WatchModel {
         recorder.onAutoResume = { [weak self] in
             self?.forgetPosition()
         }
+        recorder.onQueueReleased = { [weak self] in self?.queueReleased() }
         recorder.setAutoPauseEnabled(library.isAutoPauseOn)
     }
 
@@ -459,6 +465,18 @@ final class WatchModel {
         link.send(walk)
     }
 
+    /// The recorder let go of a walk the drain left unsent, or of the whole
+    /// queue once the launch has read the journal — see ``WatchQueueHold``.
+    /// Drained now, because no reachability change need come: a phone that
+    /// stayed in range sends none.
+    ///
+    /// Not before ``start()``. A seeded launch's count is the fixture's, and
+    /// the drain would recount it from a disk the fixture never wrote.
+    private func queueReleased() {
+        guard isStarted else { return }
+        drainQueue()
+    }
+
     // MARK: The link
 
     private func apply(_ delivery: PhoneDelivery) {
@@ -569,7 +587,9 @@ final class WatchModel {
     }
 
     /// Offers every queued walk again, bar the ones ``PhoneLink`` holds back
-    /// as still crossing or not yet due a retry — see `WatchWalkDelivery`.
+    /// as still crossing or not yet due a retry — see `WatchWalkDelivery` —
+    /// and the ones the recorder holds back as its own — see
+    /// ``WatchQueueHold``.
     ///
     /// Sending a walk the phone already has is safe by construction: the
     /// import is keyed on `sessionID` and recognises an arrival it has seen,
@@ -585,13 +605,17 @@ final class WatchModel {
         guard !queued.isEmpty else { return }
         var isAnyUnread = false
         var offered = 0
-        for sessionID in queued.sessionIDs where link.isDue(sessionID) {
+        for sessionID in queued.sessionIDs where !recorder.queueHold.holds(sessionID) && link.isDue(sessionID) {
             // One at a time, and only a walk the link will take: the read is
             // the whole recording.
             guard let walk = await store.walks.walk(sessionID) else {
                 isAnyUnread = true
                 continue
             }
+            // Asked again once the walk is read: Continue can take its
+            // session while the read is under way, and sent then, the walk
+            // as it stood would reach the phone ahead of Stop's (#1572).
+            guard !recorder.queueHold.holds(sessionID) else { continue }
             if link.send(walk) { offered += 1 }
         }
         // Counted from what the session took, so a drain that the activation
