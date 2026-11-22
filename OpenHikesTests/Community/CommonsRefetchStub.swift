@@ -9,7 +9,7 @@
 //  somebody else, keeps earlier revisions, or had its thumbnail fail. It
 //  writes down what it was asked, can refuse every question, and can hold the
 //  first one out until told to answer it — the moment the refetch's queue is
-//  about.
+//  about — or hold every thumbnail download until told to let them arrive.
 //
 
 import Foundation
@@ -39,11 +39,18 @@ nonisolated final class CommonsRefetchStub: Sendable {
     private let refusingDownloads = Mutex(false)
     private let holdsFirstQuestion: Bool
     private let held = Mutex<CheckedContinuation<Void, Never>?>(nil)
+    /// Whether downloads are held, and the ones waiting for
+    /// ``releaseDownloads()``.
+    private let heldDownloads: Mutex<(isHolding: Bool, waiting: [CheckedContinuation<Void, Never>])>
 
-    /// - Parameter holdingFirstQuestion: Whether the first file-details
-    ///   question waits for ``answerHeldQuestion()`` before it is answered.
-    init(holdingFirstQuestion: Bool = false) {
+    /// - Parameters:
+    ///   - holdingFirstQuestion: Whether the first file-details question
+    ///     waits for ``answerHeldQuestion()`` before it is answered.
+    ///   - holdingDownloads: Whether each thumbnail download waits for
+    ///     ``releaseDownloads()`` before it arrives.
+    init(holdingFirstQuestion: Bool = false, holdingDownloads: Bool = false) {
         holdsFirstQuestion = holdingFirstQuestion
+        heldDownloads = Mutex((isHolding: holdingDownloads, waiting: []))
     }
 
     /// A small JPEG, the format every Commons copy is saved in.
@@ -115,6 +122,9 @@ nonisolated final class CommonsRefetchStub: Sendable {
     /// Whether the first question is out and being held.
     var isHoldingQuestion: Bool { held.withLock { $0 != nil } }
 
+    /// How many thumbnail downloads are out and being held.
+    var heldDownloadCount: Int { heldDownloads.withLock { $0.waiting.count } }
+
     func gone(_ name: String) { goneNames.withLock { _ = $0.insert(name) } }
 
     func failThumbnail(of name: String) { thumbnailFailures.withLock { _ = $0.insert(name) } }
@@ -137,6 +147,15 @@ nonisolated final class CommonsRefetchStub: Sendable {
         }
     }
 
+    /// Lets every held download arrive, and every later one through at once.
+    func releaseDownloads() {
+        let released = heldDownloads.withLock { held in
+            defer { held = (isHolding: false, waiting: []) }
+            return held.waiting
+        }
+        for continuation in released { continuation.resume() }
+    }
+
     var transport: CommonsPhotoRefetch.Transport {
         { [self] request in
             let url = request.url ?? URL(filePath: "/")
@@ -145,6 +164,7 @@ nonisolated final class CommonsRefetchStub: Sendable {
                 return requests.count
             }
             guard url.host() == "commons.wikimedia.org" else {
+                await holdIfAsked()
                 return refusingDownloads.withLock { $0 } ? (Data(), Self.notFound) : (Self.thumbnail, Self.answered)
             }
             if holdsFirstQuestion, count == 1 {
@@ -156,6 +176,19 @@ nonisolated final class CommonsRefetchStub: Sendable {
             let names = Self.names(in: url)
             if Self.isRevisionLookup(url) { return (revisions(of: names.first ?? ""), Self.answered) }
             return (answer(naming: names), Self.answered)
+        }
+    }
+
+    /// Waits for ``releaseDownloads()`` while downloads are held. Joined
+    /// under the lock the release empties, so a download is either held
+    /// before the release or never held.
+    private func holdIfAsked() async {
+        await withCheckedContinuation { continuation in
+            let isHeld = heldDownloads.withLock { held in
+                if held.isHolding { held.waiting.append(continuation) }
+                return held.isHolding
+            }
+            if !isHeld { continuation.resume() }
         }
     }
 
@@ -182,7 +215,7 @@ nonisolated final class CommonsRefetchStub: Sendable {
         }
         let picture = thumbnailFailures.withLock { $0.contains(name) }
             ? #""thumberror":"Error creating thumbnail: timed out""#
-            : #""thumburl":"https://upload.wikimedia.org/thumb/\#(id)/960px-\#(id).jpg""#
+            : #""thumburl":"https://upload.wikimedia.org/thumb/\#(id)/960px-\#(Self.thumbnailName(of: name))""#
         let credit = otherAuthors.withLock { $0[name] } ?? Self.author
         return """
         {"pageid":\(id),"ns":6,"title":"File:\(Self.filed(name))","imageinfo":[{\
@@ -226,5 +259,11 @@ nonisolated final class CommonsRefetchStub: Sendable {
 
     private static func filed(_ name: String) -> String {
         name.replacingOccurrences(of: "_", with: " ")
+    }
+
+    /// The file's name as a thumbnail's address spells it, so two files
+    /// asked about in different questions never share a thumbnail.
+    private static func thumbnailName(of name: String) -> String {
+        name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? name
     }
 }

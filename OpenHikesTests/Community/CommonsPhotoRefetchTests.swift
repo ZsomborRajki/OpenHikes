@@ -5,8 +5,9 @@
 //  How a saved copy's picture is asked for again: the revision it was made
 //  from or nothing, a copy saved before the hash was kept only while its
 //  credit still fits, one question at a time with every name waiting going
-//  into the next one, a name asked for twice asked about once, and a *no*
-//  remembered while a failure is not. Driven through
+//  into the next one as far as it has room, a name asked for twice asked
+//  about once, the thumbnails a few at a time, and a *no* remembered while a
+//  failure is not. Driven through
 //  ``CommonsPhotoRefetch/Transport``, as the other Commons suites are, so
 //  nothing here reaches Wikimedia.
 //
@@ -33,19 +34,30 @@ struct CommonsPhotoRefetchTests {
         return CommonsCopy(title: name, fileSHA1: sha1, author: author, licenseName: CommonsRefetchStub.licenseName)
     }
 
-    /// Waits until `count` asks are waiting on `title` — an actor's contents
-    /// need an `await`, which a settle's condition cannot make, so this is
-    /// the loop `settlePollTick()` is shared for.
+    /// Waits until `count` asks are waiting on `title`.
     private static func waitUntil(
         _ refetch: CommonsPhotoRefetch,
         has count: Int,
         waitingOn title: String,
         sourceLocation: SourceLocation = #_sourceLocation
     ) async {
+        await waitUntil("\(count) asks on \(title)", sourceLocation: sourceLocation) {
+            await refetch.waiterCount(for: title) >= count
+        }
+    }
+
+    /// Waits until `isDone` — an actor's contents need an `await`, which a
+    /// settle's condition cannot make, so this is the loop
+    /// `settlePollTick()` is shared for.
+    private static func waitUntil(
+        _ description: String,
+        sourceLocation: SourceLocation = #_sourceLocation,
+        _ isDone: () async -> Bool
+    ) async {
         let deadline = ContinuousClock.now + .seconds(5)
-        while await refetch.waiterCount(for: title) < count {
+        while await !isDone() {
             guard ContinuousClock.now < deadline, await settlePollTick() else {
-                Issue.record("Timed out waiting for \(count) asks on \(title)", sourceLocation: sourceLocation)
+                Issue.record("Timed out waiting for \(description)", sourceLocation: sourceLocation)
                 return
             }
         }
@@ -118,6 +130,43 @@ struct CommonsPhotoRefetchTests {
 
         #expect(commons.questions.count == 1)
         #expect(commons.downloads.isEmpty)
+    }
+
+    @Test("a copy whose credit no longer fits is refused, and not asked about again")
+    func unlikeCopyIsRefusedOnce() async {
+        let commons = CommonsRefetchStub()
+        commons.credit("Lac_glacier.jpg", to: "Somebody else")
+        let refetch = CommonsPhotoRefetch(transport: commons.transport)
+        let copy = Self.copy("Lac_glacier.jpg", pinnedTo: .unpinned)
+
+        #expect(await refetch.picture(of: copy) == .refused)
+        #expect(await refetch.picture(of: copy) == .refused)
+
+        #expect(commons.questions.count == 1)
+    }
+
+    @Test("a copy of a revision Commons no longer has is refused, and not looked up again")
+    func lostRevisionIsRefusedOnce() async {
+        let commons = CommonsRefetchStub()
+        commons.keepRevisions(of: "Lac_glacier.jpg", ["older"])
+        let refetch = CommonsPhotoRefetch(transport: commons.transport)
+        let copy = Self.copy("Lac_glacier.jpg", pinnedTo: .revision("saved"))
+
+        #expect(await refetch.picture(of: copy) == .refused)
+        #expect(await refetch.picture(of: copy) == .refused)
+
+        #expect(commons.questions.count == 1)
+        #expect(commons.revisionLookups.count == 1)
+    }
+
+    @Test("a refusal of one copy leaves another copy of the same file to be asked for")
+    func refusalIsTheCopys() async {
+        let commons = CommonsRefetchStub()
+        commons.keepRevisions(of: "Lac_glacier.jpg", ["older"])
+        let refetch = CommonsPhotoRefetch(transport: commons.transport)
+
+        #expect(await refetch.picture(of: Self.copy("Lac_glacier.jpg", pinnedTo: .revision("saved"))) == .refused)
+        #expect(await refetch.picture(of: Self.copy("Lac_glacier.jpg")) == Self.picture)
     }
 
     @Test("a question Commons does not answer is no answer, and the next ask asks again")
@@ -199,5 +248,66 @@ struct CommonsPhotoRefetchTests {
         #expect(answers == [Self.picture, Self.picture])
         #expect(commons.questions == [["Lac_glacier.jpg"]])
         #expect(commons.downloads.count == 1)
+    }
+
+    @Test("names too long to go in one question together go in the next")
+    func longNamesSplitAcrossQuestions() async {
+        let commons = CommonsRefetchStub(holdingFirstQuestion: true)
+        let refetch = CommonsPhotoRefetch(transport: commons.transport)
+        let names = (0..<CommonsPhotoQuery.imageInfoBatch).map { index in
+            "Вид_на_Говерлу_з_хребта_Чорногора,_Українські_Карпати_\(index).jpg"
+        }
+        let copies = names.map { Self.copy($0) }
+
+        async let first = refetch.picture(of: Self.copy("First.jpg"))
+        await settleDelegateHop(until: "the first question is out") { commons.isHoldingQuestion }
+        let answers = await withTaskGroup(of: CommonsPictureAnswer.self) { group in
+            for copy in copies {
+                group.addTask { await refetch.picture(of: copy) }
+            }
+            for name in names {
+                await Self.waitUntil(refetch, has: 1, waitingOn: name)
+            }
+            commons.answerHeldQuestion()
+            var answers: [CommonsPictureAnswer] = []
+            for await answer in group { answers.append(answer) }
+            return answers
+        }
+
+        #expect(await first == Self.picture)
+        #expect(answers.count == names.count)
+        #expect(answers.allSatisfy { $0 == Self.picture })
+        let later = commons.questions.dropFirst()
+        #expect(later.count > 1)
+        #expect(later.flatMap(\.self).sorted() == names.sorted())
+        #expect(commons.requests.allSatisfy { $0.absoluteString.utf8.count <= CommonsPhotoQuery.maximumRequestLength })
+    }
+
+    @Test("thumbnails come down a few at a time, however many are asked for")
+    func downloadsTakeTurns() async {
+        let commons = CommonsRefetchStub(holdingDownloads: true)
+        let refetch = CommonsPhotoRefetch(transport: commons.transport)
+        let turns = WikimediaCommonsSource.parallelDownloads
+        let names = (0..<(turns + 2)).map { "Photo_\($0).jpg" }
+        let copies = names.map { Self.copy($0) }
+
+        let answers = await withTaskGroup(of: CommonsPictureAnswer.self) { group in
+            for copy in copies {
+                group.addTask { await refetch.picture(of: copy) }
+            }
+            await Self.waitUntil("\(turns) downloads out and the rest waiting") {
+                await refetch.downloadsWaitingForTurn == names.count - turns && commons.heldDownloadCount == turns
+            }
+            // The two waiting for a turn have not been asked for.
+            #expect(commons.downloads.count == turns)
+            commons.releaseDownloads()
+            var answers: [CommonsPictureAnswer] = []
+            for await answer in group { answers.append(answer) }
+            return answers
+        }
+
+        #expect(answers.count == names.count)
+        #expect(answers.allSatisfy { $0 == Self.picture })
+        #expect(commons.downloads.count == names.count)
     }
 }

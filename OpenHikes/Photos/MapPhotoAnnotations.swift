@@ -88,15 +88,21 @@ final class PhotoCalloutPreview: PhotoCalloutPreviewControl {
         onTap: @escaping (UUID) -> Void
     ) {
         self.onTap = onTap
+        // A Commons copy that could not be downloaded is the one answer a
+        // reselect asks for again: the connection may be back, and nothing
+        // is on screen that a reload could flash.
+        let loads = photoID != pin.photo.id || unavailability == .notDownloaded
+        if loads { unavailability = nil }
         // Recomputed on every call rather than only for a new photo: a pin's
         // count changes under a preview that is still showing the same leading
         // photo. What must *not* be lost with it is what the load found, which
         // is why that is remembered rather than re-derived — the reselect
-        // below returns without asking the store again.
+        // below returns without asking the store again. A load forgets it
+        // first, so a preview recycled from another pin does not speak that
+        // pin's answer over this one's picture.
         accessibilityLabel = Self.label(for: pin, unavailable: unavailability)
-        guard photoID != pin.photo.id else { return }
+        guard loads else { return }
         photoID = pin.photo.id
-        unavailability = nil
         showPlaceholder("photo")
         loadTask?.cancel()
         loadTask = Task { [weak self] in
