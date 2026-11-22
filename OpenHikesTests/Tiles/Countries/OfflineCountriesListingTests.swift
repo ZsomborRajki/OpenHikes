@@ -71,10 +71,10 @@ struct OfflineCountriesListingTests {
             #expect(sections.unfinished == [colorado])
             #expect(sections.downloaded.isEmpty)
             #expect(sections.parts.map(\.lines) == [[.group(id: "US", regions: [california, colorado])]])
-            let heldTarget = sections.scrollTarget(for: "US-CO")
+            let heldTarget = try #require(sections.scrollTarget(for: "US-CO"))
             #expect(heldTarget.rowID == "US-CO")
             #expect(heldTarget.opening == nil)
-            let groupTarget = sections.scrollTarget(for: "US-CA")
+            let groupTarget = try #require(sections.scrollTarget(for: "US-CA"))
             #expect(groupTarget.rowID == OfflineCountrySections.groupRowID("US-CA"))
             #expect(groupTarget.opening == "US")
         }

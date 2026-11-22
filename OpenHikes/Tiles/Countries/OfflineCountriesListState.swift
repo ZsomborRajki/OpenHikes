@@ -3,8 +3,9 @@
 //  OpenHikes
 //
 //  What *Offline Maps*' list holds while it is up: what is typed in its
-//  search field, the order the hiker picked and the split countries opened to
-//  their regions, where a turn of the phone cannot reach it.
+//  search field, the order the hiker picked, the split countries opened to
+//  their regions and the directory it was last drawn from, where a turn of
+//  the phone cannot reach it.
 //
 //  Under the map the list is drawn in the sheet upright and in the side panel
 //  on its side, so a turn builds it again in the other host. While these were
@@ -17,6 +18,7 @@
 //  nothing turns the list into another host, it is the screen's own.
 //
 
+import Foundation
 import Observation
 
 @Observable
@@ -35,6 +37,14 @@ final class OfflineCountriesListState {
     private(set) var chosenSort: OfflineCountrySort?
     /// The split countries open in the list.
     var expanded: Set<String> = []
+    /// The directory the list is drawn from, which the host a turn of the
+    /// phone builds draws while it prepares its own, rather than its
+    /// loading state.
+    let directories: OfflineCountryDirectoryCache
+
+    init(directories: OfflineCountryDirectoryCache = OfflineCountryDirectoryCache()) {
+        self.directories = directories
+    }
 
     /// Puts the list in `sort`. Picking the order already in force, `current`,
     /// chooses nothing, so a menu that hands its selection back unchanged is
@@ -42,5 +52,16 @@ final class OfflineCountriesListState {
     func choose(_ sort: OfflineCountrySort, over current: OfflineCountrySort) {
         guard sort != current else { return }
         chosenSort = sort
+    }
+
+    /// Clears a search that would hide the area `id`, chosen on the map. With
+    /// no directory yet, whether the search holds the area is not known, so
+    /// it is cleared.
+    func clearSearch(hiding id: String) {
+        let asked = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !asked.isEmpty,
+              directories.directory?.areas(matching: asked).contains(where: { $0.id == id }) != true
+        else { return }
+        query = ""
     }
 }
