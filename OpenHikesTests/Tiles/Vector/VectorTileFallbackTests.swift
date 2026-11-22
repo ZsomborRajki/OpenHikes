@@ -119,6 +119,27 @@ struct VectorTileFallbackTests {
         #expect(stub.cache.freshDiskImage(forKey: key) == nil, "still due")
     }
 
+    /// A copy that cannot be read is nothing to keep, current or not: the
+    /// raster template stands in for it, as for a tile never saved.
+    @Test("a saved tile that cannot be read is replaced by the raster template's while the server fails", arguments: [
+        0.0, 8.0,
+    ])
+    func unreadableSavedTileFallsBack(agedByDays days: Double) async throws {
+        let stub = StubbedTileCache(vectorSources: sources)
+        defer { stub.tearDown() }
+        script(vector: .status(503))
+        let file = stub.savedFile(for: key)
+        try stub.place(in: file)
+        try Data("not a picture".utf8).write(to: file)
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date(timeIntervalSinceNow: -days * 24 * 3600)], ofItemAtPath: file.path
+        )
+
+        #expect(await stub.cache.loadTile(forKey: key, url: rasterURL) != nil)
+        #expect(hosts == [vectorHost, rasterURL.host()])
+        #expect(stub.cache.freshDiskImage(forKey: key) != nil, "the raster tile, saved in its place")
+    }
+
     /// The connection that failed the tile server would fail the raster
     /// template too, and a raster tile that came back would be filed for a
     /// week among drawn ones.

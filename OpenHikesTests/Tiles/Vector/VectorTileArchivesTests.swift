@@ -37,15 +37,22 @@ struct VectorTileArchivesTests {
     }
 
     /// What a launch in `language` at `date` draws from the bundled manifest,
-    /// keeping it in `file`.
-    private func launch(in language: String, at date: Date, keepingIn file: URL) throws -> VectorTileArchives {
+    /// keeping it in `file`, reading `manifests` where the network `mayAsk`.
+    private func launch(
+        in language: String,
+        at date: Date,
+        keepingIn file: URL,
+        manifests: StubVectorTileManifests? = nil,
+        mayAsk: @escaping @Sendable () -> Bool = { true }
+    ) throws -> VectorTileArchives {
         try #require(VectorTileArchives(
             providerIDs: ["osm"],
             bundled: bundled,
-            manifests: nil,
+            manifests: manifests,
             file: file,
             language: language,
             server: server,
+            mayAsk: mayAsk,
             launchedAt: date
         ))
     }
@@ -145,13 +152,14 @@ struct VectorTileArchivesTests {
 
     /// A write that fails leaves the record before it on disk, and a switch
     /// back to that record's language would take every tile drawn in the
-    /// other one since for current. So it is written again at the next read,
-    /// even of the same manifest, or the app's next coming to the front.
+    /// other one since for current. So it is written again by the next read
+    /// the app comes to the front for, of the same manifest, or one the
+    /// network refuses, as a device offline makes.
     @Test(
-        "a launch whose record could not be written writes it at the next chance, so a switch back redraws",
+        "a launch whose record could not be written writes it at the next read, so a switch back redraws",
         arguments: [true, false]
     )
-    func failedWriteIsMadeAgain(byARead: Bool) async throws {
+    func failedWriteIsMadeAgain(networkAllowed: Bool) async throws {
         try await withFile { file in
             let directory = file.deletingLastPathComponent()
             let manager = FileManager.default
@@ -159,13 +167,17 @@ struct VectorTileArchivesTests {
             try manager.setAttributes([.posixPermissions: 0o555], ofItemAtPath: directory.path)
             defer { try? manager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: directory.path) }
 
-            let french = try launch(in: "fr", at: Self.hoursAgo(3), keepingIn: file)
+            let manifests = StubVectorTileManifests(bundled)
+            let french = try launch(
+                in: "fr", at: Self.hoursAgo(3), keepingIn: file, manifests: manifests, mayAsk: { networkAllowed }
+            )
             french.adopt(bundled)
             #expect(VectorTileArchives.Kept.read(from: file)?.language == "de", "precondition: no write lands")
             #expect(french.redraws("osm/14/1/1", drawnAt: Self.hoursAgo(3.5)), "drawn in French from the launch")
 
             try manager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: directory.path)
-            if byARead { french.adopt(bundled) } else { french.refresh() }
+            await french.refresh()?.value
+            #expect(manifests.reads == (networkAllowed ? 1 : 0))
             #expect(VectorTileArchives.Kept.read(from: file)?.language == "fr")
 
             let german = try launch(in: "de", at: Self.hoursAgo(1), keepingIn: file)
@@ -187,6 +199,22 @@ struct VectorTileArchivesTests {
         )
 
         #expect(start.since == launch)
+    }
+
+    /// Set back during a launch below the move it made: the move is made
+    /// again from then, once, or every copy drawn until the clock caught up
+    /// would be turned away, and drawn again at every look.
+    @Test("a move later than the clock is made again from it, once, so copies drawn since are current")
+    func moveAheadOfTheClockDuringALaunch() async throws {
+        try await withFile { file in
+            let archives = try launch(in: "en", at: Date(timeIntervalSinceNow: 3600), keepingIn: file)
+            let setBack = Date()
+
+            #expect(archives.redraws("osm/14/1/1", drawnAt: setBack - 60, now: setBack), "drawn before")
+            #expect(!archives.redraws("osm/14/1/1", drawnAt: setBack, now: setBack))
+            #expect(!archives.redraws("osm/14/1/1", drawnAt: setBack + 30, now: setBack + 60), "drawn since")
+            #expect(archives.redraws("osm/14/1/1", drawnAt: setBack - 60, now: setBack + 60), "still drawn before")
+        }
     }
 
     /// A copy stored later than now was stored before the clock was set

@@ -34,17 +34,23 @@
 //  once rather than at the next read of the manifest, which a device offline
 //  or in Low Data Mode never makes: until then, every launch would draw
 //  everything again. A write that fails is not taken as made: the record
-//  before it is what the next launch would read, so it is written again at
-//  the next read and each time the app comes to the front, until it lands.
-//  Otherwise a switch back to the language before would find that record,
-//  and take every tile drawn since in the other language for current.
+//  before it is what the next launch would read, so it is written again by
+//  the next read of the manifest the app makes or tries to make, off the
+//  main actor, until it lands. Otherwise a switch back to the language before
+//  would find that record, and take every tile drawn since in the other
+//  language for current.
 //
 //  All of this is told apart by the device's clock, which can be set back.
 //  A copy stored later than now was stored before the clock went back, by
 //  archives or in a language nobody can say, so it is drawn again. And a
-//  move kept for later than the launch is made again from the launch, or
-//  every tile drawn until the clock caught up with it would be turned away
-//  as drawn before it.
+//  move later than now, kept from a launch or made earlier in this one, is
+//  made again from now, or every tile drawn until the clock caught up with
+//  it would be turned away as drawn before it, and drawn again at every
+//  look.
+//
+//  A manifest that could not be read says nothing of an archive the server
+//  answers is gone, so a tile that meets one then is the server failing
+//  (`lastReadFailed`), and a saved copy of it stays the tile.
 //
 
 import Foundation
@@ -136,6 +142,9 @@ nonisolated final class VectorTileArchives: Sendable {
         var written: Kept?
         var reading: Task<Void, Never>?
         var lastRead: ContinuousClock.Instant?
+        /// Whether the last read the manifest was due could not be made, or
+        /// failed.
+        var lastReadFailed = false
     }
 
     private static let logger = Logger(subsystem: "OpenHikes", category: "VectorTiles")
@@ -306,19 +315,32 @@ nonisolated final class VectorTileArchives: Sendable {
     /// is to be drawn again: its provider has moved to other archives since,
     /// or this launch draws names in another language than it did, or it was
     /// stored later than `now`, by a clock that has been set back since.
-    /// Safe in the map's draw pass, which it is asked from.
+    /// Safe in the map's draw pass, which it is asked from: it writes nothing
+    /// down, and a move it finds later than `now` is made again from `now`
+    /// in memory alone, kept by the next write.
     func redraws(_ key: String, drawnAt storedAt: Date, now: Date = Date()) -> Bool {
         guard let named = TileCacheKey.named(key) else { return false }
-        return state.withLock { $0.sources[named.providerID] != nil && ($0.since > storedAt || storedAt > now) }
+        return state.withLock { state in
+            guard state.sources[named.providerID] != nil else { return false }
+            // Once, rather than the earlier of the two at every ask, which
+            // would follow the clock and turn every new copy away.
+            if state.since > now { state.since = now }
+            return state.since > storedAt || storedAt > now
+        }
     }
 
     /// Reads the manifest unless it was read within ``readInterval``: the
     /// app coming to the front, which does not wait for it. The read, or
-    /// `nil` where none is made. What the providers are drawn from is
-    /// written down first, where an earlier write of it failed.
+    /// `nil` where none is made.
     @discardableResult func refresh() -> Task<Void, Never>? {
-        keep()
-        return read(unlessReadWithin: Self.readInterval)
+        read(unlessReadWithin: Self.readInterval)
+    }
+
+    /// Whether the last read of the manifest could not be made, or failed:
+    /// what a tile whose archive is gone, and not moved from, is told apart
+    /// by, as the server failing rather than an archive with no successor.
+    var lastReadFailed: Bool {
+        state.withLock { $0.lastReadFailed }
     }
 
     /// Whether `providerID` is drawn from something other than `source` now,
@@ -356,7 +378,8 @@ nonisolated final class VectorTileArchives: Sendable {
 
     /// Writes what the providers are drawn from now to `file`, unless it is
     /// what is there already: written by the launch, by a read, or again
-    /// after a write of either failed. Synchronous, and a few hundred bytes.
+    /// after a write of either failed. Synchronous, and a few hundred bytes,
+    /// so never asked on the main actor after the launch.
     private func keep() {
         guard let file else { return }
         keeping.withLock { _ in
@@ -387,13 +410,22 @@ nonisolated final class VectorTileArchives: Sendable {
         }
     }
 
+    /// `@concurrent`, so that the write ahead of the read, and the one after
+    /// it, are never the main actor's, which the app's coming to the front
+    /// asks from.
+    @concurrent
     private func readManifest() async {
+        // What a write that failed left unwritten goes first, whatever the
+        // read comes to: a device offline makes none.
+        keep()
         // A read the network refused has not been made, so the next reason
         // to read asks again.
         let asked = mayAsk()
+        var failed = true
         if asked, let manifests {
             do {
                 adopt(try await manifests.manifest())
+                failed = false
             } catch {
                 let reason = String(describing: error)
                 Self.logger.error("Reading the tile server's manifest: \(reason, privacy: .public)")
@@ -402,6 +434,7 @@ nonisolated final class VectorTileArchives: Sendable {
         let instant = now()
         state.withLock { state in
             state.reading = nil
+            state.lastReadFailed = failed
             if asked { state.lastRead = instant }
         }
     }
