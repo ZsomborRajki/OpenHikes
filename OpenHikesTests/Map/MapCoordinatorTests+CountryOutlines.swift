@@ -99,11 +99,20 @@ extension MapCoordinatorTests {
         let coordinator = MapView.Coordinator()
         let map = makeMap(view, coordinator)
         defer { detach(map) }
-        let token = outlines.attach { _ in /* nothing chosen here */ }
+        var chosen: [String] = []
+        let token = outlines.attach { chosen.append($0) }
         var listed = Self.outlinedCountries()
+        // Bounds that hold both outlines, as a tap tests the bounds first:
+        // only the outline decides which of the two points is Slovenia's.
+        listed[1].bounds.east = Self.correctedSlovenia.east
         outlines.show(listed, installed: [], selected: nil, token: token)
+        map.setRegion(listed[1].bounds.framingRegion, animated: false)
         await settleDelegateHop(until: "both countries are outlined") { polygons(on: map).count == 2 }
         let earlier = try #require(polygons(on: map).first { $0.countryID == "SI" })
+        let ljubljana = CLLocationCoordinate2D(latitude: 46.05, longitude: 14.5)
+        let eastOfTheFirstOutline = CLLocationCoordinate2D(latitude: 46.05, longitude: 16.8)
+        let tap = { coordinator.handleCountryOutlineTap(at: map.convert($0, toPointTo: map), in: map) }
+        #expect(!tap(eastOfTheFirstOutline), "precondition: the first outline stops short of it")
 
         listed[1].outline = OfflineCountryFixture.outline(of: Self.correctedSlovenia)
         outlines.show(listed, installed: [], selected: nil, token: token)
@@ -112,10 +121,11 @@ extension MapCoordinatorTests {
         }
 
         let slovenia = try #require(polygons(on: map).first { $0.countryID == "SI" })
-        let ljubljana = CLLocationCoordinate2D(latitude: 46.05, longitude: 14.5)
-        let eastOfTheFirstOutline = CLLocationCoordinate2D(latitude: 46.05, longitude: 16.8)
         #expect(slovenia.boundingMapRect.contains(MKMapPoint(eastOfTheFirstOutline)))
         #expect(!slovenia.boundingMapRect.contains(MKMapPoint(ljubljana)))
+        #expect(tap(eastOfTheFirstOutline), "a tap where the new outline is drawn chooses it")
+        #expect(!tap(ljubljana), "and where only the old one was, chooses nothing")
+        #expect(chosen == ["SI"])
         #expect(polygons(on: map).map(\.countryID) == ["AT", "SI"], "in the list's order, and only once")
     }
 
