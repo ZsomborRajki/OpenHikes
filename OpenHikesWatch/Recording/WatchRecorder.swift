@@ -175,7 +175,8 @@ final class WatchRecorder: NSObject {
     /// location managers on a watch is twice the radio for one hiker.
     var onFix: (@MainActor (CLLocation) -> Void)?
 
-    /// Called once whenever a recording ends with a walk on the disk queue.
+    /// Called once whenever a recording ends with a walk it wrote to the
+    /// disk queue.
     ///
     /// A callback rather than the return of ``stop()`` alone, because ``stop()``
     /// is not always the hiker's: a workout session that fails takes the
@@ -687,8 +688,10 @@ extension WatchRecorder {
     /// The phase a stopped walk leaves behind, and what becomes of its journal.
     ///
     /// On disk before anything is told it exists — the ordering ``WatchStore``
-    /// exists for — so ``onWalkQueued`` is called for a saved walk and never
-    /// for an unsaved one.
+    /// exists for — so ``onWalkQueued`` is called for a walk this wrote and
+    /// never for an unsaved one. A walk the queue already held, which
+    /// ``saveInterrupted()`` can keep, goes with the drain that letting go of
+    /// its hold runs — see ``onQueueReleased``.
     ///
     /// - Parameter attempt: the decision, handed the write to make — which
     ///   is the queue's, awaited, so the queue it leaves can travel with the
@@ -753,9 +756,20 @@ extension WatchRecorder {
     /// the one Stop writes over any copy the last Stop queued, which no
     /// drain sends while this recording holds it (#1572).
     func continueInterrupted() async {
-        guard case .interrupted(let recovered) = phase else { return }
+        guard case .interrupted(var recovered) = phase else { return }
         sessionID = recovered.sessionID
         phase = .preparing
+        // That copy can be a batch of fixes ahead of the journal, and Stop's
+        // walk goes over it, so the walk carries on from the copy's last fix
+        // rather than the journal's. Written down too, so a second
+        // interruption replays them — see
+        // ``WatchRecoveredRecording/tail(in:)``.
+        if let queued = await store.walks.walk(recovered.sessionID), let tail = recovered.tail(in: queued) {
+            recovered.carryOn(through: tail)
+            for fix in tail {
+                journaling { try $0.record(.fix(fix), at: fix.timestamp) }
+            }
+        }
         guard await requestPermissions(), startWorkoutSession() else {
             // Back to the choice rather than on to the failure: the walk is
             // still only in the journal, and a `.failed` phase would let the
@@ -768,11 +782,22 @@ extension WatchRecorder {
     }
 
     /// Keeps an interrupted walk as it stood when the recording stopped.
+    ///
+    /// The copy the last Stop queued, when it reads now and holds every fix
+    /// the journal does: Stop wrote it from fixes the journal may not have
+    /// had yet, and the journal's replay written over it would drop them
+    /// (#1572). It is left where it is, and goes once the hold lets go of
+    /// it. The replay otherwise.
     func saveInterrupted() async {
         guard case .interrupted(let recovered) = phase else { return }
         sessionID = recovered.sessionID
         phase = .saving
-        _ = await settle { await WatchStoppedWalk.settle(recovered.finishedWalk(), writing: $0) }
+        _ = await settle { write in
+            if let queued = await self.store.walks.walk(recovered.sessionID), recovered.tail(in: queued) != nil {
+                return .saved(queued)
+            }
+            return await WatchStoppedWalk.settle(recovered.finishedWalk(), writing: write)
+        }
     }
 
     /// Throws an interrupted walk away, which only the hiker decides.

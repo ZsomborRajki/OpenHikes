@@ -21,9 +21,13 @@
 //  So a drain never sends the session the recorder holds: from the moment
 //  its journal names it, through the hiker's answer and a recording carried
 //  on, until the recorder's own walk of it is on the queue or thrown away.
-//  Continue and Save replace the queued copy at Stop, because the queue
-//  keeps one file a session. Discard lets the copy go, as the original Stop
-//  meant it to.
+//  Each answer reads the copy again, since it can be a batch of fixes ahead
+//  of the journal — see ``WatchRecoveredRecording/tail(in:)``. Save keeps the
+//  copy when it holds every fix the journal does, and writes the journal's
+//  walk over it otherwise. Continue carries on from the copy's last fix when
+//  it is ahead, and Stop's walk goes over it, because the queue keeps one
+//  file a session. Discard lets the copy go, as the original Stop meant it
+//  to.
 //
 //  ## Everything, until the journal is read
 //

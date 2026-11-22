@@ -155,6 +155,34 @@ public struct WatchRecoveredRecording: Sendable, Equatable {
         return true
     }
 
+    /// The fixes `walk` holds past this recording's, or `nil` when `walk` is
+    /// not this recording carried at least as far.
+    ///
+    /// `walk` is the copy the queue holds for this session. Stop writes it
+    /// from the accumulator and lets the journal go without writing what the
+    /// journal still had waiting, so the copy can be a batch of fixes ahead
+    /// — see ``WatchRecordingJournalBuffer``. A journal carried on after
+    /// Continue is ahead of the copy instead, and then this is `nil`: the
+    /// copy is missing fixes the journal holds (#1572).
+    ///
+    /// One session's fixes are kept in time order, so the copy holds every
+    /// fix this recording does when it has at least as many and its fix in
+    /// the place of this recording's last is that one.
+    public func tail(in walk: WatchRecordedWalk) -> ArraySlice<WatchRecordedFix>? {
+        let held = accumulator.fixes
+        guard walk.sessionID == sessionID, walk.fixes.count >= held.count else { return nil }
+        if let last = held.last, walk.fixes[held.count - 1].timestamp != last.timestamp { return nil }
+        return walk.fixes[held.count...]
+    }
+
+    /// Applies fixes the journal never wrote down, as its own lines would
+    /// have been — see ``tail(in:)``.
+    public mutating func carryOn(through fixes: some Sequence<WatchRecordedFix>) {
+        for fix in fixes {
+            _ = apply(.fix(fix))
+        }
+    }
+
     /// The walk this recording had become when it was interrupted, or `nil`
     /// if it is not one worth keeping.
     ///
@@ -222,11 +250,14 @@ public enum WatchRecordingRecovery: Sendable, Equatable {
     /// for the walk says it was written, not that it can still be read back:
     /// one that will not decode is never sent, and a journal let go beside it
     /// would be the hike lost. So the journal is offered unless the queue
-    /// hands its walk back — one that cannot be read just now included,
-    /// because offering a walk that is already queued costs the hiker a
-    /// question, and the other mistake costs the walk. The copy left on the
-    /// queue is not sent while the offer stands, or while a walk carried on
-    /// from it records — see ``WatchQueueHold``.
+    /// hands its walk back holding every fix the journal does — one that
+    /// cannot be read just now included, because offering a walk that is
+    /// already queued costs the hiker a question, and the other mistake costs
+    /// the walk. A copy the journal has run past, which a Continue interrupted
+    /// in its turn leaves, is not the walk either — see
+    /// ``WatchRecoveredRecording/tail(in:)``. The copy left on the queue is
+    /// not sent while the offer stands, or while a walk carried on from it
+    /// records — see ``WatchQueueHold``.
     ///
     /// Or unless the phone has already confirmed it. The drain holds every
     /// walk back until this answers, but a transfer an earlier process
@@ -238,7 +269,7 @@ public enum WatchRecordingRecovery: Sendable, Equatable {
     @concurrent
     public static func checking(_ journal: WatchRecordingJournalFile, against queue: WatchWalkQueue) async -> Self {
         guard let recording = journal.recover() else { return .nothing }
-        return await queue.hasTaken(recording.sessionID) ? .alreadyQueued : .offer(recording)
+        return await queue.hasTaken(recording) ? .alreadyQueued : .offer(recording)
     }
 }
 

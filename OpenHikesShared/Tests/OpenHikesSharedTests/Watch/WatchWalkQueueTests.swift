@@ -65,19 +65,42 @@ struct WatchWalkQueueTests {
     func takenOutlivesTheReceipt() async throws {
         try await withQueue { queue in
             let walk = Fixture.walk(endingAfter: 100)
-            let neverQueued = UUID()
-            #expect(await !queue.hasTaken(walk.sessionID))
+            let recording = Fixture.recording(of: walk, fixes: 2)
+            let neverQueued = Fixture.recording(of: Fixture.walk(endingAfter: 200), fixes: 2)
+            #expect(await !queue.hasTaken(recording))
 
             _ = await queue.enqueue(walk)
-            #expect(await queue.hasTaken(walk.sessionID))
+            #expect(await queue.hasTaken(recording))
             _ = await queue.remove(walk.sessionID)
-            #expect(await queue.hasTaken(walk.sessionID))
+            #expect(await queue.hasTaken(recording))
             // A receipt says the phone has the walk whether or not this
             // queue still held it.
-            _ = await queue.remove(neverQueued)
+            _ = await queue.remove(neverQueued.sessionID)
             #expect(await queue.hasTaken(neverQueued))
 
-            #expect(await !WatchWalkQueue(directory: queue.directory).hasTaken(walk.sessionID))
+            #expect(await !WatchWalkQueue(directory: queue.directory).hasTaken(recording))
+        }
+    }
+
+    @Test("A queued walk is taken only when it holds every fix the journal does")
+    func takenOnlyWhenItCoversTheJournal() async throws {
+        try await withQueue { queue in
+            var walk = Fixture.walk(endingAfter: 100)
+            _ = await queue.enqueue(walk)
+            #expect(await queue.hasTaken(Fixture.recording(of: walk, fixes: 1)))
+
+            // A journal carried on past the copy, as Continue leaves one.
+            walk.fixes.append(
+                WatchRecordedFix(
+                    latitude: 47.5503,
+                    longitude: 12.90,
+                    timestamp: walk.endedAt.addingTimeInterval(60),
+                    horizontalAccuracy: 5
+                )
+            )
+            let carriedOn = Fixture.recording(of: walk, fixes: 3)
+            #expect(carriedOn.accumulator.fixes.count == 3)
+            #expect(await !queue.hasTaken(carriedOn))
         }
     }
 
@@ -112,6 +135,32 @@ struct WatchWalkQueueTests {
             let names = try fileNames(in: queue.directory)
             #expect(names.count == 1)
             #expect(await queue.walk(walk.sessionID) == walk)
+        }
+    }
+
+    /// Written beside its old file and the old one removed after, a process
+    /// killed between the two left both, and the next launch's index kept
+    /// whichever it listed first: a continued walk could lose to the copy it
+    /// carried on from (#1572).
+    @Test("The same session written again goes over its own file, and keeps its place")
+    func rewriteGoesOverItsOwnFile() async throws {
+        try await withQueue { queue in
+            var walk = Fixture.walk(endingAfter: 100)
+            let later = Fixture.walk(endingAfter: 150)
+            _ = await queue.enqueue(walk)
+            _ = await queue.enqueue(later)
+            let names = try fileNames(in: queue.directory)
+
+            walk.endedAt = walk.endedAt.addingTimeInterval(600)
+            walk.fixes.append(
+                WatchRecordedFix(latitude: 47.5503, longitude: 12.90, timestamp: walk.endedAt, horizontalAccuracy: 5)
+            )
+            #expect(await queue.enqueue(walk)?.sessionIDs == [walk.sessionID, later.sessionID])
+
+            #expect(try Set(fileNames(in: queue.directory)) == Set(names))
+            let relaunched = WatchWalkQueue(directory: queue.directory)
+            #expect(await relaunched.walk(walk.sessionID) == walk)
+            #expect(await relaunched.pending().sessionIDs == [walk.sessionID, later.sessionID])
         }
     }
 
@@ -199,8 +248,8 @@ struct WatchWalkQueueTests {
             let relaunched = WatchWalkQueue(directory: queue.directory)
             #expect(await relaunched.walk(walk.sessionID) == nil)
             #expect(await relaunched.pending().isEmpty)
-            // Recovered from its journal, so it ends at a different moment
-            // and is written under a different name.
+            // Recovered from its journal, so it ends at a different moment,
+            // and written over the file that would not decode.
             walk.endedAt = walk.endedAt.addingTimeInterval(-30)
             #expect(await relaunched.enqueue(walk)?.sessionIDs == [walk.sessionID])
 
@@ -290,6 +339,19 @@ struct WatchWalkQueueTests {
                 activeSeconds: seconds,
                 fixes: fixes
             )
+        }
+
+        /// The journal of `walk` as its first `count` fixes, or of a walk
+        /// carried further when `count` is more than it holds.
+        static func recording(of walk: WatchRecordedWalk, fixes count: Int) -> WatchRecoveredRecording {
+            var recording = WatchRecoveredRecording(
+                header: WatchRecordingJournalHeader(sessionID: walk.sessionID, startedAt: walk.startedAt),
+                accumulator: WatchWalkAccumulator(),
+                wasPaused: false,
+                lastRecordedAt: walk.startedAt
+            )
+            recording.carryOn(through: walk.fixes.prefix(count))
+            return recording
         }
     }
 }

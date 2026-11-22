@@ -70,6 +70,75 @@ struct WatchRecordingRecoveryTests {
         }
     }
 
+    /// Continue carries a walk on in its journal, under the session whose
+    /// shorter copy the last Stop queued. Killed before the next Stop, the
+    /// launch after finds the copy readable: let go of beside it, the journal
+    /// took everything after Continue with it (#1572).
+    @Test("A journal carried on past its queued walk is offered, not let go")
+    func journalAheadOfItsQueuedWalkIsOffered() async throws {
+        try await withStore { journal, queue in
+            try Fixture.write(steps: 6, to: journal)
+            #expect(await queue.enqueue(try #require(Fixture.walk(steps: 3))) != nil)
+
+            let relaunched = WatchWalkQueue(directory: queue.directory)
+            let recovery = await WatchRecordingRecovery.checking(journal, against: relaunched)
+            guard case .offer(let recovered) = recovery else {
+                Issue.record("Expected an offer, got \(recovery)")
+                return
+            }
+            #expect(recovered.accumulator.fixes.count == 7)
+        }
+    }
+
+    /// Stop writes the walk from the accumulator and lets the journal go
+    /// without writing what it still held, so a queued walk can be a batch
+    /// of fixes ahead of the journal beside it.
+    @Test("A queued walk ahead of its journal is the walk, not a second offer")
+    func queuedWalkAheadOfItsJournalIsTaken() async throws {
+        try await withStore { journal, queue in
+            try Fixture.write(steps: 3, to: journal)
+            #expect(await queue.enqueue(try #require(Fixture.walk(steps: 6))) != nil)
+
+            let relaunched = WatchWalkQueue(directory: queue.directory)
+            #expect(await WatchRecordingRecovery.checking(journal, against: relaunched) == .alreadyQueued)
+        }
+    }
+
+    /// What Save keeps and Continue carries on from, when the last Stop's
+    /// copy reads at the hiker's answer (#1572).
+    @Test("A queued walk ahead of its journal hands back the fixes between, and carrying on through them is the walk")
+    func queuedWalkAheadHandsBackItsTail() async throws {
+        try await withStore { journal, _ in
+            try Fixture.write(steps: 3, to: journal)
+            var recovered = try #require(journal.recover())
+            let queued = try #require(Fixture.walk(steps: 6, pausingBefore: 5))
+
+            let tail = try #require(recovered.tail(in: queued))
+            #expect(tail.map(\.timestamp) == (4...6).map { Fixture.fix(step: $0).timestamp })
+            recovered.carryOn(through: tail)
+            #expect(recovered.accumulator.fixes == queued.fixes)
+            #expect(recovered.accumulator.fixes[5].resumesAfterPause)
+            #expect(recovered.lastRecordedAt == Fixture.fix(step: 6).timestamp)
+            #expect(recovered.finishedWalk()?.distanceMeters == queued.distanceMeters)
+            #expect(recovered.tail(in: queued)?.isEmpty == true)
+        }
+    }
+
+    @Test("A walk of another session, or one its journal has run past, hands back no tail")
+    func walkBehindItsJournalHandsBackNothing() async throws {
+        try await withStore { journal, _ in
+            try Fixture.write(steps: 6, to: journal)
+            let recovered = try #require(journal.recover())
+
+            #expect(recovered.tail(in: try #require(Fixture.walk(steps: 3))) == nil)
+            #expect(recovered.tail(in: Fixture.otherWalk) == nil)
+            // As many fixes, and the last not the journal's.
+            var other = try #require(Fixture.walk(steps: 6))
+            other.fixes[6].timestamp.addTimeInterval(1)
+            #expect(recovered.tail(in: other) == nil)
+        }
+    }
+
     @Test(
         "A file named for the walk that is not one leaves the journal offered",
         arguments: [false, true]
@@ -160,6 +229,28 @@ struct WatchRecordingRecoveryTests {
         static func write(steps: Int, to journal: WatchRecordingJournalFile) throws {
             try journal.begin(header)
             try journal.append((0...steps).map { .fix(fix(step: $0)) })
+        }
+
+        /// The walk Stop would have queued for a recording of `0...steps`,
+        /// paused before `pausedStep` when there is one.
+        static func walk(steps: Int, pausingBefore pausedStep: Int? = nil) -> WatchRecordedWalk? {
+            var accumulator = WatchWalkAccumulator()
+            for (step, fix) in (0...steps).map({ ($0, fix(step: $0)) }) {
+                if step == pausedStep { accumulator.pause() }
+                accumulator.accept(
+                    latitude: fix.latitude,
+                    longitude: fix.longitude,
+                    timestamp: fix.timestamp,
+                    horizontalAccuracy: fix.horizontalAccuracy
+                )
+            }
+            return accumulator.recordedWalk(
+                sessionID: header.sessionID,
+                startedAt: header.startedAt,
+                endedAt: fix(step: steps).timestamp.addingTimeInterval(2),
+                trailHikeID: nil,
+                title: header.title
+            )
         }
     }
 }
