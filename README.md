@@ -50,17 +50,22 @@ HealthKit and Time Sensitive Notifications need a portal step only if signing re
 
 ## Recording demo
 
-On a booted simulator, tap the record button on the map (*Record a hike*, under *Make a trail*) and replay the bundled Thumsee route:
+Take a simulator from the project's pool and run the app on it from Xcode. Tap the record button on the map (*Record a hike*, under *Make a trail*) and replay the bundled Thumsee route on that simulator:
 
 ```sh
-Scripts/simulate-hike.sh start              # ~1.7 km accelerated preview
-Scripts/simulate-hike.sh --full --speed 4   # the complete 9.3 km route
-Scripts/simulate-hike.sh stop               # stop and clear location playback
+udid="$(Scripts/sim-pool.sh acquire)"   # once, before running the app: acquiring closes it
+Scripts/sim-pool.sh status              # which OpenHikes Pool <n> to choose in Xcode
+
+Scripts/simulate-hike.sh start --device "$udid"              # ~1.7 km accelerated preview
+Scripts/simulate-hike.sh --full --speed 4 --device "$udid"   # the complete 9.3 km route
+Scripts/simulate-hike.sh stop --device "$udid"               # stop and clear location playback
+
+Scripts/sim-pool.sh release             # when you are done: shut it down and give it back
 ```
 
-`OpenHikes/SimulatedLocations/ThumseeWalkWithStop.gpx` is a walk with a six-minute stop in it, for watching Auto-Pause: replay it with `--route`, `--full` and `--speed 1.4`.
+`OpenHikes/SimulatedLocations/ThumseeWalkWithStop.gpx` is a walk with a six-minute stop in it, for watching Auto-Pause: replay it with `--route`, `--full`, `--speed 1.4` and the same `--device`.
 
-`--help` lists the options for another simulator, route, speed, interval or point count.
+`--help` lists the options for another route, speed, interval or point count. *A second session on this machine* in [`AGENTS.md`](AGENTS.md) has the pool's rules.
 
 ## Build and test
 
