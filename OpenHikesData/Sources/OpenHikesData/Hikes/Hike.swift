@@ -292,12 +292,6 @@ public final class Hike {
     /// together: see that one.
     public var difficultyMetersByGrade: [String: Double] = [:]
 
-    /// The stops a trail drawn in the maker was drawn from, as JSON, or `nil`
-    /// for any other hike — read through ``drawnRoute``. See ``DrawnRoute``
-    /// for why it is one synced column rather than several, and why a
-    /// recording or an import never carries one.
-    public var drawnRouteData: Data?
-
     /// The line as it stood before *Edit Route* first trimmed it, or empty
     /// for a hike whose line was never edited: what *Revert to Original* puts
     /// back, on whichever device the hiker reverts on.
@@ -316,9 +310,9 @@ public final class Hike {
 
     /// What an edited hike was before its line was edited, beside the line
     /// itself, as JSON, or `nil` for a hike never edited — read through the
-    /// app's `routeEdit`. One `Data` column for the reason ``drawnRouteData``
-    /// is one: it crosses CloudKit as a single field, and a later addition
-    /// to it costs no schema change.
+    /// app's `routeEdit`. One `Data` column of JSON rather than a column per
+    /// field: it crosses CloudKit as a single field, and a later addition to
+    /// it costs no schema change.
     public var routeEditData: Data?
 
     /// Photos taken or imported while this hike was open, newest last once

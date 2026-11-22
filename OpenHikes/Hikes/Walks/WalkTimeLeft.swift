@@ -64,22 +64,15 @@
 //  back against a climb it never made, and a stretch walked there and back
 //  counted once against twice the time (#1039).
 //
-//  ## On a bike, or in a car
+//  ## Every line on foot
 //
-//  A trail drawn in the maker keeps what it was drawn for —
-//  ``DrawnRoute/travelMode`` — and one drawn for walking the streets, for
-//  cycling or for driving is not covered at a hiker's pace on a path. For
-//  those the signposts are the mode's own pace over the distance,
-//  ``TrailTravelMode/paceMetersPerSecond``, with no climb, which is how the
-//  maker times a leg no router timed (``TrailDraft/climbFactor(_:)`` counts a
-//  climb for hiking alone), and the calibration measures the walk against
-//  the same pace. So the time left on a ride starts near the maker's figure
-//  and becomes the rider's own. Recordings, imports and trails drawn for
-//  hiking keep DIN 33466.
-//
-//  A mode's pace takes no heights, so the rule above that a flat figure is
-//  no figure holds for hiking alone: off foot, a flat figure is the maker's
-//  own, and it is shown before calibration too.
+//  A walk is timed at a hiker's pace whatever the line it follows was made
+//  by: a recording, an import, or a trail drawn in the maker, which keeps
+//  nothing of what it was drawn for — not the stops, and not the travel
+//  mode (see ``TrailDraftSave``). A ride along a line drawn for cycling is
+//  timed as a walk until ``calibrationMeters`` and ``calibrationSeconds`` of
+//  it have calibrated the figure: the same calibration that brings a fast
+//  hiker's figure down, bounded by ``paceFactorBounds``.
 //
 //  ## On the map
 //
@@ -115,14 +108,11 @@ nonisolated enum WalkTimeLeft {
     ///   - coverage: the stretches this walk has actually spanned, each the
     ///     way it was walked, and the way it is going now.
     ///   - activeSeconds: the walk's clock with its pauses taken out.
-    ///   - travelMode: what the trail was drawn for, which sets the pace the
-    ///     signposts stand for — see the file header.
     static func seconds(
         profile: RouteProfile,
         position: Double,
         coverage: TrailWalkCoverage,
-        activeSeconds: TimeInterval,
-        travelMode: TrailTravelMode = .hiking
+        activeSeconds: TimeInterval
     ) -> TimeInterval? {
         let remainingMeters = metersAhead(
             position: position,
@@ -130,19 +120,12 @@ nonisolated enum WalkTimeLeft {
             routeMeters: profile.totalDistanceMeters
         )
         guard remainingMeters.isFinite, remainingMeters > 0 else { return nil }
-        let ahead = travelMode == .hiking
-            ? climbAhead(profile: profile, position: position, coverage: coverage)
-            : nil
-        let pace = paceFactor(
-            profile: profile,
-            coverage: coverage,
-            activeSeconds: activeSeconds,
-            travelMode: travelMode
-        )
-        // On foot, neither heights nor a calibrated pace: a flat figure is
-        // the error this exists to correct. A vehicle's pace is flat anyway.
-        guard travelMode != .hiking || ahead != nil || pace != nil else { return nil }
-        let signposts = signpostSeconds(meters: remainingMeters, climb: ahead, travelMode: travelMode)
+        let ahead = climbAhead(profile: profile, position: position, coverage: coverage)
+        let pace = paceFactor(profile: profile, coverage: coverage, activeSeconds: activeSeconds)
+        // Neither heights nor a calibrated pace: a flat figure is the error
+        // this exists to correct.
+        guard ahead != nil || pace != nil else { return nil }
+        let signposts = signpostSeconds(meters: remainingMeters, climb: ahead)
         return signposts * (pace ?? 1)
     }
 
@@ -192,33 +175,26 @@ nonisolated enum WalkTimeLeft {
     /// Against each stretch the way it was walked, over the stretches' own
     /// lengths, ``TrailWalkCoverage/walkedMeters`` — see the file header. A
     /// stretch walked there and back is walked twice, as the time spent on it
-    /// was. A trail drawn for a vehicle is measured against that vehicle's
-    /// pace.
+    /// was.
     static func paceFactor(
         profile: RouteProfile,
         coverage: TrailWalkCoverage,
-        activeSeconds: TimeInterval,
-        travelMode: TrailTravelMode = .hiking
+        activeSeconds: TimeInterval
     ) -> Double? {
         let walkedMeters = coverage.walkedMeters
         guard walkedMeters >= calibrationMeters,
               activeSeconds >= calibrationSeconds else { return nil }
-        let walked = travelMode == .hiking ? profile.climb(walking: coverage) : nil
-        let expected = signpostSeconds(meters: walkedMeters, climb: walked, travelMode: travelMode)
+        let expected = signpostSeconds(meters: walkedMeters, climb: profile.climb(walking: coverage))
         guard expected > 0 else { return nil }
         return min(max(activeSeconds / expected, paceFactorBounds.lowerBound), paceFactorBounds.upperBound)
     }
 
-    /// The signposts' time over `meters` with `climb` to make: DIN 33466 on
-    /// foot, and a vehicle's own flat pace for a trail drawn for one — see
-    /// the file header.
+    /// The signposts' time over `meters` with `climb` to make: DIN 33466.
     private static func signpostSeconds(
         meters: Double,
-        climb: (gainMeters: Double, lossMeters: Double)?,
-        travelMode: TrailTravelMode
+        climb: (gainMeters: Double, lossMeters: Double)?
     ) -> TimeInterval {
-        guard travelMode == .hiking else { return meters / travelMode.paceMetersPerSecond }
-        return WalkingTimeEstimate.seconds(
+        WalkingTimeEstimate.seconds(
             distanceMeters: meters,
             ascentMeters: climb?.gainMeters ?? 0,
             descentMeters: climb?.lossMeters ?? 0

@@ -91,29 +91,6 @@ extension TrailWalkSessionTests {
         #expect(mark.coordinate.longitude.isApproximatelyEqual(to: expected.longitude, absoluteTolerance: 1e-9))
     }
 
-    /// A trail drawn for the bike is ridden at a cyclist's pace, not walked
-    /// at a hiker's — see ``WalkTimeLeft``.
-    @Test("a trail drawn for cycling has a cyclist's time left")
-    func aDrawnRideIsTimedForTheBike() throws {
-        let session = session()
-        let ride = hike(title: "River Ride") { hike in
-            hike.drawnRoute = DrawnRoute(
-                waypoints: [hike.route[0], hike.route[hike.route.count - 1]],
-                waypointNames: [],
-                travelMode: .cycling,
-                snapsToPaths: false,
-                editedUnderSubmissionID: nil,
-                chosenLegs: []
-            )
-        }
-        let profile = RouteProfile(route: ride.route)
-        walk(session, hike: ride, profile: profile, from: 0, through: 3)
-
-        let left = try #require(session.secondsLeft())
-        let expected = session.metersLeft / TrailTravelMode.cycling.paceMetersPerSecond
-        #expect(left.isApproximatelyEqual(to: expected, absoluteTolerance: 0.001))
-    }
-
     /// Started by hand at the trailhead, before a fix has said where on the
     /// trail the hiker is: all of it is still to walk, and the payload says
     /// so from the tap.

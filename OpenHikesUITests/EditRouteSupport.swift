@@ -18,15 +18,15 @@ nonisolated extension UITestFixture {
 }
 
 extension XCTestCase {
-    /// From the open detail of a hike that was recorded or imported, pushes
-    /// *Edit Route*, which is in the list that closes the card, below the
-    /// fold.
+    /// From the open detail of any hike — recorded, imported or drawn —
+    /// pushes *Edit Route*, which is in the list that closes the card, below
+    /// the fold.
     @MainActor
     func openEditRoute(in app: XCUIApplication) {
         let editRoute = element("hike-edit-route", in: app)
         XCTAssertTrue(
             editRoute.waitForExistence(timeout: UITestTimeout.existence),
-            "a hike that was imported should offer Edit Route"
+            "a hike with a line should offer Edit Route"
         )
         scrollToTap(editRoute, in: app, attempts: 12)
         XCTAssertTrue(app.navigationBars["Edit Route"].waitForExistence(timeout: UITestTimeout.navigation))

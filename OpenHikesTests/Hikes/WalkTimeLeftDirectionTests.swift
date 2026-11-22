@@ -184,4 +184,24 @@ struct WalkTimeLeftDirectionTests {
 
         try expectEstimate(at: position, coverage: coverage, heading: .towardsEnd)
     }
+
+    /// Halfway between the hiker and the end the walk is going for, whichever
+    /// end that is.
+    @Test("the time left stands halfway along the way ahead, either way round")
+    func theMarkIsHalfwayAhead() {
+        let total = 6000.0
+        let onwards = WalkTimeLeft.midwayAhead(
+            position: 2000,
+            coverage: TrailWalkCoverage(intervals: [0, 2000], furthestDistanceMeters: 0),
+            routeMeters: total
+        )
+        #expect(onwards.isApproximatelyEqual(to: 4000, absoluteTolerance: 0.001))
+
+        let back = WalkTimeLeft.midwayAhead(
+            position: 4000,
+            coverage: TrailWalkCoverage(intervals: [6000, 4000], furthestDistanceMeters: 0),
+            routeMeters: total
+        )
+        #expect(back.isApproximatelyEqual(to: 2000, absoluteTolerance: 0.001))
+    }
 }

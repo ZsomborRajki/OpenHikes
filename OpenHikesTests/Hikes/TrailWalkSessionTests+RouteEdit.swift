@@ -49,7 +49,7 @@ extension TrailWalkSessionTests {
         walk(session, hike: hike, profile: RouteProfile(route: hike.route), from: 0, through: 4)
         #expect(session.phase == .following)
 
-        // What `TrailDraftSave.update` and a mirrored edit both come to: the
+        // What *Edit Route*'s save and a mirrored edit both come to: the
         // same hike, a new line.
         hike.replaceRoute(with: Self.straightRoute(through: 20))
         let extended = RouteProfile(route: hike.route)

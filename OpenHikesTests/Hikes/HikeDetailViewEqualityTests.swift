@@ -112,7 +112,7 @@ struct HikeDetailViewEqualityTests {
     private static let compared: Set = [
         "hike", "isSheetCompact", "highlight", "mapController", "autoSave", "entitlement",
         "settings", "locationManager", "backgroundTracker", "selectedLine", "lineStoreWatch", "walkSession",
-        "photoCapture", "photoPins", "placePins", "trailMaker",
+        "photoCapture", "photoPins", "placePins",
     ]
     /// The inputs it leaves out, each for the reason
     /// `HikeDetailView+Equatable.swift` gives.

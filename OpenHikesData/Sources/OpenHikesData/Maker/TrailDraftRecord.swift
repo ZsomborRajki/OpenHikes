@@ -99,19 +99,6 @@ public final class TrailDraftRecord {
     /// resumes as one.
     public var startIsOpen = false
 
-    /// The hike this drawing is an edit of, or `nil` for a new trail — see
-    /// ``TrailDraftController/editingHikeID``. Kept with the drawing so a
-    /// half-finished edit resumes as an edit after a relaunch rather than
-    /// saving a second copy of the trail. An inline default, like every
-    /// column here.
-    public var editingHikeID: UUID?
-
-    /// The places that hike held when the edit opened — see
-    /// ``TrailDraftController/editingPlaceIDs``. Kept beside the hike's id for
-    /// the same reason: an edit resumed without it would delete every place
-    /// the hike gained in the meantime. Empty for a new trail.
-    public var editingPlaceIDs: [UUID] = []
-
     /// The ways the hiker picked over the router's own for legs of this
     /// drawing — see ``TrailLegChoice``. Without it a restored draft routes
     /// between the same stops again and silently goes back to the router's
@@ -130,12 +117,8 @@ public final class TrailDraftRecord {
         updatedAt: Date,
         travelMode: TrailTravelMode = .hiking,
         startIsOpen: Bool = false,
-        editingHikeID: UUID? = nil,
-        editingPlaceIDs: [UUID] = [],
         chosenLegs: [TrailLegChoice] = []
     ) {
-        self.editingHikeID = editingHikeID
-        self.editingPlaceIDs = editingPlaceIDs
         self.chosenLegs = chosenLegs
         self.waypoints = waypoints
         self.waypointNames = waypointNames

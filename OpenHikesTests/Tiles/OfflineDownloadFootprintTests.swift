@@ -56,14 +56,9 @@ struct OfflineDownloadFootprintTests {
         )
     }
 
+    /// Moves `hike`'s line through *Edit Route*'s own save.
     private func redraw(_ hike: Hike) throws {
-        let outcome = TrailDraftSave.update(
-            hike,
-            from: Self.draft(longitude: Line.movedLongitude),
-            openedWith: [],
-            into: context
-        )
-        _ = try #require(outcome.hike)
+        try #require(Fixture.redraw(hike, as: Self.draft(longitude: Line.movedLongitude).routeCoordinates, in: context))
         #expect(hike.route.allSatisfy { $0.longitude == Line.movedLongitude })
     }
 

@@ -13,18 +13,17 @@
 //
 //  ## On the hike, and synced
 //
-//  For the reason ``DrawnRoute`` is: an edit made on the phone should be
-//  revertible on the iPad, and one `Data` column of JSON crosses CloudKit as
-//  a single field that a later addition costs no schema change. A drawn
-//  trail never carries one, because the maker edits it by its stops.
+//  An edit made on the phone should be revertible on the iPad, and one
+//  `Data` column of JSON crosses CloudKit as a single field that a later
+//  addition costs no schema change. Every hike can carry one, a trail drawn
+//  in the maker included: once saved it is a line like any import's.
 //
 //  ## A shared hike that was edited
 //
 //  A submission is write-once, so an edit changes the hike and not the
-//  listing, exactly as the maker's does. ``editedUnderSubmissionID`` is the
-//  note ``DrawnRoute/editedUnderSubmissionID`` keeps for a drawn trail, for
-//  every other hike: which submission the hike had when its line was last
-//  edited, so the share menu can say the shared copy shows the old route.
+//  listing. ``editedUnderSubmissionID`` is which submission the hike had
+//  when its line was last edited, so the share menu can say the shared copy
+//  shows the old route.
 //
 
 import Foundation
@@ -212,8 +211,8 @@ extension RouteEdit.RecordedWalk {
 extension Hike {
     /// What this hike was before its line was edited, or `nil` for a line
     /// never edited — see ``RouteEdit``. A value that fails to decode reads
-    /// as `nil`, as ``drawnRoute`` does, and is never taken for a hike with
-    /// no record: ``hasUnreadableRouteEdit``.
+    /// as `nil`, and is never taken for a hike with no record:
+    /// ``hasUnreadableRouteEdit``.
     var routeEdit: RouteEdit? {
         get {
             guard let routeEditData else { return nil }
@@ -234,6 +233,13 @@ extension Hike {
     /// Whether *Edit Route* has changed this hike's line and kept the one it
     /// had, which is when *Revert to Original* has something to put back.
     var hasOriginalRoute: Bool { routeEdit?.original != nil }
+
+    /// Whether the shared copy of this hike shows a route it has since been
+    /// edited away from — see ``RouteEdit/editedUnderSubmissionID``.
+    var isSharedCopyOutOfDate: Bool {
+        guard let submission = communitySubmissionID else { return false }
+        return routeEdit?.editedUnderSubmissionID == submission
+    }
 
     /// The walk this hike's recording wrote for itself, if it was recorded.
     var recordedWalk: HikeWalk? {

@@ -37,8 +37,7 @@ extension TrailWalkSession {
             profile: walkedProfile,
             position: position,
             coverage: record.coverage,
-            activeSeconds: record.activeSeconds(at: now),
-            travelMode: walkedTravelMode
+            activeSeconds: record.activeSeconds(at: now)
         )
     }
 
