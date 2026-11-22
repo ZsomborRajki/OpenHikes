@@ -145,7 +145,11 @@ struct OfflineCountryRow: View {
                 .accessibilityHidden(true)
         } else {
             glyphButton("Download \(name)", systemImage: "arrow.down.circle") {
-                countries.download(country)
+                // As the list off the server has it now: the row can be the
+                // directory's before a refresh, which the list draws until
+                // the next is prepared, and its build one the server has
+                // deleted, or its area one the server no longer offers.
+                countries.downloadListed(country.id)
             }
         }
     }

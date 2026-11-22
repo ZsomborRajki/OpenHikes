@@ -367,6 +367,21 @@ struct OfflineCountrySections: Equatable {
     /// the head of the list.
     static func groupRowID(_ id: String) -> String { "group-\(id)" }
 
+    /// Whether the list has a line for `id`: a row of its own, or a region's
+    /// under its country.
+    func holds(_ id: String) -> Bool {
+        let isID = { (country: OfflineCountryManifest.Country) in country.id == id }
+        if unfinished.contains(where: isID) || downloaded.contains(where: isID) { return true }
+        return parts.contains { part in
+            part.lines.contains { line in
+                switch line {
+                case let .area(country): isID(country)
+                case let .group(_, regions): regions.contains(where: isID)
+                }
+            }
+        }
+    }
+
     /// The list's next step towards showing an area.
     enum Reveal: Equatable {
         /// Open the country the area is under. Its regions join the list on
@@ -375,11 +390,18 @@ struct OfflineCountrySections: Equatable {
         case open(String)
         /// Go to the row.
         case scroll(to: String)
+        /// Wait: the list has no line for the area. The map draws the list
+        /// off the server as it is now, and the list draws the directory
+        /// last prepared until the next is, so an area the map offers can be
+        /// one the list does not hold yet. A scroll to it would find no row
+        /// and be spent.
+        case wait
     }
 
     /// What the list does next to show `id`, with `expanded` the split
     /// countries already open in it.
     func reveal(_ id: String, expanded: Set<String>) -> Reveal {
+        guard holds(id) else { return .wait }
         let target = scrollTarget(for: id)
         if let group = target.opening, !expanded.contains(group) { return .open(group) }
         return .scroll(to: target.rowID)
@@ -439,8 +461,9 @@ final class OfflineCountryDirectoryCache {
     @ObservationIgnored private var asked: Source?
     /// Counts the changes to ``asked``.
     @ObservationIgnored private var askedRevision = 0
-    /// The revision ``directory`` was prepared for.
-    @ObservationIgnored private var shownRevision: Int?
+    /// The revision ``directory`` was prepared for: what the list waits on
+    /// to go to an area the directory before did not hold.
+    private(set) var shownRevision: Int?
     @ObservationIgnored private let measure: Measure
 
     /// - Parameter measure: Measures what a directory is made from: a
