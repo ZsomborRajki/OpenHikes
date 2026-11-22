@@ -894,7 +894,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
 - **Fallback.** Wherever the server cannot answer, the tile comes from
   `tile.openstreetmap.org` as before. A failure of the device's own
   connection falls back to nothing: the load fails and is tried again, rather
-  than filing a raster tile among the drawn ones for a week.
+  than filing a raster tile among the drawn ones for a week. So does a server
+  failing over a saved tile, whose copy stays the tile
+  (`VectorTileClient.Drawing.unavailable`).
 - **openstreetmap.org stands beside it while the style is new.**
   `TileProvider.openStreetMapRaster` (`osm_raster`), the fourth card on
   *Map Modes*, draws the OSMF's raster tiles alone, so the two can be

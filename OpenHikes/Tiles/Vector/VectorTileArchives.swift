@@ -33,7 +33,18 @@
 //  until its redraw lands. What a launch starts from is written down at
 //  once rather than at the next read of the manifest, which a device offline
 //  or in Low Data Mode never makes: until then, every launch would draw
-//  everything again.
+//  everything again. A write that fails is not taken as made: the record
+//  before it is what the next launch would read, so it is written again at
+//  the next read and each time the app comes to the front, until it lands.
+//  Otherwise a switch back to the language before would find that record,
+//  and take every tile drawn since in the other language for current.
+//
+//  All of this is told apart by the device's clock, which can be set back.
+//  A copy stored later than now was stored before the clock went back, by
+//  archives or in a language nobody can say, so it is drawn again. And a
+//  move kept for later than the launch is made again from the launch, or
+//  every tile drawn until the clock caught up with it would be turned away
+//  as drawn before it.
 //
 
 import Foundation
@@ -98,16 +109,20 @@ nonisolated final class VectorTileArchives: Sendable {
             return try? JSONDecoder().decode(Self.self, from: data)
         }
 
-        func write(to file: URL) {
+        /// Whether this is in `file` now. A write that fails leaves what was
+        /// there before.
+        func write(to file: URL) -> Bool {
             do {
                 try FileManager.default.createDirectory(
                     at: file.deletingLastPathComponent(),
                     withIntermediateDirectories: true
                 )
                 try JSONEncoder().encode(self).write(to: file, options: .atomic)
+                return true
             } catch {
                 let reason = String(describing: error)
                 VectorTileArchives.logger.error("Keeping the tile archives: \(reason, privacy: .public)")
+                return false
             }
         }
     }
@@ -116,7 +131,8 @@ nonisolated final class VectorTileArchives: Sendable {
         var sources: [String: VectorTileSource]
         var manifest: VectorTileArchiveManifest?
         var since: Date
-        /// What is on disk, so that a read which changes nothing writes nothing.
+        /// What is on disk, so that a read which changes nothing writes
+        /// nothing: only ever a record a write has put there, or read there.
         var written: Kept?
         var reading: Task<Void, Never>?
         var lastRead: ContinuousClock.Instant?
@@ -128,6 +144,9 @@ nonisolated final class VectorTileArchives: Sendable {
     /// holds for the launch.
     let language: String
     private let state: Mutex<State>
+    /// Held across a write of `file`, so two writes cannot land in the other
+    /// order from the one `State/written` records. Never taken under `state`.
+    private let keeping = Mutex(())
     private let server: URL
     private let manifests: (any VectorTileManifestServing)?
     private let file: URL?
@@ -215,12 +234,11 @@ nonisolated final class VectorTileArchives: Sendable {
         let kept = file.flatMap(Kept.read(from:))
         guard let start = Self.start(bundled: bundled, kept: kept, server: server, language: language, at: date)
         else { return nil }
-        if let file, start != kept { start.write(to: file) }
         self.init(
             sources: Dictionary(uniqueKeysWithValues: providerIDs.map { ($0, start.source) }),
             since: start.since,
             manifest: start.manifest,
-            written: file == nil ? nil : start,
+            written: kept,
             language: language,
             server: server,
             manifests: manifests,
@@ -229,6 +247,7 @@ nonisolated final class VectorTileArchives: Sendable {
             now: now,
             didMove: didMove
         )
+        keep()
     }
 
     /// The app's, or `nil` in a suite, which reaches no tile server unless it
@@ -253,7 +272,8 @@ nonisolated final class VectorTileArchives: Sendable {
     /// What a launch draws from: the kept manifest where it is at least as
     /// new as the bundled one and names something this build draws, as the
     /// server's, and the bundled one otherwise. It moved at `date` unless it
-    /// is what the device drew from before, in the same `language`.
+    /// is what the device drew from before, in the same `language`, since a
+    /// time no later than `date`.
     static func start(
         bundled: VectorTileArchiveManifest,
         kept: Kept?,
@@ -268,7 +288,11 @@ nonisolated final class VectorTileArchives: Sendable {
             bundled
         }
         guard let source = manifest.source(on: server) else { return nil }
-        let since = if let kept, kept.source == source, kept.language == language { kept.since } else { date }
+        let since = if let kept, kept.source == source, kept.language == language, kept.since <= date {
+            kept.since
+        } else {
+            date
+        }
         return Kept(manifest: manifest, source: source, since: since, language: language)
     }
 
@@ -280,18 +304,21 @@ nonisolated final class VectorTileArchives: Sendable {
 
     /// Whether the cache's copy of the tile `key` names, drawn at `storedAt`,
     /// is to be drawn again: its provider has moved to other archives since,
-    /// or this launch draws names in another language than it did.
+    /// or this launch draws names in another language than it did, or it was
+    /// stored later than `now`, by a clock that has been set back since.
     /// Safe in the map's draw pass, which it is asked from.
-    func redraws(_ key: String, drawnAt storedAt: Date) -> Bool {
+    func redraws(_ key: String, drawnAt storedAt: Date, now: Date = Date()) -> Bool {
         guard let named = TileCacheKey.named(key) else { return false }
-        return state.withLock { $0.sources[named.providerID] != nil && $0.since > storedAt }
+        return state.withLock { $0.sources[named.providerID] != nil && ($0.since > storedAt || storedAt > now) }
     }
 
     /// Reads the manifest unless it was read within ``readInterval``: the
     /// app coming to the front, which does not wait for it. The read, or
-    /// `nil` where none is made.
+    /// `nil` where none is made. What the providers are drawn from is
+    /// written down first, where an earlier write of it failed.
     @discardableResult func refresh() -> Task<Void, Never>? {
-        read(unlessReadWithin: Self.readInterval)
+        keep()
+        return read(unlessReadWithin: Self.readInterval)
     }
 
     /// Whether `providerID` is drawn from something other than `source` now,
@@ -313,21 +340,34 @@ nonisolated final class VectorTileArchives: Sendable {
             return
         }
         let date = Date()
-        let (moved, kept) = state.withLock { state -> (Bool, Kept?) in
-            if let current = state.manifest, manifest.revision < current.revision { return (false, nil) }
+        let moved = state.withLock { state -> Bool in
+            if let current = state.manifest, manifest.revision < current.revision { return false }
             let moved = state.sources.values.contains { $0 != source }
             if moved {
                 state.sources = state.sources.mapValues { _ in source }
                 state.since = date
             }
             state.manifest = manifest
-            let kept = Kept(manifest: manifest, source: source, since: state.since, language: language)
-            guard file != nil, kept != state.written else { return (moved, nil) }
-            state.written = kept
-            return (moved, kept)
+            return moved
         }
-        if let kept, let file { kept.write(to: file) }
+        keep()
         if moved { didMove() }
+    }
+
+    /// Writes what the providers are drawn from now to `file`, unless it is
+    /// what is there already: written by the launch, by a read, or again
+    /// after a write of either failed. Synchronous, and a few hundred bytes.
+    private func keep() {
+        guard let file else { return }
+        keeping.withLock { _ in
+            let unwritten = state.withLock { state -> Kept? in
+                guard let manifest = state.manifest, let source = manifest.source(on: server) else { return nil }
+                let kept = Kept(manifest: manifest, source: source, since: state.since, language: language)
+                return kept == state.written ? nil : kept
+            }
+            guard let unwritten, unwritten.write(to: file) else { return }
+            state.withLock { $0.written = unwritten }
+        }
     }
 
     /// The read under way, joined, or one started unless the last ended

@@ -100,6 +100,25 @@ struct VectorTileFallbackTests {
         #expect(stub.isBrowsed(key))
     }
 
+    /// The raster template's tile would replace the hiker's coverage for a
+    /// week, in another look. The saved copy is drawn until the server can
+    /// draw it again, and stays due until then.
+    @Test("a saved tile past its age stays the tile while the server fails, and the raster template is not asked")
+    func savedTileOutlastsAFailingServer() async throws {
+        let stub = StubbedTileCache(vectorSources: sources)
+        defer { stub.tearDown() }
+        script(vector: .status(503))
+        let file = stub.savedFile(for: key)
+        try stub.place(in: file, agedByDays: 8)
+        let storedAt = { try FileManager.default.attributesOfItem(atPath: file.path)[.modificationDate] as? Date }
+        let placedAt = try storedAt()
+
+        #expect(await stub.cache.loadTile(forKey: key, url: rasterURL) != nil, "the saved copy")
+        #expect(hosts == [vectorHost])
+        #expect(try storedAt() == placedAt, "not written over")
+        #expect(stub.cache.freshDiskImage(forKey: key) == nil, "still due")
+    }
+
     /// The connection that failed the tile server would fail the raster
     /// template too, and a raster tile that came back would be filed for a
     /// week among drawn ones.

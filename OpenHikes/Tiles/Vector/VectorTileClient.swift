@@ -20,6 +20,12 @@
 //  - the tile could not be read or drawn. Bytes that could not be read are
 //    not kept, so the next tile that needs them asks for them again.
 //
+//  A saved copy is the exception to the first (``Drawing/unavailable``).
+//  While the server is failing, the copy stays the tile, past its age or
+//  drawn before a move or a launch in another language, and is drawn again
+//  once the server can draw it: a raster tile would replace the hiker's
+//  coverage for a week, in another look and with the local names.
+//
 //  A failure of the device's own connection is not the server's: no route,
 //  cellular data off for the app. It pauses nothing and falls back to
 //  nothing (``Drawing/offline``), because the raster template would fail the
@@ -103,6 +109,10 @@ nonisolated final class VectorTileClient: Sendable {
         case provisional(Data)
         /// Not drawn: the provider's raster template is asked instead.
         case fallBack
+        /// Not drawn, because the server is failing or its archive is passed
+        /// over after a failure: the raster template stands in, except for a
+        /// tile saved on the device, whose copy is kept as the tile instead.
+        case unavailable
         /// The device reached no server, so the raster template is not asked
         /// either: the load fails, and is tried again as any failed load is.
         case offline
@@ -213,12 +223,12 @@ nonisolated final class VectorTileClient: Sendable {
             // because a move away from that one waits out a read just made.
             guard await archives.moved(from: source, for: named.providerID) else { return .fallBack }
             return await drawing(forKey: key)
-        case nil:
+        case .unavailable, nil:
             #if DEBUG
-            Self.logger.debug("Vector tile \(key, privacy: .public): archive passed over after a failure")
+            Self.logger.debug("Vector tile \(key, privacy: .public): archive failing, or passed over after a failure")
             #endif
-            return .fallBack
-        case .missing, .refused, .unavailable:
+            return .unavailable
+        case .missing, .refused:
             return .fallBack
         }
     }
