@@ -180,6 +180,29 @@ struct RouteEditWorkoutTests {
         #expect(request.route == RouteTrim.trimmed(Self.route, keeping: 0...kept))
     }
 
+    @Test("a cut made after Reverse comes off the workout too")
+    func aCutAfterTurningRound() async throws {
+        let harness = try Harness()
+        let session = RouteTrimSession()
+        await session.load(Self.route)
+        await session.reverse()
+        // Turned round, the start is the walk's end: four tenths of the line
+        // off it leaves the walk's first six.
+        session.move(.start, to: session.totalMeters * 0.4)
+        let destination = RouteTrimSession.Destination(
+            hike: harness.hike,
+            context: harness.container.mainContext,
+            health: harness.health
+        ) { Self.route }
+
+        #expect(await session.save(to: destination))
+        await session.workoutReplacement?.value
+
+        let request = try #require(harness.writer.written.first)
+        #expect(request.route == Array(Self.route[0...6]))
+        #expect(request.distanceMeters == harness.hike.distanceMeters)
+    }
+
     @Test("a hike Health never held is saved without asking Health anything")
     func aSavedTrimWithNothingOwed() async throws {
         let harness = try Harness(wroteToHealth: false)

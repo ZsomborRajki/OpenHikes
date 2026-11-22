@@ -396,9 +396,11 @@ final class RouteTrimSession {
         preview.present(self)
     }
 
-    /// Takes the cuts off the map, for good — see the file header.
+    /// Takes the cuts off the map, for good — see the file header — and
+    /// stops reading the line's junctions, which may be asking Overpass.
     func end() {
         isEnded = true
+        junctionSearch?.cancel()
         preview?.withdraw(self)
     }
 }

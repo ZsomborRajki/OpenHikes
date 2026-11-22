@@ -515,8 +515,8 @@ private extension HikeDetailView {
             if hike.drawnRouteData != nil {
                 if let trailMaker { HikeRouteEditButton(hike: hike, maker: trailMaker) }
             } else if line.pointCount > 1 {
-                // A line somebody walked or imported is trimmed, never
-                // re-routed — see ``RouteTrimView``.
+                // A line somebody walked or imported is edited where it
+                // lies, never reopened in the maker — see ``RouteTrimView``.
                 HikeRouteTrimLink(hike: hike)
             }
             renameButton(scroller)

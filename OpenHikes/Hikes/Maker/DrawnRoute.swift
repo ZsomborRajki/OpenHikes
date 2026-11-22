@@ -19,10 +19,11 @@
 //  than a column per field, so the whole plan crosses CloudKit as one
 //  `CD_drawnRouteData` field and a later addition to it costs no schema
 //  change. `nil` for every hike that was not drawn in the maker — a recording
-//  or an import has no stops to reopen, and re-routing a line somebody
-//  actually walked would replace it with a guess (the owner's decision: the
-//  maker reopens maker-born hikes only). *Edit Route* on any other hike trims
-//  its line and re-routes none of it — see ``RouteTrimView``.
+//  or an import has no stops to reopen, and re-routing the whole of a line
+//  somebody actually walked would replace it with a guess (the owner's
+//  decision: the maker reopens maker-born hikes only). *Edit Route* on any
+//  other hike changes its line only where the hiker asks, and marks what it
+//  redraws as a guess — see ``RouteTrimView`` and ``RouteStep``.
 //
 //  ## A field, not an asset, so the chosen ways are bounded
 //

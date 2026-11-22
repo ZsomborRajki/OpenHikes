@@ -54,7 +54,11 @@
 //  step that clears it, and ``RouteSteps/Applied/clockedRoute`` keeps the
 //  line it was last read off, for a workout to be written from: the same
 //  steps give the same walk whichever of them were saved first. Nothing made
-//  after the clock is gone can say what it takes off the walk.
+//  after the clock is gone can say what it takes off the walk. It can say
+//  where the line no longer goes, so the workout leaves out the points of
+//  the clocked line that a later cut or step took away
+//  (``RouteSteps/walked(_:stillOn:)``): a drive cut off a line turned round
+//  is not left in Health.
 //
 //  ## A step that changes nothing
 //
@@ -233,6 +237,26 @@ nonisolated public enum RouteSteps {
             lastStepChangedLine: lastStepChangedLine,
             clockedRoute: clockedRoute
         )
+    }
+
+    /// The points of `clocked`, an ``Applied/clockedRoute``, that `kept`,
+    /// the line every step and both cuts leave, still goes through, in their
+    /// own order — see *The clock a step leaves* in the file header. Matched
+    /// by place alone, because the step that cleared the clock took the
+    /// times and kept every place.
+    public static func walked(_ clocked: [RouteCoordinate], stillOn kept: [RouteCoordinate]) -> [RouteCoordinate] {
+        let places = Set(kept.map(Place.init))
+        return clocked.filter { places.contains(Place($0)) }
+    }
+
+    private struct Place: Hashable {
+        let latitude: Double
+        let longitude: Double
+
+        init(_ point: RouteCoordinate) {
+            latitude = point.latitude
+            longitude = point.longitude
+        }
     }
 
     /// Whether two points are the same fix: where and when.

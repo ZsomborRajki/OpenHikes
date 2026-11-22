@@ -6,9 +6,10 @@
 //  it was drawn from — see ``DrawnRoute`` and ``TrailDraftController/edit(_:)``.
 //
 //  Drawn only for a hike that carries a ``DrawnRoute``. A recording or an
-//  import has no stops, and re-routing a line somebody walked would replace
-//  it with a guess — the owner's decision. Its *Edit Route* is the row below,
-//  ``HikeRouteTrimLink``, which trims the line and re-routes none of it.
+//  import has no stops, and re-routing the whole of a line somebody walked
+//  would replace it with a guess — the owner's decision. Its *Edit Route* is
+//  the row below, ``HikeRouteTrimLink``, which keeps every point it is not
+//  asked to change and marks what it redraws as a guess (``RouteStep``).
 //
 //  The maker holds one drawing at a time, so a half-drawn *other* trail is
 //  asked about before it is replaced, the way the maker's own ✕ asks before a
@@ -55,7 +56,7 @@ struct HikeRouteEditButton: View {
 }
 
 /// *Edit Route* on a hike that was recorded or imported: the way to the
-/// screen that trims its line — see ``RouteTrimView``. The same row and the
+/// screen that cuts and changes its line — see ``RouteTrimView``. The same row and the
 /// same words as the maker's, because to the hiker it is the same thing to
 /// want.
 struct HikeRouteTrimLink: View {
