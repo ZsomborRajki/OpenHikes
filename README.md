@@ -16,7 +16,7 @@ There is no OpenHikes account and no server holding your hikes: they live on the
 - **Walking a saved trail**, with progress along it, the time left shown on the line ahead, a history of past walks and a shareable photo card.
 - **Junction warnings** while you follow a trail: the phone says which way to go before each fork, and the watch taps. Off until you turn them on from the map.
 - **Statistics**: an interactive elevation profile, the segments between a hike's stops, overall and moving average speed, surface and Swiss Alpine Club difficulty from OpenStreetMap, and yearly and all-time totals.
-- **Maps**: the OpenHikes map, drawn on the device from OpenStreetMap's data, openstreetmap.org's own tiles, Apple's standard and satellite maps, Stadia Outdoors, Stamen Terrain and Thunderforest Outdoors, with OpenStreetMap's marked hiking routes as a layer you can switch off and every hike in your library drawn faintly on top. Tilting the map raises the terrain in 3D under the satellite map and the tile styles. A route's map can be downloaded where the provider allows it, and a switch in Settings saves the tiles you browse around a hike.
+- **Maps**: the OpenHikes map, drawn on the device from OpenStreetMap's data, with national parks and nature reserves outlined and named along their borders, openstreetmap.org's own tiles, Apple's standard and satellite maps, Stadia Outdoors, Stamen Terrain and Thunderforest Outdoors, with OpenStreetMap's marked hiking routes as a layer you can switch off and every hike in your library drawn faintly on top. Tilting the map raises the terrain in 3D under the satellite map and the tile styles. A route's map can be downloaded where the provider allows it, and a switch in Settings saves the tiles you browse around a hike.
 - **Photos** taken on a walk or picked from the library, pinned to where on the trail they were taken.
 - **Weather** from WeatherKit: now, the next twelve hours and the week ahead.
 - **Widget and Live Activity**: the trail, or the recording in progress, on the Home Screen, the Lock Screen and in the Dynamic Island.
@@ -50,17 +50,22 @@ HealthKit and Time Sensitive Notifications need a portal step only if signing re
 
 ## Recording demo
 
-On a booted simulator, tap the record button on the map (*Record a hike*, under *Make a trail*) and replay the bundled Thumsee route:
+Take a simulator from the project's pool and run the app on it from Xcode. Tap the record button on the map (*Record a hike*, under *Make a trail*) and replay the bundled Thumsee route on that simulator:
 
 ```sh
-Scripts/simulate-hike.sh start              # ~1.7 km accelerated preview
-Scripts/simulate-hike.sh --full --speed 4   # the complete 9.3 km route
-Scripts/simulate-hike.sh stop               # stop and clear location playback
+udid="$(Scripts/sim-pool.sh acquire)"   # once, before running the app: acquiring closes it
+Scripts/sim-pool.sh status              # which OpenHikes Pool <n> to choose in Xcode
+
+Scripts/simulate-hike.sh start --device "$udid"              # ~1.7 km accelerated preview
+Scripts/simulate-hike.sh --full --speed 4 --device "$udid"   # the complete 9.3 km route
+Scripts/simulate-hike.sh stop --device "$udid"               # stop and clear location playback
+
+Scripts/sim-pool.sh release             # when you are done: shut it down and give it back
 ```
 
-`OpenHikes/SimulatedLocations/ThumseeWalkWithStop.gpx` is a walk with a six-minute stop in it, for watching Auto-Pause: replay it with `--route`, `--full` and `--speed 1.4`.
+`OpenHikes/SimulatedLocations/ThumseeWalkWithStop.gpx` is a walk with a six-minute stop in it, for watching Auto-Pause: replay it with `--route`, `--full`, `--speed 1.4` and the same `--device`.
 
-`--help` lists the options for another simulator, route, speed, interval or point count.
+`--help` lists the options for another route, speed, interval or point count. *A second session on this machine* in [`AGENTS.md`](AGENTS.md) has the pool's rules.
 
 ## Build and test
 

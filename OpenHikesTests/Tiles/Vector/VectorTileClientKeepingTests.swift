@@ -26,9 +26,10 @@ struct VectorTileClientKeepingTests {
         defer { StubTileProtocol.reset() }
         StubTileProtocol.alwaysRespond(with: .init(statusCode: 204))
         let client = VectorTileClient(
-            archives: VectorTileArchives(sources: ["osm": VectorTileSource(archiveURL: archive, maximumZ: 15)]),
-            session: URLSession(configuration: StubTileProtocol.sessionConfiguration()),
-            language: "en"
+            archives: VectorTileArchives(
+                sources: ["osm": VectorTileSource(archiveURL: archive, maximumZ: 15)], language: "en"
+            ),
+            session: URLSession(configuration: StubTileProtocol.sessionConfiguration())
         )
         let limit = VectorTileClient.keptArchiveTiles
 

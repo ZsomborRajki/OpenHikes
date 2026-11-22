@@ -20,6 +20,12 @@
 //  - the tile could not be read or drawn. Bytes that could not be read are
 //    not kept, so the next tile that needs them asks for them again.
 //
+//  A saved copy is the exception to the first (``Drawing/unavailable``).
+//  While the server is failing, the copy stays the tile, past its age or
+//  drawn before a move or a launch in another language, and is drawn again
+//  once the server can draw it: a raster tile would replace the hiker's
+//  coverage for a week, in another look and with the local names.
+//
 //  A failure of the device's own connection is not the server's: no route,
 //  cellular data off for the app. It pauses nothing and falls back to
 //  nothing (``Drawing/offline``), because the raster template would fail the
@@ -52,7 +58,8 @@
 //  from the archive it names now, rather than falling back: a 410 is a build
 //  retired since the manifest was last read, not a server in trouble. Where
 //  the manifest names nothing newer, the basemap's 410 falls back and the
-//  extras' leaves the drawing provisional, as any refusal does.
+//  extras' leaves the drawing provisional, as any refusal does. Where the
+//  manifest could not be read, the basemap's 410 is the server failing.
 //
 
 import Foundation
@@ -103,6 +110,10 @@ nonisolated final class VectorTileClient: Sendable {
         case provisional(Data)
         /// Not drawn: the provider's raster template is asked instead.
         case fallBack
+        /// Not drawn, because the server is failing or its archive is passed
+        /// over after a failure: the raster template stands in, except for a
+        /// tile saved on the device, whose copy is kept as the tile instead.
+        case unavailable
         /// The device reached no server, so the raster template is not asked
         /// either: the load fails, and is tried again as any failed load is.
         case offline
@@ -155,17 +166,18 @@ nonisolated final class VectorTileClient: Sendable {
     ///     drawn from.
     ///   - session: the cache's own, so the tile server is told who is asking
     ///     as every tile server is.
-    ///   - language: the language whose names the map prefers.
     ///   - now: the clock ``failurePause`` is measured on, injected for tests.
+    ///
+    /// The names are drawn in the archives' language, which is what the
+    /// cache's copies are kept current by (``VectorTileArchives/language``).
     init(
         archives: VectorTileArchives,
         session: URLSession,
-        language: String = VectorTileLabels.appLanguage,
         now: @escaping @Sendable () -> ContinuousClock.Instant = { .now }
     ) {
         self.archives = archives
         self.session = session
-        self.language = language
+        language = archives.language
         self.now = now
     }
 
@@ -208,18 +220,30 @@ nonisolated final class VectorTileClient: Sendable {
         case .offline:
             return .offline
         case .retired:
-            // Drawn again from the archive the manifest names now: once,
-            // because a move away from that one waits out a read just made.
-            guard await archives.moved(from: source, for: named.providerID) else { return .fallBack }
-            return await drawing(forKey: key)
-        case nil:
+            return await drawingAfterRetirement(forKey: key, of: source, providerID: named.providerID)
+        case .unavailable, nil:
             #if DEBUG
-            Self.logger.debug("Vector tile \(key, privacy: .public): archive passed over after a failure")
+            Self.logger.debug("Vector tile \(key, privacy: .public): archive failing, or passed over after a failure")
             #endif
-            return .fallBack
-        case .missing, .refused, .unavailable:
+            return .unavailable
+        case .missing, .refused:
             return .fallBack
         }
+    }
+
+    /// The tile `key` names after the server answered that `source`'s
+    /// basemap is gone: drawn again from the archive the manifest names now,
+    /// once, because a move away from that one waits out a read just made.
+    /// Where the manifest still names it, the raster template draws the
+    /// tile; where it could not be read, the server is failing, and a saved
+    /// copy stays the tile (``Drawing/unavailable``).
+    private func drawingAfterRetirement(
+        forKey key: String,
+        of source: VectorTileSource,
+        providerID: String
+    ) async -> Drawing {
+        if await archives.moved(from: source, for: providerID) { return await drawing(forKey: key) }
+        return archives.lastReadFailed ? .unavailable : .fallBack
     }
 
     /// What a lookup came to, or `nil` where the archive is passed over.

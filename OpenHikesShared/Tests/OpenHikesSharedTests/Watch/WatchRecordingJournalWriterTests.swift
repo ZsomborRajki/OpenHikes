@@ -134,6 +134,124 @@ struct WatchRecordingJournalWriterTests {
         }
     }
 
+    @Test("A header the disk refused is written ahead of the next line, once the disk takes it")
+    func refusedHeaderIsWrittenWithTheNextLine() throws {
+        try withWriter { writer in
+            // A file where the journal's directory goes, so the header is refused.
+            let directory = writer.file.url.deletingLastPathComponent()
+            try Data().write(to: directory)
+            #expect(throws: (any Error).self) { try writer.begin(Fixture.header) }
+            #expect(throws: (any Error).self) {
+                try writer.record(.fix(Fixture.fix(step: 0)), at: Fixture.time(step: 0))
+            }
+            try FileManager.default.removeItem(at: directory)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+            // One fix, well short of a batch: a recording with no journal at
+            // all is not one to keep waiting.
+            try writer.record(.fix(Fixture.fix(step: 1)), at: Fixture.time(step: 1))
+
+            let recovered = try #require(writer.file.recover())
+            #expect(recovered.header == Fixture.header)
+            #expect(recovered.accumulator.fixes.count == 2)
+        }
+    }
+
+    @Test("Lines refused behind a header that landed go with the next line, not the next batch")
+    func linesBehindALandedHeaderStayDue() throws {
+        try withWriter { writer in
+            let directory = writer.file.url.deletingLastPathComponent()
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try Data().write(to: writer.file.url)
+            try withJournalReadOnly(writer.file) {
+                try withNothingNewIn(directory) {
+                    #expect(throws: (any Error).self) { try writer.begin(Fixture.header) }
+                }
+                // An atomic write keeps the mode of the file it replaces, so
+                // the header lands and the line behind it is refused.
+                #expect(throws: (any Error).self) {
+                    try writer.record(.fix(Fixture.fix(step: 0)), at: Fixture.time(step: 0))
+                }
+                let headerOnly = try #require(writer.file.recover())
+                #expect(headerOnly.header == Fixture.header)
+                #expect(headerOnly.accumulator.fixes.isEmpty)
+            }
+
+            // One more fix, well short of a batch.
+            try writer.record(.fix(Fixture.fix(step: 1)), at: Fixture.time(step: 1))
+
+            let recovered = try #require(writer.file.recover())
+            #expect(recovered.header == Fixture.header)
+            #expect(recovered.accumulator.fixes.count == 2)
+        }
+    }
+
+    @Test("A new recording's lines never go under the last recording's header")
+    func linesWaitForTheirOwnHeader() throws {
+        try withWriter { writer in
+            try writer.begin(Fixture.header)
+            try writer.record(.fix(Fixture.fix(step: 0)), at: Fixture.time(step: 0))
+            try writer.flush()
+
+            let next = WatchRecordingJournalHeader(sessionID: UUID(), startedAt: Fixture.time(step: 5))
+            try withNothingNewIn(writer.file.url.deletingLastPathComponent()) {
+                #expect(throws: (any Error).self) { try writer.begin(next) }
+                #expect(throws: (any Error).self) {
+                    try writer.record(.fix(Fixture.fix(step: 6)), at: Fixture.time(step: 6))
+                }
+            }
+            // The last journal could still be appended to, and was left alone.
+            let earlier = try #require(writer.file.recover())
+            #expect(earlier.header == Fixture.header)
+            #expect(earlier.accumulator.fixes.count == 1)
+
+            try writer.record(.fix(Fixture.fix(step: 7)), at: Fixture.time(step: 7))
+            let recovered = try #require(writer.file.recover())
+            #expect(recovered.header == next)
+            #expect(recovered.accumulator.fixes.map(\.timestamp) == [Fixture.time(step: 6), Fixture.time(step: 7)])
+        }
+    }
+
+    @Test("A recording taken up again after a relaunch goes on under the header already on disk")
+    func recoveredJournalIsAppendedTo() throws {
+        try withWriter { writer in
+            try writer.begin(Fixture.header)
+            try writer.record(.fix(Fixture.fix(step: 0)), at: Fixture.time(step: 0))
+            try writer.flush()
+
+            // What a relaunch holds: the same file, and a writer that never began.
+            var relaunched = WatchRecordingJournalWriter(file: writer.file)
+            #expect(relaunched.file.recover() != nil)
+            let breakAt = Fixture.time(step: 1)
+            try relaunched.record(.paused(breakAt), .resumed(breakAt), at: breakAt)
+            try relaunched.record(.fix(Fixture.fix(step: 2)), at: Fixture.time(step: 2))
+            try relaunched.flush()
+
+            let recovered = try #require(relaunched.file.recover())
+            #expect(recovered.header == Fixture.header)
+            #expect(recovered.accumulator.fixes.count == 2)
+            #expect(recovered.accumulator.fixes.last?.resumesAfterPause == true)
+        }
+    }
+
+    /// Makes `directory` read-only for `body` and gives it back: a file
+    /// already in it can still be written, and nothing new can be made there.
+    private func withNothingNewIn(_ directory: URL, _ body: () throws -> Void) throws {
+        let manager = FileManager.default
+        try manager.setAttributes([.posixPermissions: 0o555], ofItemAtPath: directory.path)
+        defer { try? manager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: directory.path) }
+        try body()
+    }
+
+    /// Makes the journal read-only for `body` and gives it back: every append
+    /// in it throws, and an atomic write still replaces it.
+    private func withJournalReadOnly(_ file: WatchRecordingJournalFile, _ body: () throws -> Void) throws {
+        let manager = FileManager.default
+        try manager.setAttributes([.posixPermissions: 0o444], ofItemAtPath: file.url.path)
+        defer { try? manager.setAttributes([.posixPermissions: 0o644], ofItemAtPath: file.url.path) }
+        try body()
+    }
+
     /// Moves the journal aside for `body`, so every append in it throws, and
     /// puts it back.
     private func withJournalMissing(_ file: WatchRecordingJournalFile, _ body: () throws -> Void) throws {

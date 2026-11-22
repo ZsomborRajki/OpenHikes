@@ -794,15 +794,17 @@ nonisolated extension TileCache {
     private func fetchTile(forKey key: String, url: URL) async -> FetchedTile? {
         // A provider drawn from vector tiles asks the tile server first, and
         // comes down to its raster template below whenever that brings nothing,
-        // unless the device itself is offline, which the template would be too.
+        // unless the device itself is offline, which the template would be too,
+        // or the server is failing over a saved copy, which then stays the tile
+        // rather than be replaced for a week by the template's.
         switch await vectorTiles?.drawing(forKey: key) {
         case let .png(drawn):
             if let image = TileImage(data: drawn) { return FetchedTile(data: drawn, image: image) }
         case let .provisional(drawn):
             if let image = TileImage(data: drawn) { return FetchedTile(data: drawn, image: image, isProvisional: true) }
-        case .offline:
+        case .unavailable where hasSavedCopy(ofKey: key), .offline:
             return nil
-        case .fallBack, nil:
+        case .fallBack, .unavailable, nil:
             break
         }
         // A deadline a raster server named stands for its URL, whichever

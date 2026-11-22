@@ -10,8 +10,8 @@
 //  is every country and region, some four hundred areas and two and a half
 //  thousand rings, an area of islands — Nunavut, Indonesia — hundreds on its
 //  own. So an area is one overlay and one renderer, not one a ring; the
-//  overlays are rebuilt only when the areas listed change; and choosing a
-//  row draws again only the areas whose look it changed.
+//  overlays are rebuilt only when the areas listed or their outlines change;
+//  and choosing a row draws again only the areas whose look it changed.
 //
 
 import MapKit
@@ -42,6 +42,9 @@ struct CountryOutlineMapState {
     }
 
     var polygons: [OfflineCountryPolygon] = []
+    /// The areas the polygons were last checked against, as the list held
+    /// them.
+    var drawn: [OfflineCountryManifest.Country] = []
     var renderers: [ObjectIdentifier: MKMultiPolygonRenderer] = [:]
     /// How each area was last drawn, so a change draws again only those whose
     /// look it changed.
@@ -72,7 +75,16 @@ extension MapView.Coordinator {
 
     private func applyCountryOutlines(_ outlines: OfflineCountryOutlines, on mapView: MKMapView) {
         let shown = outlines.isActive ? outlines.countries : []
-        if countryOutlineMap.polygons.map(\.countryID) != shown.map(\.id) {
+        // An area the list keeps under its id with a new outline is drawn
+        // again, or a tap would choose by a shape the map does not show.
+        let isReshaped = !countryOutlineMap.drawn.elementsEqual(shown) { drawn, listed in
+            drawn.id == listed.id && drawn.outline == listed.outline
+        }
+        // Kept as the list holds them, even when nothing moved, so the next
+        // pass compares outlines that share storage, which Swift answers
+        // without reading a point: choosing a row compares ids alone.
+        countryOutlineMap.drawn = shown
+        if isReshaped {
             mapView.removeOverlays(countryOutlineMap.polygons)
             countryOutlineMap.renderers = [:]
             countryOutlineMap.looks = [:]

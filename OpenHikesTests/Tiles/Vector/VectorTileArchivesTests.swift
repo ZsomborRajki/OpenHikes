@@ -4,9 +4,10 @@
 //
 //  What the vector providers are drawn from, as the tile server's manifest
 //  moves it: which manifest a launch starts from, what a read moves and
-//  keeps for the next launch, which tiles are drawn again after a move, and
-//  how often the manifest is read. The manifest is a stub's, the clock is
-//  one the test moves, and what is kept goes to a directory of the test's.
+//  keeps for the next launch, which tiles are drawn again after a move or a
+//  launch in another language, and how often the manifest is read. The
+//  manifest is a stub's, the clock is one the test moves, and what is kept
+//  goes to a directory of the test's.
 //
 
 import Foundation
@@ -35,6 +36,27 @@ struct VectorTileArchivesTests {
         try await body(directory.appending(path: "kept.json"))
     }
 
+    /// What a launch in `language` at `date` draws from the bundled manifest,
+    /// keeping it in `file`, reading `manifests` where the network `mayAsk`.
+    private func launch(
+        in language: String,
+        at date: Date,
+        keepingIn file: URL,
+        manifests: StubVectorTileManifests? = nil,
+        mayAsk: @escaping @Sendable () -> Bool = { true }
+    ) throws -> VectorTileArchives {
+        try #require(VectorTileArchives(
+            providerIDs: ["osm"],
+            bundled: bundled,
+            manifests: manifests,
+            file: file,
+            language: language,
+            server: server,
+            mayAsk: mayAsk,
+            launchedAt: date
+        ))
+    }
+
     // MARK: A launch
 
     /// An earlier build drew from names of its own, and nothing says which,
@@ -42,7 +64,9 @@ struct VectorTileArchivesTests {
     @Test("a first launch draws from the bundled manifest, from the launch on")
     func firstLaunch() throws {
         let launch = Self.hoursAgo(1)
-        let start = try #require(VectorTileArchives.start(bundled: bundled, kept: nil, server: server, at: launch))
+        let start = try #require(
+            VectorTileArchives.start(bundled: bundled, kept: nil, server: server, language: "en", at: launch)
+        )
 
         #expect(start.manifest == bundled)
         #expect(start.source == (try source(of: bundled)))
@@ -53,9 +77,11 @@ struct VectorTileArchivesTests {
     func keptManifestWins() throws {
         let earlier = Self.hoursAgo(5)
         for kept in [newer, VectorTileArchiveManifest.fixture(revision: 1, basemap: "planet-c")] {
-            let record = VectorTileArchives.Kept(manifest: kept, source: try source(of: kept), since: earlier)
+            let record = VectorTileArchives.Kept(
+                manifest: kept, source: try source(of: kept), since: earlier, language: "en"
+            )
             let start = try #require(
-                VectorTileArchives.start(bundled: bundled, kept: record, server: server, at: .now)
+                VectorTileArchives.start(bundled: bundled, kept: record, server: server, language: "en", at: .now)
             )
 
             #expect(start.manifest == kept)
@@ -72,14 +98,135 @@ struct VectorTileArchivesTests {
         unreadable.basemaps[0].schema += 1
         let older = VectorTileArchiveManifest.fixture(revision: 0, basemap: "planet-0")
         for kept in [older, unreadable] {
-            let record = VectorTileArchives.Kept(manifest: kept, source: try source(of: older), since: .distantPast)
+            let record = VectorTileArchives.Kept(
+                manifest: kept, source: try source(of: older), since: .distantPast, language: "en"
+            )
             let start = try #require(
-                VectorTileArchives.start(bundled: bundled, kept: record, server: server, at: launch)
+                VectorTileArchives.start(bundled: bundled, kept: record, server: server, language: "en", at: launch)
             )
 
             #expect(start.manifest == bundled)
             #expect(start.since == launch, "it moved")
         }
+    }
+
+    /// The names are drawn in the app's language, which the cache's key says
+    /// nothing of, and which changes only between launches.
+    @Test("a launch in another language keeps the archives, and moves from the launch on")
+    func otherLanguageMoves() throws {
+        let launch = Self.hoursAgo(1)
+        let record = VectorTileArchives.Kept(
+            manifest: newer, source: try source(of: newer), since: Self.hoursAgo(5), language: "de"
+        )
+        let start = try #require(
+            VectorTileArchives.start(bundled: bundled, kept: record, server: server, language: "fr", at: launch)
+        )
+
+        #expect(start.manifest == newer)
+        #expect(start.source == (try source(of: newer)))
+        #expect(start.language == "fr")
+        #expect(start.since == launch)
+    }
+
+    /// Written at the launch rather than at the next read of the manifest,
+    /// which a device offline or in Low Data Mode does not make: every launch
+    /// would otherwise move, and draw everything again.
+    @Test("a launch keeps what it draws from at once, so the next one in the same language moves nothing")
+    func launchKeepsItsStart() async throws {
+        try await withFile { file in
+            _ = try launch(in: "de", at: Self.hoursAgo(4), keepingIn: file)
+            let again = try launch(in: "de", at: Self.hoursAgo(3), keepingIn: file)
+            #expect(!again.redraws("osm/14/1/1", drawnAt: Self.hoursAgo(3.5)), "drawn in the same language")
+
+            let switched = try launch(in: "fr", at: Self.hoursAgo(2), keepingIn: file)
+            #expect(switched.language == "fr")
+            #expect(switched.redraws("osm/14/1/1", drawnAt: Self.hoursAgo(2.5)), "drawn in German")
+            #expect(!switched.redraws("osm/14/1/1", drawnAt: Self.hoursAgo(1.5)), "drawn since")
+            #expect(!switched.redraws("stadia_outdoors/14/1/1", drawnAt: Self.hoursAgo(2.5)), "not drawn from these")
+
+            let relaunched = try launch(in: "fr", at: Self.hoursAgo(1), keepingIn: file)
+            #expect(relaunched.redraws("osm/14/1/1", drawnAt: Self.hoursAgo(2.5)), "the move is kept")
+            #expect(!relaunched.redraws("osm/14/1/1", drawnAt: Self.hoursAgo(1.5)))
+        }
+    }
+
+    /// A write that fails leaves the record before it on disk, and a switch
+    /// back to that record's language would take every tile drawn in the
+    /// other one since for current. So it is written again by the next read
+    /// the app comes to the front for, of the same manifest, or one the
+    /// network refuses, as a device offline makes.
+    @Test(
+        "a launch whose record could not be written writes it at the next read, so a switch back redraws",
+        arguments: [true, false]
+    )
+    func failedWriteIsMadeAgain(networkAllowed: Bool) async throws {
+        try await withFile { file in
+            let directory = file.deletingLastPathComponent()
+            let manager = FileManager.default
+            _ = try launch(in: "de", at: Self.hoursAgo(4), keepingIn: file)
+            try manager.setAttributes([.posixPermissions: 0o555], ofItemAtPath: directory.path)
+            defer { try? manager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: directory.path) }
+
+            let manifests = StubVectorTileManifests(bundled)
+            let french = try launch(
+                in: "fr", at: Self.hoursAgo(3), keepingIn: file, manifests: manifests, mayAsk: { networkAllowed }
+            )
+            french.adopt(bundled)
+            #expect(VectorTileArchives.Kept.read(from: file)?.language == "de", "precondition: no write lands")
+            #expect(french.redraws("osm/14/1/1", drawnAt: Self.hoursAgo(3.5)), "drawn in French from the launch")
+
+            try manager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: directory.path)
+            await french.refresh()?.value
+            #expect(manifests.reads == (networkAllowed ? 1 : 0))
+            #expect(VectorTileArchives.Kept.read(from: file)?.language == "fr")
+
+            let german = try launch(in: "de", at: Self.hoursAgo(1), keepingIn: file)
+            #expect(german.redraws("osm/14/1/1", drawnAt: Self.hoursAgo(2)), "drawn in French")
+        }
+    }
+
+    /// A move kept for later than the launch was made by a clock set back
+    /// since. Kept, it would turn away every tile drawn until the clock
+    /// caught up with it.
+    @Test("a kept move later than the launch is made again from the launch")
+    func moveFromAheadOfTheClock() throws {
+        let launch = Self.hoursAgo(1)
+        let record = VectorTileArchives.Kept(
+            manifest: bundled, source: try source(of: bundled), since: Self.hoursAgo(-24), language: "en"
+        )
+        let start = try #require(
+            VectorTileArchives.start(bundled: bundled, kept: record, server: server, language: "en", at: launch)
+        )
+
+        #expect(start.since == launch)
+    }
+
+    /// Set back during a launch below the move it made: the move is made
+    /// again from then, once, or every copy drawn until the clock caught up
+    /// would be turned away, and drawn again at every look.
+    @Test("a move later than the clock is made again from it, once, so copies drawn since are current")
+    func moveAheadOfTheClockDuringALaunch() async throws {
+        try await withFile { file in
+            let archives = try launch(in: "en", at: Date(timeIntervalSinceNow: 3600), keepingIn: file)
+            let setBack = Date()
+
+            #expect(archives.redraws("osm/14/1/1", drawnAt: setBack - 60, now: setBack), "drawn before")
+            #expect(!archives.redraws("osm/14/1/1", drawnAt: setBack, now: setBack))
+            #expect(!archives.redraws("osm/14/1/1", drawnAt: setBack + 30, now: setBack + 60), "drawn since")
+            #expect(archives.redraws("osm/14/1/1", drawnAt: setBack - 60, now: setBack + 60), "still drawn before")
+        }
+    }
+
+    /// A copy stored later than now was stored before the clock was set
+    /// back, by archives or in a language nothing says.
+    @Test("a copy stored later than now is drawn again, whenever the providers moved")
+    func copyFromAheadOfTheClock() throws {
+        let archives = VectorTileArchives(sources: ["osm": try source(of: bundled)], language: "en", server: server)
+        let now = Date()
+
+        #expect(archives.redraws("osm/14/1/1", drawnAt: now.addingTimeInterval(3600), now: now))
+        #expect(!archives.redraws("osm/14/1/1", drawnAt: now.addingTimeInterval(-3600), now: now))
+        #expect(!archives.redraws("stadia_outdoors/14/1/1", drawnAt: now.addingTimeInterval(3600), now: now))
     }
 
     // MARK: A read
@@ -107,7 +254,7 @@ struct VectorTileArchivesTests {
             #expect(archives.source(for: "stadia_outdoors") == nil)
             #expect(moves.withLock { $0 } == 1)
             #expect(archives.redraws("osm/14/1/1", drawnAt: Self.hoursAgo(1)))
-            #expect(!archives.redraws("osm/14/1/1", drawnAt: Date(timeIntervalSinceNow: 60)), "drawn since")
+            #expect(!archives.redraws("osm/14/1/1", drawnAt: Date()), "drawn since")
             #expect(!archives.redraws("stadia_outdoors/14/1/1", drawnAt: Self.hoursAgo(1)))
 
             let relaunched = try #require(VectorTileArchives(

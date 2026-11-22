@@ -12,13 +12,15 @@
 //  states or provinces. The same list under the map, where a row shows its
 //  area on the map behind it, and in Settings, beside the storage it costs.
 //
-//  The body reads the list, what is installed, *Extra Detail*, the order
-//  and the query, which change a few times a visit or once a keystroke. What
-//  it orders and finds the areas by is kept across those passes
+//  The body reads the list's revision, what is installed, *Extra Detail*,
+//  the order and the query, which change a few times a visit or once a
+//  keystroke. What it orders and finds the areas by is prepared off the main
+//  actor, by a task for each revision of the list and each position, and
+//  kept across those passes, the last one drawn until the next is ready
 //  (``OfflineCountryDirectoryCache``). A download's progress is read by its
-//  row alone. The query, the order and the countries open are kept outside
-//  it (``OfflineCountriesListState``), because under the map a turn of the
-//  phone builds the list again.
+//  row alone. The query, the order, the countries open and that directory
+//  are kept outside it (``OfflineCountriesListState``), because under the
+//  map a turn of the phone builds the list again.
 //
 
 import CoreLocation
@@ -26,7 +28,7 @@ import SwiftUI
 
 struct OfflineCountriesList: View {
     let countries: OfflineCountries
-    /// The search, the order picked and the countries open.
+    /// The search, the order picked, the countries open and the directory.
     @Bindable var state: OfflineCountriesListState
     /// Where the hiker is, read once as the list comes up, for the order it
     /// opens in.
@@ -43,11 +45,12 @@ struct OfflineCountriesList: View {
     var onSearch: () -> Void = { /* No sheet to raise. */ }
     var onSelect: (OfflineCountryManifest.Country) -> Void = { _ in /* No map to show it on. */ }
 
-    @State private var directories = OfflineCountryDirectoryCache()
     /// The area the list owes a scroll to, chosen by a row or on the map,
     /// until a list that holds its row has gone to it.
     @State private var revealing: String?
     @FocusState private var isSearchFocused: Bool
+
+    private var directories: OfflineCountryDirectoryCache { state.directories }
 
     var body: some View {
         if !countries.isAvailable {
@@ -57,21 +60,44 @@ struct OfflineCountriesList: View {
                 description: Text("This build can’t download countries.")
             )
         } else {
-            let directory = directories.directory(
-                offered: countries.offered,
-                installed: countries.installed,
-                near: near
-            )
-            if directory.isEmpty {
-                emptyState
-            } else {
-                content(directory)
-            }
+            let key = OfflineCountryDirectoryCache.Key(catalog: countries.catalogRevision, near: near)
+            prepared
+                .task(id: key) {
+                    // The list as the model holds it now, outside the body,
+                    // and put on screen only while the model holds it still.
+                    let source = OfflineCountryDirectory.Source(
+                        offered: countries.offered,
+                        installed: countries.installed,
+                        near: near
+                    )
+                    await directories.prepare(key, from: source) { countries.catalogRevision == key.catalog }
+                }
+                // Here rather than on the list, which is not drawn until the
+                // first directory is prepared: the map outlines the list off
+                // the server, and an area chosen there before then is owed a
+                // scroll all the same.
+                .onChange(of: selectedID) { _, id in
+                    guard let id else { return }
+                    revealing = id
+                    state.clearSearch(hiding: id)
+                }
         }
     }
 
-    @ViewBuilder private var emptyState: some View {
-        if countries.listPhase == .failed {
+    /// The list, once a directory is prepared and has areas in it.
+    @ViewBuilder private var prepared: some View {
+        if let directory = directories.directory, !directory.isEmpty {
+            content(directory)
+        } else {
+            emptyState(isPrepared: directories.directory != nil)
+        }
+    }
+
+    /// - Parameter isPrepared: Whether a directory is prepared: until one
+    ///   is, the list is still coming, whatever the server answered.
+    @ViewBuilder
+    private func emptyState(isPrepared: Bool) -> some View {
+        if isPrepared, countries.listPhase == .failed {
             ContentUnavailableView {
                 Label("Couldn’t Load Countries", systemImage: "wifi.exclamationmark")
             } description: {
@@ -111,15 +137,15 @@ struct OfflineCountriesList: View {
         .onChange(of: hasFullHeight) { _, hasHeight in
             if !hasHeight { isSearchFocused = false }
         }
-        .onChange(of: selectedID) { _, id in
-            guard let id else { return }
-            revealing = id
-            // An area chosen on the map is shown in the list, which a search
-            // that does not hold it would hide.
-            if !asked.isEmpty, !directory.areas(matching: asked).contains(where: { $0.id == id }) {
-                state.query = ""
-            }
-        }
+    }
+
+    /// What the list goes to an area again on: the area it owes a scroll to,
+    /// and the directory it draws. One change, so that a directory drawn as
+    /// an area is chosen asks once, and a country opened is not scrolled
+    /// into before its regions are in the list.
+    private struct OwedScroll: Equatable {
+        let id: String?
+        let directory: OfflineCountryDirectoryCache.Key?
     }
 
     // MARK: - The list
@@ -155,8 +181,9 @@ struct OfflineCountriesList: View {
             .fitsSidePanel()
             .scrollDismissesKeyboard(.immediately)
             // As the list comes up too: a search gives way to it with the
-            // area it owes a scroll to already chosen.
-            .onChange(of: revealing, initial: true) {
+            // area it owes a scroll to already chosen. And as a newer
+            // directory is drawn, which may be the first to hold it.
+            .onChange(of: OwedScroll(id: revealing, directory: directories.shown), initial: true) {
                 reveal(in: sections, with: scroller)
             }
             // A region's row is in the list only once its country is open.
@@ -176,6 +203,9 @@ struct OfflineCountriesList: View {
         case let .scroll(rowID):
             revealing = nil
             withAnimation { scroller.scrollTo(rowID, anchor: .center) }
+        case .wait:
+            // Still owed, until a directory that holds it is drawn.
+            break
         }
     }
 

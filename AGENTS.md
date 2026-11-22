@@ -870,6 +870,10 @@ a change to recording, the map, the sheet or the render path; the PR template,
   `VectorTileRasterizer` draws it. The cache then files the picture as any
   tile, under the raster style's id and keys, so saved coverage keeps
   answering.
+- **A drawn tile's key names neither its archives nor its language.**
+  `VectorTileArchives` keeps both, and since when, and every drawing, the
+  server's and a country's, takes its language from there, so a copy drawn
+  before either changed is drawn again.
 - **The look is OpenStreetMap Carto's**, and each rule is argued in the file
   that draws it, under `OpenHikes/Tiles/Vector/`. Points, icons and patterns
   are read out of Carto's style, never written by hand
@@ -890,7 +894,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
 - **Fallback.** Wherever the server cannot answer, the tile comes from
   `tile.openstreetmap.org` as before. A failure of the device's own
   connection falls back to nothing: the load fails and is tried again, rather
-  than filing a raster tile among the drawn ones for a week.
+  than filing a raster tile among the drawn ones for a week. So does a server
+  failing over a saved tile, whose copy stays the tile
+  (`VectorTileClient.Drawing.unavailable`).
 - **openstreetmap.org stands beside it while the style is new.**
   `TileProvider.openStreetMapRaster` (`osm_raster`), the fourth card on
   *Map Modes*, draws the OSMF's raster tiles alone, so the two can be

@@ -5,10 +5,10 @@
 //  The orders *Offline Maps* can be put in, and its search. By name every
 //  country is under the letter its name is filed under; nearest first and
 //  largest first are flat, a region a line of its own; the downloads not yet
-//  finished and then what is downloaded are first in each. A search lists what answers it best first,
-//  a region answering to its country's name too. And the directory all of it
-//  is read from is built when the list or the hiker's position changes, not
-//  at every pass.
+//  finished and then what is downloaded are first in each. A search lists
+//  what answers it best first, a region answering to its country's name
+//  too. How the directory all of it is read from is prepared and kept is
+//  `OfflineCountryDirectoryCacheTests`'.
 //
 
 import CoreLocation
@@ -121,13 +121,14 @@ struct OfflineCountryDirectoryTests {
     }
 
     @Test("nearest first puts what is held first, nearest first too")
-    func nearestFirstHeld() {
+    func nearestFirstHeld() throws {
         let nearest = sections(directory(everything, near: ljubljana), by: .nearest, holding: ["ES", "AT"])
 
         #expect(nearest.downloaded == [austria, spain])
         #expect(nearest.parts.first == Part(heading: .nearby, lines: [.area(slovenia)]))
-        #expect(nearest.scrollTarget(for: "US-CO").rowID == "US-CO", "a region is a row of its own here")
-        #expect(nearest.scrollTarget(for: "US-CO").opening == nil)
+        let region = try #require(nearest.scrollTarget(for: "US-CO"))
+        #expect(region.rowID == "US-CO", "a region is a row of its own here")
+        #expect(region.opening == nil)
     }
 
     @Test("with no position, nearest first is the list by name")
@@ -247,52 +248,25 @@ struct OfflineCountryDirectoryTests {
         #expect(nearest.reveal("US-CO", expanded: []) == .scroll(to: "US-CO"), "a region is a row of its own there")
     }
 
-    // MARK: - Kept across passes
+    /// The map outlines the list off the server as it is now, and the list
+    /// draws the directory last prepared until the next is, so an area
+    /// chosen on the map can be one the list does not hold yet. A scroll to
+    /// it then found no row, and the area was no longer owed one.
+    @Test("an area the list does not hold yet is waited for, and gone to once a list holds it")
+    func revealWaitsForAListThatHoldsIt() {
+        let before = sections(directory([austria, slovenia, california]), by: .name)
 
-    @Test("the directory is built when the list or the position changes, and kept otherwise")
-    func keptAcrossPasses() {
-        let cache = OfflineCountryDirectoryCache()
+        #expect(before.scrollTarget(for: "ES") == nil)
+        #expect(before.reveal("ES", expanded: []) == .wait)
+        // The country is in the list with another of its regions: the line
+        // under it is no line for this one.
+        #expect(before.scrollTarget(for: "US-CO") == nil)
+        #expect(before.reveal("US-CO", expanded: ["US"]) == .wait)
+        #expect(before.reveal("US-CA", expanded: ["US"]) == .scroll(to: OfflineCountrySections.groupRowID("US-CA")))
 
-        _ = cache.directory(offered: [austria, slovenia], installed: [:], near: nil)
-        _ = cache.directory(offered: [austria, slovenia], installed: [:], near: nil)
-        #expect(cache.builds == 1)
-
-        let placed = cache.directory(offered: [austria, slovenia], installed: [:], near: ljubljana)
-        _ = cache.directory(offered: [austria, slovenia], installed: [:], near: ljubljana)
-        #expect(cache.builds == 2)
-        #expect(placed.hasPosition)
-
-        var newer = slovenia
-        newer.build = "20270101"
-        _ = cache.directory(offered: [austria, newer], installed: [:], near: ljubljana)
-        #expect(cache.builds == 3)
-    }
-
-    /// The server can correct a name without cutting the area again, and the
-    /// rows and the search read the areas the directory kept.
-    @Test("a list off the server that renames an area at the same build is named and found by the new name")
-    func renamedAtTheSameBuild() {
-        let cache = OfflineCountryDirectoryCache()
-        var misspelled = california
-        misspelled.names = ["en": "Californa"]
-
-        _ = cache.directory(offered: [austria, misspelled], installed: [:], near: nil)
-        let refreshed = cache.directory(offered: [austria, california], installed: [:], near: nil)
-
-        #expect(cache.builds == 2)
-        #expect(refreshed.entries.map(\.country) == [austria, california])
-        #expect(refreshed.areas(matching: "California") == [california])
-    }
-
-    @Test("an area downloaded and no longer offered is still listed")
-    func keepsWhatIsNoLongerOffered() {
-        let cache = OfflineCountryDirectoryCache()
-        let installed = ["ES": OfflineCountryStore.Record(country: spain, installedAt: .now)]
-
-        let listed = cache.directory(offered: [austria, slovenia], installed: installed, near: nil)
-
-        #expect(listed.entries.map(\.country) == [austria, slovenia, spain])
-        #expect(listed.entries.map(\.fullName) == ["Austria", "Slovenia", "Spain"])
+        let after = sections(directory(everything), by: .name, holding: ["ES"])
+        #expect(after.reveal("ES", expanded: []) == .scroll(to: "ES"))
+        #expect(after.reveal("US-CO", expanded: []) == .open("US"))
     }
 }
 

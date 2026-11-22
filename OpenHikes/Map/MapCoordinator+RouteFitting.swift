@@ -47,6 +47,7 @@
 //
 
 import MapKit
+import OpenHikesData
 
 extension MapView.Coordinator {
     /// Fits the currently drawn route into the focus area. Shared by the
@@ -367,33 +368,36 @@ struct MapEdgeInsets: Equatable {
 extension MKCoordinateRegion {
     /// This region as a map rect.
     ///
-    /// Built from the two corners rather than from the centre and a span in
-    /// map points, because a degree of longitude is a different number of map
-    /// points at every latitude and the span is in degrees.
+    /// Its top and bottom are projected from the two edges' latitudes,
+    /// because a degree of latitude is a different number of map points at
+    /// every latitude. Its width is the span's share of the world, measured
+    /// east from the west edge, because a degree of longitude is the same
+    /// number everywhere.
     ///
-    /// A region that crosses the antimeridian is not handled and does not need
-    /// to be: the regions reaching this are a local search's `boundingRegion`
-    /// and a span around one photograph, and a rect built from a wrapped pair
-    /// of corners would be refused by `setVisibleMapRect` rather than drawn
-    /// wrong.
+    /// So a region across the antimeridian, such as the one *Offline Maps*
+    /// frames Fiji in, becomes a rect that runs on past the world's east
+    /// edge, which is how MapKit spells one across the 180th meridian. An
+    /// east corner taken on its own would lie past 180°, where `MKMapPoint`
+    /// has no answer.
+    ///
+    /// A span wider than the world is held to the world's width before the
+    /// west edge is placed, so the rect keeps the region's centre: placed
+    /// from the whole span, the edge would move it west by half of what was
+    /// cut.
     var mapRect: MKMapRect {
-        let topLeft = MKMapPoint(
-            CLLocationCoordinate2D(
-                latitude: center.latitude + span.latitudeDelta / 2,
-                longitude: center.longitude - span.longitudeDelta / 2
-            )
+        let longitudeSpan = min(span.longitudeDelta, 360)
+        let west = RouteGeometry.normalizedLongitude(center.longitude - longitudeSpan / 2)
+        let northWest = MKMapPoint(
+            CLLocationCoordinate2D(latitude: center.latitude + span.latitudeDelta / 2, longitude: west)
         )
-        let bottomRight = MKMapPoint(
-            CLLocationCoordinate2D(
-                latitude: center.latitude - span.latitudeDelta / 2,
-                longitude: center.longitude + span.longitudeDelta / 2
-            )
+        let southWest = MKMapPoint(
+            CLLocationCoordinate2D(latitude: center.latitude - span.latitudeDelta / 2, longitude: west)
         )
         return MKMapRect(
-            x: min(topLeft.x, bottomRight.x),
-            y: min(topLeft.y, bottomRight.y),
-            width: abs(bottomRight.x - topLeft.x),
-            height: abs(bottomRight.y - topLeft.y)
+            x: northWest.x,
+            y: min(northWest.y, southWest.y),
+            width: longitudeSpan / 360 * MKMapSize.world.width,
+            height: abs(southWest.y - northWest.y)
         )
     }
 }

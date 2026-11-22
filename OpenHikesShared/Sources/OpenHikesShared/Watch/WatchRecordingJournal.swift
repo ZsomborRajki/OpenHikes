@@ -277,6 +277,13 @@ struct WatchRecordingJournalBuffer: Sendable, Equatable {
         return isDue
     }
 
+    /// Makes ``pending`` due whatever it holds, until ``written()``: lines a
+    /// write was asked for go with the next line if that write throws,
+    /// rather than waiting out the count and time limits again.
+    mutating func makeDue() {
+        isDue = true
+    }
+
     /// Forgets everything waiting, once it is on disk. Not before: a write
     /// that throws leaves it all waiting for the next one.
     mutating func written() {

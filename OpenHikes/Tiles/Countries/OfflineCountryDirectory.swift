@@ -9,6 +9,16 @@
 //  collation's and a distance a walk round an outline; the list is hundreds
 //  of areas, and its body runs again at every keystroke in its search field.
 //
+//  Nor is it worked out in the body, or on the main actor, but for the
+//  letters (#1536). Near a known position each area is measured to the
+//  nearest point of its outline, and the world's outlines are some 180,000
+//  points: 37 to 47 ms on the main actor, in a Debug build on a simulator,
+//  as the list opened, as a new list came off the server and as the
+//  position was read. So the names, the distances and the orders they give
+//  are ``Measured`` off it, and only the letters are filed on it, because
+//  the collation they come from is UIKit's: 0.3 ms of the same build
+//  (``OfflineCountryDirectoryCache``).
+//
 //  ## The three orders
 //
 //  Whatever the order (``OfflineCountrySort``), the areas the hiker has asked
@@ -44,11 +54,11 @@ import Foundation
 import UIKit
 #endif
 
-struct OfflineCountryDirectory {
+nonisolated struct OfflineCountryDirectory: Sendable {
     typealias Country = OfflineCountryManifest.Country
 
     /// An area, with what the list reads of it.
-    struct Entry {
+    struct Entry: Sendable {
         let country: Country
         /// Its name, with its country's after a region's: what a flat list
         /// and a search call it.
@@ -58,7 +68,7 @@ struct OfflineCountryDirectory {
     }
 
     /// A line of the list by name, with the letter it is filed under.
-    private struct Line {
+    private struct Line: Sendable {
         let letter: OfflineCountryLetter
         let listing: OfflineCountryListing
     }
@@ -83,43 +93,103 @@ struct OfflineCountryDirectory {
     ///   - near: Where the hiker is.
     ///   - letter: The letter a name is filed under.
     init(listed: [Country], near: CLLocationCoordinate2D?, letter: (String) -> OfflineCountryLetter) {
-        let measured = listed.map { country in
-            Entry(
-                country: country,
-                fullName: OfflineCountries.fullName(of: country),
-                kilometers: near.map { country.kilometers(from: $0) }
-            )
-        }
-        entries = measured
-        hasPosition = near != nil
-        lines = Self.byLetter(listed, letter: letter)
-        nearestFirst = measured.indices.sorted { first, second in
-            let (one, other) = (measured[first].kilometers ?? .infinity, measured[second].kilometers ?? .infinity)
-            return one == other ? first < second : one < other
-        }
+        self.init(Measured(listed: listed, near: near), letter: letter)
     }
 
     /// Every country, and every country split by region with its regions
-    /// under it, by letter and then by name.
-    private static func byLetter(_ listed: [Country], letter: (String) -> OfflineCountryLetter) -> [Line] {
-        var named: [(name: String, listing: OfflineCountryListing)] = []
-        var regions: [String: [Country]] = [:]
-        for country in listed {
-            if let group = country.group {
-                regions[group, default: []].append(country)
-            } else {
-                named.append((OfflineCountries.name(of: country), .area(country)))
-            }
+    /// under it, by letter and then by name: what was `measured`, filed
+    /// under the letters `letter` gives.
+    init(_ measured: Measured, letter: (String) -> OfflineCountryLetter) {
+        entries = measured.entries
+        hasPosition = measured.hasPosition
+        nearestFirst = measured.nearestFirst
+        // In their names' order already, and each letter's group keeps it, so
+        // filing is grouping by letter and putting the letters in order.
+        let byLetter = measured.named
+            .map { Line(letter: letter($0.name), listing: $0.listing) }
+            .grouped(by: \.letter.order)
+        lines = byLetter.keys.sorted().flatMap { byLetter[$0] ?? [] }
+    }
+}
+
+nonisolated extension OfflineCountryDirectory {
+    /// What a directory is made from: the list off the server, what is
+    /// downloaded, and where the hiker was as the list came up.
+    struct Source: Sendable {
+        let offered: [Country]
+        let installed: [String: OfflineCountryStore.Record]
+        let latitude: Double?
+        let longitude: Double?
+
+        init(offered: [Country], installed: [String: OfflineCountryStore.Record], near: CLLocationCoordinate2D?) {
+            self.offered = offered
+            self.installed = installed
+            latitude = near?.latitude
+            longitude = near?.longitude
         }
-        named += regions.map { (OfflineCountries.name(ofCountry: $0.key), .group(id: $0.key, regions: $0.value)) }
-        return named.map { (letter: letter($0.name), name: $0.name, listing: $0.listing) }
-            .sorted { first, second in
-                if first.letter.order != second.letter.order { return first.letter.order < second.letter.order }
-                return first.name.localizedStandardCompare(second.name) == .orderedAscending
-            }
-            .map { Line(letter: $0.letter, listing: $0.listing) }
+
+        var near: CLLocationCoordinate2D? {
+            guard let latitude, let longitude else { return nil }
+            return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+        }
     }
 
+    /// A directory but for its letters: every area's names and distance,
+    /// the order nearest first, and the list by name in its names' order.
+    /// All a directory costs, and nothing of the main actor's.
+    struct Measured: Sendable {
+        let entries: [Entry]
+        let hasPosition: Bool
+        /// ``entries``' indices, nearest first.
+        let nearestFirst: [Int]
+        /// Every country, and every country split by region as the line
+        /// that holds its regions, by name.
+        let named: [(name: String, listing: OfflineCountryListing)]
+
+        /// Measures the areas `source` lists: ``OfflineCountries/listed``.
+        init(from source: Source) {
+            self.init(
+                listed: OfflineCountries.listed(offered: source.offered, installed: source.installed),
+                near: source.near
+            )
+        }
+
+        init(listed: [Country], near: CLLocationCoordinate2D?) {
+            let measured = listed.map { country in
+                Entry(
+                    country: country,
+                    fullName: OfflineCountries.fullName(of: country),
+                    kilometers: near.map { country.kilometers(from: $0) }
+                )
+            }
+            entries = measured
+            hasPosition = near != nil
+            nearestFirst = measured.indices.sorted { first, second in
+                let (one, other) = (measured[first].kilometers ?? .infinity, measured[second].kilometers ?? .infinity)
+                return one == other ? first < second : one < other
+            }
+            named = Self.byName(listed)
+        }
+
+        private static func byName(_ listed: [Country]) -> [(name: String, listing: OfflineCountryListing)] {
+            var lines: [(name: String, listing: OfflineCountryListing)] = []
+            var regions: [String: [Country]] = [:]
+            for country in listed {
+                if let group = country.group {
+                    regions[group, default: []].append(country)
+                } else {
+                    lines.append((OfflineCountries.name(of: country), .area(country)))
+                }
+            }
+            lines += regions.map { (OfflineCountries.name(ofCountry: $0.key), .group(id: $0.key, regions: $0.value)) }
+            return lines.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        }
+    }
+}
+
+/// The orders and the search, on the main actor, where the list reads them
+/// as it draws.
+extension OfflineCountryDirectory {
     // MARK: - The orders
 
     /// What an order puts at the head of the list, and the rest under its
@@ -215,14 +285,16 @@ struct OfflineCountryDirectory {
 
 /// The letter a name is filed under in a list by name, and where that letter
 /// stands among the others.
-struct OfflineCountryLetter {
+nonisolated struct OfflineCountryLetter: Sendable {
     let order: Int
     /// What the section it heads, and the list's index, call it.
     let title: String
 
     /// The letters of the app's language, as the system files a name under
     /// them: `É` under `E` in French, `Ł` after `L` in Polish, and a name
-    /// that starts with no letter of the alphabet under `#`, last.
+    /// that starts with no letter of the alphabet under `#`, last. On the
+    /// main actor, because the collation is UIKit's.
+    @MainActor
     static func ofTheAppLanguage() -> (String) -> Self {
         #if canImport(UIKit)
         let collation = UILocalizedIndexedCollation.current()
@@ -279,16 +351,22 @@ struct OfflineCountrySections: Equatable {
 
     /// Where the list goes to show `id`: its row in *Not Yet Downloaded* or
     /// *Downloaded* if it has one there, else its line further down, opening
-    /// the country a region is under.
-    func scrollTarget(for id: String) -> (rowID: String, opening: String?) {
+    /// the country a region is under. `nil` where the list has no line for
+    /// it.
+    func scrollTarget(for id: String) -> (rowID: String, opening: String?)? {
         let isID = { (country: OfflineCountryManifest.Country) in country.id == id }
         if unfinished.contains(where: isID) || downloaded.contains(where: isID) { return (id, nil) }
-        for line in parts.flatMap(\.lines) {
-            if case let .group(group, regions) = line, regions.contains(where: { $0.id == id }) {
+        for line in parts.lazy.flatMap(\.lines) {
+            switch line {
+            case let .area(country) where isID(country):
+                return (id, nil)
+            case let .group(group, regions) where regions.contains(where: isID):
                 return (Self.groupRowID(id), group)
+            case .area, .group:
+                continue
             }
         }
-        return (id, nil)
+        return nil
     }
 
     /// A region's row under its country, apart from the same region's row at
@@ -303,12 +381,18 @@ struct OfflineCountrySections: Equatable {
         case open(String)
         /// Go to the row.
         case scroll(to: String)
+        /// Wait: the list has no line for the area. The map draws the list
+        /// off the server as it is now, and the list draws the directory
+        /// last prepared until the next is, so an area the map offers can be
+        /// one the list does not hold yet. A scroll to it would find no row
+        /// and be spent.
+        case wait
     }
 
     /// What the list does next to show `id`, with `expanded` the split
     /// countries already open in it.
     func reveal(_ id: String, expanded: Set<String>) -> Reveal {
-        let target = scrollTarget(for: id)
+        guard let target = scrollTarget(for: id) else { return .wait }
         if let group = target.opening, !expanded.contains(group) { return .open(group) }
         return .scroll(to: target.rowID)
     }
@@ -316,7 +400,7 @@ struct OfflineCountrySections: Equatable {
 
 /// A line of the list: an area, or a country split by region, which holds
 /// all its regions.
-enum OfflineCountryListing: Equatable, Identifiable {
+nonisolated enum OfflineCountryListing: Equatable, Identifiable, Sendable {
     case area(OfflineCountryManifest.Country)
     case group(id: String, regions: [OfflineCountryManifest.Country])
 
@@ -328,51 +412,91 @@ enum OfflineCountryListing: Equatable, Identifiable {
     }
 }
 
-/// Keeps the directory across the list's body passes, which far outnumber
-/// the changes to what it is made from: a new list off the server, an area
-/// downloaded or deleted, and the hiker's position as the list comes up.
+/// Prepares the directory off the main actor, and keeps it across the list's
+/// body passes, which far outnumber the changes to what it is made from: a
+/// new list off the server, an area downloaded or deleted, and the hiker's
+/// position as the list comes up.
 ///
-/// Kept against the areas themselves, not their ids and builds: a list off
-/// the server can correct a region's name at the same build, and the rows and
-/// the search are read from what was kept. Comparing them costs nothing on a
-/// pass that reads the same list, which is the same storage; a refresh that
-/// changes nothing walks the areas once, and its storage is kept from then.
+/// The list's task for each ``Key`` prepares it (``prepare(_:from:isCurrent:)``),
+/// and the directory last prepared stays on screen meanwhile. One is put on
+/// screen only while the list is still made from what it was measured from:
+/// a newer list, a download or the position read as the list came up passes
+/// over one measured before it, and the list going away cancels it.
+///
+/// Keyed on ``OfflineCountries/catalogRevision``, which the model counts, and
+/// never on the areas themselves: every read of the list off the server
+/// writes the model's, mostly with what it held, and an equal list written
+/// over the model's swaps its storage without a word, so a key of the areas
+/// compared two decodes of the world outline by outline in the body after
+/// every refresh, some 9 ms in a Debug build. The directory is still made
+/// from the areas, not their ids and builds: a list off the server can
+/// correct a region's name at the same build, and the revision moves for it.
+///
+/// Kept by ``OfflineCountriesListState``, so a turn of the phone, which
+/// builds the list again in the other host, draws the directory it had
+/// while the new host's is prepared, rather than its loading state.
+@Observable
 final class OfflineCountryDirectoryCache {
-    /// What a directory is made from.
-    private struct Key: Equatable {
-        let offered: [OfflineCountryManifest.Country]
-        let installed: [String: OfflineCountryStore.Record]
+    typealias Source = OfflineCountryDirectory.Source
+    /// Measures what a directory is made from, wherever it is called.
+    typealias Measure = @Sendable (Source) async -> OfflineCountryDirectory.Measured
+
+    /// What a directory is asked for by: the revision of the list off the
+    /// server and what is downloaded, and where the hiker was as the list
+    /// came up.
+    struct Key: Hashable {
+        let catalog: Int
         let latitude: Double?
         let longitude: Double?
+
+        init(catalog: Int, near: CLLocationCoordinate2D?) {
+            self.catalog = catalog
+            latitude = near?.latitude
+            longitude = near?.longitude
+        }
     }
 
-    private var key: Key?
-    private var directory: OfflineCountryDirectory?
-    /// Directories built. A pass that kept one and a pass that built one
-    /// hand back the same list, so this is what a suite holds the keeping to.
-    private(set) var builds = 0
+    /// The directory last prepared, or `nil` until the first is.
+    private(set) var directory: OfflineCountryDirectory?
+    /// The key ``directory`` was prepared for: what the list waits on to go
+    /// to an area the directory before did not hold.
+    private(set) var shown: Key?
+    /// Directories put on screen. A key asked for again is not measured
+    /// again, so this is what a suite holds the keeping to.
+    @ObservationIgnored private(set) var builds = 0
 
-    func directory(
-        offered: [OfflineCountryManifest.Country],
-        installed: [String: OfflineCountryStore.Record],
-        near: CLLocationCoordinate2D?
-    ) -> OfflineCountryDirectory {
-        let asked = Key(offered: offered, installed: installed, latitude: near?.latitude, longitude: near?.longitude)
-        if asked == key, let directory {
-            // The storage asked about kept, so that the next pass compares
-            // the very same arrays rather than an equal copy, outline by
-            // outline.
-            key = asked
-            return directory
-        }
-        let built = OfflineCountryDirectory(
-            listed: OfflineCountries.listed(offered: offered, installed: installed),
-            near: near,
-            letter: OfflineCountryLetter.ofTheAppLanguage()
-        )
+    /// The key last asked for. A measuring for an earlier one gives way to
+    /// it: two hosts of the list, as a turn of the phone hands it from one to
+    /// the other, ask for their own, and the later one is the one drawn.
+    @ObservationIgnored private var asked: Key?
+    @ObservationIgnored private let measure: Measure
+
+    /// - Parameter measure: Measures what a directory is made from: a
+    ///   suite's own, to hold a measuring back.
+    init(measure: @escaping Measure = { OfflineCountryDirectory.Measured(from: $0) }) {
+        self.measure = measure
+    }
+
+    /// Non-isolated so releasing the last reference never requires proving
+    /// we're on the main actor — see ``LocationManager``'s deinit for why.
+    nonisolated deinit { /* intentionally empty */ }
+
+    /// Prepares the directory of `key` from `source`, what the model held for
+    /// it as the task began, and puts it on screen unless the task was
+    /// cancelled, a later key was asked for, or `isCurrent` says the model's
+    /// list has moved on since. Nothing is measured for the key on screen.
+    func prepare(_ key: Key, from source: Source, isCurrent: () -> Bool) async {
+        asked = key
+        guard key != shown else { return }
+        let measured = await Self.measuring(source, with: measure)
+        guard !Task.isCancelled, key == asked, isCurrent() else { return }
+        directory = OfflineCountryDirectory(measured, letter: OfflineCountryLetter.ofTheAppLanguage())
+        shown = key
         builds += 1
-        key = asked
-        directory = built
-        return built
+    }
+
+    @concurrent
+    private static func measuring(_ source: Source, with measure: Measure) async -> OfflineCountryDirectory.Measured {
+        await measure(source)
     }
 }

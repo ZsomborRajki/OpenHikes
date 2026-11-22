@@ -10,8 +10,9 @@
 //  the country that holds it was installed, or before the tile server's
 //  manifest moved the provider to other archives (``VectorTileArchives``), is
 //  not current, wherever it is kept, so the load draws it again from the
-//  build there is now. Out of `TileCache.swift`, which is at the length the
-//  linter allows.
+//  build there is now. A saved copy waits out a tile server that is failing,
+//  rather than be replaced by the raster template's tile. Out of
+//  `TileCache.swift`, which is at the length the linter allows.
 //
 
 import Foundation
@@ -55,6 +56,18 @@ nonisolated extension TileCache {
     func isRedrawn(_ key: String, storedAt: Date) -> Bool {
         vectorTiles?.archives.redraws(key, drawnAt: storedAt) == true
             || countryTiles?.redraws(key, drawnAt: storedAt) == true
+    }
+
+    /// Whether a saved copy of `key` is on disk that can be drawn, current or
+    /// not: what a failing tile server leaves as the tile, rather than the
+    /// raster template's (``VectorTileClient/Drawing/unavailable``). The load
+    /// that asks has found that copy past its age or drawn before the
+    /// archives or the language it is drawn in now, and draws it until the
+    /// server can. A copy that cannot be read is no tile to keep, so the
+    /// raster template replaces it as before. Asked off the main thread, only
+    /// while the server is failing.
+    func hasSavedCopy(ofKey key: String) -> Bool {
+        durableImage(forKey: key) != nil
     }
 
     /// Whether a downloaded country holds the tile `key` names, and so draws
