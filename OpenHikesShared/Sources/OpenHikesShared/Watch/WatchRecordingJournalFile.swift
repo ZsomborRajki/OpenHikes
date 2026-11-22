@@ -105,6 +105,13 @@ public struct WatchRecordingJournalFile: Sendable {
 /// the last journal in place, and its lines would replay under its header.
 /// A writer that never began — a relaunch taking up the journal it found —
 /// has no header waiting, and appends to that journal.
+///
+/// Whatever a write was asked for stays due until it is on disk, so a
+/// refused write is tried again with the next line. That is what retries a
+/// waiting header with every fix, and it holds for the lines behind a header
+/// that landed too: fixes short of a batch, which went only because the
+/// header did, would otherwise wait out the batch limits again in a journal
+/// holding nothing but the header.
 public struct WatchRecordingJournalWriter: Sendable {
     public let file: WatchRecordingJournalFile
     private var buffer = WatchRecordingJournalBuffer()
@@ -125,28 +132,31 @@ public struct WatchRecordingJournalWriter: Sendable {
     }
 
     /// Writes lines down, now or with the next batch — see
-    /// ``WatchRecordingJournalBuffer``. Now, while the header is still
-    /// waiting: a recording with no journal at all has more to lose than a
-    /// batch's worth of line.
+    /// ``WatchRecordingJournalBuffer``. Now, too, while anything a write
+    /// threw on is still waiting: lines refused once do not wait out another
+    /// batch, and a recording whose header was refused has no journal at all.
     ///
     /// Every line is waiting before anything is written, so lines that belong
     /// together — a recovery's pause and resume — are kept together by a
     /// write that throws, rather than the first kept and the rest never added.
     public mutating func record(_ entries: WatchRecordingJournalEntry..., at date: Date) throws {
-        var isDue = waitingHeader != nil
+        var isDue = false
         for entry in entries {
             isDue = buffer.add(entry, at: date) || isDue
         }
         if isDue { try flush() }
     }
 
-    /// Writes everything still waiting, header first, and keeps it waiting
-    /// if that throws.
+    /// Writes everything still waiting, header first, and keeps it waiting,
+    /// and due with the next line, if that throws.
     ///
     /// The header goes in a write of its own, ahead of the lines. Retried
     /// with every line for as long as the disk refuses it, it is one short
-    /// line each time rather than the whole backlog encoded again.
+    /// line each time rather than the whole backlog encoded again. A header
+    /// that lands ahead of lines the disk then refuses is on disk for good,
+    /// and the lines are still due.
     public mutating func flush() throws {
+        buffer.makeDue()
         if let header = waitingHeader {
             try file.begin(header)
             waitingHeader = nil

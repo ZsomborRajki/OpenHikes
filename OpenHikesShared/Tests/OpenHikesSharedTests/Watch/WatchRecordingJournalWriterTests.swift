@@ -157,6 +157,35 @@ struct WatchRecordingJournalWriterTests {
         }
     }
 
+    @Test("Lines refused behind a header that landed go with the next line, not the next batch")
+    func linesBehindALandedHeaderStayDue() throws {
+        try withWriter { writer in
+            let directory = writer.file.url.deletingLastPathComponent()
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try Data().write(to: writer.file.url)
+            try withJournalReadOnly(writer.file) {
+                try withNothingNewIn(directory) {
+                    #expect(throws: (any Error).self) { try writer.begin(Fixture.header) }
+                }
+                // An atomic write keeps the mode of the file it replaces, so
+                // the header lands and the line behind it is refused.
+                #expect(throws: (any Error).self) {
+                    try writer.record(.fix(Fixture.fix(step: 0)), at: Fixture.time(step: 0))
+                }
+                let headerOnly = try #require(writer.file.recover())
+                #expect(headerOnly.header == Fixture.header)
+                #expect(headerOnly.accumulator.fixes.isEmpty)
+            }
+
+            // One more fix, well short of a batch.
+            try writer.record(.fix(Fixture.fix(step: 1)), at: Fixture.time(step: 1))
+
+            let recovered = try #require(writer.file.recover())
+            #expect(recovered.header == Fixture.header)
+            #expect(recovered.accumulator.fixes.count == 2)
+        }
+    }
+
     @Test("A new recording's lines never go under the last recording's header")
     func linesWaitForTheirOwnHeader() throws {
         try withWriter { writer in
@@ -211,6 +240,15 @@ struct WatchRecordingJournalWriterTests {
         let manager = FileManager.default
         try manager.setAttributes([.posixPermissions: 0o555], ofItemAtPath: directory.path)
         defer { try? manager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: directory.path) }
+        try body()
+    }
+
+    /// Makes the journal read-only for `body` and gives it back: every append
+    /// in it throws, and an atomic write still replaces it.
+    private func withJournalReadOnly(_ file: WatchRecordingJournalFile, _ body: () throws -> Void) throws {
+        let manager = FileManager.default
+        try manager.setAttributes([.posixPermissions: 0o444], ofItemAtPath: file.url.path)
+        defer { try? manager.setAttributes([.posixPermissions: 0o644], ofItemAtPath: file.url.path) }
         try body()
     }
 
