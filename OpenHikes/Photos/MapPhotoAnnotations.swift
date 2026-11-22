@@ -125,6 +125,8 @@ final class PhotoCalloutPreview: PhotoCalloutPreviewControl {
     private static func symbol(for reason: PhotoUnavailability) -> String {
         switch reason {
         case .notOnThisDevice: "icloud.slash"
+        case .notDownloaded: "icloud.and.arrow.down"
+        case .goneFromCommons: "photo.badge.exclamationmark"
         case .unreadable: "exclamationmark.triangle"
         // A pin rather than a broken picture: on this surface the row is not
         // failing at anything. Where it was taken is exactly what it has, and
@@ -165,6 +167,10 @@ final class PhotoCalloutPreview: PhotoCalloutPreviewControl {
             return base
         case .notOnThisDevice:
             return String(localized: "\(base), not on this device")
+        case .notDownloaded:
+            return String(localized: "\(base), not downloaded")
+        case .goneFromCommons:
+            return String(localized: "\(base), no longer on Wikimedia Commons")
         case .unreadable:
             return String(localized: "\(base), unavailable")
         case .placeOnly:

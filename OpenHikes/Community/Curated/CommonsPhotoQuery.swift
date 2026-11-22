@@ -138,8 +138,42 @@ nonisolated enum CommonsPhotoQuery {
     /// ``WikidataPlaceSource``. The answer is read by ``files(from:timeZone:)``
     /// like any other, so the file has to pass every check a geotagged one does.
     static func imageInfo(ofFileTitled title: String) -> URLRequest {
-        get([URLQueryItem(name: "titles", value: "File:\(title)")] + imageInfoFields)
+        imageInfo(ofFilesTitled: [title])
     }
+
+    /// The same details of up to ``imageInfoBatch`` files named in `titles`,
+    /// in one request: the files saved hikes no longer hold, asked about
+    /// again by name — see ``CommonsPhotoRefetch``. The answer is read by
+    /// ``files(named:from:timeZone:)``.
+    ///
+    /// No `redirects`: a file renamed on Commons leaves a redirect behind,
+    /// and `imageinfo` follows a file redirect by itself, answering under the
+    /// name it was asked by. Measured against the live service in 2026.
+    static func imageInfo(ofFilesTitled titles: [String]) -> URLRequest {
+        let named = titles.prefix(imageInfoBatch).map { "\(fileNamespacePrefix)\($0)" }
+        return get([URLQueryItem(name: "titles", value: named.joined(separator: "|"))] + imageInfoFields)
+    }
+
+    /// The name of the file on the Commons page at `page`, without its
+    /// namespace — what ``imageInfo(ofFilesTitled:)`` asks about — or `nil`
+    /// for an address that is not a file's page on Commons.
+    ///
+    /// The page is all a saved copy keeps of where it came from
+    /// (``HikePhotoLicense/sourceURL``): the `descriptionurl` Commons
+    /// answered with, which it spells `https://commons.wikimedia.org/wiki/`
+    /// then `File:` and the name, percent-encoded. A file name cannot hold a
+    /// `/`, so the rest of the path is the whole name.
+    static func fileTitle(of page: URL) -> String? {
+        guard page.scheme == "https", page.host() == endpoint.host() else { return nil }
+        let path = page.path(percentEncoded: false)
+        let prefix = articlePath + fileNamespacePrefix
+        guard path.hasPrefix(prefix), path.count > prefix.count else { return nil }
+        return String(path.dropFirst(prefix.count))
+    }
+
+    /// Where Commons serves its pages, and the namespace a file's page is in.
+    private static let articlePath = "/wiki/"
+    private static let fileNamespacePrefix = "File:"
 
     /// What every `imageinfo` question asks for about a file.
     private static var imageInfoFields: [URLQueryItem] {
@@ -238,6 +272,40 @@ nonisolated enum CommonsPhotoQuery {
         )
     }
 
+    /// What an answer to ``imageInfo(ofFilesTitled:)`` says about each of
+    /// `titles`, keyed by the name as it was asked.
+    ///
+    /// A name the answer says nothing about is left out, for the reason
+    /// ``CommonsImageInfo`` leaves such a page out of `answered`: it was asked
+    /// and not answered, which is not a *no*. Commons spells a name back the
+    /// way it files it — spaces for underscores, a capital first letter — and
+    /// lists which name became which under `normalized`, which is how each
+    /// page is matched to the name it was asked by.
+    static func files(
+        named titles: [String],
+        from data: Data,
+        timeZone: TimeZone = .current
+    ) throws -> [String: CommonsFileAnswer] {
+        let answer = try JSONDecoder().decode(ImageInfoAnswer.self, from: data)
+        if let error = answer.error { throw failure(for: error) }
+        let renamed = Dictionary((answer.query?.normalized ?? []).map { ($0.from, $0.to) }) { first, _ in first }
+        let pages = Dictionary(
+            (answer.query?.pages ?? []).compactMap { page in page.title.map { ($0, page) } }
+        ) { first, _ in first }
+        var answers: [String: CommonsFileAnswer] = [:]
+        for title in titles {
+            let asked = fileNamespacePrefix + title
+            guard let page = pages[renamed[asked] ?? asked] else { continue }
+            if let pageID = page.pageid, let info = page.imageinfo.first {
+                answers[title] = file(pageID: pageID, info: info, timeZone: timeZone)
+                    .map(CommonsFileAnswer.file) ?? .refused
+            } else if page.missing || page.invalid {
+                answers[title] = .refused
+            }
+        }
+        return answers
+    }
+
     private static func failure(for error: APIError) -> CommonsPhotoFailure {
         busyCodes.contains(error.code) ? .busy : .refused(code: error.code)
     }
@@ -298,6 +366,16 @@ nonisolated enum CommonsPhotoQuery {
 nonisolated struct CommonsImageInfo: Equatable, Sendable {
     var files: [CommonsFile]
     var answered: Set<Int>
+}
+
+/// What Commons answered about one file asked for by name — see
+/// ``CommonsPhotoQuery/files(named:from:timeZone:)``.
+nonisolated enum CommonsFileAnswer: Equatable, Sendable {
+    /// A file this app may show, and where its thumbnail is.
+    case file(CommonsFile)
+    /// Commons answered, and it is not one: deleted, never there, or no
+    /// longer a photograph under a licence this app can honour.
+    case refused
 }
 
 /// A geotagged file near a stretch of a route, before anything is known about
@@ -371,28 +449,54 @@ nonisolated private struct GeoSearchAnswer: Decodable {
 nonisolated private struct ImageInfoAnswer: Decodable {
     struct Query: Decodable {
         let pages: [Page]
+        /// Which name asked became which name answered, for a question asked
+        /// by name — see ``CommonsPhotoQuery/files(named:from:timeZone:)``.
+        let normalized: [Normalization]
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            pages = try container.decodeIfPresent([Page].self, forKey: .pages) ?? []
+            normalized = try container.decodeIfPresent([Normalization].self, forKey: .normalized) ?? []
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case pages = "pages"
+            case normalized = "normalized"
+        }
+    }
+
+    struct Normalization: Decodable {
+        let from: String
+        let to: String
     }
 
     /// One page of the answer. A page id that does not exist comes back with
     /// no `imageinfo` at all, which reads as no file rather than as a failed
     /// answer — and is marked `missing`, which is what tells it apart from a
-    /// page an answer cut short said nothing about.
+    /// page an answer cut short said nothing about. A name that cannot be a
+    /// page at all is marked `invalid`, and has no id either.
     struct Page: Decodable {
         let pageid: Int?
+        let title: String?
         let imageinfo: [ImageInfo]
         let missing: Bool
+        let invalid: Bool
 
         init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             imageinfo = try container.decodeIfPresent([ImageInfo].self, forKey: .imageinfo) ?? []
             pageid = try container.decodeIfPresent(Int.self, forKey: .pageid)
+            title = try container.decodeIfPresent(String.self, forKey: .title)
             missing = try container.decodeIfPresent(Bool.self, forKey: .missing) ?? false
+            invalid = try container.decodeIfPresent(Bool.self, forKey: .invalid) ?? false
         }
 
         enum CodingKeys: String, CodingKey {
             case imageinfo = "imageinfo"
             case pageid = "pageid"
+            case title = "title"
             case missing = "missing"
+            case invalid = "invalid"
         }
     }
 

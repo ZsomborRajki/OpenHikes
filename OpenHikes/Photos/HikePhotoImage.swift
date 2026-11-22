@@ -79,6 +79,16 @@ nonisolated protocol HikePhotoReading: Sendable {
     func thumbnail(for photo: HikePhoto) -> PhotoImage?
     func displayImage(for photo: HikePhoto) -> PhotoImage?
     func hasImage(for photo: HikePhoto) -> Bool
+    /// Fetches the file of a photograph that has gone from this device again,
+    /// where that can be done — see ``HikePhotoStore/restore(_:)``.
+    @concurrent
+    func restore(_ photo: HikePhoto) async -> PhotoRestore
+}
+
+nonisolated extension HikePhotoReading {
+    /// Nothing, for reads that hold their pictures in memory: a suite's.
+    @concurrent
+    func restore(_ photo: HikePhoto) async -> PhotoRestore { .unrestorable }
 }
 
 nonisolated extension HikePhotoStore: HikePhotoReading {}
@@ -117,7 +127,7 @@ nonisolated enum HikePhotoLoader {
     ) async -> PhotoDisplay {
         guard !Task.isCancelled else { return .loading }
         guard let image = store.thumbnail(for: photo) else {
-            return settled(.unavailable(unavailability(of: photo, in: store)))
+            return settled(await missing(photo, in: store) { store.thumbnail(for: photo) })
         }
         return settled(.ready(LoadedPhotoImage(image: image)))
     }
@@ -134,7 +144,7 @@ nonisolated enum HikePhotoLoader {
     ) async -> PhotoDisplay {
         guard !Task.isCancelled else { return .loading }
         guard let image = store.displayImage(for: photo) else {
-            return settled(.unavailable(unavailability(of: photo, in: store)))
+            return settled(await missing(photo, in: store) { store.displayImage(for: photo) })
         }
         return settled(.ready(LoadedPhotoImage(image: image)))
     }
@@ -184,6 +194,36 @@ nonisolated enum HikePhotoLoader {
         Task.isCancelled ? .loading : answer
     }
 
+    /// What a read that came back empty shows: why — or, for a copy of a
+    /// Wikimedia Commons photograph whose file is not here, the picture,
+    /// downloaded again and read with `read`.
+    ///
+    /// Asked of a Commons copy alone, because it is the only photograph
+    /// something else still holds; see ``HikePhotoStore/restore(_:)``. Every
+    /// other answer is the one the row and the disk give.
+    private static func missing(
+        _ photo: HikePhoto,
+        in store: some HikePhotoReading,
+        reading read: () -> PhotoImage?
+    ) async -> PhotoDisplay {
+        let reason = unavailability(of: photo, in: store)
+        guard reason == .notOnThisDevice, photo.license != nil, !Task.isCancelled else {
+            return .unavailable(reason)
+        }
+        switch await store.restore(photo) {
+        case .restored:
+            // Written and still not drawn: the bytes are on this device and
+            // would not decode, which is what the unreadable page is for.
+            return read().map { .ready(LoadedPhotoImage(image: $0)) } ?? .unavailable(.unreadable)
+        case .refused:
+            return .unavailable(.goneFromCommons)
+        case .unanswered:
+            return .unavailable(.notDownloaded)
+        case .unrestorable:
+            return .unavailable(reason)
+        }
+    }
+
     /// Which of the two empty answers this is, asked only once a decode has
     /// already failed.
     ///
@@ -213,11 +253,25 @@ nonisolated enum HikePhotoLoader {
 /// photo that is fine everywhere except here, which is a sentence to say
 /// rather than a picture to fail at drawing.
 nonisolated enum PhotoUnavailability: Sendable {
+    /// A copy of a Wikimedia Commons photograph whose file is not here, which
+    /// Commons no longer offers: deleted there, or no longer a photograph
+    /// under a licence this app can honour. Nothing will bring it back, so
+    /// the row is the hiker's to remove.
+    case goneFromCommons
+    /// A copy of a Wikimedia Commons photograph whose file is not here, and
+    /// which could not be downloaded again just now — no connection, Low Data
+    /// Mode, Commons busy. The one of the missing files that is worth asking
+    /// for again. See ``HikePhotoStore/restore(_:)``.
+    case notDownloaded
     /// No file under the name the row claims. What a mirrored photo looks like
     /// on every device but the one it was added on — the camera writes its
     /// bytes here and so does an import, so that is the device holding the
     /// only copy, whatever took the picture — and what a file deleted
     /// underneath the app looks like anywhere.
+    ///
+    /// Never a copy of a Wikimedia Commons photograph on a launch that can
+    /// ask Commons for it: that is downloaded again, and is
+    /// ``notDownloaded`` or ``goneFromCommons`` when it cannot be.
     case notOnThisDevice
     /// The row was never a picture: it came out of a `<wpt>` in an imported
     /// `.gpx`, which records where a photograph was taken and cannot carry

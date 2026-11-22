@@ -61,7 +61,10 @@ nonisolated final class HikePhotoStore: @unchecked Sendable {
         }
     }
 
-    static let shared = HikePhotoStore()
+    /// The app's photographs, with Wikimedia Commons to download a saved
+    /// copy's picture again from — none in a suite. See
+    /// ``CommonsPhotoRefetch``.
+    static let shared = HikePhotoStore(commons: CommonsPhotoRefetch.forThisLaunch())
 
     static let logger = Logger(subsystem: "OpenHikes", category: "HikePhotos")
 
@@ -105,11 +108,20 @@ nonisolated final class HikePhotoStore: @unchecked Sendable {
     private let thumbnailDirectory: URL
     // swiftlint:disable:next legacy_objc_type
     private let thumbnails = NSCache<NSString, PhotoImage>()
+    /// Where a copy of a Wikimedia Commons photograph is downloaded again
+    /// from when its file is not here, or `nil` for nowhere — see
+    /// ``restore(_:)``.
+    let commons: CommonsPhotoRefetch?
 
-    /// - Parameter storageRoot: Overrides Application Support, so a suite gets
-    ///   its own photo directory rather than the host app's — the same
-    ///   arrangement ``TileCache`` offers.
-    init(storageRoot: URL? = nil) {
+    /// - Parameters:
+    ///   - storageRoot: Overrides Application Support, so a suite gets its own
+    ///     photo directory rather than the host app's — the same arrangement
+    ///     ``TileCache`` offers.
+    ///   - commons: Where a saved Commons copy's picture is fetched again
+    ///     from. `nil`, the default, fetches nothing, which is what every
+    ///     suite but the one about fetching wants.
+    init(storageRoot: URL? = nil, commons: CommonsPhotoRefetch? = nil) {
+        self.commons = commons
         let root = storageRoot
             ?? FileManager.default.urls(
                 for: .applicationSupportDirectory,
@@ -537,5 +549,72 @@ nonisolated final class HikePhotoStore: @unchecked Sendable {
             size: CGSize(width: image.width, height: image.height)
         )
         #endif
+    }
+}
+
+// MARK: - Downloading again
+
+/// What asking again for a photograph's file came to — see
+/// ``HikePhotoStore/restore(_:)``.
+nonisolated enum PhotoRestore: Equatable, Sendable {
+    /// Where the picture came from no longer offers it.
+    case refused
+    /// The file is on this device now.
+    case restored
+    /// It could not be had just now, and may be later.
+    case unanswered
+    /// Nothing can fetch this one: the hiker's own photograph, whose only copy
+    /// is on the device it was added on, or a launch that may not ask.
+    case unrestorable
+}
+
+nonisolated extension HikePhotoStore {
+    /// Downloads a copy of a Wikimedia Commons photograph again, for a row
+    /// whose file is not on this device, and keeps it under the row's own
+    /// name.
+    ///
+    /// The one photograph that can come back. A file stays on the device it
+    /// was added on — see *Settled decisions* in the repository instructions
+    /// — and for the hiker's own pictures that is final. A Commons copy is
+    /// somebody else's picture that Commons still holds, under the licence
+    /// the row carries, so a reinstall or a second device fetches it from
+    /// there. See ``CommonsPhotoRefetch``.
+    @concurrent
+    func restore(_ photo: HikePhoto) async -> PhotoRestore {
+        guard let license = photo.license, let commons else { return .unrestorable }
+        // A page that names no file on Commons is one nothing can ask about,
+        // which is the hiker's to remove rather than to retry.
+        guard let title = CommonsPhotoQuery.fileTitle(of: license.sourceURL) else { return .refused }
+        switch await commons.picture(ofFileTitled: title) {
+        case .picture(let data):
+            return write(data, restoring: photo) ? .restored : .unanswered
+        case .refused:
+            return .refused
+        case .unanswered:
+            return .unanswered
+        }
+    }
+
+    /// Writes a downloaded picture under the name `photo` claims.
+    ///
+    /// Only bytes of the format that name says, because every reader goes by
+    /// the name: a copy is saved as the JPEG Commons served, and its thumbnail
+    /// is served as one again.
+    private func write(_ data: Data, restoring photo: HikePhoto) -> Bool {
+        assertOffMainThread("Photo storage must stay off the main thread")
+        guard ImageDataFormat.detect(in: data)?.pathExtension == photo.pathExtension else {
+            Self.logger.error("Refused a downloaded photo whose bytes are not the format it was saved in.")
+            return false
+        }
+        do {
+            try createDirectories()
+            try data.write(to: url(for: photo), options: .atomic)
+            return true
+        } catch {
+            Self.logger.error(
+                "Could not store a downloaded photo: \(error.localizedDescription, privacy: .public)"
+            )
+            return false
+        }
     }
 }

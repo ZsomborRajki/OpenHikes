@@ -167,6 +167,10 @@ struct HikePhotoPage: View {
         switch reason {
         case .notOnThisDevice:
             notOnThisDevice
+        case .notDownloaded:
+            notDownloaded
+        case .goneFromCommons:
+            goneFromCommons
         case .unreadable:
             unreadable
         case .placeOnly:
@@ -215,6 +219,57 @@ struct HikePhotoPage: View {
             Text("This photo is on the device it was added on. Only where and when it was taken syncs.")
         }
         .accessibilityIdentifier("photo-not-on-this-device")
+        .environment(\.colorScheme, .dark)
+    }
+
+    /// A copy of a Wikimedia Commons photograph whose file is not here yet:
+    /// the download it was just asked for did not arrive.
+    ///
+    /// *Try Again*, which ``notOnThisDevice`` withholds, because here it is no
+    /// placebo: the picture is on Commons and comes down the moment it can be
+    /// reached. No removal, because nothing is wrong with the row.
+    private var notDownloaded: some View {
+        VStack(spacing: Self.recoverySpacing) {
+            ContentUnavailableView {
+                Label("Not Downloaded", systemImage: "icloud.and.arrow.down")
+            } description: {
+                Text(
+                    """
+                    This photo comes from Wikimedia Commons and couldn’t be downloaded just now. \
+                    Check your connection and try again.
+                    """
+                )
+            }
+            // A sibling of the button for the reason ``unreadable`` gives.
+            .accessibilityIdentifier("photo-not-downloaded")
+
+            Button("Try Again") { attempt += 1 }
+                .glassButtonStyle()
+                .accessibilityIdentifier("photo-retry-button")
+        }
+        .environment(\.colorScheme, .dark)
+    }
+
+    /// A copy of a Wikimedia Commons photograph that Commons no longer offers.
+    ///
+    /// The removal, and nothing to retry: no device will be able to fetch
+    /// the picture again, so the row is what is left to decide about. The
+    /// credit stays over the page, with its link to the page on Commons.
+    private var goneFromCommons: some View {
+        VStack(spacing: Self.recoverySpacing) {
+            ContentUnavailableView {
+                Label("No Longer on Wikimedia Commons", systemImage: "photo.badge.exclamationmark")
+            } description: {
+                Text("Wikimedia Commons no longer offers this photo, so it can’t be downloaded again.")
+            }
+            .accessibilityIdentifier("photo-gone-from-commons")
+
+            if let onRemove {
+                Button("Remove Photo", role: .destructive, action: onRemove)
+                    .glassButtonStyle()
+                    .accessibilityIdentifier("photo-remove-button")
+            }
+        }
         .environment(\.colorScheme, .dark)
     }
 
@@ -268,13 +323,14 @@ struct HikePhotoPage: View {
     /// ``PhotoUnavailability/unreadable`` counts, and deliberately: the file is
     /// there, the share sheet copies it without decoding it, and the hiker
     /// sending their own damaged file somewhere it may still be recoverable is
-    /// a reasonable thing to let them do. The other two states have no file at
-    /// all — one on another device, one that was never a photograph — and
-    /// nothing to hand over.
+    /// a reasonable thing to let them do. The other states have no file at
+    /// all — on another device, still on Wikimedia Commons, or never a
+    /// photograph — and nothing to hand over.
     private static func hasFile(_ display: PhotoDisplay) -> Bool {
         switch display {
         case .ready, .unavailable(.unreadable): true
-        case .loading, .unavailable(.notOnThisDevice), .unavailable(.placeOnly): false
+        case .unavailable(.notOnThisDevice), .unavailable(.notDownloaded), .unavailable(.goneFromCommons): false
+        case .loading, .unavailable(.placeOnly): false
         }
     }
 
