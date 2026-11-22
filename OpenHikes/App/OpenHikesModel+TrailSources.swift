@@ -15,9 +15,11 @@ extension OpenHikesModel {
     /// The recorder, a hike's breakdowns and the route's colours read trails
     /// alone, which the pre-built squares hold, so ``trails`` asks the squares
     /// first and keeps its regions apart. The trail maker routes over the
-    /// roads that join trails too, which no square holds, so ``routing`` asks
-    /// Overpass for the whole graph, in the directory every earlier build kept
-    /// it in. See ``TrailGraphSquareGrid``.
+    /// roads that join trails too, which those squares leave out, so
+    /// ``routing`` asks the maker's own archive on the tile server first,
+    /// and Overpass where it cannot answer, in the directory every earlier
+    /// build kept the maker's regions in. See ``TrailGraphSquareGrid`` and
+    /// ``RoutingGraphArchive``.
     struct TrailGraphProviders {
         let trails: OverpassTrailGraphProvider
         let routing: OverpassTrailGraphProvider
@@ -34,7 +36,10 @@ extension OpenHikesModel {
                 squares: TrailGraphSquareLibrary.forThisLaunch(),
                 retryDeadline: retryDeadline
             ),
-            routing: OverpassTrailGraphProvider(retryDeadline: retryDeadline)
+            routing: OverpassTrailGraphProvider(
+                squares: TrailGraphSquareLibrary.routingForThisLaunch(),
+                retryDeadline: retryDeadline
+            )
         )
     }
 

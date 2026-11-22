@@ -745,6 +745,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
     area codes they start with (*The offline countries*)
   - the tile server's own `manifest.json`, its fields, and the 410 it gives
     for an archive it does not have (*Tiles*)
+  - the trail maker's archive names and the path of a tile in one
+    (`RoutingGraphArchive`, *The trail maker's graph*)
 
 ## Conventions
 
@@ -934,7 +936,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
 - **No suite reaches the tile server.** `TileCache.shared` has no vector
   source under `isRunningTests`, UI tests included
   (`VectorTileArchives.forThisLaunch()`), except a launch that passes
-  `--ui-test-tile-server`, which only the App Store frames do.
+  `--ui-test-tile-server`, which only the App Store frames do. The trail
+  maker's graph has no server then at all
+  (`TrailGraphSquareLibrary.routingForThisLaunch()`).
 - **A new build gets a new archive name**, carrying its date, and the
   extras the hour too: the server's cache holds a tile for a day, so a build
   overwritten in place would mix two builds on screen.
@@ -945,11 +949,14 @@ a change to recording, the map, the sheet or the render path; the PR template,
   reads, so extras an installed app would draw wrong go up as the next
   generation, and the last of the old one stays listed. The app reads the
   manifest again when it comes to the front and when an archive answers 410,
-  so it moves without a release (`VectorTileArchives`).
+  so it moves without a release (`VectorTileArchives`). It names the trail
+  maker's archive too, under `routing` (*The trail maker's graph*).
 - **Refreshing the server is a run of commands, each safe to run again.**
   Each script's header has its options.
   1. `Scripts/trail-cells.sh update-planet <planet.osm.pbf>`, then
-     `Scripts/vector-extras.sh build <planet.osm.pbf>` and `upload`.
+     `Scripts/vector-extras.sh build <planet.osm.pbf>` and `upload`, and
+     `Scripts/trail-cells.sh build-routing <planet.osm.pbf> --world` and
+     `upload-routing`.
   2. `Scripts/vector-archives.sh basemap` copies Protomaps' newest daily
      build of the schema the app reads into the bucket.
   3. `Scripts/vector-archives.sh use` with each new name, then `publish`, and
@@ -1587,9 +1594,10 @@ argues the design and has the measurements.
 - **Trails, never the roads that join them.** The roads were most of the
   planet, so the squares leave them out, and nothing that reads roads may
   read the squares. The trail maker routes over both, so it has a provider of
-  its own that asks Overpass for the whole graph, in the `TrailGraphs`
-  directory; every other reader shares one that asks the squares first and
-  keeps its regions in `TrailGraphTrails` (`OpenHikesModel.makeDependencies`).
+  its own, in the `TrailGraphs` directory, that reads a set of its own on
+  the tile server before Overpass (*The trail maker's graph*); every other
+  reader shares one that asks the squares first and keeps its regions in
+  `TrailGraphTrails` (`OpenHikesModel.makeTrailGraphProviders()`).
 - **A square answers for the sixteen regions inside it**, on the trail
   squares' terms, through `TrailGraphSquareLibrary`. Overpass's `429` stops
   only a region that would ask Overpass, in both providers, which share its
@@ -1602,6 +1610,30 @@ argues the design and has the measurements.
   minutes.** The squares are 5 GB in about 124,000 records, ten times every
   other set together, and a first upload to one environment took three to
   four hours.
+
+### The trail maker's graph
+
+What the trail maker and *Edit Route*'s redrawn stretches route over is every
+trail and every road that joins trails (`TrailGraphHighway.all`), which the
+graph squares leave out. It is built from the planet into one PMTiles archive
+on the tile server, a z12 tile a region of the graph, each tile a
+`TrailGraphSquareFile`. `RoutingGraphArchive` argues the design.
+
+- **Read like the squares, served like the map.** `RoutingGraphServer` reads
+  a tile as the public database answers for a square, so
+  `TrailGraphSquareLibrary` (`Layout.routing`) reads it, and the maker's
+  provider asks Overpass only for a region the server cannot answer. Which
+  archive is the server's manifest's, under `routing` (*Tiles*), and a 410
+  has the manifest read again.
+- **No tile is ground with no ways.** So only a build of the whole planet
+  goes up: `Scripts/trail-cells.sh upload-routing` refuses any other.
+- **The tile is the graph squares' file.** A change to
+  `TrailGraphSquareFile`, `TrailGraphHighway` or the walking rules is a new
+  archive, and one an installed app would read wrong goes up under the next
+  generation.
+- **The build streams bands of longitude** (`build-routing`), because no
+  index of the planet's 2.5 billion such nodes fits in memory. The bands'
+  edges are measured; a band past 2²⁹ nodes is split. ROUTING_AGENTS_FIGURES
 
 ## The watch app
 

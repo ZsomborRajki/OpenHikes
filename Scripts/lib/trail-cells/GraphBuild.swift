@@ -53,37 +53,23 @@ enum TrailGraphSquareBuild {
 
         var withPositions = 0
         try OPLFile(path: options.waysPath).forEachLine { line in
-            guard let way = try OPL.way(
-                line,
-                scale: TrailGraphSquareFile.standardCoordinateScale,
-                readsTags: true,
-                readsNodeIDs: true
-            ),
-                let highway = way.tags["highway"], TrailGraphHighway.trails.contains(highway)
-            else { return }
-            guard TrailGraphSquareFile.permitsWalking(way.tags) else {
+            let trail: TrailGraphSquareFile.Way
+            switch try read(line, keeping: TrailGraphHighway.trails, names: names) {
+            case .other:
+                return
+            case .notWalkable:
                 summary.notWalkable += 1
                 return
-            }
-            guard let points = way.points, points.count == way.nodeIDs.count else {
+            case .withoutPositions:
                 summary.withoutPositions += 1
                 return
+            case .tooShort:
+                withPositions += 1
+                return
+            case .way(let way):
+                withPositions += 1
+                trail = way
             }
-            withPositions += 1
-            guard points.count > 1 else { return }
-            var tags: [TrailGraphSquareFile.Tag: String] = [:]
-            for tag in TrailGraphSquareFile.Tag.allCases {
-                tags[tag] = tag.key.flatMap { way.tags[$0] }
-            }
-            tags[.hikingRoute] = names[way.id]
-            let trail = TrailGraphSquareFile.Way(
-                id: way.id,
-                highway: highway,
-                tags: tags,
-                nodes: zip(way.nodeIDs, points).map { id, point in
-                    TrailGraphSquareFile.Node(id: id, latitude: point.latitude, longitude: point.longitude)
-                }
-            )
             let record = SpoolRecord.encoded(trail)
             let squares = TrailGraphSquareGrid.squares(
                 touching: trail.nodes,
@@ -121,7 +107,56 @@ enum TrailGraphSquareBuild {
 
 // MARK: - Reading the extract
 
-private extension TrailGraphSquareBuild {
+extension TrailGraphSquareBuild {
+    /// What one line of the ways came to.
+    enum Read {
+        /// Not a way, or not one of the highways asked for.
+        case other
+        case notWalkable
+        /// A node of it had no position: it runs out of the extract.
+        case withoutPositions
+        /// A single node, which is no segment of the graph.
+        case tooShort
+        case way(TrailGraphSquareFile.Way)
+    }
+
+    /// One line of osmium's ways as the graph keeps it: a way whose
+    /// `highway` is one of `highways` and that may be walked, with its
+    /// nodes' ids and positions, the tags an edge keeps, and the name of a
+    /// hiking route it is part of. The trail graph's build keeps the trails,
+    /// and the trail maker's (`RoutingGraphBuild`) the roads that join them
+    /// too.
+    static func read(
+        _ line: UnsafeBufferPointer<UInt8>,
+        keeping highways: Set<String>,
+        names: [Int64: String]
+    ) throws -> Read {
+        guard let way = try OPL.way(
+            line,
+            scale: TrailGraphSquareFile.standardCoordinateScale,
+            readsTags: true,
+            readsNodeIDs: true
+        ),
+            let highway = way.tags["highway"], highways.contains(highway)
+        else { return .other }
+        guard TrailGraphSquareFile.permitsWalking(way.tags) else { return .notWalkable }
+        guard let points = way.points, points.count == way.nodeIDs.count else { return .withoutPositions }
+        guard points.count > 1 else { return .tooShort }
+        var tags: [TrailGraphSquareFile.Tag: String] = [:]
+        for tag in TrailGraphSquareFile.Tag.allCases {
+            tags[tag] = tag.key.flatMap { way.tags[$0] }
+        }
+        tags[.hikingRoute] = names[way.id]
+        return .way(TrailGraphSquareFile.Way(
+            id: way.id,
+            highway: highway,
+            tags: tags,
+            nodes: zip(way.nodeIDs, points).map { id, point in
+                TrailGraphSquareFile.Node(id: id, latitude: point.latitude, longitude: point.longitude)
+            }
+        ))
+    }
+
     /// The hiking route name of every way a hiking relation names. osmium
     /// hands over a matching relation's member relations too, whatever they
     /// are, so the tags are asked about again here.
@@ -143,7 +178,7 @@ private extension TrailGraphSquareBuild {
 
 /// Each square's ways as they are read, a few gigabytes in memory at a time
 /// and the rest appended to a file a square.
-private final class Spool {
+final class Spool {
     private static let flushBytes = 2 << 30
 
     private let directory: URL
@@ -182,6 +217,23 @@ private final class Spool {
 
     /// The ways spooled for `square`, once everything is flushed.
     func ways(of square: TrailGraphSquare) throws -> [TrailGraphSquareFile.Way] {
+        try reader.ways(of: square)
+    }
+
+    /// What reads the spool back, from as many tasks at once as there are.
+    var reader: SpoolReader { SpoolReader(directory: directory) }
+
+    private func file(of square: TrailGraphSquare) -> URL {
+        reader.file(of: square)
+    }
+}
+
+/// A flushed spool's squares, read back.
+struct SpoolReader: Sendable {
+    let directory: URL
+
+    /// The ways spooled for `square`, in the order they were read.
+    func ways(of square: TrailGraphSquare) throws -> [TrailGraphSquareFile.Way] {
         var reader = PackedReader(bytes: Array(try Data(contentsOf: file(of: square))))
         var ways: [TrailGraphSquareFile.Way] = []
         while !reader.isAtEnd {
@@ -190,14 +242,20 @@ private final class Spool {
         return ways
     }
 
-    private func file(of square: TrailGraphSquare) -> URL {
+    /// How many bytes are spooled for `square`.
+    func bytes(of square: TrailGraphSquare) -> Int {
+        let attributes = try? FileManager.default.attributesOfItem(atPath: file(of: square).path)
+        return (attributes?[.size] as? NSNumber)?.intValue ?? 0
+    }
+
+    func file(of square: TrailGraphSquare) -> URL {
         directory.appendingPathComponent("\(square.x)_\(square.y).spool")
     }
 }
 
 /// One way as the spool holds it: every number whole, so a record can be
 /// copied into any number of squares as it is.
-private enum SpoolRecord {
+enum SpoolRecord {
     static func encoded(_ way: TrailGraphSquareFile.Way) -> [UInt8] {
         var writer = PackedWriter()
         writer.write(step: way.id)

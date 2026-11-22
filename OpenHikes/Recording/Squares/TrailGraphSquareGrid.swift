@@ -104,30 +104,38 @@ nonisolated enum TrailGraphSquareGrid {
     private static let halfTurnDegrees: Double = 180
     private static let fullTurnDegrees: Double = 360
 
-    static var tilesPerSide: Int { 1 << squareZoom }
+    /// How many squares a side of the map is at `zoom`.
+    static func tilesPerSide(atZoom zoom: Int = squareZoom) -> Int { 1 << zoom }
 }
 
 // MARK: - Which square
 
 nonisolated extension TrailGraphSquareGrid {
-    /// The square a region of the provider's grid lies in, or `nil` for one
-    /// that is not a z12 tile.
-    static func square(forRegionX x: Int, y: Int, zoom: Int) -> TrailGraphSquare? {
-        guard zoom == regionZoom else { return nil }
+    /// The square at `squareZoom` a region of the provider's grid lies in,
+    /// or `nil` for one that is not a z12 tile. Every square here is
+    /// ``squareZoom``'s but the trail maker's, which is a region itself:
+    /// see ``RoutingGraphArchive``.
+    static func square(forRegionX x: Int, y: Int, zoom: Int, squareZoom: Int = squareZoom) -> TrailGraphSquare? {
+        guard zoom == regionZoom, (0...regionZoom).contains(squareZoom) else { return nil }
         let shift = regionZoom - squareZoom
         let count = 1 << regionZoom
         guard (0..<count).contains(x), (0..<count).contains(y) else { return nil }
         return TrailGraphSquare(x: x >> shift, y: y >> shift)
     }
 
-    /// Every square a way touches, each once: what the tool files it under.
+    /// Every square at `zoom` a way touches, each once: what the tool files
+    /// it under.
     ///
     /// The squares of the box of its nodes, each step from one node to the
     /// next read the short way round (``turn(fromLongitude:to:)``), so the
     /// box of a way across the antimeridian runs on past ±180° and holds
     /// every square the way crosses, whether or not a node of it is there.
     /// A way that never steps across the line is boxed as it is written.
-    static func squares(touching nodes: [TrailGraphSquareFile.Node], coordinateScale: Int32) -> [TrailGraphSquare] {
+    static func squares(
+        touching nodes: [TrailGraphSquareFile.Node],
+        coordinateScale: Int32,
+        zoom: Int = squareZoom
+    ) -> [TrailGraphSquare] {
         guard let first = nodes.first else { return [] }
         let scale = Double(coordinateScale)
         var south = Double(first.latitude) / scale
@@ -147,10 +155,10 @@ nonisolated extension TrailGraphSquareGrid {
             west = min(west, longitude + turns)
             east = max(east, longitude + turns)
         }
-        return squares(touchingSouth: south, west: west, north: north, east: east)
+        return squares(touchingSouth: south, west: west, north: north, east: east, zoom: zoom)
     }
 
-    /// Every square a box touches, each once.
+    /// Every square at `zoom` a box touches, each once.
     ///
     /// Its longitudes run west to east and may go on past ±180°, as a way's
     /// across the antimeridian do: what lies past the line is the squares at
@@ -162,14 +170,15 @@ nonisolated extension TrailGraphSquareGrid {
         touchingSouth south: Double,
         west: Double,
         north: Double,
-        east: Double
+        east: Double,
+        zoom: Int = squareZoom
     ) -> [TrailGraphSquare] {
         guard south.isFinite, west.isFinite, north.isFinite, east.isFinite, south <= north, west <= east else {
             return []
         }
-        let columns = Self.columns(west: west, east: east)
+        let columns = Self.columns(west: west, east: east, zoom: zoom)
         // North is the smaller row: the slippy map counts down from the top.
-        let rows = tileY(north, zoom: squareZoom)...tileY(south, zoom: squareZoom)
+        let rows = tileY(north, zoom: zoom)...tileY(south, zoom: zoom)
         return rows.flatMap { row in
             columns.map { TrailGraphSquare(x: $0, y: row) }
         }
@@ -198,15 +207,15 @@ nonisolated extension TrailGraphSquareGrid {
     /// turn of the map it reaches, the map itself or the one past either
     /// edge, read as the map's own columns. A box that keeps off the line is
     /// one piece, the columns between its edges.
-    private static func columns(west: Double, east: Double) -> [Int] {
-        guard east - west < fullTurnDegrees else { return Array(0..<tilesPerSide) }
+    private static func columns(west: Double, east: Double, zoom: Int) -> [Int] {
+        guard east - west < fullTurnDegrees else { return Array(0..<tilesPerSide(atZoom: zoom)) }
         let firstTurn = Int(((west - halfTurnDegrees) / fullTurnDegrees).rounded(.up))
         let lastTurn = Int(((east + halfTurnDegrees) / fullTurnDegrees).rounded(.down))
         var columns: [Int] = []
         for turn in firstTurn...lastTurn {
             let shift = Double(turn) * fullTurnDegrees
-            let piece = tileX(max(west - shift, -halfTurnDegrees), zoom: squareZoom)
-                ... tileX(min(east - shift, halfTurnDegrees), zoom: squareZoom)
+            let piece = tileX(max(west - shift, -halfTurnDegrees), zoom: zoom)
+                ... tileX(min(east - shift, halfTurnDegrees), zoom: zoom)
             columns += piece.filter { !columns.contains($0) }
         }
         return columns
@@ -258,7 +267,7 @@ nonisolated extension TrailGraphSquareGrid {
         let parts = name.split(separator: nameSeparator, omittingEmptySubsequences: false)
         guard parts.count == namePartCount, parts[0] == namePrefix, parts[1] == "z\(squareZoom)",
               let x = Int(parts[2]), let y = Int(parts[3]),
-              (0..<tilesPerSide).contains(x), (0..<tilesPerSide).contains(y)
+              (0..<tilesPerSide()).contains(x), (0..<tilesPerSide()).contains(y)
         else { return nil }
         return TrailGraphSquare(x: x, y: y)
     }
