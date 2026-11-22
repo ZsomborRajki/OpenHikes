@@ -23,6 +23,30 @@ struct WatchRecordingRecoveryTests {
         }
     }
 
+    /// Taken for none, a journal that would not read let Start through, and
+    /// Start's header replaced what may have been the only copy of a walk
+    /// (#1573). Asked again once whatever kept it from reading has passed,
+    /// it is offered as any other.
+    @Test("A journal that cannot be read is not taken for none, and is offered once it reads")
+    func unreadableJournalIsNotNothing() async throws {
+        try await withStore { journal, queue in
+            try Fixture.write(steps: 3, to: journal)
+            let manager = FileManager.default
+            try manager.setAttributes([.posixPermissions: 0o000], ofItemAtPath: journal.url.path)
+
+            #expect(await WatchRecordingRecovery.checking(journal, against: queue) == .unreadable)
+
+            try manager.setAttributes([.posixPermissions: 0o644], ofItemAtPath: journal.url.path)
+            let recovery = await WatchRecordingRecovery.checking(journal, against: queue)
+            guard case .offer(let recovered) = recovery else {
+                Issue.record("Expected an offer, got \(recovery)")
+                return
+            }
+            #expect(recovered.header == Fixture.header)
+            #expect(recovered.accumulator.fixes.count == 4)
+        }
+    }
+
     @Test("A journal whose walk is not on the queue is offered")
     func unqueuedJournalIsOffered() async throws {
         try await withStore { journal, queue in
@@ -43,7 +67,7 @@ struct WatchRecordingRecoveryTests {
     func queuedWalkIsNotOfferedAgain() async throws {
         try await withStore { journal, queue in
             try Fixture.write(steps: 3, to: journal)
-            let recovered = try #require(journal.recover())
+            let recovered = try #require(try journal.recover())
             #expect(await queue.enqueue(try #require(recovered.finishedWalk())) != nil)
 
             let relaunched = WatchWalkQueue(directory: queue.directory)
@@ -60,7 +84,7 @@ struct WatchRecordingRecoveryTests {
     func walkConfirmedDuringTheCheckIsNotOffered() async throws {
         try await withStore { journal, queue in
             try Fixture.write(steps: 3, to: journal)
-            let recovered = try #require(journal.recover())
+            let recovered = try #require(try journal.recover())
             let walk = try #require(recovered.finishedWalk())
             #expect(await queue.enqueue(walk) != nil)
 
@@ -110,7 +134,7 @@ struct WatchRecordingRecoveryTests {
     func queuedWalkAheadHandsBackItsTail() async throws {
         try await withStore { journal, _ in
             try Fixture.write(steps: 3, to: journal)
-            var recovered = try #require(journal.recover())
+            var recovered = try #require(try journal.recover())
             let queued = try #require(Fixture.walk(steps: 6, pausingBefore: 5))
 
             let tail = try #require(recovered.tail(in: queued))
@@ -128,7 +152,7 @@ struct WatchRecordingRecoveryTests {
     func walkBehindItsJournalHandsBackNothing() async throws {
         try await withStore { journal, _ in
             try Fixture.write(steps: 6, to: journal)
-            let recovered = try #require(journal.recover())
+            let recovered = try #require(try journal.recover())
 
             #expect(recovered.tail(in: try #require(Fixture.walk(steps: 3))) == nil)
             #expect(recovered.tail(in: Fixture.otherWalk) == nil)
@@ -146,7 +170,7 @@ struct WatchRecordingRecoveryTests {
     func undecodableQueuedWalkIsOffered(namedBeforeTheIndex: Bool) async throws {
         try await withStore { journal, queue in
             try Fixture.write(steps: 3, to: journal)
-            let recovered = try #require(journal.recover())
+            let recovered = try #require(try journal.recover())
             let walk = try #require(recovered.finishedWalk())
             let fileName = if namedBeforeTheIndex {
                 "\(walk.sessionID.uuidString).json"

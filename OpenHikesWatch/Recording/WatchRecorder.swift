@@ -95,10 +95,11 @@ final class WatchRecorder: NSObject {
         case saving
         /// At launch, until the journal the last process left has been read
         /// and the disk queue asked whether its walk already went — see
-        /// ``checkJournal()``. Both are read off the main actor, so the first
-        /// frame waits on neither, and Start and the queue's drain wait on
-        /// both. Not ``saving``: nothing is being kept, and leaving `.saving`
-        /// for `.idle` is what a save feels like.
+        /// ``checkJournal()`` — and again each time a journal that could not
+        /// be read is asked for again. Both are read off the main actor, so
+        /// the first frame waits on neither, and Start and the queue's drain
+        /// wait on both. Not ``saving``: nothing is being kept, and leaving
+        /// `.saving` for `.idle` is what a save feels like.
         case checkingJournal
         /// Stopped, and the walk is on disk waiting for the phone.
         case saved(WatchRecordedWalk)
@@ -109,6 +110,12 @@ final class WatchRecorder: NSObject {
         /// A recording the last process never finished, found in its journal
         /// at launch and waiting for the hiker to say what becomes of it.
         case interrupted(WatchRecoveredRecording)
+        /// A journal the last process left that could not be read at launch
+        /// — see ``WatchRecordingRecovery/unreadable``. It may be the only
+        /// copy of a walk, so Start waits until it reads, which is asked
+        /// again whenever the app comes to the front and when the hiker
+        /// asks, or until the hiker throws it away.
+        case unreadableJournal
         /// Said to the hiker as it is, so each site words it with
         /// `String(localized:)`: a bare literal here was drawn but never
         /// reached the String Catalog (#1028).
@@ -117,7 +124,8 @@ final class WatchRecorder: NSObject {
         var isActive: Bool {
             switch self {
             case .recording, .paused: true
-            case .idle, .preparing, .saving, .checkingJournal, .saved, .unsaved, .interrupted, .failed: false
+            case .idle, .preparing, .saving, .checkingJournal, .saved, .unsaved, .interrupted, .unreadableJournal,
+                .failed: false
             }
         }
 
@@ -131,9 +139,11 @@ final class WatchRecorder: NSObject {
             // `HKWorkoutSession`, leak the first unended and reset the
             // accumulator under a recording that was already running.
             // `.saving` and `.unsaved` would reset it under a walk nothing
-            // else holds yet, and `.checkingJournal` and `.interrupted` would
-            // start a journal over what may be the only copy of a walk.
-            case .preparing, .recording, .paused, .saving, .checkingJournal, .unsaved, .interrupted: false
+            // else holds yet, and `.checkingJournal`, `.interrupted` and
+            // `.unreadableJournal` would start a journal over what may be the
+            // only copy of a walk.
+            case .preparing, .recording, .paused, .saving, .checkingJournal, .unsaved, .interrupted,
+                .unreadableJournal: false
             }
         }
     }
@@ -363,7 +373,8 @@ final class WatchRecorder: NSObject {
     func acknowledge() {
         switch phase {
         case .saved, .failed: phase = .idle
-        case .idle, .preparing, .recording, .paused, .saving, .checkingJournal, .unsaved, .interrupted: break
+        case .idle, .preparing, .recording, .paused, .saving, .checkingJournal, .unsaved, .interrupted,
+            .unreadableJournal: break
         }
     }
 
@@ -600,7 +611,8 @@ final class WatchRecorder: NSObject {
         let state: WatchGlance.State = switch phase {
         case .recording: .recording
         case .paused: .paused
-        case .idle, .preparing, .saving, .checkingJournal, .saved, .unsaved, .interrupted, .failed: .idle
+        case .idle, .preparing, .saving, .checkingJournal, .saved, .unsaved, .interrupted, .unreadableJournal,
+            .failed: .idle
         }
         glances.publish(
             WatchGlance(
@@ -747,7 +759,19 @@ extension WatchRecorder {
         case .offer(let recovered):
             phase = .interrupted(recovered)
             recoverWorkoutSession()
+        case .unreadable:
+            phase = .unreadableJournal
         }
+    }
+
+    /// Reads a journal that could not be read again: called whenever the app
+    /// comes to the front, and when the hiker asks. Whatever kept it from
+    /// reading at launch may have passed, and a journal that reads now is
+    /// offered as any other.
+    func checkJournalAgain() {
+        guard phase == .unreadableJournal else { return }
+        phase = .checkingJournal
+        Task { await checkJournal() }
     }
 
     /// Carries on recording an interrupted walk, under a new workout session.
@@ -800,11 +824,17 @@ extension WatchRecorder {
         }
     }
 
-    /// Throws an interrupted walk away, which only the hiker decides.
+    /// Throws an interrupted walk away, which only the hiker decides — one
+    /// whose journal could not be read too, or a journal that never reads
+    /// would keep this watch from recording again.
     func discardInterrupted() {
-        guard case .interrupted = phase else { return }
-        journal.close()
-        phase = .idle
+        switch phase {
+        case .interrupted, .unreadableJournal:
+            journal.close()
+            phase = .idle
+        case .idle, .preparing, .recording, .paused, .saving, .checkingJournal, .saved, .unsaved, .failed:
+            return
+        }
     }
 
     /// Asks HealthKit for the workout session the last process was running.
@@ -945,8 +975,11 @@ extension WatchRecorder.Phase {
     ///   queue, so holding it keeps nothing back.
     func queueHold(recording sessionID: UUID) -> WatchQueueHold {
         switch self {
-        // The session the journal names, which nothing knows yet.
-        case .checkingJournal: .everything
+        // The session the journal names, which nothing knows yet: while it
+        // is being read, and for as long as it cannot be (#1573). A walk
+        // sent meanwhile could be the journal's, still crossing when a read
+        // that works at last offers it (#1572). Discard lets the queue go.
+        case .checkingJournal, .unreadableJournal: .everything
         case .interrupted(let recovered): .session(recovered.sessionID)
         case .unsaved(let walk): .session(walk.sessionID)
         case .preparing, .recording, .paused, .saving: .session(sessionID)

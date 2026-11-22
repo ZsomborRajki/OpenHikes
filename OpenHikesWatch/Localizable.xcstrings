@@ -4492,6 +4492,58 @@
         }
       }
     },
+    "This watch can’t read the interrupted hike right now. Try again, or discard it to record a new one." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Watch kann die unterbrochene Wanderung gerade nicht lesen. Versuche es erneut oder verwirf sie, um eine neue aufzuzeichnen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este reloj no puede leer la excursión interrumpida en este momento. Inténtalo de nuevo o descártala para grabar una nueva."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette montre ne peut pas lire la randonnée interrompue pour le moment. Réessayez, ou supprimez-la pour en enregistrer une nouvelle."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo orologio non riesce a leggere l’escursione interrotta in questo momento. Riprova, oppure scartala per registrarne una nuova."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ten zegarek nie może teraz odczytać przerwanej wędrówki. Spróbuj ponownie lub odrzuć ją, aby nagrać nową."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acest ceas nu poate citi acum drumeția întreruptă. Reîncercați sau abandonați-o pentru a înregistra una nouă."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Часы сейчас не могут прочитать прерванный поход. Повторите попытку или удалите его, чтобы записать новый."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Годинник зараз не може прочитати перерваний похід. Спробуйте ще раз або видаліть його, щоб записати новий."
+          }
+        }
+      }
+    },
     "This watch can’t start a workout, so a recording couldn’t stay running." : {
       "localizations" : {
         "de" : {

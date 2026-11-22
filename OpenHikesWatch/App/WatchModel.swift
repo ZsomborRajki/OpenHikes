@@ -178,6 +178,7 @@ final class WatchModel {
     /// would try again before the next launch.
     func cameToFront() {
         askForLibraryIfEmpty()
+        recorder.checkJournalAgain()
         guard isStarted else { return }
         link.retryActivation()
         drainQueue()
@@ -452,6 +453,12 @@ final class WatchModel {
 
     func discardInterruptedRecording() {
         recorder.discardInterrupted()
+    }
+
+    /// Reads the journal of a walk the last process never finished again,
+    /// after it could not be read.
+    func checkInterruptedRecordingAgain() {
+        recorder.checkJournalAgain()
     }
 
     /// Offers a walk the recorder has just put on the disk queue.
