@@ -1157,6 +1157,12 @@
             "value" : "Nie pieszo: %@"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nu pe jos: %@"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -8029,6 +8035,30 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld odcinka do sprawdzenia"
+                }
+              }
+            }
+          }
+        },
+        "ro" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld secțiuni de verificat"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld secțiune de verificat"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld de secțiuni de verificat"
                 }
               }
             }
@@ -15098,6 +15128,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sprawdź trasę"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verificați ruta"
           }
         },
         "ru" : {
@@ -32096,6 +32132,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wygląda dobrze"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este în regulă"
           }
         },
         "ru" : {
@@ -54407,7 +54449,7 @@
         "ro" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Secțiunea %1$lld din %2$lld"
+            "value" : "Secțiuni de verificat"
           }
         },
         "ru" : {
@@ -56867,6 +56909,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pokazuje odcinek na mapie"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afișează secțiunea pe hartă"
           }
         },
         "ru" : {
@@ -65578,6 +65626,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tej trasy nie można jeszcze edytować."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Această rută nu poate fi editată încă."
           }
         },
         "ru" : {
