@@ -745,8 +745,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
     area codes they start with (*The offline countries*)
   - the tile server's own `manifest.json`, its fields, and the 410 it gives
     for an archive it does not have (*Tiles*)
-  - the trail maker's archive names and the path of a tile in one
-    (`RoutingGraphArchive`, *The trail maker's graph*)
+  - each set of squares' list in the tile server's manifest, its archives'
+    names, and where a square is in one, its zoom included (`SquareArchive`,
+    `SquareArchiveTests`, *The trail squares*)
 
 ## Conventions
 
@@ -936,9 +937,8 @@ a change to recording, the map, the sheet or the render path; the PR template,
 - **No suite reaches the tile server.** `TileCache.shared` has no vector
   source under `isRunningTests`, UI tests included
   (`VectorTileArchives.forThisLaunch()`), except a launch that passes
-  `--ui-test-tile-server`, which only the App Store frames do. The trail
-  maker's graph has no server then at all
-  (`TrailGraphSquareLibrary.routingForThisLaunch()`).
+  `--ui-test-tile-server`, which only the App Store frames do. The squares
+  have no server then at all (*The trail squares*).
 - **A new build gets a new archive name**, carrying its date, and the
   extras the hour too: the server's cache holds a tile for a day, so a build
   overwritten in place would mix two builds on screen.
@@ -949,14 +949,13 @@ a change to recording, the map, the sheet or the render path; the PR template,
   reads, so extras an installed app would draw wrong go up as the next
   generation, and the last of the old one stays listed. The app reads the
   manifest again when it comes to the front and when an archive answers 410,
-  so it moves without a release (`VectorTileArchives`). It names the trail
-  maker's archive too, under `routing` (*The trail maker's graph*).
+  so it moves without a release (`VectorTileArchives`). It names each set of
+  squares' archives too, under a list a set (*The trail squares*).
 - **Refreshing the server is a run of commands, each safe to run again.**
   Each script's header has its options.
   1. `Scripts/trail-cells.sh update-planet <planet.osm.pbf>`, then
-     `Scripts/vector-extras.sh build <planet.osm.pbf>` and `upload`, and
-     `Scripts/trail-cells.sh build-routing <planet.osm.pbf> --world` and
-     `upload-routing`.
+     `Scripts/vector-extras.sh build <planet.osm.pbf>` and `upload`, and the
+     four sets of squares (*The trail squares*).
   2. `Scripts/vector-archives.sh basemap` copies Protomaps' newest daily
      build of the schema the app reads into the bucket.
   3. `Scripts/vector-archives.sh use` with each new name, then `publish`, and
@@ -1039,9 +1038,11 @@ Maps*. `OfflineCountries` is the one owner, on the main actor.
   build `20261122`, cut from `planet-20261118` and `extras-20261122-00`: 381
   of them (234 countries, and the 51 states, 13 provinces and 83 regions of
   the three split ones), 1,524 files and 180.6 GB, and no other country
-  file. Beside them it holds those two archives, the trail maker's
-  `routing-20261122-00` (*The trail maker's graph*), and the manifest at
-  revision 10, which names all three, and nothing else.
+  file. Beside them it holds those two archives, the four sets of squares
+  (*The trail squares*), and the manifest at revision 11, which names all
+  six, and nothing else. The squares are `routing-20261122-00`,
+  `trails-20261122-00`, `routes-20261122-00` and `places-20261122-00`, each
+  the planet of 2026-11-22 00:00 UTC.
 
 ### Accessibility
 
@@ -1331,7 +1332,9 @@ in its source header. Do not weaken one without a measurement.
   neither with an index. Both hold the same build of all four sets of
   squares, from OpenStreetMap as of 2026-11-17 23:00 UTC, each marked as the
   whole world under its own manifest (checked 2026-11-18): `trails1_manifest`,
-  `routes1_manifest`, `places1_manifest` and `graph1_manifest`. Both have a
+  `routes1_manifest`, `places1_manifest` and `graph1_manifest`. Builds
+  v1.5-1 to v1.7-1 read them, and nothing later does (*The trail squares*).
+  Both have a
   column for every attribute in `MirroredCloudKitSchema.recordTypes`. The
   only live columns the contract does not name are SwiftData's own
   `CD_entityName`, the to-one reference columns that the contract lists as
@@ -1385,8 +1388,9 @@ is world-readable, because browsing needs no account.
   (`Users` grants `WRITE TO "_creator"`) is unverified, so test it before
   trusting the role in production.
 - **The last two types hold nothing a hiker made.** They are a copy of
-  OpenStreetMap's routes, places and trails that a script uploads; see *The
-  trail squares* and the three sections after it.
+  OpenStreetMap's routes, places and trails that a script uploads, which
+  builds v1.5-1 to v1.7-1 read and later builds read from the tile server
+  instead; see *The trail squares*.
 
 ### Rules that hold it up
 
@@ -1488,16 +1492,29 @@ is world-readable, because browsing needs no account.
 
 A curated search used to wait in Overpass's queue, so its answer is built
 ahead of time: OpenStreetMap's waymarked day hikes, filed by quarter-degree
-square, one `CuratedTrailCell` record a square in the public database, fetched
-by name. `TrailCellGrid` argues the design and has the measurements. The three
-sets after this one are built, uploaded and read on the same terms.
+square, one tile a square of a PMTiles archive on the tile server, fetched
+by name. `TrailCellGrid` argues the grid and has the measurements,
+`SquareArchive` says where a square is in its archive, and
+`SquareArchiveServer` reads it. The three sets after this one are built,
+packed and read on the same terms.
 
 - **An answer is complete or it is not given** (`TrailCellLibrary`). A search
-  is answered from the squares only when the manifest says they are the whole
-  world, and every square within reach of the search was read or has no
-  record. Otherwise `CuratedTrailSource` asks Overpass as it did before. So an
-  empty answer from the squares means *no trails here*, and a regional build
-  is never read, even where its squares are.
+  is answered from the squares only when the server lists an archive of them
+  this build reads, and every square within reach of the search was read or
+  has no tile. Otherwise `CuratedTrailSource` asks Overpass as it did before.
+  So an empty answer from the squares means *no trails here*.
+- **Only a build of the whole planet goes up.** A square with no tile is read
+  as ground with nothing on it, so `pack` and `upload-archive` refuse a build
+  without `--world`.
+- **Each set has a list of its own in the server's manifest**: `routing`,
+  `trails`, `routes` and `places`, newest first (*Tiles*). A build reads the
+  first archive of its set's generation and zoom, a new build is a new
+  archive name, never one replaced in place, and a 410 has the manifest read
+  again.
+- **A square is a tile at its row and column** (`SquareArchive`), at the
+  shallowest zoom that holds every square of its grid, one zoom a
+  hiking-routes level. The trail graph's tiles are its regions. The zooms
+  are a storage contract (`SquareArchiveTests`).
 - **The squares reach further than Overpass is asked**
   (`CuratedTrailQuery.maximumRadiusMeters` against
   `maximumOverpassRadiusMeters`). Between the two, a search the squares cannot
@@ -1508,31 +1525,34 @@ sets after this one are built, uploaded and read on the same terms.
   the two to one result).
 - **`CuratedTrailQuery`'s day-hike figures are the grid's**, spelled once:
   raising them without rebuilding the squares would offer nothing more.
-- **The file's generation is in every record name** (`trails1_…`). An
-  installed build keeps asking for the names it knows, so a file it cannot
-  read goes under a new generation beside the old one, never over it.
-- **Thirteen of the app's files are compiled into the tool:**
-  `PackedBytes.swift`, `TrailCellGrid.swift`, `TrailCellFile.swift`,
-  `RouteSquareGrid.swift`, `RouteSquareFile.swift`, `PlaceSquareGrid.swift`,
-  `PlaceSquareFile.swift`, `TrailGraphSquareGrid.swift`,
-  `TrailGraphSquareFile.swift`, `RoutingGraphArchive.swift`,
-  `TrailGraphHighway.swift`, `PMTilesFile.swift` and
-  `CommunitySchema.swift`. They import nothing of the app's, and
-  `Scripts/run-script-tests.sh` builds the tool, which is what holds them to
-  that.
-- **Building and uploading** is `Scripts/trail-cells.sh`, whose header has
+- **The file's generation is in every square's name** (`trails1_…`) and in
+  its archive's entry in the manifest. A file an installed build cannot read
+  goes up as the next generation, beside the old one, which stays listed
+  for the builds that read only that.
+- **The tool compiles the app's grid, file and archive files**
+  (`tool_sources` in `Scripts/trail-cells.sh`). They import nothing of the
+  app's, and `Scripts/run-script-tests.sh` builds the tool, which is what
+  holds them to that.
+- **Building and publishing** is `Scripts/trail-cells.sh`, whose header has
   every option:
   1. `update-planet <planet.osm.pbf>`. The planet is downloaded once and then
      kept current with the hourly changes openstreetmap.org publishes,
      because the volunteers who serve it asked that it not be downloaded
      again for each refresh.
-  2. `build <planet.osm.pbf> --world` (or `build-routes`, `build-places`,
-     `build-graph`). Only a build of the whole planet takes `--world`, which
-     is what marks the squares complete.
-  3. `upload <dir> --environment development`, then try it in a Debug build.
-  4. `upload <dir> --environment production`.
-- **Both record types are added by schema import before the first upload**
-  to an environment, for the reason *A new field arrives indexed* gives.
+  2. `build <planet.osm.pbf> --world`, `build-routes`, `build-places` and
+     `build-routing`, each with `--world`.
+  3. `pack <dir>` for the first three; `build-routing` writes its archive
+     itself.
+  4. `upload-archive <dir>` for all four, then `Scripts/vector-archives.sh
+     use` with each name, `publish`, and commit the manifest (*Tiles*).
+- **The public database's copies are for builds v1.5-1 to v1.7-1.** Those
+  read the squares as `CuratedTrailCell` records, under the same names
+  (*Persisted identifiers*), and nothing later does. `upload` refreshes them,
+  and `prune` takes a set down once those builds are gone: it marks the
+  set's manifest incomplete first, so they fall back to Overpass, deletes
+  the squares, and deletes the manifest record last, because it is the only
+  list of them. Both record types were added by schema import before the
+  first upload, for the reason *A new field arrives indexed* gives.
 - **No suite reaches any of the squares.** Each set's source is `nil` under
   `isRunningTests`: `makeCommunityTransport()`,
   `HikingRouteSquares.forThisLaunch()`, `makeTrailPointSource()` and
@@ -1547,8 +1567,8 @@ squares. `RouteSquareGrid` argues the design and has the measurements.
 
 - **On unless the hiker turns it off, and nothing of it is a tile.** Auto-save
   and downloads ask the selected map alone.
-- **Names of their own.** A routes square is a `CuratedTrailCell` named
-  `routes1_z<zoom>_<row>_<col>`, under `routes1_manifest`. The build writes
+- **Names of their own.** A routes square is `routes1_z<zoom>_<row>_<col>`,
+  in the `routes` archive, one zoom of it a level. The build writes
   `routes-manifest.json`, never `manifest.json`, because a tool from before
   the layer reads only that name and would take the layer's squares for the
   day hikes'.
@@ -1575,10 +1595,9 @@ squares. `RouteSquareGrid` argues the design and has the measurements.
 
 What a place search offers (*Search this area*, *Places Around Trail*, *Add
 Place* and *Places Nearby*) is built ahead of time the same way: every element
-`TrailPointQuery` asks Overpass for, filed by one-degree square, one
-`CuratedTrailCell` a square named `places1_<row>_<col>`, under
-`places1_manifest`. `PlaceSquareGrid` argues the size and has the
-measurements.
+`TrailPointQuery` asks Overpass for, filed by one-degree square, one tile a
+square of the `places` archive, named `places1_<row>_<col>`.
+`PlaceSquareGrid` argues the size and has the measurements.
 
 - **The squares first, Overpass second** (`TrailPointSource`, through
   `PlaceSquareLibrary`), on the trail squares' terms.
@@ -1589,52 +1608,34 @@ measurements.
 - **The symbol is the app's.** A square holds tags, and
   `TrailPointDecoding.place(…)` reads them as it reads an Overpass element.
 
-### The trail graph squares
+### The trail graph
 
-The trail graph a recording is matched against, a hike's surface and
-difficulty are read from and a route is colored by is built ahead of time
-too: every trail OpenStreetMap has (`TrailGraphHighway.trails`) that may be
-walked, filed by slippy-map tile at zoom 10, one `CuratedTrailCell` a square
-named `graph1_z10_<x>_<y>`, under `graph1_manifest`. `TrailGraphSquareGrid`
-argues the design and has the measurements.
+What a recording is matched against, a hike's surface and difficulty are read
+from, a route is colored by, and the trail maker and *Edit Route*'s redrawn
+stretches route over is one graph: every trail and every road that joins
+trails (`TrailGraphHighway.all`), as an Overpass answer for a region holds
+it. It is built from the planet into one PMTiles archive on the tile server,
+a z12 tile a region, each tile a `TrailGraphSquareFile`, and read on the
+trail squares' terms. `RoutingGraphArchive` argues the design.
 
-- **Trails, never the roads that join them.** The roads were most of the
-  planet, so the squares leave them out, and nothing that reads roads may
-  read the squares. The trail maker routes over both, so it has a provider of
-  its own, in the `TrailGraphs` directory, that reads a set of its own on
-  the tile server before Overpass (*The trail maker's graph*); every other
-  reader shares one that asks the squares first and keeps its regions in
-  `TrailGraphTrails` (`OpenHikesModel.makeTrailGraphProviders()`).
-- **A square answers for the sixteen regions inside it**, on the trail
-  squares' terms, through `TrailGraphSquareLibrary`. Overpass's `429` stops
-  only a region that would ask Overpass, in both providers, which share its
-  deadline (`OverpassRetryDeadline`).
-- **A region read from a square is the graph Overpass gives** for the same
-  trails, joined at the same node ids, so the two merge in the provider's
-  cache (`TrailGraphSquareLibraryTests`). The walking and hiking-route rules
-  are written once, in `TrailGraphSquareFile`, for the decoder and the tool.
-- **A planet's build needs some 60 GB of work files and about forty
-  minutes.** The squares are 5 GB in about 124,000 records, ten times every
-  other set together, and a first upload to one environment took three to
-  four hours.
-
-### The trail maker's graph
-
-What the trail maker and *Edit Route*'s redrawn stretches route over is every
-trail and every road that joins trails (`TrailGraphHighway.all`), which the
-graph squares leave out. It is built from the planet into one PMTiles archive
-on the tile server, a z12 tile a region of the graph, each tile a
-`TrailGraphSquareFile`. `RoutingGraphArchive` argues the design.
-
-- **Read like the squares, served like the map.** `RoutingGraphServer` reads
-  a tile as the public database answers for a square, so
-  `TrailGraphSquareLibrary` (`Layout.routing`) reads it, and the maker's
-  provider asks Overpass only for a region the server cannot answer. Which
-  archive is the server's manifest's, under `routing` (*Tiles*), and a 410
-  has the manifest read again.
-- **No tile is ground with no ways.** So only a build of the whole planet
-  goes up: `Scripts/trail-cells.sh upload-routing` refuses any other.
-- **The tile is the graph squares' file.** A change to
+- **One library, two providers** (`OpenHikesModel.makeTrailGraphProviders()`).
+  The recorder's provider and the maker's read the same tiles through one
+  `TrailGraphSquareLibrary`, and ask Overpass only for a region the server
+  cannot answer. Overpass's `429` stops only a region that would ask
+  Overpass, in both, which share its deadline (`OverpassRetryDeadline`).
+- **A reader that wants trails keeps the trail edges**
+  (`TrailGraphEdge.isTrail`), as it always did with an Overpass answer, which
+  carries the roads too.
+- **The providers keep their regions apart**: the recorder's in
+  `TrailGraphTrails`, which builds v1.5-1 to v1.7-1 filled from the public
+  database's trails-only squares (`graph1_z10_<x>_<y>`), and the maker's in
+  `TrailGraphs`, which never held a region without its roads.
+- **A region read from a tile is the graph Overpass gives** for the same
+  ways, joined at the same node ids, so the two merge in the provider's cache
+  (`SquareArchiveServerTests`, `TrailGraphSquareLibraryTests`). The walking
+  and hiking-route rules are written once, in `TrailGraphSquareFile`, for the
+  decoder and the tool.
+- **The tile is the trail graph's file.** A change to
   `TrailGraphSquareFile`, `TrailGraphHighway` or the walking rules is a new
   archive, and one an installed app would read wrong goes up under the next
   generation.
@@ -1821,10 +1822,11 @@ Reopening one needs new evidence, not a fresh reading of the same code.
   - A tilted map's tiles assume MapKit drapes a replacing tile overlay, and
     every line above it, over the realistic satellite map's terrain. Watched
     on iOS 18.6 and 27.2 simulators, never on a device.
-  - No search in the app has been watched reading a trail square, on a
-    device or in a TestFlight build, and nobody has watched the widest
-    search on a cellular connection. The fetch itself has been watched,
-    hosted in a simulator, from both environments, and so has the upload.
+  - No search in the app has been watched reading a square from the tile
+    server, on a device or in a TestFlight build, and nobody has watched the
+    widest search on a cellular connection. Every set has been read from the
+    live server through `SquareArchiveServer`, hosted in a simulator, each
+    square identical to its build.
 
 ## Documentation
 

@@ -10,7 +10,8 @@
 //  The graph splits every way at every node, so a node two ways share is
 //  where they meet, and a node with three or more trails leaving it is a
 //  place a hiker can go wrong. Roads are not asked about: the graph a walk
-//  reads holds trails alone (*The trail graph squares* in `AGENTS.md`), so a
+//  reads holds the roads that join trails too, as Overpass gives them, and
+//  this keeps its trail edges alone (*The trail graph* in `AGENTS.md`), so a
 //  turn onto a lane is not announced, and neither is crossing one.
 //
 //  ## The line has to be on the ways it is said to take

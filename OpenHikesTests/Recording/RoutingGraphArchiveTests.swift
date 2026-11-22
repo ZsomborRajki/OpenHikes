@@ -2,9 +2,9 @@
 //  RoutingGraphArchiveTests.swift
 //  OpenHikesTests
 //
-//  The trail maker's archive as the app and the tool both read it: a tile is
-//  a region, what a tile is called on the way and on the server, and which
-//  names off the network are asked for at all.
+//  The trail graph's archive as the app and the tool both read it: a tile is
+//  a region, and what a tile is called on the way. Where it is asked for,
+//  and which archive names are, is ``SquareArchiveTests``'.
 //
 
 import Foundation
@@ -32,28 +32,6 @@ struct RoutingGraphArchiveTests {
         #expect(RoutingGraphArchive.tile(named: "routing1_z10_548_357") == nil)
         #expect(RoutingGraphArchive.tile(named: "routing1_z12_4096_0") == nil)
         #expect(RoutingGraphArchive.tile(named: "routing1_z12_1_2_3") == nil)
-    }
-
-    @Test("a tile is asked for at its zoom, column and row, under the extension the server gives it")
-    func aTilePath() {
-        let path = RoutingGraphArchive.path(of: TrailGraphSquare(x: 2194, y: 1430), inArchive: "routing-20261122-00")
-        #expect(path == "routing-20261122-00/12/2194/1430.bin")
-    }
-
-    @Test("only a routing archive's name is asked for", arguments: [
-        ("routing-20261122-00", true),
-        ("routing", true),
-        ("planet-20261118", false),
-        ("extras-20261121-00", false),
-        ("routing-", false),
-        ("routing--1", false),
-        ("Routing-20261122-00", false),
-        ("routing-../manifest", false),
-        ("routing-2026/11", false),
-        ("", false),
-    ])
-    func archiveNames(name: String, isRead: Bool) {
-        #expect(RoutingGraphArchive.isArchiveName(name) == isRead)
     }
 
     /// A tile holds every way whose box touches it, as a square of the

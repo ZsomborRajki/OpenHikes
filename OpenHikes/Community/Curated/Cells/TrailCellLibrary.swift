@@ -18,8 +18,8 @@
 //    squares are the whole world, and every square the area needs was read
 //    or is known not to exist.
 //  - ``TrailCellAnswer/uncovered`` is the squares not reaching this area:
-//    none published in this environment, or a set that is only part of the
-//    world. See ``TrailCellFetch/Manifest``.
+//    no archive of them the tile server lists that this build reads, or a
+//    set that is only part of the world. See ``TrailCellFetch/Manifest``.
 //  - ``TrailCellAnswer/unreachable`` is a square that should be readable and
 //    was not.
 //
@@ -94,31 +94,32 @@ nonisolated struct TrailCellLibrary: Sendable {
 
     /// The most squares one request names.
     ///
-    /// Thirty-five is what the widest search named before the ceiling was
-    /// raised, at 47°N, so no request there covers more ground than the ones
-    /// ``CloudKitTrailCellDatabase``'s thirty seconds were set for, and
-    /// further north, where a square is narrower, none covers as much. A
-    /// wider search is four requests at 47°N and five at 60°N, sent one after
-    /// another, and each one's squares are kept as it lands.
-    ///
-    /// One after another, because sending them together bought nothing.
-    /// Measured on 2026-11-14 against development, on a connection that
-    /// carries 8.5 MB a second: a map two hundred kilometres across was 1 to
-    /// 9.5 MB of squares over ground with trails on it, and took 3 to 17.5
-    /// seconds the first time. That came to 30 to 110 milliseconds for each
-    /// square that held routes when they were asked for in one request, and
-    /// 25 to 135 in eight requests at once: the wait is CloudKit handing
-    /// over a file per square, not the line. The same searches again, from
-    /// this device, took under two seconds. Those were requests of sixty,
-    /// and have not been timed again in requests of this size.
-    ///
-    /// That is also why the requests are small. A request that fails as a
-    /// whole gives back nothing, however many of its squares had arrived, so
-    /// a request that a slow connection cannot carry in its thirty seconds
-    /// runs out of time every time it is tried, and the squares of the
-    /// requests after it are never asked for. Around Stuttgart, the busiest
-    /// ground measured, 117 squares were 12 MB of files.
+    /// The tile server answers a square at a time, a few of a request's at
+    /// once (``SquareArchiveServer/concurrentRequests``), and each square has
+    /// ``requestTimeout`` and ``resourceTimeout`` to itself, so a slow
+    /// connection no longer runs a whole request out of time: what arrived
+    /// is kept. Thirty-five is what the widest search named before the
+    /// ceiling was raised, at 47°N, and what a request to the public
+    /// database, which gave back nothing when it failed as a whole, was cut
+    /// to. A wider search is four requests at 47°N and five at 60°N, sent
+    /// one after another, so a superseded search is heard of between them,
+    /// and each one's squares are kept as it lands. Around Stuttgart, the
+    /// busiest ground measured, 117 squares were 12 MB of files.
     static let maximumCellsPerRequest = 35
+
+    /// How long one square's request may go quiet, and take in all, in
+    /// seconds.
+    ///
+    /// Short, and set rather than left to the system's own (a minute of
+    /// silence, and a week for the whole), because of what waits behind a
+    /// failure here: ``CuratedTrailSource`` asks Overpass instead, and a
+    /// hiker should reach that in seconds rather than after a spinner has
+    /// outlasted their patience. A place search has Overpass behind it too,
+    /// and takes these (see ``PlaceSquareLibrary``). The hiking-routes layer
+    /// has nothing to fall back on, and sets its own (see
+    /// ``HikingRouteSquares``).
+    static let requestTimeout: TimeInterval = 15
+    static let resourceTimeout: TimeInterval = 30
 
     private let database: any TrailCellFetching
     /// `nil` for a launch with nowhere to keep squares, which costs a fetch

@@ -120,7 +120,7 @@ struct TrailGraphSquareLibraryCancellationTests {
         let directory = Self.scratchDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let database = Self.makeDatabase()
-        let library = TrailGraphSquareLibrary(database: database, directory: directory)
+        let library = TrailGraphSquareLibrary.squares(database, directory: directory)
         let name = TrailGraphSquareLibraryTests.squareName
 
         let asking = Task { await library.graph(for: Self.region) }
@@ -146,7 +146,7 @@ struct TrailGraphSquareLibraryCancellationTests {
     @Test("a region giving up leaves the request running for another still waiting", .timeLimit(.minutes(1)))
     func anotherRegionKeepsTheRequest() async throws {
         let database = Self.makeDatabase()
-        let library = TrailGraphSquareLibrary(database: database, directory: nil)
+        let library = TrailGraphSquareLibrary.squares(database, directory: nil)
         let name = TrailGraphSquareLibraryTests.squareName
 
         let abandoned = Task { await library.graph(for: Self.region) }
@@ -174,7 +174,7 @@ struct TrailGraphSquareLibraryCancellationTests {
     @Test("a region given up on before it asks starts no request", .timeLimit(.minutes(1)))
     func aRegionGivenUpOnAsksNothing() async {
         let database = Self.makeDatabase()
-        let library = TrailGraphSquareLibrary(database: database, directory: nil)
+        let library = TrailGraphSquareLibrary.squares(database, directory: nil)
 
         let answer = await Task {
             withUnsafeCurrentTask { $0?.cancel() }
@@ -198,7 +198,7 @@ struct TrailGraphSquareLibraryCancellationTests {
         let database = Self.makeDatabase()
         let provider = OverpassTrailGraphProvider(
             directory: directory,
-            squares: TrailGraphSquareLibrary(database: database, directory: nil),
+            squares: TrailGraphSquareLibrary.squares(database, directory: nil),
             transport: { _ in
                 Issue.record("a region given up on asked Overpass")
                 throw URLError(.cancelled)

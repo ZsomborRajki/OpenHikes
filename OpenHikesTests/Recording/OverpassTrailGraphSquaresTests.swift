@@ -46,7 +46,7 @@ struct OverpassTrailGraphSquaresTests {
         OverpassTrailGraphProvider(
             directory: directory,
             clock: clock.read,
-            squares: TrailGraphSquareLibrary(database: database, directory: nil, clock: clock.read),
+            squares: TrailGraphSquareLibrary.squares(database, directory: nil, clock: clock.read),
             transport: { _ in await overpass.respond() }
         )
     }
@@ -128,7 +128,7 @@ struct OverpassTrailGraphSquaresTests {
         let provider = OverpassTrailGraphProvider(
             directory: directory,
             clock: clock.read,
-            squares: TrailGraphSquareLibrary(database: database, directory: nil, clock: clock.read),
+            squares: TrailGraphSquareLibrary.squares(database, directory: nil, clock: clock.read),
             transport: { _ in await overpass.respond() }
         )
         // The region beside the hut's, in the same square.
@@ -164,6 +164,7 @@ struct OverpassTrailGraphSquaresTests {
             directory: directory.appendingPathComponent("trails"),
             squares: TrailGraphSquareLibrary(
                 database: StubTrailCellDatabase(cells: [TrailGraphSquareLibraryTests.squareName: .failed]),
+                layout: .sixteenRegions,
                 directory: nil
             ),
             retryDeadline: deadline,

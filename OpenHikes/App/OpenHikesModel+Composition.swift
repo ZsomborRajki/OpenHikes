@@ -590,10 +590,14 @@ private extension OpenHikesModel {
         return MergedCommunityTransport(
             published: CloudKitCommunityTransport(),
             // The one launch whose curated search reads the pre-built squares
-            // out of the public database before it asks Overpass. Every other
-            // source is built without them — see ``CuratedTrailSource`` — so
-            // no suite can reach CloudKit through one.
-            curated: CuratedTrailSource(cells: TrailCellLibrary(database: CloudKitTrailCellDatabase())),
+            // off the tile server before it asks Overpass. Every other source
+            // is built without them — see ``CuratedTrailSource`` — so no
+            // suite can reach the server through one.
+            curated: CuratedTrailSource(cells: TrailCellLibrary(database: SquareArchiveServer.live(
+                .trails,
+                requestTimeout: TrailCellLibrary.requestTimeout,
+                resourceTimeout: TrailCellLibrary.resourceTimeout
+            ))),
             // The one launch that may spend a billable call: a real one, with
             // a key. Every other path here keeps the dormant default — see
             // ``MergedCommunityTransport/elevation``.

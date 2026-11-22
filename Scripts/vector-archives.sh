@@ -6,9 +6,14 @@
 # The app draws the OpenStreetMap style from a basemap archive and an extras
 # archive on tiles.openhikes.app, and learns which from the server's manifest,
 # `manifest.json` at its root (`VectorTileArchiveManifest`). The same manifest
-# names the archive the trail maker routes over, under `routing`
-# (`RoutingGraphServer`), which Scripts/trail-cells.sh build-routing builds
-# and upload-routing puts in the bucket. That manifest is
+# names the archives of OpenStreetMap's pre-built squares the app reads
+# (`SquareArchive`, `SquareArchiveServer`), a list each: the trail graph the
+# trail maker routes over and a recording is matched against, under
+# `routing`, which Scripts/trail-cells.sh build-routing builds, and the day
+# hikes, the hiking-routes layer and the places, under `trails`, `routes` and
+# `places`, which its pack makes of a build; its upload-archive puts each in
+# the bucket. A manifest from before one of these lists has none of it, and
+# is written without it. That manifest is
 # OpenHikes/Tiles/Vector/VectorTileArchiveManifest.json: the app bundles it,
 # and this puts it on the server. *Tiles* in AGENTS.md has the whole refresh,
 # extras and countries included.
@@ -26,14 +31,16 @@
 # `use` puts an archive in the bucket at the head of its list in the manifest,
 # or keeps it there, and raises `revision` above the server's, once however
 # many archives it names before the next publish: a basemap (`planet-…`) of
-# the schema of the one it replaces, extras (`extras-…`) or a routing graph
-# (`routing-…`) of the generation of the ones they replace, unless --schema or
-# --generation says otherwise or the list already has the archive, which keeps
-# its own. The first routing graph names its generation with --generation, and
-# a routing graph's zoom is the one the server says its tiles are. It drops what no build
-# would draw from any more, the archives behind it of the same schema or of
-# the same or a later generation, and keeps the first of each other one for
-# the builds that read only that. Then `publish`, and commit the file. It
+# the schema of the one it replaces, extras (`extras-…`) or an archive of
+# squares (`routing-…`, `trails-…`, `routes-…` or `places-…`) of the
+# generation of the ones they replace, unless --schema or --generation says
+# otherwise or the list already has the archive, which keeps its own. The
+# first archive of a list of squares names its generation with --generation,
+# and an archive of squares is listed at the deepest zoom the server says its
+# tiles are at. It drops what no build would draw from any more, the archives
+# behind it of the same schema or of the same or a later generation, and
+# keeps the first of each other one for the builds that read only that. Then
+# `publish`, and commit the file. It
 # edits the manifest this checkout has, so it refuses one behind the
 # server's: one of the server's revision that is not the server's file, or of
 # a lower one.
@@ -61,7 +68,8 @@
 # Usage:
 #   Scripts/vector-archives.sh basemap [<YYYYMMDD>]
 #   Scripts/vector-archives.sh use <name> [--schema <n> | --generation <n>]
-#                                 (<name> is planet-…, extras-… or routing-…)
+#                                 (<name> is planet-…, extras-…, routing-…,
+#                                 trails-…, routes-… or places-…)
 #   Scripts/vector-archives.sh check
 #   Scripts/vector-archives.sh publish
 #   Scripts/vector-archives.sh prune [--dry-run]
@@ -92,6 +100,20 @@ die() {
 
 trap 'rm -rf "$SCRATCH"' EXIT
 
+# The lists of the archives of pre-built squares, in the order the manifest
+# is written in. Each came after the manifest did, so a manifest may lack any
+# of them, and is written without one it lacks.
+SQUARE_LISTS=(routing trails routes places)
+
+is_square_list() {
+  [[ " ${SQUARE_LISTS[*]} " == *" $1 "* ]]
+}
+
+# `has_list <list> <file>`: whether a manifest has the list at all.
+has_list() {
+  plutil -extract "$1" json -o /dev/null "$2" 2>/dev/null
+}
+
 # One value of a JSON file, by key path (`basemaps.0.name`); an array's count.
 value() {
   plutil -extract "$1" raw -o - "$2" 2>/dev/null
@@ -99,15 +121,15 @@ value() {
 
 # `manifest_names <file> <what it is>`: each archive a manifest names, a line
 # each. A file that is not a whole manifest fails rather than naming nothing,
-# since `prune` deletes whatever no manifest names. A manifest from before the
-# trail maker's archive has no `routing`, which names none.
+# since `prune` deletes whatever no manifest names. A manifest from before a
+# list of squares has none of it, which names none.
 manifest_names() {
   local file="$1" what="$2" list count index name
   [[ -f "$file" ]] || die "no manifest at $file"
   [[ "$(value version "$file")" == 1 ]] || die "$what is not a version 1 manifest"
   [[ "$(value revision "$file")" =~ ^[1-9][0-9]*$ ]] || die "$what has no revision"
-  for list in basemaps extras routing; do
-    if [[ "$list" == routing ]] && ! plutil -extract routing json -o /dev/null "$file" 2>/dev/null; then
+  for list in basemaps extras "${SQUARE_LISTS[@]}"; do
+    if is_square_list "$list" && ! has_list "$list" "$file"; then
       continue
     fi
     count="$(value "$list" "$file")" && [[ "$count" =~ ^[0-9]+$ ]] || die "$what has no $list"
@@ -270,8 +292,9 @@ use() {
   case "$name" in
     planet-*) list=basemaps key=schema zoom_key=maximumZoom ;;
     extras-*) list=extras key=generation zoom_key=minimumZoom ;;
-    routing-*) list=routing key=generation zoom_key=zoom ;;
-    *) die "'$name' is neither a basemap (planet-…), extras (extras-…) nor a routing graph (routing-…)" ;;
+    routing-*|trails-*|routes-*|places-*) list="${name%%-*}" key=generation zoom_key=zoom ;;
+    *) die "'$name' is neither a basemap (planet-…), extras (extras-…) nor an archive of squares \
+(routing-…, trails-…, routes-… or places-…)" ;;
   esac
   if [[ $# -eq 3 ]]; then
     [[ "$2" == "--$key" && "$3" =~ ^[1-9][0-9]*$ ]] || usage
@@ -298,10 +321,10 @@ bring it up to the server's (curl -o '$MANIFEST' $SERVER/manifest.json), then us
   esac
   # An archive the list already has keeps its own schema or generation and
   # zoom, as one stepped back to would; a new one takes the head's, which it
-  # replaces. A manifest from before the trail maker's archive has no routing
-  # list, whose first archive names its generation with --generation.
+  # replaces. A manifest from before a list of squares has none of it, and
+  # the list's first archive names its generation with --generation.
   local count index from=0 level zoom
-  if [[ "$list" == routing ]] && ! plutil -extract routing json -o /dev/null "$MANIFEST" 2>/dev/null; then
+  if is_square_list "$list" && ! has_list "$list" "$MANIFEST"; then
     count=0
   else
     count="$(value "$list" "$MANIFEST")" || die "$MANIFEST has no $list"
@@ -310,8 +333,9 @@ bring it up to the server's (curl -o '$MANIFEST' $SERVER/manifest.json), then us
     [[ "$(value "$list.$index.name" "$MANIFEST")" != "$name" ]] || { from="$index"; break; }
   done
   level="${override:-$(value "$list.$from.$key" "$MANIFEST")}" || die "$MANIFEST has no $list to take the $key from"
-  if [[ "$list" == routing ]]; then
-    # The zoom its tiles are, as the server reads it out of the archive.
+  if is_square_list "$list"; then
+    # The deepest zoom its tiles are at, as the server reads it out of the
+    # archive.
     curl -s -o "$SCRATCH/tileset.json" "$SERVER/$name.json"
     zoom="$(value maxzoom "$SCRATCH/tileset.json")" && [[ "$zoom" =~ ^[0-9]+$ ]] \
       || die "$SERVER does not say what zoom $name's tiles are"
@@ -336,20 +360,26 @@ bring it up to the server's (curl -o '$MANIFEST' $SERVER/manifest.json), then us
     echo "vector-archives: $name is already the manifest's first of its $list"
     return
   fi
-  local basemaps extras routing
+  local basemaps extras squares="" square lines
   (( revision > live_revision )) || revision=$(( live_revision + 1 ))
   basemaps="$(current_lines basemaps schema maximumZoom)"
   extras="$(current_lines extras generation minimumZoom)"
-  routing="$(current_lines routing generation zoom)"
   case "$list" in
     basemaps) basemaps="$(entry_lines basemaps schema maximumZoom "${entries[@]}")" ;;
     extras) extras="$(entry_lines extras generation minimumZoom "${entries[@]}")" ;;
-    routing) routing="$(entry_lines routing generation zoom "${entries[@]}")" ;;
   esac
-  # A manifest with no routing list is written as it was before there was one.
-  [[ -z "$routing" ]] || routing="$(printf ',\n  "routing": [\n%s\n  ]' "$routing")"
+  for square in "${SQUARE_LISTS[@]}"; do
+    if [[ "$square" == "$list" ]]; then
+      lines="$(entry_lines "$square" generation zoom "${entries[@]}")"
+    else
+      lines="$(current_lines "$square" generation zoom)"
+    fi
+    # A list the manifest does not have is written as it was before there
+    # was one: not at all.
+    [[ -z "$lines" ]] || squares+="$(printf ',\n  "%s": [\n%s\n  ]' "$square" "$lines")"
+  done
   printf '{\n  "version": 1,\n  "revision": %s,\n  "basemaps": [\n%s\n  ],\n  "extras": [\n%s\n  ]%s\n}\n' \
-    "$revision" "$basemaps" "$extras" "$routing" > "$SCRATCH/manifest.json"
+    "$revision" "$basemaps" "$extras" "$squares" > "$SCRATCH/manifest.json"
   mv "$SCRATCH/manifest.json" "$MANIFEST"
   echo "vector-archives: $name heads the $list at revision $revision; next, Scripts/vector-archives.sh publish"
 }
@@ -396,18 +426,17 @@ prune() {
   # Of the rest, only an archive earlier than the latest of its kind the
   # server names goes, by name, whose date sorts. A later one is an upload
   # not yet named, perhaps by another checkout's `use`, and is kept.
-  local newest_planet newest_extras newest_routing newest
-  newest_planet="$(awk '/^planet-/' <<< "$live_names" | LC_ALL=C sort | tail -n 1)"
-  newest_extras="$(awk '/^extras-/' <<< "$live_names" | LC_ALL=C sort | tail -n 1)"
-  newest_routing="$(awk '/^routing-/' <<< "$live_names" | LC_ALL=C sort | tail -n 1)"
+  local newest kind
   while IFS=$'\t' read -r key bytes; do
     [[ "$key" == *.pmtiles ]] || continue
     name="${key%.pmtiles}"
     [[ "$kept" != *" $name "* ]] || continue
-    case "$name" in
-      planet-*) newest="$newest_planet" ;;
-      extras-*) newest="$newest_extras" ;;
-      routing-*) newest="$newest_routing" ;;
+    # Its kind is what its name starts with, `routes-` and `routing-` apart.
+    kind="${name%%-*}"
+    case "$kind" in
+      planet|extras|routing|trails|routes|places)
+        newest="$(awk -v prefix="$kind-" 'index($0, prefix) == 1' <<< "$live_names" | LC_ALL=C sort | tail -n 1)"
+        ;;
       *) newest="" ;;
     esac
     if [[ -z "$newest" || "$(printf '%s\n%s\n' "$name" "$newest" | LC_ALL=C sort | tail -n 1)" == "$name" ]]; then

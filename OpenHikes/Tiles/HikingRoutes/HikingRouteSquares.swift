@@ -3,8 +3,8 @@
 //  OpenHikes
 //
 //  The hiking-routes layer's squares, as the map draws them: held in memory,
-//  kept on disk, and fetched from the public database by name for whatever
-//  ground the map is about to draw.
+//  kept on disk, and fetched from the tile server by name for whatever
+//  ground the map is about to draw (see ``SquareArchive``).
 //
 //  The renderer asks synchronously whether every square a tile needs is in
 //  memory — see ``drawable(_:)`` — and that is all it ever waits on. Anything
@@ -21,13 +21,12 @@
 //
 //  **One request at a time.** Every tile's missing squares join one queue,
 //  and a request takes up to ``squaresPerRequest`` of them once the one
-//  before it has answered, so whatever queued meanwhile goes out together.
-//  A pan over unseen ground asks every few tiles, and a request for each
-//  kept as many open at once, each for up to ``resourceTimeout``.
-//  Sending several together bought nothing when the day hikes' squares were
-//  timed — see ``TrailCellLibrary/maximumCellsPerRequest``. The squares
-//  asked for most recently go first, because they are the ground the map is
-//  on now.
+//  before it has answered, so whatever queued meanwhile goes out together,
+//  and the server asks for a request's squares a few at a time
+//  (``SquareArchiveServer/concurrentRequests``). A pan over unseen ground
+//  asks every few tiles, and a request for each would keep many open at
+//  once, each for up to ``resourceTimeout``. The squares asked for most
+//  recently go first, because they are the ground the map is on now.
 //
 //  **A request is a tile's, and is refused like one.** Whether the network
 //  may be asked is ``TileNetworkPolicy``'s answer for a tile somebody is
@@ -38,10 +37,11 @@
 //  nobody is moving. Only those: a tile already drawn whole is not stroked
 //  again every minute of an afternoon offline.
 //
-//  Like the day hikes' search, this draws only from squares a manifest calls
-//  the whole world — see ``TrailCellFetch/Manifest`` — because only then is a
-//  square with no record a square with no routes rather than one not
-//  uploaded yet. Until a manifest says so, the layer draws nothing, and asks
+//  Like the day hikes' search, this draws only from squares that are the
+//  whole world — every archive the tile server lists is — see
+//  ``TrailCellFetch/Manifest``, because only then is a square with no tile a
+//  square with no routes rather than one not built. Until the server lists
+//  an archive of them this build reads, the layer draws nothing, and asks
 //  again after ``unavailableRetry``.
 //
 
@@ -78,7 +78,7 @@ nonisolated final class HikingRouteSquares: Sendable {
     /// for again, in seconds.
     static let failedRetry: TimeInterval = 60
     /// How long the layer waits before asking again whether there are squares
-    /// at all, in seconds, after a manifest said they are not the whole world.
+    /// at all, in seconds, after the server listed none this build reads.
     static let unavailableRetry: TimeInterval = 600
 
     /// The tile a redraw is owed to. One closure is kept for each, however
@@ -164,10 +164,9 @@ nonisolated final class HikingRouteSquares: Sendable {
         }
     }
 
-    /// The squares for this launch, read from the public database, or `nil`
-    /// for a launch under test — UI tests included — on the terms
-    /// ``OpenHikesModel/makeCommunityTransport()`` keeps: there is no sandbox
-    /// for a public database, so no suite may fetch from it.
+    /// The squares for this launch, read from the tile server, or `nil` for a
+    /// launch under test, UI tests included: no suite reaches the tile server
+    /// (see ``SquareArchiveServer``).
     static func forThisLaunch() -> HikingRouteSquares? {
         guard !AppLaunchEnvironment.isRunningTests else { return nil }
         // A square is asked for because the map is drawing its ground, so it
@@ -178,14 +177,10 @@ nonisolated final class HikingRouteSquares: Sendable {
         return HikingRouteSquares(database: liveDatabase(), allowsFetching: tilesMayBeFetched)
     }
 
-    /// The public database, as the layer reads it: under its own manifest,
-    /// never the day hikes', and on its own timeouts.
-    static func liveDatabase() -> CloudKitTrailCellDatabase {
-        CloudKitTrailCellDatabase(
-            manifestRecordName: RouteSquareGrid.manifestRecordName,
-            requestTimeout: requestTimeout,
-            resourceTimeout: resourceTimeout
-        )
+    /// The tile server, as the layer reads it: its own archive, never the
+    /// day hikes', on its own timeouts.
+    static func liveDatabase() -> SquareArchiveServer {
+        SquareArchiveServer.live(.routes, requestTimeout: requestTimeout, resourceTimeout: resourceTimeout)
     }
 
     /// `Caches`, beside the day hikes' squares: everything here is

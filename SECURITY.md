@@ -89,7 +89,11 @@ reporting:
   the role is a finding of the same weight as one on `CommunityHike`: what a
   square holds is drawn on every hiker's map as a trail to walk or a place
   to stop. A read is
-  not one, since every byte is OpenStreetMap's.
+  not one, since every byte is OpenStreetMap's. Builds v1.5-1 to v1.7-1
+  read these records; later builds read the same squares out of archives
+  on the tile server, `tiles.openhikes.app`, whose bucket only the
+  maintainer writes, and a way to write there is a finding of the same
+  weight.
 
 **Known and accepted, so a report of it is not new:** an unreviewed submission
 is readable by anyone holding its record name — unguessable, and not
@@ -108,8 +112,9 @@ enumerable, but a name rather than a permission. What would be new is a way to
   `openhikes://` deep link, a response from a tile or Overpass endpoint, a
   payload crossing the watch link (`WatchLink` is the only decoder on either
   side), the contents of a community record — which is text and assets
-  another user uploaded — or a trail square (`TrailCellFile` is its only
-  decoder).
+  another user uploaded — or a square of OpenStreetMap's data, from the
+  database or the tile server (`TrailCellFile`, `RouteSquareFile`,
+  `PlaceSquareFile` and `TrailGraphSquareFile` are their only decoders).
 - A committed credential. `OpenHikes/Secrets.plist` is gitignored and holds the
   optional Stadia and Thunderforest keys; a key that reached a commit is worth
   reporting even if the commit is old. So is the private half of the

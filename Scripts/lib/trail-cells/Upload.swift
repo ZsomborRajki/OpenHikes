@@ -279,7 +279,7 @@ extension Upload {
     }
 
     /// Which database a command is about.
-    private struct Target {
+    struct Target {
         var container: String
         var environment: String
         var endpoint: String
@@ -306,7 +306,12 @@ extension Upload {
     /// Production is changed only by somebody who said so: with `--yes`, or
     /// by typing the word at a terminal.
     private static func confirm(_ plan: Plan, in environment: String, isConfirmed: Bool) throws {
-        guard environment == "production", !isConfirmed, !plan.isEmpty else { return }
+        try confirm(changing: !plan.isEmpty, in: environment, isConfirmed: isConfirmed)
+    }
+
+    /// The same, for any command that would change the database.
+    static func confirm(changing: Bool, in environment: String, isConfirmed: Bool) throws {
+        guard environment == "production", !isConfirmed, changing else { return }
         guard isatty(STDIN_FILENO) != 0 else {
             throw UsageError(description: "changing production needs --yes when nobody is at the terminal.")
         }
@@ -320,7 +325,7 @@ extension Upload {
 
 // MARK: - Reading what is there
 
-private extension Upload {
+extension Upload {
     static func remoteState(of database: PublicDatabase, manifest manifestName: String, names: [String]) async throws -> Remote {
         var remote = Remote()
         let manifestAnswer = try await database.lookup(

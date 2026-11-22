@@ -13,8 +13,9 @@
 //  was for the day hikes (see ``TrailCellGrid``), so the answer is built ahead
 //  of time the same way: `Scripts/trail-cells.sh build-places` reads a planet
 //  file and files every place ``TrailPointQuery`` asks for under one square of
-//  this grid, kept in the public database one record a square, where a search
-//  fetches the few squares it needs by name. See ``PlaceSquareLibrary`` for
+//  this grid, kept on the tile server one tile a square (see
+//  ``SquareArchive``), where a search fetches the few squares it needs by
+//  name; builds before that read them as records of the public database. See ``PlaceSquareLibrary`` for
 //  the reading and ``PlaceSquareFile`` for what one square holds.
 //
 //  ## A whole degree, and a place filed under every square it reaches
