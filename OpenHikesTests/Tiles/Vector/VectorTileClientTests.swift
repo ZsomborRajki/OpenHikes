@@ -104,9 +104,9 @@ struct VectorTileClientTests {
         defer { StubTileProtocol.reset() }
         StubTileProtocol.alwaysRespond(with: response)
 
-        #expect(await client.drawing(forKey: "osm/14/8800/5700") == .fallBack)
+        #expect(await client.drawing(forKey: "osm/14/8800/5700") == .unavailable)
         #expect(client.isPaused(source.archiveURL))
-        #expect(await client.drawing(forKey: "osm/14/8801/5700") == .fallBack)
+        #expect(await client.drawing(forKey: "osm/14/8801/5700") == .unavailable)
         #expect(StubTileProtocol.requestCount == 1, "the next tile goes straight to the fallback")
 
         clock.advance(by: VectorTileClient.failurePause + .seconds(1))
@@ -128,11 +128,11 @@ struct VectorTileClientTests {
             headers: [RetryAfterHeader.name: "600"]
         ))
 
-        #expect(await client.drawing(forKey: "osm/14/8800/5700") == .fallBack)
+        #expect(await client.drawing(forKey: "osm/14/8800/5700") == .unavailable)
         clock.advance(by: VectorTileClient.failurePause + .seconds(1))
         StubTileProtocol.alwaysRespond(with: .init(data: landTile))
 
-        #expect(await client.drawing(forKey: "osm/14/8801/5700") == .fallBack)
+        #expect(await client.drawing(forKey: "osm/14/8801/5700") == .unavailable)
         #expect(StubTileProtocol.requestCount == 1, "the server asked for ten minutes, not one")
 
         clock.advance(by: .seconds(600) - VectorTileClient.failurePause)
@@ -170,7 +170,7 @@ struct VectorTileClientTests {
         StubTileProtocol.alwaysRespond(with: .init(data: landTile))
         #expect(await client.drawing(forKey: "osm/17/70400/45600").png != nil)
         StubTileProtocol.alwaysRespond(with: .status(503))
-        #expect(await client.drawing(forKey: "osm/15/17601/11400") == .fallBack)
+        #expect(await client.drawing(forKey: "osm/15/17601/11400") == .unavailable)
         #expect(client.isPaused(source.archiveURL))
 
         #expect(await client.drawing(forKey: "osm/17/70403/45603").png != nil)
@@ -368,9 +368,9 @@ extension VectorTileClientTests {
         StubTileProtocol.respond { url in url.path.hasPrefix("/extras") ? .init(statusCode: 204) : .status(503) }
         let extras = try #require(withExtras.extrasURL(of: VectorTileAddress(z: 15, x: 17_601, y: 11_400)))
 
-        #expect(await client.drawing(forKey: "osm/15/17600/11400") == .fallBack)
+        #expect(await client.drawing(forKey: "osm/15/17600/11400") == .unavailable)
         #expect(client.isPaused(withExtras.archiveURL), "precondition: the basemap is passed over")
-        #expect(await client.drawing(forKey: "osm/15/17601/11400") == .fallBack)
+        #expect(await client.drawing(forKey: "osm/15/17601/11400") == .unavailable)
 
         #expect(!client.isAskingOrHolding(extras))
     }
