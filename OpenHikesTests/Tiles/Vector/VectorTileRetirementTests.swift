@@ -109,6 +109,27 @@ struct VectorTileRetirementTests {
         #expect(manifests.reads == 1)
     }
 
+    /// A manifest that could not be read is the server failing, not an
+    /// archive with no successor: the raster template's tile would replace
+    /// the hiker's coverage for a week.
+    @Test("a saved tile whose basemap is gone stays the tile while the manifest cannot be read")
+    func retiredBasemapKeepsASavedTile() async throws {
+        let (archives, manifests) = try archives(answer: nil)
+        let stub = StubbedTileCache(vectorArchives: archives)
+        defer { stub.tearDown() }
+        serve([])
+        let file = stub.savedFile(for: key)
+        try stub.place(in: file, agedByDays: 8)
+        let storedAt = { try FileManager.default.attributesOfItem(atPath: file.path)[.modificationDate] as? Date }
+        let placedAt = try storedAt()
+
+        #expect(await stub.cache.loadTile(forKey: key, url: rasterURL) != nil, "the saved copy")
+        #expect(hosts == [vectorHost], "no raster request")
+        #expect(manifests.reads == 1)
+        #expect(try storedAt() == placedAt, "not written over")
+        #expect(stub.cache.freshDiskImage(forKey: key) == nil, "still due")
+    }
+
     @Test("extras the server no longer has are drawn from the ones the manifest names now, and the tile is whole")
     func retiredExtrasMove() async throws {
         let (archives, manifests) = try archives(

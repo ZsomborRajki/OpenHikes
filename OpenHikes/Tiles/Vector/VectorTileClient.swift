@@ -58,7 +58,8 @@
 //  from the archive it names now, rather than falling back: a 410 is a build
 //  retired since the manifest was last read, not a server in trouble. Where
 //  the manifest names nothing newer, the basemap's 410 falls back and the
-//  extras' leaves the drawing provisional, as any refusal does.
+//  extras' leaves the drawing provisional, as any refusal does. Where the
+//  manifest could not be read, the basemap's 410 is the server failing.
 //
 
 import Foundation
@@ -219,10 +220,7 @@ nonisolated final class VectorTileClient: Sendable {
         case .offline:
             return .offline
         case .retired:
-            // Drawn again from the archive the manifest names now: once,
-            // because a move away from that one waits out a read just made.
-            guard await archives.moved(from: source, for: named.providerID) else { return .fallBack }
-            return await drawing(forKey: key)
+            return await drawingAfterRetirement(forKey: key, of: source, providerID: named.providerID)
         case .unavailable, nil:
             #if DEBUG
             Self.logger.debug("Vector tile \(key, privacy: .public): archive failing, or passed over after a failure")
@@ -231,6 +229,21 @@ nonisolated final class VectorTileClient: Sendable {
         case .missing, .refused:
             return .fallBack
         }
+    }
+
+    /// The tile `key` names after the server answered that `source`'s
+    /// basemap is gone: drawn again from the archive the manifest names now,
+    /// once, because a move away from that one waits out a read just made.
+    /// Where the manifest still names it, the raster template draws the
+    /// tile; where it could not be read, the server is failing, and a saved
+    /// copy stays the tile (``Drawing/unavailable``).
+    private func drawingAfterRetirement(
+        forKey key: String,
+        of source: VectorTileSource,
+        providerID: String
+    ) async -> Drawing {
+        if await archives.moved(from: source, for: providerID) { return await drawing(forKey: key) }
+        return archives.lastReadFailed ? .unavailable : .fallBack
     }
 
     /// What a lookup came to, or `nil` where the archive is passed over.
