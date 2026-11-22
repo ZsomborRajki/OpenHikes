@@ -90,17 +90,24 @@ struct CommonsPhotoQueryTitleTests {
                     "descriptionurl":"https://commons.wikimedia.org/wiki/File:Diagram.svg",
                     "extmetadata":{"LicenseShortName":{"value":"CC BY 4.0"}}}]},
                 {"pageid":1,"ns":6,"title":"File:Lac glacier.jpg","imageinfo":[{
-                    "timestamp":"2020-06-01T10:00:00Z","width":3000,"mime":"image/jpeg",
+                    "timestamp":"2020-06-01T10:00:00Z","width":3000,"mime":"image/jpeg","sha1":"5fe1a8",
                     "thumburl":"https://upload.wikimedia.org/thumb/1/960px-Lac_glacier.jpg",
                     "descriptionurl":"https://commons.wikimedia.org/wiki/File:Lac_glacier.jpg",
                     "extmetadata":{"Artist":{"value":"A hiker"},"LicenseShortName":{"value":"CC BY-SA 4.0"}}}]},
-                {"ns":6,"title":"File:Unsaid.jpg"}
+                {"ns":6,"title":"File:Unsaid.jpg"},
+                {"pageid":3,"ns":6,"title":"File:Busy.jpg","imageinfo":[{
+                    "timestamp":"2020-06-01T10:00:00Z","width":3000,"mime":"image/jpeg",
+                    "thumberror":"Error creating thumbnail: timed out",
+                    "descriptionurl":"https://commons.wikimedia.org/wiki/File:Busy.jpg",
+                    "extmetadata":{"LicenseShortName":{"value":"CC BY 4.0"}}}]}
             ]
         }}
         """#.utf8
     )
 
-    private static let asked = ["Lac_glacier.jpg", "Gone.jpg", "Bad<name.jpg", "Diagram.svg", "Unsaid.jpg", "Never.jpg"]
+    private static let asked = [
+        "Lac_glacier.jpg", "Gone.jpg", "Bad<name.jpg", "Diagram.svg", "Unsaid.jpg", "Never.jpg", "Busy.jpg",
+    ]
 
     @Test("a photograph is matched to the name it was asked by, through Commons' own spelling of it")
     func photographIsMatchedThroughItsSpelling() throws {
@@ -112,6 +119,8 @@ struct CommonsPhotoQueryTitleTests {
         #expect(file.thumbnailURL.absoluteString == "https://upload.wikimedia.org/thumb/1/960px-Lac_glacier.jpg")
         #expect(file.credit.author == "A hiker")
         #expect(file.credit.license.name == "CC BY-SA 4.0")
+        // Kept with the copy, so the picture downloaded again is this one.
+        #expect(file.credit.license.fileSHA1 == "5fe1a8")
     }
 
     @Test("a file Commons does not have, cannot have, or may not be shown is refused")
@@ -128,6 +137,63 @@ struct CommonsPhotoQueryTitleTests {
         #expect(answers["Unsaid.jpg"] == nil)
         #expect(answers["Never.jpg"] == nil)
         #expect(answers.count == 4)
+    }
+
+    /// MediaWiki answers a thumbnail it failed to make with `thumberror` in
+    /// place of `thumburl`. The file is still there, so a *no* would offer to
+    /// remove a photograph Commons holds.
+    @Test("a file whose thumbnail Commons failed to make is not answered")
+    func thumbnailErrorIsNotAnswered() throws {
+        let answers = try CommonsPhotoQuery.files(named: Self.asked, from: Self.answer)
+        #expect(answers["Busy.jpg"] == nil)
+    }
+
+    // MARK: - An earlier revision
+
+    @Test("the revisions question asks for every revision's hash and thumbnail")
+    func revisionsQuestion() {
+        let items = Self.queryItems(of: CommonsPhotoQuery.revisions(ofFileTitled: "Lac_glacier.jpg"))
+        #expect(items["titles"] == "File:Lac_glacier.jpg")
+        #expect(items["iiprop"] == "url|sha1")
+        #expect(items["iiurlwidth"] == String(CommonsPhotoQuery.thumbnailWidth))
+        #expect(items["iilimit"] == String(CommonsPhotoQuery.imageInfoBatch))
+    }
+
+    /// The shape the live service answered with in 2026: the current revision
+    /// first, then the archived ones, each with a thumbnail of its own.
+    private static let revisions = Data(
+        #"""
+        {"query":{"pages":[{"pageid":1,"ns":6,"title":"File:Lac glacier.jpg","imageinfo":[
+            {"sha1":"current","thumburl":"https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Lac.jpg/960px-Lac.jpg"},
+            {"sha1":"saved","thumburl":"https://upload.wikimedia.org/wikipedia/commons/archive/a/ab/2019!Lac.jpg"},
+            {"sha1":"failed","thumberror":"Error creating thumbnail"},
+            {"sha1":"elsewhere","thumburl":"https://images.example.org/Lac.jpg"}
+        ]}]}}
+        """#.utf8
+    )
+
+    @Test("the saved revision's own thumbnail is found among the file's revisions")
+    func savedRevisionIsFound() throws {
+        let found = try CommonsPhotoQuery.thumbnail(ofRevision: "saved", from: Self.revisions)
+        let archived = try #require(
+            URL(string: "https://upload.wikimedia.org/wikipedia/commons/archive/a/ab/2019!Lac.jpg")
+        )
+        #expect(found == .thumbnail(archived))
+    }
+
+    @Test("a revision that is not among them, or is shown from elsewhere, is refused")
+    func missingRevisionIsRefused() throws {
+        #expect(try CommonsPhotoQuery.thumbnail(ofRevision: "deleted", from: Self.revisions) == .refused)
+        #expect(try CommonsPhotoQuery.thumbnail(ofRevision: "elsewhere", from: Self.revisions) == .refused)
+        let gone = Data(#"{"query":{"pages":[{"ns":6,"title":"File:Lac glacier.jpg","missing":true}]}}"#.utf8)
+        #expect(try CommonsPhotoQuery.thumbnail(ofRevision: "saved", from: gone) == .refused)
+    }
+
+    @Test("a revision whose thumbnail failed, or an answer with none, is not answered")
+    func failedRevisionIsNotAnswered() throws {
+        #expect(try CommonsPhotoQuery.thumbnail(ofRevision: "failed", from: Self.revisions) == .unanswered)
+        let silent = Data(#"{"query":{"pages":[{"pageid":1,"ns":6,"title":"File:Lac glacier.jpg"}]}}"#.utf8)
+        #expect(try CommonsPhotoQuery.thumbnail(ofRevision: "saved", from: silent) == .unanswered)
     }
 
     @Test("an error answer is read the way every other Commons error is")

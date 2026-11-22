@@ -211,6 +211,26 @@ struct CommonsPhotoQueryTests {
         #expect(answer.answered == Set(1...9))
     }
 
+    /// A thumbnail Commons failed to make this once says nothing about the
+    /// file, and written down as a *no* it would hide the photograph for as
+    /// long as ``CommonsPhotoStore`` keeps the answer.
+    @Test("a page whose thumbnail Commons failed to make is not counted as answered")
+    func thumbnailErrorIsNotAnswered() throws {
+        let answer = try CommonsPhotoQuery.imageInfo(
+            from: Data(
+                #"""
+                {"query":{"pages":[{"pageid":1,"ns":6,"title":"File:Busy.jpg","imageinfo":[{
+                    "width":2000,"mime":"image/jpeg","thumberror":"Error creating thumbnail: timed out",
+                    "descriptionurl":"https://commons.wikimedia.org/wiki/File:Busy.jpg",
+                    "extmetadata":{"LicenseShortName":{"value":"CC0"}}}]}]}}
+                """#.utf8
+            ),
+            timeZone: Self.utc
+        )
+        #expect(answer.files.isEmpty)
+        #expect(answer.answered.isEmpty)
+    }
+
     @Test("the kept photograph carries its author, its licence and both links")
     func keptPhotographIsCredited() throws {
         let file = try #require(try CommonsPhotoQuery.files(from: Self.imageInfoAnswer, timeZone: Self.utc).first)

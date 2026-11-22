@@ -73,12 +73,18 @@ nonisolated struct WikidataPlaceSource: WikidataPlaceSourcing {
     /// ``WikidataQuery/languages(preferring:)``.
     let languages: [String]
     private let transport: Transport
+    /// Where the photograph's Commons request waits its turn — see
+    /// ``CommonsRequestGate``. Wikidata and Wikipedia are other services, and
+    /// are asked outside it.
+    private let gate: CommonsRequestGate
 
     init(
         languages: [String] = WikidataQuery.languages(preferring: Locale.preferredLanguages),
-        transport: Transport? = nil
+        transport: Transport? = nil,
+        gate: CommonsRequestGate? = nil
     ) {
         self.languages = languages
+        self.gate = gate ?? .forSource(reachingNetwork: transport == nil)
         self.transport = transport ?? { request in
             let (data, response) = try await Self.session.data(for: request)
             return (data, (response as? HTTPURLResponse)?.statusCode ?? 0)
@@ -126,7 +132,7 @@ nonisolated struct WikidataPlaceSource: WikidataPlaceSourcing {
     private func photo(named name: String?) async throws -> WikidataPhoto? {
         guard let name else { return nil }
         let files = try await CommonsPhotoQuery.files(
-            from: commonsBody(of: CommonsPhotoQuery.imageInfo(ofFileTitled: name))
+            from: gate.run { try await commonsBody(of: CommonsPhotoQuery.imageInfo(ofFileTitled: name)) }
         )
         // `files(from:)` has already left out what may not be shown — the
         // licence, the type, the size and the host are checked there.

@@ -171,6 +171,25 @@ nonisolated enum CommonsPhotoQuery {
         return String(path.dropFirst(prefix.count))
     }
 
+    /// Every revision of the file named `title`, up to ``imageInfoBatch`` of
+    /// them, each with its SHA-1 and its thumbnail at ``thumbnailWidth``:
+    /// where a saved copy pinned to a revision the file has since moved past
+    /// finds its own picture — see ``HikePhotoLicense/fileSHA1``. Read by
+    /// ``thumbnail(ofRevision:from:)``.
+    ///
+    /// An earlier revision keeps a thumbnail of its own, under
+    /// `upload.wikimedia.org/…/archive/`, measured against the live service
+    /// in 2026.
+    static func revisions(ofFileTitled title: String) -> URLRequest {
+        get([
+            URLQueryItem(name: "titles", value: "\(fileNamespacePrefix)\(title)"),
+            URLQueryItem(name: "prop", value: "imageinfo"),
+            URLQueryItem(name: "iiprop", value: "url|sha1"),
+            URLQueryItem(name: "iiurlwidth", value: String(thumbnailWidth)),
+            URLQueryItem(name: "iilimit", value: String(imageInfoBatch)),
+        ])
+    }
+
     /// Where Commons serves its pages, and the namespace a file's page is in.
     private static let articlePath = "/wiki/"
     private static let fileNamespacePrefix = "File:"
@@ -179,7 +198,7 @@ nonisolated enum CommonsPhotoQuery {
     private static var imageInfoFields: [URLQueryItem] {
         [
             URLQueryItem(name: "prop", value: "imageinfo"),
-            URLQueryItem(name: "iiprop", value: "url|mime|size|timestamp|extmetadata"),
+            URLQueryItem(name: "iiprop", value: "url|mime|size|timestamp|sha1|extmetadata"),
             URLQueryItem(name: "iiurlwidth", value: String(thumbnailWidth)),
             URLQueryItem(
                 name: "iiextmetadatafilter",
@@ -266,8 +285,10 @@ nonisolated enum CommonsPhotoQuery {
                 guard let pageID = page.pageid, let info = page.imageinfo.first else { return nil }
                 return file(pageID: pageID, info: info, timeZone: timeZone)
             },
+            // A thumbnail Commons failed to make this once is not an answer
+            // about the file, so a page answered with one is asked about again.
             answered: Set(pages.compactMap { page in
-                page.imageinfo.isEmpty && !page.missing ? nil : page.pageid
+                page.missing || page.imageinfo.first.map({ $0.thumberror == nil }) == true ? page.pageid : nil
             })
         )
     }
@@ -297,6 +318,9 @@ nonisolated enum CommonsPhotoQuery {
             let asked = fileNamespacePrefix + title
             guard let page = pages[renamed[asked] ?? asked] else { continue }
             if let pageID = page.pageid, let info = page.imageinfo.first {
+                // A thumbnail Commons failed to make is a failure of the
+                // moment rather than a *no*: the file is still there.
+                guard info.thumberror == nil else { continue }
                 answers[title] = file(pageID: pageID, info: info, timeZone: timeZone)
                     .map(CommonsFileAnswer.file) ?? .refused
             } else if page.missing || page.invalid {
@@ -304,6 +328,33 @@ nonisolated enum CommonsPhotoQuery {
             }
         }
         return answers
+    }
+
+    /// The thumbnail of the revision whose SHA-1 is `sha1`, in an answer to
+    /// ``revisions(ofFileTitled:)``.
+    ///
+    /// Refused when the file has gone, or has no revision by that hash any
+    /// more — deleted, hidden, or further back than the answer reaches — and
+    /// not answered when the answer says nothing usable this time.
+    static func thumbnail(ofRevision sha1: String, from data: Data) throws -> CommonsRevisionAnswer {
+        let answer = try JSONDecoder().decode(ImageInfoAnswer.self, from: data)
+        if let error = answer.error { throw failure(for: error) }
+        guard let page = answer.query?.pages.first else { return .unanswered }
+        if page.missing || page.invalid { return .refused }
+        guard !page.imageinfo.isEmpty else { return .unanswered }
+        guard let revision = page.imageinfo.first(where: { $0.sha1 == sha1 }) else { return .refused }
+        guard revision.thumberror == nil else { return .unanswered }
+        return shownThumbnail(revision.thumburl).map(CommonsRevisionAnswer.thumbnail) ?? .refused
+    }
+
+    /// A thumbnail address the API handed back, if it is one this app fetches
+    /// from: HTTPS, on one of ``imageHosts``.
+    private static func shownThumbnail(_ address: String?) -> URL? {
+        guard let url = address.flatMap(URL.init(string:)),
+              url.scheme == "https",
+              url.host().map(imageHosts.contains) == true
+        else { return nil }
+        return url
     }
 
     private static func failure(for error: APIError) -> CommonsPhotoFailure {
@@ -315,9 +366,7 @@ nonisolated enum CommonsPhotoQuery {
         guard info.mime == photographType,
               (info.width ?? 0) >= minimumWidth,
               field(.restrictions)?.isEmpty ?? true,
-              let thumbnail = info.thumburl.flatMap(URL.init(string:)),
-              thumbnail.scheme == "https",
-              thumbnail.host().map(imageHosts.contains) == true,
+              let thumbnail = shownThumbnail(info.thumburl),
               let source = info.descriptionurl.flatMap(URL.init(string:)),
               let licenseName = field(.licenseName).flatMap(CommonsLicense.accepted),
               let capturedAt = CommonsDate.capturedAt(
@@ -334,7 +383,8 @@ nonisolated enum CommonsPhotoQuery {
                 license: HikePhotoLicense(
                     name: licenseName,
                     url: field(.licenseURL).flatMap(CommonsText.link),
-                    sourceURL: source
+                    sourceURL: source,
+                    fileSHA1: info.sha1
                 )
             ),
             capturedAt: capturedAt
@@ -376,6 +426,17 @@ nonisolated enum CommonsFileAnswer: Equatable, Sendable {
     /// Commons answered, and it is not one: deleted, never there, or no
     /// longer a photograph under a licence this app can honour.
     case refused
+}
+
+/// What Commons answered about one revision of a file — see
+/// ``CommonsPhotoQuery/thumbnail(ofRevision:from:)``.
+nonisolated enum CommonsRevisionAnswer: Equatable, Sendable {
+    /// The file, or that revision of it, is gone.
+    case refused
+    /// Where that revision's thumbnail is.
+    case thumbnail(URL)
+    /// Nothing usable came back this time.
+    case unanswered
 }
 
 /// A geotagged file near a stretch of a route, before anything is known about
@@ -511,6 +572,12 @@ nonisolated private struct ImageInfo: Decodable {
     /// ground rather than costing the whole answer.
     let extmetadata: [String: Metadatum]
     let mime: String?
+    /// The revision's own hash, which a saved copy is pinned to — see
+    /// ``HikePhotoLicense/fileSHA1``.
+    let sha1: String?
+    /// Why Commons made no thumbnail this time, in place of `thumburl` — see
+    /// ``CommonsPhotoQuery/files(named:from:timeZone:)``.
+    let thumberror: String?
     let thumburl: String?
     let timestamp: String?
     let width: Int?
@@ -520,6 +587,8 @@ nonisolated private struct ImageInfo: Decodable {
         descriptionurl = try container.decodeIfPresent(String.self, forKey: .descriptionurl)
         extmetadata = (try? container.decodeIfPresent([String: Metadatum].self, forKey: .extmetadata)) ?? [:]
         mime = try container.decodeIfPresent(String.self, forKey: .mime)
+        sha1 = try container.decodeIfPresent(String.self, forKey: .sha1)
+        thumberror = try? container.decodeIfPresent(String.self, forKey: .thumberror)
         thumburl = try container.decodeIfPresent(String.self, forKey: .thumburl)
         timestamp = try container.decodeIfPresent(String.self, forKey: .timestamp)
         width = try container.decodeIfPresent(Int.self, forKey: .width)
@@ -529,6 +598,8 @@ nonisolated private struct ImageInfo: Decodable {
         case descriptionurl = "descriptionurl"
         case extmetadata = "extmetadata"
         case mime = "mime"
+        case sha1 = "sha1"
+        case thumberror = "thumberror"
         case thumburl = "thumburl"
         case timestamp = "timestamp"
         case width = "width"

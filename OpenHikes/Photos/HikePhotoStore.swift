@@ -24,6 +24,7 @@ import Foundation
 import ImageIO
 import OpenHikesData
 import os
+import Synchronization
 import UniformTypeIdentifiers
 
 #if canImport(UIKit)
@@ -112,6 +113,11 @@ nonisolated final class HikePhotoStore: @unchecked Sendable {
     /// from when its file is not here, or `nil` for nowhere — see
     /// ``restore(_:)``.
     let commons: CommonsPhotoRefetch?
+    /// The photographs ``remove(_:)`` has taken away this launch, which a
+    /// download still on its way must not write back. Held under the same
+    /// lock as that write, so a removal either comes after the file is there,
+    /// and deletes it, or before, and keeps it from landing.
+    private let removedIDs = Mutex<Set<UUID>>([])
 
     /// - Parameters:
     ///   - storageRoot: Overrides Application Support, so a suite gets its own
@@ -450,6 +456,7 @@ nonisolated final class HikePhotoStore: @unchecked Sendable {
     /// past, while the photos are still attached and can still be enumerated.
     func remove(_ files: [PhotoFiles]) {
         assertOffMainThread("Photo deletion must stay off the main thread")
+        removedIDs.withLock { $0.formUnion(files.map(\.id)) }
         for file in files {
             try? FileManager.default.removeItem(at: url(for: file))
             try? FileManager.default.removeItem(at: thumbnailURL(for: file))
@@ -564,7 +571,8 @@ nonisolated enum PhotoRestore: Equatable, Sendable {
     /// It could not be had just now, and may be later.
     case unanswered
     /// Nothing can fetch this one: the hiker's own photograph, whose only copy
-    /// is on the device it was added on, or a launch that may not ask.
+    /// is on the device it was added on, a launch that may not ask, or a
+    /// photograph removed while its download was on its way.
     case unrestorable
 }
 
@@ -581,13 +589,13 @@ nonisolated extension HikePhotoStore {
     /// there. See ``CommonsPhotoRefetch``.
     @concurrent
     func restore(_ photo: HikePhoto) async -> PhotoRestore {
-        guard let license = photo.license, let commons else { return .unrestorable }
+        guard photo.license != nil, let commons else { return .unrestorable }
         // A page that names no file on Commons is one nothing can ask about,
         // which is the hiker's to remove rather than to retry.
-        guard let title = CommonsPhotoQuery.fileTitle(of: license.sourceURL) else { return .refused }
-        switch await commons.picture(ofFileTitled: title) {
+        guard let copy = CommonsCopy(photo) else { return .refused }
+        switch await commons.picture(of: copy) {
         case .picture(let data):
-            return write(data, restoring: photo) ? .restored : .unanswered
+            return write(data, restoring: photo)
         case .refused:
             return .refused
         case .unanswered:
@@ -595,26 +603,30 @@ nonisolated extension HikePhotoStore {
         }
     }
 
-    /// Writes a downloaded picture under the name `photo` claims.
+    /// Writes a downloaded picture under the name `photo` claims, unless the
+    /// photograph was removed while it was on its way — see ``removedIDs``.
     ///
     /// Only bytes of the format that name says, because every reader goes by
     /// the name: a copy is saved as the JPEG Commons served, and its thumbnail
     /// is served as one again.
-    private func write(_ data: Data, restoring photo: HikePhoto) -> Bool {
+    private func write(_ data: Data, restoring photo: HikePhoto) -> PhotoRestore {
         assertOffMainThread("Photo storage must stay off the main thread")
         guard ImageDataFormat.detect(in: data)?.pathExtension == photo.pathExtension else {
             Self.logger.error("Refused a downloaded photo whose bytes are not the format it was saved in.")
-            return false
+            return .unanswered
         }
-        do {
-            try createDirectories()
-            try data.write(to: url(for: photo), options: .atomic)
-            return true
-        } catch {
-            Self.logger.error(
-                "Could not store a downloaded photo: \(error.localizedDescription, privacy: .public)"
-            )
-            return false
+        return removedIDs.withLock { removed in
+            guard !removed.contains(photo.id) else { return .unrestorable }
+            do {
+                try createDirectories()
+                try data.write(to: url(for: photo), options: .atomic)
+                return .restored
+            } catch {
+                Self.logger.error(
+                    "Could not store a downloaded photo: \(error.localizedDescription, privacy: .public)"
+                )
+                return .unanswered
+            }
         }
     }
 }

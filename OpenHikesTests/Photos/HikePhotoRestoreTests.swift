@@ -15,7 +15,12 @@
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import Synchronization
 import Testing
+
+#if canImport(UIKit)
+import UIKit
+#endif
 
 @Suite("Hike photo restore", .timeLimit(.minutes(1)))
 struct HikePhotoRestoreTests {
@@ -34,17 +39,44 @@ struct HikePhotoRestoreTests {
     }
 
     /// A Commons copy as ``CommunityImport`` saves one: a JPEG row carrying
-    /// the licence and the page it came from — and here, no file.
-    private static func commonsCopy(page: String = "https://commons.wikimedia.org/wiki/File:Lac_glacier.jpg")
-        -> HikePhoto {
-        HikePhoto(
-            importedAuthorName: "A hiker",
-            license: HikePhotoLicense(
-                name: "CC BY-SA 4.0",
-                url: URL(string: "https://creativecommons.org/licenses/by-sa/4.0"),
-                sourceURL: URL(string: page) ?? URL(filePath: "/")
-            )
-        )
+    /// the licence, the page it came from and the revision it was made from —
+    /// and here, no file.
+    private static func commonsCopy() -> HikePhoto {
+        CommonsRefetchStub.copy(of: "Lac_glacier.jpg")
+    }
+
+    /// Reads that find no file the first time and the picture after it, as a
+    /// viewer does when the strip's download lands between its read and its
+    /// look at the disk.
+    nonisolated private final class ArrivingReads: HikePhotoReading {
+        private let reads = Mutex(0)
+        private let image: PhotoImage?
+
+        init() {
+            #if canImport(UIKit)
+            image = UIImage(data: CommonsRefetchStub.thumbnail)
+            #else
+            image = nil
+            #endif
+        }
+
+        func thumbnail(for photo: HikePhoto) -> PhotoImage? { read() }
+        func displayImage(for photo: HikePhoto) -> PhotoImage? { read() }
+        func hasImage(for photo: HikePhoto) -> Bool { true }
+
+        private func read() -> PhotoImage? {
+            reads.withLock { count in
+                count += 1
+                return count == 1 ? nil : image
+            }
+        }
+    }
+
+    /// What deleting a photograph does to its files, off the main actor as
+    /// the store requires.
+    @concurrent
+    private static func remove(_ photo: HikePhoto, from store: HikePhotoStore) async {
+        store.remove([HikePhotoStore.PhotoFiles(photo)])
     }
 
     private static func unavailability(_ display: PhotoDisplay) -> PhotoUnavailability? {
@@ -102,7 +134,9 @@ struct HikePhotoRestoreTests {
     func copyWithoutAFilePageIsGone() async {
         let sandbox = Sandbox()
         let commons = CommonsRefetchStub()
-        let photo = Self.commonsCopy(page: "https://commons.wikimedia.org/wiki/Category:Glaciers")
+        var photo = Self.commonsCopy()
+        photo.license?.sourceURL = URL(string: "https://commons.wikimedia.org/wiki/Category:Glaciers")
+            ?? URL(filePath: "/")
 
         let display = await HikePhotoLoader.thumbnail(for: photo, in: sandbox.store(asking: commons))
 
@@ -119,6 +153,30 @@ struct HikePhotoRestoreTests {
 
         #expect(Self.unavailability(display) == .notOnThisDevice)
         #expect(commons.requests.isEmpty)
+    }
+
+    @Test("a photograph removed while its download was on its way is not written back")
+    func removalWinsOverALateDownload() async {
+        let sandbox = Sandbox()
+        let commons = CommonsRefetchStub(holdingFirstQuestion: true)
+        let store = sandbox.store(asking: commons)
+        let photo = Self.commonsCopy()
+
+        let load = Task { await HikePhotoLoader.display(for: photo, in: store) }
+        await settleDelegateHop(until: "the question is out") { commons.isHoldingQuestion }
+        // The viewer's trash: the page goes away, and the files with it.
+        load.cancel()
+        await Self.remove(photo, from: store)
+        commons.answerHeldQuestion()
+        _ = await load.value
+
+        #expect(commons.downloads.count == 1)
+        #expect(!FileManager.default.fileExists(atPath: store.url(for: photo).path))
+    }
+
+    @Test("a file that arrived after the read failed is read again rather than called unreadable")
+    func arrivingFileIsReadAgain() async {
+        #expect(Self.isReady(await HikePhotoLoader.display(for: Self.commonsCopy(), in: ArrivingReads())))
     }
 
     @Test("a launch with nowhere to ask reads a missing copy as on another device")

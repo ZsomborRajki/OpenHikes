@@ -38,10 +38,21 @@ nonisolated public struct HikePhotoLicense: Codable, Hashable, Sendable {
     /// licence and its history — and where a problem with any of them is
     /// raised.
     public var sourceURL: URL
+    /// The SHA-1 Commons gives the revision of the file this copy was made
+    /// from, so the picture downloaded again for it is that revision and no
+    /// other: a file on Commons can be overwritten under the same name, and
+    /// the credit kept here describes the one the hiker saw.
+    ///
+    /// `nil` for a copy saved before it was kept, which is downloaded again
+    /// only while Commons still credits the file as this copy does. A new key
+    /// in the `CD_photos` blob, and optional for the reason
+    /// ``HikePhoto/sentToCommunityAt`` is.
+    public var fileSHA1: String?
 
-    public init(name: String, url: URL?, sourceURL: URL) {
+    public init(name: String, url: URL?, sourceURL: URL, fileSHA1: String? = nil) {
         self.name = name
         self.url = url
         self.sourceURL = sourceURL
+        self.fileSHA1 = fileSHA1
     }
 }
