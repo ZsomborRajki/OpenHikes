@@ -258,7 +258,7 @@
 # (`RouteStepsTests`) and the pull on the map (`MapCoordinatorTests+RouteStretch`).
 #
 # The recording's and the walk's controls moved to the bar of their own
-# screen and to a capsule on the map (`RecordingBar`, `MapActivityCapsuleView`),
+# screen and to a capsule on the map (`RecordingBar`, `MapActivityCapsuleStatus`),
 # the Stop question is put up by a modifier of its own (`RecordingStopAlerts`),
 # and *Delete Hike* came to the foot of a hike's screen (`HikeDeleteRow`), all
 # body code. What they decide stays measured: what Stop asks and sends is

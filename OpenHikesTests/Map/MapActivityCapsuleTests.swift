@@ -44,6 +44,17 @@ struct MapActivityCapsuleTests {
         #expect(activity(recordingLive: true, recordingOnTop: true, walkedHikeID: trail) == nil)
     }
 
+    @Test("Pause while a recording takes fixes, Resume while it is paused, neither otherwise")
+    func pauseControlFollowsThePhase() {
+        #expect(MapActivityCapsule.pause(for: .waitingForFix) == .pause)
+        #expect(MapActivityCapsule.pause(for: .recording) == .pause)
+        #expect(MapActivityCapsule.pause(for: .paused) == .resume)
+        #expect(MapActivityCapsule.pause(for: .idle) == nil)
+        #expect(MapActivityCapsule.pause(for: .recovering) == nil)
+        #expect(MapActivityCapsule.pause(for: .saving) == nil)
+        #expect(MapActivityCapsule.pause(for: .failed(.tooShort)) == nil)
+    }
+
     private func activity(
         recordingLive: Bool = false,
         recordingOnTop: Bool = false,
