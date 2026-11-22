@@ -15,14 +15,12 @@
 //  Stop is where it was — see ``MapTrailDraftControlsView/setRecording(_:)``.
 //
 //  It grows no further than the tracking pill across the map, and its status
-//  gives way first — see ``MapActivityCapsuleView``.
+//  gives way first — see ``MapActivityCapsuleControlsView``.
 //
-//  Hosted SwiftUI in a column of UIKit, for the reason the column is UIKit at
-//  all: its height is a constraint the sheet drives without a SwiftUI pass —
-//  see ``MapView/Coordinator/applySheetTop(on:)`` — and the capsule rides the
-//  same line. What it draws is SwiftUI because it reads a recording, a walk
-//  and a clock, and a hosting controller is a root of its own: nothing it
-//  reads re-runs anything on the map or in the sheet.
+//  UIKit, for the reason the column is UIKit at all: its height is a
+//  constraint the sheet drives without a SwiftUI pass — see
+//  ``MapView/Coordinator/applySheetTop(on:)`` — and the capsule rides the same
+//  line. And for VoiceOver's sake — see ``MapActivityCapsuleControlsView``.
 //
 
 import MapKit
@@ -34,11 +32,7 @@ import UIKit
 #if os(iOS)
 /// What the coordinator keeps of the capsule.
 struct ActivityCapsuleParts {
-    /// The hosting controller, kept because nothing else holds it: its view is
-    /// a subview of the map's, and a controller let go of stops updating it.
-    var controller: UIHostingController<MapActivityCapsuleView>?
-    weak var host: UIView?
-    weak var capsule: MapActivityCapsule?
+    weak var host: MapActivityCapsuleControlsView?
     /// The capsule's own pair against the credit line.
     var clearance: CreditLineClearance?
     /// Whether it is offered, which is what the column stands on.
@@ -62,15 +56,7 @@ extension MapView {
         alignedTo guide: UILayoutGuide,
         beside trackingPill: UIView
     ) {
-        let controller = UIHostingController(rootView: MapActivityCapsuleView(capsule: activityCapsule))
-        controller.sizingOptions = .intrinsicContentSize
-        // The map ignores the safe area, and the capsule is placed by the
-        // column's constraints; insets of its own would pad it off its line.
-        controller.safeAreaRegions = []
-        controller.view.backgroundColor = .clear
-        coordinator.activityCapsule.controller = controller
-        coordinator.activityCapsule.capsule = activityCapsule
-        let host: UIView = controller.view
+        let host = MapActivityCapsuleControlsView(capsule: activityCapsule)
         coordinator.activityCapsule.clearance = placeInCreditLineSlot(
             host,
             on: mapView,
@@ -101,9 +87,10 @@ extension MapView.Coordinator {
     }
 
     private func trackActivityCapsule(_ capsule: MapActivityCapsule) {
+        activityCapsule.host?.apply(capsule.controls)
         applyActivityCapsuleVisibility(capsule, animated: activityCapsule.host?.window != nil)
         reobserving(self, capsule) {
-            _ = capsule.activity
+            _ = capsule.controls
         } onChange: { coordinator, model in
             coordinator.trackActivityCapsule(model)
         }

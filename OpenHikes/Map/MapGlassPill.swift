@@ -84,19 +84,19 @@ enum MapGlassPill {
         return (glass, button)
     }
 
-    /// Stacks `capsules` top to bottom in one glass container that fills
-    /// `host`.
+    /// Stacks `capsules` top to bottom — or, for the activity capsule, side
+    /// by side — in one glass container that fills `host`.
     ///
     /// Grouped the way iOS groups bar items: a glass container renders every
     /// glass shape in one pass and merges them as they come close, so they
     /// read as one pill with seams rather than as floating circles — which is
     /// what they are below iOS 26, see ``MapGlass``. A hidden capsule leaves
     /// the stack, so the pill is only as tall as what it offers.
-    static func install(_ capsules: [UIView], in host: UIView) {
+    static func install(_ capsules: [UIView], in host: UIView, axis: NSLayoutConstraint.Axis = .vertical) {
         let container = MapGlass.container(spacing: glassMergeSpacing)
 
         let stack = UIStackView(arrangedSubviews: capsules)
-        stack.axis = .vertical
+        stack.axis = axis
         stack.spacing = buttonSpacing
         stack.translatesAutoresizingMaskIntoConstraints = false
 
