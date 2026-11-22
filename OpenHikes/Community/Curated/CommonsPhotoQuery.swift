@@ -154,6 +154,32 @@ nonisolated enum CommonsPhotoQuery {
         return get([URLQueryItem(name: "titles", value: named.joined(separator: "|"))] + imageInfoFields)
     }
 
+    /// The longest address a question by name is let grow to.
+    ///
+    /// Wikimedia's servers refuse a longer one with `414 URI Too Long`, and
+    /// that refusal answers none of the names in it. Measured against the
+    /// live service in 2026: fifty names were answered at 8,163 characters
+    /// and refused at 11,763. A name is percent-encoded at three characters a
+    /// byte, so fifty in Cyrillic or Chinese pass the limit long before
+    /// ``imageInfoBatch`` is reached.
+    static let maximumRequestLength = 8000
+
+    /// How many of `titles`, from the first, one ``imageInfo(ofFilesTitled:)``
+    /// asks about: up to ``imageInfoBatch``, and no more than keep its address
+    /// within ``maximumRequestLength``. Always the first, because no single
+    /// name is long enough to pass it: Commons caps a name at 255 bytes.
+    static func imageInfoCount(fitting titles: [String]) -> Int {
+        var count = min(titles.count, imageInfoBatch)
+        while count > 1, requestLength(imageInfo(ofFilesTitled: Array(titles.prefix(count)))) > maximumRequestLength {
+            count -= 1
+        }
+        return count
+    }
+
+    private static func requestLength(_ request: URLRequest) -> Int {
+        request.url?.absoluteString.utf8.count ?? 0
+    }
+
     /// The name of the file on the Commons page at `page`, without its
     /// namespace — what ``imageInfo(ofFilesTitled:)`` asks about — or `nil`
     /// for an address that is not a file's page on Commons.

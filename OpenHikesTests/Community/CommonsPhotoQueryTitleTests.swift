@@ -63,6 +63,42 @@ struct CommonsPhotoQueryTitleTests {
         #expect(named?.split(separator: "|").count == CommonsPhotoQuery.imageInfoBatch)
     }
 
+    /// A name as long as a Ukrainian photographer's caption, at six
+    /// characters of address a letter once percent-encoded.
+    private static func longName(_ index: Int) -> String {
+        "Вид_на_Говерлу_з_хребта_Чорногора,_Українські_Карпати_\(index).jpg"
+    }
+
+    private static func length(of request: URLRequest) -> Int {
+        request.url?.absoluteString.utf8.count ?? 0
+    }
+
+    @Test("short names fill a question to the API's limit")
+    func shortNamesFillAQuestion() {
+        let titles = (0..<(CommonsPhotoQuery.imageInfoBatch + 10)).map { "\($0).jpg" }
+        #expect(CommonsPhotoQuery.imageInfoCount(fitting: titles) == CommonsPhotoQuery.imageInfoBatch)
+    }
+
+    @Test("long names go in a question only as many as its address has room for")
+    func longNamesFitTheAddress() {
+        let titles = (0..<CommonsPhotoQuery.imageInfoBatch).map(Self.longName)
+        let count = CommonsPhotoQuery.imageInfoCount(fitting: titles)
+        let fitted = CommonsPhotoQuery.imageInfo(ofFilesTitled: Array(titles.prefix(count)))
+        let overfull = CommonsPhotoQuery.imageInfo(ofFilesTitled: Array(titles.prefix(count + 1)))
+
+        #expect(count > 1)
+        #expect(count < CommonsPhotoQuery.imageInfoBatch)
+        #expect(Self.length(of: fitted) <= CommonsPhotoQuery.maximumRequestLength)
+        #expect(Self.length(of: overfull) > CommonsPhotoQuery.maximumRequestLength)
+    }
+
+    @Test("the first name always goes, however long, and no names make no question")
+    func firstNameAlwaysGoes() {
+        let tooLong = String(repeating: "a", count: CommonsPhotoQuery.maximumRequestLength) + ".jpg"
+        #expect(CommonsPhotoQuery.imageInfoCount(fitting: [tooLong, "Lac_glacier.jpg"]) == 1)
+        #expect(CommonsPhotoQuery.imageInfoCount(fitting: []) == 0)
+    }
+
     @Test("a single file asked for by name is the same question")
     func singleFileIsTheSameQuestion() {
         #expect(

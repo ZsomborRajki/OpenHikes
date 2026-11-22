@@ -375,6 +375,39 @@ extension MapCoordinatorTests {
         #endif
     }
 
+    /// The one answer a reselect does not keep: a Commons copy that could not
+    /// be downloaded may come down now, and the callout is where the hiker
+    /// asks again.
+    @Test("reselecting a pin whose Commons copy did not download asks for it again")
+    func aReselectedPinAsksAgainForADownload() async throws {
+        #if os(iOS)
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("photo-callout-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let commons = CommonsRefetchStub()
+        commons.refuseQuestions(true)
+        let store = HikePhotoStore(storageRoot: root, commons: CommonsPhotoRefetch(transport: commons.transport))
+        var photo = CommonsRefetchStub.copy(of: "Lac_glacier.jpg")
+        photo.latitude = Self.bend.latitude
+        photo.longitude = Self.bend.longitude
+        let pin = try #require(PhotoMapPin.pins(for: [photo]).first)
+        let preview = PhotoCalloutPreview()
+        preview.show(pin, store: store) { _ in /* unused */ }
+        await settle(until: "the callout to find the copy did not download") {
+            preview.accessibilityLabel?.hasSuffix("not downloaded") == true
+        }
+
+        commons.refuseQuestions(false)
+        preview.show(pin, store: store) { _ in /* unused */ }
+        await settle(until: "the reselect to download the copy") {
+            FileManager.default.fileExists(atPath: store.url(for: photo).path)
+        }
+
+        #expect(preview.accessibilityLabel?.hasSuffix("not downloaded") == false)
+        #expect(commons.questions.count == 2)
+        #endif
+    }
+
     /// A place's photographs are pinned at the place, so its camera balloon
     /// lands exactly on the place's own. The place is the one drawn in front:
     /// its kind and its name are the more useful pin, and its screen holds

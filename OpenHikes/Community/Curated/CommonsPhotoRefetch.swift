@@ -41,10 +41,13 @@
 //  Every question goes through ``CommonsRequestGate``, which the rest of the
 //  app's Commons requests share. A hike's strip asks for every tile at once,
 //  so the names wait here, and each question takes every name waiting when it
-//  is sent, up to ``CommonsPhotoQuery/imageInfoBatch``: a strip of a dozen
+//  is sent, up to as many as fit one request
+//  (``CommonsPhotoQuery/imageInfoCount(fitting:)``): a strip of a dozen
 //  missing photographs is one question or two rather than twelve. The
-//  thumbnails come from Wikimedia's image servers, outside the gate, each
-//  once however many views asked for it.
+//  thumbnails come from Wikimedia's image servers, outside the gate, a few
+//  at a time, each once however many views asked for it. A copy Commons
+//  refused is not asked about again during the launch, whatever step
+//  refused it.
 //
 //  ## What is not done
 //
@@ -160,10 +163,22 @@ actor CommonsPhotoRefetch {
     /// Names Commons said no to, this launch: a strip scrolled back does not
     /// ask about them again.
     private var refused: Set<String> = []
+    /// Copies refused this launch for what the file is now rather than for
+    /// its name: a credit that no longer fits, or a revision Commons no
+    /// longer has. Each answer is as final as a missing file's, and costs a
+    /// question or two to learn again.
+    private var refusedCopies: Set<CommonsCopy> = []
     private var isAsking = false
     /// Thumbnails on their way, so two views showing one picture fetch it
     /// once.
     private var downloading: [URL: Task<CommonsPictureAnswer, Never>] = [:]
+    /// How many thumbnails are coming down now, and who waits for a turn:
+    /// ``WikimediaCommonsSource/parallelDownloads`` at a time, the limit a
+    /// preview's downloads keep to on the same image servers. A strip flicked
+    /// past a few dozen missing copies would otherwise ask for all of them
+    /// at once, because no download stops when its tile scrolls away.
+    private var downloadsUnderway = 0
+    private var downloadTurns: [CheckedContinuation<Void, Never>] = []
 
     /// - Parameter gate: The app's own when `nil` and this reaches the
     ///   network, and one of its own for a suite's transport — see
@@ -182,6 +197,29 @@ actor CommonsPhotoRefetch {
     /// fetches is kept, so a tile scrolled away before it arrived still finds
     /// it there the next time.
     func picture(of copy: CommonsCopy) async -> CommonsPictureAnswer {
+        guard !refusedCopies.contains(copy) else { return .refused }
+        let answer = await freshPicture(of: copy)
+        if answer == .refused { refusedCopies.insert(copy) }
+        return answer
+    }
+
+    /// How many asks are waiting on `title`'s answer, whether for the next
+    /// question or the one out now: what a suite waits on before it lets the
+    /// question already out come back.
+    func waiterCount(for title: String) -> Int {
+        (waiting[title]?.count ?? 0) + (asking[title]?.count ?? 0)
+    }
+
+    /// How many thumbnails are waiting for a turn to come down: what a suite
+    /// waits on before it lets the ones coming down now arrive.
+    var downloadsWaitingForTurn: Int { downloadTurns.count }
+}
+
+// MARK: - The questions
+
+private extension CommonsPhotoRefetch {
+    /// What Commons gives for `copy`, asked afresh.
+    func freshPicture(of copy: CommonsCopy) async -> CommonsPictureAnswer {
         switch await details(ofFileTitled: copy.title) {
         case nil:
             return .unanswered
@@ -203,17 +241,6 @@ actor CommonsPhotoRefetch {
         }
     }
 
-    /// How many asks are waiting on `title`'s answer, whether for the next
-    /// question or the one out now: what a suite waits on before it lets the
-    /// question already out come back.
-    func waiterCount(for title: String) -> Int {
-        (waiting[title]?.count ?? 0) + (asking[title]?.count ?? 0)
-    }
-}
-
-// MARK: - The questions
-
-private extension CommonsPhotoRefetch {
     /// What Commons says about the file named `title` — `nil` when it said
     /// nothing this time — from the next question asked.
     func details(ofFileTitled title: String) async -> CommonsFileAnswer? {
@@ -232,9 +259,13 @@ private extension CommonsPhotoRefetch {
     }
 
     /// Asks about every name waiting, a batch at a time, until none is.
+    ///
+    /// A batch is as many names as fit one question
+    /// (``CommonsPhotoQuery/imageInfoCount(fitting:)``), and the rest wait
+    /// for the next.
     func askWhileAnyWait() async {
         while !queued.isEmpty {
-            let titles = Array(queued.prefix(CommonsPhotoQuery.imageInfoBatch))
+            let titles = Array(queued.prefix(CommonsPhotoQuery.imageInfoCount(fitting: queued)))
             queued.removeFirst(titles.count)
             for title in titles {
                 asking[title] = waiting.removeValue(forKey: title) ?? []
@@ -290,10 +321,28 @@ private extension CommonsPhotoRefetch {
     /// The thumbnail at `url`, fetched once however many ask for it at once.
     func download(_ url: URL) async -> CommonsPictureAnswer {
         if let running = downloading[url] { return await running.value }
-        let task = Task { [transport] in await Self.fetch(url, using: transport) }
+        let task = Task { await downloadInTurn(url) }
         downloading[url] = task
         let answer = await task.value
         downloading[url] = nil
+        return answer
+    }
+
+    /// The thumbnail at `url`, once a turn is free — see ``downloadsUnderway``.
+    func downloadInTurn(_ url: URL) async -> CommonsPictureAnswer {
+        if downloadsUnderway < WikimediaCommonsSource.parallelDownloads {
+            downloadsUnderway += 1
+        } else {
+            await withCheckedContinuation { downloadTurns.append($0) }
+        }
+        let answer = await Self.fetch(url, using: transport)
+        // Handed straight to the next download waiting, so none can take a
+        // turn that one is owed.
+        if downloadTurns.isEmpty {
+            downloadsUnderway -= 1
+        } else {
+            downloadTurns.removeFirst().resume()
+        }
         return answer
     }
 
