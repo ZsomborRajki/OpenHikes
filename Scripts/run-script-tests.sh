@@ -400,7 +400,7 @@ case "${1:-} ${2:-}" in
 esac
 STUB
 
-# Answers the four osmium commands Scripts/trail-cells.sh makes, and the
+# Answers the osmium commands Scripts/trail-cells.sh makes, and the
 # `merge` Scripts/vector-extras.sh makes besides, and records each. It reads no
 # extract: `tags-filter`, `add-locations-to-ways` and `merge` write an empty
 # file where `-o` or `--output` says. `cat` writes the OPL fixture STUB_OSMIUM_RELATIONS,
@@ -408,25 +408,48 @@ STUB
 # file `-o` names — and writes the ways without their nodes' positions unless
 # the format asks for them, which is what the real one does and is the option
 # the script must not lose. STUB_OSMIUM_NO_POSITIONS leaves them out even then.
-# `fileinfo` prints STUB_OSMIUM_TIMESTAMP.
+# `add-locations-to-ways -o -` writes the ways to standard output as `cat`
+# writes them to a file, once for each band build-routing streams, and exits
+# 1 for the band STUB_OSMIUM_FAIL_BAND names. `extract` writes an empty file
+# for each output its `--config` names, into its `--directory`. `fileinfo`
+# prints STUB_OSMIUM_TIMESTAMP.
 cat > "$stub_bin/osmium" <<'STUB'
 #!/usr/bin/env bash
 printf 'osmium %s\n' "$*" >> "$STUB_CALL_LOG"
 command="${1:-}"
 [[ $# -eq 0 ]] || shift
 arguments=("$@")
-output="" kind="" format=""
+output="" kind="" format="" config="" directory=""
 for (( index = 0; index < ${#arguments[@]}; index++ )); do
     case "${arguments[index]}" in
         -o) output="${arguments[index + 1]:-}" ;;
         --output=*) output="${arguments[index]#--output=}" ;;
         -t) kind="${arguments[index + 1]:-}" ;;
         -f) format="${arguments[index + 1]:-}" ;;
+        --config) config="${arguments[index + 1]:-}" ;;
+        --directory) directory="${arguments[index + 1]:-}" ;;
     esac
 done
 case "$command" in
-    tags-filter|add-locations-to-ways|merge)
+    add-locations-to-ways)
+        if [[ "$output" == - ]]; then
+            [[ "$(basename "${arguments[0]}" .osm.pbf)" != "${STUB_OSMIUM_FAIL_BAND:-}" ]] || exit 1
+            if [[ "$format" == *locations_on_ways=true* ]]; then
+                cat "$STUB_OSMIUM_WAYS"
+            else
+                sed -E 's/x[0-9.-]*y[0-9.-]*//g' "$STUB_OSMIUM_WAYS"
+            fi
+        else
+            : > "$output"
+        fi
+        ;;
+    tags-filter|merge)
         : > "$output"
+        ;;
+    extract)
+        for name in $(grep -o '"output":"[^"]*"' "$config" | cut -d '"' -f 4); do
+            : > "$directory/$name"
+        done
         ;;
     cat)
         if [[ "$kind" == relation ]]; then
@@ -4993,6 +5016,112 @@ if expect_status 0; then
     fi
 fi
 
+# The trail maker's archive holds every way the trail graph's build would and
+# the roads that join them, but a motorway or a road closed to walkers, in
+# z12 tiles of one PMTiles archive named for the hour the extract is current
+# to. osmium cuts the ways into bands of longitude and streams each into the
+# tool; the stub answers every band with the same ways, as it would a way
+# across every band's edge, and each is filed once. Way 307 reaches east into
+# the next tile, and is in both.
+cat > "$cells_work/routing-ways.opl" <<'ROUTING'
+n9 Tbarrier=gate x12.86 y47.63
+w300 Thighway=path,name=Local%20%Path,surface=gravel Nn1x12.86y47.63,n2x12.86y47.631
+w301 Thighway=track,access=private Nn2x12.86y47.631,n3x12.87y47.632
+w303 Thighway=residential Nn5x12.86y47.63,n6x12.861y47.63
+w305 Thighway=motorway Nn7x12.86y47.63,n8x12.87y47.63
+w306 Thighway=primary,foot=no Nn7x12.86y47.63,n8x12.87y47.63
+w307 Thighway=service Nn10x12.80y47.63,n11x12.95y47.63
+ROUTING
+routing_out="$cells_work/routing"
+routing_filters="r/route=hiking w/highway=bridleway,cycleway,footway,living_street,path,pedestrian,primary,primary_link,residential,road,secondary,secondary_link,service,steps,tertiary,tertiary_link,track,unclassified,via_ferrata"
+STUB_OSMIUM_WAYS="$cells_work/routing-ways.opl" \
+    STUB_OSMIUM_RELATIONS="$cells_work/graph-relations.opl" \
+    STUB_OSMIUM_TIMESTAMP="2026-11-22T00:00:00Z" \
+    run_script "trail-cells build-routing cuts the ways and roads into bands, streams them in, and files each once" \
+    "$trail_cells" build-routing "$cells_work/extract.osm.pbf" --out "$routing_out" --world
+if expect_status 0 \
+    && expect_contains "$calls" \
+        "osmium tags-filter $cells_work/extract.osm.pbf $routing_filters -f pbf,add_metadata=false -o $routing_out.work/routing.osm.pbf --overwrite" \
+        "the recorded calls" \
+    && expect_contains "$calls" \
+        "osmium extract $routing_out.work/routing.osm.pbf --config $routing_out.work/bands.json --directory $routing_out.work/bands --overwrite" \
+        "the recorded calls" \
+    && expect_contains "$calls" \
+        "osmium add-locations-to-ways $routing_out.work/bands/band-8.osm.pbf --ignore-missing-nodes -i sparse_mem_array -f opl,add_metadata=false,locations_on_ways=true -o -" \
+        "the recorded calls" \
+    && expect_contains "$output" "Filed 3 ways (6 nodes)" "the summary" \
+    && expect_contains "$output" "in 3 tiles at zoom 12" "the summary" \
+    && expect_contains "$output" "Marked complete" "the summary"; then
+    routing_record="$(cat "$routing_out/routing-build.json" 2>/dev/null)"
+    if [[ "$(grep -c '^osmium add-locations-to-ways ' <<< "$calls")" != 9 ]]; then
+        fail "the ways were not streamed a band at a time" "$calls"
+    elif [[ ! -f "$routing_out/routing-20261122-00.pmtiles" ]]; then
+        fail "the archive is not named for the hour the extract is current to" "$(ls "$routing_out")"
+    elif [[ "$routing_record" != *'"complete" : true'* || "$routing_record" != *'"name" : "routing-20261122-00"'* ]]; then
+        fail "the build does not say it is the whole world, or under what name" "$routing_record"
+    elif [[ -e "$routing_out.work" || -e "$routing_out.spool" ]]; then
+        fail "the work files or the spool were left behind"
+    else
+        pass
+    fi
+fi
+
+# What the app reads a region out of, through the archive's own directories as
+# the tile server reads them: the trail and both roads, by id, and not the
+# private track, the motorway or the road closed to walkers.
+routing_expected='{"scale":1000000,"ways":[{"highway":"path","id":300,"nodes":[[1,47630000,12860000],[2,47631000,12860000]],"tags":{"hikingRoute":"Alpine Route","name":"Local Path","surface":"gravel"}},{"highway":"residential","id":303,"nodes":[[5,47630000,12860000],[6,47630000,12861000]],"tags":{}},{"highway":"service","id":307,"nodes":[[10,47630000,12800000],[11,47630000,12950000]],"tags":{}}]}'
+run_script "trail-cells routing-tile reads back the ways a tile of the archive was built from" \
+    "$trail_cells" routing-tile "$routing_out/routing-20261122-00.pmtiles" 2194 1430 --json
+if expect_status 0; then
+    if [[ "$output" == "$routing_expected" ]]; then
+        pass
+    else
+        fail "the tile does not hold the ways" "$output"
+    fi
+fi
+
+run_script "trail-cells routing-tile finds no tile where no way is" \
+    "$trail_cells" routing-tile "$routing_out/routing-20261122-00.pmtiles" 2196 1430
+if expect_status 0 && expect_contains "$output" "no tile 12/2196/1430" "the output"; then
+    pass
+fi
+
+# A band osmium gave up on ends the tool's input like the last band, and the
+# tool writes what it had. The script takes it away again, so upload-routing
+# never finds a world build missing a band.
+STUB_OSMIUM_WAYS="$cells_work/routing-ways.opl" \
+    STUB_OSMIUM_RELATIONS="$cells_work/graph-relations.opl" \
+    STUB_OSMIUM_TIMESTAMP="2026-11-22T00:00:00Z" STUB_OSMIUM_FAIL_BAND=band-3 \
+    run_script "trail-cells build-routing leaves nothing to upload when a band fails" \
+    "$trail_cells" build-routing "$cells_work/extract.osm.pbf" --out "$cells_work/routing-failed" --world
+if expect_status 1 && expect_contains "$output" "the trail maker's graph was not built" "the error"; then
+    if [[ -e "$cells_work/routing-failed/routing-build.json" \
+        || -e "$cells_work/routing-failed/routing-20261122-00.pmtiles" ]]; then
+        fail "a build missing a band was left to upload" "$(ls "$cells_work/routing-failed")"
+    else
+        pass
+    fi
+fi
+
+STUB_OSMIUM_WAYS="$cells_work/routing-ways.opl" \
+    STUB_OSMIUM_RELATIONS="$cells_work/graph-relations.opl" \
+    STUB_OSMIUM_TIMESTAMP="2026-11-22T00:00:00Z" \
+    run_script "trail-cells build-routing says a region is not the world" \
+    "$trail_cells" build-routing "$cells_work/extract.osm.pbf" --out "$cells_work/routing-region"
+if expect_status 0 && expect_contains "$output" "Not marked complete" "the summary"; then
+    pass
+fi
+
+# The app reads a tile the archive does not hold as ground with no ways on it,
+# so a regional build would blank every road outside its region.
+run_script "trail-cells upload-routing refuses a build that is not the whole world, before sending anything" \
+    "$trail_cells" upload-routing "$cells_work/routing-region"
+if expect_status 1 \
+    && expect_contains "$output" "routing-20261122-00 is not the whole world" "the error" \
+    && expect_absent "$calls" "curl" "the requests"; then
+    pass
+fi
+
 # The digest is what an upload compares, so the same extract has to give the
 # same squares, or every refresh would send the whole world again.
 run_script "trail-cells build files the same extract into the same squares, and says a region is not the world" \
@@ -5765,8 +5894,8 @@ unset OPENHIKES_VECTOR_ARCHIVE_MANIFEST OPENHIKES_TILE_SERVER STUB_SERVED_MANIFE
 # STUB_LANDS_FIRST names a key another upload fills while one is under way.
 # Protomaps is STUB_PROTOMAPS, its builds and their index,
 # each build's ETag in a file beside it; the tile server serves the manifest
-# at STUB_SERVED_MANIFEST, and an archive's TileJSON unless
-# STUB_MISSING_ARCHIVES names it.
+# at STUB_SERVED_MANIFEST, and an archive's TileJSON, at the zoom
+# STUB_TILESET_ZOOM says (12), unless STUB_MISSING_ARCHIVES names it.
 cat > "$stub_bin/curl" <<'STUB'
 #!/usr/bin/env bash
 printf 'curl %s\n' "$*" >> "$STUB_CALL_LOG"
@@ -5864,6 +5993,7 @@ case "$path" in
         ;;
     "$OPENHIKES_TILE_SERVER"/*.json)
         [[ " ${STUB_MISSING_ARCHIVES:-} " != *" $(basename "$path" .json) "* ]] || status=410
+        printf '{"minzoom":%s,"maxzoom":%s}' "${STUB_TILESET_ZOOM:-12}" "${STUB_TILESET_ZOOM:-12}" > "$body"
         ;;
     *) echo "stub curl: no answer for $method $url" >&2; exit 64 ;;
 esac
@@ -6060,6 +6190,35 @@ if expect_status 1 \
     fi
 fi
 
+# Scripts/trail-cells.sh's upload-routing puts the trail maker's archive in the
+# bucket as the extras go, under the name the build gave it, and on the same
+# condition that the name is still free.
+routing_bucket="$bucket_work/routing-bucket"
+mkdir -p "$routing_bucket"
+STUB_BUCKET="$routing_bucket" \
+    run_script "trail-cells upload-routing sends a world build in parts under its own name" \
+    "$trail_cells" upload-routing "$routing_out"
+if expect_status 0 \
+    && expect_contains "$calls" "stub-bucket/routing-20261122-00.pmtiles?uploads" "the requests" \
+    && expect_contains "$calls" "-X POST -H If-None-Match: * -H Content-Type: application/xml" "the completion" \
+    && expect_contains "$output" "uploaded routing-20261122-00.pmtiles" "the output" \
+    && expect_contains "$output" "Next, Scripts/vector-archives.sh use routing-20261122-00, then publish." "the output"; then
+    if cmp -s "$routing_bucket/routing-20261122-00.pmtiles" "$routing_out/routing-20261122-00.pmtiles"; then
+        pass
+    else
+        fail "the bucket does not hold the archive"
+    fi
+fi
+
+STUB_BUCKET="$routing_bucket" \
+    run_script "trail-cells upload-routing refuses a name already in the bucket, before sending anything" \
+    "$trail_cells" upload-routing "$routing_out"
+if expect_status 1 \
+    && expect_contains "$output" "routing-20261122-00.pmtiles is already in stub-bucket" "the error" \
+    && expect_absent "$calls" "?uploads" "the requests"; then
+    pass
+fi
+
 # `use` puts the new basemap first, drops the one of its schema behind it,
 # which no build would draw from any more, and keeps the first of another
 # schema for the builds that read only that. The server has this manifest's
@@ -6161,6 +6320,78 @@ if expect_status 1 \
         pass
     else
         fail "the manifest was edited" "$(cat "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST")"
+    fi
+fi
+cp "$bucket_work/before.json" "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST"
+
+# The trail maker's archive has a list of its own, `routing`, which a manifest
+# from before it does not have. The first archive names its generation, takes
+# the zoom the server reads out of it, and leaves the basemaps and the extras
+# as they were; a later one of the same generation takes its place.
+cp "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST" "$STUB_SERVED_MANIFEST"
+run_script "vector-archives use refuses a first routing archive that names no generation" \
+    "$vector_archives" use routing-20261122-00
+if expect_status 1 \
+    && expect_contains "$output" "has no routing to take the generation from" "the error"; then
+    if cmp -s "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST" "$bucket_work/before.json"; then
+        pass
+    else
+        fail "the manifest was edited" "$(cat "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST")"
+    fi
+fi
+
+run_script "vector-archives use starts the routing list at the generation it is given and the zoom the server reads" \
+    "$vector_archives" use routing-20261122-00 --generation 1
+if expect_status 0 \
+    && expect_contains "$output" "routing-20261122-00 heads the routing at revision 5" "the output"; then
+    manifest_now="$(cat "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST")"
+    expected_routing="$(printf '%s\n' '  "routing": [' \
+        '    { "name": "routing-20261122-00", "generation": 1, "zoom": 12 }' '  ]')"
+    if expect_contains "$manifest_now" "$expected_routing" "the manifest" \
+        && expect_contains "$manifest_now" '"name": "planet-20261118", "schema": 4, "maximumZoom": 15' "the manifest" \
+        && expect_contains "$manifest_now" '"name": "extras-20261120", "generation": 2, "minimumZoom": 4' "the manifest"; then
+        pass
+    fi
+fi
+
+run_script "vector-archives use keeps the routing list when it heads the basemaps" \
+    "$vector_archives" use planet-20261001
+if expect_status 0 \
+    && expect_contains "$(cat "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST")" \
+        '{ "name": "routing-20261122-00", "generation": 1, "zoom": 12 }' "the manifest"; then
+    pass
+fi
+
+run_script "vector-archives use puts a later routing archive in the place of one of its generation" \
+    "$vector_archives" use routing-20261129-00
+if expect_status 0 \
+    && expect_contains "$output" "routing-20261129-00 heads the routing at revision 5" "the output" \
+    && expect_contains "$(cat "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST")" \
+        '{ "name": "routing-20261129-00", "generation": 1, "zoom": 12 }' "the manifest" \
+    && expect_absent "$(cat "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST")" "routing-20261122-00" "the manifest"; then
+    pass
+fi
+
+# prune treats the routing archives as a kind of their own: an earlier one
+# than the server names goes, and a later one is an upload not yet named.
+cp "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST" "$STUB_SERVED_MANIFEST"
+routing_prune_bucket="$bucket_work/routing-prune-bucket"
+mkdir -p "$routing_prune_bucket"
+for key in planet-20261001.pmtiles planet-20261118.pmtiles extras-20261120.pmtiles routing-20261115-00.pmtiles \
+    routing-20261129-00.pmtiles routing-20261206-00.pmtiles manifest.json; do
+    printf 'bytes' > "$routing_prune_bucket/$key"
+done
+STUB_BUCKET="$routing_prune_bucket" \
+    run_script "vector-archives prune deletes a routing archive the server has moved past, and keeps a later one" \
+    "$vector_archives" prune
+if expect_status 0 \
+    && expect_contains "$output" "deleted routing-20261115-00.pmtiles" "the output" \
+    && expect_contains "$output" "kept routing-20261206-00.pmtiles (5 bytes): the server names no later archive of its kind" \
+        "the output"; then
+    if [[ -f "$routing_prune_bucket/routing-20261129-00.pmtiles" ]]; then
+        pass
+    else
+        fail "the routing archive the server names was deleted"
     fi
 fi
 cp "$bucket_work/before.json" "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST"

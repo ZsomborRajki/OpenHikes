@@ -14,7 +14,10 @@
 //  *could* go, though not the same provider: a drawing routes over the roads
 //  that join trails, which the recording's trails-only graph leaves out, so
 //  the maker has a provider and a disk cache of its own, and the two share
-//  only Overpass's retry deadline. See `OpenHikesModel.makeTrailMaker`.
+//  only Overpass's retry deadline. The maker's provider reads its regions
+//  from an archive of trails and roads on the OpenHikes tile server first
+//  (``RoutingGraphArchive``), and asks Overpass only where that cannot
+//  answer. See `OpenHikesModel.makeTrailMaker`.
 //
 //  ## One request per leg, and they are asked one at a time
 //

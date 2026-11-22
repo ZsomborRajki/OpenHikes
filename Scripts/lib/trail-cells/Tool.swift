@@ -38,6 +38,14 @@ enum TrailCellsTool {
                File every trail into the trail graph's squares under <dir>.
       graph-filters
                Print the expressions osmium tags-filter finds the trails with, one a line.
+      build-routing --relations <opl> --ways <opl|-> --out <dir> [--name <archive>] [--world]
+               [--osm-timestamp <ISO 8601>]
+               File every trail and the roads that join them into the trail maker's archive,
+               <dir>/<archive>.pmtiles (default routing). `--ways -` reads standard input.
+      routing-filters
+               Print the expressions osmium tags-filter finds them with, one a line.
+      routing-tile <archive.pmtiles> <x> <y> [--json]
+               Print what a tile of the trail maker's archive holds.
       upload   <dir> --container <id> --environment development|production
                --key-id <id> --key-file <pem> [--dry-run] [--yes] [--replace-world]
                Make the public database hold what <dir> does.
@@ -81,6 +89,13 @@ enum TrailCellsTool {
         case "graph-filters":
             try options.finish()
             TrailGraphSquareBuild.osmiumFilters.forEach { print($0) }
+        case "build-routing":
+            try await buildRouting(&options)
+        case "routing-filters":
+            try options.finish()
+            RoutingGraphBuild.osmiumFilters.forEach { print($0) }
+        case "routing-tile":
+            try routingTile(&options)
         case "upload":
             try await Upload.run(&options)
         case "whoami":
@@ -184,6 +199,68 @@ private extension TrailCellsTool {
             ? "Marked complete: a square with no file is a square with no trails."
             : "Not marked complete: the app reads only squares that are the whole world, and keeps asking "
                 + "Overpass. Pass --world for a build of the whole planet.")
+    }
+
+    static func buildRouting(_ options: inout Options) async throws {
+        let timestamp = try options.value("--osm-timestamp").map { text -> Date in
+            guard let date = ISO8601DateFormatter().date(from: text) else {
+                throw UsageError(description: "--osm-timestamp '\(text)' is not an ISO 8601 date.")
+            }
+            return date
+        }
+        let build = RoutingBuildOptions(
+            relationsPath: try options.required("--relations"),
+            waysPath: try options.required("--ways"),
+            outputDirectory: URL(fileURLWithPath: try options.required("--out"), isDirectory: true),
+            name: try options.value("--name") ?? RoutingGraphArchive.namePrefix,
+            coversTheWorld: options.flag("--world"),
+            osmTimestamp: timestamp
+        )
+        try options.finish()
+        let summary = try await RoutingGraphBuild.run(build)
+        print("Filed \(summary.ways) ways (\(summary.nodes) nodes), trails and the roads that join them, in "
+            + "\(summary.tiles.count) tiles at zoom \(RoutingGraphArchive.zoom), \(summary.tiles.bytes) bytes in all.")
+        if summary.notWalkable > 0 {
+            print("  left out \(summary.notWalkable) that may not be walked, as read")
+        }
+        if summary.withoutPositions > 0 {
+            print("  left out \(summary.withoutPositions) running out of the extract, as read")
+        }
+        for (what, sizes) in [("tile", summary.tiles), ("square at zoom \(TrailGraphSquareGrid.squareZoom)", summary.squares)] {
+            guard let largest = sizes.largest else { continue }
+            print("By \(what): \(sizes.count) of them, \(sizes.bytes) bytes, the median \(sizes.median) bytes, one in a "
+                + "hundred over \(sizes.percentile99), the largest \(largest.name) at \(largest.bytes) bytes for "
+                + "\(largest.ways) ways.")
+        }
+        if let archive = summary.archive {
+            print("Wrote \(archive.path), \(summary.archiveBytes) bytes\(summary.isClustered ? ", clustered" : "").")
+        }
+        print(build.coversTheWorld
+            ? "Marked complete: a tile the archive does not hold is ground with no ways on it."
+            : "Not marked complete: upload-routing refuses it. Pass --world for a build of the whole planet.")
+    }
+
+    static func routingTile(_ options: inout Options) throws {
+        let json = options.flag("--json")
+        let path = try options.positional("an archive")
+        guard let x = Int(try options.positional("a tile's x")), let y = Int(try options.positional("a tile's y")) else {
+            throw UsageError(description: "a tile's x and y are whole numbers.")
+        }
+        try options.finish()
+        guard let bytes = try RoutingArchiveReader.tile(at: URL(fileURLWithPath: path), x: x, y: y) else {
+            print("no tile \(RoutingGraphArchive.zoom)/\(x)/\(y)")
+            return
+        }
+        let graph = try TrailGraphSquareFile(decoding: bytes)
+        if json {
+            print(try Inspection.json(of: graph))
+        } else {
+            print("scale \(graph.coordinateScale), \(graph.ways.count) ways, "
+                + "\(graph.ways.reduce(0) { $0 + $1.nodes.count }) nodes")
+            for way in graph.ways {
+                print("way/\(way.id)\t\(way.highway)\t\(way.nodes.count) nodes")
+            }
+        }
     }
 
     static func build(_ options: inout Options) throws {

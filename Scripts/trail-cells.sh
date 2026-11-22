@@ -2,8 +2,9 @@
 #
 # trail-cells.sh — file OpenStreetMap's waymarked day hikes into the squares the
 # Community tab's search reads, and put them in the public database. The same
-# for the hiking-routes layer's squares, and for the places a place search
-# offers.
+# for the hiking-routes layer's squares, for the places a place search offers
+# and for the trail graph's squares; and the graph the trail maker routes
+# over, which goes to the tile server's bucket instead.
 #
 # The search used to be a question for Overpass, and the answer was a wait in a
 # public server's queue. So the answer is built ahead of time, here: every
@@ -37,6 +38,9 @@
 #   Scripts/trail-cells.sh build-routes <extract.osm.pbf> [--out <dir>] [--world] [--keep-work]
 #   Scripts/trail-cells.sh build-places <extract.osm.pbf> [--out <dir>] [--world] [--keep-work]
 #   Scripts/trail-cells.sh build-graph <extract.osm.pbf> [--out <dir>] [--world] [--keep-work]
+#   Scripts/trail-cells.sh build-routing <extract.osm.pbf> [--out <dir>] [--world] [--keep-work]
+#   Scripts/trail-cells.sh upload-routing <dir>
+#   Scripts/trail-cells.sh routing-tile <archive.pmtiles> <x> <y> [--json]
 #   Scripts/trail-cells.sh upload <dir> --environment development|production
 #                                 [--dry-run] [--yes] [--replace-world]
 #   Scripts/trail-cells.sh whoami --environment development|production
@@ -84,9 +88,32 @@
 #             --out and --keep-work as for build; it writes graph-manifest.json.
 #             What a planet's build needs is in AGENTS.md, under
 #             *The trail graph squares*.
+#   build-routing
+#             File every trail and every road that joins trails, the graph
+#             the trail maker routes over, into one PMTiles archive in <dir>
+#             (default .build/trail-cells/routing): a tile a region of the
+#             graph, see OpenHikes/Recording/Squares/RoutingGraphArchive.swift.
+#             It is named for the hour the extract is current to,
+#             routing-YYYYMMDD-HH.pmtiles, and routing-build.json beside it says
+#             what it is. --world, --out and --keep-work as for build. No index
+#             of the positions of a planet's 2.5 billion such nodes fits in
+#             memory, so osmium cuts the ways into bands of longitude, each
+#             with every node of its ways, and puts the positions on one band
+#             at a time, into a pipe the tool reads. Measured on an M4 Max with
+#             48 GB and the planet of 2026-11-22: ROUTING_FIGURES.
+#   upload-routing
+#             Put the archive build-routing wrote in <dir> in the R2 bucket
+#             openhikes-tiles under its own name, refusing a build that is not
+#             the whole world and a name the bucket already holds, as
+#             Scripts/vector-extras.sh upload does. Then name it in the app's
+#             manifest: Scripts/vector-archives.sh use <name>, then publish. It
+#             signs with R2's S3 keys (Scripts/lib/r2.sh).
 #   upload    Make the public database hold what <dir> does: send the squares
 #             that changed, delete the ones that are gone, then say what the
 #             squares cover. --dry-run reads and plans, and changes nothing.
+#   routing-tile
+#             Print what a z12 tile of the trail maker's archive holds, read by
+#             the archive's own directories as the tile server reads them.
 #   whoami    Print the account the server-to-server key acts as.
 #   inspect   Print what a square's file holds.
 #   cell      Print the record name of the square a point is in.
@@ -101,6 +128,8 @@
 #   is read before the plain name.
 #   OPENHIKES_TRAIL_CELLS_BUILD  Where the tool is compiled to
 #                                (default .build/trail-cells).
+#   OPENHIKES_R2_ENV             upload-routing's R2 keys (default
+#                                ~/.config/openhikes/r2-openhikes-tiles.env).
 #
 # Exit status:
 #   0  done
@@ -112,6 +141,17 @@ set -euo pipefail
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 build_dir="${OPENHIKES_TRAIL_CELLS_BUILD:-$repository_root/.build/trail-cells}"
 tool="$build_dir/trail-cells"
+
+# shellcheck source=lib/r2.sh
+source "$repository_root/Scripts/lib/r2.sh"
+
+# The edges of the bands of longitude build-routing puts positions on one at a
+# time, west to east: osmium's index of a band's node positions is what has to
+# fit in memory, sixteen bytes a node. Measured on the planet of 2026-11-22,
+# the bands held 2.51 billion nodes, the largest, 25° to 60°, 395 million, some
+# 6 GB of index; −100° to −30°, one band until then, held 538 million, past the
+# 2²⁹ at which osmium's array doubles to 17 GB, and was cut at −85°.
+routing_band_edges=(-180 -100 -85 -30 5 12 25 60 105 180)
 
 usage() {
     sed -n '/^# Usage:/,/^# Exit status:/p' "${BASH_SOURCE[0]}" | sed '$d' | sed 's/^# \{0,1\}//'
@@ -144,7 +184,9 @@ tool_sources() {
         "$repository_root/OpenHikes/Hikes/Places/Squares/PlaceSquareFile.swift" \
         "$repository_root/OpenHikes/Recording/Squares/TrailGraphSquareGrid.swift" \
         "$repository_root/OpenHikes/Recording/Squares/TrailGraphSquareFile.swift" \
+        "$repository_root/OpenHikes/Recording/Squares/RoutingGraphArchive.swift" \
         "$repository_root/OpenHikes/Recording/TrailGraphHighway.swift" \
+        "$repository_root/OpenHikes/Tiles/Countries/PMTilesFile.swift" \
         "$repository_root/OpenHikes/Community/Transport/CommunitySchema.swift"
 }
 
@@ -285,6 +327,137 @@ build() {
     echo "Wrote $out"
 }
 
+# `build-routing`: osmium finds the ways and the hiking relations, cuts them
+# into bands of longitude with every node of each band's ways, and puts the
+# positions on one band at a time into the tool's standard input. A way across
+# a band's edge is in both bands, and the tool files it once.
+build_routing() {
+    local extract="" out="$build_dir/routing" world=false keep_work=false
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --out)
+                [[ $# -ge 2 ]] || usage_error "missing value for --out."
+                out="$2"
+                shift 2
+                ;;
+            --world)
+                world=true
+                shift
+                ;;
+            --keep-work)
+                keep_work=true
+                shift
+                ;;
+            -*)
+                usage_error "unknown option '$1'."
+                ;;
+            *)
+                [[ -z "$extract" ]] || usage_error "unexpected argument '$1'."
+                extract="$1"
+                shift
+                ;;
+        esac
+    done
+    [[ -n "$extract" ]] || usage_error "build-routing needs an OpenStreetMap extract."
+    [[ -f "$extract" ]] || die "there is no file at $extract."
+    command -v osmium >/dev/null 2>&1 \
+        || die "osmium is not installed. It reads the extract: brew install osmium-tool"
+
+    prepare_tool
+    local work="$out.work"
+    mkdir -p "$work"
+
+    local filters=() filter
+    while IFS= read -r filter; do
+        filters+=("$filter")
+    done < <("$tool" routing-filters)
+    [[ ${#filters[@]} -gt 0 ]] || die "the trail-cells tool named nothing to find."
+    echo "Finding the trails and the roads that join them in $extract …"
+    osmium tags-filter "$extract" "${filters[@]}" -f pbf,add_metadata=false \
+        -o "$work/routing.osm.pbf" --overwrite
+    osmium cat "$work/routing.osm.pbf" -t relation -f opl,add_metadata=false \
+        -o "$work/relations.opl" --overwrite
+
+    # Each band holds its ways whole, with every node they use however far
+    # outside the band it is: osmium's complete_ways, which is its default.
+    local bands=$(( ${#routing_band_edges[@]} - 1 )) index separator=""
+    {
+        printf '{"extracts":['
+        for (( index = 0; index < bands; index++ )); do
+            printf '%s{"output":"band-%d.osm.pbf","bbox":[%s,-90,%s,90]}' "$separator" "$index" \
+                "${routing_band_edges[index]}" "${routing_band_edges[index + 1]}"
+            separator=","
+        done
+        printf ']}\n'
+    } > "$work/bands.json"
+    echo "Cutting them into $bands bands of longitude …"
+    rm -rf "$work/bands"
+    mkdir -p "$work/bands"
+    osmium extract "$work/routing.osm.pbf" --config "$work/bands.json" --directory "$work/bands" --overwrite
+    rm -f "$work/routing.osm.pbf"
+
+    # Named for the hour the extract is current to, as the extras are, so a
+    # second build on one day goes up under a name of its own.
+    local timestamp name=routing
+    timestamp="$(osmium fileinfo -g header.option.osmosis_replication_timestamp "$extract" 2>/dev/null || true)"
+    if [[ -z "$timestamp" ]]; then
+        timestamp="$(osmium fileinfo -g header.option.timestamp "$extract" 2>/dev/null || true)"
+    fi
+    if [[ "$timestamp" =~ ^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}) ]]; then
+        name="routing-${BASH_REMATCH[1]}${BASH_REMATCH[2]}${BASH_REMATCH[3]}-${BASH_REMATCH[4]}"
+    fi
+
+    local arguments=(build-routing --relations "$work/relations.opl" --ways - --out "$out" --name "$name")
+    [[ "$world" == false ]] || arguments+=(--world)
+    [[ -z "$timestamp" ]] || arguments+=(--osm-timestamp "$timestamp")
+    echo "Putting positions on their ways a band at a time, and filing them …"
+    # A band osmium gave up on ends the tool's input as the last band would,
+    # so what it wrote from the rest is taken away rather than left for
+    # upload-routing to find.
+    if ! located_bands "$work/bands" "$bands" | "$tool" "${arguments[@]}"; then
+        rm -f "$out/routing-build.json" "$out/$name.pmtiles"
+        die "the trail maker's graph was not built."
+    fi
+
+    if [[ "$keep_work" == false ]]; then
+        rm -rf "$work"
+    fi
+    echo "Wrote $out"
+}
+
+# Every band's ways, with their nodes' positions, as OPL on standard output.
+# The index is a sorted array of the band's own nodes, sixteen bytes each:
+# osmium's default can switch to an array as long as the planet's highest node
+# id, a hundred gigabytes.
+located_bands() {
+    local directory="$1" bands="$2" index
+    for (( index = 0; index < bands; index++ )); do
+        osmium add-locations-to-ways "$directory/band-$index.osm.pbf" --ignore-missing-nodes \
+            -i sparse_mem_array -f opl,add_metadata=false,locations_on_ways=true -o - || return 1
+    done
+}
+
+# `upload-routing <dir>`: the archive a whole-world build wrote, into the
+# bucket under its own name, refusing one already there.
+upload_routing() {
+    [[ $# -eq 1 ]] || usage_error "upload-routing takes the directory build-routing wrote."
+    local directory="$1" record name complete archive
+    record="$directory/routing-build.json"
+    [[ -f "$record" ]] || die "$directory holds no routing-build.json. Build it with build-routing first."
+    name="$(plutil -extract name raw -o - "$record" 2>/dev/null)" || die "$record names no archive."
+    complete="$(plutil -extract complete raw -o - "$record" 2>/dev/null)" || die "$record does not say what it covers."
+    [[ "$complete" == true ]] || die "$name is not the whole world. The app reads a tile the archive does \
+not hold as ground with no ways on it, so only a build of the planet with --world goes up."
+    [[ "$name" =~ ^routing-[0-9]{8}-[0-9]{2}$ ]] \
+        || die "$name is not named for the hour its planet is current to. Build it from a planet whose header says."
+    archive="$directory/$name.pmtiles"
+    [[ -f "$archive" ]] || die "there is no archive at $archive."
+    r2_load_keys
+    [[ -z "$(r2_etag "$name.pmtiles")" ]] || die "$name.pmtiles is already in $R2_BUCKET; build from a newer planet."
+    r2_put_parts "$archive" "$name.pmtiles" 256
+    echo "Next, Scripts/vector-archives.sh use $name, then publish."
+}
+
 # `update-planet`: pyosmium-up-to-date, again for as long as it says more
 # changes are waiting. Its first pass starts from the time in the planet's
 # header, on the hourly diffs it takes from openstreetmap.org by default, and
@@ -412,10 +585,16 @@ case "$command" in
     build-graph)
         build build-graph graph "$@"
         ;;
+    build-routing)
+        build_routing "$@"
+        ;;
+    upload-routing)
+        upload_routing "$@"
+        ;;
     upload|whoami)
         with_database "$command" "$@"
         ;;
-    inspect|cell|sign)
+    inspect|cell|sign|routing-tile)
         prepare_tool
         "$tool" "$command" "$@"
         ;;

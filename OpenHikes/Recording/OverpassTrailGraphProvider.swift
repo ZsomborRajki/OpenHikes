@@ -7,9 +7,11 @@
 //
 //  A provider handed the trail graph's squares asks them first, and Overpass
 //  only for a region they cannot answer — see ``TrailGraphSquareLibrary``.
-//  The squares hold trails and not the roads that join them, so such a
-//  provider is for everything but the trail maker, which routes over both and
-//  has one of its own: see `OpenHikesModel.makeDependencies`.
+//  The public database's squares hold trails and not the roads that join
+//  them, so such a provider is for everything but the trail maker, which
+//  routes over both and has one of its own, handed the maker's own set on
+//  the tile server (``RoutingGraphArchive``): see
+//  `OpenHikesModel.makeTrailGraphProviders()`.
 //
 
 import Algorithms
@@ -635,9 +637,10 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
 }
 
 extension OverpassTrailGraphProvider {
-    /// Where a provider that asks the squares keeps its regions: apart from
-    /// the maker's, because a region read from a square holds no roads, and
-    /// the maker's own directory has to go on holding what it routes over.
+    /// Where a provider that asks the public database's squares keeps its
+    /// regions: apart from the maker's, because a region read from one of
+    /// them holds no roads, and the maker's own directory has to go on
+    /// holding what it routes over.
     static func trailsDirectory() -> URL? {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
             .first?

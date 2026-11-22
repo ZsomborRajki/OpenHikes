@@ -66,38 +66,112 @@ struct OPLNode {
 
 enum OPLError: Error, CustomStringConvertible {
     case malformed(line: String)
+    case lineTooLong(bytes: Int)
+    case unreadable(errno: Int32)
 
     var description: String {
         switch self {
         case .malformed(let line):
             "this is not an OPL line the tool reads: \(line.prefix(120))"
+        case .lineTooLong(let bytes):
+            "a line of the input runs past \(bytes) bytes without ending"
+        case .unreadable(let code):
+            "the input could not be read: \(String(cString: strerror(code)))"
         }
     }
 }
 
 /// A file of OPL, mapped into memory rather than read into it: the ways of a
 /// whole planet's hiking routes are gigabytes, and each line is looked at
-/// once.
+/// once. Or, for the path `-`, standard input, read as it comes: the trail
+/// maker's ways, roads and all, are a hundred gigabytes of text, which
+/// osmium writes into a pipe rather than onto the disk.
 struct OPLFile {
-    private let data: Data
+    private enum Source {
+        case mapped(Data)
+        case standardInput
+    }
+
+    /// The longest line standard input may hold. A way is two thousand nodes
+    /// at most, each some forty bytes of OPL.
+    static let streamBufferBytes = 64 << 20
+
+    private let source: Source
 
     init(path: String) throws {
-        data = try Data(contentsOf: URL(fileURLWithPath: path), options: .alwaysMapped)
+        source = path == "-"
+            ? .standardInput
+            : .mapped(try Data(contentsOf: URL(fileURLWithPath: path), options: .alwaysMapped))
     }
 
     /// Calls `body` with each line that is not empty, without its newline.
     func forEachLine(_ body: (UnsafeBufferPointer<UInt8>) throws -> Void) throws {
-        try data.withUnsafeBytes { raw in
-            let bytes = raw.bindMemory(to: UInt8.self)
-            guard let base = bytes.baseAddress else { return }
-            var start = 0
-            while start < bytes.count {
-                let found = memchr(base + start, Int32(ASCII.newline), bytes.count - start)
-                let end = found.map { base.distance(to: $0.assumingMemoryBound(to: UInt8.self)) } ?? bytes.count
-                if end > start {
-                    try body(UnsafeBufferPointer(rebasing: bytes[start..<end]))
+        switch source {
+        case .mapped(let data):
+            try data.withUnsafeBytes { raw in
+                let bytes = raw.bindMemory(to: UInt8.self)
+                guard let base = bytes.baseAddress else { return }
+                try Self.forEachLine(in: base, count: bytes.count, body)
+            }
+        case .standardInput:
+            try Self.forEachLine(of: FileHandle.standardInput.fileDescriptor, body)
+        }
+    }
+
+    /// The lines of `count` bytes at `base`, and the offset after the last
+    /// newline: what is past it is a line still being written.
+    @discardableResult
+    private static func forEachLine(
+        in base: UnsafePointer<UInt8>,
+        count: Int,
+        endingInNewline: Bool = false,
+        _ body: (UnsafeBufferPointer<UInt8>) throws -> Void
+    ) throws -> Int {
+        var start = 0
+        while start < count {
+            let found = memchr(base + start, Int32(ASCII.newline), count - start)
+            guard let found else {
+                if !endingInNewline {
+                    try body(UnsafeBufferPointer(start: base + start, count: count - start))
+                    return count
                 }
-                start = end + 1
+                return start
+            }
+            let end = base.distance(to: found.assumingMemoryBound(to: UInt8.self))
+            if end > start {
+                try body(UnsafeBufferPointer(start: base + start, count: end - start))
+            }
+            start = end + 1
+        }
+        return start
+    }
+
+    /// Every line of what `descriptor` reads until its end, through one
+    /// buffer: a line cut at the buffer's end is moved to its start and
+    /// read on.
+    private static func forEachLine(
+        of descriptor: Int32,
+        _ body: (UnsafeBufferPointer<UInt8>) throws -> Void
+    ) throws {
+        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: streamBufferBytes)
+        defer { buffer.deallocate() }
+        var filled = 0
+        while true {
+            guard filled < streamBufferBytes else { throw OPLError.lineTooLong(bytes: streamBufferBytes) }
+            let count = read(descriptor, buffer + filled, streamBufferBytes - filled)
+            if count < 0 {
+                guard errno == EINTR else { throw OPLError.unreadable(errno: errno) }
+                continue
+            }
+            guard count > 0 else {
+                try forEachLine(in: buffer, count: filled, body)
+                return
+            }
+            filled += count
+            let consumed = try forEachLine(in: buffer, count: filled, endingInNewline: true, body)
+            if consumed > 0 {
+                memmove(buffer, buffer + consumed, filled - consumed)
+                filled -= consumed
             }
         }
     }

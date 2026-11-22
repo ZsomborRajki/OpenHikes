@@ -28,6 +28,10 @@
 //  many regions are waiting on it, the last one read is kept decoded, and
 //  every square fetched is kept on disk, in a store of its own.
 //
+//  The trail maker's graph is read through the same library from a set of
+//  its own, laid out a square a region (``Layout/routing``), which the tile
+//  server holds with the roads in it: see ``RoutingGraphArchive``.
+//
 //  The fetch is counted the way the provider counts a region's: it goes on
 //  while any region waits on it, and is cancelled when the last one stops
 //  waiting, so a recording's Stop ends the request rather than leaving it to
@@ -55,9 +59,9 @@
 //  box, whole, an edge for each segment between two different nodes, joined
 //  at the nodes' ids. The one difference is a segment with no length, which
 //  a square keeps and the decoder leaves out — see
-//  ``graph(of:crossing:)``. What a square leaves out is the roads, which only
-//  the trail maker asks about — see ``TrailGraphSquareGrid`` — and so this is
-//  never what the maker reads.
+//  ``graph(of:crossing:)``. What the public database's squares leave out is
+//  the roads, which only the trail maker asks about — see
+//  ``TrailGraphSquareGrid`` — and so the maker reads its own set.
 //
 
 import Algorithms
@@ -149,7 +153,25 @@ actor TrailGraphSquareLibrary {
         var waiters: Set<UUID>
     }
 
+    /// Which square answers for a region, and what it is called.
+    nonisolated struct Layout: Sendable {
+        /// The zoom of the slippy-map tiles a square is.
+        var squareZoom: Int
+        var name: @Sendable (TrailGraphSquare) -> String
+
+        /// The trail graph's squares in the public database.
+        static let trails = Layout(squareZoom: TrailGraphSquareGrid.squareZoom) { square in
+            TrailGraphSquareGrid.recordName(for: square)
+        }
+
+        /// The trail maker's, on the tile server: a square is a region.
+        static let routing = Layout(squareZoom: RoutingGraphArchive.zoom) { tile in
+            RoutingGraphArchive.squareName(for: tile)
+        }
+    }
+
     private let database: any TrailCellFetching
+    private let layout: Layout
     private let store: TrailCellStore?
     private let clock: @Sendable () -> Date
     private var fetches: [String: SquareFetch] = [:]
@@ -162,20 +184,27 @@ actor TrailGraphSquareLibrary {
     ///   the app's `Caches`.
     init(
         database: any TrailCellFetching,
+        layout: Layout = .trails,
         directory: URL? = TrailGraphSquareLibrary.defaultDirectory(),
         clock: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.database = database
+        self.layout = layout
         self.clock = clock
         store = directory.map { TrailCellStore(directory: $0, maximumFiles: Self.maximumFiles, clock: clock) }
     }
 
     /// The trails of `region`, or why the squares cannot say.
     func graph(for region: TrailGraphRegion) async -> TrailGraphSquareAnswer {
-        guard let square = TrailGraphSquareGrid.square(forRegionX: region.x, y: region.y, zoom: region.zoom) else {
+        guard let square = TrailGraphSquareGrid.square(
+            forRegionX: region.x,
+            y: region.y,
+            zoom: region.zoom,
+            squareZoom: layout.squareZoom
+        ) else {
             return .uncovered
         }
-        switch await read(TrailGraphSquareGrid.recordName(for: square)) {
+        switch await read(layout.name(square)) {
         case let .square(file, fetchedAt):
             // Read for nobody otherwise, and a large square's read is the
             // costly part of a region.
