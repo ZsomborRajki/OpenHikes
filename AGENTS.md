@@ -1506,11 +1506,12 @@ sets after this one are built, uploaded and read on the same terms.
 - **The file's generation is in every record name** (`trails1_…`). An
   installed build keeps asking for the names it knows, so a file it cannot
   read goes under a new generation beside the old one, never over it.
-- **Eleven of the app's files are compiled into the tool:**
+- **Thirteen of the app's files are compiled into the tool:**
   `PackedBytes.swift`, `TrailCellGrid.swift`, `TrailCellFile.swift`,
   `RouteSquareGrid.swift`, `RouteSquareFile.swift`, `PlaceSquareGrid.swift`,
   `PlaceSquareFile.swift`, `TrailGraphSquareGrid.swift`,
-  `TrailGraphSquareFile.swift`, `TrailGraphHighway.swift` and
+  `TrailGraphSquareFile.swift`, `RoutingGraphArchive.swift`,
+  `TrailGraphHighway.swift`, `PMTilesFile.swift` and
   `CommunitySchema.swift`. They import nothing of the app's, and
   `Scripts/run-script-tests.sh` builds the tool, which is what holds them to
   that.
@@ -1633,9 +1634,9 @@ on the tile server, a z12 tile a region of the graph, each tile a
   archive, and one an installed app would read wrong goes up under the next
   generation.
 - **The build streams bands of longitude** (`build-routing`), because no
-  index of the planet's 2.5 billion such nodes fits in memory. The bands'
-  edges are measured; a band past 2²⁹ nodes is split. A planet's build took
-  53 minutes and some 65 GB of disk at the most, for an archive of 18.7 GB.
+  index of every such node's position in the planet fits in memory. The
+  bands' edges, and the time and the disk a planet's build takes, are
+  measured in `Scripts/trail-cells.sh`'s header.
 
 ## The watch app
 

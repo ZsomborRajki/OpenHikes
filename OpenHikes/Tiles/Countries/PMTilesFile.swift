@@ -11,8 +11,9 @@
 //
 //  The tool that cuts the countries out of the planet
 //  (`Scripts/offline-countries.sh`) compiles this file as it stands, beside
-//  `PackedBytes.swift`, so it imports Foundation and nothing of the app's and
-//  says `nonisolated` on every declaration.
+//  `PackedBytes.swift`, and so does the one that writes the trail maker's
+//  archive (`Scripts/trail-cells.sh`), so it imports Foundation and nothing
+//  of the app's and says `nonisolated` on every declaration.
 //
 //  Every count, offset and length is read from a file that came over the
 //  network, so each is checked against the bytes that are there before it is

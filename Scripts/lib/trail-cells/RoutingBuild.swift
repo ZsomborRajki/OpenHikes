@@ -7,7 +7,7 @@
 //  `RoutingGraphArchive.zoom` its box touches, as one PMTiles archive the tile
 //  server serves a tile at a time. See `RoutingGraphArchive.swift` for why.
 //
-//  A planet's roads and trails are 2.5 billion nodes, so the ways come in on
+//  A planet's roads and trails are billions of nodes, so the ways come in on
 //  standard input rather than from a file: `Scripts/trail-cells.sh
 //  build-routing` has osmium write them into a pipe a band of longitude at a
 //  time, because no index of every node's position fits in memory at once. A
@@ -94,9 +94,6 @@ enum RoutingGraphBuild {
         var notWalkable = 0
         var withoutPositions = 0
         var tiles = Sizes()
-        /// What the same ways would weigh filed under the trail graph's own
-        /// squares, four levels up, measured on the way.
-        var squares = Sizes()
         var archiveBytes: UInt64 = 0
         var isClustered = true
         var archive: URL?
@@ -144,7 +141,6 @@ enum RoutingGraphBuild {
         let archive = options.outputDirectory.appendingPathComponent("\(options.name).pmtiles")
         let writer = try RoutingArchiveWriter(url: archive)
         var tileSizes: [(bytes: Int, ways: Int, tile: TrailGraphSquare)] = []
-        var squareSizes: [(bytes: Int, ways: Int, square: TrailGraphSquare)] = []
         let reader = spool.reader
         let squares = spool.squares.sorted { firstTileID(of: $0) < firstTileID(of: $1) }
         var batch: [TrailGraphSquare] = []
@@ -153,7 +149,6 @@ enum RoutingGraphBuild {
             for square in try await tiles(of: batch, from: reader) {
                 summary.ways += square.ways
                 summary.nodes += square.nodes
-                squareSizes.append((square.bytes, square.wayCount, square.square))
                 for tile in square.tiles {
                     try writer.append(tile.bytes, tileID: tile.id)
                     tileSizes.append((tile.bytes.count, tile.ways, tile.tile))
@@ -173,7 +168,6 @@ enum RoutingGraphBuild {
         summary.isClustered = writer.isClustered
         summary.archive = archive
         summary.tiles = sizes(tileSizes.map { ($0.bytes, $0.ways, "z\(RoutingGraphArchive.zoom)/\($0.tile.x)/\($0.tile.y)") })
-        summary.squares = sizes(squareSizes.map { ($0.bytes, $0.ways, "z\(TrailGraphSquareGrid.squareZoom)/\($0.square.x)/\($0.square.y)") })
 
         let record = Record(
             name: options.name,
@@ -226,9 +220,6 @@ private extension RoutingGraphBuild {
     struct SquareTiles: Sendable {
         var square: TrailGraphSquare
         var tiles: [Tile]
-        /// The square's own file, which the trail graph's squares would be.
-        var bytes: Int
-        var wayCount: Int
         /// The ways that start in this square and their nodes, so a way is
         /// counted once however many squares it is filed under.
         var ways: Int
@@ -282,8 +273,6 @@ private extension RoutingGraphBuild {
         return SquareTiles(
             square: square,
             tiles: tiles.sorted { $0.id < $1.id },
-            bytes: TrailGraphSquareFile(ways: ways).encoded().count,
-            wayCount: ways.count,
             ways: starting,
             nodes: nodes
         )

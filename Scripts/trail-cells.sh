@@ -96,17 +96,18 @@
 #             It is named for the hour the extract is current to,
 #             routing-YYYYMMDD-HH.pmtiles, and routing-build.json beside it says
 #             what it is. --world, --out and --keep-work as for build. No index
-#             of the positions of a planet's 2.5 billion such nodes fits in
+#             of the positions of every such node in a planet fits in
 #             memory, so osmium cuts the ways into bands of longitude, each
 #             with every node of its ways, and puts the positions on one band
 #             at a time, into a pipe the tool reads; a band is deleted once it
 #             is read. Measured on an M4 Max with 48 GB and the planet of
 #             2026-11-22: 53 minutes (8 to find the ways, 14 to cut the bands,
 #             25 to read them and 6 to write the tiles), a cut of 20 GB, a
-#             spool of some 43 GB, and an archive of 18.7 GB in 1.78 million
-#             tiles; about 65 GB of disk at the most. The build is written
-#             into <dir>.work and replaces an earlier one in <dir> only once
-#             it is whole, so that one needs room beside it until then.
+#             spool of some 43 GB and the archive, whose size
+#             RoutingGraphArchive.swift gives: about 65 GB of disk at the
+#             most. The build is written into <dir>.work and replaces an
+#             earlier one in <dir> only once it is whole, so that one needs
+#             room beside it until then.
 #   upload-routing
 #             Put the archive build-routing wrote in <dir> in the R2 bucket
 #             openhikes-tiles under its own name, refusing a build that is not

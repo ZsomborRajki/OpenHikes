@@ -103,12 +103,17 @@ struct RoutingGraphServerTests {
     }
 
     /// Every listed archive is the whole world, so a tile it does not hold
-    /// is ground with no ways on it, which the library keeps as such.
-    @Test("no tile is ground with no ways on it")
-    func noTileIsEmptyGround() async throws {
+    /// is ground with no ways on it, which the library keeps as such. The
+    /// server says so with a 204, and an empty 200 is how a cache in front
+    /// of it might, as the map reads one.
+    @Test("no tile is ground with no ways on it", arguments: [
+        StubTileServer.Answer(status: 204),
+        StubTileServer.Answer.ok(Data()),
+    ])
+    func noTileIsEmptyGround(answer: StubTileServer.Answer) async throws {
         let tiles = StubTileServer([
             "manifest.json": [StubTileServer.manifest(revision: 9, routing: [Self.current])],
-            Self.tilePath(Self.current): [.init(status: 204)],
+            Self.tilePath(Self.current): [answer],
         ])
         let reader = try Self.reader(tiles, bundled: nil)
 
@@ -299,16 +304,21 @@ struct RoutingGraphServerTests {
     /// The maker closed while its first region waited on the list. Ended
     /// with that region's request, the read would count as made, and every
     /// tile for the next minute would be asked of the pruned archive and
-    /// left to Overpass.
-    @Test("a region given up on while the list is read does not end the read")
+    /// left to Overpass. And the region does not wait out the read: it ends
+    /// while the server is still holding the list, or this case runs out of
+    /// time.
+    @Test(
+        "a region given up on while the list is read stops at once, and does not end the read",
+        .timeLimit(.minutes(1))
+    )
     func aRegionGivenUpOnLeavesTheRead() async throws {
         let held = HeldRequest("manifest.json")
         let (tiles, reader) = try Self.prunedSinceBuilt(clock: Clock(), held: held)
         let givenUp = Task { try await reader.fetch(cellsNamed: [Self.tileName]) }
         await held.arrived()
         givenUp.cancel()
+        await #expect(throws: CancellationError.self) { try await givenUp.value }
         held.release()
-        _ = try? await givenUp.value
 
         let fetch = try await reader.fetch(cellsNamed: [Self.tileName])
 
