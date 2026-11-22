@@ -99,8 +99,12 @@
 #             of the positions of a planet's 2.5 billion such nodes fits in
 #             memory, so osmium cuts the ways into bands of longitude, each
 #             with every node of its ways, and puts the positions on one band
-#             at a time, into a pipe the tool reads. Measured on an M4 Max with
-#             48 GB and the planet of 2026-11-22: ROUTING_FIGURES.
+#             at a time, into a pipe the tool reads; a band is deleted once it
+#             is read. Measured on an M4 Max with 48 GB and the planet of
+#             2026-11-22: 53 minutes (8 to find the ways, 14 to cut the bands,
+#             25 to read them and 6 to write the tiles), a cut of 20 GB, a
+#             spool of some 43 GB, and an archive of 18.7 GB in 1.78 million
+#             tiles; about 65 GB of disk at the most.
 #   upload-routing
 #             Put the archive build-routing wrote in <dir> in the R2 bucket
 #             openhikes-tiles under its own name, refusing a build that is not
@@ -414,7 +418,7 @@ build_routing() {
     # A band osmium gave up on ends the tool's input as the last band would,
     # so what it wrote from the rest is taken away rather than left for
     # upload-routing to find.
-    if ! located_bands "$work/bands" "$bands" | "$tool" "${arguments[@]}"; then
+    if ! located_bands "$work/bands" "$bands" "$keep_work" | "$tool" "${arguments[@]}"; then
         rm -f "$out/routing-build.json" "$out/$name.pmtiles"
         die "the trail maker's graph was not built."
     fi
@@ -428,12 +432,14 @@ build_routing() {
 # Every band's ways, with their nodes' positions, as OPL on standard output.
 # The index is a sorted array of the band's own nodes, sixteen bytes each:
 # osmium's default can switch to an array as long as the planet's highest node
-# id, a hundred gigabytes.
+# id, a hundred gigabytes. A band read is deleted unless the work is kept,
+# because the tool's spool grows on the same disk as the bands are read.
 located_bands() {
-    local directory="$1" bands="$2" index
+    local directory="$1" bands="$2" keep_work="$3" index
     for (( index = 0; index < bands; index++ )); do
         osmium add-locations-to-ways "$directory/band-$index.osm.pbf" --ignore-missing-nodes \
             -i sparse_mem_array -f opl,add_metadata=false,locations_on_ways=true -o - || return 1
+        [[ "$keep_work" == true ]] || rm -f "$directory/band-$index.osm.pbf"
     done
 }
 
