@@ -106,6 +106,22 @@ struct RouteTrimTests {
         #expect(acrossAPause.first?.timestamp == nil, "nobody knows which side of the pause the time was spent")
     }
 
+    @Test("a cut that takes a point with no time gives it the time of the stamps either side")
+    func takenPointWithoutATime() {
+        let route = [Self.point(0, at: 0), Self.point(2), Self.point(4, at: 240)]
+
+        let fromIt = RouteTrim.trimmed(route, keeping: (2 * Self.step)...(4 * Self.step))
+        let toIt = RouteTrim.trimmed(route, keeping: 0...(2 * Self.step))
+
+        #expect(fromIt.first?.timestamp == Self.point(0, at: 120).timestamp)
+        #expect(toIt.last?.timestamp == Self.point(0, at: 120).timestamp)
+        let untimedEnds = [Self.point(0), Self.point(2, at: 120), Self.point(4)]
+        #expect(
+            RouteTrim.trimmed(untimedEnds, keeping: 0...(4 * Self.step)) == untimedEnds,
+            "an end left alone is the point it was saved as"
+        )
+    }
+
     @Test("a made end is inferred where the leg it stands on was")
     func madeEndKeepsItsLegsProvenance() throws {
         let route = [Self.point(0), Self.point(2), Self.point(4, inferred: true)]

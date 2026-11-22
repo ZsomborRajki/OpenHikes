@@ -25,11 +25,12 @@
 //  handle back to where it was gives the line it was.
 //
 //  Inside a stretch drawn along other ground, whose points carry no time
-//  (``RouteStep``), the time of the cut is read off the stamped points
-//  either side of the stretch by distance instead: the hiker crossed it at
-//  one pace, as far as anyone knows. Without it, a cut or a stretch taken
-//  out there would take the whole crossing's time off the walk, or none of
-//  it.
+//  (``RouteStep``), the time of the cut, made or taken, is read off the
+//  stamped points either side of the stretch by distance instead: the hiker
+//  crossed it at one pace, as far as anyone knows. Without it, a cut or a
+//  stretch taken out there would take the whole crossing's time off the
+//  walk, or none of it. The editor's figures read the same clock
+//  (``time(at:between:and:of:distances:)``).
 //
 //  ## A pause at a cut
 //
@@ -115,6 +116,19 @@ nonisolated public enum RouteTrim {
         }
         if let made = tail.made { kept.append(made) }
         guard kept.count > 1 else { return [] }
+        // A cut that takes a point as it stands, inside a way drawn with no
+        // times, is timed as one that makes a point there: else the walk's
+        // clock, its recorded time and its workout all lose the crossing.
+        if head.made == nil, kept[0].timestamp == nil {
+            let index = head.firstWhole
+            kept[0].timestamp = time(at: distances[index], between: index, and: index, of: route, distances: distances)
+        }
+        if tail.made == nil, kept[kept.count - 1].timestamp == nil {
+            let index = tail.lastWhole
+            kept[kept.count - 1].timestamp = time(
+                at: distances[index], between: index, and: index, of: route, distances: distances
+            )
+        }
         // Nothing arrives at the first point of a line, so a new one names
         // neither a pause nor an inference: both describe the leg leading to
         // it. The line's own first point is left as it was saved.
@@ -253,7 +267,7 @@ nonisolated public enum RouteTrim {
     /// *Where a cut falls* in the file header. `nil` where either side has
     /// none, or a pause stands between them, whose length says nothing of
     /// where along the way the hiker was when.
-    private static func time(
+    public static func time(
         at target: Double,
         between lower: Int,
         and upper: Int,
@@ -262,9 +276,11 @@ nonisolated public enum RouteTrim {
     ) -> Date? {
         guard let before = route[...lower].lastIndex(where: { $0.timestamp != nil }),
               let after = route[upper...].firstIndex(where: { $0.timestamp != nil }),
-              let began = route[before].timestamp, let arrived = route[after].timestamp,
-              !route[(before + 1)...after].contains(where: \.isPauseBoundary)
+              let began = route[before].timestamp, let arrived = route[after].timestamp
         else { return nil }
+        // A point asked for itself, with a time of its own.
+        guard after > before else { return began }
+        guard !route[(before + 1)...after].contains(where: \.isPauseBoundary) else { return nil }
         let span = distances[after] - distances[before]
         let fraction = span > 0 ? (target - distances[before]) / span : 0
         return began.addingTimeInterval(arrived.timeIntervalSince(began) * fraction)

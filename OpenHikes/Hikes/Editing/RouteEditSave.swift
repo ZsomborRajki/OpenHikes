@@ -104,7 +104,8 @@ nonisolated struct EditedLine: Equatable, Sendable {
     let route: [RouteCoordinate]
     /// The line a workout of the walk is written from — see
     /// ``RouteEditWorkout``: this one, or, where a step took its clock away,
-    /// the line before that step, which the walk's time was last read off.
+    /// the line before that step, which the walk's time was last read off,
+    /// less what this one no longer goes through.
     let workoutRoute: [RouteCoordinate]
     /// Its own length, on ``RouteProfile``'s axis.
     let lengthMeters: Double
@@ -166,7 +167,7 @@ nonisolated struct EditedLine: Equatable, Sendable {
         let length = kept.lengthMeters
         guard length > 0 else { return nil }
         route = kept
-        workoutRoute = steps.clockedRoute.isEmpty ? kept : steps.clockedRoute
+        workoutRoute = steps.clockedRoute.isEmpty ? kept : RouteSteps.walked(steps.clockedRoute, stillOn: kept)
         lengthMeters = length
         removedMeters = current.lengthMeters - length
         // A line with no times leaves the walk's time as it was, as it

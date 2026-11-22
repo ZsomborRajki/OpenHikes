@@ -176,6 +176,18 @@ extension RouteStepsTests {
         #expect(RouteSteps.applying([cut], to: Self.line).clockedRoute.isEmpty)
         #expect(RouteSteps.applying([.reverse, cut], to: Self.line).clockedRoute == Self.line)
     }
+
+    @Test("a workout leaves out what a cut after the clock was taken away took off the line")
+    func theClockedLineLosesWhatWasCutAfter() {
+        let turned = RouteSteps.applying([.reverse], to: Self.line)
+        // Turned round, the line's first two legs are the clocked line's last.
+        let kept = RouteTrim.trimmed(turned.route, keeping: (Self.step * 2)...Self.total)
+
+        let walked = RouteSteps.walked(turned.clockedRoute, stillOn: kept)
+
+        #expect(walked == Array(Self.line.dropLast(2)))
+        #expect(RouteSteps.walked(turned.clockedRoute, stillOn: turned.route) == Self.line)
+    }
 }
 
 // swiftlint:enable no_magic_numbers

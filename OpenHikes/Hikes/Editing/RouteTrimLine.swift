@@ -237,16 +237,17 @@ nonisolated struct RouteTrimLine: Sendable {
         return spot(at: bracket(meters, for: .end))
     }
 
-    /// The clock at a cut `meters` along the line, read off the two points
-    /// either side of it, or `nil` where they carry none. An end left alone
-    /// is its own point's, as the hike's *Duration* reads it.
+    /// The clock at a cut `meters` along the line, read off the stamped
+    /// points either side of it as the save reads it, or `nil` where there
+    /// are none — see ``RouteTrim/time(at:between:and:of:distances:)``. An
+    /// end left alone is its own point's, as the hike's *Duration* reads it.
     func timestamp(of handle: RouteTrimHandle, at meters: Double, takingOffPause: Bool = false) -> Date? {
         if isLeftAlone(handle, at: meters, takingOffPause: takingOffPause) {
             return handle == .start ? route.first?.timestamp : route.last?.timestamp
         }
         let leg = bracket(meters, for: handle)
-        guard let began = route[leg.lower].timestamp, let arrived = route[leg.upper].timestamp else { return nil }
-        return began.addingTimeInterval(arrived.timeIntervalSince(began) * leg.fraction)
+        let at = distances[leg.lower] + (distances[leg.upper] - distances[leg.lower]) * leg.fraction
+        return RouteTrim.time(at: at, between: leg.lower, and: leg.upper, of: route, distances: distances)
     }
 
     /// Whether a cut `meters` along the line is no cut at all: it stands on
