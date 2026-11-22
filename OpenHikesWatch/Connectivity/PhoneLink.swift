@@ -53,6 +53,13 @@
 //  delegates and is what keeps a `[String: Any]` — which is not `Sendable` —
 //  from ever crossing an isolation boundary.
 //
+//  The reply and error handlers handed to `sendMessage` arrive on a
+//  background queue too, and are `@Sendable` for it. A closure written in this
+//  main-actor class is otherwise main-actor isolated, and because
+//  WatchConnectivity's handler types say nothing about isolation, Swift checks
+//  it at run time and traps when the framework calls it from its own queue.
+//  The phone's `WatchSessionCoordinator` crashed at launch that way.
+//
 
 import Foundation
 import OpenHikesShared
@@ -284,10 +291,12 @@ final class PhoneLink: NSObject {
             deliverRefusal(of: command, saying: "That didn’t reach your iPhone.")
             return
         }
-        session.sendMessage(encoded) { [weak self] reply in
+        session.sendMessage(encoded) { @Sendable [weak self] reply in
             // The reply arrives on a background queue and is decoded there,
             // for the reason every delivery below is: `[String: Any]` is not
-            // `Sendable` and must not cross to the main actor.
+            // `Sendable` and must not cross to the main actor. `@Sendable`
+            // keeps both handlers off the main actor; see the file header's
+            // Isolation.
             guard let outcome = try? WatchLink.commandOutcome(from: reply) else {
                 // The phone answers with an *empty* dictionary on every path
                 // it cannot encode an outcome on, precisely so this watch is
@@ -299,7 +308,7 @@ final class PhoneLink: NSObject {
                 return
             }
             onMainActor { self?.onDelivery?(.commandAnswer(.answered(outcome))) }
-        } errorHandler: { [weak self] error in
+        } errorHandler: { @Sendable [weak self] error in
             Self.logger.debug("A command failed: \(error.localizedDescription, privacy: .public)")
             onMainActor { self?.deliverRefusal(of: command, saying: "That didn’t reach your iPhone.") }
         }
