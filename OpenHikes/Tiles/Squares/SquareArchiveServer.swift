@@ -38,7 +38,18 @@
 //
 //  A call's squares are asked for several at a time, because the day hikes'
 //  widest search reads hundreds, and the server answers each in its own
-//  request.
+//  request. Two things hold for the call as a whole:
+//
+//  - **One archive.** When a square's archive turns out to be retired, every
+//    square of the call is asked again of the archive the list names now,
+//    not only the retired ones: a place or a route that moved from one
+//    square to another between two builds would otherwise be in neither
+//    square of the answer, and the library keeps both.
+//  - **One deadline**, the library's limit for a whole request, as the
+//    public database had: a server that stops answering would otherwise
+//    hold a search for a wave of request timeouts after another, while the
+//    hiker waits for Overpass. When it passes, what is out is cancelled,
+//    nothing more is asked, and the squares that arrived are kept.
 //
 //  ## No suite reaches it
 //
@@ -142,6 +153,8 @@ nonisolated final class SquareArchiveServer: TrailCellFetching {
     enum Failure: Error, Equatable {
         case status(Int)
         case notHTTP
+        /// The call's deadline passed before any of its squares arrived.
+        case timedOut
     }
 
     /// How long after a read of the server's list the next square reads it
@@ -168,31 +181,52 @@ nonisolated final class SquareArchiveServer: TrailCellFetching {
         case retired
     }
 
+    /// What one of a call's tasks came back with.
+    private enum Event {
+        case answered(String, Result<Answer, any Error>)
+        /// The call's deadline passed.
+        case expired
+    }
+
     /// The set this reads.
     let set: SquareArchive
     private let server: URL
     /// How long one square's request may go quiet, in seconds.
     let requestTimeout: TimeInterval
+    /// How long one call may take in all, its squares together, in seconds,
+    /// or `nil` for no limit but each request's own.
+    let callTimeout: TimeInterval?
     private let transport: Transport
     private let clock: @Sendable () -> Date
+    private let waitOut: @Sendable (TimeInterval) async -> Void
     private let state: Mutex<State>
 
-    /// - Parameter requestTimeout: How long one square's request may go
-    ///   quiet, the set's library's figure: the live transport takes the
-    ///   same, with the library's limit for the whole request.
+    /// - Parameters:
+    ///   - requestTimeout: How long one square's request may go quiet, the
+    ///     set's library's figure: the live transport takes the same, with
+    ///     the library's limit for the whole request.
+    ///   - callTimeout: How long one call may take in all: the library's
+    ///     limit for the whole request, as a request to the public database
+    ///     was held to.
+    ///   - waitOut: Returns once the given seconds have passed, or once the
+    ///     task waiting is cancelled. A suite passes one it ends itself.
     init(
         set: SquareArchive,
         server: URL,
         bundled: Listing?,
         requestTimeout: TimeInterval,
+        callTimeout: TimeInterval? = nil,
         clock: @escaping @Sendable () -> Date = { Date() },
+        waitOut: @escaping @Sendable (TimeInterval) async -> Void = { try? await Task.sleep(for: .seconds($0)) },
         transport: @escaping Transport
     ) {
         self.set = set
         self.server = server
         self.requestTimeout = requestTimeout
+        self.callTimeout = callTimeout
         self.transport = transport
         self.clock = clock
+        self.waitOut = waitOut
         state = Mutex(State(listing: bundled))
     }
 
@@ -203,19 +237,19 @@ nonisolated final class SquareArchiveServer: TrailCellFetching {
 
     @concurrent
     func fetch(cellsNamed names: [String]) async throws -> TrailCellFetch {
+        let deadline = callTimeout.map { clock().addingTimeInterval($0) }
         try await readListing(unlessReadWithin: Self.readInterval)
         guard let asked = archive else { return TrailCellFetch(manifest: .absent, cells: [:]) }
-        var found = try await answers(for: names, in: asked)
-        let retired = names.filter { found[$0] == .retired }
-        if !retired.isEmpty {
+        var found = try await answers(for: names, in: asked, until: deadline)
+        if found.values.contains(.retired) {
             // Retired since the list was read: read it again, and ask the
-            // archive it names now, if it names another.
+            // archive it names now, if it names another, for every square of
+            // the call, so that all of them are one build's.
             try await readListing(unlessReadWithin: Self.retiredReadInterval)
             guard let next = archive else { return TrailCellFetch(manifest: .absent, cells: [:]) }
             guard next != asked else { return TrailCellFetch(manifest: .unread, cells: [:]) }
-            let again = try await answers(for: retired, in: next)
-            guard !again.values.contains(.retired) else { return TrailCellFetch(manifest: .unread, cells: [:]) }
-            found.merge(again) { _, new in new }
+            found = try await answers(for: names, in: next, until: deadline)
+            guard !found.values.contains(.retired) else { return TrailCellFetch(manifest: .unread, cells: [:]) }
         }
         return TrailCellFetch(manifest: .complete, cells: found.compactMapValues { answer in
             guard case .cell(let cell) = answer else { return nil }
@@ -224,58 +258,124 @@ nonisolated final class SquareArchiveServer: TrailCellFetching {
     }
 
     /// What the server says of each of `names` in `archive`, several at a
-    /// time. A square whose request failed is ``TrailCellFetch/Cell/failed``,
-    /// unless every request failed, which throws the first failure.
-    private func answers(for names: [String], in archive: String) async throws -> [String: Answer] {
-        var answers: [String: Answer] = [:]
+    /// time, until `deadline`. A square whose request failed, or that the
+    /// deadline left unanswered, is ``TrailCellFetch/Cell/failed``, unless no
+    /// square arrived at all, which throws.
+    private func answers(
+        for names: [String],
+        in archive: String,
+        until deadline: Date?
+    ) async throws -> [String: Answer] {
+        var unnamed: [String: Answer] = [:]
         var asked: [(name: String, tile: SquareArchiveTile)] = []
         for name in names {
             if let tile = set.tile(named: name) {
                 asked.append((name, tile))
             } else {
+                unnamed[name] = .cell(.failed)
+            }
+        }
+        guard !asked.isEmpty else { return unnamed }
+        var batch = await ask(asked, in: archive, until: deadline)
+        // Never asked: the deadline came first.
+        for (name, _) in asked where batch.answers[name] == nil {
+            batch.answers[name] = .cell(.failed)
+        }
+        if batch.arrived == 0 {
+            if batch.expired { throw Failure.timedOut }
+            if let first = batch.failures.first { throw first }
+        }
+        log(batch, of: asked.count)
+        return batch.answers.merging(unnamed) { asked, _ in asked }
+    }
+
+    /// What one call's requests to one archive came to.
+    private struct Batch {
+        var answers: [String: Answer] = [:]
+        var failures: [any Error] = []
+        /// How many squares the server answered for.
+        var arrived = 0
+        /// Whether the deadline passed with requests out.
+        var expired = false
+
+        mutating func record(_ event: Event) {
+            guard case let .answered(name, result) = event else { return }
+            switch result {
+            case .success(let answer):
+                arrived += 1
+                answers[name] = answer
+            case .failure(let error):
+                failures.append(error)
                 answers[name] = .cell(.failed)
             }
         }
-        guard !asked.isEmpty else { return answers }
-        var failures: [any Error] = []
-        await withTaskGroup(of: (String, Result<Answer, any Error>).self) { group in
+    }
+
+    /// `asked`, ``concurrentRequests`` at a time, until `deadline`: then
+    /// what is out is cancelled and nothing more is asked.
+    private func ask(
+        _ asked: [(name: String, tile: SquareArchiveTile)],
+        in archive: String,
+        until deadline: Date?
+    ) async -> Batch {
+        var batch = Batch()
+        await withTaskGroup(of: Event.self) { group in
             var waiting = asked.makeIterator()
+            var outstanding = 0
             func addNext() {
-                guard let (name, tile) = waiting.next() else { return }
+                guard !batch.expired, let (name, tile) = waiting.next() else { return }
+                outstanding += 1
                 group.addTask {
                     do {
-                        return (name, .success(try await self.answer(tile, in: archive)))
+                        return .answered(name, .success(try await self.answer(tile, in: archive)))
                     } catch {
-                        return (name, .failure(error))
+                        return .answered(name, .failure(error))
                     }
+                }
+            }
+            if let deadline {
+                let seconds = max(0, deadline.timeIntervalSince(clock()))
+                group.addTask {
+                    await self.waitOut(seconds)
+                    return .expired
                 }
             }
             for _ in 0..<Self.concurrentRequests {
                 addNext()
             }
-            for await (name, result) in group {
-                switch result {
-                case .success(let answer):
-                    answers[name] = answer
-                case .failure(let error):
-                    failures.append(error)
-                    answers[name] = .cell(.failed)
+            for await event in group {
+                if case .expired = event {
+                    // Every square answered first, and the wait was ended.
+                    guard outstanding > 0 else { continue }
+                    batch.expired = true
+                    group.cancelAll()
+                } else {
+                    outstanding -= 1
+                    batch.record(event)
+                    addNext()
                 }
-                addNext()
+                // The deadline's wait is the last task left.
+                if outstanding == 0 { group.cancelAll() }
             }
         }
-        if failures.count == asked.count, let first = failures.first { throw first }
-        if let first = failures.first {
+        return batch
+    }
+
+    private func log(_ batch: Batch, of count: Int) {
+        let list = set.listName
+        if batch.expired {
+            Self.logger.error(
+                "\(count - batch.arrived, privacy: .public) \(list, privacy: .public) squares ran out of time"
+            )
+        } else if let first = batch.failures.first {
             let reason = String(describing: first)
-            let list = set.listName
             Self.logger.error(
                 """
-                \(failures.count, privacy: .public) of \(asked.count, privacy: .public) \(list, privacy: .public) \
+                \(batch.failures.count, privacy: .public) of \(count, privacy: .public) \(list, privacy: .public) \
                 squares failed: \(reason, privacy: .public)
                 """
             )
         }
-        return answers
     }
 
     /// One tile of `archive`.
@@ -382,6 +482,7 @@ nonisolated extension SquareArchiveServer {
             server: VectorTileArchives.server,
             bundled: Listing.bundled,
             requestTimeout: requestTimeout,
+            callTimeout: resourceTimeout,
             transport: liveTransport(requestTimeout: requestTimeout, resourceTimeout: resourceTimeout)
         )
     }

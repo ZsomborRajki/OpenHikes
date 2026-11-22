@@ -128,9 +128,15 @@ enum SquarePack {
         }
 
         let manager = FileManager.default
-        let staging = options.outputDirectory.appendingPathExtension("staging")
-        try? manager.removeItem(at: staging)
-        try manager.createDirectory(at: staging, withIntermediateDirectories: true)
+        // A directory of its own beside the output, made here and so never one
+        // that was there before: a name taken from the output alone could be
+        // the very build being packed, which clearing it would delete.
+        try manager.createDirectory(
+            at: options.outputDirectory.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let staging = options.outputDirectory.appendingPathExtension("staging-\(UUID().uuidString)")
+        try manager.createDirectory(at: staging, withIntermediateDirectories: false)
         defer { try? manager.removeItem(at: staging) }
 
         let archiveName = "\(name).pmtiles"

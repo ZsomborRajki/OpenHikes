@@ -1510,7 +1510,9 @@ packed and read on the same terms.
   `trails`, `routes` and `places`, newest first (*Tiles*). A build reads the
   first archive of its set's generation and zoom, a new build is a new
   archive name, never one replaced in place, and a 410 has the manifest read
-  again.
+  again and every square of that call asked again, so that a call's squares
+  are one build's. A call is held to its library's limit for a whole
+  request, and keeps what arrived by then (`SquareArchiveServer`).
 - **A square is a tile at its row and column** (`SquareArchive`), at the
   shallowest zoom that holds every square of its grid, one zoom a
   hiking-routes level. The trail graph's tiles are its regions. The zooms

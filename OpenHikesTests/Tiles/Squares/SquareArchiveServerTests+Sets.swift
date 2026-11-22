@@ -169,6 +169,93 @@ extension SquareArchiveServerTests {
         #expect(tiles.paths.suffix(2).allSatisfy { $0.hasPrefix("trails-20261129-00/") })
     }
 
+    /// A route filed under A in the old build and under B in the new one is
+    /// in neither if A comes from the old archive and B from the new.
+    @Test("a call's squares are all one archive's: a retired one has every square asked again of the next")
+    func oneArchiveACall() async throws {
+        let names = ["trails1_550_796", "trails1_550_797"]
+        let tiles = StubTileServer([
+            "manifest.json": [StubTileServer.manifest(revision: 11, Self.everySet)],
+            "trails-20261122-00/11/796/550.bin": [.ok(Self.otherSquare)],
+            "trails-20261122-00/11/797/550.bin": [.init(status: 410)],
+            "trails-20261129-00/11/796/550.bin": [.ok(Self.square)],
+            "trails-20261129-00/11/797/550.bin": [.ok(Self.otherSquare)],
+        ])
+        let clock = Clock()
+        let reader = try Self.reader(.trails, tiles, clock: clock)
+        _ = try? await reader.fetch(cellsNamed: names)
+        tiles.answer("manifest.json", with: [StubTileServer.manifest(revision: 12, [.trails: [Self.laterTrails]])])
+        clock.advance(by: SquareArchiveServer.retiredReadInterval)
+
+        let fetch = try await reader.fetch(cellsNamed: names)
+
+        #expect(fetch == TrailCellFetch(manifest: .complete, cells: [
+            names[0]: .found(Self.square),
+            names[1]: .found(Self.otherSquare),
+        ]))
+    }
+
+    /// A deadline that a suite ends itself: once the held request is out.
+    static func deadline(when held: HeldRequest) -> @Sendable (TimeInterval) async -> Void {
+        { _ in await held.arrived() }
+    }
+
+    static func reader(
+        _ tiles: StubTileServer,
+        holding held: HeldRequest,
+        callTimeout: TimeInterval
+    ) throws -> SquareArchiveServer {
+        SquareArchiveServer(
+            set: .trails,
+            server: try #require(server),
+            bundled: nil,
+            requestTimeout: TrailCellLibrary.requestTimeout,
+            callTimeout: callTimeout,
+            waitOut: deadline(when: held),
+            transport: tiles.transport(holding: held)
+        )
+    }
+
+    /// A tile server that stops answering would otherwise hold a search for
+    /// a request's timeout a wave, while the hiker waits for Overpass.
+    @Test("a call that runs out of time keeps the squares that arrived, and fails the rest", .timeLimit(.minutes(1)))
+    func aCallRunsOutOfTime() async throws {
+        let held = HeldRequest("trails-20261122-00/11/797/550.bin")
+        let tiles = StubTileServer([
+            "manifest.json": [StubTileServer.manifest(revision: 11, Self.everySet)],
+            "trails-20261122-00/11/796/550.bin": [.ok(Self.square)],
+            "trails-20261122-00/11/797/550.bin": [.ok(Self.otherSquare)],
+        ])
+        let reader = try Self.reader(tiles, holding: held, callTimeout: TrailCellLibrary.resourceTimeout)
+
+        let fetch = try await reader.fetch(cellsNamed: ["trails1_550_796", "trails1_550_797"])
+
+        #expect(fetch == TrailCellFetch(manifest: .complete, cells: [
+            "trails1_550_796": .found(Self.square),
+            "trails1_550_797": .failed,
+        ]))
+    }
+
+    @Test("a call none of whose squares arrives in time fails as a whole", .timeLimit(.minutes(1)))
+    func nothingArrivesInTime() async throws {
+        let held = HeldRequest("trails-20261122-00/11/796/550.bin")
+        let tiles = StubTileServer([
+            "manifest.json": [StubTileServer.manifest(revision: 11, Self.everySet)],
+            "trails-20261122-00/11/796/550.bin": [.ok(Self.square)],
+        ])
+        let reader = try Self.reader(tiles, holding: held, callTimeout: TrailCellLibrary.resourceTimeout)
+
+        await #expect(throws: SquareArchiveServer.Failure.timedOut) {
+            try await reader.fetch(cellsNamed: ["trails1_550_796"])
+        }
+    }
+
+    @Test("a launch's reader holds each call to the library's limit for a whole request")
+    func theLiveCallTimeout() {
+        let server = SquareArchiveServer.live(.trails, requestTimeout: 15, resourceTimeout: 30)
+        #expect(server.callTimeout == 30)
+    }
+
     @Test("the bundled manifest names an archive of every set this build reads", arguments: SquareArchive.allCases)
     func theBundledListingNamesEverySet(set: SquareArchive) throws {
         let listing = try #require(SquareArchiveServer.Listing.bundled)
