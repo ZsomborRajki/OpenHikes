@@ -62,6 +62,13 @@
 //  is what keeps a `[String: Any]` — not `Sendable` — from crossing an
 //  isolation boundary.
 //
+//  A handler passed to `sendMessage` arrives on that queue too, and is
+//  `@Sendable` for it. A closure written in this main-actor class is
+//  otherwise main-actor isolated, and because WatchConnectivity's handler
+//  types say nothing about isolation, Swift checks it at run time and traps
+//  when the framework calls it from its own queue. 1.7 (1) crashed at launch
+//  that way, the first time a reading failed to reach the watch.
+//
 
 import Foundation
 import OpenHikesShared
@@ -425,7 +432,9 @@ final class WatchSessionCoordinator: NSObject {
         #if canImport(WatchConnectivity)
         guard let session, session.isReachable else { return }
         do {
-            session.sendMessage(try WatchLink.message(recording), replyHandler: nil) { error in
+            // `@Sendable` keeps this handler off the main actor; see the
+            // file header's Isolation.
+            session.sendMessage(try WatchLink.message(recording), replyHandler: nil) { @Sendable error in
                 Self.logger.debug(
                     "A recording reading did not reach the watch: \(error.localizedDescription, privacy: .public)"
                 )

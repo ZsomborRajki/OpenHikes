@@ -797,6 +797,10 @@ a change to recording, the map, the sheet or the render path; the PR template,
     already on the main thread. That keeps GPS batches in order;
     `RecordingFixPolicy` silently drops a reordered pair.
   - A callback that must `await` keeps `Task { @MainActor in … }`.
+  - A handler a framework calls on its own queue is written `@Sendable`. In
+    a main-actor body it is otherwise main-actor isolated, and where the
+    framework's type says nothing about isolation (`WCSession.sendMessage`)
+    Swift checks that at run time and traps (`WatchSessionCoordinator`).
   - A `withObservationTracking` `onChange` stays deferred, because it fires
     mid-mutation.
 - **To leave the main actor, put `@concurrent` or `nonisolated` on the callee,
