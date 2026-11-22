@@ -68,13 +68,20 @@ struct MapRegionRectTests {
         #expect(back.span.longitudeDelta.isApproximatelyEqual(to: 14, absoluteTolerance: 1e-6))
     }
 
-    @Test("a region as wide as the world, or wider, is the world's width")
+    /// Cut to the world's width about its centre, which a west edge placed
+    /// from the whole span would move to 38° W.
+    @Test("a region as wide as the world, or wider, is the world's width round its centre")
     func worldWideRegion() {
         let region = MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: -72, longitude: -3),
             span: MKCoordinateSpan(latitudeDelta: 25, longitudeDelta: 430)
         )
 
-        #expect(region.mapRect.width.isApproximatelyEqual(to: Self.world, absoluteTolerance: 1))
+        let rect = region.mapRect
+
+        #expect(rect.width.isApproximatelyEqual(to: Self.world, absoluteTolerance: 1))
+        let back = MKCoordinateRegion(rect)
+        #expect(RouteGeometry.normalizedLongitudeDelta(back.center.longitude + 3)
+            .isApproximatelyEqual(to: 0, absoluteTolerance: 1e-6))
     }
 }

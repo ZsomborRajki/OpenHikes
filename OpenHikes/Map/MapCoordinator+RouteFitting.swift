@@ -379,8 +379,14 @@ extension MKCoordinateRegion {
     /// edge, which is how MapKit spells one across the 180th meridian. An
     /// east corner taken on its own would lie past 180°, where `MKMapPoint`
     /// has no answer.
+    ///
+    /// A span wider than the world is held to the world's width before the
+    /// west edge is placed, so the rect keeps the region's centre: placed
+    /// from the whole span, the edge would move it west by half of what was
+    /// cut.
     var mapRect: MKMapRect {
-        let west = RouteGeometry.normalizedLongitude(center.longitude - span.longitudeDelta / 2)
+        let longitudeSpan = min(span.longitudeDelta, 360)
+        let west = RouteGeometry.normalizedLongitude(center.longitude - longitudeSpan / 2)
         let northWest = MKMapPoint(
             CLLocationCoordinate2D(latitude: center.latitude + span.latitudeDelta / 2, longitude: west)
         )
@@ -390,7 +396,7 @@ extension MKCoordinateRegion {
         return MKMapRect(
             x: northWest.x,
             y: min(northWest.y, southWest.y),
-            width: min(span.longitudeDelta, 360) / 360 * MKMapSize.world.width,
+            width: longitudeSpan / 360 * MKMapSize.world.width,
             height: abs(southWest.y - northWest.y)
         )
     }
