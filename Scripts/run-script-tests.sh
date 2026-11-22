@@ -5282,7 +5282,7 @@ for pack_case in "trails:$cells_squares:11 to 11" "routes:$routes_squares:7 to 1
             || "$pack_record" != *"\"name\" : \"$pack_list-20261112-21\""* \
             || "$pack_record" != *"\"zoom\" : ${pack_zooms##* }"* ]]; then
             fail "the pack does not say what it is" "$pack_record"
-        elif [[ -e "$pack_build.archive.staging" ]]; then
+        elif compgen -G "$pack_build.archive.staging*" > /dev/null; then
             fail "the staging directory was left behind"
         else
             pass
@@ -5331,7 +5331,7 @@ fi
 run_script "trail-cells pack refuses a build that is not the whole world, and writes nothing" \
     "$trail_cells" pack "$cells_work/region"
 if expect_status 1 && expect_contains "$output" "region is not the whole world" "the error"; then
-    if [[ -e "$cells_work/region.archive" || -e "$cells_work/region.archive.staging" ]]; then
+    if [[ -e "$cells_work/region.archive" ]] || compgen -G "$cells_work/region.archive.staging*" > /dev/null; then
         fail "something was written for a build that is not the world" "$(ls "$cells_work")"
     else
         pass
@@ -5369,7 +5369,26 @@ run_script "trail-cells pack refuses a directory that holds something else, and 
 if expect_status 1 && expect_contains "$output" "is not an earlier pack to replace" "the error"; then
     if [[ "$(ls "$cells_work/not-a-build")" != "notes.txt" ]]; then
         fail "the directory was written into" "$(ls "$cells_work/not-a-build")"
-    elif [[ -e "$cells_work/not-a-build.staging" ]]; then
+    elif compgen -G "$cells_work/not-a-build.staging*" > /dev/null; then
+        fail "the staging directory was left behind"
+    else
+        pass
+    fi
+fi
+
+# The staging directory is made beside the output under a name of its own, so
+# a build that happens to sit where a name taken from the output would put it
+# is packed, not deleted.
+cp -R "$cells_squares" "$cells_work/beside.staging"
+run_script "trail-cells pack leaves alone a build named as the output's staging directory would be" \
+    "$trail_cells" pack "$cells_work/beside.staging" --out "$cells_work/beside"
+if expect_status 0; then
+    if [[ ! -f "$cells_work/beside.staging/manifest.json" ]] \
+        || [[ "$(ls "$cells_work/beside.staging/cells" | wc -l)" != "$(ls "$cells_squares/cells" | wc -l)" ]]; then
+        fail "the build was deleted" "$(ls -R "$cells_work/beside.staging" 2>&1 | head -5)"
+    elif [[ ! -f "$cells_work/beside/trails-20261112-21.pmtiles" ]]; then
+        fail "nothing was packed" "$(ls "$cells_work/beside")"
+    elif compgen -G "$cells_work/beside.staging-*" > /dev/null; then
         fail "the staging directory was left behind"
     else
         pass
