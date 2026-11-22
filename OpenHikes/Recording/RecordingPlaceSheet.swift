@@ -13,6 +13,12 @@
 //  the place — which is what makes *add a place and photograph it* one
 //  gesture rather than two trips through the gallery.
 //
+//  *Places Nearby* is the first thing in it, for a hiker who wants to look
+//  around before marking anything: what OpenStreetMap has in the area the
+//  map shows — see ``HikePlacesNearbyView``. It was a button of its own in the
+//  recording screen's bar, beside *Add Place*, until the bar was given to
+//  Pause and Stop and *Add Place* moved to the camera pill (2026-11-22).
+//
 //  *Your own place* is always there under it, and never waits on the search.
 //  It closes the sheet and opens the form a hike's own screen adds places
 //  with — see ``HikePlaceAdder`` — at the spot the hiker is standing on, with
@@ -29,9 +35,10 @@ import SwiftData
 import SwiftUI
 import TipKit
 
-/// The glyphs of the two places buttons in the recording screen's bar, named
-/// once because the first-run tips about them draw them too — see
-/// ``AddPlaceTip`` and ``PlacesNearbyTip``.
+/// The glyphs of *Add Place*, on the camera pill while a walk is recorded,
+/// and of *Places Nearby* in the sheet it opens, named once because the
+/// first-run tips about them draw them too — see ``AddPlaceTip`` and
+/// ``PlacesNearbyTip``.
 nonisolated enum RecordingPlaceSymbols {
     static let addPlace = "mappin.and.ellipse"
     static let placesNearby = "binoculars"
@@ -51,6 +58,9 @@ struct RecordingPlaceSheet: View {
     /// Called with ``coordinate`` once the sheet is going, to open the form
     /// that places one of the hiker's own there.
     let onAddOwn: (CLLocationCoordinate2D) -> Void
+    /// Called once the sheet is going, to open *Places Nearby*, or `nil` for
+    /// a launch that must not ask OpenStreetMap, which offers no row.
+    var onFindNearby: (() -> Void)?
 
     @Environment(\.modelContext) private var modelContext
     @State private var finder = NearbyPlaceFinder()
@@ -62,8 +72,11 @@ struct RecordingPlaceSheet: View {
     /// under a sheet.
     @State private var exit: Exit?
 
+    @Environment(\.appTips) private var tips
+
     private enum Exit: Equatable {
         case addOwn
+        case findNearby
         /// The place to open, if the add found one.
         case opened(UUID?)
     }
@@ -71,6 +84,7 @@ struct RecordingPlaceSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                if onFindNearby != nil { nearbySection }
                 if source != nil { mappedSection }
                 ownSection
             }
@@ -88,6 +102,7 @@ struct RecordingPlaceSheet: View {
         .dismiss(after: exit) { exit in
             switch exit {
             case .addOwn: onAddOwn(coordinate)
+            case .findNearby: onFindNearby?()
             case .opened(let id): if let id { onAdded(id) }
             }
         }
@@ -128,6 +143,22 @@ struct RecordingPlaceSheet: View {
             if let outage = finder.outage {
                 Text(TrailPointNotice.outage(outage).caption.text)
             }
+        }
+    }
+
+    /// Looking before marking: what is around, ahead of the spot underfoot.
+    /// With its first-run tip over it, once *Add Place*'s has gone — opening
+    /// this sheet is what retires that one.
+    private var nearbySection: some View {
+        Section {
+            if let tip = tips?.recording.currentTip as? PlacesNearbyTip {
+                TipView(tip).tipImageStyle(Color.primary)
+            }
+            Button("Places Nearby", systemImage: RecordingPlaceSymbols.placesNearby) {
+                tips?.used(PlacesNearbyTip())
+                exit = .findNearby
+            }
+            .accessibilityIdentifier("recording-places-nearby")
         }
     }
 
@@ -174,19 +205,23 @@ struct RecordingPlaceSheet: View {
 }
 
 extension View {
-    /// *Add Place* in the navigation bar while `recorder` has a walk under
-    /// way, and the sheet it opens — with *Places Nearby* beside it.
+    /// *Add Place* on the camera pill while `recorder` has a walk under way,
+    /// and the sheet it opens — with *Places Nearby* at its head. Claims the
+    /// pill for the walk's photographs too.
     ///
     /// - Parameters:
+    ///   - photoCapture: The pill's controller, or `nil` for a preview, which
+    ///     offers no pill at all.
     ///   - onAdded: Called with the walk and the new place once it is on the
     ///     walk — the recording screen opens it.
     ///   - onAddOwn: Called with the walk and where the hiker stood, to open
     ///     the form that places one of their own — see ``HikePlaceAdder``.
     ///   - onFindNearby: Opens *Places Nearby* for the walk — see
     ///     ``HikePlacesNearbyView`` — or `nil` for a launch that must not ask
-    ///     OpenStreetMap, which offers no button.
+    ///     OpenStreetMap, which offers no row.
     func recordingAddPlace(
         recorder: HikeRecorder,
+        photoCapture: PhotoCaptureController?,
         source: (any TrailPointSourcing)?,
         onAdded: @escaping (Hike, UUID) -> Void,
         onAddOwn: @escaping (Hike, CLLocationCoordinate2D) -> Void,
@@ -194,6 +229,7 @@ extension View {
     ) -> some View {
         modifier(RecordingAddPlace(
             recorder: recorder,
+            photoCapture: photoCapture,
             source: source,
             onAdded: onAdded,
             onAddOwn: onAddOwn,
@@ -202,17 +238,18 @@ extension View {
     }
 }
 
-/// The first-run tips about the two places buttons in the recording screen's
-/// bar — see ``AppTips`` — at the top of the screen, right under that bar,
-/// each carrying its button's glyph.
+/// The first-run tip about *Add Place* — see ``AppTips`` — at the top of the
+/// recording screen, carrying the glyph the camera pill draws it with. The
+/// tip after it, about *Places Nearby*, is in the sheet *Add Place* opens,
+/// over its row — see ``RecordingPlaceSheet``.
 ///
-/// Inline rather than as popovers on the buttons: a popover tip on a toolbar
-/// button never presented here — measured on iOS 27, and reported against 26.1
-/// as FB20756013. And in the screen's own content rather than in a
-/// `safeAreaInset` under the bar, which is the measured cost of the obvious
-/// spelling: an inset on the pushed screen made every change of the
-/// recording's phase evaluate the whole sheet twice — *Pause* went from 19
-/// bodies to 40, the screen and the hikes list under it included.
+/// Inline rather than as a popover: a popover over the map would be presented
+/// by the permanent sheet — see *First-run tips* in `AGENTS.md`. And in the
+/// screen's own content rather than in a `safeAreaInset` under the bar, which
+/// is the measured cost of the obvious spelling: an inset on the pushed
+/// screen made every change of the recording's phase evaluate the whole sheet
+/// twice — *Pause* went from 19 bodies to 40, the screen and the hikes list
+/// under it included.
 ///
 /// Only once the walk has a fix, because *Add Place* marks where the hiker
 /// stands and has nothing to mark before then. A view of its own, so the
@@ -223,7 +260,7 @@ struct RecordingPlaceTips: View {
     @Environment(\.appTips) private var tips
 
     var body: some View {
-        if recorder.phase == .recording, let tip = tips?.recording.currentTip {
+        if recorder.phase == .recording, let tip = tips?.recording.currentTip as? AddPlaceTip {
             TipView(tip)
                 // The glyph in its button's colour, as on the map's cards —
                 // see ``MapTipCardView``.
@@ -233,8 +270,8 @@ struct RecordingPlaceTips: View {
     }
 }
 
-/// The buttons, the sheet and the one refusal, as a modifier so the recording
-/// screen's own body gains a line rather than a feature.
+/// The pill's claim, the sheet and the one refusal, as a modifier so the
+/// recording screen's own body gains a line rather than a feature.
 private struct RecordingAddPlace: ViewModifier {
     /// Where *Add Place* was tapped, and on which walk.
     private struct Spot: Identifiable {
@@ -244,35 +281,31 @@ private struct RecordingAddPlace: ViewModifier {
     }
 
     let recorder: HikeRecorder
+    let photoCapture: PhotoCaptureController?
     let source: (any TrailPointSourcing)?
     let onAdded: (Hike, UUID) -> Void
     let onAddOwn: (Hike, CLLocationCoordinate2D) -> Void
     let onFindNearby: ((Hike) -> Void)?
 
-    /// Retired from here, when either button is used — the tips themselves
-    /// are ``RecordingPlaceTips``.
+    /// *Add Place*'s tip is retired from here when the pill's button is used
+    /// — the tip itself is ``RecordingPlaceTips``.
     @Environment(\.appTips) private var tips
     @State private var spot: Spot?
     @State private var isMissingLocation = false
 
     func body(content: Content) -> some View {
         content
-            .toolbar {
-                if let hike = recorder.currentHike, recorder.isActive {
-                    ToolbarItemGroup(placement: .topBarTrailing) {
-                        // Looking before marking: what is around, then the
-                        // spot underfoot.
-                        if let onFindNearby {
-                            Button("Places Nearby", systemImage: RecordingPlaceSymbols.placesNearby) {
-                                tips?.used(PlacesNearbyTip())
-                                onFindNearby(hike)
-                            }
-                            .accessibilityIdentifier("recording-places-nearby")
-                        }
-                        Button("Add Place", systemImage: RecordingPlaceSymbols.addPlace) { addPlace() }
-                            .accessibilityIdentifier("recording-add-place")
-                    }
-                }
+            // Each photo is pinned where the walk was when its shutter fired,
+            // so a picture taken twenty minutes in is pinned twenty minutes
+            // along — and one handed over a minute after it was taken is not
+            // pinned a minute further on. The recorder's own fixes, not the
+            // draft `Hike`'s `route`: that is only written when the recording
+            // stops. See ``HikeRecorder/photoCoordinate(atShutter:)``. A draft
+            // only exists once recording starts, which is why the modifier
+            // takes an optional hike. And the pill's *Add Place* opens the
+            // sheet below rather than the form a saved hike's opens.
+            .photoCaptureSubject(photoCapture, for: recorder.currentHike, placeRequest: addPlace) { shutter in
+                recorder.photoCoordinate(atShutter: shutter)
             }
             .sheet(item: $spot) { spot in
                 RecordingPlaceSheet(
@@ -280,7 +313,8 @@ private struct RecordingAddPlace: ViewModifier {
                     coordinate: spot.coordinate,
                     source: source,
                     onAdded: { placeID in onAdded(spot.hike, placeID) },
-                    onAddOwn: { coordinate in onAddOwn(spot.hike, coordinate) }
+                    onAddOwn: { coordinate in onAddOwn(spot.hike, coordinate) },
+                    onFindNearby: onFindNearby.map { find in { find(spot.hike) } }
                 )
             }
             .alert("No Location Yet", isPresented: $isMissingLocation) {
@@ -294,7 +328,7 @@ private struct RecordingAddPlace: ViewModifier {
     /// the one a photograph taken now would be pinned to.
     private func addPlace() {
         tips?.used(AddPlaceTip())
-        guard let hike = recorder.currentHike,
+        guard recorder.isActive, let hike = recorder.currentHike,
               let coordinate = PhotoTrailAnchor.recordingCoordinate(recorder.lastAcceptedPoint)
         else {
             isMissingLocation = true

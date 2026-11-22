@@ -102,9 +102,9 @@ extension MapView.Coordinator {
         if onPhoto != onPhotoControls.isActive { onPhotoControls.isActive = onPhoto }
         if onMaker != onTrailDraftControls.isActive { onTrailDraftControls.isActive = onMaker }
         if onPhoto || onMaker {
-            NSLayoutConstraint.deactivate([onCreditLine.above, onCreditLine.flush])
+            onCreditLine.deactivate()
         } else {
-            onCreditLine.apply(flush: attributionView?.isHidden ?? false)
+            onCreditLine.apply(flush: attributionView?.isHidden ?? false, onCapsule: activityCapsule.isUp)
         }
     }
 

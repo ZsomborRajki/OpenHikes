@@ -75,6 +75,25 @@ extension XCTestCase {
         )
     }
 
+    /// Opens the recording's *Add Place* sheet from the map's camera pill,
+    /// where the recording screen offers it.
+    @MainActor
+    func openRecordingPlaces(in app: XCUIApplication) {
+        tapWhenReady(element("map-add-place-button", in: app))
+        XCTAssertTrue(
+            element("recording-place-sheet", in: app).waitForExistence(timeout: UITestTimeout.navigation),
+            "the pill's Add Place opens the recording's own sheet"
+        )
+    }
+
+    /// Opens *Places Nearby* for the recording, from the head of its *Add
+    /// Place* sheet.
+    @MainActor
+    func openRecordingPlacesNearby(in app: XCUIApplication) {
+        openRecordingPlaces(in: app)
+        tapWhenReady(element("recording-places-nearby", in: app))
+    }
+
     /// Moves the map under *Add Place*'s fixed pin: a short press and a drag,
     /// which pans — a held one would drop a pin.
     @MainActor

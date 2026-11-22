@@ -138,6 +138,26 @@ struct SheetPresentationIsolationTests {
         #expect(presentation.isRecordingPresented == false)
     }
 
+    /// The map's activity capsule stands down on the walked trail's own
+    /// screen, and only while that screen is the one in front — see
+    /// ``MapActivityCapsule``.
+    @Test("only a hike's own screen on top reports that hike")
+    func onlyAHikesScreenOnTopIsPresented() throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        let presentation = SheetPresentation(detent: .medium)
+        #expect(presentation.presentedHikeID == nil)
+
+        presentation.path = [.hike(hike)]
+        #expect(presentation.presentedHikeID == hike.id)
+
+        presentation.path = [.hike(hike), .placesAround(hike)]
+        #expect(presentation.presentedHikeID == nil, "a screen over it is another screen")
+
+        presentation.path = [.recording]
+        #expect(presentation.presentedHikeID == nil)
+    }
+
     /// The last piece of `OpenHikesView`'s `@State` to move, and the one that
     /// moved the most often.
     ///

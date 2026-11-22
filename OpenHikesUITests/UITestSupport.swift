@@ -718,35 +718,13 @@ extension XCTestCase {
         )
     }
 
-    /// Confirms the "Discard this recording?" dialog.
-    ///
-    /// The confirming button carries the same title as the one that raised it,
-    /// so it has to be found inside the presentation rather than by title: a
-    /// plain lookup resolves to whichever the tree happens to list first,
-    /// which on a good day is the button already tapped.
-    @MainActor
-    func confirmDiscard(in app: XCUIApplication) {
-        let title = "Discard Recording"
-        for container in [app.sheets, app.alerts] {
-            let presented = container.firstMatch
-            guard presented.waitForExistence(timeout: UITestTimeout.navigation)
-            else { continue }
-            let confirm = presented.buttons[title]
-            guard confirm.waitForExistence(timeout: UITestTimeout.navigation)
-            else { continue }
-            confirm.tap()
-            return
-        }
-        XCTFail("discarding should ask before throwing a walk away")
-    }
-
     /// Confirms a destructive `confirmationDialog` by the title of its
     /// confirming button.
     ///
-    /// Found inside the presentation rather than by title for the reason
-    /// ``confirmDiscard(in:)`` explains: a plain lookup resolves to whichever
-    /// the tree lists first, and the button that raised the dialog is often
-    /// that one. `failureMessage` is what a *missing* dialog reads as, which
+    /// Found inside the presentation rather than by title: the confirming
+    /// button carries the title of the one that raised it, a plain lookup
+    /// resolves to whichever the tree lists first, and the button that raised
+    /// the dialog is often that one. `failureMessage` is what a *missing* dialog reads as, which
     /// is the assertion that matters here — these tests exist because the
     /// action used to happen with nothing asked.
     @MainActor

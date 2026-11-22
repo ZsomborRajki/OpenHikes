@@ -56,10 +56,13 @@ final class PhotoCaptureController {
         let anchor: Anchor
         /// Where a place added from the pill would stand, resolved when the
         /// pill's *Add Place* is tapped. `nil` for a screen that does not
-        /// offer one — the recording screen has its own *Add Place*, and a
-        /// place's own screen is already about a place. See
+        /// offer one — a place's own screen is already about a place. See
         /// ``HikePlaceAdder``.
         let placeAnchor: (() -> CLLocationCoordinate2D?)?
+        /// What the pill's *Add Place* does instead, for a screen that adds a
+        /// place its own way: the recording screen, which asks what is mapped
+        /// where the hiker stands first — see ``RecordingPlaceSheet``.
+        var placeRequest: (() -> Void)?
     }
 
     /// Where the pill's *Add Place* would put a place, resolved at the tap.
@@ -81,8 +84,9 @@ final class PhotoCaptureController {
     /// SwiftUI view.
     private(set) var isAvailable = false
     /// Whether the pill also offers *Add Place*: only while it is available
-    /// at all, and only for a screen that says where a place would go. See
-    /// ``Subject/placeAnchor``.
+    /// at all, and only for a screen that says where a place would go, or
+    /// how it adds one. See ``Subject/placeAnchor`` and
+    /// ``Subject/placeRequest``.
     private(set) var canAddPlace = false
 
     /// One-shot requests, in the same shape ``MapController``'s commands take:
@@ -123,11 +127,18 @@ final class PhotoCaptureController {
         to hike: Hike,
         place placeID: UUID? = nil,
         placeAnchor: (() -> CLLocationCoordinate2D?)? = nil,
+        placeRequest: (() -> Void)? = nil,
         depth: Int = 0,
         anchor: @escaping Anchor
     ) -> Int {
         let token = claims.attach(
-            Subject(hike: hike, placeID: placeID, anchor: anchor, placeAnchor: placeAnchor),
+            Subject(
+                hike: hike,
+                placeID: placeID,
+                anchor: anchor,
+                placeAnchor: placeAnchor,
+                placeRequest: placeRequest
+            ),
             depth: depth
         )
         refreshAvailability()
@@ -217,10 +228,15 @@ final class PhotoCaptureController {
     }
 
     /// Refused like the two above, and also while the screen offering the
-    /// pill has nowhere to put a place.
+    /// pill has nowhere to put a place. Handed to a screen that adds places
+    /// its own way, and otherwise to the root view, which pushes the form.
     func requestPlace() {
         guard canAddPlace else { return }
-        placeFeed.send(())
+        if let placeRequest = subject?.placeRequest {
+            placeRequest()
+        } else {
+            placeFeed.send(())
+        }
     }
 
     /// The *Add Place* requests made from now on, for one reader.
@@ -231,7 +247,7 @@ final class PhotoCaptureController {
     private func refreshAvailability() {
         let available = subject != nil && hasHostScreen
         if isAvailable != available { isAvailable = available }
-        let addsPlaces = available && subject?.placeAnchor != nil
+        let addsPlaces = available && (subject?.placeAnchor != nil || subject?.placeRequest != nil)
         if canAddPlace != addsPlaces { canAddPlace = addsPlaces }
     }
 

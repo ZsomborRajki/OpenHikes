@@ -268,6 +268,8 @@ extension MapView.Coordinator {
         // shares that slot and takes the same value the same way.
         applyPhotoControlsAlpha(alpha)
         applyTrailDraftControlsAlpha(alpha)
+        // And the activity capsule they stand on while it is up.
+        applyActivityCapsuleAlpha(alpha)
         // And the junction warnings button, which stands on whichever of the
         // two is up.
         applyJunctionButtonAlpha(alpha)

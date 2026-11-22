@@ -509,6 +509,8 @@ struct MapSheet: View {
                 onFindPlaces: { presentation.path.append(.placesAround(hike)) },
                 onOpenWalk: { walk in presentation.path.append(.walk(walk)) },
                 onZoomToRoute: presentation.makeRoomForTheMap,
+                onDelete: deleteFromItsScreen,
+                onWithdraw: { withdrawingHike = $0 },
                 isSheetCompact: presentation.isCompact,
                 interaction: presentation.hikeInteraction(for: hike)
             )
@@ -580,11 +582,11 @@ private extension MapSheet {
         RecordingView(
             recorder: appModel.hikeRecorder,
             entry: appModel.recordingEntry,
+            stopQuestion: appModel.recordingStop,
             mapController: mapController,
             photoCapture: photoCapture,
             photoPins: photoPins,
             onSaved: showSavedHike,
-            onDiscarded: closeDiscardedRecording,
             onOpenPhoto: { hike, photo in
                 presentation.path.append(.photo(hike, photo.id))
             },
@@ -689,6 +691,22 @@ private func delete(_ hike: Hike, among hikes: [Hike]) {
             await deletionPlan.removeExclusiveTiles(from: .shared)
         }
     }
+}
+
+/// *Delete Hike* at the foot of the hike's own screen, which has no list of
+/// the other hikes to hand. Read here, at the tap, rather than kept: the
+/// list is what tells the deletion which offline tiles another hike still
+/// claims. A read that fails deletes nothing — taking it for an empty
+/// library would free tiles other hikes are drawn from — and is said the way
+/// a refused save is.
+private func deleteFromItsScreen(_ hike: Hike) {
+    guard let context = hike.modelContext,
+          let hikes = try? context.fetch(FetchDescriptor<Hike>())
+    else {
+        onHikeDeletionRefused()
+        return
+    }
+    delete(hike, among: hikes)
 }
 
 /// The save *Delete* commits through. A refused write is not something
@@ -829,22 +847,10 @@ private func openRecording() {
     presentation.path = path
 }
 
-private func closeRecording() {
-    presentation.path.removeAll { $0 == .recording }
-}
-
 /// Leaves the maker. The draft itself is the maker's to keep or throw away —
 /// this only takes the screen down.
 private func closeTrailDraft() {
     presentation.path.removeAll { $0 == .trailDraft }
-}
-
-private func closeDiscardedRecording(_ hikeID: UUID?) {
-    closeRecording()
-    if let hikeID, selectedHike?.id == hikeID {
-        selectedHike = nil
-        highlight.move(to: nil)
-    }
 }
 
 /// Where a hike this app has just written lands: selected, drawn on the map,

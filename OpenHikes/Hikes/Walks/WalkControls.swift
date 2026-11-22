@@ -3,13 +3,14 @@
 //  OpenHikes
 //
 //  The walk under way, under the progress bar of the hike being walked: its
-//  phase and clock, and End and Save Hike.
+//  phase and clock.
 //
-//  Pause and Resume are not here. They are the navigation bar's
-//  ``WalkToggleButton``, which is on screen at every detent, and a second
-//  copy of them in the scroll view was one button too many (#679). End is
-//  drawn like *Find Photos of This Hike* — a section's own action, leading
-//  aligned — and says in its title that ending keeps the walk as a record.
+//  Its controls are not here. Pause and Resume are the navigation bar's
+//  ``WalkToggleButton``, and End is the bar's ``WalkEndButton`` beside it,
+//  both on screen at every detent. End was a section's button here, under the
+//  progress row, out of reach with the sheet down; the owner's "mini player"
+//  (2026-11-20) put it beside Pause, on the bar and on the map's capsule —
+//  see ``MapActivityCapsule``.
 //
 //  The controls exist only once there is a walk to control: opening a trail
 //  is not walking it, and this draws nothing until the hiker moving along the
@@ -35,19 +36,10 @@ struct WalkControls: View {
     let session: TrailWalkSession
     let onOpenWalk: (HikeWalk) -> Void
 
-    @State private var showEndConfirmation = false
-    /// A commit the store refused. The walk is still under way and its
-    /// controls are still on screen — this is what says so, rather than
-    /// letting a refusal read as a walk too short to keep.
-    @State private var showEndRefusal = false
-
     var body: some View {
         Group {
             if session.walkedHikeID == hike.id, let phase = session.phase {
-                VStack(alignment: .leading, spacing: 12) {
-                    WalkPhaseRow(session: session, phase: phase, tint: hike.tintOpaque)
-                    endButton
-                }
+                WalkPhaseRow(session: session, phase: phase, tint: hike.tintOpaque)
             } else if session.walkedHikeID != nil {
                 Text("A hike is in progress on \(session.walkedHikeTitle). End it there to hike this trail.")
                     .font(.caption)
@@ -56,35 +48,10 @@ struct WalkControls: View {
                     .accessibilityIdentifier("walk-notice")
             }
         }
-        .confirmationDialog(
-            "End this hike?",
-            isPresented: $showEndConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("End and Save Hike", role: .destructive) {
-                let end = session.end()
-                // From the outcome rather than from the phase going absent:
-                // kept, dropped and refused are three different pieces of news
-                // and the phase carries none of them. See ``WalkHaptics``.
-                end.hapticMoment.play()
-                switch end {
-                case let .kept(walk): onOpenWalk(walk)
-                case .discarded: break
-                case .refused: showEndRefusal = true
-                }
-            }
-            Button("Cancel", role: .cancel) { /* no-op */ }
-        } message: {
-            Text("What it covered so far is kept as a record. A hike under 100 m is not.")
-        }
-        .alert("Could not end this hike", isPresented: $showEndRefusal) {
-            Button("OK", role: .cancel) { /* no-op */ }
-        } message: {
-            Text("Its record could not be saved, so the hike is still under way. Try ending it again.")
-        }
         // A walk that reached the end on its own has no tap to push its
-        // summary from; this is what does it. A tapped End pushed from its
-        // own action above, so only the automatic case is answered here.
+        // summary from; this is what does it. A tapped End opens its own
+        // through ``ActivityEnding``, so only the automatic case is answered
+        // here.
         .onChange(of: session.lastEndedWalk) { _, ended in
             guard let ended, ended.hikeID == hike.id, ended.endReason == .reachedEnd else { return }
             // The one ending nobody asked for, and so the one most worth
@@ -93,9 +60,9 @@ struct WalkControls: View {
             HapticMoment.walkSaved.play()
             onOpenWalk(ended)
         }
-        // The beginning and the middle. The endings are reported by the two
-        // closures above, which know what kind of ending it was — see
-        // ``WalkHaptics``.
+        // The beginning and the middle. The endings are reported by whoever
+        // ended the walk, which knows what kind of ending it was — see
+        // ``WalkHaptics`` and ``WalkEndQuestion``.
         //
         // Scoped to the walked hike for the reason the `onChange` above is:
         // the session is one object and this view is on *every* hike's detail,
@@ -108,19 +75,6 @@ struct WalkControls: View {
             guard session.walkedHikeID == hike.id else { return nil }
             return hapticFeedback(forWalkPhase: old, to: new)?.feedback
         }
-    }
-
-    /// Drawn the way *Find Photos of This Hike* is, in the app's accent
-    /// rather than the route's tint, so the two section actions on this
-    /// screen read as one kind of control.
-    private var endButton: some View {
-        Button("End and Save Hike", systemImage: "stop.fill") {
-            showEndConfirmation = true
-        }
-        .sectionActionButtonStyle()
-        // On the leaf rather than the stack: an identifier on a container is
-        // pushed onto every descendant, and the phase row is found by its own.
-        .accessibilityIdentifier("walk-controls")
     }
 }
 
@@ -157,5 +111,28 @@ private struct WalkPhaseRow: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("walk-phase")
+    }
+}
+
+/// End, in the walked trail's bar beside ``WalkToggleButton``, while that
+/// trail is the one being walked.
+///
+/// It asks what the map's capsule asks, through the one object both hold —
+/// see ``WalkEndQuestion``. Red, as a recording's Stop is, and found by
+/// `walk-controls`, which End has always carried.
+struct WalkEndButton: View {
+    let hike: Hike
+    let session: TrailWalkSession
+
+    /// Optional so a preview without the model draws no End.
+    @Environment(OpenHikesModel.self) private var appModel: OpenHikesModel?
+
+    var body: some View {
+        if session.walkedHikeID == hike.id, session.phase != nil, let question = appModel?.walkEnd {
+            Button("End and Save Hike", systemImage: "stop.fill") { question.ask() }
+                .prominentGlassButtonStyle()
+                .tint(.red)
+                .accessibilityIdentifier("walk-controls")
+        }
     }
 }

@@ -40,6 +40,28 @@ struct PhotoCaptureControllerPlaceTests {
         #expect(controller.placeSpot() == nil)
     }
 
+    /// The recording screen, which asks what is mapped where the hiker
+    /// stands before it marks anything.
+    @Test("a screen that adds places its own way is handed the tap, and the form is not pushed")
+    func placeRequestGoesToTheScreen() async throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        let controller = PhotoCaptureController()
+        let places = FeedReader(controller.placeRequests())
+        var asked = 0
+
+        controller.attach(to: hike, placeRequest: { asked += 1 }, anchor: { _ in nil })
+        #expect(controller.canAddPlace)
+        controller.requestPlace()
+        // Nothing is sent to the feed to prove the absence against, so the
+        // reader is given the turns it would have needed to drain one.
+        await settleDelegateHop()
+
+        #expect(asked == 1)
+        #expect(places.received.isEmpty, "the root view must not push the form as well")
+        #expect(controller.placeSpot() == nil, "and has no spot to push it at")
+    }
+
     @Test("a hike's screen offers Add Place, resolved at the tap rather than at attach")
     func placeSpotIsResolvedLate() async throws {
         let context = try Fixture.modelContext()

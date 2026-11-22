@@ -30,6 +30,12 @@
 //  any moment, a card's included, so it is put up by whichever of the two is
 //  in front, for the reason the alert above is.
 //
+//  And two that a control on the map opens and a screen's bar opens too:
+//  the question a recording's Stop asks (``RecordingStopQuestion``) and the
+//  one a walk's End asks (``WalkEndQuestion``). The activity's capsule on the
+//  map asks them, and so does the bar of its own screen, and one copy of
+//  each is presented from whichever is in front.
+//
 //  And one thing *Map Modes* opens goes the other way: *Offline Maps* is
 //  pushed onto the map sheet, and a push under a card lands behind it. So
 //  over a card, the card closes first, and the list opens once it has gone.
@@ -137,8 +143,8 @@ extension View {
 }
 
 private extension View {
-    /// The three, attached to `presenter`, and the walk's off-trail question
-    /// with them.
+    /// The three, attached to `presenter`, with the walk's off-trail
+    /// question and the two questions a Stop and an End ask.
     func presentingMapControls(
         _ modals: MapControlModals,
         from presenter: MapControlModals.Presenter,
@@ -154,6 +160,8 @@ private extension View {
             )
             .locationAccessAlert(modals, from: presenter)
             .offTrailQuestionAlert(modals, from: presenter, model: model)
+            .recordingStopAlerts(modals, from: presenter, question: model.recordingStop)
+            .walkEndAlerts(modals, from: presenter, question: model.walkEnd)
     }
 }
 

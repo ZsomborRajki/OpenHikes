@@ -162,6 +162,13 @@ final class SheetPresentation {
     /// and by nothing else, so pushing a hike's photo leaves it alone.
     private(set) var isRecordingPresented = false
 
+    /// The hike whose own screen is the one on top, or `nil` while it is
+    /// anything else. Read by the map's activity capsule, which stands down
+    /// on the screen of the trail being walked, whose bar holds the same
+    /// controls — see ``MapActivityCapsule``. A photo pushed over that screen
+    /// is another screen, and brings the capsule back.
+    private(set) var presentedHikeID: UUID?
+
     /// Whether anything at all is pushed over the sheet's root. What the map's
     /// camera pill and photo pins belong to: a screen, any screen, rather than
     /// a particular one — and, inverted, what the trail maker's pill is
@@ -770,6 +777,8 @@ final class SheetPresentation {
         framedRoutes = framedRoutes.filter { stack.contains($0) }
         let recording = storedPath.last == .recording
         if isRecordingPresented != recording { isRecordingPresented = recording }
+        let hikeID: UUID? = if case let .hike(hike)? = storedPath.last { hike.id } else { nil }
+        if presentedHikeID != hikeID { presentedHikeID = hikeID }
         let drafting = storedPath.last == .trailDraft
         if isTrailDraftPresented != drafting { isTrailDraftPresented = drafting }
         let pushed = !storedPath.isEmpty

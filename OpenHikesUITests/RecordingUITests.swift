@@ -45,9 +45,9 @@ nonisolated final class RecordingUITests: XCTestCase {
     /// Pausing stops the recording without ending it, and resuming picks it
     /// back up — a distinction the phase label is the only report of.
     ///
-    /// The discard button is part of the same assertion: it exists while
-    /// paused and not while recording, which is what stops a walk being thrown
-    /// away by a mis-tap mid-stride.
+    /// No discard button in either phase is part of the same assertion: a
+    /// recording is thrown away only as an answer to Stop's question, which is
+    /// what stops a walk being lost to a mis-tap mid-stride.
     @MainActor
     func testPausingAndResumingARecording() {
         let app = makeApp(
@@ -83,10 +83,8 @@ nonisolated final class RecordingUITests: XCTestCase {
 
         tapWhenReady(app.buttons["Pause"])
         expectPhase(phase, contains: "Paused")
-        XCTAssertTrue(
-            discard.waitForExistence(timeout: UITestTimeout.navigation),
-            "a paused recording is where discarding is offered"
-        )
+        XCTAssertTrue(app.buttons["Resume"].waitForExistence(timeout: UITestTimeout.navigation))
+        XCTAssertFalse(discard.exists, "nor a paused one: Stop's question is where a recording is thrown away")
 
         tapWhenReady(app.buttons["Resume"])
         expectPhase(phase, contains: "Recording")
@@ -114,23 +112,8 @@ nonisolated final class RecordingUITests: XCTestCase {
 
         launch(app)
         startRecording(in: app)
-
-        let phase = element("recording-phase", in: app)
-        XCTAssertTrue(
-            phase.waitForExistence(timeout: UITestTimeout.navigation)
-        )
-        tapWhenReady(app.buttons["Pause"])
-        expectPhase(phase, contains: "Paused")
-
-        // Waited for, not assumed: the phase reading "Paused" and the discard
-        // button being in the tree are two separate redraws, which
-        // `testPausingAndResumingARecording` asserts directly above. Tapping
-        // it on the line after the phase check won that race on an idle
-        // machine and lost it under `--all`, where three simulator clones
-        // share the cores — and a lost race arrives as "No matches found for
-        // Button Discard Recording", which reads like the button is gone.
-        tapWhenReady(app.buttons["Discard Recording"])
-        confirmDiscard(in: app)
+        pauseALine(in: app)
+        discardByStopping(in: app)
 
         XCTAssertTrue(
             app.staticTexts["No hikes yet"]
@@ -175,16 +158,8 @@ nonisolated final class RecordingUITests: XCTestCase {
         let restingOffset = search.frame.minY - sheet.frame.minY
 
         startRecording(in: app)
-
-        let phase = element("recording-phase", in: app)
-        XCTAssertTrue(
-            phase.waitForExistence(timeout: UITestTimeout.navigation)
-        )
-        tapWhenReady(app.buttons["Pause"])
-        expectPhase(phase, contains: "Paused")
-
-        tapWhenReady(app.buttons["Discard Recording"])
-        confirmDiscard(in: app)
+        pauseALine(in: app)
+        discardByStopping(in: app)
 
         XCTAssertTrue(
             app.staticTexts["No hikes yet"]
@@ -407,5 +382,40 @@ nonisolated final class RecordingUITests: XCTestCase {
         line: UInt = #line
     ) {
         expectLabel(phase, contains: text, file: file, line: line)
+    }
+}
+
+// The two discard tests' steps, apart from the class's body for its length.
+extension RecordingUITests {
+    /// How many of the fixture trail's points make a line worth asking about.
+    private static let discardedLineLength = 3
+
+    /// Walks a short line and pauses it: a recording Stop asks about before
+    /// it goes, rather than one it ends without a word.
+    @MainActor
+    func pauseALine(in app: XCUIApplication) {
+        let points = element("recording-point-count", in: app)
+        XCTAssertTrue(points.waitForExistence(timeout: UITestTimeout.existence))
+        walkRecordedTrace(Array(UITestFixture.trailPoints.prefix(Self.discardedLineLength)), countedBy: points)
+        tapWhenReady(app.buttons["Pause"])
+        expectLabel(element("recording-phase", in: app), contains: "Paused")
+    }
+
+    /// Throws the recording away the one way there is: Stop, the name
+    /// alert's *Discard Recording*, and the question that follows it, whose
+    /// confirming button has the title of the one just tapped — so it is
+    /// found in the question, not by title alone.
+    @MainActor
+    func discardByStopping(in app: XCUIApplication) {
+        tapWhenReady(app.buttons["Stop"])
+        let prompt = app.alerts["Name Your Hike"]
+        XCTAssertTrue(prompt.waitForExistence(timeout: UITestTimeout.navigation))
+        prompt.buttons["Discard Recording"].tap()
+        let question = app.alerts["Discard this recording?"]
+        XCTAssertTrue(
+            question.waitForExistence(timeout: UITestTimeout.navigation),
+            "discarding should ask before throwing a walk away"
+        )
+        question.buttons["Discard Recording"].tap()
     }
 }

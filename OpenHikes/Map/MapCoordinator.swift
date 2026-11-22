@@ -184,6 +184,9 @@ extension MapView {
         /// `MapCoordinator+JunctionButton.swift`, which owns everything that
         /// reads it.
         var junctionButton = JunctionButtonParts()
+        /// The recording's or the walk's capsule at the foot of the leading
+        /// column, kept for `MapCoordinator+ActivityCapsule.swift`.
+        var activityCapsule = ActivityCapsuleParts()
         #endif
 
         weak var sheetMetrics: SheetMetrics?

@@ -2,10 +2,13 @@
 //  RecordingCard.swift
 //  OpenHikes
 //
-//  The recording screen as an Apple Maps place card: the phase as the title,
-//  the trail underfoot as the line under it, and Pause and Stop on the title
-//  row's trailing edge, where a place card keeps Share and Close. The numbers
-//  under it are the hike detail's own — see ``RecordingStatsSection``.
+//  The recording screen's card: the trail underfoot, what a failed save
+//  needs, the notices, and the numbers — the hike detail's own, see
+//  ``RecordingStatsSection``.
+//
+//  The phase and the controls are not here. They are the bar's, which is on
+//  screen at every detent — see ``RecordingBar`` — and the card's title row
+//  that held them was out of reach with the sheet down.
 //
 
 import Foundation
@@ -14,41 +17,12 @@ import os
 import SwiftUI
 
 struct RecordingCard: View {
-    /// How close two adjacent glass controls have to come before they merge.
-    private static let controlGlassSpacing: CGFloat = 8
-
     let recorder: HikeRecorder
-    /// What the idle Start goes through, as the map's record button does — see
-    /// ``RecordingStartButton``.
-    let entry: RecordingEntry
+    /// Asked when a failed save's recording is to be thrown away, as Stop
+    /// asks it — see ``RecordingStopQuestion``.
+    let question: RecordingStopQuestion
+    /// A retried save's hike, for the screen to open.
     var onSaved: (Hike) -> Void
-    var onDiscarded: (UUID?) -> Void
-
-    @State private var showDiscardConfirmation = false
-    @State private var showStopAlert = false
-    @State private var stopNameDraft = ""
-    /// The name the alert's field opens with, taken once when the hiker asks
-    /// to stop: the walk's town, trail and day where it has them, else the
-    /// draft's own name — the time of day and the date. Handed to the
-    /// recorder with whatever the field says by then — see
-    /// ``HikeRecorder/stop(customName:offeredTitle:)``.
-    ///
-    /// Held here rather than read in `body`, which is the whole reason it is
-    /// a `@State`: ``HikeRecorder/suggestedTitle`` reads the live distance,
-    /// and a body observing that re-runs on every accepted fix. A button's
-    /// action is not a body, so reading it there costs one look and creates
-    /// no dependency.
-    @State private var offeredTitle: String?
-
-    /// The discard question as the name alert's *Discard Recording* asks it:
-    /// a second alert, rather than the dialog the paused card's button opens.
-    ///
-    /// A dialog raised from an alert's button is never presented. Measured on
-    /// iOS 27.2: the button's action runs while the alert is still on its way
-    /// down, the dialog's flag reads true in the pass after it, and nothing
-    /// comes up — the alert closed and the recording went on, with the flag
-    /// left standing. An alert raised the same way does follow the first.
-    @State private var showDiscardAlert = false
 
     /// Reads `phase`, the recovery state and whether a save can be retried —
     /// each of which moves a handful of times a session. Everything that moves
@@ -56,16 +30,12 @@ struct RecordingCard: View {
     /// ``RecordingStatsSection``, which are the boundaries for it.
     var body: some View {
         VStack(alignment: .leading, spacing: StatCardMetrics.sectionSpacing) {
-            PlaceCardHeader {
-                RecordingPhaseTitle(phase: recorder.phase)
-            } subtitle: {
-                RecordingTrailLine(stats: recorder.stats)
-            } trailing: {
-                titleControls
-            }
-            // Straight under the title: a save that failed is what the hiker
-            // is deciding about, so it has to be the first thing in view at
-            // the sheet's middle height rather than under the numbers.
+            RecordingTrailLine(stats: recorder.stats)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            // First under the trail: a save that failed is what the hiker is
+            // deciding about, so it has to be the first thing in view at the
+            // sheet's middle height rather than under the numbers.
             phaseContent
             RecordingRecoveryNotice(recorder: recorder)
             RecordingConditionsNotice(recorder: recorder)
@@ -73,115 +43,9 @@ struct RecordingCard: View {
             RecordingSegmentSection(stats: recorder.stats)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .confirmationDialog(
-            "Discard this recording?",
-            isPresented: $showDiscardConfirmation,
-            titleVisibility: .visible
-        ) {
-            discardChoices
-        } message: {
-            discardWarning
-        }
-        .alert("Discard this recording?", isPresented: $showDiscardAlert) {
-            discardChoices
-        } message: {
-            discardWarning
-        }
-        .alert("Name Your Hike", isPresented: $showStopAlert) {
-            // The offered name is the field's text, and under it the field's
-            // placeholder: a hiker who clears the field and saves is still
-            // shown what the hike will be called. Either way it is the name
-            // the save writes rather than one asked for again when the save
-            // comes. By then the town may have answered, and the walk gone on
-            // under the alert.
-            TextField(
-                offeredTitle ?? String(localized: "Hike name"),
-                text: $stopNameDraft
-            )
-            Button("Save") {
-                Task { await stopAndSave() }
-            }
-            // The other way a recording ends, beside the one that keeps it,
-            // so that throwing a walk away does not take a pause first. It
-            // still asks, as a paused recording's button does.
-            Button("Discard Recording", role: .destructive) {
-                showDiscardAlert = true
-            }
-            Button("Keep Recording", role: .cancel) { /* no-op */ }
-        } message: {
-            Text("Save the hike under this name, or type another.")
-        }
-        // The offered name opens selected, so the first key typed replaces
-        // it and a tap in the field keeps it to be edited. Asked of the
-        // field itself, because an alert does not hear a `selection:`
-        // binding — see ``AlertTextSelection``.
-        .selectsAlertText(offeredTitle, while: showStopAlert)
     }
 
-    /// The discard question's two answers, for the dialog and the alert that
-    /// ask it.
-    @ViewBuilder private var discardChoices: some View {
-        Button("Discard Recording", role: .destructive) {
-            Task { await discard() }
-        }
-        Button("Cancel", role: .cancel) { /* no-op */ }
-    }
-
-    private var discardWarning: Text {
-        Text("The recorded track cannot be recovered after it is discarded.")
-    }
-
-    /// What the title row's trailing edge offers in each phase. A phase that
-    /// needs more than a button or two — a route to review, a save to retry —
-    /// offers nothing here and says what it needs in ``phaseContent``.
-    @ViewBuilder private var titleControls: some View {
-        switch recorder.phase {
-        case .idle:
-            RecordingStartButton(entry: entry)
-        case .recovering, .saving:
-            ProgressView()
-        case .waitingForFix, .recording:
-            // Two `.glass` buttons side by side: a container renders them in
-            // one pass and lets them blend as they meet, which is what makes
-            // a pair read as one control group rather than two panes.
-            GlassStack(spacing: Self.controlGlassSpacing) {
-                HStack(spacing: Self.controlGlassSpacing) {
-                    Button("Pause", systemImage: "pause.fill") {
-                        recorder.pause()
-                    }
-                    .glassButtonStyle()
-                    .placeCardControl()
-
-                    stopButton
-                }
-            }
-        case .paused:
-            GlassStack(spacing: Self.controlGlassSpacing) {
-                HStack(spacing: Self.controlGlassSpacing) {
-                    // A button of its own rather than an item in a "…" menu:
-                    // XCUITest never sees an identifier on a `Menu`'s button,
-                    // and the confirmation it opens is the safeguard anyway.
-                    Button("Discard Recording", systemImage: "trash", role: .destructive) {
-                        showDiscardConfirmation = true
-                    }
-                    .glassButtonStyle()
-                    .placeCardControl()
-
-                    Button("Resume", systemImage: "play.fill") {
-                        Task { await recorder.resume() }
-                    }
-                    .glassButtonStyle()
-                    .placeCardControl()
-
-                    stopButton
-                }
-            }
-        case .failed:
-            EmptyView()
-        }
-    }
-
-    /// The phases whose decision does not fit on the title row.
+    /// The phases whose decision does not fit in the bar.
     @ViewBuilder private var phaseContent: some View {
         switch recorder.phase {
         case .failed(let failure):
@@ -216,63 +80,12 @@ struct RecordingCard: View {
         }
     }
 
-    private var stopButton: some View {
-        Button("Stop", systemImage: "stop.fill") {
-            Task {
-                // Settled first, because a recording the live figures call
-                // empty can still have fixes on their way to its journal.
-                switch await recorder.settledStopStep() {
-                case .askName: await askForName()
-                case .confirmDiscard: showDiscardConfirmation = true
-                case .endEmpty: await discard()
-                case nil: break
-                }
-            }
-        }
-        .prominentGlassButtonStyle()
-        .tint(.red)
-        .placeCardControl()
-    }
-
-    /// Opens the name alert holding the offered name.
-    ///
-    /// The field was once prefilled and then emptied again, because Save
-    /// without typing sent the default through as a typed name and the hike
-    /// was flagged user-named for good. The text is back, and what keeps that
-    /// from coming back with it is the save reading the field against what it
-    /// opened with — see ``RecordingStopName``.
-    private func askForName() async {
-        let offered = await recorder.suggestedTitle() ?? recorder.currentHike?.title
-        offeredTitle = offered
-        stopNameDraft = offered ?? ""
-        showStopAlert = true
-    }
-
     private var discardButton: some View {
         Button("Discard Recording", role: .destructive) {
-            showDiscardConfirmation = true
+            question.confirmDiscard()
         }
         .glassButtonStyle()
         .frame(maxWidth: .infinity)
-    }
-
-    private func discard() async {
-        let hikeID = recorder.currentHike?.id
-        await recorder.discard()
-        if recorder.phase == .idle {
-            onDiscarded(hikeID)
-        }
-    }
-
-    private func stopAndSave() async {
-        let customName = RecordingStopName.typed(stopNameDraft, over: offeredTitle)
-        do {
-            onSaved(try await recorder.stop(customName: customName, offeredTitle: offeredTitle))
-        } catch {
-            HikeRecorder.logger.error(
-                "Recording save failed: \(error.localizedDescription, privacy: .public)"
-            )
-        }
     }
 
     private func retrySave() async {
@@ -282,103 +95,6 @@ struct RecordingCard: View {
             HikeRecorder.logger.error(
                 "Recording save retry failed: \(error.localizedDescription, privacy: .public)"
             )
-        }
-    }
-}
-
-/// The idle card's Start, which starts a recording the way the map's record
-/// button does — through ``RecordingEntry`` — rather than asking the recorder.
-///
-/// This screen is up with nothing recording more often than it looks: a row
-/// carrying another device's draft, or one a reinstall left behind, opens it
-/// on this phone's idle recorder, and a Start that asked the recorder itself
-/// began a recording beside a walk the hiker had paused. A hiker walks a trail
-/// or records one, never both, so mid-walk this asks first, with the map
-/// button's menu and words, and *End Hike and Record* ends the walk before
-/// anything records. A refused End is said by the map's alert, which is
-/// attached above this screen — see ``MapScreenAlerts``.
-///
-/// Its own view so that the walk it asks about is read here, rather than in
-/// the card's body, which would otherwise re-run as a walk starts or ends.
-private struct RecordingStartButton: View {
-    let entry: RecordingEntry
-
-    var body: some View {
-        Group {
-            if let trail = entry.walkToEnd {
-                Menu {
-                    // The menu's title, as `UIMenu` gives the map's button one.
-                    Section(String(localized: "End your hike on \(trail) and start recording?")) {
-                        Button("End Hike and Record", systemImage: "record.circle") {
-                            entry.endWalkAndRecord()
-                        }
-                    }
-                } label: {
-                    startLabel
-                }
-            } else {
-                Button {
-                    entry.requestRecording()
-                } label: {
-                    startLabel
-                }
-            }
-        }
-        .menuStyle(.button)
-        .prominentGlassButtonStyle()
-        .tint(.red)
-        .placeCardControl()
-    }
-
-    /// A key of its own for the "Start" that a route's first stop and a
-    /// hike's start time also read in English, because French names those
-    /// « Départ » and this button « Démarrer ».
-    private var startLabel: some View {
-        Label(String(localized: "recording.start", defaultValue: "Start"), systemImage: "record.circle")
-    }
-}
-
-/// The phase as the card's title, with the coloured dot that says it at a
-/// glance ahead of it.
-private struct RecordingPhaseTitle: View {
-    private static let dotSize: CGFloat = 10
-
-    let phase: HikeRecorder.Phase
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(dotColor)
-                .frame(width: Self.dotSize, height: Self.dotSize)
-                .accessibilityHidden(true)
-            Text(phase.accessibilityTitle)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isHeader)
-        .accessibilityIdentifier("recording-phase")
-    }
-
-    private var dotColor: Color {
-        switch phase {
-        case .recording: .red
-        case .recovering, .waitingForFix, .saving: .orange
-        case .paused: .secondary
-        case .idle: .green
-        case .failed: .red
-        }
-    }
-}
-
-extension HikeRecorder.Phase {
-    var accessibilityTitle: String {
-        switch self {
-        case .idle: String(localized: "Ready")
-        case .recovering: String(localized: "Recovering")
-        case .waitingForFix: String(localized: "Finding GPS")
-        case .recording: String(localized: "Recording")
-        case .paused: String(localized: "Paused")
-        case .saving: String(localized: "Saving")
-        case .failed: String(localized: "Needs Attention")
         }
     }
 }

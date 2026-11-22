@@ -38,9 +38,9 @@ extension ScreenshotUITests {
     /// here, 22 m apart every four seconds, and read 18 km/h, no climb, and a
     /// line along a village street.
     ///
-    /// The record button is what opens it, as it opens a recording for a
-    /// hiker — and is waited on until it says so, because tapped while the
-    /// recovery is still under way it would start a second recording.
+    /// The recording's capsule on the map is what opens it, as it opens a
+    /// recording for a hiker — and is waited on, because it is there only
+    /// once the recovery has the recording under way again.
     @MainActor
     func testCapturesRecordingAHike() {
         let app = makeApp(arguments: [
@@ -67,12 +67,12 @@ extension ScreenshotUITests {
         defer { XCUIDevice.shared.location = nil }
 
         launch(app)
-        let recordButton = element("record-hike-button", in: app)
+        let capsule = element("activity-capsule-status", in: app)
         XCTAssertTrue(
-            waitUntil(timeout: UITestTimeout.trace) { recordButton.label == screenshotText("Open hike recording") },
+            capsule.waitForExistence(timeout: UITestTimeout.trace),
             "the seeded recording should have been recovered and resumed"
         )
-        recordButton.tap()
+        capsule.tap()
         XCTAssertTrue(
             app.navigationBars[screenshotText("Record Hike")].waitForExistence(timeout: UITestTimeout.navigation),
             "the record button should open the recording under way"

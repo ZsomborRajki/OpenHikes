@@ -321,6 +321,7 @@ struct OpenHikesView: View {
             placePins: appModel.placePins,
             trailMaker: appModel.trailMaker,
             recordingEntry: appModel.recordingEntry,
+            activityCapsule: appModel.activityCapsule,
             community: appModel.community,
             searchCompleter: appModel.searchCompleter,
             libraryLines: appModel.libraryLines,
@@ -444,6 +445,7 @@ struct OpenHikesView: View {
             .task { await readHikeOpenRequests() }
             .task { await readMakerOpenRequests() }
             .task { await readPlaceRequests() }
+            .task { await readActivityEndings() }
             // The pill posts a token; flipping the presentation flags is this
             // view's job because it owns `photoPresentation`. The pickers and
             // the alerts that report what they couldn't do both hang off
@@ -635,6 +637,29 @@ private extension OpenHikesView {
         }
     }
 
+    /// A Stop or an End, from the activity's bar or from its capsule on the
+    /// map — see ``ActivityEnding``. A saved recording opens its hike, a
+    /// discarded one takes its screen and its selection with it, and a walk
+    /// kept opens its summary over its trail's screen. And the capsule
+    /// follows this view's sheet from here, for as long as this view reads
+    /// what it ends with: it stands down on the activity's own screen, which
+    /// only the sheet's path can say is in front.
+    func readActivityEndings() async {
+        appModel.activityCapsule.follow(sheet)
+        for await ending in appModel.activityEndings.events() {
+            switch ending {
+            case let .recordingSaved(hikeID): openHike(id: hikeID)
+            case let .recordingDiscarded(hikeID):
+                if let hikeID, selectedHike?.id == hikeID {
+                    selectedHike = nil
+                    highlight.move(to: nil)
+                }
+                sheet.path.removeAll { $0 == .recording }
+            case let .walkKept(hikeID, walkID): openHike(id: hikeID, showingWalk: walkID)
+            }
+        }
+    }
+
     /// Assigned rather than appended — the maker is only ever offered when
     /// nothing is pushed, so there is nothing to push it onto, and an
     /// assignment cannot stack a second copy behind a double tap.
@@ -709,8 +734,16 @@ private extension OpenHikesView {
         }
     }
 
-    private func openHike(id: UUID) {
-        if case let .hike(current)? = sheet.path.last, current.id == id { return }
+    /// - Parameter walkID: A walk of the hike's to open over its screen: one
+    ///   just ended, whose summary the bar's End has always pushed.
+    private func openHike(id: UUID, showingWalk walkID: UUID? = nil) {
+        let walk = walkID.flatMap { walkID in
+            try? modelContext.fetch(FetchDescriptor<HikeWalk>(predicate: #Predicate { $0.id == walkID })).first
+        }
+        if case let .hike(current)? = sheet.path.last, current.id == id {
+            if let walk { sheet.path.append(.walk(walk)) }
+            return
+        }
 
         let descriptor = FetchDescriptor<Hike>(predicate: #Predicate { $0.id == id })
         // A hike deleted while the widget still showed it: open the app and
@@ -732,7 +765,7 @@ private extension OpenHikesView {
         // push there would arrive off-screen.
         sheet.makeRoomForTheMap()
         // The path last — see ``SheetPresentation/path``.
-        sheet.path = [.hike(hike)]
+        sheet.path = [.hike(hike)] + (walk.map { [.walk($0)] } ?? [])
     }
 
     /// The recording's screen, with `hike` selected when there is one.
