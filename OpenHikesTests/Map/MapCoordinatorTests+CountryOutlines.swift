@@ -106,7 +106,10 @@ extension MapCoordinatorTests {
         // only the outline decides which of the two points is Slovenia's.
         listed[1].bounds.east = Self.correctedSlovenia.east
         outlines.show(listed, installed: [], selected: nil, token: token)
-        map.setRegion(listed[1].bounds.framingRegion, animated: false)
+        // Framed by those bounds, as an area listed without an outline is.
+        var heldByTheBounds = listed[1]
+        heldByTheBounds.outline = []
+        map.setRegion(heldByTheBounds.framingRegion, animated: false)
         await settleDelegateHop(until: "both countries are outlined") { polygons(on: map).count == 2 }
         let earlier = try #require(polygons(on: map).first { $0.countryID == "SI" })
         let ljubljana = CLLocationCoordinate2D(latitude: 46.05, longitude: 14.5)
