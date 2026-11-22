@@ -224,14 +224,17 @@ public enum WatchRecordingRecovery: Sendable, Equatable {
     /// would be the hike lost. So the journal is offered unless the queue
     /// hands its walk back — one that cannot be read just now included,
     /// because offering a walk that is already queued costs the hiker a
-    /// question, and the other mistake costs the walk.
+    /// question, and the other mistake costs the walk. The copy left on the
+    /// queue is not sent while the offer stands, or while a walk carried on
+    /// from it records — see ``WatchQueueHold``.
     ///
-    /// Or unless the phone has already confirmed it. The launch drain does
-    /// not wait for this check, so the walk can cross and its receipt take
-    /// it off the queue while the journal is still replaying. Offered then,
-    /// Continue would carry on under a session the phone already holds, and
-    /// the phone would drop everything after as a second arrival — see
-    /// ``WatchWalkQueue/hasTaken(_:)``.
+    /// Or unless the phone has already confirmed it. The drain holds every
+    /// walk back until this answers, but a transfer an earlier process
+    /// handed `WCSession` goes on crossing without it, and its receipt can
+    /// take the walk off the queue while the journal is still replaying.
+    /// Offered then, Continue would carry on under a session the phone
+    /// already holds, and the phone would drop everything after as a second
+    /// arrival — see ``WatchWalkQueue/hasTaken(_:)``.
     @concurrent
     public static func checking(_ journal: WatchRecordingJournalFile, against queue: WatchWalkQueue) async -> Self {
         guard let recording = journal.recover() else { return .nothing }

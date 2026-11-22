@@ -119,10 +119,12 @@ public actor WatchWalkQueue {
     /// process began.
     ///
     /// The second half is for a launch that finds a journal beside its
-    /// queued walk. The launch drain can send that walk while the journal is
-    /// still being replayed, and the phone's receipt can take it off the
-    /// queue before anything asks about it. Asked as one question on the
-    /// actor, so a receipt cannot land between the two halves of the answer.
+    /// queued walk. The drain holds every walk back until the journal has
+    /// been read — see ``WatchQueueHold`` — but a transfer an earlier process
+    /// handed `WCSession` crosses without it, and the phone's receipt can
+    /// take the walk off the queue before anything asks about it. Asked as
+    /// one question on the actor, so a receipt cannot land between the two
+    /// halves of the answer.
     public func hasTaken(_ sessionID: UUID) -> Bool {
         confirmed.contains(sessionID) || walk(sessionID) != nil
     }

@@ -96,9 +96,9 @@ final class WatchRecorder: NSObject {
         /// At launch, until the journal the last process left has been read
         /// and the disk queue asked whether its walk already went — see
         /// ``checkJournal()``. Both are read off the main actor, so the first
-        /// frame waits on neither, and Start waits on both. Not ``saving``:
-        /// nothing is being kept, and leaving `.saving` for `.idle` is what a
-        /// save feels like.
+        /// frame waits on neither, and Start and the queue's drain wait on
+        /// both. Not ``saving``: nothing is being kept, and leaving `.saving`
+        /// for `.idle` is what a save feels like.
         case checkingJournal
         /// Stopped, and the walk is on disk waiting for the phone.
         case saved(WatchRecordedWalk)
@@ -141,7 +141,13 @@ final class WatchRecorder: NSObject {
     /// Set only by this type, across its files: `WatchRecorder+AutoPause.swift`
     /// pauses and resumes the recording too. Begins checking the journal,
     /// which ``init(store:)`` sets going.
-    var phase: Phase = .checkingJournal
+    var phase: Phase = .checkingJournal {
+        didSet {
+            // Here rather than beside each way out of a hold, so no change of
+            // phase can leave a walk waiting for a drain nothing runs.
+            if oldValue.queueHold(recording: sessionID).releases(into: queueHold) { onQueueReleased?() }
+        }
+    }
 
     /// Whether the hiker has refused this watch location outright.
     ///
@@ -201,6 +207,11 @@ final class WatchRecorder: NSObject {
     /// hears a Resume.
     var onAutoResume: (@MainActor () -> Void)?
 
+    /// Called when a change of phase lets go of a queued walk ``queueHold``
+    /// kept back, so the drain that skipped it runs again rather than at
+    /// the next reachability change — see ``WatchQueueHold``.
+    var onQueueReleased: (@MainActor () -> Void)?
+
     @ObservationIgnored private let store: WatchStore
     /// The complication's copy of this recording — see ``WatchGlance``.
     @ObservationIgnored private let glances = WatchGlancePublisher()
@@ -210,6 +221,8 @@ final class WatchRecorder: NSObject {
     /// only ones whose callbacks speak for it — see ``WatchWorkoutOwnership``.
     @ObservationIgnored var workout = WatchWorkoutOwnership<HKWorkoutSession, HKLiveWorkoutBuilder>()
     @ObservationIgnored var accumulator = WatchWalkAccumulator()
+    /// Set before the phase that is about it, so ``queueHold`` never names
+    /// another session while the recorder waits on anything.
     @ObservationIgnored private var sessionID = UUID()
     @ObservationIgnored private var startedAt = Date.now
     /// Refuses fixes taken before this recording, or its current leg, began —
@@ -257,10 +270,10 @@ final class WatchRecorder: NSObject {
     /// Starts a recording, optionally naming the trail being walked.
     func start(trailHikeID: UUID? = nil, title: String? = nil) async {
         guard phase.canStart else { return }
+        sessionID = UUID()
         phase = .preparing
         self.trailHikeID = trailHikeID
         trailTitle = title
-        sessionID = UUID()
         startedAt = .now
         window = RecordingFixWindow(opensAt: startedAt)
         accumulator = WatchWalkAccumulator()
@@ -338,25 +351,6 @@ final class WatchRecorder: NSObject {
             title: trailTitle
         )
         return await settle { await WatchStoppedWalk.settle(walk, writing: $0) }
-    }
-
-    /// Writes an unsaved walk again, and offers it to the phone once it is on
-    /// disk. The same walk under the same session ID, so however often this
-    /// is pressed the phone is sent one walk — and the journal it was
-    /// recorded into is the one a success lets go, never a new one.
-    @discardableResult func retrySave() async -> WatchRecordedWalk? {
-        guard case .unsaved(let walk) = phase else { return nil }
-        phase = .saving
-        return await settle { await WatchStoppedWalk.unsaved(walk).retried(writing: $0) }
-    }
-
-    /// Throws away a walk that could not be written, which only the hiker
-    /// decides. Its journal goes with it, or the next launch would offer the
-    /// discarded walk back as an interrupted one.
-    func discardUnsaved() {
-        guard case .unsaved = phase else { return }
-        journal.close()
-        phase = .idle
     }
 
     /// Clears a finished or failed recording once the hiker has seen it.
@@ -658,11 +652,37 @@ final class WatchRecorder: NSObject {
     }
 }
 
-// Keeping a stopped walk, recovery, the journal and the data source, in an
-// extension of the same file: it can reach the recorder's private state, and
-// the class body stays within the lint's type length.
+// The queue's hold, keeping a stopped walk, recovery, the journal and the data
+// source, in an extension of the same file: it can reach the recorder's
+// private state, and the class body stays within the lint's type length.
 extension WatchRecorder {
+    // MARK: The queue
+
+    /// Which queued walks the drain must not send yet — see
+    /// ``Phase/queueHold(recording:)``.
+    var queueHold: WatchQueueHold { phase.queueHold(recording: sessionID) }
+
     // MARK: Keeping a stopped walk
+
+    /// Writes an unsaved walk again, and offers it to the phone once it is on
+    /// disk. The same walk under the same session ID, so however often this
+    /// is pressed the phone is sent one walk — and the journal it was
+    /// recorded into is the one a success lets go, never a new one.
+    @discardableResult func retrySave() async -> WatchRecordedWalk? {
+        guard case .unsaved(let walk) = phase else { return nil }
+        sessionID = walk.sessionID
+        phase = .saving
+        return await settle { await WatchStoppedWalk.unsaved(walk).retried(writing: $0) }
+    }
+
+    /// Throws away a walk that could not be written, which only the hiker
+    /// decides. Its journal goes with it, or the next launch would offer the
+    /// discarded walk back as an interrupted one.
+    func discardUnsaved() {
+        guard case .unsaved = phase else { return }
+        journal.close()
+        phase = .idle
+    }
 
     /// The phase a stopped walk leaves behind, and what becomes of its journal.
     ///
@@ -729,9 +749,12 @@ extension WatchRecorder {
 
     /// Carries on recording an interrupted walk, under a new workout session.
     ///
-    /// The same session ID, so however it ends the phone is sent one walk.
+    /// The same session ID, so however it ends the phone is sent one walk:
+    /// the one Stop writes over any copy the last Stop queued, which no
+    /// drain sends while this recording holds it (#1572).
     func continueInterrupted() async {
         guard case .interrupted(let recovered) = phase else { return }
+        sessionID = recovered.sessionID
         phase = .preparing
         guard await requestPermissions(), startWorkoutSession() else {
             // Back to the choice rather than on to the failure: the walk is
@@ -747,6 +770,7 @@ extension WatchRecorder {
     /// Keeps an interrupted walk as it stood when the recording stopped.
     func saveInterrupted() async {
         guard case .interrupted(let recovered) = phase else { return }
+        sessionID = recovered.sessionID
         phase = .saving
         _ = await settle { await WatchStoppedWalk.settle(recovered.finishedWalk(), writing: $0) }
     }
@@ -884,5 +908,24 @@ extension WatchRecorder {
         let stopped = collection.stopped.sorted().joined(separator: ", ")
         Self.logger.notice("Workout collects \(left, privacy: .public); stopped \(stopped, privacy: .public)")
         return source
+    }
+}
+
+extension WatchRecorder.Phase {
+    /// Which queued walks a drain must leave unsent in this phase, because
+    /// the recorder may yet replace one — see ``WatchQueueHold``.
+    ///
+    /// - Parameter sessionID: the recording's session, which each phase that
+    ///   carries no walk of its own is about. A fresh recording's is on no
+    ///   queue, so holding it keeps nothing back.
+    func queueHold(recording sessionID: UUID) -> WatchQueueHold {
+        switch self {
+        // The session the journal names, which nothing knows yet.
+        case .checkingJournal: .everything
+        case .interrupted(let recovered): .session(recovered.sessionID)
+        case .unsaved(let walk): .session(walk.sessionID)
+        case .preparing, .recording, .paused, .saving: .session(sessionID)
+        case .idle, .saved, .failed: .nothing
+        }
     }
 }
