@@ -121,13 +121,14 @@ struct OfflineCountryDirectoryTests {
     }
 
     @Test("nearest first puts what is held first, nearest first too")
-    func nearestFirstHeld() {
+    func nearestFirstHeld() throws {
         let nearest = sections(directory(everything, near: ljubljana), by: .nearest, holding: ["ES", "AT"])
 
         #expect(nearest.downloaded == [austria, spain])
         #expect(nearest.parts.first == Part(heading: .nearby, lines: [.area(slovenia)]))
-        #expect(nearest.scrollTarget(for: "US-CO").rowID == "US-CO", "a region is a row of its own here")
-        #expect(nearest.scrollTarget(for: "US-CO").opening == nil)
+        let region = try #require(nearest.scrollTarget(for: "US-CO"))
+        #expect(region.rowID == "US-CO", "a region is a row of its own here")
+        #expect(region.opening == nil)
     }
 
     @Test("with no position, nearest first is the list by name")
@@ -253,12 +254,15 @@ struct OfflineCountryDirectoryTests {
     /// it then found no row, and the area was no longer owed one.
     @Test("an area the list does not hold yet is waited for, and gone to once a list holds it")
     func revealWaitsForAListThatHoldsIt() {
-        let before = sections(directory([austria, slovenia]), by: .name)
+        let before = sections(directory([austria, slovenia, california]), by: .name)
 
-        #expect(before.holds("AT"))
-        #expect(!before.holds("ES"))
+        #expect(before.scrollTarget(for: "ES") == nil)
         #expect(before.reveal("ES", expanded: []) == .wait)
-        #expect(before.reveal("US-CO", expanded: ["US"]) == .wait, "nor a region of a country it does not hold")
+        // The country is in the list with another of its regions: the line
+        // under it is no line for this one.
+        #expect(before.scrollTarget(for: "US-CO") == nil)
+        #expect(before.reveal("US-CO", expanded: ["US"]) == .wait)
+        #expect(before.reveal("US-CA", expanded: ["US"]) == .scroll(to: OfflineCountrySections.groupRowID("US-CA")))
 
         let after = sections(directory(everything), by: .name, holding: ["ES"])
         #expect(after.reveal("ES", expanded: []) == .scroll(to: "ES"))

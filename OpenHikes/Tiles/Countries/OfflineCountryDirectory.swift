@@ -115,7 +115,7 @@ nonisolated struct OfflineCountryDirectory: Sendable {
 nonisolated extension OfflineCountryDirectory {
     /// What a directory is made from: the list off the server, what is
     /// downloaded, and where the hiker was as the list came up.
-    struct Source: Equatable, Sendable {
+    struct Source: Sendable {
         let offered: [Country]
         let installed: [String: OfflineCountryStore.Record]
         let latitude: Double?
@@ -351,36 +351,27 @@ struct OfflineCountrySections: Equatable {
 
     /// Where the list goes to show `id`: its row in *Not Yet Downloaded* or
     /// *Downloaded* if it has one there, else its line further down, opening
-    /// the country a region is under.
-    func scrollTarget(for id: String) -> (rowID: String, opening: String?) {
+    /// the country a region is under. `nil` where the list has no line for
+    /// it.
+    func scrollTarget(for id: String) -> (rowID: String, opening: String?)? {
         let isID = { (country: OfflineCountryManifest.Country) in country.id == id }
         if unfinished.contains(where: isID) || downloaded.contains(where: isID) { return (id, nil) }
-        for line in parts.flatMap(\.lines) {
-            if case let .group(group, regions) = line, regions.contains(where: { $0.id == id }) {
+        for line in parts.lazy.flatMap(\.lines) {
+            switch line {
+            case let .area(country) where isID(country):
+                return (id, nil)
+            case let .group(group, regions) where regions.contains(where: isID):
                 return (Self.groupRowID(id), group)
+            case .area, .group:
+                continue
             }
         }
-        return (id, nil)
+        return nil
     }
 
     /// A region's row under its country, apart from the same region's row at
     /// the head of the list.
     static func groupRowID(_ id: String) -> String { "group-\(id)" }
-
-    /// Whether the list has a line for `id`: a row of its own, or a region's
-    /// under its country.
-    func holds(_ id: String) -> Bool {
-        let isID = { (country: OfflineCountryManifest.Country) in country.id == id }
-        if unfinished.contains(where: isID) || downloaded.contains(where: isID) { return true }
-        return parts.contains { part in
-            part.lines.contains { line in
-                switch line {
-                case let .area(country): isID(country)
-                case let .group(_, regions): regions.contains(where: isID)
-                }
-            }
-        }
-    }
 
     /// The list's next step towards showing an area.
     enum Reveal: Equatable {
@@ -401,8 +392,7 @@ struct OfflineCountrySections: Equatable {
     /// What the list does next to show `id`, with `expanded` the split
     /// countries already open in it.
     func reveal(_ id: String, expanded: Set<String>) -> Reveal {
-        guard holds(id) else { return .wait }
-        let target = scrollTarget(for: id)
+        guard let target = scrollTarget(for: id) else { return .wait }
         if let group = target.opening, !expanded.contains(group) { return .open(group) }
         return .scroll(to: target.rowID)
     }
@@ -427,43 +417,58 @@ nonisolated enum OfflineCountryListing: Equatable, Identifiable, Sendable {
 /// new list off the server, an area downloaded or deleted, and the hiker's
 /// position as the list comes up.
 ///
-/// The body only notes what the list is made from (``revision(for:)``), and
-/// the list's task for that revision prepares it (``prepare(_:)``). The
-/// directory last prepared stays on screen meanwhile. One is put on screen
-/// only while the list is still made from what it was measured from, so a
-/// newer list, a download or the position read as the list came up passes
+/// The list's task for each ``Key`` prepares it (``prepare(_:from:isCurrent:)``),
+/// and the directory last prepared stays on screen meanwhile. One is put on
+/// screen only while the list is still made from what it was measured from:
+/// a newer list, a download or the position read as the list came up passes
 /// over one measured before it, and the list going away cancels it.
 ///
-/// Kept against the areas themselves, not their ids and builds: a list off
-/// the server can correct a region's name at the same build, and the rows and
-/// the search are read from what was kept. Comparing them costs nothing on a
-/// pass that reads the same list, which is the same storage; a refresh that
-/// changes nothing walks the areas once, and its storage is kept from then.
-/// That is why the comparing is here and the list's task is keyed on the
-/// revision: an equal list written over the model's swaps its storage
-/// without a word, SwiftUI does not say which of two equal ids it keeps, and
-/// keyed on the areas, the task could compare two decodes of the world
-/// outline by outline at every pass from then, some 9 ms in a Debug build.
+/// Keyed on ``OfflineCountries/catalogRevision``, which the model counts, and
+/// never on the areas themselves: every read of the list off the server
+/// writes the model's, mostly with what it held, and an equal list written
+/// over the model's swaps its storage without a word, so a key of the areas
+/// compared two decodes of the world outline by outline in the body after
+/// every refresh, some 9 ms in a Debug build. The directory is still made
+/// from the areas, not their ids and builds: a list off the server can
+/// correct a region's name at the same build, and the revision moves for it.
+///
+/// Kept by ``OfflineCountriesListState``, so a turn of the phone, which
+/// builds the list again in the other host, draws the directory it had
+/// while the new host's is prepared, rather than its loading state.
 @Observable
 final class OfflineCountryDirectoryCache {
     typealias Source = OfflineCountryDirectory.Source
     /// Measures what a directory is made from, wherever it is called.
     typealias Measure = @Sendable (Source) async -> OfflineCountryDirectory.Measured
 
+    /// What a directory is asked for by: the revision of the list off the
+    /// server and what is downloaded, and where the hiker was as the list
+    /// came up.
+    struct Key: Hashable {
+        let catalog: Int
+        let latitude: Double?
+        let longitude: Double?
+
+        init(catalog: Int, near: CLLocationCoordinate2D?) {
+            self.catalog = catalog
+            latitude = near?.latitude
+            longitude = near?.longitude
+        }
+    }
+
     /// The directory last prepared, or `nil` until the first is.
     private(set) var directory: OfflineCountryDirectory?
-    /// Directories put on screen. A pass that kept one hands back the same
-    /// list as a pass that prepared one, so this is what a suite holds the
-    /// keeping to.
+    /// The key ``directory`` was prepared for: what the list waits on to go
+    /// to an area the directory before did not hold.
+    private(set) var shown: Key?
+    /// Directories put on screen. A key asked for again is not measured
+    /// again, so this is what a suite holds the keeping to.
     @ObservationIgnored private(set) var builds = 0
 
-    /// What the list was last noted to be made from.
-    @ObservationIgnored private var asked: Source?
-    /// Counts the changes to ``asked``.
-    @ObservationIgnored private var askedRevision = 0
-    /// The revision ``directory`` was prepared for: what the list waits on
-    /// to go to an area the directory before did not hold.
-    private(set) var shownRevision: Int?
+    /// The key last asked for. A measuring for an earlier one gives way to
+    /// it: two hosts of the list, as a turn of the phone hands it from one to
+    /// the other, ask for their own, and the later one is the one drawn.
+    @ObservationIgnored private var asked: Key?
     @ObservationIgnored private let measure: Measure
 
     /// - Parameter measure: Measures what a directory is made from: a
@@ -476,24 +481,17 @@ final class OfflineCountryDirectoryCache {
     /// we're on the main actor — see ``LocationManager``'s deinit for why.
     nonisolated deinit { /* intentionally empty */ }
 
-    /// Notes what the list is made from, and answers its revision: a new one
-    /// only when it changed.
-    func revision(for source: Source) -> Int {
-        if source != asked { askedRevision += 1 }
-        // The storage asked about kept, so that the next pass compares the
-        // very same arrays rather than an equal copy, outline by outline.
-        asked = source
-        return askedRevision
-    }
-
-    /// Prepares the directory of `revision`, and puts it on screen unless the
-    /// list has changed since or the task was cancelled.
-    func prepare(_ revision: Int) async {
-        guard revision == askedRevision, revision != shownRevision, let source = asked else { return }
+    /// Prepares the directory of `key` from `source`, what the model held for
+    /// it as the task began, and puts it on screen unless the task was
+    /// cancelled, a later key was asked for, or `isCurrent` says the model's
+    /// list has moved on since. Nothing is measured for the key on screen.
+    func prepare(_ key: Key, from source: Source, isCurrent: () -> Bool) async {
+        asked = key
+        guard key != shown else { return }
         let measured = await Self.measuring(source, with: measure)
-        guard !Task.isCancelled, revision == askedRevision else { return }
+        guard !Task.isCancelled, key == asked, isCurrent() else { return }
         directory = OfflineCountryDirectory(measured, letter: OfflineCountryLetter.ofTheAppLanguage())
-        shownRevision = revision
+        shown = key
         builds += 1
     }
 
