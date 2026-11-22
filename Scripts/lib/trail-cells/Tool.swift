@@ -3,8 +3,9 @@
 //  trail-cells
 //
 //  The command-line tool behind `Scripts/trail-cells.sh`: it files an
-//  OpenStreetMap extract's hiking routes into squares, and puts the squares in
-//  the public database.
+//  OpenStreetMap extract's hiking routes, places and trails into squares,
+//  packs each set into an archive for the tile server, and keeps or takes the
+//  copies in the public database that earlier builds of the app read.
 //
 //  It is compiled by that script, from the files in this directory and from
 //  eight of the app's own — each set's grid and file, the byte format they
@@ -46,9 +47,18 @@ enum TrailCellsTool {
                Print the expressions osmium tags-filter finds them with, one a line.
       routing-tile <archive.pmtiles> <x> <y> [--json]
                Print what a tile of the trail maker's archive holds.
+      pack     <build-dir> --out <dir> [--name <archive>]
+               Pack a whole-world build of the day hikes', the hiking-routes layer's or the places'
+               squares into one archive for the tile server, <dir>/<archive>.pmtiles (default
+               <list>-YYYYMMDD-HH, for the hour the extract is current to), and read it back.
+      archive-tile <archive.pmtiles> <square-name> [--json]
+               Print what the square of that name holds, read out of the archive of its set.
       upload   <dir> --container <id> --environment development|production
                --key-id <id> --key-file <pem> [--dry-run] [--yes] [--replace-world]
                Make the public database hold what <dir> does.
+      prune    <trails|routes|places|graph> --container <id> --environment development|production
+               --key-id <id> --key-file <pem> [--dry-run] [--yes]
+               Take one set of squares out of the public database, its manifest last.
       whoami   --container <id> --environment development|production --key-id <id> --key-file <pem>
                Print the account the key acts as.
       sign     --key-id <id> --key-file <pem> --subpath <path> --date <ISO 8601> [--body-file <file>]
@@ -96,8 +106,14 @@ enum TrailCellsTool {
             RoutingGraphBuild.osmiumFilters.forEach { print($0) }
         case "routing-tile":
             try routingTile(&options)
+        case "pack":
+            try pack(&options)
+        case "archive-tile":
+            try archiveTile(&options)
         case "upload":
             try await Upload.run(&options)
+        case "prune":
+            try await Prune.run(&options)
         case "whoami":
             try await Upload.whoAmI(&options)
         case "sign":
@@ -212,7 +228,7 @@ private extension TrailCellsTool {
             relationsPath: try options.required("--relations"),
             waysPath: try options.required("--ways"),
             outputDirectory: URL(fileURLWithPath: try options.required("--out"), isDirectory: true),
-            name: try options.value("--name") ?? RoutingGraphArchive.namePrefix,
+            name: try options.value("--name") ?? SquareArchive.routing.listName,
             coversTheWorld: options.flag("--world"),
             osmTimestamp: timestamp
         )
@@ -252,7 +268,8 @@ private extension TrailCellsTool {
             throw UsageError(description: "a tile at zoom \(RoutingGraphArchive.zoom) has an x and a y from 0 to \(side - 1).")
         }
         try options.finish()
-        guard let bytes = try RoutingArchiveReader.tile(at: URL(fileURLWithPath: path), x: x, y: y) else {
+        let reader = try TileArchiveReader(url: URL(fileURLWithPath: path))
+        guard let bytes = try reader.tile(z: RoutingGraphArchive.zoom, x: x, y: y) else {
             print("no tile \(RoutingGraphArchive.zoom)/\(x)/\(y)")
             return
         }
@@ -292,7 +309,27 @@ private extension TrailCellsTool {
         let path = try options.positional("a square's file")
         try options.finish()
         let data = try Data(contentsOf: URL(fileURLWithPath: path))
-        if let graph = try? TrailGraphSquareFile(decoding: data) {
+        // Each file's envelope says which it is, so the first that reads it
+        // is the one. A day hike's is tried last, and says why it is none.
+        let set: SquareArchive = if (try? TrailGraphSquareFile(decoding: data)) != nil {
+            .routing
+        } else if (try? PlaceSquareFile(decoding: data)) != nil {
+            .places
+        } else if (try? RouteSquareFile(decoding: data)) != nil {
+            .routes
+        } else {
+            .trails
+        }
+        try printSquare(data, of: set, asJSON: asJSON)
+    }
+
+    /// What a square's file holds, read as the file a square of `set` is: a
+    /// trail graph square for the trail maker's archive, whose tiles are
+    /// those files too.
+    static func printSquare(_ data: Data, of set: SquareArchive, asJSON: Bool) throws {
+        switch set {
+        case .routing:
+            let graph = try TrailGraphSquareFile(decoding: data)
             if asJSON {
                 print(try Inspection.json(of: graph))
                 return
@@ -302,9 +339,9 @@ private extension TrailCellsTool {
             for way in graph.ways {
                 print("\(way.id)\t\(way.highway)\t\(way.nodes.count) nodes\t\(way.tags[.name] ?? "")")
             }
-            return
-        }
-        if let places = try? PlaceSquareFile(decoding: data) {
+
+        case .places:
+            let places = try PlaceSquareFile(decoding: data)
             if asJSON {
                 print(try Inspection.json(of: places))
                 return
@@ -314,9 +351,9 @@ private extension TrailCellsTool {
                 print("\(place.element.name)/\(place.id)\t\(place.point.latitude) \(place.point.longitude)\t"
                     + (place.tags["name"] ?? ""))
             }
-            return
-        }
-        if let routes = try? RouteSquareFile(decoding: data) {
+
+        case .routes:
+            let routes = try RouteSquareFile(decoding: data)
             if asJSON {
                 print(try Inspection.json(of: routes))
                 return
@@ -326,18 +363,62 @@ private extension TrailCellsTool {
             for route in routes.routes {
                 print("\(route.id)\t\(route.tags["network"] ?? "-")\t\(route.tags["ref"] ?? "-")\t\(route.tags["name"] ?? "")")
             }
+
+        case .trails:
+            let file = try TrailCellFile(decoding: data)
+            if asJSON {
+                print(try Inspection.json(of: file))
+                return
+            }
+            print("scale \(file.coordinateScale), \(file.relations.count) relations")
+            for relation in file.relations {
+                let points = relation.ways.reduce(0) { $0 + $1.points.count }
+                print("\(relation.id)\t\(relation.ways.count) ways\t\(points) points\t\(relation.tags["name"] ?? "")")
+            }
+        }
+    }
+
+    static func pack(_ options: inout Options) throws {
+        // The named options first, so that their values are not taken for
+        // the build's directory.
+        let output = try options.required("--out")
+        let name = try options.value("--name")
+        let pack = PackOptions(
+            buildDirectory: URL(fileURLWithPath: try options.positional("a build's directory"), isDirectory: true),
+            outputDirectory: URL(fileURLWithPath: output, isDirectory: true),
+            name: name
+        )
+        try options.finish()
+        let summary = try SquarePack.run(pack)
+        let record = summary.record
+        print("Packed \(record.squares) squares of the \(record.list), \(record.itemCount) \(summary.itemName), "
+            + "into \(summary.archive.path), \(record.bytes) bytes, at zoom \(record.minimumZoom) to \(record.zoom).")
+        if let largest = summary.largest {
+            print("The median square is \(summary.median) bytes, the largest \(largest.name) at \(largest.bytes).")
+        }
+        print("Every tile read back as its square's file.")
+    }
+
+    static func archiveTile(_ options: inout Options) throws {
+        let json = options.flag("--json")
+        let path = try options.positional("an archive")
+        let name = try options.positional("a square's name")
+        try options.finish()
+        guard let set = SquareArchive.allCases.first(where: { $0.tile(named: name) != nil }),
+              let tile = set.tile(named: name)
+        else {
+            throw UsageError(description: "'\(name)' is not the name of a square of any set.")
+        }
+        let reader = try TileArchiveReader(url: URL(fileURLWithPath: path))
+        guard (Int(reader.header.minimumZoom)...Int(reader.header.maximumZoom)).contains(tile.zoom) else {
+            throw UsageError(description: "\(name) is a \(set.listName) square, at zoom \(tile.zoom), and the archive "
+                + "holds zoom \(reader.header.minimumZoom) to \(reader.header.maximumZoom).")
+        }
+        guard let bytes = try reader.tile(z: tile.zoom, x: tile.x, y: tile.y) else {
+            print("no tile \(tile.zoom)/\(tile.x)/\(tile.y)")
             return
         }
-        let file = try TrailCellFile(decoding: data)
-        if asJSON {
-            print(try Inspection.json(of: file))
-            return
-        }
-        print("scale \(file.coordinateScale), \(file.relations.count) relations")
-        for relation in file.relations {
-            let points = relation.ways.reduce(0) { $0 + $1.points.count }
-            print("\(relation.id)\t\(relation.ways.count) ways\t\(points) points\t\(relation.tags["name"] ?? "")")
-        }
+        try printSquare(bytes, of: set, asJSON: json)
     }
 
     static func cell(_ options: inout Options) throws {

@@ -11,11 +11,37 @@
 //  The database is the day hikes' stub and the directory is the case's own,
 //  for the reason the repository's *Deliberate test seams* section gives.
 //
+//  The squares are the public database's layout, sixteen regions a square,
+//  which builds before this one read: a square on the tile server is one
+//  region (``TrailGraphSquareLibrary/Layout/routing``), and what this suite
+//  holds the library to, a square shared by the regions waiting on it, is
+//  only seen where a square holds more than one.
+//
 
 import CoreLocation
 import Foundation
 @testable import OpenHikes
 import Testing
+
+nonisolated extension TrailGraphSquareLibrary.Layout {
+    /// The trail graph's squares as the public database filed them: sixteen
+    /// regions a square, under their record names.
+    static let sixteenRegions = Self(squareZoom: TrailGraphSquareGrid.squareZoom) { square in
+        TrailGraphSquareGrid.recordName(for: square)
+    }
+}
+
+extension TrailGraphSquareLibrary {
+    /// A library over ``Layout/sixteenRegions``, the squares these suites
+    /// file their trails in.
+    static func squares(
+        _ database: any TrailCellFetching,
+        directory: URL?,
+        clock: @escaping @Sendable () -> Date = { Date() }
+    ) -> TrailGraphSquareLibrary {
+        TrailGraphSquareLibrary(database: database, layout: .sixteenRegions, directory: directory, clock: clock)
+    }
+}
 
 @Suite("Trail graph square library")
 struct TrailGraphSquareLibraryTests {
@@ -73,7 +99,7 @@ struct TrailGraphSquareLibraryTests {
     func aSquareReadsAsOverpassDoes() async throws {
         let fromOverpass = try OverpassTrailGraphProvider.decodeGraph(from: Data(OverpassGraphFixture.alpineRoute.utf8))
         let database = StubTrailCellDatabase(cells: [Self.squareName: Self.found([Self.localPath])])
-        let library = TrailGraphSquareLibrary(database: database, directory: nil)
+        let library = TrailGraphSquareLibrary.squares(database, directory: nil)
 
         let fromSquare = try #require(Self.graph(await library.graph(for: Self.region)))
 
@@ -102,7 +128,7 @@ struct TrailGraphSquareLibraryTests {
         )
         let database = StubTrailCellDatabase(cells: [Self.squareName: Self.found([crossing, passing])])
 
-        let graph = try #require(Self.graph(await TrailGraphSquareLibrary(database: database, directory: nil)
+        let graph = try #require(Self.graph(await TrailGraphSquareLibrary.squares(database, directory: nil)
             .graph(for: Self.region)))
 
         #expect(graph.edges.map(\.id.wayID) == [20])
@@ -134,7 +160,7 @@ struct TrailGraphSquareLibraryTests {
         )
         let database = StubTrailCellDatabase(cells: [Self.squareName: Self.found([approach, joint, onward])])
 
-        let graph = try #require(Self.graph(await TrailGraphSquareLibrary(database: database, directory: nil)
+        let graph = try #require(Self.graph(await TrailGraphSquareLibrary.squares(database, directory: nil)
             .graph(for: Self.region)))
 
         #expect(joint.nodes[0].latitude == joint.nodes[1].latitude, "the fixture's two nodes are one point here")
@@ -149,7 +175,7 @@ struct TrailGraphSquareLibraryTests {
         let directory = Self.scratchDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let database = StubTrailCellDatabase(cells: [Self.squareName: Self.found([Self.localPath])])
-        let library = TrailGraphSquareLibrary(database: database, directory: directory)
+        let library = TrailGraphSquareLibrary.squares(database, directory: directory)
         let regionsOfOneSquare = (0..<4).map { offset in
             TrailGraphRegion(zoom: 12, x: 2192 + offset, y: 1430)
         }
@@ -159,7 +185,7 @@ struct TrailGraphSquareLibraryTests {
                 group.addTask { _ = await library.graph(for: next) }
             }
         }
-        let later = TrailGraphSquareLibrary(database: database, directory: directory)
+        let later = TrailGraphSquareLibrary.squares(database, directory: directory)
         let again = Self.graph(await later.graph(for: Self.region))
 
         #expect(database.requests == [[Self.squareName]])
@@ -174,9 +200,9 @@ struct TrailGraphSquareLibraryTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let database = StubTrailCellDatabase()
 
-        let first = Self.graph(await TrailGraphSquareLibrary(database: database, directory: directory)
+        let first = Self.graph(await TrailGraphSquareLibrary.squares(database, directory: directory)
             .graph(for: Self.region))
-        let second = Self.graph(await TrailGraphSquareLibrary(database: database, directory: directory)
+        let second = Self.graph(await TrailGraphSquareLibrary.squares(database, directory: directory)
             .graph(for: Self.region))
 
         #expect(first?.isEmpty == true)
@@ -195,11 +221,11 @@ struct TrailGraphSquareLibraryTests {
         let clock = TestClock()
         let fetchedAt = clock.now
         let database = StubTrailCellDatabase(cells: [Self.squareName: Self.found([Self.localPath])])
-        let library = TrailGraphSquareLibrary(database: database, directory: directory, clock: clock.read)
+        let library = TrailGraphSquareLibrary.squares(database, directory: directory, clock: clock.read)
         let fetched = await library.graph(for: Self.region)
 
         clock.advance(by: OverpassCache.lifetime - 60)
-        let fromDisk = await TrailGraphSquareLibrary(database: database, directory: directory, clock: clock.read)
+        let fromDisk = await TrailGraphSquareLibrary.squares(database, directory: directory, clock: clock.read)
             .graph(for: Self.region)
         let readLast = await library.graph(for: Self.region)
 
@@ -213,7 +239,7 @@ struct TrailGraphSquareLibraryTests {
     func theSquareReadLastExpires() async {
         let clock = TestClock()
         let database = StubTrailCellDatabase(cells: [Self.squareName: Self.found([Self.localPath])])
-        let library = TrailGraphSquareLibrary(database: database, directory: nil, clock: clock.read)
+        let library = TrailGraphSquareLibrary.squares(database, directory: nil, clock: clock.read)
         _ = await library.graph(for: Self.region)
 
         clock.advance(by: OverpassCache.lifetime + 60)
@@ -233,8 +259,8 @@ struct TrailGraphSquareLibraryTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let database = StubTrailCellDatabase(manifest: manifest, cells: [Self.squareName: Self.found([Self.localPath])])
 
-        let first = await TrailGraphSquareLibrary(database: database, directory: directory).graph(for: Self.region)
-        _ = await TrailGraphSquareLibrary(database: database, directory: directory).graph(for: Self.region)
+        let first = await TrailGraphSquareLibrary.squares(database, directory: directory).graph(for: Self.region)
+        _ = await TrailGraphSquareLibrary.squares(database, directory: directory).graph(for: Self.region)
 
         guard case .uncovered = first else {
             Issue.record("a set that is part of the world answered: \(first)")
@@ -255,7 +281,7 @@ struct TrailGraphSquareLibraryTests {
         offline.fail(with: URLError(.notConnectedToInternet))
 
         for database in [unreadManifest, failedSquare, notASquare, offline] {
-            let answer = await TrailGraphSquareLibrary(database: database, directory: nil).graph(for: Self.region)
+            let answer = await TrailGraphSquareLibrary.squares(database, directory: nil).graph(for: Self.region)
             guard case .unreachable = answer else {
                 Issue.record("an unreadable square answered: \(answer)")
                 continue
@@ -269,7 +295,7 @@ struct TrailGraphSquareLibraryTests {
     func aFailedSquareIsLeftAlone() async {
         let clock = TestClock()
         let database = StubTrailCellDatabase(cells: [Self.squareName: .failed])
-        let library = TrailGraphSquareLibrary(database: database, directory: nil, clock: clock.read)
+        let library = TrailGraphSquareLibrary.squares(database, directory: nil, clock: clock.read)
         let regionBeside = TrailGraphRegion(zoom: 12, x: 2193, y: 1430)
 
         let failed = await library.graph(for: Self.region)
@@ -291,7 +317,7 @@ struct TrailGraphSquareLibraryTests {
     func aRegionOfAnotherZoom() async {
         let database = StubTrailCellDatabase()
 
-        let answer = await TrailGraphSquareLibrary(database: database, directory: nil)
+        let answer = await TrailGraphSquareLibrary.squares(database, directory: nil)
             .graph(for: TrailGraphRegion(zoom: 11, x: 1, y: 1))
 
         guard case .uncovered = answer else {

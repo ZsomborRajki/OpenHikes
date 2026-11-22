@@ -16,6 +16,11 @@
 //  See ``TrailGraphSquareLibrary`` for the reading and ``TrailGraphSquareFile``
 //  for what one square holds.
 //
+//  Those squares are for the builds that read them, v1.5-1 to v1.7-1. Later
+//  builds read the graph out of an archive on the tile server, trails and
+//  roads together, a tile a region (``RoutingGraphArchive``), whose regions
+//  this grid still names.
+//
 //  ## Trails, and not the roads that join them
 //
 //  The graph Overpass answers with holds roads as well as trails, because the

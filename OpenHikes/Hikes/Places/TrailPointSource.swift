@@ -23,7 +23,7 @@
 //  overlaps answers partially while looking complete.
 //
 //  **Overpass is the second place asked, not the first.** The places are built
-//  ahead of time into squares of the public database — see
+//  ahead of time into squares on the tile server — see
 //  ``PlaceSquareGrid`` — and a search asks them first, through
 //  ``PlaceSquareLibrary``, as the day hikes' search asks theirs. An answer
 //  from them is the whole of the area's places, and an empty one means there

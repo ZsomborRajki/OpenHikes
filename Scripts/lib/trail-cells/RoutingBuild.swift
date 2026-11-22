@@ -21,11 +21,8 @@
 //  the archive is clustered. The squares are read back and encoded many at a
 //  time; only the writing is in order.
 //
-//  The archive's root directory has to be in its first 16 KiB, and its size
-//  is known only once every tile is written. So the first 16 KiB are held
-//  open, the tiles written after them, the metadata and the leaf directories
-//  after the tiles, and the header and the root written last into the space
-//  held for them. The tile server reads every section by its offset.
+//  The archive is written a tile at a time by `TileArchiveWriter`, which
+//  `TileArchive.swift` argues.
 //
 //  **The same extract always gives the same archive**, but for the time it
 //  was built, which is in the metadata: a tile's ways are written by id.
@@ -39,7 +36,7 @@ struct RoutingBuildOptions {
     var waysPath: String
     var outputDirectory: URL
     /// The archive's name on the server, which is its file's name without
-    /// `.pmtiles` — see `RoutingGraphArchive.isArchiveName(_:)`.
+    /// `.pmtiles` — see `SquareArchive.isArchiveName(_:)`.
     var name: String
     /// Whether the extract was the whole planet, so a tile the archive does
     /// not hold is ground with no ways on it. See `RoutingGraphBuild.Record`.
@@ -100,7 +97,7 @@ enum RoutingGraphBuild {
     }
 
     static func run(_ options: RoutingBuildOptions) async throws -> Summary {
-        guard RoutingGraphArchive.isArchiveName(options.name) else {
+        guard SquareArchive.routing.isArchiveName(options.name) else {
             throw RoutingBuildError.notAnArchiveName(options.name)
         }
         var summary = Summary()
@@ -139,7 +136,7 @@ enum RoutingGraphBuild {
 
         try prepare(options.outputDirectory)
         let archive = options.outputDirectory.appendingPathComponent("\(options.name).pmtiles")
-        let writer = try RoutingArchiveWriter(url: archive)
+        let writer = try TileArchiveWriter(url: archive, zooms: RoutingGraphArchive.zoom...RoutingGraphArchive.zoom)
         var tileSizes: [(bytes: Int, ways: Int, tile: TrailGraphSquare)] = []
         let reader = spool.reader
         let squares = spool.squares.sorted { firstTileID(of: $0) < firstTileID(of: $1) }
@@ -338,109 +335,9 @@ private extension RoutingGraphBuild {
     }
 }
 
-// MARK: - The archive
-
-/// A PMTiles archive written tile by tile: the first 16 KiB held for the
-/// header and the root directory, the tiles after them, then the metadata
-/// and the leaf directories, and the header and the root written last.
-final class RoutingArchiveWriter {
-    static let tileDataOffset = UInt64(PMTilesHeader.rootReadBytes)
-
-    private let handle: FileHandle
-    private var entries: [PMTilesEntry] = []
-    private var tileDataLength: UInt64 = 0
-    /// Whether every tile came after the one before it along the curve,
-    /// which is what makes the data's order the directory's.
-    private(set) var isClustered = true
-
-    init(url: URL) throws {
-        FileManager.default.createFile(atPath: url.path, contents: nil)
-        handle = try FileHandle(forWritingTo: url)
-        try handle.truncate(atOffset: 0)
-        try handle.write(contentsOf: Data(count: PMTilesHeader.rootReadBytes))
-    }
-
-    func append(_ bytes: Data, tileID: UInt64) throws {
-        if let last = entries.last, last.tileID >= tileID { isClustered = false }
-        entries.append(PMTilesEntry(tileID: tileID, offset: tileDataLength, length: UInt64(bytes.count), runLength: 1))
-        try handle.write(contentsOf: bytes)
-        tileDataLength += UInt64(bytes.count)
-    }
-
-    /// Writes the rest and closes the file. Returns how long it is.
-    func finish(metadata: Data) throws -> UInt64 {
-        if !isClustered { entries.sort { $0.tileID < $1.tileID } }
-        for (earlier, later) in zip(entries, entries.dropFirst()) where earlier.tileID == later.tileID {
-            throw RoutingBuildError.tileWrittenTwice(earlier.tileID)
-        }
-        let (root, leaves) = PMTilesLayout.directories(for: entries)
-        var header = PMTilesHeader()
-        header.rootDirectoryOffset = UInt64(PMTilesHeader.byteCount)
-        header.rootDirectoryLength = UInt64(root.count)
-        header.tileDataOffset = Self.tileDataOffset
-        header.tileDataLength = tileDataLength
-        header.metadataOffset = Self.tileDataOffset + tileDataLength
-        header.metadataLength = UInt64(metadata.count)
-        header.leafDirectoryOffset = header.metadataOffset + header.metadataLength
-        header.leafDirectoryLength = UInt64(leaves.count)
-        header.addressedTiles = UInt64(entries.count)
-        header.tileEntries = UInt64(entries.count)
-        header.tileContents = UInt64(entries.count)
-        header.isClustered = isClustered
-        header.internalCompression = PMTilesCompression.uncompressed.rawValue
-        // Each tile is a trail graph file in its own envelope, packed already.
-        header.tileCompression = PMTilesCompression.uncompressed.rawValue
-        // Not a type PMTiles names, which the tile server serves as it is.
-        header.tileType = 0
-        header.minimumZoom = UInt8(RoutingGraphArchive.zoom)
-        header.maximumZoom = UInt8(RoutingGraphArchive.zoom)
-        header.bounds = [-1_800_000_000, -850_511_287, 1_800_000_000, 850_511_287]
-        header.centerZoom = UInt8(RoutingGraphArchive.zoom)
-        header.center = [0, 0]
-        let prefix = header.bytes + root
-        guard prefix.count <= PMTilesHeader.rootReadBytes else { throw RoutingBuildError.rootTooLarge(root.count) }
-        try handle.write(contentsOf: metadata)
-        try handle.write(contentsOf: Data(leaves))
-        try handle.seek(toOffset: 0)
-        try handle.write(contentsOf: Data(prefix))
-        try handle.close()
-        return header.leafDirectoryOffset + header.leafDirectoryLength
-    }
-}
-
-/// One tile of an archive `RoutingArchiveWriter` wrote, read back by its
-/// directories, as the tile server reads it.
-enum RoutingArchiveReader {
-    static func tile(at url: URL, x: Int, y: Int) throws -> Data? {
-        let handle = try FileHandle(forReadingFrom: url)
-        defer { try? handle.close() }
-        func read(_ offset: UInt64, _ length: UInt64) throws -> [UInt8] {
-            try handle.seek(toOffset: offset)
-            let bytes = try handle.read(upToCount: Int(length)) ?? Data()
-            guard bytes.count == Int(length) else { throw PMTilesError.truncated }
-            return Array(bytes)
-        }
-        let start = try read(0, UInt64(PMTilesHeader.byteCount))
-        let header = try PMTilesHeader(bytes: start)
-        let id = PMTilesTileID.id(z: RoutingGraphArchive.zoom, x: x, y: y)
-        var entries = try PMTilesDirectory.entries(
-            from: read(header.rootDirectoryOffset, header.rootDirectoryLength)
-        )
-        while let entry = PMTilesDirectory.entry(holding: id, in: entries) {
-            guard entry.isLeaf else {
-                return Data(try read(header.tileDataOffset + entry.offset, entry.length))
-            }
-            entries = try PMTilesDirectory.entries(from: read(header.leafDirectoryOffset + entry.offset, entry.length))
-        }
-        return nil
-    }
-}
-
 enum RoutingBuildError: Error, CustomStringConvertible {
     case notAnArchiveName(String)
     case outputIsNotABuild(String)
-    case tileWrittenTwice(UInt64)
-    case rootTooLarge(Int)
 
     var description: String {
         switch self {
@@ -450,10 +347,6 @@ enum RoutingBuildError: Error, CustomStringConvertible {
         case .outputIsNotABuild(let path):
             "\(path) holds files and no \(RoutingGraphBuild.recordFileName), so it is not an earlier routing "
                 + "build to replace. Name an empty directory, or a previous build's."
-        case .tileWrittenTwice(let id):
-            "tile \(id) was written twice."
-        case .rootTooLarge(let bytes):
-            "the root directory is \(bytes) bytes, past the archive's first \(PMTilesHeader.rootReadBytes)."
         }
     }
 }

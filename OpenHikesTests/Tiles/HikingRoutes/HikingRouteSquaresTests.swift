@@ -319,14 +319,14 @@ struct HikingRouteSquaresTests {
         #expect(database.requests.count == 2, "nothing was asked for during the back-off")
     }
 
-    /// Built, never asked: nothing here reaches CloudKit, which only a fetch
-    /// would.
-    @Test("the layer reads its own manifest, and waits longer for its squares than a search does")
+    /// Built, never asked: nothing here reaches the tile server, which only a
+    /// fetch would.
+    @Test("the layer reads its own archive, and waits longer for its squares than a search does")
     func liveDatabase() {
         let database = HikingRouteSquares.liveDatabase()
-        #expect(database.manifestRecordName == RouteSquareGrid.manifestRecordName)
-        #expect(database.requestTimeout > CloudKitTrailCellDatabase.searchRequestTimeout)
-        #expect(database.resourceTimeout > CloudKitTrailCellDatabase.searchResourceTimeout)
+        #expect(database.set == .routes)
+        #expect(database.requestTimeout > TrailCellLibrary.requestTimeout)
+        #expect(HikingRouteSquares.resourceTimeout > TrailCellLibrary.resourceTimeout)
     }
 
     /// MapKit asks about a waiting tile on every region change.

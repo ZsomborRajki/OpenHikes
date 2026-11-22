@@ -25,7 +25,7 @@
 //    square the boxes touch was read or is known not to exist. An empty one
 //    means nothing of those kinds is mapped there.
 //  - ``PlaceSquareAnswer/uncovered`` is the squares not reaching the search:
-//    none published in this environment, or a set that is only part of the
+//    no archive of them the tile server lists, or a set that is only part of the
 //    world, whose squares are not read at all. See ``TrailCellFetch/Manifest``.
 //  - ``PlaceSquareAnswer/unreachable`` is a square that should be readable
 //    and was not.
@@ -33,8 +33,9 @@
 //  Either of the last two sends the search to Overpass exactly as it went
 //  before there were squares, so no answer is worse than it was. What no
 //  answer costs is the wait for it first: on a connection too poor to bring
-//  the squares, up to ``CloudKitTrailCellDatabase``'s search timeouts, the
-//  day hikes' own, before Overpass is asked on the same connection.
+//  the squares, up to ``TrailCellLibrary/requestTimeout`` and
+//  ``TrailCellLibrary/resourceTimeout``, the day hikes' own, before Overpass
+//  is asked on the same connection.
 //
 //  **Asked on any network**, as Overpass was and as the day hikes' squares
 //  are, because a search is something the hiker asked for. The hiking-routes

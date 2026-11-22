@@ -1,19 +1,24 @@
 #!/usr/bin/env bash
 #
 # trail-cells.sh — file OpenStreetMap's waymarked day hikes into the squares the
-# Community tab's search reads, and put them in the public database. The same
-# for the hiking-routes layer's squares, for the places a place search offers
-# and for the trail graph's squares; and the graph the trail maker routes
-# over, which goes to the tile server's bucket instead.
+# Community tab's search reads, and the hiking-routes layer's squares and the
+# places a place search offers likewise; pack each set into one archive and put
+# it in the tile server's bucket. And build the graph a recording is matched
+# against and the trail maker routes over, trails and the roads that join
+# them, which goes to the same bucket as an archive of its own. The squares,
+# with the trail graph's own squares, are also in the public database for the
+# builds of the app that read them there, 1.5 to 1.7: `upload` keeps those
+# copies, and `prune` takes them away once those builds are gone.
 #
 # The search used to be a question for Overpass, and the answer was a wait in a
 # public server's queue. So the answer is built ahead of time, here: every
 # hiking route in an OpenStreetMap extract, filed by quarter-degree square, one
-# small file a square, which `upload` saves as one record a square in the
-# container's public database. The app then fetches the few squares a search
-# needs by name. `OpenHikes/Community/Curated/Cells/TrailCellGrid.swift` argues
-# the design and has the measurements; *The trail squares* in AGENTS.md is the
-# procedure.
+# small file a square, which `pack` puts in one PMTiles archive, a square a
+# tile. The app then fetches the few squares a search needs from the tile
+# server by name. `OpenHikes/Community/Curated/Cells/TrailCellGrid.swift` argues
+# the design and has the measurements, and
+# `OpenHikes/Tiles/Squares/SquareArchive.swift` says where a square goes in an
+# archive; *The trail squares* in AGENTS.md is the procedure.
 #
 # It is a *development* tool and is in no gate, though its parts are:
 # Scripts/run-script-tests.sh builds the tool and runs it against fixtures.
@@ -39,10 +44,15 @@
 #   Scripts/trail-cells.sh build-places <extract.osm.pbf> [--out <dir>] [--world] [--keep-work]
 #   Scripts/trail-cells.sh build-graph <extract.osm.pbf> [--out <dir>] [--world] [--keep-work]
 #   Scripts/trail-cells.sh build-routing <extract.osm.pbf> [--out <dir>] [--world] [--keep-work]
+#   Scripts/trail-cells.sh pack <dir> [--out <dir>] [--name <archive>]
+#   Scripts/trail-cells.sh upload-archive <dir>
 #   Scripts/trail-cells.sh upload-routing <dir>
 #   Scripts/trail-cells.sh routing-tile <archive.pmtiles> <x> <y> [--json]
+#   Scripts/trail-cells.sh archive-tile <archive.pmtiles> <square-name> [--json]
 #   Scripts/trail-cells.sh upload <dir> --environment development|production
 #                                 [--dry-run] [--yes] [--replace-world]
+#   Scripts/trail-cells.sh prune trails|routes|places|graph
+#                                 --environment development|production [--dry-run] [--yes]
 #   Scripts/trail-cells.sh whoami --environment development|production
 #   Scripts/trail-cells.sh inspect <file.cell> [--json]
 #   Scripts/trail-cells.sh cell <latitude> <longitude>
@@ -68,6 +78,8 @@
 #             Its working files go in <dir>.work and are deleted afterwards
 #             unless --keep-work. They are small beside the extract: Hungary's
 #             were 50 MB, for one in seventy-five of the world's hiking relations.
+#             `pack` makes the archive the app reads out of what it wrote, and
+#             `upload` puts the same squares in the public database.
 #   build-routes
 #             File every hiking route's ways into the hiking-routes layer's
 #             squares in <dir> (default .build/trail-cells/routes), four levels
@@ -86,8 +98,9 @@
 #             its squares in <dir> (default .build/trail-cells/graph): see
 #             OpenHikes/Recording/Squares/TrailGraphSquareGrid.swift. --world,
 #             --out and --keep-work as for build; it writes graph-manifest.json.
-#             What a planet's build needs is in AGENTS.md, under
-#             *The trail graph squares*.
+#             Only the public database's copy is built from it, for the builds
+#             that read it there: the app reads the trail graph out of the
+#             trail maker's archive, and `pack` refuses this build.
 #   build-routing
 #             File every trail and every road that joins trails, the graph
 #             the trail maker routes over, into one PMTiles archive in <dir>
@@ -108,19 +121,44 @@
 #             most. The build is written into <dir>.work and replaces an
 #             earlier one in <dir> only once it is whole, so that one needs
 #             room beside it until then.
-#   upload-routing
-#             Put the archive build-routing wrote in <dir> in the R2 bucket
-#             openhikes-tiles under its own name, refusing a build that is not
-#             the whole world and a name the bucket already holds, as
+#   pack      Pack what build, build-routes or build-places wrote in <dir>
+#             into one PMTiles archive for the tile server, each square's file
+#             as it is in the tile SquareArchive.swift gives it, into a
+#             directory of its own (default <dir>.archive) with
+#             archive-build.json beside it. It is named for the set and the
+#             hour the extract is current to, trails-YYYYMMDD-HH (routes-…,
+#             places-…), unless --name says otherwise. Only a build of the
+#             whole world is packed: the app reads a square the archive does
+#             not hold as ground with nothing on it. The archive is written
+#             beside the output and read back, every tile held to its file,
+#             before it replaces an earlier pack there.
+#   upload-archive
+#             Put the archive build-routing or pack wrote in <dir> in the R2
+#             bucket openhikes-tiles under its own name, refusing one that is
+#             not the whole world and a name the bucket already holds, as
 #             Scripts/vector-extras.sh upload does. Then name it in the app's
 #             manifest: Scripts/vector-archives.sh use <name>, then publish. It
 #             signs with R2's S3 keys (Scripts/lib/r2.sh).
+#   upload-routing
+#             upload-archive, for a directory build-routing wrote.
 #   upload    Make the public database hold what <dir> does: send the squares
 #             that changed, delete the ones that are gone, then say what the
 #             squares cover. --dry-run reads and plans, and changes nothing.
+#             The app reads its squares from the tile server; these copies are
+#             for the builds that read them in the public database.
+#   prune     Take one set of squares out of the public database, once no
+#             installed build reads it there: make its manifest say the
+#             squares are not the whole world, so those builds ask Overpass,
+#             delete every square the manifest lists, then the manifest, which
+#             is the only list of them. Stopped part of the way, it carries on
+#             from there when run again. --dry-run reads and plans, and changes
+#             nothing; production needs --yes, as upload's does.
 #   routing-tile
 #             Print what a z12 tile of the trail maker's archive holds, read by
 #             the archive's own directories as the tile server reads them.
+#   archive-tile
+#             Print what the square of that name holds, read out of an archive
+#             of its set as the tile server reads it.
 #   whoami    Print the account the server-to-server key acts as.
 #   inspect   Print what a square's file holds.
 #   cell      Print the record name of the square a point is in.
@@ -135,7 +173,7 @@
 #   is read before the plain name.
 #   OPENHIKES_TRAIL_CELLS_BUILD  Where the tool is compiled to
 #                                (default .build/trail-cells).
-#   OPENHIKES_R2_ENV             upload-routing's R2 keys (default
+#   OPENHIKES_R2_ENV             upload-archive's R2 keys (default
 #                                ~/.config/openhikes/r2-openhikes-tiles.env).
 #
 # Exit status:
@@ -192,6 +230,7 @@ tool_sources() {
         "$repository_root/OpenHikes/Recording/Squares/TrailGraphSquareGrid.swift" \
         "$repository_root/OpenHikes/Recording/Squares/TrailGraphSquareFile.swift" \
         "$repository_root/OpenHikes/Recording/Squares/RoutingGraphArchive.swift" \
+        "$repository_root/OpenHikes/Tiles/Squares/SquareArchive.swift" \
         "$repository_root/OpenHikes/Recording/TrailGraphHighway.swift" \
         "$repository_root/OpenHikes/Tiles/Countries/PMTilesFile.swift" \
         "$repository_root/OpenHikes/Community/Transport/CommunitySchema.swift"
@@ -475,18 +514,55 @@ located_bands() {
     done
 }
 
-# `upload-routing <dir>`: the archive a whole-world build wrote, into the
-# bucket under its own name, refusing one already there.
-upload_routing() {
-    [[ $# -eq 1 ]] || usage_error "upload-routing takes the directory build-routing wrote."
-    local directory="$1" record name complete archive
-    record="$directory/routing-build.json"
-    [[ -f "$record" ]] || die "$directory holds no routing-build.json. Build it with build-routing first."
+# `pack <build-dir> [--out <dir>] [--name <archive>]`: the tool's pack, into a
+# directory beside the build unless --out names another.
+pack() {
+    local build="" out="" name=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --out|--name)
+                [[ $# -ge 2 ]] || usage_error "missing value for $1."
+                if [[ "$1" == --out ]]; then out="$2"; else name="$2"; fi
+                shift 2
+                ;;
+            -*)
+                usage_error "unknown option '$1'."
+                ;;
+            *)
+                [[ -z "$build" ]] || usage_error "unexpected argument '$1'."
+                build="$1"
+                shift
+                ;;
+        esac
+    done
+    [[ -n "$build" ]] || usage_error "pack needs the directory a build wrote."
+    [[ -d "$build" ]] || die "there is no build at $build."
+    [[ -n "$out" ]] || out="${build%/}.archive"
+    prepare_tool
+    local arguments=(pack "$build" --out "$out")
+    [[ -z "$name" ]] || arguments+=(--name "$name")
+    "$tool" "${arguments[@]}"
+    echo "Next, Scripts/trail-cells.sh upload-archive $out"
+}
+
+# `upload-archive <dir>`: the archive a whole-world build-routing or pack
+# wrote, into the bucket under its own name, refusing one already there.
+upload_archive() {
+    [[ $# -eq 1 ]] || usage_error "upload-archive takes the directory build-routing or pack wrote."
+    local directory="$1" record="" file name complete archive
+    for file in routing-build.json archive-build.json; do
+        [[ -f "$directory/$file" ]] || continue
+        [[ -z "$record" ]] || die "$directory holds both routing-build.json and archive-build.json, so which \
+archive it is for cannot be told. Build or pack into a directory of its own."
+        record="$directory/$file"
+    done
+    [[ -n "$record" ]] || die "$directory holds no routing-build.json or archive-build.json. Build it with \
+build-routing, or pack a build of squares, first."
     name="$(plutil -extract name raw -o - "$record" 2>/dev/null)" || die "$record names no archive."
     complete="$(plutil -extract complete raw -o - "$record" 2>/dev/null)" || die "$record does not say what it covers."
     [[ "$complete" == true ]] || die "$name is not the whole world. The app reads a tile the archive does \
-not hold as ground with no ways on it, so only a build of the planet with --world goes up."
-    [[ "$name" =~ ^routing-[0-9]{8}-[0-9]{2}$ ]] \
+not hold as ground with nothing on it, so only a build of the planet with --world goes up."
+    [[ "$name" =~ ^(routing|trails|routes|places)-[0-9]{8}-[0-9]{2}$ ]] \
         || die "$name is not named for the hour its planet is current to. Build it from a planet whose header says."
     archive="$directory/$name.pmtiles"
     [[ -f "$archive" ]] || die "there is no archive at $archive."
@@ -494,6 +570,14 @@ not hold as ground with no ways on it, so only a build of the planet with --worl
     [[ -z "$(r2_etag "$name.pmtiles")" ]] || die "$name.pmtiles is already in $R2_BUCKET; build from a newer planet."
     r2_put_parts "$archive" "$name.pmtiles" 256
     echo "Next, Scripts/vector-archives.sh use $name, then publish."
+}
+
+# `upload-routing <dir>`: upload-archive, for the directory build-routing
+# wrote, by the name it had before there were other archives.
+upload_routing() {
+    [[ $# -eq 1 ]] || usage_error "upload-routing takes the directory build-routing wrote."
+    [[ -f "$1/routing-build.json" ]] || die "$1 holds no routing-build.json. Build it with build-routing first."
+    upload_archive "$1"
 }
 
 # `update-planet`: pyosmium-up-to-date, again for as long as it says more
@@ -626,13 +710,19 @@ case "$command" in
     build-routing)
         build_routing "$@"
         ;;
+    pack)
+        pack "$@"
+        ;;
+    upload-archive)
+        upload_archive "$@"
+        ;;
     upload-routing)
         upload_routing "$@"
         ;;
-    upload|whoami)
+    upload|prune|whoami)
         with_database "$command" "$@"
         ;;
-    inspect|cell|sign|routing-tile)
+    inspect|cell|sign|routing-tile|archive-tile)
         prepare_tool
         "$tool" "$command" "$@"
         ;;

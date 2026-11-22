@@ -2,35 +2,41 @@
 //  TrailGraphSquareLibrary.swift
 //  OpenHikes
 //
-//  A region of the trail graph answered from the pre-built squares: the one
-//  square the region lies in, from this device or in one request, and the
-//  graph of every trail in it that crosses the region.
+//  A region of the trail graph answered from the pre-built graph on the tile
+//  server: the tile the region is, from one request, and the graph of every
+//  way in it that crosses the region.
 //
-//  ``OverpassTrailGraphProvider`` asks this before it asks Overpass, on the
-//  terms the day hikes' squares keep (see ``TrailCellLibrary``):
+//  Both of a launch's trail graph providers ask this before they ask
+//  Overpass: the recorder's, which a hike's breakdowns and the route's
+//  colours read too, and the trail maker's. The archive holds every trail
+//  and the roads that join them (``RoutingGraphArchive``), which is what an
+//  Overpass answer for the region holds, so a region reads the same from
+//  either; the readers that want trails alone keep the edges that are
+//  trails (``TrailGraphEdge/isTrail``), as they always did. It answers on
+//  the terms the day hikes' squares keep (see ``TrailCellLibrary``):
 //
-//  - ``TrailGraphSquareAnswer/graph(_:)`` is the region's trails, given only
-//    when the squares are the whole world. An empty graph means there are no
-//    trails there.
-//  - ``TrailGraphSquareAnswer/uncovered`` is the squares not reaching the
-//    region: none published in this environment, or a set that is only part
-//    of the world, whose squares are not read at all.
-//  - ``TrailGraphSquareAnswer/unreachable`` is a square that should be
+//  - ``TrailGraphSquareAnswer/graph(_:fetchedAt:)`` is the region's ways,
+//    given only when the server's archive is the whole world. An empty graph
+//    means there are no trails there.
+//  - ``TrailGraphSquareAnswer/uncovered`` is the server listing no archive
+//    this build reads.
+//  - ``TrailGraphSquareAnswer/unreachable`` is a tile that should be
 //    readable and was not.
 //
 //  Either of the last two sends the region to Overpass exactly as it went
 //  before there were squares.
 //
-//  ## One square, many regions
+//  ## A square, and the regions waiting on it
 //
-//  A square is sixteen of the provider's regions, and a recording asks for
-//  the nine around the hiker at once. So a square is fetched once however
-//  many regions are waiting on it, the last one read is kept decoded, and
-//  every square fetched is kept on disk, in a store of its own.
-//
-//  The trail maker's graph is read through the same library from a set of
-//  its own, laid out a square a region (``Layout/routing``), which the tile
-//  server holds with the roads in it: see ``RoutingGraphArchive``.
+//  The library reads a square by name, and a square may hold several of the
+//  provider's regions (``Layout``). On the tile server a square is one
+//  region; the trail graph's squares in the public database, which builds
+//  before this one read, were sixteen. Either way a square is fetched once
+//  however many regions are waiting on it, and the last one read is kept
+//  decoded. Given a directory, the library keeps every square it fetched on
+//  disk too, in a store of its own; a launch gives it none, because the
+//  provider keeps every region it reads for thirty days, and a tile is a
+//  region.
 //
 //  The fetch is counted the way the provider counts a region's: it goes on
 //  while any region waits on it, and is cancelled when the last one stops
@@ -42,7 +48,7 @@
 //  A square that could not be read is left for a minute, as the
 //  hiking-routes layer leaves one: its regions go to Overpass meanwhile, and
 //  a square too large for the signal is not downloaded again from the start
-//  for each of the sixteen regions it holds.
+//  for every region waiting on it.
 //
 //  ## As old as the square
 //
@@ -59,9 +65,7 @@
 //  box, whole, an edge for each segment between two different nodes, joined
 //  at the nodes' ids. The one difference is a segment with no length, which
 //  a square keeps and the decoder leaves out — see
-//  ``graph(of:crossing:)``. What the public database's squares leave out is
-//  the roads, which only the trail maker asks about — see
-//  ``TrailGraphSquareGrid`` — and so the maker reads its own set.
+//  ``graph(of:crossing:)``.
 //
 
 import Algorithms
@@ -73,7 +77,7 @@ import os
 
 /// What the pre-built squares had to say about a region of the trail graph.
 nonisolated enum TrailGraphSquareAnswer: Sendable {
-    /// The trails that cross the region, which may be none, and when the
+    /// The ways that cross the region, which may be none, and when the
     /// square they were read out of was fetched.
     case graph(TrailGraph, fetchedAt: Date)
     /// The squares do not reach this region, so nothing is known from them.
@@ -82,27 +86,21 @@ nonisolated enum TrailGraphSquareAnswer: Sendable {
     case unreachable
 }
 
-/// The trail graph's pre-built squares, read through a disk cache.
+/// The trail graph's pre-built squares.
 ///
 /// An actor, unlike the other sets' libraries, because what it holds is
-/// shared by the regions asked about at once: the fetch of a square nine of
-/// them are waiting on, and the square read last.
+/// shared by the regions asked about at once: the fetch of a square the
+/// regions are waiting on, and the square read last.
 actor TrailGraphSquareLibrary {
     private static let logger = Logger(subsystem: "OpenHikes", category: "TrailGraphSquares")
 
-    /// How many squares are kept on disk.
-    ///
-    /// A recording's nine regions lie in one to four squares, so this is a
-    /// few days of walking. The median square is 5.4 KB and one in a hundred
-    /// is over 627 KB; the one around Berchtesgaden is 683 KB and the largest,
-    /// over Paris, 6.0 MB — a third more once it is a file here. In `Caches`,
-    /// where the system takes the lot back when it wants the room.
+    /// How many squares are kept on disk, by a library given a directory.
     static let maximumFiles = 32
 
     /// How long a request may go quiet, and take in all, in seconds: the
-    /// hiking-routes layer's, because a square is as large as one of its and
-    /// is mostly asked for while a recording walks on, with Overpass behind
-    /// it if it fails.
+    /// hiking-routes layer's, because a tile can be as large as one of its
+    /// squares (the largest, over Paris, is 1.7 MB) and is mostly asked for
+    /// while a recording walks on, with Overpass behind it if it fails.
     static let requestTimeout: TimeInterval = 30
     static let resourceTimeout: TimeInterval = 120
     /// How long a square that could not be read is left before it is asked
@@ -110,26 +108,20 @@ actor TrailGraphSquareLibrary {
     /// same reason.
     static let failedRetry: TimeInterval = HikingRouteSquares.failedRetry
 
-    /// Where the files live for an ordinary launch: `Caches`, beside the
-    /// other sets' squares.
-    static func defaultDirectory() -> URL? {
-        FileManager.default
-            .urls(for: .cachesDirectory, in: .userDomainMask)
-            .first?
-            .appendingPathComponent("TrailGraphSquares", isDirectory: true)
-    }
-
-    /// The squares for this launch, read from the public database, or `nil`
-    /// for a launch under test, UI tests included, on the terms
-    /// ``OpenHikesModel/makeCommunityTransport()`` keeps: there is no sandbox
-    /// for a public database, so no suite may fetch from it.
+    /// The trail graph for this launch, read from the tile server, or `nil`
+    /// for a launch under test, UI tests included: no suite reaches the tile
+    /// server (see ``SquareArchiveServer``). One library serves both of the
+    /// launch's providers, which read the same tiles.
     static func forThisLaunch() -> TrailGraphSquareLibrary? {
         guard !AppLaunchEnvironment.isRunningTests else { return nil }
-        return TrailGraphSquareLibrary(database: CloudKitTrailCellDatabase(
-            manifestRecordName: TrailGraphSquareGrid.manifestRecordName,
-            requestTimeout: requestTimeout,
-            resourceTimeout: resourceTimeout
-        ))
+        return TrailGraphSquareLibrary(
+            database: SquareArchiveServer.live(
+                .routing,
+                requestTimeout: requestTimeout,
+                resourceTimeout: resourceTimeout
+            ),
+            layout: .routing
+        )
     }
 
     /// What reading one square came to.
@@ -159,12 +151,8 @@ actor TrailGraphSquareLibrary {
         var squareZoom: Int
         var name: @Sendable (TrailGraphSquare) -> String
 
-        /// The trail graph's squares in the public database.
-        static let trails = Layout(squareZoom: TrailGraphSquareGrid.squareZoom) { square in
-            TrailGraphSquareGrid.recordName(for: square)
-        }
-
-        /// The trail maker's, on the tile server: a square is a region.
+        /// The trail graph's archive on the tile server: a square is a
+        /// region.
         static let routing = Layout(squareZoom: RoutingGraphArchive.zoom) { tile in
             RoutingGraphArchive.squareName(for: tile)
         }
@@ -180,12 +168,11 @@ actor TrailGraphSquareLibrary {
     private var failedUntil: [String: Date] = [:]
 
     /// - Parameter directory: Where fetched squares are kept between
-    ///   launches. A suite passes one of its own, and must: the default is
-    ///   the app's `Caches`.
+    ///   launches, or `nil` to keep none.
     init(
         database: any TrailCellFetching,
-        layout: Layout = .trails,
-        directory: URL? = TrailGraphSquareLibrary.defaultDirectory(),
+        layout: Layout = .routing,
+        directory: URL? = nil,
         clock: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.database = database

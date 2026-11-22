@@ -9,9 +9,10 @@
 //  app over whichever map is selected. `Scripts/trail-cells.sh build-routes`
 //  reads a planet file, keeps each way that belongs to a route **once** —
 //  with the routes it belongs to, so a path four routes share is one line
-//  rather than four — and files the ways into squares, one record a square in
-//  the public database, which the map fetches by name for the ground it
-//  draws. See ``RouteSquareFile`` for what a square holds.
+//  rather than four — and files the ways into squares, one tile a square of an
+//  archive on the tile server (see ``SquareArchive``), which the map fetches
+//  by name for the ground it draws. See ``RouteSquareFile`` for what a square
+//  holds.
 //
 //  ## Four levels, measured on the planet of 2026-11-09
 //

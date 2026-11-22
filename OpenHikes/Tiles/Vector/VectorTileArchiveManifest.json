@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "revision": 10,
+  "revision": 11,
   "basemaps": [
     { "name": "planet-20261118", "schema": 4, "maximumZoom": 15 }
   ],
@@ -9,5 +9,14 @@
   ],
   "routing": [
     { "name": "routing-20261122-00", "generation": 1, "zoom": 12 }
+  ],
+  "trails": [
+    { "name": "trails-20261122-00", "generation": 1, "zoom": 11 }
+  ],
+  "routes": [
+    { "name": "routes-20261122-00", "generation": 1, "zoom": 11 }
+  ],
+  "places": [
+    { "name": "places-20261122-00", "generation": 1, "zoom": 9 }
   ]
 }

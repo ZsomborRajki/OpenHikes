@@ -10,10 +10,12 @@
 //  2026-11-13, `overpass-api.de` held the map above the sheet for 29 and 42
 //  seconds and refused it outright twice more. So the answer is now built
 //  ahead of time — `Scripts/trail-cells.sh` reads an OpenStreetMap extract and
-//  files every waymarked day hike under one square of this grid — and kept in
-//  the public database, one record a square, where a search fetches the few
-//  squares it needs by name. See ``TrailCellLibrary`` for the reading and
-//  ``TrailCellFile`` for what one square holds.
+//  files every waymarked day hike under one square of this grid — and kept on
+//  the tile server, one tile of an archive a square, where a search fetches
+//  the few squares it needs by name. See ``TrailCellLibrary`` for the
+//  reading, ``TrailCellFile`` for what one square holds and ``SquareArchive``
+//  for where it is kept. Builds before that read the same squares as records
+//  of the public database, one a square, under the same names.
 //
 //  ## A quarter of a degree, and a route filed once
 //

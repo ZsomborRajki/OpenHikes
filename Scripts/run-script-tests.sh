@@ -5259,6 +5259,144 @@ if expect_status 2 && expect_contains "$output" "unknown option '--planet'" "the
     pass
 fi
 
+# Each of the three sets the app reads from the tile server is packed out of
+# its build into one PMTiles archive, a square a tile, named for the set and
+# the hour the extract is current to. Every square reads back out of it,
+# through the archive's own directories as the tile server reads them, as the
+# very file the build wrote: archive-tile prints it as inspect prints the file.
+for pack_case in "trails:$cells_squares:11 to 11" "routes:$routes_squares:7 to 11" "places:$places_squares:9 to 9"; do
+    IFS=: read -r pack_list pack_build pack_zooms <<< "$pack_case"
+    pack_archive="$pack_build.archive/$pack_list-20261112-21.pmtiles"
+    run_script "trail-cells pack packs the $pack_list squares into one archive named for the set and the hour" \
+        "$trail_cells" pack "$pack_build"
+    if expect_status 0 \
+        && expect_contains "$output" "Packed $(ls "$pack_build/cells" | wc -l | tr -d ' ') squares of the $pack_list" \
+            "the summary" \
+        && expect_contains "$output" "at zoom $pack_zooms." "the summary" \
+        && expect_contains "$output" "Every tile read back as its square's file." "the summary" \
+        && expect_contains "$output" "Next, Scripts/trail-cells.sh upload-archive $pack_build.archive" "the output"; then
+        pack_record="$(cat "$pack_build.archive/archive-build.json" 2>/dev/null)"
+        if [[ ! -f "$pack_archive" ]]; then
+            fail "the archive is not named for the set and the hour" "$(ls "$pack_build.archive")"
+        elif [[ "$pack_record" != *'"complete" : true'* || "$pack_record" != *"\"list\" : \"$pack_list\""* \
+            || "$pack_record" != *"\"name\" : \"$pack_list-20261112-21\""* \
+            || "$pack_record" != *"\"zoom\" : ${pack_zooms##* }"* ]]; then
+            fail "the pack does not say what it is" "$pack_record"
+        elif [[ -e "$pack_build.archive.staging" ]]; then
+            fail "the staging directory was left behind"
+        else
+            pass
+        fi
+    fi
+
+    pack_unread=""
+    for pack_file in "$pack_build"/cells/*.cell; do
+        pack_square="$(basename "$pack_file" .cell)"
+        run_script "trail-cells archive-tile reads $pack_square back" \
+            "$trail_cells" archive-tile "$pack_archive" "$pack_square" --json
+        pack_tile="$output"
+        run_script "trail-cells inspect reads $pack_square" "$trail_cells" inspect "$pack_file" --json
+        [[ "$pack_tile" == "$output" && -n "$output" ]] || pack_unread+="$pack_square "
+    done
+    current="trail-cells archive-tile reads every $pack_list square back as the file the build wrote"
+    if [[ -z "$pack_unread" ]]; then
+        pass
+    else
+        fail "these squares do not read back as their files" "$pack_unread"
+    fi
+done
+
+run_script "trail-cells archive-tile finds no tile where no square is" \
+    "$trail_cells" archive-tile "$cells_squares.archive/trails-20261112-21.pmtiles" trails1_0_0
+if expect_status 0 && expect_contains "$output" "no tile 11/0/0" "the output"; then
+    pass
+fi
+
+run_script "trail-cells archive-tile refuses a square of a set at a zoom the archive does not hold" \
+    "$trail_cells" archive-tile "$cells_squares.archive/trails-20261112-21.pmtiles" places1_100_200
+if expect_status 2 \
+    && expect_contains "$output" "places1_100_200 is a places square, at zoom 9, and the archive holds zoom 11 to 11" \
+        "the error"; then
+    pass
+fi
+
+run_script "trail-cells archive-tile refuses a name that is no square" \
+    "$trail_cells" archive-tile "$cells_squares.archive/trails-20261112-21.pmtiles" trails1_720_0
+if expect_status 2 && expect_contains "$output" "'trails1_720_0' is not the name of a square of any set" "the error"; then
+    pass
+fi
+
+# The app reads a square the archive does not hold as ground with nothing on
+# it, so a region packed would answer "nothing here" for the rest of the world.
+run_script "trail-cells pack refuses a build that is not the whole world, and writes nothing" \
+    "$trail_cells" pack "$cells_work/region"
+if expect_status 1 && expect_contains "$output" "region is not the whole world" "the error"; then
+    if [[ -e "$cells_work/region.archive" || -e "$cells_work/region.archive.staging" ]]; then
+        fail "something was written for a build that is not the world" "$(ls "$cells_work")"
+    else
+        pass
+    fi
+fi
+
+run_script "trail-cells pack refuses the trail graph's squares, which the app reads from the trail maker's archive" \
+    "$trail_cells" pack "$graph_squares"
+if expect_status 1 && expect_contains "$output" "the trail maker's archive, which build-routing builds" "the error" \
+    && [[ ! -e "$graph_squares.archive" ]]; then
+    pass
+fi
+
+run_script "trail-cells pack refuses a name that is not its set's" \
+    "$trail_cells" pack "$cells_squares" --out "$cells_work/misnamed" --name routes-20261112-21
+if expect_status 1 \
+    && expect_contains "$output" "'routes-20261112-21' is not a name the app asks the tile server for: \`trails\`" \
+        "the error" \
+    && [[ ! -e "$cells_work/misnamed" ]]; then
+    pass
+fi
+
+# The layer's build with its kind taken off reads as the day hikes', and lists
+# squares the day hikes' archive has no tile for.
+mkdir -p "$cells_work/stray-squares"
+sed 's/"kind" : "routes",//' "$routes_squares/routes-manifest.json" > "$cells_work/stray-squares/manifest.json"
+run_script "trail-cells pack refuses a build that lists another set's square" \
+    "$trail_cells" pack "$cells_work/stray-squares"
+if expect_status 1 && expect_contains "$output" "which is not one of the trails squares" "the error"; then
+    pass
+fi
+
+run_script "trail-cells pack refuses a directory that holds something else, and leaves it alone" \
+    "$trail_cells" pack "$cells_squares" --out "$cells_work/not-a-build"
+if expect_status 1 && expect_contains "$output" "is not an earlier pack to replace" "the error"; then
+    if [[ "$(ls "$cells_work/not-a-build")" != "notes.txt" ]]; then
+        fail "the directory was written into" "$(ls "$cells_work/not-a-build")"
+    elif [[ -e "$cells_work/not-a-build.staging" ]]; then
+        fail "the staging directory was left behind"
+    else
+        pass
+    fi
+fi
+
+# A pack replaces an earlier one, archive and record together, and the record
+# names the archive that is there.
+run_script "trail-cells pack names an archive as it is told" \
+    "$trail_cells" pack "$cells_squares" --out "$cells_work/repacked" --name trails-20261105-00
+if expect_status 0 && [[ -f "$cells_work/repacked/trails-20261105-00.pmtiles" ]]; then
+    pass
+fi
+run_script "trail-cells pack replaces an earlier pack once the new one reads back" \
+    "$trail_cells" pack "$cells_squares" --out "$cells_work/repacked"
+if expect_status 0; then
+    if [[ "$(ls "$cells_work/repacked" | tr '\n' ' ')" != "archive-build.json trails-20261112-21.pmtiles " ]]; then
+        fail "the earlier archive was left beside the new one" "$(ls "$cells_work/repacked")"
+    elif ! cmp -s "$cells_work/repacked/trails-20261112-21.pmtiles" "$cells_squares.archive/trails-20261112-21.pmtiles"; then
+        fail "a second pack of the same build is not the same archive"
+    elif [[ "$(cat "$cells_work/repacked/archive-build.json")" != *'"name" : "trails-20261112-21"'* ]]; then
+        fail "the record is not the new pack's" "$(cat "$cells_work/repacked/archive-build.json")"
+    else
+        pass
+    fi
+fi
+
 # The planet is kept current from OpenStreetMap's published changes, because
 # the volunteers who serve it asked that it not be downloaded again for each
 # refresh. A pass that says more are waiting is followed by another, and any
@@ -5466,6 +5604,89 @@ fi
 run_script "trail-cells upload does not take a container: it is the app's" \
     "$trail_cells" upload "$cells_squares" --environment development --container iCloud.example --dry-run
 if expect_status 2 && expect_contains "$output" "the container is the app's own" "the error"; then
+    pass
+fi
+
+# prune takes a set out of the public database once no installed build reads
+# it there, in an order a stopped prune can carry on from: the manifest says
+# the squares are not the whole world before any square goes, so those builds
+# ask Overpass instead, and the manifest, the only list of the squares, goes
+# last. Planned here against saved states, as upload's are. The manifest lists
+# a square that has no record, which there is nothing to delete of, and one of
+# the layer's, which is left alone.
+cat > "$cells_work/prune-remote.json" <<'EOF'
+{
+  "manifestExists": true,
+  "complete": true,
+  "listed": ["trails1_550_771", "trails1_10_10", "trails1_11_11", "routes1_z7_34_48"],
+  "digests": { "trails1_550_771": "aaaa", "trails1_10_10": "0000", "routes1_z7_34_48": "0000" }
+}
+EOF
+run_script "trail-cells prune marks the manifest, then deletes the squares it lists, then the manifest" \
+    "$trail_cells" prune trails --environment production --dry-run --against "$cells_work/prune-remote.json"
+if expect_status 0 \
+    && expect_contains "$output" \
+        "iCloud.tappium.com.OpenHikes, production, trails1_manifest: 2 squares to delete, then the manifest." "the plan" \
+    && expect_contains "$output" "Leaving alone 1 records trails1_manifest lists that are not its squares." "the plan" \
+    && expect_contains "$output" "Before any square is deleted, the manifest is made to say the squares are no longer \
+the whole world, so the builds that read them send every search back to Overpass." "the plan" \
+    && expect_contains "$output" "Dry run: nothing was changed." "the output"; then
+    pass
+fi
+
+# A prune that stopped after the first step finds the manifest saying so, and
+# goes on with the squares still there.
+sed 's/"complete": true/"complete": false/' "$cells_work/prune-remote.json" > "$cells_work/prune-resumed.json"
+run_script "trail-cells prune carries on from a manifest that already says the squares are not the world" \
+    "$trail_cells" prune trails --environment development --dry-run --against "$cells_work/prune-resumed.json"
+if expect_status 0 \
+    && expect_contains "$output" "The manifest already says the squares are not the whole world." "the plan" \
+    && expect_absent "$output" "Before any square is deleted" "the plan"; then
+    pass
+fi
+
+printf '%s\n' '{ "manifestExists": false, "complete": false, "listed": [], "digests": {} }' \
+    > "$cells_work/prune-gone.json"
+run_script "trail-cells prune finds nothing to delete where there is no manifest" \
+    "$trail_cells" prune places --environment development --dry-run --against "$cells_work/prune-gone.json"
+if expect_status 0 \
+    && expect_contains "$output" "places1_manifest: there is no manifest, so no list of squares to delete" "the output"; then
+    pass
+fi
+
+cat > "$cells_work/prune-routes.json" <<'EOF'
+{
+  "manifestExists": true,
+  "complete": true,
+  "listed": ["routes1_z7_34_48", "routes1_z14_550_771"],
+  "digests": { "routes1_z7_34_48": "0000", "routes1_z14_550_771": "0000" }
+}
+EOF
+run_script "trail-cells prune takes each set's squares under its own manifest" \
+    "$trail_cells" prune routes --environment development --dry-run --against "$cells_work/prune-routes.json"
+if expect_status 0 \
+    && expect_contains "$output" ", development, routes1_manifest: 2 squares to delete, then the manifest." "the plan" \
+    && expect_contains "$output" "leave the hiking-routes layer drawing nothing" "the plan"; then
+    pass
+fi
+
+run_script "trail-cells prune takes one of the sets and nothing else" \
+    "$trail_cells" prune hikes --environment development --dry-run --against "$cells_work/prune-remote.json"
+if expect_status 2 && expect_contains "$output" "'hikes' is not a set of squares: graph, places, routes, trails." \
+    "the error"; then
+    pass
+fi
+
+run_script "trail-cells prune only plans against a saved state" \
+    "$trail_cells" prune trails --environment development --against "$cells_work/prune-remote.json"
+if expect_status 2 && expect_contains "$output" "--against only plans" "the error"; then
+    pass
+fi
+
+run_script "trail-cells prune says where the key comes from when it has none" \
+    env -u OPENHIKES_CLOUDKIT_KEY_ID -u OPENHIKES_CLOUDKIT_KEY_FILE \
+    "$trail_cells" prune trails --environment production --dry-run
+if expect_status 2 && expect_contains "$output" "OPENHIKES_CLOUDKIT_KEY_ID_PRODUCTION" "the error"; then
     pass
 fi
 
@@ -6288,6 +6509,54 @@ if expect_status 1 \
     pass
 fi
 
+# upload-archive puts a pack in the bucket as upload-routing puts the trail
+# maker's archive, under the name the pack gave it and on the same condition.
+STUB_BUCKET="$routing_bucket" \
+    run_script "trail-cells upload-archive sends a pack in parts under its own name" \
+    "$trail_cells" upload-archive "$cells_squares.archive"
+if expect_status 0 \
+    && expect_contains "$calls" "stub-bucket/trails-20261112-21.pmtiles?uploads" "the requests" \
+    && expect_contains "$output" "uploaded trails-20261112-21.pmtiles" "the output" \
+    && expect_contains "$output" "Next, Scripts/vector-archives.sh use trails-20261112-21, then publish." "the output"; then
+    if cmp -s "$routing_bucket/trails-20261112-21.pmtiles" "$cells_squares.archive/trails-20261112-21.pmtiles"; then
+        pass
+    else
+        fail "the bucket does not hold the archive"
+    fi
+fi
+
+STUB_BUCKET="$routing_bucket" \
+    run_script "trail-cells upload-archive refuses a name already in the bucket, before sending anything" \
+    "$trail_cells" upload-archive "$cells_squares.archive"
+if expect_status 1 \
+    && expect_contains "$output" "trails-20261112-21.pmtiles is already in stub-bucket" "the error" \
+    && expect_absent "$calls" "?uploads" "the requests"; then
+    pass
+fi
+
+STUB_BUCKET="$routing_bucket" \
+    run_script "trail-cells upload-archive refuses a directory that is no archive's, before sending anything" \
+    "$trail_cells" upload-archive "$cells_squares"
+if expect_status 1 \
+    && expect_contains "$output" "holds no routing-build.json or archive-build.json" "the error" \
+    && expect_absent "$calls" "curl" "the requests"; then
+    pass
+fi
+
+cells_partial_pack="$bucket_work/partial-pack"
+mkdir -p "$cells_partial_pack"
+cp "$routes_squares.archive/routes-20261112-21.pmtiles" "$cells_partial_pack/"
+sed 's/"complete" : true/"complete" : false/' "$routes_squares.archive/archive-build.json" \
+    > "$cells_partial_pack/archive-build.json"
+STUB_BUCKET="$routing_bucket" \
+    run_script "trail-cells upload-archive refuses an archive that is not the whole world, before sending anything" \
+    "$trail_cells" upload-archive "$cells_partial_pack"
+if expect_status 1 \
+    && expect_contains "$output" "routes-20261112-21 is not the whole world" "the error" \
+    && expect_absent "$calls" "curl" "the requests"; then
+    pass
+fi
+
 # `use` puts the new basemap first, drops the one of its schema behind it,
 # which no build would draw from any more, and keeps the first of another
 # schema for the builds that read only that. The server has this manifest's
@@ -6440,6 +6709,133 @@ if expect_status 0 \
     && expect_absent "$(cat "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST")" "routing-20261122-00" "the manifest"; then
     pass
 fi
+
+# The day hikes', the hiking-routes layer's and the places' archives have a
+# list each after `routing`, which a manifest from before them does not have,
+# on the routing list's terms: the first names its generation, and each is
+# listed at the deepest zoom the server says its tiles are at. The lists go
+# in one order whichever is named first.
+cp "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST" "$bucket_work/before-squares.json"
+run_script "vector-archives use refuses a first trails archive that names no generation" \
+    "$vector_archives" use trails-20261122-00
+if expect_status 1 && expect_contains "$output" "has no trails to take the generation from" "the error"; then
+    if cmp -s "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST" "$bucket_work/before-squares.json"; then
+        pass
+    else
+        fail "the manifest was edited" "$(cat "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST")"
+    fi
+fi
+
+STUB_TILESET_ZOOM=11 \
+    run_script "vector-archives use starts the trails list after the routing list, at the zoom the server reads" \
+    "$vector_archives" use trails-20261122-00 --generation 1
+if expect_status 0 && expect_contains "$output" "trails-20261122-00 heads the trails at revision 5" "the output"; then
+    expected_squares="$(printf '%s\n' '  "routing": [' \
+        '    { "name": "routing-20261129-00", "generation": 1, "zoom": 12 }' '  ],' '  "trails": [' \
+        '    { "name": "trails-20261122-00", "generation": 1, "zoom": 11 }' '  ]' '}')"
+    if expect_contains "$(cat "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST")" "$expected_squares" "the manifest"; then
+        pass
+    fi
+fi
+
+STUB_TILESET_ZOOM=9 run_script "vector-archives use starts the places list after the trails list" \
+    "$vector_archives" use places-20261122-00 --generation 1
+STUB_TILESET_ZOOM=11 run_script "vector-archives use puts the routes list between the trails and the places" \
+    "$vector_archives" use routes-20261122-00 --generation 1
+if expect_status 0 && expect_contains "$output" "routes-20261122-00 heads the routes at revision 5" "the output"; then
+    expected_squares="$(printf '%s\n' '  "trails": [' \
+        '    { "name": "trails-20261122-00", "generation": 1, "zoom": 11 }' '  ],' '  "routes": [' \
+        '    { "name": "routes-20261122-00", "generation": 1, "zoom": 11 }' '  ],' '  "places": [' \
+        '    { "name": "places-20261122-00", "generation": 1, "zoom": 9 }' '  ]' '}')"
+    if expect_contains "$(cat "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST")" "$expected_squares" "the manifest"; then
+        pass
+    fi
+fi
+
+STUB_TILESET_ZOOM=11 run_script "vector-archives use puts a later trails archive in the place of one of its generation" \
+    "$vector_archives" use trails-20261129-00
+if expect_status 0 \
+    && expect_contains "$(cat "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST")" \
+        '{ "name": "trails-20261129-00", "generation": 1, "zoom": 11 }' "the manifest" \
+    && expect_absent "$(cat "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST")" "trails-20261122-00" "the manifest" \
+    && expect_contains "$(cat "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST")" "routes-20261122-00" "the manifest"; then
+    pass
+fi
+
+# A manifest with none of the lists of squares is written as it was before
+# there were any, byte for byte.
+cat > "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST" <<'EOF'
+{
+  "version": 1,
+  "revision": 6,
+  "basemaps": [
+    { "name": "planet-20261118", "schema": 4, "maximumZoom": 15 }
+  ],
+  "extras": [
+    { "name": "extras-20261120", "generation": 2, "minimumZoom": 4 }
+  ]
+}
+EOF
+cp "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST" "$STUB_SERVED_MANIFEST"
+run_script "vector-archives use writes a manifest with no lists of squares as it was before there were any" \
+    "$vector_archives" use extras-20261121
+expected_manifest="$(printf '%s\n' '{' '  "version": 1,' '  "revision": 7,' '  "basemaps": [' \
+    '    { "name": "planet-20261118", "schema": 4, "maximumZoom": 15 }' '  ],' '  "extras": [' \
+    '    { "name": "extras-20261121", "generation": 2, "minimumZoom": 4 }' '  ]' '}')"
+if expect_status 0; then
+    if [[ "$(cat "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST")" == "$expected_manifest" ]]; then
+        pass
+    else
+        fail "the manifest is not the one written before there were lists of squares" \
+            "$(cat "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST")"
+    fi
+fi
+
+# prune reads a kind off the start of a name, so the hiking routes' archives
+# are a kind of their own beside the routing graph's: each loses only one
+# earlier than its own the server names, and a set the server names none of
+# keeps everything.
+cat > "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST" <<'EOF'
+{
+  "version": 1,
+  "revision": 8,
+  "basemaps": [
+    { "name": "planet-20261118", "schema": 4, "maximumZoom": 15 }
+  ],
+  "extras": [
+    { "name": "extras-20261120", "generation": 2, "minimumZoom": 4 }
+  ],
+  "routing": [
+    { "name": "routing-20261129-00", "generation": 1, "zoom": 12 }
+  ],
+  "routes": [
+    { "name": "routes-20261122-00", "generation": 1, "zoom": 11 }
+  ]
+}
+EOF
+cp "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST" "$STUB_SERVED_MANIFEST"
+squares_prune_bucket="$bucket_work/squares-prune-bucket"
+mkdir -p "$squares_prune_bucket"
+for key in planet-20261118.pmtiles extras-20261120.pmtiles routing-20261115-00.pmtiles routing-20261129-00.pmtiles \
+    routes-20261115-00.pmtiles routes-20261122-00.pmtiles trails-20261206-00.pmtiles manifest.json; do
+    printf 'bytes' > "$squares_prune_bucket/$key"
+done
+STUB_BUCKET="$squares_prune_bucket" \
+    run_script "vector-archives prune tells the hiking routes' archives from the routing graph's" \
+    "$vector_archives" prune
+if expect_status 0 \
+    && expect_contains "$output" "deleted routing-20261115-00.pmtiles" "the output" \
+    && expect_contains "$output" "deleted routes-20261115-00.pmtiles" "the output" \
+    && expect_contains "$output" "kept trails-20261206-00.pmtiles (5 bytes): the server names no later archive of its kind" \
+        "the output"; then
+    remaining="$(cd "$squares_prune_bucket" && find . -type f | sed 's|^\./||' | LC_ALL=C sort | tr '\n' ' ')"
+    if [[ "$remaining" != "extras-20261120.pmtiles manifest.json planet-20261118.pmtiles routes-20261122-00.pmtiles routing-20261129-00.pmtiles trails-20261206-00.pmtiles " ]]; then
+        fail "the bucket holds the wrong archives afterwards" "$remaining"
+    else
+        pass
+    fi
+fi
+cp "$bucket_work/before-squares.json" "$OPENHIKES_VECTOR_ARCHIVE_MANIFEST"
 
 # prune treats the routing archives as a kind of their own: an earlier one
 # than the server names goes, and a later one is an upload not yet named.

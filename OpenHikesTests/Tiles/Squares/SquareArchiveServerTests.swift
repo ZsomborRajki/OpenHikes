@@ -1,11 +1,13 @@
 //
-//  RoutingGraphServerTests.swift
+//  SquareArchiveServerTests.swift
 //  OpenHikesTests
 //
-//  What the trail maker's graph on the tile server answers a tile with, read
-//  as the public database's answers for a square are: which archive it asks,
+//  What a set of squares on the tile server answers a square with, read as
+//  the public database's answers for a square were: which archive it asks,
 //  what a tile, no tile, a retired archive and a failing server each mean,
-//  and that a region read through it is the graph Overpass gives.
+//  and that a region read through it is the graph Overpass gives. The cases
+//  here read the trail graph's archive; ``SquareArchiveServerTests+Sets``
+//  reads the other sets', and a call of many squares.
 //
 //  The server is a stub, for the reason the repository's *Deliberate test
 //  seams* section gives.
@@ -17,24 +19,27 @@ import Foundation
 import Synchronization
 import Testing
 
-@Suite("Routing graph server")
-struct RoutingGraphServerTests {
+@Suite("Square archive server")
+struct SquareArchiveServerTests {
     // MARK: - Fixtures
 
     static let server = URL(string: "https://tiles.example/")
-    static let current = RoutingGraphServer.Listing.Archive(name: "routing-20261122-00", generation: 1, zoom: 12)
-    static let next = RoutingGraphServer.Listing.Archive(name: "routing-20261129-00", generation: 1, zoom: 12)
+    static let current = SquareArchiveServer.Listing.Archive(name: "routing-20261122-00", generation: 1, zoom: 12)
+    static let next = SquareArchiveServer.Listing.Archive(name: "routing-20261129-00", generation: 1, zoom: 12)
     /// The region over `OverpassGraphFixture.alpineRoute`, which is its tile.
     static let region = TrailGraphRegion(zoom: 12, x: 2194, y: 1430)
     static let tile = TrailGraphSquare(x: 2194, y: 1430)
     static let tileName = "routing1_z12_2194_1430"
 
-    static func tilePath(_ archive: RoutingGraphServer.Listing.Archive) -> String {
+    static func tilePath(_ archive: SquareArchiveServer.Listing.Archive) -> String {
         "\(archive.name)/12/2194/1430.bin"
     }
 
-    static func listing(revision: Int, _ archives: [RoutingGraphServer.Listing.Archive]) -> RoutingGraphServer.Listing {
-        RoutingGraphServer.Listing(version: 1, revision: revision, routing: archives)
+    static func listing(
+        revision: Int,
+        _ archives: [SquareArchiveServer.Listing.Archive]
+    ) -> SquareArchiveServer.Listing {
+        SquareArchiveServer.Listing(version: 1, revision: revision, archives: [.routing: archives])
     }
 
     /// `OverpassGraphFixture.alpineRoute` as a tile holds it: way 10 with the
@@ -74,12 +79,14 @@ struct RoutingGraphServerTests {
 
     static func reader(
         _ tiles: StubTileServer,
-        bundled: RoutingGraphServer.Listing?,
+        bundled: SquareArchiveServer.Listing?,
         clock: Clock = Clock()
-    ) throws -> RoutingGraphServer {
-        RoutingGraphServer(
+    ) throws -> SquareArchiveServer {
+        SquareArchiveServer(
+            set: .routing,
             server: try #require(server),
             bundled: bundled,
+            requestTimeout: TrailGraphSquareLibrary.requestTimeout,
             clock: clock.read,
             transport: tiles.transport
         )
@@ -141,7 +148,7 @@ struct RoutingGraphServerTests {
         ])
         let reader = try Self.reader(tiles, bundled: nil)
 
-        await #expect(throws: RoutingGraphServer.Failure.status(503)) {
+        await #expect(throws: SquareArchiveServer.Failure.status(503)) {
             try await reader.fetch(cellsNamed: [Self.tileName])
         }
     }
@@ -150,12 +157,12 @@ struct RoutingGraphServerTests {
 
     @Test("no archive this build reads leaves the region to Overpass and asks for no tile", arguments: [
         [],
-        [RoutingGraphServer.Listing.Archive(name: "routing-20261122-00", generation: 2, zoom: 12)],
-        [RoutingGraphServer.Listing.Archive(name: "routing-20261122-00", generation: 1, zoom: 10)],
-        [RoutingGraphServer.Listing.Archive(name: "../manifest", generation: 1, zoom: 12)],
-        [RoutingGraphServer.Listing.Archive(name: "planet-20261118", generation: 1, zoom: 12)],
+        [SquareArchiveServer.Listing.Archive(name: "routing-20261122-00", generation: 2, zoom: 12)],
+        [SquareArchiveServer.Listing.Archive(name: "routing-20261122-00", generation: 1, zoom: 10)],
+        [SquareArchiveServer.Listing.Archive(name: "../manifest", generation: 1, zoom: 12)],
+        [SquareArchiveServer.Listing.Archive(name: "planet-20261118", generation: 1, zoom: 12)],
     ])
-    func noArchiveIsNoAnswer(routing: [RoutingGraphServer.Listing.Archive]) async throws {
+    func noArchiveIsNoAnswer(routing: [SquareArchiveServer.Listing.Archive]) async throws {
         let tiles = StubTileServer(["manifest.json": [StubTileServer.manifest(revision: 9, routing: routing)]])
         let reader = try Self.reader(tiles, bundled: nil)
 
@@ -181,7 +188,7 @@ struct RoutingGraphServerTests {
 
     @Test("the first archive of the list that this build reads is the one asked")
     func theFirstReadArchive() async throws {
-        let later = RoutingGraphServer.Listing.Archive(name: "routing-20261201-00", generation: 2, zoom: 12)
+        let later = SquareArchiveServer.Listing.Archive(name: "routing-20261201-00", generation: 2, zoom: 12)
         let tiles = StubTileServer([
             "manifest.json": [StubTileServer.manifest(revision: 9, routing: [later, Self.current])],
             Self.tilePath(Self.current): [.init(status: 204)],
@@ -231,7 +238,7 @@ struct RoutingGraphServerTests {
         let reader = try Self.reader(tiles, bundled: nil, clock: clock)
 
         _ = try await reader.fetch(cellsNamed: [Self.tileName])
-        clock.advance(by: RoutingGraphServer.readInterval - 1)
+        clock.advance(by: SquareArchiveServer.readInterval - 1)
         _ = try await reader.fetch(cellsNamed: [Self.tileName])
         #expect(tiles.paths.filter { $0 == "manifest.json" }.count == 1)
 
@@ -256,7 +263,7 @@ struct RoutingGraphServerTests {
         let reader = try Self.reader(tiles, bundled: Self.listing(revision: 9, [Self.current]), clock: clock)
         _ = try? await reader.fetch(cellsNamed: [Self.tileName])
         tiles.answer("manifest.json", with: [StubTileServer.manifest(revision: 10, routing: [Self.next, Self.current])])
-        clock.advance(by: RoutingGraphServer.retiredReadInterval)
+        clock.advance(by: SquareArchiveServer.retiredReadInterval)
 
         let fetch = try await reader.fetch(cellsNamed: [Self.tileName])
 
@@ -286,15 +293,17 @@ struct RoutingGraphServerTests {
 
     /// A build whose bundled archive is pruned, at its first read of the
     /// list: the server lists the next archive, and the bundled one is gone.
-    static func prunedSinceBuilt(clock: Clock, held: HeldRequest) throws -> (StubTileServer, RoutingGraphServer) {
+    static func prunedSinceBuilt(clock: Clock, held: HeldRequest) throws -> (StubTileServer, SquareArchiveServer) {
         let tiles = StubTileServer([
             "manifest.json": [StubTileServer.manifest(revision: 10, routing: [Self.next])],
             Self.tilePath(Self.current): [.init(status: 410)],
             Self.tilePath(Self.next): [.ok(Self.squareFile)],
         ])
-        let reader = RoutingGraphServer(
+        let reader = SquareArchiveServer(
+            set: .routing,
             server: try #require(server),
             bundled: Self.listing(revision: 9, [Self.current]),
+            requestTimeout: TrailGraphSquareLibrary.requestTimeout,
             clock: clock.read,
             transport: tiles.transport(holding: held)
         )
@@ -368,12 +377,5 @@ struct RoutingGraphServerTests {
             return
         }
         #expect(fromTile == fromOverpass)
-    }
-
-    @Test("the bundled manifest names an archive of the trail maker's graph this build reads")
-    func theBundledListing() throws {
-        let listing = try #require(RoutingGraphServer.Listing.bundled)
-        let name = try #require(listing.archive)
-        #expect(RoutingGraphArchive.isArchiveName(name))
     }
 }

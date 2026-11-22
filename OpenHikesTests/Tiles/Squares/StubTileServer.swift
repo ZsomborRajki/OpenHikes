@@ -2,9 +2,9 @@
 //  StubTileServer.swift
 //  OpenHikesTests
 //
-//  What a suite's trail maker graph is read from instead of the OpenHikes
-//  tile server: an answer for each path, and every request kept. No suite
-//  reaches the server — see ``RoutingGraphServer``.
+//  What a suite's squares are read from instead of the OpenHikes tile
+//  server: an answer for each path, and every request kept. No suite reaches
+//  the server — see ``SquareArchiveServer``.
 //
 
 import Foundation
@@ -59,12 +59,12 @@ nonisolated final class StubTileServer: Sendable {
         state.withLock { $0.requests }
     }
 
-    var transport: RoutingGraphServer.Transport {
+    var transport: SquareArchiveServer.Transport {
         { request in self.respond(to: request) }
     }
 
     /// ``transport``, with the request `held` holds kept until it is let go.
-    func transport(holding held: HeldRequest) -> RoutingGraphServer.Transport {
+    func transport(holding held: HeldRequest) -> SquareArchiveServer.Transport {
         { request in
             try await held.hold(request)
             return self.respond(to: request)
@@ -89,8 +89,14 @@ nonisolated final class StubTileServer: Sendable {
 
     /// A tile server's `manifest.json` that lists `routing`, newest first, at
     /// `revision`.
-    static func manifest(revision: Int, routing: [RoutingGraphServer.Listing.Archive]) -> Answer {
-        let listing = RoutingGraphServer.Listing(version: 1, revision: revision, routing: routing)
+    static func manifest(revision: Int, routing: [SquareArchiveServer.Listing.Archive]) -> Answer {
+        manifest(revision: revision, [.routing: routing])
+    }
+
+    /// A tile server's `manifest.json` that lists each set's `archives`,
+    /// newest first, at `revision`.
+    static func manifest(revision: Int, _ archives: [SquareArchive: [SquareArchiveServer.Listing.Archive]]) -> Answer {
+        let listing = SquareArchiveServer.Listing(version: 1, revision: revision, archives: archives)
         return .ok((try? JSONEncoder().encode(listing)) ?? Data())
     }
 }

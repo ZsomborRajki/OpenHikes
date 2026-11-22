@@ -241,6 +241,11 @@
 //  trails of the trail graph are filed the same way under names of their
 //  own.
 //
+//  Builds v1.5-1 to v1.7-1 read them, and nothing later does: later builds
+//  read the same squares, under the same names, out of archives on the tile
+//  server (``SquareArchive``). The records stay for as long as those builds
+//  are about, and `Scripts/trail-cells.sh prune` takes each set down after.
+//
 //  - **`_world` reads both**, for the reason it reads a listing: browsing
 //    needs no account.
 //  - **Create and write are the `reviewer` role's and nobody else's.** Not a

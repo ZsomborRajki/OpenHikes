@@ -103,11 +103,18 @@ nonisolated struct VectorTileArchiveManifest: Codable, Equatable, Sendable {
             }
     }
 
+    /// Where the manifest this build was made with is in the app's bundle,
+    /// which the squares' reader takes its lists from too
+    /// (``SquareArchiveServer/Listing/bundled``).
+    static var bundledURL: URL? {
+        Bundle.main.url(forResource: "VectorTileArchiveManifest", withExtension: "json")
+    }
+
     /// The manifest this build was made with, or `nil` if it is not in the
     /// bundle or cannot be read, which `VectorTileArchiveManifestTests`
     /// holds against.
     static let bundled: Self? = {
-        guard let url = Bundle.main.url(forResource: "VectorTileArchiveManifest", withExtension: "json"),
+        guard let url = bundledURL,
               let data = try? Data(contentsOf: url)
         else { return nil }
         return try? JSONDecoder().decode(Self.self, from: data)
