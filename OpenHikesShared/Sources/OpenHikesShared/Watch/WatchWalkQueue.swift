@@ -109,23 +109,6 @@ public actor WatchWalkQueue {
         return walk
     }
 
-    /// The sessions with a file on the queue, from the names alone.
-    ///
-    /// Synchronous, for the one caller that has to decide before anything can
-    /// wait: a recorder that finds a journal at launch, and must know before
-    /// the first frame whether its walk is already queued or a hiker's Start
-    /// could write over the only copy. A listing is cheap at any queue length.
-    /// Read beside the actor rather than through it, which is safe only
-    /// because nothing has written to the queue that early in the process.
-    ///
-    /// A name is not a walk, so a session listed here is only *probably*
-    /// queued — ``WatchRecordingRecovery/confirming(_:on:)`` reads it before
-    /// a journal is let go. A listing that fails answers empty, which offers
-    /// the journal: the side that keeps a copy.
-    nonisolated public func listedSessionIDs() -> Set<UUID> {
-        Set(((try? Self.fileNames(in: directory)) ?? []).compactMap { Entry.Name(parsing: $0)?.sessionID })
-    }
-
     // MARK: Changing
 
     /// Puts a walk on the queue, and answers once it is on disk.

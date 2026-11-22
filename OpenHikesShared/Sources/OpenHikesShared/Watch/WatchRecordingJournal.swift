@@ -95,71 +95,64 @@ public struct WatchRecoveredRecording: Sendable, Equatable {
     /// Rebuilds a recording from a journal's bytes, or `nil` when there is no
     /// header to rebuild one from.
     ///
+    /// Each line is applied to the one recording in place. A copy taken per
+    /// line, while the recording before it was still held, copied every fix
+    /// kept so far on every fix: a replay that grew with the square of the
+    /// walk, which the watch paid before its first frame (#1543).
+    ///
     /// - Returns: the recording and how many leading bytes of `data` are
     ///   whole lines, so the caller can cut a torn tail off before appending
     ///   anything after it — a line appended to half a line would be one more
     ///   undecodable line, and would take every line after it down too.
     public static func replaying(_ data: Data) -> (recording: Self, validByteCount: Int)? {
-        var recording: Self?
-        var validByteCount = 0
-        var lineStart = data.startIndex
-        while let newline = data[lineStart...].firstIndex(of: WatchRecordingJournalEntry.newline) {
-            guard let entry = try? JSONDecoder().decode(
-                WatchRecordingJournalEntry.self,
-                from: data[lineStart..<newline]
-            ) else { break }
-            if let current = recording {
-                guard let next = current.applying(entry) else { break }
-                recording = next
-            } else {
-                guard case .began(let header) = entry else { return nil }
-                recording = Self(
-                    header: header,
-                    accumulator: WatchWalkAccumulator(),
-                    wasPaused: false,
-                    lastRecordedAt: header.startedAt
-                )
-            }
-            lineStart = data.index(after: newline)
-            validByteCount = data.distance(from: data.startIndex, to: lineStart)
+        var lines = JournalLines(data)
+        guard case .began(let header)? = lines.next() else { return nil }
+        var recording = Self(
+            header: header,
+            accumulator: WatchWalkAccumulator(),
+            wasPaused: false,
+            lastRecordedAt: header.startedAt
+        )
+        var validByteCount = lines.consumedByteCount
+        while let entry = lines.next(), recording.apply(entry) {
+            validByteCount = lines.consumedByteCount
         }
-        return recording.map { ($0, validByteCount) }
+        return (recording, validByteCount)
     }
 
-    /// The recording with one more line applied, or `nil` for a line that has
-    /// no business after the first — a second header is a journal nothing
-    /// here wrote.
-    private func applying(_ entry: WatchRecordingJournalEntry) -> Self? {
-        var next = self
+    /// Applies one more line, or answers `false` and changes nothing for a
+    /// line that has no business after the first — a second header is a
+    /// journal nothing here wrote.
+    private mutating func apply(_ entry: WatchRecordingJournalEntry) -> Bool {
         switch entry {
         case .began:
-            return nil
+            return false
         case .fix(let fix):
-            if fix.resumesAfterPause { next.accumulator.pause() }
-            next.accumulator.accept(
+            if fix.resumesAfterPause { accumulator.pause() }
+            accumulator.accept(
                 latitude: fix.latitude,
                 longitude: fix.longitude,
                 timestamp: fix.timestamp,
                 horizontalAccuracy: fix.horizontalAccuracy,
                 elevationMeters: fix.elevationMeters
             )
-            next.lastRecordedAt = max(lastRecordedAt, fix.timestamp)
+            lastRecordedAt = max(lastRecordedAt, fix.timestamp)
         case .paused(let date):
-            next.accumulator.pause()
-            next.wasPaused = true
-            next.wasAutoPaused = false
-            next.lastRecordedAt = max(lastRecordedAt, date)
+            accumulator.pause()
+            wasPaused = true
+            wasAutoPaused = false
+            lastRecordedAt = max(lastRecordedAt, date)
         case .autoPaused(let date):
-            next.accumulator.pause(since: date)
-            next.wasPaused = true
-            next.wasAutoPaused = true
-            next.lastRecordedAt = max(lastRecordedAt, date)
+            accumulator.pause(since: date)
+            wasPaused = true
+            wasAutoPaused = true
+            lastRecordedAt = max(lastRecordedAt, date)
         case .resumed(let date):
-            next.wasPaused = false
-            next.wasAutoPaused = false
-            next.lastRecordedAt = max(lastRecordedAt, date)
+            wasPaused = false
+            wasAutoPaused = false
+            lastRecordedAt = max(lastRecordedAt, date)
         }
-        return next
+        return true
     }
 
     /// The walk this recording had become when it was interrupted, or `nil`
@@ -179,42 +172,62 @@ public struct WatchRecoveredRecording: Sendable, Equatable {
     }
 }
 
+/// A journal's whole lines, decoded in order, up to the first that does not
+/// decode or that no newline ends.
+private struct JournalLines: IteratorProtocol {
+    private let data: Data
+    private var lineStart: Data.Index
+    /// One for the whole journal rather than one a line.
+    private let decoder = JSONDecoder()
+    /// How many leading bytes of the journal the lines handed out so far fill.
+    private(set) var consumedByteCount = 0
+
+    init(_ data: Data) {
+        self.data = data
+        lineStart = data.startIndex
+    }
+
+    mutating func next() -> WatchRecordingJournalEntry? {
+        guard let newline = data[lineStart...].firstIndex(of: WatchRecordingJournalEntry.newline),
+              let entry = try? decoder.decode(WatchRecordingJournalEntry.self, from: data[lineStart..<newline])
+        else { return nil }
+        lineStart = data.index(after: newline)
+        consumedByteCount = data.distance(from: data.startIndex, to: lineStart)
+        return entry
+    }
+}
+
 /// What to do with a journal found at launch.
 public enum WatchRecordingRecovery: Sendable, Equatable {
     /// The walk already reached the outbound queue, and only the journal's
     /// removal was lost. Offering it again would be offering it twice.
     case alreadyQueued
-    /// A file named for the walk is on the queue, which only reading it can
-    /// turn into ``alreadyQueued`` — see ``confirming(_:on:)``. Until then
-    /// the journal is the copy to keep.
-    case confirm(WatchRecoveredRecording)
     /// No journal, or none that could be read.
     case nothing
     case offer(WatchRecoveredRecording)
 
-    /// - Parameter queued: the session IDs on the outbound queue, from the
-    ///   file names alone — ``WatchWalkQueue/listedSessionIDs()``.
+    /// Reads and replays `journal`, cutting a torn tail off, and asks `queue`
+    /// whether its walk already went — all of it off the main actor.
+    ///
+    /// A six-hour journal is tens of thousands of lines to decode, and the
+    /// queue reads a whole walk to answer, so neither is work for the launch
+    /// to wait on before its first frame. The recorder holds Start back
+    /// until this answers instead: a Start before it would write a fresh
+    /// journal over what may be the only copy of a walk.
     ///
     /// Stop writes the walk to the queue *before* it removes the journal, so
     /// a process killed between the two leaves both. The queue is the one
-    /// that counts, because it is what the phone is sent.
-    public static func resolve(_ recording: WatchRecoveredRecording?, queued: Set<UUID>) -> Self {
-        guard let recording else { return .nothing }
-        if queued.contains(recording.sessionID) { return .confirm(recording) }
-        return .offer(recording)
-    }
-
-    /// Settles a ``confirm(_:)`` by reading the queued walk, off the main
-    /// actor.
-    ///
-    /// A name says a walk was written, not that it can still be read back: a
-    /// file that will not decode is never sent, and a journal let go beside
-    /// it would be the hike lost. So the journal is offered unless the queue
+    /// that counts, because it is what the phone is sent. But a file named
+    /// for the walk says it was written, not that it can still be read back:
+    /// one that will not decode is never sent, and a journal let go beside it
+    /// would be the hike lost. So the journal is offered unless the queue
     /// hands its walk back — one that cannot be read just now included,
     /// because offering a walk that is already queued costs the hiker a
     /// question, and the other mistake costs the walk.
-    public static func confirming(_ recording: WatchRecoveredRecording, on queue: WatchWalkQueue) async -> Self {
-        await queue.walk(recording.sessionID) == nil ? .offer(recording) : .alreadyQueued
+    @concurrent
+    public static func checking(_ journal: WatchRecordingJournalFile, against queue: WatchWalkQueue) async -> Self {
+        guard let recording = journal.recover() else { return .nothing }
+        return await queue.walk(recording.sessionID) == nil ? .offer(recording) : .alreadyQueued
     }
 }
 
