@@ -54,7 +54,33 @@ nonisolated enum CloudSyncOutcome: Equatable, Sendable {
         }
         self = Self.isTransient(error)
             ? .transientFailure(error.localizedDescription)
-            : .failed(error.localizedDescription)
+            : .failed(Self.reason(for: error))
+    }
+
+    /// What the settings row says under *Sync Problem* about `error`.
+    ///
+    /// CloudKit's own description, except for the one failure a hiker meets
+    /// most and can act on: a full iCloud account. CloudKit describes that in
+    /// its own terms, untranslated, and when it arrives inside a partial
+    /// failure the description is only `Partial Failure`, which names neither
+    /// the problem nor the way out of it.
+    static func reason(for error: any Error) -> String {
+        guard isStorageFull(error) else { return error.localizedDescription }
+        return String(localized: "Your iCloud storage is full. Free up space to keep syncing your hikes.")
+    }
+
+    /// Whether `error` says the hiker's iCloud account has no room left.
+    ///
+    /// One item is enough inside a partial failure, unlike
+    /// ``isTransient(_:)``, which needs all of them. A full account refuses
+    /// the records it was asked to save, and the batch's other items come back
+    /// as `batchRequestFailed`, which only says the batch went down with them.
+    static func isStorageFull(_ error: any Error) -> Bool {
+        guard let ckError = error as? CKError else { return false }
+        if ckError.code == .partialFailure {
+            return ckError.partialErrorsByItemID?.values.contains { isStorageFull($0) } ?? false
+        }
+        return ckError.code == .quotaExceeded
     }
 
     /// Whether an error is mirroring's own to clear rather than the user's.
