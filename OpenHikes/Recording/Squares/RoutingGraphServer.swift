@@ -99,7 +99,7 @@ nonisolated final class RoutingGraphServer: TrailCellFetching {
             routing = try container.decodeIfPresent([Archive].self, forKey: .routing) ?? []
         }
 
-        private static let readVersion = 1
+        private static let readVersion = VectorTileArchiveManifest.currentVersion
 
         /// The list the app was built with, or `nil` if it cannot be read.
         static let bundled: Self? = {
@@ -118,10 +118,9 @@ nonisolated final class RoutingGraphServer: TrailCellFetching {
     }
 
     /// How long after a read of the server's list the next tile reads it
-    /// again, and how long after one a retired archive does not: the map's
-    /// figures, `VectorTileArchives.readInterval` and `retiredReadInterval`.
-    static let readInterval: TimeInterval = 3600
-    static let retiredReadInterval: TimeInterval = 60
+    /// again, and how long after one a retired archive does not: the map's.
+    static let readInterval = TimeInterval(VectorTileArchives.readInterval.components.seconds)
+    static let retiredReadInterval = TimeInterval(VectorTileArchives.retiredReadInterval.components.seconds)
 
     private struct State {
         var listing: Listing?
@@ -156,7 +155,7 @@ nonisolated final class RoutingGraphServer: TrailCellFetching {
 
     @concurrent
     func fetch(cellsNamed names: [String]) async throws -> TrailCellFetch {
-        await readListing(unlessReadWithin: Self.readInterval)
+        try await readListing(unlessReadWithin: Self.readInterval)
         guard var asked = archive else { return TrailCellFetch(manifest: .absent, cells: [:]) }
         var cells: [String: TrailCellFetch.Cell] = [:]
         for name in names {
@@ -170,7 +169,7 @@ nonisolated final class RoutingGraphServer: TrailCellFetching {
             }
             // Retired since the list was read: read it again, and ask the
             // archive it names now, if it names another.
-            await readListing(unlessReadWithin: Self.retiredReadInterval)
+            try await readListing(unlessReadWithin: Self.retiredReadInterval)
             guard let next = archive else { return TrailCellFetch(manifest: .absent, cells: [:]) }
             guard next != asked, let found = try await cell(tile, in: next) else {
                 return TrailCellFetch(manifest: .unread, cells: [:])
@@ -187,6 +186,10 @@ nonisolated final class RoutingGraphServer: TrailCellFetching {
         let url = server.appending(path: RoutingGraphArchive.path(of: tile, inArchive: archive))
         let (data, response) = try await transport(Self.request(url))
         switch response.statusCode {
+        // No tile the build writes is empty, so an empty 200 is a server or a
+        // cache saying there is nothing, as the map reads one
+        // (`VectorTileClient.outcome(status:data:retryAfter:)`).
+        case Self.ok where data.isEmpty: return .absent
         case Self.ok: return .found(data)
         case Self.noContent: return .absent
         case Self.gone: return nil
@@ -203,8 +206,9 @@ nonisolated final class RoutingGraphServer: TrailCellFetching {
     /// it may have retired. And it is a task of its own, which no tile's
     /// cancellation reaches: a region given up on while the list was read
     /// would otherwise end the read, and leave the list unread for as long
-    /// as a read that had finished.
-    private func readListing(unlessReadWithin interval: TimeInterval) async {
+    /// as a read that had finished. A tile that is cancelled stops waiting
+    /// at once, and throws `CancellationError`.
+    private func readListing(unlessReadWithin interval: TimeInterval) async throws {
         let now = clock()
         let reading = state.withLock { state -> Task<Void, Never>? in
             if let reading = state.reading { return reading }
@@ -214,7 +218,23 @@ nonisolated final class RoutingGraphServer: TrailCellFetching {
             state.reading = reading
             return reading
         }
-        await reading?.value
+        if let reading { await Self.wait(for: reading) }
+        try Task.checkCancellation()
+    }
+
+    /// Returns when `reading` has finished, or as soon as the task waiting
+    /// is cancelled, so a region given up on does not wait out a read it no
+    /// longer needs.
+    private static func wait(for reading: Task<Void, Never>) async {
+        let (finished, finish) = AsyncStream.makeStream(of: Void.self)
+        Task {
+            await reading.value
+            finish.finish()
+        }
+        for await _ in finished {
+            // Nothing is ever sent: the loop ends when the stream does, or
+            // when this task is cancelled.
+        }
     }
 
     @concurrent

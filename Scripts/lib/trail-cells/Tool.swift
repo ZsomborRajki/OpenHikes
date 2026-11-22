@@ -226,11 +226,10 @@ private extension TrailCellsTool {
         if summary.withoutPositions > 0 {
             print("  left out \(summary.withoutPositions) running out of the extract, as read")
         }
-        for (what, sizes) in [("tile", summary.tiles), ("square at zoom \(TrailGraphSquareGrid.squareZoom)", summary.squares)] {
-            guard let largest = sizes.largest else { continue }
-            print("By \(what): \(sizes.count) of them, \(sizes.bytes) bytes, the median \(sizes.median) bytes, one in a "
-                + "hundred over \(sizes.percentile99), the largest \(largest.name) at \(largest.bytes) bytes for "
-                + "\(largest.ways) ways.")
+        let sizes = summary.tiles
+        if let largest = sizes.largest {
+            print("By tile: the median \(sizes.median) bytes, one in a hundred over \(sizes.percentile99), the largest "
+                + "\(largest.name) at \(largest.bytes) bytes for \(largest.ways) ways.")
         }
         if let archive = summary.archive {
             print("Wrote \(archive.path), \(summary.archiveBytes) bytes\(summary.isClustered ? ", clustered" : "").")
