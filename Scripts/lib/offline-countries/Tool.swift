@@ -331,6 +331,9 @@ extension Tool {
     /// lists is refused: `Scripts/offline-countries.sh prune` deletes the
     /// files of a build the server has moved past, so a country's build only
     /// ever rises.
+    ///
+    /// Of the same build, a role the server lists and the build's entry does
+    /// not is kept: see ``keepingListedRoles(of:in:)``.
     static func merge(_ options: Options) throws {
         let decoder = JSONDecoder()
         let built = try decoder.decode(
@@ -347,15 +350,41 @@ extension Tool {
             OfflineCountryManifest(version: OfflineCountryManifest.currentVersion, countries: [])
         }
         for country in built.countries {
-            if let listed = merged.countries.first(where: { $0.id == country.id }), listed.build > country.build {
-                fail("the server lists build \(listed.build) of \(country.id), later than this \(country.build)")
+            let listed = merged.countries.filter { $0.id == country.id }
+            if let later = listed.first(where: { $0.build > country.build }) {
+                fail("the server lists build \(later.build) of \(country.id), later than this \(country.build)")
             }
             merged.countries.removeAll { $0.id == country.id }
-            merged.countries.append(country)
+            merged.countries.append(keepingListedRoles(of: listed, in: country))
         }
         merged.countries.sort { $0.id < $1.id }
         try write(merged, to: URL(fileURLWithPath: options.required("out")))
         print("offline-countries: \(merged.countries.count) countries in the merged manifest")
+    }
+
+    /// `country`, with every file the server lists for the same build in a
+    /// role `country` has none of.
+    ///
+    /// A directory cut before a role was added to its build (`trails`)
+    /// still uploads cleanly, because every file it holds is the bucket's
+    /// byte for byte. Taken as it is, it would take the added file off the
+    /// list while the file stayed in the bucket, and every download and
+    /// every map waiting for it would go without. So a role leaves an
+    /// area's list only with a new build. A role both lists hold is the same
+    /// file in each, because the upload refuses a name already taken by
+    /// other bytes.
+    static func keepingListedRoles(
+        of listed: [OfflineCountryManifest.Country],
+        in country: OfflineCountryManifest.Country
+    ) -> OfflineCountryManifest.Country {
+        let published = listed.filter { $0.build == country.build }.flatMap(\.files)
+        var kept = country
+        for role in OfflineCountryManifest.Role.allCases where !kept.files.contains(where: { $0.role == role }) {
+            if let file = published.first(where: { $0.role == role }) {
+                kept.files.append(file)
+            }
+        }
+        return kept
     }
 
     /// `files <manifest.json>`: each file's path, size and SHA-256, a line

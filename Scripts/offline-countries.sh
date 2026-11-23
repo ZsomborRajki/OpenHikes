@@ -74,6 +74,9 @@
 #             the server's and write that last, so the app never lists a file
 #             that is not there yet. A file the manifest lists that <dir> does
 #             not hold has to be in the bucket already, with the same bytes.
+#             A file the server lists for the same build in a role <dir>'s
+#             manifest lacks stays listed: a role leaves an area's list only
+#             with a new build.
 #   prune     Delete every archive under countries/ of a build earlier than
 #             the one the server's manifest lists for its area, keeping any
 #             other the manifest does not list, since an upload puts its files
