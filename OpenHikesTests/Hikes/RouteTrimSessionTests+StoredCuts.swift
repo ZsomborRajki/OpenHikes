@@ -90,6 +90,66 @@ extension RouteTrimSessionTests {
         #expect(hike.routeEdit?.endPausesTakenOff.isEmpty != false)
     }
 
+    /// Where the boundary test cuts the walk, both exact in binary, so a
+    /// handle moved half a meter is half a meter to the last bit.
+    private enum StoredCut {
+        static let start = 200.0
+        static let end = 800.0
+        /// Within ``RouteTrimSession/endToleranceMeters``, and past it.
+        static let atTolerance = 0.5
+        static let pastTolerance = 0.75
+    }
+
+    /// A cut put back within half a meter of where it was saved is where it
+    /// was saved: a drag that lands a hair off a handle's own spot is no edit.
+    /// Past that it is one, at either end.
+    @Test("a stored cut moved up to half a meter is no change, and moved further at either end is one")
+    func aStoredCutsTolerance() async throws {
+        let context = try Fixture.modelContext()
+        let walk = Array(Self.walkThenPausedDrive.prefix(Drive.walkedPoints))
+        let hike = Fixture.hike(in: context, route: walk)
+        try context.save()
+        let first = RouteTrimSession()
+        await first.load(RouteEditSources.reading(hike, drawn: walk, in: context.container))
+        first.move(.start, to: StoredCut.start)
+        first.move(.end, to: StoredCut.end)
+        await first.save(to: RouteTrimSession.Destination(hike: hike, context: context) { walk })
+        try #require(hike.routeEdit?.trim == StoredCut.start...StoredCut.end)
+
+        let session = RouteTrimSession()
+        await session.load(RouteEditSources.reading(hike, drawn: hike.route, in: context.container))
+        #expect(!session.hasChanges)
+
+        session.move(.start, to: StoredCut.start + StoredCut.atTolerance)
+        session.move(.end, to: StoredCut.end - StoredCut.atTolerance)
+        #expect(!session.hasChanges, "both cuts at the tolerance are where they were saved")
+
+        session.move(.start, to: StoredCut.start + StoredCut.pastTolerance)
+        #expect(session.hasChanges, "the start past it is a change")
+
+        session.move(.start, to: StoredCut.start)
+        session.move(.end, to: StoredCut.end - StoredCut.pastTolerance)
+        #expect(session.hasChanges, "and so is the end")
+
+        session.move(.end, to: StoredCut.end)
+        #expect(!session.hasChanges)
+    }
+
+    /// `isApproximatelyEqual` calls two equal infinities equal; a cut that
+    /// is not finite stands nowhere, and is never the cut that was saved.
+    @Test("trims are the same within the tolerance, never with an end that is not finite, and none only as none")
+    func trimSameness() {
+        let saved = StoredCut.start...StoredCut.end
+        let open = StoredCut.start...Double.infinity
+
+        #expect(RouteTrimSession.isSame(saved, (StoredCut.start - StoredCut.atTolerance)...StoredCut.end))
+        #expect(!RouteTrimSession.isSame(saved, StoredCut.start...(StoredCut.end + StoredCut.pastTolerance)))
+        #expect(!RouteTrimSession.isSame(open, open))
+        #expect(!RouteTrimSession.isSame(saved, open))
+        #expect(RouteTrimSession.isSame(nil, nil))
+        #expect(!RouteTrimSession.isSame(saved, nil))
+    }
+
     /// The Save button is drawn before the line has loaded, and Observation
     /// tells a view only of what it read. An answer given before anything
     /// was read left the button disabled for good: found by the UI suite,
