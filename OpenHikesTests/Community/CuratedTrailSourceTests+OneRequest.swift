@@ -86,7 +86,7 @@ extension CuratedTrailSourceTests {
     func oneRequestKeepsTheDayHikeFilter() async throws {
         let (source, _) = Self.makeSource([Self.ok(Self.areaWithLinesBody)])
 
-        let listed = try await source.listings(near: Self.visibleArea, limit: 25)
+        let listed = try await source.listings(near: Self.visibleArea, limit: 25).trails
 
         #expect(!listed.map(\.relationID).contains(33))
     }
@@ -97,7 +97,7 @@ extension CuratedTrailSourceTests {
     func anUndrawableRouteIsNotOffered() async throws {
         let (source, _) = Self.makeSource([Self.ok(Self.areaWithLinesBody)])
 
-        let listed = try await source.listings(near: Self.visibleArea, limit: 25)
+        let listed = try await source.listings(near: Self.visibleArea, limit: 25).trails
 
         #expect(!listed.map(\.relationID).contains(44))
     }

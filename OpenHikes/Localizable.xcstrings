@@ -57919,6 +57919,58 @@
         }
       }
     },
+    "Some OpenStreetMap trails unavailable" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einige OpenStreetMap-Wege nicht verfügbar"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Algunos senderos de OpenStreetMap no disponibles"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Certains sentiers OpenStreetMap indisponibles"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alcuni sentieri OpenStreetMap non disponibili"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Niektóre szlaki OpenStreetMap niedostępne"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unele trasee OpenStreetMap indisponibile"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Некоторые тропы OpenStreetMap недоступны"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Деякі стежки OpenStreetMap недоступні"
+          }
+        }
+      }
+    },
     "Some photos couldn’t be added. Try adding them again." : {
       "localizations" : {
         "de" : {

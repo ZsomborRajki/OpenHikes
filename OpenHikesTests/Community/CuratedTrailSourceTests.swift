@@ -247,7 +247,7 @@ struct CuratedTrailSourceTests {
         limit: Int = 25,
         room: Int? = nil
     ) async throws -> CuratedCompletion {
-        let listed = try await source.listings(near: area, limit: limit)
+        let listed = try await source.listings(near: area, limit: limit).trails
         return try await source.completed(Array(listed.prefix(room ?? limit)))
     }
 

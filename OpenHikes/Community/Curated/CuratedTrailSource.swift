@@ -63,14 +63,6 @@ import Foundation
 import OpenHikesData
 import OrderedCollections
 
-/// What a geometry pass came back with.
-///
-/// A type rather than an array because *a line is missing* has two meanings
-/// and only one of them is a reason to drop the row — see
-/// ``CuratedTrailSourcing/completed(_:)``. The rows and the refusal travel
-/// together for the reason ``CommunityNearbyAnswer``'s two fields do: a caller
-/// that reads only the first draws exactly what it drew before, and the
-/// caption under *Search this area* is the second one's whole audience.
 /// Why a search the pre-built squares could not answer was not put to
 /// Overpass instead.
 ///
@@ -86,6 +78,36 @@ nonisolated enum CuratedTrailSearchRefusal: Error, Equatable {
     case widerThanOverpassIsAsked
 }
 
+/// What a listing pass came back with.
+///
+/// A type rather than an array for the reason ``CuratedCompletion`` is one:
+/// rows can be the whole of an area's answer or only part of it, and the
+/// caption under *Search this area* is the one that has to say which — see
+/// ``CuratedTrailOutcome/partial(_:)``.
+nonisolated struct CuratedListing: Equatable, Sendable {
+    /// The listed routes, nearest the area's middle first.
+    var trails: [CuratedTrail]
+    /// Why routes of the area may be missing, when only part of it could be
+    /// answered: the pre-built squares this device could read gave
+    /// ``trails``, and nothing could answer for the rest — see
+    /// ``TrailCellAnswer/partial(_:)``. `nil` when the rows are the whole
+    /// answer.
+    var gap: CuratedTrailOutage?
+
+    init(trails: [CuratedTrail], gap: CuratedTrailOutage? = nil) {
+        self.trails = trails
+        self.gap = gap
+    }
+}
+
+/// What a geometry pass came back with.
+///
+/// A type rather than an array because *a line is missing* has two meanings
+/// and only one of them is a reason to drop the row — see
+/// ``CuratedTrailSourcing/completed(_:)``. The rows and the refusal travel
+/// together for the reason ``CommunityNearbyAnswer``'s two fields do: a caller
+/// that reads only the first draws exactly what it drew before, and the
+/// caption under *Search this area* is the second one's whole audience.
 nonisolated struct CuratedCompletion: Equatable, Sendable {
     /// The listed routes in listing order — drawn where a line arrived, and
     /// lineless where one was refused.
@@ -123,10 +145,18 @@ nonisolated protocol CuratedTrailSourcing: Sendable {
     /// less than a second turn in Overpass's queue would; ``completed(_:)``
     /// keeps them without asking.
     ///
-    /// Answers `[]` rather than throwing for an area too wide to ask about —
-    /// see ``CuratedTrailQuery/maximumRadiusMeters``. That is an answer: the
-    /// hiker is looking at half a continent, where a list of village loops is
-    /// not what they asked for.
+    /// Answers no rows rather than throwing for an area too wide to ask
+    /// about — see ``CuratedTrailQuery/maximumRadiusMeters``. That is an
+    /// answer: the hiker is looking at half a continent, where a list of
+    /// village loops is not what they asked for.
+    ///
+    /// **Part of an answer is returned, with its gap, rather than thrown.**
+    /// Where the squares could read only some of the area and Overpass could
+    /// not be asked or did not answer, the rows are those the squares that
+    /// were read hold, and ``CuratedListing/gap`` says why the rest are
+    /// missing. Over ground the hiker downloaded, with no signal, those are
+    /// the download's day hikes; throwing would have drawn only what earlier
+    /// searches kept in their place.
     ///
     /// **`limit` is honoured in full only by the squares.** Their rows come
     /// with their lines, so a page of them is as long as the caller asks. An
@@ -134,7 +164,7 @@ nonisolated protocol CuratedTrailSourcing: Sendable {
     /// ``CuratedTrailQuery/geometryBatchLimit``, which is what one geometry
     /// pass draws.
     @concurrent
-    func listings(near area: CommunitySearchArea, limit: Int) async throws -> [CuratedTrail]
+    func listings(near area: CommunitySearchArea, limit: Int) async throws -> CuratedListing
 
     /// The routes in `listed` with their lines filled in, and what happened to
     /// the ones without.
@@ -262,6 +292,17 @@ actor CuratedTrailSource: CuratedTrailSourcing {
         case trail(CuratedTrail)
         /// Asked about, and Overpass had nothing to draw.
         case absent
+    }
+
+    /// What a listing pass brought, before it is cut to a page.
+    private struct ListedPage {
+        var trails: [CuratedTrail]
+        /// Whether the rows came with their lines: always from the squares,
+        /// and from Overpass when the area was small enough to ask for both.
+        var drawsLines: Bool
+        /// How many rows the page may hold: all that were asked for when the
+        /// squares answer, and one geometry pass's worth when Overpass does.
+        var limit: Int
     }
 
     /// The gate in front of the endpoint, and the one retry a busy answer
@@ -398,7 +439,7 @@ actor CuratedTrailSource: CuratedTrailSourcing {
 // MARK: - Searching
 
 extension CuratedTrailSource {
-    func listings(near area: CommunitySearchArea, limit: Int) async throws -> [CuratedTrail] {
+    func listings(near area: CommunitySearchArea, limit: Int) async throws -> CuratedListing {
         // Cleared before anything that can fail, so every path out of here
         // except a completed search leaves nothing behind for
         // ``trails(matching:limit:)`` to answer a different area with. The
@@ -407,15 +448,11 @@ extension CuratedTrailSource {
         let boxes = CuratedTrailQuery.searchBoxes(for: area)
         guard limit > 0, !boxes.isEmpty else {
             forgetLastAnswer()
-            return []
+            return CuratedListing(trails: [])
         }
-        let listed: [CuratedTrail]
-        // Whether the rows came with their lines: always from the squares,
-        // and from Overpass when the area was small enough to ask for both.
-        let drawsLines: Bool
-        // How many rows the page may hold: all that were asked for when the
-        // squares answer, and one geometry pass's worth when Overpass does.
-        let pageLimit: Int
+        let page: ListedPage
+        // Why the page is only part of the area's answer, when it is.
+        var gap: CuratedTrailOutage?
         // The squares first. A source with none is one whose squares do not
         // reach anywhere, which is the same thing to a search.
         let center = area.coordinate
@@ -425,28 +462,26 @@ extension CuratedTrailSource {
             // hikes there is something the squares can say, and asking
             // Overpass to confirm it would bring the wait back for every
             // search beside a lake.
-            listed = prebuilt
-            drawsLines = true
-            pageLimit = limit
+            page = ListedPage(trails: prebuilt, drawsLines: true, limit: limit)
+
+        case .partial(let prebuilt):
+            // Part of an answer, which Overpass can still make whole where it
+            // may be asked. Where it may not, or does not answer, the part is
+            // what there is to draw, and the gap is said beside it: see
+            // ``CuratedTrailSourcing/listings(near:limit:)``.
+            do {
+                page = try await askOverpass(about: area, in: boxes, limit: limit)
+            } catch {
+                guard let outage = CuratedTrailOutage(error) else { throw error }
+                page = ListedPage(trails: prebuilt, drawsLines: true, limit: limit)
+                gap = outage
+            }
 
         case .uncovered, .unreachable:
-            // No answer, so the question goes where it always went — unless
-            // it is wider than Overpass is asked about, and then it fails
-            // here: see ``CuratedTrailSearchRefusal``.
-            guard CuratedTrailQuery.isWithinOverpassCeiling(area),
-                  let request = CuratedTrailQuery.areaRequest(in: boxes)
-            else { throw CuratedTrailSearchRefusal.widerThanOverpassIsAsked }
-            listed = try await conversation.fetch(
-                request.query,
-                awaiting: request.timeoutSeconds
-            ) { body in
-                try request.drawsLines
-                    ? CuratedTrailDecoding.trails(fromListingWithLines: body)
-                    : CuratedTrailDecoding.trails(fromListing: body)
-            }
-            drawsLines = request.drawsLines
-            pageLimit = min(limit, CuratedTrailQuery.geometryBatchLimit)
+            // No answer, so the question goes where it always went.
+            page = try await askOverpass(about: area, in: boxes, limit: limit)
         }
+        let listed = page.trails
         // Nearest first, by the same measure the published half is sorted by,
         // so a merged list is ordered by one rule rather than by two that
         // happen to agree near the centre.
@@ -464,16 +499,42 @@ extension CuratedTrailSource {
         // it was.
         let nearest = listed
             .map { (trail: $0, distance: RouteGeometry.distanceMeters(from: center, to: $0.coordinate)) }
-            .min(count: pageLimit) { $0.distance < $1.distance }
+            .min(count: page.limit) { $0.distance < $1.distance }
             .map(\.trail)
         // The lines a small search brought, kept the way a geometry pass keeps
         // its own, so drawing one of these rows or opening it asks nothing
         // more. Only the page's: the rest of the box was measured and thrown
         // away, and a cache full of routes nobody was offered would evict the
         // ones somebody was.
-        if drawsLines { remember(nearest) }
+        if page.drawsLines { remember(nearest) }
         lastArea = area
-        return nearest
+        return CuratedListing(trails: nearest, gap: gap)
+    }
+
+    /// The listing pass put to Overpass — unless the area is wider than
+    /// Overpass is asked about, and then it fails here: see
+    /// ``CuratedTrailSearchRefusal``.
+    private func askOverpass(
+        about area: CommunitySearchArea,
+        in boxes: [CuratedTrailQuery.BoundingBox],
+        limit: Int
+    ) async throws -> ListedPage {
+        guard CuratedTrailQuery.isWithinOverpassCeiling(area),
+              let request = CuratedTrailQuery.areaRequest(in: boxes)
+        else { throw CuratedTrailSearchRefusal.widerThanOverpassIsAsked }
+        let listed = try await conversation.fetch(
+            request.query,
+            awaiting: request.timeoutSeconds
+        ) { body in
+            try request.drawsLines
+                ? CuratedTrailDecoding.trails(fromListingWithLines: body)
+                : CuratedTrailDecoding.trails(fromListing: body)
+        }
+        return ListedPage(
+            trails: listed,
+            drawsLines: request.drawsLines,
+            limit: min(limit, CuratedTrailQuery.geometryBatchLimit)
+        )
     }
 
     /// Fills in each listed route's line, keeping a row whose line was refused

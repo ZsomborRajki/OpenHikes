@@ -61,6 +61,12 @@ final class StubCuratedTrailSource: CuratedTrailSourcing, @unchecked Sendable {
     /// the merge is built to survive rather than an exotic one.
     var nearbyResult: Result<[CuratedTrail], TrailGraphProviderError> = .success([])
 
+    /// Why a successful area search is only part of the area's answer: the
+    /// real source's answer when the pre-built squares could read some of
+    /// the area and nothing could answer for the rest. `nil`, the default,
+    /// is a whole answer. See ``CuratedListing/gap``.
+    var listingGap: CuratedTrailOutage?
+
     /// What the geometry pass does, which is a different question from what
     /// the listing pass does and has to be armed separately: the case worth
     /// testing is the one where the cheap pass got through and the expensive
@@ -103,12 +109,12 @@ final class StubCuratedTrailSource: CuratedTrailSourcing, @unchecked Sendable {
     /// ``CuratedTrailQuery/geometryBatchLimit`` — and the merge's own split has
     /// to be shown doing its work on top of that rather than instead of it.
     @concurrent
-    func listings(near area: CommunitySearchArea, limit: Int) async throws -> [CuratedTrail] {
+    func listings(near area: CommunitySearchArea, limit: Int) async throws -> CuratedListing {
         state.withLock { $0.areaRequests.append((area: area, limit: limit)) }
         await Task.yield()
         await beforeListingsReturn?()
         let answer = try nearbyResult.get()
-        return Array(answer.prefix(max(0, limit)))
+        return CuratedListing(trails: Array(answer.prefix(max(0, limit))), gap: listingGap)
     }
 
     /// Records how many rows the expensive pass was asked about, which is the

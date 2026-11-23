@@ -109,14 +109,14 @@ nonisolated struct SeededCuratedTrailSource: CuratedTrailSourcing {
         (0, 0), (2, 1), (4, 2), (6, 3),
     ]
 
-    func listings(near area: CommunitySearchArea, limit: Int) -> [CuratedTrail] {
+    func listings(near area: CommunitySearchArea, limit: Int) -> CuratedListing {
         // The area is deliberately ignored, exactly as the seeded published
         // transport ignores it: what a scenario is asking is what the list
         // does with these rows, and making that depend on where the
         // simulator's map settled would turn a UI assertion into a geography
         // assertion — the failure being an empty list with nothing to say
         // about why.
-        Array(served.prefix(max(0, limit)))
+        CuratedListing(trails: Array(served.prefix(max(0, limit))))
     }
 
     /// Already complete, because these two never went over a wire.

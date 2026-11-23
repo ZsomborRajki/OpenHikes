@@ -1527,11 +1527,14 @@ by name. `TrailCellGrid` argues the grid and has the measurements,
 `SquareArchiveServer` reads it. The three sets after this one are built,
 packed and read on the same terms.
 
-- **An answer is complete or it is not given** (`TrailCellLibrary`). A search
+- **An answer is complete, or says it is not** (`TrailCellLibrary`). A search
   is answered from the squares only when the server lists an archive of them
   this build reads, and every square within reach of the search was read or
   has no tile. Otherwise `CuratedTrailSource` asks Overpass as it did before.
-  So an empty answer from the squares means *no trails here*. A downloaded
+  So an empty answer from the squares means *no trails here*. Where some
+  squares were read and another could not be, and Overpass cannot be asked or
+  does not answer, the routes of those read are offered as a part, and the
+  caption says some may be missing (`TrailCellAnswer.partial`). A downloaded
   area's squares are read first (*The offline countries*).
 - **Only a build of the whole planet goes up.** A square with no tile is read
   as ground with nothing on it, so `pack` and `upload-archive` refuse a build
