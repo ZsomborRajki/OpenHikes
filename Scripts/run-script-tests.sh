@@ -6036,6 +6036,21 @@ if expect_status 0 \
     pass
 fi
 
+# A directory cut before `trails` was added to its build still uploads, every
+# file it holds being the bucket's: merged as it is, it would take the trails
+# off the list while their file stayed in the bucket.
+run_script "offline-countries merge keeps a file the server lists for the same build" \
+    "$OPENHIKES_OFFLINE_COUNTRIES_BUILD/offline-countries" merge --server "$countries_work/trails/manifest.json" \
+    --build "$countries_work/out/manifest.json" --out "$countries_work/same-build.json"
+if expect_status 0; then
+    same_build_roles="$(grep -o '"role":"[a-z-]*"' "$countries_work/same-build.json" | tr '\n' ' ')"
+    if [[ "$same_build_roles" == '"role":"basemap" "role":"trails" ' ]]; then
+        pass
+    else
+        fail "the merged manifest does not list the basemap and the trails, once each" "$same_build_roles"
+    fi
+fi
+
 head -c 40 "$countries_work/later.json" > "$countries_work/cut-short.json"
 run_script "offline-countries merge refuses a server manifest it cannot read, rather than starting from none" \
     "$OPENHIKES_OFFLINE_COUNTRIES_BUILD/offline-countries" merge --server "$countries_work/cut-short.json" \
