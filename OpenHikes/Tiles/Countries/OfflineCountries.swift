@@ -22,8 +22,9 @@
 //  Turning it on brings zoom 15 to every area already down; turning it off
 //  deletes it from them and keeps the areas (``reconcile()``). A file the
 //  list names for a build already down that the area did not take is
-//  brought the same way: the day hikes' squares, which builds already
-//  listed gained after many areas were down.
+//  brought the same way, and ahead of any zoom 15 the area lacks: the day
+//  hikes' squares, which builds already listed gained after many areas were
+//  down.
 //
 //  A download is `.speculative`, as a bulk tile download is: it waits for
 //  Wi-Fi, and it is refused outright in Low Power Mode or while the device is
@@ -170,7 +171,7 @@ final class OfflineCountries {
     /// 15: the server deletes a build it has moved past, and asking for that
     /// build's files failed at every launch. So is one with a file that
     /// would not open, for the hiker's *Try Again*, which brings zoom 15
-    /// with it: here it would come down again unasked at every launch, even
+    /// after it: here it would come down again unasked at every launch, even
     /// where the device only refused a read for the moment. Nothing is
     /// brought while the launch picks up what was coming down
     /// (``isRecovering``); the launch brings the areas once it has.
@@ -297,13 +298,19 @@ final class OfflineCountries {
 
     /// What downloading `country` asks for: every file *Extra Detail* says,
     /// less those of the same build already down and opened. One the map
-    /// could not open is asked for again.
+    /// could not open is asked for again. Of an area down without zoom 15,
+    /// the rest comes first and zoom 15 after it (``reconcile()``): in one
+    /// download, a zoom 15 that failed would keep its day hikes off the
+    /// device even once they had landed, and turning *Extra Detail* off,
+    /// which stops a download of zoom 15 alone, would not stop it.
     func filesToFetch(for country: Country) -> [OfflineCountryManifest.File] {
         let wanted = country.files(withDetail: includesDetail)
         guard let record = installed[country.id], record.country.build == country.build else { return wanted }
         let failed = unopenable[country.id] ?? []
         let held = Set(record.files.filter { !failed.contains($0.role) }.map(\.fileName))
-        return wanted.filter { !held.contains($0.fileName) }
+        let owed = wanted.filter { !held.contains($0.fileName) }
+        guard !record.hasDetail, owed.contains(where: { !$0.role.isDetail }) else { return owed }
+        return owed.filter { !$0.role.isDetail }
     }
 
     /// Stops `id`'s download and keeps nothing it brought. A launch that has

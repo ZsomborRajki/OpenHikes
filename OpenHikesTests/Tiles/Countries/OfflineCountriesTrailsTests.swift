@@ -24,6 +24,11 @@ struct OfflineCountriesTrailsTests {
         [VectorTileAddress(z: 14, x: 8852, y: 5824): Data("z14".utf8)],
         maximumZoom: 14
     )
+    private let detail = OfflineCountryFixture.archive(
+        [VectorTileAddress(z: 15, x: 17_704, y: 11_649): Data("z15".utf8)],
+        maximumZoom: 15,
+        minimumZoom: 15
+    )
 
     /// The day hikes' file of an area holding `bytes` for Ljubljana's square.
     nonisolated private static func trails(_ bytes: Data) -> Data {
@@ -72,11 +77,6 @@ struct OfflineCountriesTrailsTests {
     )
     func gainedByABuildAlreadyDown(withDetail: Bool) async throws {
         let trails = Self.trails(Self.loop)
-        let detail = OfflineCountryFixture.archive(
-            [VectorTileAddress(z: 15, x: 17_704, y: 11_649): Data("z15".utf8)],
-            maximumZoom: 15,
-            minimumZoom: 15
-        )
         let mapOnly = OfflineCountryFixture.country(bytes: basemap, detail: detail)
         let withTrails = OfflineCountryFixture.country(bytes: basemap, detail: detail, trails: trails)
         try await OfflineCountryFixture.withDirectory { directory in
@@ -105,6 +105,41 @@ struct OfflineCountriesTrailsTests {
             #expect(harness.countries.installed["SI"]?.hasDetail == withDetail)
             #expect(harness.store.installed().first?.country == withTrails)
             #expect(withTrails.files(withDetail: withDetail).allSatisfy(harness.fileExists))
+        }
+    }
+
+    /// With *Extra Detail* on over an area down without its zoom 15. In one
+    /// download with zoom 15, a zoom 15 that failed would keep the day hikes
+    /// off the device once they had landed, and turning *Extra Detail* off,
+    /// which stops a download of zoom 15 alone, would leave both coming.
+    @Test("an area down without its zoom 15 brings its build's day hikes on their own, and then its zoom 15")
+    func dayHikesAheadOfDetail() async throws {
+        let trails = Self.trails(Self.loop)
+        let mapOnly = OfflineCountryFixture.country(bytes: basemap, detail: detail)
+        let withTrails = OfflineCountryFixture.country(bytes: basemap, detail: detail, trails: trails)
+        try await OfflineCountryFixture.withDirectory { directory in
+            let store = OfflineCountryStore(directory: directory)
+            try store.prepare()
+            try basemap.write(to: store.fileURL(for: try #require(mapOnly.files.first)))
+            try store.write(installed: [OfflineCountryStore.Record(country: mapOnly, installedAt: .now)])
+            try store.cache(OfflineCountryFixture.manifest([withTrails]))
+            let harness = await OfflineCountryHarness.make(in: directory, offering: [withTrails])
+            #expect(harness.downloader.requests.map(\.key.role) == [.trails])
+
+            harness.downloader.fail(.trails, resumeData: nil)
+            await harness.countries.retry("SI")
+            #expect(harness.downloader.requests.map(\.key.role) == [.trails, .trails], "and so does a retry")
+            try harness.land([.trails: trails])
+            await settleDelegateHop(until: "the day hikes are in, and zoom 15 is asked for") {
+                harness.countries.downloads["SI"]?.files.map(\.role) == [.detail]
+                    && !harness.archives.trailCells(named: [Self.ljubljana]).isEmpty
+            }
+            #expect(harness.store.installed().first?.country == withTrails)
+
+            harness.countries.setIncludesDetail(false)
+            #expect(harness.countries.downloads["SI"] == nil)
+            #expect(harness.store.pending().isEmpty)
+            #expect(harness.countries.installed["SI"]?.files.map(\.role) == [.basemap, .trails])
         }
     }
 
