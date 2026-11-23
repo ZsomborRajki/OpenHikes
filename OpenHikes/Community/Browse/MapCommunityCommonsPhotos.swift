@@ -35,31 +35,18 @@ import MapKit
 import OpenHikesData
 import OpenHikesShared
 
-/// One photograph, in the shape MapKit wants it.
+/// One of the tab's photographs on the map.
 ///
 /// Its own class rather than ``TrailDraftPhotoAnnotation``, because the map
 /// tells the two apart by class: the maker reads its own back off the map and
-/// opens its card on a tap, and a community photograph must be neither.
-final class CommunityCommonsPhotoAnnotation: NSObject, MKAnnotation {
+/// opens its card on a tap, and a community photograph must be neither. What
+/// the two share is ``CommonsPhotoAnnotation``.
+final class CommunityCommonsPhotoAnnotation: CommonsPhotoAnnotation {
     static let reuseIdentifier = "communityCommonsPhoto"
     /// What MapKit groups overlapping thumbnails by — see this file's header.
     static let clusteringIdentifier = "communityCommonsPhotos"
     /// The view a group is drawn with: the same thumbnail, with a count.
     static let groupReuseIdentifier = "communityCommonsPhotoGroup"
-
-    let photo: CommonsPhoto
-    @objc dynamic let coordinate: CLLocationCoordinate2D
-    /// Both keys, because MapKit reads them by key-value coding once a second
-    /// annotation is up — see `MapAnnotationKeyCodingTests`. Neither is drawn.
-    @objc let title: String? = nil
-    @objc let subtitle: String? = nil
-
-    init?(photo: CommonsPhoto) {
-        guard let camera = photo.pin.coordinate else { return nil }
-        self.photo = photo
-        coordinate = camera
-        super.init()
-    }
 
     /// The photographs a group MapKit made of these stands for, newest first
     /// — the order its grid shows them in, and the first is the one drawn.
@@ -79,18 +66,10 @@ final class CommunityCommonsPhotoAnnotation: NSObject, MKAnnotation {
 }
 
 extension MapView.Coordinator {
-    /// Rebuilds the photographs' pins wholesale rather than diffing them.
-    ///
-    /// Read back off the map rather than stored, and compared as sets, for the
-    /// reasons ``applyTrailDraftPhotos(_:on:)`` gives.
+    /// Puts the tab's photographs on the map, leaving the maker's alone —
+    /// see ``applyCommonsPhotos(_:as:on:)``.
     func applyCommunityCommonsPhotos(_ photos: [CommonsPhoto], on mapView: MKMapView) {
-        let drawn = mapView.annotations.compactMap { $0 as? CommunityCommonsPhotoAnnotation }
-        guard drawn.count != photos.count || Set(drawn.map(\.photo)) != Set(photos) else { return }
-        if !drawn.isEmpty {
-            mapView.removeAnnotations(drawn)
-        }
-        guard !photos.isEmpty else { return }
-        mapView.addAnnotations(photos.compactMap(CommunityCommonsPhotoAnnotation.init))
+        applyCommonsPhotos(photos, as: CommunityCommonsPhotoAnnotation.self, on: mapView)
     }
 
     /// The view for one of the maker's annotations, a community photograph or
