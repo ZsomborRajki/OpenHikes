@@ -170,6 +170,44 @@ struct OfflineCountriesLaunchTests {
         }
     }
 
+    /// The areas are listed before the session has said what it still has,
+    /// so a read of the list meanwhile finds an area down without the day
+    /// hikes its build gained, and no row bringing them: the transfer the
+    /// launch is picking up is for them, to the same staging path.
+    @Test("a read of the list while the launch picks up a download asks for none of its files again")
+    func listReadDuringRecovery() async throws {
+        try await OfflineCountryFixture.withDirectory { directory in
+            let store = OfflineCountryStore(directory: directory)
+            try store.prepare()
+            let mapOnly = OfflineCountryFixture.country(bytes: basemap)
+            let withTrails = OfflineCountryFixture.country(bytes: basemap, trails: Data("trails".utf8))
+            try basemap.write(to: store.fileURL(for: try #require(mapOnly.files.first)))
+            try store.write(installed: [OfflineCountryStore.Record(country: mapOnly, installedAt: .now)])
+            let pending = OfflineCountryStore.Pending(country: withTrails, roles: [.trails])
+            try store.write(pending: [pending])
+            let downloader = StubCountryDownloader()
+            downloader.holdsListing = true
+            let trailsKey = OfflineCountryDownloadKey(country: "SI", build: withTrails.build, role: .trails)
+            downloader.stillRunning = [trailsKey: 3]
+            let server = StubCountryServer(OfflineCountryFixture.manifest([withTrails]))
+            let countries = countries(store, server: server, downloader: downloader)
+
+            let launch = Task { await countries.start() }
+            await settleDelegateHop(until: "the launch waits on the session's tasks") {
+                !downloader.waitingForListing.isEmpty
+            }
+            await countries.refreshList()
+            #expect(downloader.requests.isEmpty)
+            downloader.releaseListing()
+            await launch.value
+
+            #expect(countries.downloads["SI"]?.files.map(\.role) == [.trails])
+            #expect(countries.downloads["SI"]?.phase == .downloading)
+            #expect(downloader.requests.isEmpty, "the transfer picked up is the only one")
+            #expect(store.pending() == [pending])
+        }
+    }
+
     @Test("a country still downloaded stays listed after the server stops offering it")
     func listsWhatIsInstalled() async throws {
         try await OfflineCountryFixture.withDirectory { directory in

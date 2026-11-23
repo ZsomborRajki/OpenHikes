@@ -120,6 +120,11 @@ final class OfflineCountries {
     /// Counts the openings of the archives, so an opening that finishes after
     /// a later one is dropped rather than put back over it.
     @ObservationIgnored private var archiveGeneration = 0
+    /// Whether the launch is still picking up what was coming down. Until it
+    /// has, an area it is bringing has no row in ``downloads``, and bringing
+    /// the areas to the list would ask for that file a second time, to the
+    /// same staging path, so ``reconcile()`` waits for the launch's own.
+    @ObservationIgnored private var isRecovering = false
 
     nonisolated static let logger = Logger(subsystem: "OpenHikes", category: "OfflineCountries")
     /// Room left over on the volume after a download, so an area never takes
@@ -158,23 +163,6 @@ final class OfflineCountries {
     /// server, and the device's own lists are not ones it cannot read.
     var isAvailable: Bool { server != nil && holdings != .unreadable }
 
-    // MARK: - Extra Detail
-
-    /// Turns *Extra Detail* on, which brings zoom 15 to every area already
-    /// down, or off, which deletes it from them and keeps the areas.
-    func setIncludesDetail(_ isOn: Bool) {
-        guard isOn != includesDetail else { return }
-        includesDetail = isOn
-        defaults?.set(isOn, forKey: SettingsKey.offlineCountriesDetail)
-        if !isOn {
-            // Bringing only zoom 15 to an area already down is no longer wanted.
-            for (id, download) in downloads where download.files.allSatisfy(\.role.isDetail) {
-                cancel(id)
-            }
-        }
-        reconcile()
-    }
-
     /// Brings every area down, and not coming down, to *Extra Detail*'s
     /// setting, and to the files the list now names for its build. A
     /// download under way is left to finish, and brought to it then. An area
@@ -183,8 +171,11 @@ final class OfflineCountries {
     /// build's files failed at every launch. So is one with a file that
     /// would not open, for the hiker's *Try Again*, which brings zoom 15
     /// with it: here it would come down again unasked at every launch, even
-    /// where the device only refused a read for the moment.
+    /// where the device only refused a read for the moment. Nothing is
+    /// brought while the launch picks up what was coming down
+    /// (``isRecovering``); the launch brings the areas once it has.
     private func reconcile() {
+        guard !isRecovering else { return }
         for record in installed.values where downloads[record.country.id] == nil {
             let current = offeredBuild(of: record)
             if includesDetail, !record.hasDetail {
@@ -473,6 +464,25 @@ final class OfflineCountries {
     }
 }
 
+// MARK: - Extra Detail
+
+extension OfflineCountries {
+    /// Turns *Extra Detail* on, which brings zoom 15 to every area already
+    /// down, or off, which deletes it from them and keeps the areas.
+    func setIncludesDetail(_ isOn: Bool) {
+        guard isOn != includesDetail else { return }
+        includesDetail = isOn
+        defaults?.set(isOn, forKey: SettingsKey.offlineCountriesDetail)
+        if !isOn {
+            // Bringing only zoom 15 to an area already down is no longer wanted.
+            for (id, download) in downloads where download.files.allSatisfy(\.role.isDetail) {
+                cancel(id)
+            }
+        }
+        reconcile()
+    }
+}
+
 // MARK: - The archives
 
 extension OfflineCountries {
@@ -535,6 +545,7 @@ extension OfflineCountries {
             return
         }
         holdings = .read
+        isRecovering = true
         installed = Dictionary(records.map { ($0.country.id, $0) }, uniquingKeysWith: { first, _ in first })
         // Megabytes of outlines, so read off the main actor; and a list
         // fetched while it was read is newer.
@@ -556,6 +567,7 @@ extension OfflineCountries {
         if case let .holding(stillWaiting) = store.downloadsUnderWay() {
             await Self.sweep(store, keeping: Array(installed.values), pending: stillWaiting)
         }
+        isRecovering = false
         reconcile()
     }
 
