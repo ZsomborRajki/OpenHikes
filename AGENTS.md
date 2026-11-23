@@ -1050,13 +1050,14 @@ Maps*. `OfflineCountries` is the one owner, on the main actor.
   one way past the server is
   `--ui-test-offline-countries=<seeded|showcase|refused>`
   (`SeededOfflineCountryServer`), and still no session, so nothing downloads.
-- **Deployment state, checked 2026-11-22.** The bucket holds every area of
-  build `20261122`, cut from `planet-20261118` and `extras-20261122-00`: 381
-  of them (234 countries, and the 51 states, 13 provinces and 83 regions of
-  the three split ones), 1,524 files and 180.6 GB, and no other country
-  file. Beside them it holds those two archives, the four sets of squares
-  (*The trail squares*), and the manifest at revision 11, which names all
-  six, and nothing else. The squares are `routing-20261122-00`,
+- **Deployment state, checked 2026-11-23.** The bucket holds every area of
+  build `20261122`, cut from `planet-20261118` and `extras-20261122-00`, with
+  its day hikes from `trails-20261122-00` 50 km round it: 381 of them (234
+  countries, and the 51 states, 13 provinces and 83 regions of the three
+  split ones), 1,905 files and 180.8 GB, of which the day hikes are 279 MB,
+  and no other country file. Beside them it holds those two archives, the
+  four sets of squares (*The trail squares*), and the manifest at revision
+  11, which names all six, and nothing else. The squares are `routing-20261122-00`,
   `trails-20261122-00`, `routes-20261122-00` and `places-20261122-00`, each
   the planet of 2026-11-22 00:00 UTC.
 
