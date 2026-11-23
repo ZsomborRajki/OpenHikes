@@ -60,6 +60,7 @@
 //  whole.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 import OpenHikesShared
@@ -148,7 +149,7 @@ nonisolated public enum RouteShape: Hashable, Sendable {
         let reach = line.reduce(0) { max($0, hypot($1.x, $1.y)) }
         guard reach > closingToleranceMeters else { return nil }
 
-        let length = zip(line, line.dropFirst()).reduce(0) { total, leg in
+        let length = line.adjacentPairs().reduce(0) { total, leg in
             total + hypot(leg.1.x - leg.0.x, leg.1.y - leg.0.y)
         }
         let spacing = max(sampleSpacingMeters, length / Double(maximumSamples))
@@ -189,7 +190,7 @@ nonisolated public enum RouteShape: Hashable, Sendable {
         var samples = [first]
         // How far along the leg in hand the next sample falls.
         var untilNext = spacing
-        for (from, to) in zip(line, line.dropFirst()) {
+        for (from, to) in line.adjacentPairs() {
             let legLength = hypot(to.x - from.x, to.y - from.y)
             guard legLength > 0 else { continue }
             while untilNext <= legLength {
