@@ -11,7 +11,7 @@
 //  two-case question with two task handles, two accept branches and two fail
 //  branches; a third would touch every one of them. Nothing above this line
 //  has to change, and the one thing above it that can tell there are two is
-//  that the published half may arrive early — see the fourth rule.
+//  that either half may arrive early — see the fourth rule.
 //
 //  ## Four rules, and each of them is a correction to the obvious version
 //
@@ -61,12 +61,16 @@
 //  query in a fraction of a second, and Overpass held every request it
 //  admitted for 25–52 seconds when this was last measured, on 2026-10-21 —
 //  once for a search of the map above the sheet, twice for a wide one; see
-//  ``CuratedTrailQuery``. The published rows are handed up through
-//  `publishedFirst` the moment they land, so the hiker's own hikes are on the
-//  map and in the list while the trails are still on their way; the merged
-//  answer replaces them when it arrives, and only it ends the request. They
-//  are the same rows the merged page leads with, so nothing drawn early is
-//  taken away by the full answer.
+//  ``CuratedTrailQuery``. But the trails can be the fast half too: a search
+//  over ground the hiker downloaded is answered on the device, and with no
+//  signal it is CloudKit that hangs. So whichever half lands first with rows
+//  to draw is handed up through `firstHalf` the moment it does, and the
+//  merged answer replaces it when it arrives; only that ends the request.
+//  Published rows are the ones the merged page leads with, so nothing drawn
+//  early is taken away. Trails drawn early can be: the merged page still
+//  spends the limit on CloudKit first, and the first rule outranks this one.
+//  Only trails that came with their lines go up early, because a line still
+//  to fetch costs a request that waits until the page's room is known.
 //
 //  **A curated id must never reach CloudKit.** Every per-listing method routes
 //  on the listing's ``CommunityOrigin`` — ``CommunityListing/relationID`` and
@@ -138,7 +142,7 @@ nonisolated extension MergedCommunityTransport {
             limit: limit,
             excluding: excluding,
             scope: scope,
-            publishedFirst: { _ in /* the caller waits for the whole answer */ }
+            firstHalf: { _ in /* the caller waits for the whole answer */ }
         )
     }
 
@@ -148,55 +152,27 @@ nonisolated extension MergedCommunityTransport {
         limit: Int,
         excluding: Set<String>,
         scope: CommunityNearbyScope,
-        publishedFirst: @Sendable ([CommunityListing]) async -> Void
+        firstHalf: @Sendable ([CommunityListing]) async -> Void
     ) async throws -> CommunityNearbyAnswer {
-        async let publishedRows = attempt {
-            // `.publishedOnly` is what this call *is*, whatever the question
-            // was: the half being asked here is CloudKit, and the curated half
-            // of the same question is the `async let` below. A conformance
-            // with one source ignores the scope, and passing the caller's
-            // through would be handing a second source's instruction to a
-            // transport that has none.
-            try await published.listings(
-                near: area,
-                limit: limit,
-                excluding: excluding,
-                scope: .publishedOnly
-            ).listings
-        }
-        // The curated half's first request, and it runs beside CloudKit rather
-        // than after it. Which of its rows are worth a line is not known until
-        // the published half has answered — see
-        // ``merge(published:curated:limit:)`` — so for a wide area this is the
-        // cheap pass alone: a page of lines there is 420 KB to 1.4 MB, and
-        // asking for them here would spend all of that on rows the limit then
-        // throws away. For the map above the sheet it brings every line in the
-        // box with it, because that costs less than a second turn in Overpass's
-        // queue; the published rows still take their places first, so what the
-        // limit throws away there is bytes rather than a request. See
-        // ``CuratedTrailQuery/areaRequest(in:)``.
-        //
-        // For a ``CommunityNearbyScope/publishedOnly`` question it is not a
-        // request at all: `listCurated` returns without touching the source,
-        // so the whole request is the one CloudKit query beside it.
-        async let curatedListed = listCurated(near: area, limit: limit, for: scope)
-
-        let publishedAnswer = await publishedRows
-        // Up before Overpass has answered, while the curated request above is
-        // still running — see the file header's fourth rule. Only when there
-        // is a slower half to wait for, and only with rows in it; see
-        // ``CommunityTransporting/listings(near:limit:excluding:scope:publishedFirst:)``.
-        if scope == .withCuratedTrails, !publishedAnswer.rows.isEmpty {
-            await publishedFirst(nearestFirst(publishedAnswer.rows, to: area.coordinate))
-        }
-        // What Overpass had to say, or — when it refused — what this device
-        // already had about the same area. See ``listCurated(near:limit:for:)``.
-        let listed = await curatedListed
+        // Both halves at once, with whichever lands first handed up while the
+        // other is still out — see the file header's fourth rule. The trails
+        // are what Overpass or the downloaded squares had to say, or — when
+        // that was refused — what this device already had about the same
+        // area. See ``listCurated(near:limit:for:)``.
+        let (publishedAnswer, listed) = await bothHalves(
+            near: area,
+            limit: limit,
+            excluding: excluding,
+            scope: scope,
+            firstHalf: firstHalf
+        )
         let room = max(0, limit - publishedAnswer.rows.count)
         // Nothing to complete when the question did not ask, and nothing worth
         // completing when the published half has already spent the page. A
         // small search's rows are complete already, and completing them finds
         // every line in hand — see ``CuratedTrailSourcing/completed(_:)``.
+        // The room is CloudKit's leftovers whichever half landed first, so
+        // trails handed up early give their places back here.
         let curatedRows = scope == .publishedOnly || room == 0
             ? CuratedAttempt.notAsked
             : await complete(Array(listed.trails.prefix(room)))
@@ -514,11 +490,129 @@ nonisolated extension MergedCommunityTransport {
 // cannot be accessed from outside of the actor* — and would have put the
 // merge on the main actor wherever it did compile.
 nonisolated private extension MergedCommunityTransport {
+    /// What the CloudKit half came back with: its rows, or why there are none.
+    typealias PublishedAttempt = (rows: [CommunityListing], failure: CommunityFailure?)
+
+    /// One half of a nearby answer, as it lands — see
+    /// ``bothHalves(near:limit:excluding:scope:firstHalf:)``.
+    nonisolated enum Half: Sendable {
+        case published(PublishedAttempt)
+        case curated(CuratedAttempt)
+    }
+
+    /// Both halves of a nearby question, asked side by side, with the first to
+    /// land holding rows worth drawing handed to `firstHalf` while the other is
+    /// still out — see the file header's fourth rule.
+    ///
+    /// **At most once, and never with nothing**, for the reasons
+    /// ``CommunityTransporting/listings(near:limit:excluding:scope:firstHalf:)``
+    /// gives. The published rows go up whenever nothing has gone up before
+    /// them, as they did when they were the only half that could. The trails go
+    /// up only while CloudKit is still out — once it has answered, the merge is
+    /// next — and only the ones that came with their lines; see
+    /// ``drawnEarly(_:limit:)``.
+    ///
+    /// The curated half's first request runs beside CloudKit rather than after
+    /// it. Which of its rows are worth a line is not known until the published
+    /// half has answered — see ``merge(published:curated:limit:)`` — so for a
+    /// wide area this is the cheap pass alone: a page of lines there is 420 KB
+    /// to 1.4 MB, and asking for them here would spend all of that on rows the
+    /// limit then throws away. For the map above the sheet it brings every line
+    /// in the box with it, because that costs less than a second turn in
+    /// Overpass's queue; the published rows still take their places first, so
+    /// what the limit throws away there is bytes rather than a request. See
+    /// ``CuratedTrailQuery/areaRequest(in:)``. For a
+    /// ``CommunityNearbyScope/publishedOnly`` question it is not a request at
+    /// all: ``listCurated(near:limit:for:)`` returns without touching the
+    /// source, so the whole request is the one CloudKit query beside it.
+    ///
+    /// A task group rather than two `async let`s, because an `async let` is
+    /// awaited in the order it is written, and which half is the slow one is
+    /// exactly what is not known: over ground the hiker downloaded, with no
+    /// signal, it is CloudKit that hangs while the trails are already here.
+    func bothHalves(
+        near area: CommunitySearchArea,
+        limit: Int,
+        excluding: Set<String>,
+        scope: CommunityNearbyScope,
+        firstHalf: @Sendable ([CommunityListing]) async -> Void
+    ) async -> (published: PublishedAttempt, curated: CuratedAttempt) {
+        await withTaskGroup(of: Half.self) { group in
+            group.addTask { .published(await attemptPublished(near: area, limit: limit, excluding: excluding)) }
+            group.addTask { .curated(await listCurated(near: area, limit: limit, for: scope)) }
+            var published: PublishedAttempt = ([], nil)
+            var curated = CuratedAttempt.notAsked
+            var publishedLanded = false
+            // A published-only question has no slower half to wait for: its
+            // answer *is* the published half, and nothing goes up before it.
+            var handedUp = scope == .publishedOnly
+            for await half in group {
+                let early: [CommunityListing]
+                switch half {
+                case .published(let attempt):
+                    published = attempt
+                    publishedLanded = true
+                    early = attempt.rows
+                case .curated(let attempt):
+                    curated = attempt
+                    early = publishedLanded ? [] : drawnEarly(attempt.trails, limit: limit)
+                }
+                guard !handedUp, !early.isEmpty else { continue }
+                handedUp = true
+                await firstHalf(nearestFirst(early, to: area.coordinate))
+            }
+            return (published, curated)
+        }
+    }
+
+    /// The CloudKit half of a nearby question.
+    ///
+    /// `.publishedOnly` is what this call *is*, whatever the question was: the
+    /// half being asked here is CloudKit, and the curated half of the same
+    /// question is ``listCurated(near:limit:for:)``. A conformance with one
+    /// source ignores the scope, and passing the caller's through would be
+    /// handing a second source's instruction to a transport that has none.
+    func attemptPublished(
+        near area: CommunitySearchArea,
+        limit: Int,
+        excluding: Set<String>
+    ) async -> PublishedAttempt {
+        await attempt {
+            try await published.listings(
+                near: area,
+                limit: limit,
+                excluding: excluding,
+                scope: .publishedOnly
+            ).listings
+        }
+    }
+
+    /// The trails worth drawing while CloudKit is still out: the page they
+    /// would fill on their own, less any row still waiting for its line.
+    ///
+    /// Only rows that came with their lines, because those are rows in hand —
+    /// a downloaded square's always do, and a small search's arrive with
+    /// theirs — and completing them later keeps them as they came and costs no
+    /// request; see ``CuratedTrailSourcing/completed(_:)``. That is also what
+    /// keeps them from being followed by a thrown answer. A row without its
+    /// line costs a geometry request, and which rows are worth one is not known
+    /// until the published half has taken its places.
+    ///
+    /// The whole page rather than what would be left beside published hikes,
+    /// because nobody knows yet how many of those there are. The merged answer
+    /// spends the limit on CloudKit first all the same, so some of these can
+    /// leave the list again when it lands — see the file header's first rule.
+    func drawnEarly(_ trails: [CuratedTrail], limit: Int) -> [CommunityListing] {
+        trails.prefix(max(0, limit))
+            .filter { !$0.route.isEmpty }
+            .map { CommunityListing(curated: $0, editedAt: .now) }
+    }
+
     /// Runs `work`, turning a failure into one to report later.
     ///
     /// A tuple rather than a `throws`, because the whole point is that neither
-    /// half may end the other: an `async let` that throws would propagate out
-    /// of the `await` and take the sibling's answer with it.
+    /// half may end the other: a half that threw would end the request and
+    /// take the sibling's answer with it.
     ///
     /// **Logged here as well as returned**, because the returned half is not
     /// always used. ``merge(published:curated:limit:)`` reports this failure
@@ -538,7 +632,7 @@ nonisolated private extension MergedCommunityTransport {
     /// the ordinary working of the screen.
     func attempt(
         _ work: () async throws -> [CommunityListing]
-    ) async -> (rows: [CommunityListing], failure: CommunityFailure?) {
+    ) async -> PublishedAttempt {
         do {
             return (try await work(), nil)
         } catch {
@@ -556,7 +650,7 @@ nonisolated private extension MergedCommunityTransport {
     /// Two fields rather than a `Result` because the two are not exclusive in
     /// principle and the caller treats them separately: the rows are merged,
     /// the outage is carried out to the button that spent the request.
-    nonisolated struct CuratedAttempt {
+    nonisolated struct CuratedAttempt: Sendable {
         var trails: [CuratedTrail]
         var outage: CuratedTrailOutage?
 
@@ -569,9 +663,10 @@ nonisolated private extension MergedCommunityTransport {
     /// The listing pass, or nothing at all for a question that did not ask for
     /// one, or what is already on the device when Overpass refused.
     ///
-    /// The guard is here rather than at the call site so the `async let` above
-    /// stays one expression, and so the rule — *Overpass is asked only when
-    /// the question asks for it* — is a thing one function decides.
+    /// The guard is here rather than at the call site so the child task in
+    /// ``bothHalves(near:limit:excluding:scope:firstHalf:)`` stays one
+    /// expression, and so the rule — *Overpass is asked only when the question
+    /// asks for it* — is a thing one function decides.
     ///
     /// **The fall-back keeps the outage.** It is not a recovery and must not
     /// read as one: the rows it returns are whatever this device happens to
@@ -723,7 +818,7 @@ nonisolated private extension MergedCommunityTransport {
     /// rule true for ``listings(matching:…)``, whose curated half comes out of
     /// the last search's rows rather than out of a fresh request.
     func merge(
-        published: (rows: [CommunityListing], failure: CommunityFailure?),
+        published: PublishedAttempt,
         curated: [CuratedTrail],
         limit: Int
     ) -> (rows: [CommunityListing], failure: CommunityFailure?) {
