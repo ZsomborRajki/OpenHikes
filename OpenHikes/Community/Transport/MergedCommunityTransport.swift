@@ -210,7 +210,7 @@ nonisolated extension MergedCommunityTransport {
         // back, so it reaches no network and cannot be rate-limited. See
         // ``CuratedTrailSourcing/trails(matching:limit:)``.
         async let curatedRows = attemptCurated {
-            await curated.trails(matching: query, limit: limit)
+            CuratedListing(trails: await curated.trails(matching: query, limit: limit))
         }
         let (rows, failure) = merge(
             published: await publishedRows,
@@ -653,6 +653,9 @@ nonisolated private extension MergedCommunityTransport {
     nonisolated struct CuratedAttempt: Sendable {
         var trails: [CuratedTrail]
         var outage: CuratedTrailOutage?
+        /// Why ``trails`` may be only part of the area's, when the listing
+        /// pass answered for part of it: see ``CuratedListing/gap``.
+        var gap: CuratedTrailOutage?
 
         /// A pass that was never made. What a
         /// ``CommunityNearbyScope/publishedOnly`` question gets, and it is not
@@ -675,6 +678,11 @@ nonisolated private extension MergedCommunityTransport {
     /// still says the half was refused. Drawing the four is better than
     /// drawing nothing, and claiming they are the answer would be worse than
     /// either. See ``CuratedTrailStore/trails(near:limit:)``.
+    ///
+    /// A listing that answered for part of the area is not an outage, and
+    /// falls back on nothing: its rows are that part's own, ranked as a whole
+    /// answer is, and its gap goes to the caption — see
+    /// ``CuratedListing/gap``.
     func listCurated(
         near area: CommunitySearchArea,
         limit: Int,
@@ -750,10 +758,11 @@ nonisolated private extension MergedCommunityTransport {
     /// quiet about: a cancellation is a superseded search, not a service that
     /// would not answer.
     func attemptCurated(
-        _ work: () async throws -> [CuratedTrail]
+        _ work: () async throws -> CuratedListing
     ) async -> CuratedAttempt {
         do {
-            return CuratedAttempt(trails: try await work(), outage: nil)
+            let listing = try await work()
+            return CuratedAttempt(trails: listing.trails, outage: nil, gap: listing.gap)
         } catch {
             let outage = CuratedTrailOutage(error)
             if outage != nil {
@@ -766,11 +775,13 @@ nonisolated private extension MergedCommunityTransport {
     }
 
     /// What to report about the OpenStreetMap half of an answer: nothing, a
-    /// count, or a refusal.
+    /// count, a refusal, or a part.
     ///
     /// The listing pass's outage comes first because it is the pass that
     /// decides whether there was anything to complete, so its refusal is the
-    /// one that explains an answer with no trails in it. The count is that
+    /// one that explains an answer with no trails in it. A gap comes after
+    /// the outages: rows that were answered for, beside a gap, are no count
+    /// of the area's trails, an empty page least of all. The count is that
     /// same pass's, for the reason ``CuratedTrailOutcome/trails(_:)`` gives:
     /// it is what OpenStreetMap had near the area, which is the question the
     /// caption under *Search this area* answers, while the rows are what the
@@ -786,6 +797,7 @@ nonisolated private extension MergedCommunityTransport {
     ) -> CuratedTrailOutcome {
         guard scope == .withCuratedTrails else { return .notAsked }
         if let outage = listed.outage ?? completed.outage { return .outage(outage) }
+        if let gap = listed.gap { return .partial(gap) }
         return .trails(listed.trails.count)
     }
 

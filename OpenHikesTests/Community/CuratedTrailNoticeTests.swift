@@ -74,4 +74,20 @@ struct CuratedTrailNoticeTests {
         #expect(!empty.isWarning)
         #expect(refused.isWarning)
     }
+
+    /// Trails are in the list, so the caption cannot say they are
+    /// unavailable: it says some are. A busy or rate-limited Overpass keeps
+    /// its own sentence, which is the one that says what to do about it.
+    @Test("part of the trails says some are missing, and is a warning")
+    func aPartSaysSomeAreMissing() {
+        let rateLimited = CuratedTrailOutage.rateLimited(retryAfter: 60)
+        let incomplete = CuratedTrailNotice.incomplete(.unavailable)
+
+        #expect(CuratedTrailOutcome.partial(.unavailable).notice == incomplete)
+        #expect(CuratedTrailOutcome.partial(rateLimited).notice == .incomplete(rateLimited))
+        #expect(incomplete.text != CuratedTrailNotice.outage(.unavailable).text)
+        #expect(incomplete.text != CuratedTrailNotice.noTrailsHere.text)
+        #expect(CuratedTrailNotice.incomplete(rateLimited).text == CuratedTrailNotice.outage(rateLimited).text)
+        #expect(incomplete.isWarning)
+    }
 }

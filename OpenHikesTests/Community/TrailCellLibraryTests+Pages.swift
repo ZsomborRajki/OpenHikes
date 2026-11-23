@@ -156,8 +156,9 @@ extension TrailCellLibraryTests {
 
     /// Several requests at 60°N, and a square of the second cannot be read.
     /// The ones after it would be asked on behalf of a search that already
-    /// has no answer; what the first brought, and the rest of the second, is
-    /// what the next try does not have to ask for.
+    /// has no whole answer; what the first brought, and the rest of the
+    /// second, is the part it has, and what the next try does not have to ask
+    /// for.
     @Test("a request that could not be read whole ends the fetch, and the next search asks only for what is left")
     func aFailedRequestEndsTheFetch() async throws {
         let boxes = Self.widestSearch(atLatitude: 60)
@@ -177,7 +178,7 @@ extension TrailCellLibraryTests {
         let secondAsked: [String] = database.requests.dropFirst(2).flatMap(\.self)
         let left: [String] = [unreadable] + requests.dropFirst(2).flatMap(\.self)
 
-        #expect(first == .unreachable)
+        #expect(first == .partial([]))
         #expect(second == .trails([]))
         #expect(firstAsked == Array(requests.prefix(2)))
         #expect(secondAsked == left)
@@ -222,7 +223,7 @@ extension TrailCellLibraryTests {
         database.hold(TrailCellFixture.found([Self.farPath]), as: Self.eastSquare)
         let second = try await library.trails(in: [Self.valley], nearest: Self.valleyCenter, limit: 25)
 
-        #expect(first == .unreachable)
+        #expect(Self.offeredInPart(first) == [11])
         #expect(Self.offered(second) == [11])
         #expect(database.requests == [[Self.westSquare, Self.eastSquare], [Self.eastSquare]])
     }

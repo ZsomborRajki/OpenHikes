@@ -195,7 +195,7 @@ extension CuratedTrailSourceTests {
     func noTrailsIsAnAnswer() async throws {
         let (source, overpass) = Self.makeSource(squares: StubTrailCellDatabase(manifest: .complete))
 
-        let listed = try await source.listings(near: Self.visibleArea, limit: 25)
+        let listed = try await source.listings(near: Self.visibleArea, limit: 25).trails
 
         #expect(listed.isEmpty)
         #expect(await overpass.requestCount == 0)
@@ -226,7 +226,7 @@ extension CuratedTrailSourceTests {
         let batch = CuratedTrailQuery.geometryBatchLimit
         let (source, _) = Self.makeSource([Self.ok(Self.crowd(of: batch + 5))])
 
-        let listed = try await source.listings(near: Self.visibleArea, limit: batch * 2)
+        let listed = try await source.listings(near: Self.visibleArea, limit: batch * 2).trails
 
         #expect(listed.count == batch)
     }

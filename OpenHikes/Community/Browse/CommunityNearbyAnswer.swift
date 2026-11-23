@@ -43,7 +43,7 @@
 //  search that worked* over a perfectly good CloudKit list — and what this
 //  type adds is that catching them is no longer *all* it does.
 //
-//  There are three answers and they are three different sentences:
+//  There are four answers and they are four different sentences:
 //
 //  - **Nothing was asked.** A published-only question has nothing to say about
 //    OpenStreetMap, and must not be able to clear something a question that
@@ -58,8 +58,11 @@
 //    one. A hiker whose address is rate-limited is looking at a list missing
 //    half its sources, and the only place that used to be visible was
 //    Console.app.
+//  - **Part of the trails.** The pre-built squares this device could read
+//    answered for part of the area, and nothing could answer for the rest:
+//    the routes are in the list, and the caption says some may be missing.
 //
-//  The last two are *reported and not raised*: the request succeeded, the list
+//  The last three are *reported and not raised*: the request succeeded, the list
 //  is real, and what is being described is one of its two sources. That is a
 //  different sentence from ``CommunityFailure``'s, and it is drawn somewhere
 //  different — beside the control that spends the request rather than over the
@@ -227,6 +230,9 @@ nonisolated enum CuratedTrailOutage: Equatable, Sendable {
 /// undo — it is what made *OpenStreetMap trails unavailable* the only thing a
 /// hiker ever saw under that button.
 nonisolated enum CuratedTrailNotice: Equatable, Sendable {
+    /// Some of the area's trails are in the list, and the rest could not be
+    /// had, for this reason.
+    case incomplete(CuratedTrailOutage)
     /// OpenStreetMap answered, and there are no waymarked day hikes here.
     case noTrailsHere
     /// OpenStreetMap could not be reached, or asked us to wait.
@@ -234,11 +240,19 @@ nonisolated enum CuratedTrailNotice: Equatable, Sendable {
 
     /// The line itself. See ``CuratedTrailOutage/text`` on why it is short and
     /// why it names OpenStreetMap.
+    ///
+    /// A part says *some*, because the list under it has trails in it, which
+    /// *OpenStreetMap trails unavailable* would contradict. A busy or a
+    /// rate-limited Overpass keeps its own sentence, which says what to do.
     var text: String {
         switch self {
         case .noTrailsHere:
             String(localized: "No OpenStreetMap trails here — try another area")
         case .outage(let outage):
+            outage.text
+        case .incomplete(.unavailable):
+            String(localized: "Some OpenStreetMap trails unavailable")
+        case .incomplete(let outage):
             outage.text
         }
     }
@@ -248,7 +262,7 @@ nonisolated enum CuratedTrailNotice: Equatable, Sendable {
     var symbolName: String {
         switch self {
         case .noTrailsHere: "mappin.slash"
-        case .outage: "exclamationmark.triangle.fill"
+        case .outage, .incomplete: "exclamationmark.triangle.fill"
         }
     }
 
@@ -257,7 +271,7 @@ nonisolated enum CuratedTrailNotice: Equatable, Sendable {
     var isWarning: Bool {
         switch self {
         case .noTrailsHere: false
-        case .outage: true
+        case .outage, .incomplete: true
         }
     }
 
@@ -283,6 +297,10 @@ nonisolated enum CuratedTrailOutcome: Equatable, Sendable {
     case notAsked
     /// The listing pass, or the geometry pass behind it, could not be made.
     case outage(CuratedTrailOutage)
+    /// The listing pass answered for part of the area, from the pre-built
+    /// squares this device could read, and nothing could answer for the rest,
+    /// for this reason. See ``CuratedListing/gap``.
+    case partial(CuratedTrailOutage)
     /// The listing pass answered, with this many routes near the area.
     ///
     /// The count is what **Overpass listed**, not how many rows the answer
@@ -305,6 +323,8 @@ nonisolated enum CuratedTrailOutcome: Equatable, Sendable {
             nil
         case .outage(let outage):
             .outage(outage)
+        case .partial(let gap):
+            .incomplete(gap)
         case .trails(let count):
             count == 0 ? .noTrailsHere : nil
         }

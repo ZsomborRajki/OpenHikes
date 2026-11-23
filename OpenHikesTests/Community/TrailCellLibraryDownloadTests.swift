@@ -100,10 +100,11 @@ struct TrailCellLibraryDownloadTests {
         #expect(Set(Valley.offered(answer)) == [11, 55])
     }
 
-    /// Past the download, a search is what it was before there were
-    /// downloads: no answer, so the source draws what the device already
-    /// holds and says the search failed.
-    @Test("with no signal, a search that reaches past the download is no answer")
+    /// Past the download, the search has no whole answer, and the
+    /// download's day hikes are the part it has: they are what the hiker
+    /// downloaded, and a search never made over them before has nothing
+    /// kept to draw in their place.
+    @Test("with no signal, a search that reaches past the download offers the download's routes, as a part")
     func pastWithNoSignal() async throws {
         let database = StubTrailCellDatabase()
         database.fail(with: NoSignal())
@@ -111,8 +112,18 @@ struct TrailCellLibraryDownloadTests {
 
         let answer = try await Self.search(Self.makeLibrary(database, downloads: downloads))
 
-        #expect(answer == .unreachable)
+        #expect(Valley.offeredInPart(answer) == [11])
         #expect(database.requests == [[Valley.eastSquare]])
+    }
+
+    @Test("with no signal and nothing downloaded or kept, a search is no answer")
+    func nothingHeldWithNoSignal() async throws {
+        let database = StubTrailCellDatabase()
+        database.fail(with: NoSignal())
+
+        let answer = try await Self.search(Self.makeLibrary(database, downloads: StubDownloadedTrailCells()))
+
+        #expect(answer == .unreachable)
     }
 
     @Test("a downloaded square answers ahead of a copy kept from an earlier search")

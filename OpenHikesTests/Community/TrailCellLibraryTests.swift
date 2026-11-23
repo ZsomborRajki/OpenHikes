@@ -5,12 +5,14 @@
 //  What the pre-built squares answer a search with — and, as much, when they
 //  decline to answer.
 //
-//  The library's contract is that an answer is complete or it is not given.
+//  The library's contract is that an answer is complete, or says it is not.
 //  ``CuratedTrailSource`` takes an empty answer to mean there are no waymarked
-//  day hikes in the area and says so to the hiker, and takes no answer to mean
-//  *ask Overpass*. So the cases worth having are the ones on the line between
-//  the two: a square that is missing, which is either a place with no routes
-//  or a place nothing is known about, and it is the manifest that says which.
+//  day hikes in the area and says so to the hiker, and takes no answer, or a
+//  partial one, to mean *ask Overpass*. So the cases worth having are the
+//  ones on the line between them: a square that is missing, which is either a
+//  place with no routes or a place nothing is known about, and it is the
+//  manifest that says which; and a square that could not be read beside ones
+//  that were.
 //
 //  The database is a stub and the directory is the case's own, for the reason
 //  the repository's *Deliberate test seams* section gives.
@@ -262,10 +264,24 @@ struct TrailCellLibraryTests {
 
     // MARK: - A square that could not be read
 
-    @Test("a square that could not be read is no answer, whatever else was")
+    /// The routes of the square that was read are offered, and never as the
+    /// whole answer: the one that was not may hold a nearer route.
+    @Test("a square that could not be read makes the answer partial")
     func aSquareThatFailed() async throws {
         let database = StubTrailCellDatabase(cells: [
             Self.westSquare: TrailCellFixture.found([Self.nearLoop]),
+            Self.eastSquare: .failed,
+        ])
+
+        let answer = try await Self.makeLibrary(database).trails(in: [Self.valley])
+
+        #expect(Self.offeredInPart(answer) == [11])
+    }
+
+    @Test("no square that could be read is no answer")
+    func noSquareRead() async throws {
+        let database = StubTrailCellDatabase(cells: [
+            Self.westSquare: .failed,
             Self.eastSquare: .failed,
         ])
 
@@ -310,7 +326,7 @@ struct TrailCellLibraryTests {
         #expect(answer == .unreachable)
     }
 
-    @Test("bytes that are not a square are no answer, and are not kept")
+    @Test("bytes that are not a square are no whole answer, and are not kept")
     func bytesThatAreNotASquare() async throws {
         let database = StubTrailCellDatabase(cells: [Self.westSquare: .found(Data("not a square".utf8))])
         let library = Self.makeLibrary(database, directory: Self.scratchDirectory())
@@ -319,7 +335,8 @@ struct TrailCellLibraryTests {
         database.hold(TrailCellFixture.found([Self.nearLoop]), as: Self.westSquare)
         let second = try await library.trails(in: [Self.valley])
 
-        #expect(first == .unreachable)
+        // The eastern square has no record, so it was read, as an empty one.
+        #expect(first == .partial([]))
         #expect(Self.offered(second) == [11])
         #expect(database.requests.count == 2, "the bad bytes were not what the second search found on disk")
     }
@@ -436,5 +453,20 @@ struct TrailCellLibraryTests {
 
         #expect(answer == .uncovered)
         #expect(database.requests.isEmpty)
+    }
+}
+
+extension TrailCellLibraryTests {
+    /// The relations a partial answer offers, or a recorded issue when it is
+    /// a whole answer or none.
+    static func offeredInPart(
+        _ answer: TrailCellAnswer,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) -> [Int64] {
+        guard case .partial(let trails) = answer else {
+            Issue.record("the squares gave no partial answer: \(answer)", sourceLocation: sourceLocation)
+            return []
+        }
+        return trails.map(\.relationID)
     }
 }

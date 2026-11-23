@@ -253,6 +253,29 @@ extension MergedCommunityTransportTests {
         #expect(merged.overpass.recording.cacheReads.isEmpty)
     }
 
+    /// A search over ground the hiker downloaded that reaches past the
+    /// download, with no signal: the download's routes are the part, and
+    /// the routes kept from earlier searches are not drawn in their place.
+    @Test("a listing that answered for part of the area draws that part, and says some may be missing")
+    func aPartialListingIsDrawnWithItsGap() async throws {
+        let merged = Self.merged(
+            published: [Self.published("listing-a", metersNorth: Offset.far)],
+            curated: [Self.trail(Relation.almbach, named: "Almbachklamm", metersNorth: Offset.near)]
+        )
+        merged.overpass.listingGap = .unavailable
+        merged.overpass.storedTrails = [
+            Self.trail(Relation.wimbach, named: "Wimbachgries", metersNorth: Offset.nearest),
+        ]
+
+        let answer = try await Self.answer(merged)
+
+        #expect(answer.listings.count == 2, "the part stands beside the published hike")
+        #expect(answer.listings.compactMap(\.relationID) == [Relation.almbach], "and not what an earlier search kept")
+        #expect(answer.curated == .partial(.unavailable))
+        #expect(answer.curated.notice == .incomplete(.unavailable))
+        #expect(merged.overpass.recording.cacheReads.isEmpty)
+    }
+
     // MARK: The heights OpenStreetMap does not have
 
     /// A curated hike opens with a profile now, and this is where the heights
