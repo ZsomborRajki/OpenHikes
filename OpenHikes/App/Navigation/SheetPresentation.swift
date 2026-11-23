@@ -342,17 +342,32 @@ final class SheetPresentation {
     /// pin B, pin A — and left `[A, A]`, where Back lands the hiker on the
     /// screen they were already looking at.
     ///
-    /// Popping back to the open copy rather than refusing, because the two are
-    /// the same answer to *show me this hike* and only one of them moves: a
-    /// hiker who taps A's pin over B's preview asked to see A.
-    ///
-    /// A *different* listing replaces rather than stacks. Tapping B over A's
-    /// preview left `[A, B]`, where Back refit the map to A's route — a camera
-    /// move for a screen the hiker had already left. A tap is a jump to one
-    /// trail rather than a step deeper, exactly as ``MapSheet/open(_:)``
-    /// assigns for the hiker's own hikes.
+    /// The stack it leaves is ``showCommunityPreview(_:)``'s, which the
+    /// Commons photographs' pins open theirs through too.
     func showCommunityHike(_ listing: CommunityListing) {
-        let route = SheetRoute.communityHike(listing)
+        showCommunityPreview(.communityHike(listing))
+    }
+
+    /// Opens one of the *Community* tab's previews — a shared hike's, a
+    /// Commons photograph's or a group's grid — on the one rule all three
+    /// keep, because each is a pin on the same map and Back has to mean the
+    /// same thing over every one of them.
+    ///
+    /// The route already in front changes nothing. One already on the stack
+    /// is popped back to rather than pushed again, because the two are the
+    /// same answer to *show me this* and only one of them moves: a hiker who
+    /// taps A's pin over B's preview asked to see A, and a group's pin tapped
+    /// over a photograph opened from its grid comes back to the grid.
+    ///
+    /// A *different* preview replaces the open one, with whatever was pushed
+    /// over it, rather than stacking. Tapping B over A's preview left
+    /// `[A, B]`, where Back refit the map to A's route — a camera move for a
+    /// screen the hiker had already left. A tap is a jump to one trail rather
+    /// than a step deeper, exactly as ``MapSheet/open(_:)`` assigns for the
+    /// hiker's own hikes. The one step deeper there is — a photograph opened
+    /// from a group's grid — is the grid's own append, and does not come
+    /// through here: see `MapSheet+CommonsPhotos.swift`.
+    func showCommunityPreview(_ route: SheetRoute) {
         guard path.last != route else { return }
         // The compact detent is only tall enough for the search field, so a
         // screen pushed into it would arrive with nowhere to draw — the same
@@ -374,7 +389,7 @@ final class SheetPresentation {
         } else {
             // The gallery goes with its preview: its files belong to the
             // screen underneath, so leaving it would orphan it over the new
-            // hike. Anything else on the stack — an owned hike, the recorder —
+            // one. Anything else on the stack — an owned hike, the recorder —
             // stays, and Back from the new preview lands there rather than on
             // the trail just left.
             next.removeAll { $0.isCommunityPreview }

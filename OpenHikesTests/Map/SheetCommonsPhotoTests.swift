@@ -86,6 +86,57 @@ struct SheetCommonsPhotoTests {
         #expect(presentation.path == [.communityHike(listing)])
     }
 
+    /// The three ways in keep one stack: a hike's preview, a group's grid
+    /// with the photograph it opened, and the next hike's preview each
+    /// replace what was there, and the hiker's own hike under them stays.
+    @Test("a hike, a group and another hike replace each other over an owned hike")
+    func hikeGroupHike() throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        let first = CommunityListing.stub(id: "pilis")
+        let second = CommunityListing.stub(id: "ridge", submissionID: "submission-2")
+        let group = [Self.photo(1), Self.photo(2)]
+        let presentation = SheetPresentation(detent: .medium)
+        presentation.path = [.hike(hike)]
+
+        presentation.showCommunityHike(first)
+        #expect(presentation.path == [.hike(hike), .communityHike(first)])
+
+        presentation.showCommonsPhotos(group)
+        #expect(presentation.path == [.hike(hike), .commonsPhotos(group)])
+
+        // What a tile does — see `MapSheet+CommonsPhotos.swift`.
+        presentation.path.append(.commonsPhoto(Self.photo(2)))
+        presentation.showCommunityHike(second)
+        #expect(presentation.path == [.hike(hike), .communityHike(second)])
+        #expect(!presentation.isPresentingCommunityHike(first))
+    }
+
+    /// The pin of the screen in front, tapped again: the stack, and the
+    /// sheet the hiker left it at, stay as they are, whichever kind it is.
+    @Test("tapping the pin of the preview in front changes nothing, whichever kind it is")
+    func repeatedTapInFront() throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        let routes: [SheetRoute] = [
+            .communityHike(CommunityListing.stub(id: "pilis")),
+            .commonsPhoto(Self.photo(1)),
+            .commonsPhotos([Self.photo(1), Self.photo(2)]),
+        ]
+
+        for route in routes {
+            let presentation = SheetPresentation(detent: .medium)
+            presentation.path = [.hike(hike)]
+
+            presentation.showCommunityPreview(route)
+            presentation.detent = SheetPresentation.compactDetent
+            presentation.showCommunityPreview(route)
+
+            #expect(presentation.path == [.hike(hike), route])
+            #expect(presentation.isCompact, "a tap on the screen in front moves nothing")
+        }
+    }
+
     @Test("a photograph's screen and a group's grid are nobody's hike and want no full height")
     func routeFacts() throws {
         let context = try Fixture.modelContext()
