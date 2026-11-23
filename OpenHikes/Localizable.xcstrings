@@ -63152,6 +63152,58 @@
         }
       }
     },
+    "The OpenHikes map draws a downloaded country with no signal, and Community finds its OpenStreetMap trails. Downloads use Wi-Fi." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die OpenHikes-Karte zeigt ein heruntergeladenes Land auch ohne Empfang, und die Community findet seine Wege aus OpenStreetMap. Downloads laufen über WLAN."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El mapa de OpenHikes muestra un país descargado aunque no haya cobertura, y «Comunidad» encuentra sus senderos de OpenStreetMap. Las descargas usan la red Wi-Fi."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La carte OpenHikes affiche un pays téléchargé même sans réseau, et l’onglet « Communauté » y trouve les sentiers OpenStreetMap. Les téléchargements passent par le Wi-Fi."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La mappa OpenHikes mostra un paese scaricato anche senza segnale, e la Community ne trova i sentieri di OpenStreetMap. I download usano il Wi-Fi."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mapa OpenHikes pokazuje pobrany kraj także bez zasięgu, a Społeczność znajduje w nim szlaki z OpenStreetMap. Pobieranie odbywa się przez Wi-Fi."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Harta OpenHikes afișează și fără semnal o țară descărcată, iar Comunitatea îi găsește traseele OpenStreetMap. Descărcările folosesc Wi‑Fi."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Карта OpenHikes показывает загруженную страну даже без сигнала, а «Сообщество» находит в ней тропы OpenStreetMap. Загрузка идет по Wi-Fi."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Карта OpenHikes показує викачану країну навіть без сигналу, а «Спільнота» знаходить у ній стежки OpenStreetMap. Викачування відбувається через Wi-Fi."
+          }
+        }
+      }
+    },
     "The OpenHikes map draws a downloaded country with no signal. Downloads use Wi-Fi." : {
       "localizations" : {
         "de" : {

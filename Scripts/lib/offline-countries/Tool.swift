@@ -5,8 +5,11 @@
 //  The countries the app downloads, cut out of the planet build the OpenHikes
 //  map draws: `Scripts/offline-countries.sh` is the way in and says how.
 //
-//    build      cut each country's basemap and extras, read them back against
-//               the source, and write the manifest beside them
+//    build      cut each country's basemap and extras, and with --trails its
+//               day hikes, read them back against the source, and write the
+//               manifest beside them
+//    trails     cut the day hikes of the areas a manifest lists, for the
+//               builds it lists them at (Trails.swift)
 //    merge      put a build's manifest into the one the server has
 //    files      list a manifest's files and their sizes, for the upload
 //    inspect    print an archive's header
@@ -25,6 +28,7 @@ struct Tool {
             switch command {
             case "areas": try areas(Options(arguments))
             case "build": try await build(Options(arguments))
+            case "trails": try await trails(Options(arguments))
             case "merge": try merge(Options(arguments))
             case "files": try files(Options(arguments))
             case "inspect": try inspect(Options(arguments))
@@ -103,6 +107,7 @@ extension Tool {
     static func build(_ options: Options) async throws {
         let planet = try await Extractor(source: openSource(options.required("planet")))
         let extras = try await Extractor(source: openSource(options.required("extras")))
+        let trails = try await trailsSource(options)
         guard Int(planet.header.maximumZoom) == detailZoom else {
             fail("the planet goes to zoom \(planet.header.maximumZoom), and the detail files are zoom \(detailZoom)")
         }
@@ -146,7 +151,7 @@ extension Tool {
                 Cut(
                     planet: planet, extras: extras, build: build, output: output,
                     margin: margin, server: server, metadata: metadata, extrasMetadata: extrasMetadata,
-                    extrasGeneration: extrasGeneration
+                    extrasGeneration: extrasGeneration, trails: trails
                 )
             )
             manifest.countries.removeAll { $0.id == country.id && $0.build == country.build }
@@ -166,9 +171,11 @@ extension Tool {
         let metadata: [UInt8]
         let extrasMetadata: [UInt8]
         let extrasGeneration: Int?
+        /// Where the day hikes come from, or `nil` for an area without them.
+        let trails: TrailsSource?
     }
 
-    /// The four files of an area: which archive each is cut from, between
+    /// The four map files of an area: which archive each is cut from, between
     /// which zooms, and what goes between the area's code and the build in
     /// its name.
     static func parts(of cut: Cut) -> [(OfflineCountryManifest.Role, Extractor, ClosedRange<Int>, [UInt8], String)] {
@@ -221,6 +228,14 @@ extension Tool {
                 )
             )
         }
+        if let trails = cut.trails {
+            // The basemap's server is the archive's name under the server's
+            // root, where the trails archive is too.
+            files.append(try await cutTrails(
+                id: choice.id, rings: rings, build: cut.build, from: trails, into: cut.output,
+                server: cut.server?.deletingLastPathComponent()
+            ))
+        }
         return OfflineCountryManifest.Country(
             id: choice.id,
             group: choice.group,
@@ -236,10 +251,13 @@ extension Tool {
         )
     }
 
-    /// The source's metadata, saying which country and build it was cut for.
-    static func labeled(_ metadata: [UInt8], country: String, build: String) throws -> [UInt8] {
+    /// The source's metadata, saying which country and build it was cut for,
+    /// and, where it is not the build's own, which archive it was cut from.
+    static func labeled(_ metadata: [UInt8], country: String, build: String, source: String? = nil) throws -> [UInt8] {
         var object = (try JSONSerialization.jsonObject(with: Data(metadata)) as? [String: Any]) ?? [:]
-        object["openhikes"] = ["country": country, "build": build]
+        var label = ["country": country, "build": build]
+        label["source"] = source
+        object["openhikes"] = label
         return Array(try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]))
     }
 

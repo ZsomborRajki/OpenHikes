@@ -8,7 +8,7 @@ There is no OpenHikes account and no server holding your hikes: they live on the
 
 ## Features
 
-- **Offline maps of any country**, free and with no account: download a whole country for the OpenHikes map, or a state, province or region of the United States, Canada and Russia. It comes down over Wi-Fi, stays on the device and is drawn from there, so every path and summit is on the map with no signal. *Extra Detail* adds buildings and small places such as water taps.
+- **Offline maps of any country**, free and with no account: download a whole country for the OpenHikes map, or a state, province or region of the United States, Canada and Russia. It comes down over Wi-Fi, stays on the device and is drawn from there, so every path and summit is on the map with no signal, and *Community* still finds its waymarked trails. *Extra Detail* adds buildings and small places such as water taps.
 - **Recording** in the background, with crash recovery and barometric elevation. Pause and resume by hand, or let Auto-Pause do it when you stop somewhere. The track is matched to OpenStreetMap's paths and saved when you stop; any section the matcher moved can be checked afterwards.
 - **GPX import and export**: open files from Files, AirDrop or any share sheet, one hike per track, and share any hike back as GPX, with its places as waypoints.
 - **Drawing a trail**: press and hold to drop stops, or search for them by name. Each leg follows the paths OpenStreetMap has mapped.
