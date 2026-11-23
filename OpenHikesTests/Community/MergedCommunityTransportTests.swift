@@ -237,21 +237,21 @@ extension MergedCommunityTransportTests {
     /// this area* asks with, because that is the one both halves take part in
     /// and every rule in this file is about the merge.
     ///
-    /// `publishedFirst` is where the published half goes if it lands before
-    /// the curated one — see `MergedCommunityTransportTests+PublishedFirst`.
+    /// `firstHalf` is where either half goes if it lands before the other —
+    /// see `MergedCommunityTransportTests+PublishedFirst`.
     static func answer(
         _ merged: Merged,
         limit: Int = page,
         scope: CommunityNearbyScope = .withCuratedTrails,
         area: CommunitySearchArea = MergedCommunityTransportTests.area,
-        publishedFirst: @escaping @Sendable ([CommunityListing]) async -> Void = { _ in /* only the whole answer */ }
+        firstHalf: @escaping @Sendable ([CommunityListing]) async -> Void = { _ in /* only the whole answer */ }
     ) async throws -> CommunityNearbyAnswer {
         try await merged.transport.listings(
             near: area,
             limit: limit,
             excluding: [],
             scope: scope,
-            publishedFirst: publishedFirst
+            firstHalf: firstHalf
         )
     }
 

@@ -287,36 +287,44 @@ nonisolated protocol CommunityTransporting: Sendable {
         scope: CommunityNearbyScope
     ) async throws -> CommunityNearbyAnswer
 
-    /// The same question, with the published hikes handed to `publishedFirst`
-    /// as soon as they land when a slower source is still being asked.
+    /// The same question, with whichever half lands first handed to
+    /// `firstHalf` while the other source is still being asked.
     ///
     /// CloudKit answers in well under a second; Overpass can hold a request in
     /// its queue for half a minute before starting on it. Holding the hiker's
     /// own published hikes back for the whole of that is waiting on the half
     /// they are least likely to be looking for, so the rows go up the moment
-    /// they exist and the trails join them when they arrive. The returned
-    /// answer is still the whole one — the early rows included — and it is the
-    /// only thing that ends the request, which is what keeps *Search this
-    /// area* spinning until OpenStreetMap has had its say.
+    /// they exist and the trails join them when they arrive. It can be the
+    /// other way round, too: over ground the hiker downloaded, the trails are
+    /// read off the device in a moment while CloudKit, with no signal, may
+    /// take as long as it likes. The returned answer is still the whole one —
+    /// with the published-first limit applied to both halves, so trails drawn
+    /// early can give their places back — and it is the only thing that ends
+    /// the request, which is what keeps *Search this area* spinning until both
+    /// sources have had their say.
     ///
-    /// **Called at most once, and never with nothing.** An empty published
-    /// half is not handed over: replacing the last area's rows with an empty
-    /// list mid-search would draw *No community hikes here* over an area whose
-    /// trails are still on their way. Nor is it called when there is no
-    /// slower half to wait for — a ``CommunityNearbyScope/publishedOnly``
-    /// question, or a conformance with one source, whose answer *is* the
-    /// published half. That second case is the default below, so only
-    /// ``MergedCommunityTransport`` has anything to say here.
+    /// **Called at most once, and never with nothing.** An empty half is not
+    /// handed over: replacing the last area's rows with an empty list
+    /// mid-search would draw *No community hikes here* over an area whose
+    /// other half is still on its way. Nor are trails still waiting for their
+    /// lines, which cost a request that waits until the page's room is known.
+    /// Nor is it called when there is no slower half to wait for — a
+    /// ``CommunityNearbyScope/publishedOnly`` question, or a conformance with
+    /// one source, whose answer *is* the published half. That second case is
+    /// the default below, so only ``MergedCommunityTransport`` has anything to
+    /// say here.
     ///
-    /// A published half that arrived is never followed by a thrown answer
-    /// other than a cancellation: the merge throws only when CloudKit failed.
+    /// A half that arrived is never followed by a thrown answer other than a
+    /// cancellation: the merge throws only when CloudKit failed and no trails
+    /// came, and trails go up early only with their lines, which completing
+    /// them keeps.
     @concurrent
     func listings(
         near area: CommunitySearchArea,
         limit: Int,
         excluding: Set<String>,
         scope: CommunityNearbyScope,
-        publishedFirst: @Sendable ([CommunityListing]) async -> Void
+        firstHalf: @Sendable ([CommunityListing]) async -> Void
     ) async throws -> CommunityNearbyAnswer
 
     /// Published hikes whose title matches `query`, newest first.
@@ -738,7 +746,7 @@ nonisolated extension CommunityTransporting {
         limit: Int,
         excluding: Set<String>,
         scope: CommunityNearbyScope,
-        publishedFirst _: @Sendable ([CommunityListing]) async -> Void
+        firstHalf _: @Sendable ([CommunityListing]) async -> Void
     ) async throws -> CommunityNearbyAnswer {
         try await listings(near: area, limit: limit, excluding: excluding, scope: scope)
     }

@@ -186,7 +186,7 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     var beforeContributionReturns: (@Sendable () async -> Void)?
     /// A slower OpenStreetMap half for a
     /// ``CommunityNearbyScope/withCuratedTrails`` answer: the scripted rows
-    /// are handed up through `publishedFirst` at once, and the answer waits on
+    /// are handed up through `firstHalf` at once, and the answer waits on
     /// `gate` before returning them with `rows` behind. `nil` — the default —
     /// answers in one piece, which is what every suite written before the
     /// published half could arrive early is describing.
@@ -267,11 +267,11 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
         limit: Int,
         excluding: Set<String>,
         scope: CommunityNearbyScope,
-        publishedFirst: @Sendable ([CommunityListing]) async -> Void
+        firstHalf: @Sendable ([CommunityListing]) async -> Void
     ) async throws -> CommunityNearbyAnswer {
         let published = try await listings(near: area, limit: limit, excluding: excluding, scope: scope)
         guard scope == .withCuratedTrails, let curatedHalf else { return published }
-        if !published.listings.isEmpty { await publishedFirst(published.listings) }
+        if !published.listings.isEmpty { await firstHalf(published.listings) }
         await curatedHalf.gate.wait()
         try Task.checkCancellation()
         return CommunityNearbyAnswer(
