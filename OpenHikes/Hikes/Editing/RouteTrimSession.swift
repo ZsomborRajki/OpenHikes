@@ -37,6 +37,7 @@ import CoreLocation
 import Foundation
 import MapKit
 import OpenHikesData
+import RealModule
 
 @Observable
 final class RouteTrimSession {
@@ -220,10 +221,20 @@ final class RouteTrimSession {
         sources?.choices(of: check) ?? check.availableChoices
     }
 
-    private static func isSame(_ one: ClosedRange<Double>?, _ other: ClosedRange<Double>?) -> Bool {
+    /// Whether two trims are the same cuts: both none, or each end within
+    /// ``endToleranceMeters`` of the other's. Internal for the stored-cuts
+    /// suite, which holds it to the boundary.
+    static func isSame(_ one: ClosedRange<Double>?, _ other: ClosedRange<Double>?) -> Bool {
         guard let one, let other else { return one == nil && other == nil }
-        return abs(one.lowerBound - other.lowerBound) <= endToleranceMeters
-            && abs(one.upperBound - other.upperBound) <= endToleranceMeters
+        return isSameEnd(one.lowerBound, other.lowerBound) && isSameEnd(one.upperBound, other.upperBound)
+    }
+
+    /// Whether two cuts stand at one place on the line. Never for an end
+    /// that is not finite, even beside an equal one: `isApproximatelyEqual`
+    /// calls two equal infinities equal, and an infinite cut is no place.
+    private static func isSameEnd(_ one: Double, _ other: Double) -> Bool {
+        one.isFinite && other.isFinite
+            && one.isApproximatelyEqual(to: other, absoluteTolerance: endToleranceMeters)
     }
 
     // MARK: The line
