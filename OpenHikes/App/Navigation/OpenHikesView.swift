@@ -446,6 +446,9 @@ struct OpenHikesView: View {
             .task { await readMakerOpenRequests() }
             .task { await readPlaceRequests() }
             .task { await readActivityEndings() }
+            // What a recording and a walk feel like, on whatever screen is
+            // up — see ``ActivityHaptics``.
+            .background { ActivityHaptics(recorder: appModel.hikeRecorder, walk: appModel.walkSession) }
             // The pill posts a token; flipping the presentation flags is this
             // view's job because it owns `photoPresentation`. The pickers and
             // the alerts that report what they couldn't do both hang off
@@ -650,11 +653,13 @@ private extension OpenHikesView {
             switch ending {
             case let .recordingSaved(hikeID): openHike(id: hikeID)
             case let .recordingDiscarded(hikeID):
-                if let hikeID, selectedHike?.id == hikeID {
-                    selectedHike = nil
+                // The selection first and the path last, in one write — see
+                // ``SheetPresentation/path``.
+                var path = sheet.path
+                if SheetRoute.removeDiscardedRecording(hikeID, selectedHike: &selectedHike, from: &path) {
                     highlight.move(to: nil)
                 }
-                sheet.path.removeAll { $0 == .recording }
+                sheet.path = path
             case let .walkKept(hikeID, walkID): openHike(id: hikeID, showingWalk: walkID)
             }
         }
@@ -718,6 +723,8 @@ private extension OpenHikesView {
     }
 
     /// Handles a widget tap, opening either the live recording or a hike.
+    /// The Live Activity's Stop opens the recording too, and asks what its
+    /// bar's Stop asks — see ``TrailWidgetDeepLink/stopRecordingURL()``.
     ///
     /// A hike whose detail view is already on screen is left alone — coming
     /// back to the app you were already looking at shouldn't reshuffle it.
@@ -727,9 +734,10 @@ private extension OpenHikesView {
     private func openWidgetLink(_ url: URL) {
         guard let destination = TrailWidgetDeepLink.destination(from: url) else { return }
         switch destination {
-        case .recording:
+        case .recording, .stopRecording:
             guard appModel.hikeRecorder.hasScreenToShow else { return }
             openRecordingScreen(selecting: appModel.hikeRecorder.currentHike)
+            if destination == .stopRecording { Task { await appModel.recordingStop.ask() } }
         case .hike(let id): openHike(id: id)
         }
     }

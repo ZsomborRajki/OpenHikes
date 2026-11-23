@@ -92,7 +92,7 @@ extension TrailWalkSession {
     /// - Returns: the phase the tap asked for when the store refused it, for
     ///   ``WalkPhaseRefusalAlert`` to say so; `nil` when it was written down.
     ///   A change that *was* written down says nothing here: the phase moved,
-    ///   and ``WalkControls``' `sensoryFeedback` has already answered it.
+    ///   and ``WalkPhaseHaptics`` has already answered it.
     func togglePhase(from phase: TrailWalkPhase) -> TrailWalkPhase? {
         let changed = switch phase {
         case .following: pause()

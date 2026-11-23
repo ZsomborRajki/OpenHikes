@@ -57,14 +57,40 @@ extension TrailWalkSessionTests {
         session.start(hike: hike, profile: profile)
         session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[0])
 
+        question.ask()
         question.end()
-        // Nothing is sent for a dropped walk, so the reader is given the
-        // turns it would have needed to drain one.
-        await settleDelegateHop()
+        // Nothing is sent for a dropped walk. A marker sent after `end()`
+        // returns arrives after anything `end()` sent, so the reader holding
+        // the marker alone is the proof.
+        let marker = ActivityEnding.recordingDiscarded(hikeID: nil)
+        endings.send(marker)
+        await settleDelegateHop(until: "the marker to be read") { !sent.received.isEmpty }
 
         #expect(session.walkedHikeID == nil)
-        #expect(sent.received.isEmpty)
+        #expect(sent.received == [marker], "a dropped walk sends nothing ahead of the marker")
         #expect(!question.isRefused)
+    }
+
+    /// The capsule asks on another hike's screen, and a fix can end the walk
+    /// it asked about and start one along the trail on screen while the
+    /// alert is up. The answer was for the first, and the second goes on.
+    @Test("End given for a walk that has since ended leaves the next one alone")
+    func endQuestionDropsAStaleAnswer() {
+        let session = session()
+        let question = WalkEndQuestion(session: session, endings: EventFeed())
+        let first = hike(title: "Ridge Loop")
+        let second = hike(title: "Valley Walk")
+        let firstProfile = RouteProfile(route: first.route)
+        let secondProfile = RouteProfile(route: second.route)
+        walk(session, hike: first, profile: firstProfile, from: 0, through: 3)
+        question.ask()
+
+        session.end()
+        session.start(hike: second, profile: secondProfile)
+
+        question.end()
+        #expect(session.walkedHikeID == second.id, "the first walk's End must not end the second")
+        #expect(session.phase == .following)
     }
 
     @Test("the capsule's Pause and Resume move the walk")

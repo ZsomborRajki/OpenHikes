@@ -35,6 +35,26 @@ final class MapActivityCapsuleControlsView: UIView {
     private var statusController: UIHostingController<MapActivityCapsuleStatus>?
     /// What ``apply(_:)`` last drew, so a repeat is free.
     private(set) var controls: MapActivityCapsule.Controls?
+    /// What the status draws: the activity the buttons are for, and none
+    /// while the capsule is hidden. A recording's status reads the distance
+    /// per fix, and the capsule spends most of a recording hidden, on the
+    /// recording's own screen, where the bar draws the same figures. Left to
+    /// read them there, it would run on every fix for nobody, backgrounded
+    /// too — see *Energy policies in force* in `AGENTS.md`.
+    private(set) var statusActivity: MapActivityCapsule.Activity?
+
+    override var isHidden: Bool {
+        didSet {
+            showStatus()
+            withdrawStatusFromAccessibility()
+        }
+    }
+
+    /// Set the moment the capsule stands down, before its fade — see
+    /// `MapCoordinator+ActivityCapsule.swift`.
+    override var accessibilityElementsHidden: Bool {
+        didSet { withdrawStatusFromAccessibility() }
+    }
 
     init(capsule: MapActivityCapsule) {
         self.capsule = capsule
@@ -52,6 +72,7 @@ final class MapActivityCapsuleControlsView: UIView {
     func apply(_ controls: MapActivityCapsule.Controls?) {
         guard let controls, controls != self.controls else { return }
         self.controls = controls
+        showStatus()
         let isWalk = if case .walk = controls.activity { true } else { false }
         stopGlass?.isHidden = !controls.offersStop
         stopButton?.accessibilityLabel = isWalk
@@ -70,6 +91,26 @@ final class MapActivityCapsuleControlsView: UIView {
         // As ``MapPhotoControlsView/setAddPlaceVisible(_:)`` says: the stack
         // re-arranges at once, and the map has to be told to lay out.
         superview?.setNeedsLayout()
+    }
+
+    /// Hands the status what it draws — see ``statusActivity``. Only on a
+    /// change, because a new root view is a pass over the status.
+    private func showStatus() {
+        let activity = isHidden ? nil : controls?.activity
+        guard activity != statusActivity else { return }
+        statusActivity = activity
+        statusController?.rootView = MapActivityCapsuleStatus(capsule: capsule, activity: activity)
+    }
+
+    /// Takes the status out of the accessibility tree while the capsule is
+    /// withdrawn, and puts it back when it returns. Neither a hidden view nor
+    /// `accessibilityElementsHidden` above it did that: measured on iOS 27.2,
+    /// XCTest went on finding the status, and only the status, on the
+    /// recording's own screen long after the capsule had faded — it is the
+    /// one piece that declares itself an element and says its own words,
+    /// where Stop and Pause leave with their views.
+    private func withdrawStatusFromAccessibility() {
+        statusButton?.isAccessibilityElement = !(isHidden || accessibilityElementsHidden)
     }
 
     private func buildHierarchy() {
@@ -104,7 +145,7 @@ final class MapActivityCapsuleControlsView: UIView {
         button.addAction(UIAction { [capsule] _ in capsule.openActivity() }, for: .primaryActionTriggered)
         statusButton = button
 
-        let controller = UIHostingController(rootView: MapActivityCapsuleStatus(capsule: capsule))
+        let controller = UIHostingController(rootView: MapActivityCapsuleStatus(capsule: capsule, activity: nil))
         controller.sizingOptions = .intrinsicContentSize
         controller.safeAreaRegions = []
         controller.view.backgroundColor = .clear

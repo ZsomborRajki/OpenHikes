@@ -31,9 +31,19 @@ extension RecordingUITests {
         defer { XCUIDevice.shared.location = nil }
         launch(app)
         startRecording(in: app)
+        // A line, so that Stop asks for its name rather than ending a walk
+        // with nothing in it.
+        let points = element("recording-point-count", in: app)
+        XCTAssertTrue(points.waitForExistence(timeout: UITestTimeout.existence))
+        walkRecordedTrace(Array(UITestFixture.trailPoints.prefix(2)), countedBy: points)
 
         let status = element("activity-capsule-status", in: app)
-        XCTAssertFalse(status.exists, "the recording's own bar holds its controls on its screen")
+        // Waited on: the capsule can come up for the moment between the
+        // recording starting and its screen arriving.
+        XCTAssertTrue(
+            waitUntil { !status.exists },
+            "the recording's own bar holds its controls on its screen"
+        )
 
         popScreen(in: app)
         XCTAssertTrue(
@@ -57,6 +67,49 @@ extension RecordingUITests {
         XCTAssertTrue(
             app.navigationBars["Record Hike"].waitForExistence(timeout: UITestTimeout.navigation),
             "the status should go back to the recording"
+        )
+    }
+
+    /// The capsule's Stop can be tapped with one of the walk's own screens
+    /// over the recording's, and throwing the walk away takes that screen
+    /// with the draft it was about, rather than leaving it showing a deleted
+    /// hike. One fix and one place: Stop asks before the place goes.
+    @MainActor
+    func testDiscardingFromTheCapsuleClosesTheWalksOwnScreens() {
+        let app = makeApp(arguments: ["--ui-test-enable-location"])
+        app.resetAuthorizationStatus(for: .location)
+        addLocationPermissionMonitor()
+        setSimulatedLocation(UITestFixture.trailheadCoordinate)
+        defer { XCUIDevice.shared.location = nil }
+        launch(app)
+        startRecording(in: app)
+        let points = element("recording-point-count", in: app)
+        XCTAssertTrue(
+            points.waitForExistence(timeout: UITestTimeout.existence),
+            "the walk needs a fix before a place can be marked on it"
+        )
+        walkRecordedTrace([UITestFixture.trailheadCoordinate], countedBy: points)
+
+        openRecordingPlaces(in: app)
+        scrollToTap(app.buttons["recording-place-add-own"], in: app)
+        tapWhenReady(app.buttons["hike-place-adder-add"])
+        let place = element("hike-place-title", in: app)
+        XCTAssertTrue(
+            place.waitForExistence(timeout: UITestTimeout.navigation),
+            "adding opens the new place over the recording"
+        )
+
+        tapWhenReady(element("activity-capsule-stop", in: app))
+        let question = app.alerts["Discard this recording?"]
+        XCTAssertTrue(
+            question.waitForExistence(timeout: UITestTimeout.navigation),
+            "a walk with no line but a place should be asked before the place goes"
+        )
+        question.buttons["Discard Recording"].tap()
+
+        XCTAssertTrue(
+            place.waitForNonExistence(timeout: UITestTimeout.navigation),
+            "the discarded walk's place should leave with it"
         )
     }
 }

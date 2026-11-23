@@ -175,7 +175,8 @@ struct HikeActivitySecondaryFigure: View {
     }
 }
 
-/// The panel's own pause and resume, and whatever the last tap could not do.
+/// The panel's own pause and resume, its Stop, and whatever the last tap could
+/// not do.
 ///
 /// Its own view, and deliberately *outside* the combined accessibility element
 /// the figures above it form: that block is one tap target and reads as one
@@ -186,8 +187,9 @@ struct HikeActivitySecondaryFigure: View {
 /// pause worth putting here — the walk is the hiker's, not the app's — and a
 /// `.finished` panel is a result rather than something still waiting for them.
 ///
-/// Stop is deliberately absent; ``PauseHikeActivityIntent``'s header gives the
-/// argument.
+/// Stop is a link rather than an intent: it opens the app with Stop's
+/// question up, because a button on the Lock Screen can ask nothing —
+/// ``PauseHikeActivityIntent``'s header gives the argument.
 struct HikeActivityControls: View {
     let subject: HikeActivityAttributes.Subject
     let state: HikeActivityAttributes.ContentState
@@ -200,7 +202,10 @@ struct HikeActivityControls: View {
     var body: some View {
         if isDrawn {
             VStack(alignment: .leading, spacing: 4) {
-                control
+                HStack(spacing: 8) {
+                    control
+                    stop
+                }
                 if let refusal = state.controlRefusal {
                     Text(Self.wording(for: refusal))
                         .font(.caption2)
@@ -223,6 +228,19 @@ struct HikeActivityControls: View {
                     .labelStyle(.iconOnly)
             }
             .tint(tint)
+        }
+    }
+
+    /// Red, as the app's own Stop is, and styled as the intent buttons are
+    /// drawn, which a link is not unless asked.
+    @ViewBuilder private var stop: some View {
+        if let url = TrailWidgetDeepLink.stopRecordingURL() {
+            Link(destination: url) {
+                Label("Stop", systemImage: "stop.fill")
+                    .labelStyle(.iconOnly)
+            }
+            .buttonStyle(.bordered)
+            .tint(.red)
         }
     }
 

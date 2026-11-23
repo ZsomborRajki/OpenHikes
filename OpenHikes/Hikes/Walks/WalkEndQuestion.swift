@@ -25,6 +25,7 @@ import Foundation
 import Observation
 import OpenHikesData
 import OpenHikesShared
+import os
 import SwiftUI
 
 @MainActor
@@ -48,6 +49,17 @@ final class WalkEndQuestion {
     /// button says its own; the capsule has nowhere to put an alert, so it
     /// says it here.
     var refusedPhase: TrailWalkPhase?
+    /// The walk the question was asked about, by its trail and its start.
+    /// The capsule can ask on another hike's screen, and while the alert is
+    /// up a matched fix can end that walk and start one along the trail on
+    /// screen. *End* given for the first must not end the second, which would
+    /// be dropped as too short.
+    @ObservationIgnored private var askedWalk: AskedWalk?
+
+    private struct AskedWalk: Equatable {
+        let hikeID: UUID
+        let startedAt: Date
+    }
 
     init(session: TrailWalkSession, endings: EventFeed<ActivityEnding>) {
         self.session = session
@@ -57,6 +69,7 @@ final class WalkEndQuestion {
     /// What End does: asks first.
     func ask() {
         guard session.phase != nil else { return }
+        askedWalk = currentWalk
         isAsking = true
     }
 
@@ -69,6 +82,11 @@ final class WalkEndQuestion {
     /// The hiker said yes: ends the walk, kept as a record when it covered
     /// enough.
     func end() {
+        guard askedWalk != nil, currentWalk == askedWalk else {
+            // What it was about has ended without it.
+            Self.logger.notice("End's answer came after its walk ended; dropped")
+            return
+        }
         let end = session.end()
         // From the outcome rather than from the phase going absent: kept,
         // dropped and refused are three different pieces of news and the
@@ -79,6 +97,13 @@ final class WalkEndQuestion {
         case .discarded: break
         case .refused: isRefused = true
         }
+    }
+
+    private static let logger = Logger(subsystem: "OpenHikes", category: "TrailWalk")
+
+    /// The walk under way, as ``askedWalk`` keeps one.
+    private var currentWalk: AskedWalk? {
+        session.record.map { AskedWalk(hikeID: $0.hikeID, startedAt: $0.startedAt) }
     }
 }
 

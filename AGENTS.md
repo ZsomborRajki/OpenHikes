@@ -505,9 +505,11 @@ a change to recording, the map, the sheet or the render path; the PR template,
     the owner's decision** (`RecordingTitle`). A field left as it opened is
     not a typed name (`RecordingStopName`), and only `RouteShape` says what
     a loop is.
-  - **Every Stop asks the same first question.** Siri, Control Center and
-    the watch stop through `HikeIntentCoordinator.stopRecording()`, which
-    ends an empty recording as the button does. It leaves one holding
+  - **Every Stop asks the same first question.** The bar, the map's capsule
+    and the Live Activity's link ask it through `RecordingStopQuestion`.
+    Siri, Control Center and the watch stop through
+    `HikeIntentCoordinator.stopRecording()`, which ends an empty recording as
+    the button does. It leaves one holding
     photographs or places running, because only the screen can ask before
     they go.
 - **A recording's or a walk's controls are on its own screen's bar, or on
@@ -586,9 +588,10 @@ a change to recording, the map, the sheet or the render path; the PR template,
     watch alike, and the watch taps where the phone speaks.
 - **A recording always outranks a followed trail**, on every surface, because
   it is the one that would be *lost*: a follow is re-derived from the trail and
-  the next fix, and a recording is not. Three places hold the rule and must
-  agree: `TrailWidgetEntry.init`, `HikeLiveActivityController.accepts(_:)` and
-  `HikeRecordingControlState.init(snapshot:)`.
+  the next fix, and a recording is not. Four places hold the rule and must
+  agree: `TrailWidgetEntry.init`, `HikeLiveActivityController.accepts(_:)`,
+  `HikeRecordingControlState.init(snapshot:)` and the map's capsule,
+  `MapActivityCapsule.activity(recordingLive:recordingOnTop:walkedHikeID:hikeOnTop:)`.
 - **App Intents perform through `HikeIntentCoordinator`.** The system can launch
   the process just to run an intent, so no view state is reachable.
   `OpenHikesApp.init()` registers the coordinator, and each intent makes one
@@ -601,7 +604,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
 - **The Control Center toggle and the Live Activity buttons live in
   `OpenHikesShared`.** Each extension that draws one must compile its action,
   while the app performs it through the same coordinator. The Live Activity
-  offers Pause or Resume and never Stop (`HikeActivityControlIntents.swift`).
+  offers Pause or Resume as intents, and Stop only as a link that opens the
+  app with Stop's question up, by the owner's decision: a Lock Screen button
+  can ask nothing (`HikeActivityControlIntents.swift`).
 - **One controller makes the reminder decisions.**
   `MovementReminderController` is handed to both the recorder and the walk
   session, so it can see both. The thresholds live only in
@@ -1775,7 +1780,7 @@ Reopening one needs new evidence, not a fresh reading of the same code.
   `ActivityState` is matched positively, and a running activity is adopted,
   never requested twice.
 - **A live recording outranks the selected trail, on every surface, without
-  qualification** (*The app* names the three places that hold the rule).
+  qualification** (*The app* names the places that hold the rule).
   - The widget replaces the trail rather than badging it, and a paused
     recording keeps the widget. The takeover writes nothing, so the trail
     returns the moment the recording clears.

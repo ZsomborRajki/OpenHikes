@@ -20,14 +20,15 @@ import SwiftUI
 
 struct MapActivityCapsuleStatus: View {
     let capsule: MapActivityCapsule
-
-    /// The last activity the capsule stood for, kept while it fades out so
-    /// the fade has something to show.
-    @State private var shown: MapActivityCapsule.Activity?
+    /// What to draw, handed in by the UIKit view around it rather than read
+    /// off the capsule: the activity the buttons are for, kept while the
+    /// capsule fades out so the fade has something to show, and none once it
+    /// is hidden — see ``MapActivityCapsuleControlsView/statusActivity``.
+    let activity: MapActivityCapsule.Activity?
 
     var body: some View {
         Group {
-            switch capsule.activity ?? shown {
+            switch activity {
             case .recording:
                 RecordingCapsuleStatus(recorder: capsule.recorder)
             case let .walk(hikeID):
@@ -35,9 +36,6 @@ struct MapActivityCapsuleStatus: View {
             case nil:
                 EmptyView()
             }
-        }
-        .onChange(of: capsule.activity, initial: true) { _, activity in
-            if let activity { shown = activity }
         }
         .accessibilityHidden(true)
     }

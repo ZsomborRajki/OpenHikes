@@ -12,15 +12,16 @@
 //  division the widget keeps, and it is what lets the activity stay correct
 //  while the app is suspended: the system holds the last content it was given.
 //
-//  There is one button, and it pauses or resumes. A `LiveActivityIntent` runs
+//  There are two buttons. One pauses or resumes. A `LiveActivityIntent` runs
 //  in the *app's* process, so its type has to be compiled into both the app
 //  and this extension — and `OpenHikes/` and `OpenWidget/` are file-system
 //  -synchronized groups belonging to different targets, which leaves the
 //  shared package as the only place both can see. That used to be the
 //  objection; `ToggleHikeRecordingIntent` has since proved the same extraction
 //  for the Control Center control, so the mechanism is no longer unbuilt —
-//  see ``PauseHikeActivityIntent``, which also gives the argument for why Stop
-//  is not there beside it.
+//  see ``PauseHikeActivityIntent``. The other is Stop, which is a link rather
+//  than an intent, and opens the app with Stop's question up; the same
+//  header gives the argument.
 //
 //  A tap anywhere else still opens the recording screen, which is where the
 //  rest of the controls are.

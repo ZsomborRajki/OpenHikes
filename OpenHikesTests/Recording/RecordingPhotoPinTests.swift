@@ -200,7 +200,6 @@ struct RecordingPhotoPinTests {
                     stopQuestion: RecordingStopQuestion(recorder: recorder, endings: EventFeed()),
                     mapController: MapController(),
                     photoPins: photoPins,
-                    onSaved: { _ in /* unused */ },
                     onOpenPhoto: { [weak self] hike, photo in
                         self?.opened.append((hike, photo))
                     }

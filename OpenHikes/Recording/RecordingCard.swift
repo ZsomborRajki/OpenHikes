@@ -13,16 +13,13 @@
 
 import Foundation
 import OpenHikesData
-import os
 import SwiftUI
 
 struct RecordingCard: View {
     let recorder: HikeRecorder
     /// Asked when a failed save's recording is to be thrown away, as Stop
-    /// asks it — see ``RecordingStopQuestion``.
+    /// asks it, and what saves it again — see ``RecordingStopQuestion``.
     let question: RecordingStopQuestion
-    /// A retried save's hike, for the screen to open.
-    var onSaved: (Hike) -> Void
 
     /// Reads `phase`, the recovery state and whether a save can be retried —
     /// each of which moves a handful of times a session. Everything that moves
@@ -59,7 +56,7 @@ struct RecordingCard: View {
                             .foregroundStyle(.secondary)
                     }
                     Button("Retry Save") {
-                        Task { await retrySave() }
+                        Task { await question.retrySave() }
                     }
                     .prominentGlassButtonStyle()
                     .accessibilityIdentifier("recording-retry-save")
@@ -86,16 +83,6 @@ struct RecordingCard: View {
         }
         .glassButtonStyle()
         .frame(maxWidth: .infinity)
-    }
-
-    private func retrySave() async {
-        do {
-            onSaved(try await recorder.retrySave())
-        } catch {
-            HikeRecorder.logger.error(
-                "Recording save retry failed: \(error.localizedDescription, privacy: .public)"
-            )
-        }
     }
 }
 

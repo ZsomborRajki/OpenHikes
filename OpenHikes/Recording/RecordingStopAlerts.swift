@@ -60,7 +60,7 @@ private struct RecordingStopAlerts: ViewModifier {
                 // it, so that throwing a walk away does not take a pause
                 // first. It still asks.
                 Button("Discard Recording", role: .destructive) {
-                    question.confirmDiscard()
+                    question.discardInstead()
                 }
                 Button("Keep Recording", role: .cancel) { /* no-op */ }
             } message: {

@@ -21,6 +21,26 @@
 
 import OpenHikesData
 import OpenHikesShared
+import SwiftUI
+
+/// Plays a walk's beginning, its pauses and its resumes, and draws nothing.
+///
+/// ``RecordingHaptics``' twin, beside it at the root rather than on the walked
+/// trail's screen, because the map's capsule moves the phase from any screen
+/// — see ``MapActivityCapsule``. One of it, so a phase moved from anywhere,
+/// ``MovementReminderActions``' notification included, is felt once.
+struct WalkPhaseHaptics: View {
+    let session: TrailWalkSession
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .accessibilityHidden(true)
+            .sensoryFeedback(trigger: session.phase) { old, new in
+                hapticFeedback(forWalkPhase: old, to: new)?.feedback
+            }
+    }
+}
 
 /// A walk's phase in the terms the shared table speaks.
 ///

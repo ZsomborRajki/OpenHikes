@@ -8,8 +8,9 @@
 //  Seven tips: six in two queues, and one on its own. The main screen's four
 //  point at what a first launch has nothing else pointing at — the two
 //  buttons on the map, and the *Community* tab with its *Search this area*
-//  pill — and the recording screen's two at the places feature, which lives
-//  in that screen's bar. Each queue is one ordered `TipGroup`, so a screen
+//  pill — and the recording screen's two at the places feature: *Add Place* on
+//  the camera pill, and *Places Nearby* at the head of the sheet it opens.
+//  Each queue is one ordered `TipGroup`, so a screen
 //  never shows two tips at once, and a later tip waits until the one before
 //  it has been closed or used. The seventh, ``OfflineMapsTip``, is the only
 //  tip *Map Modes* shows, so it needs no queue.

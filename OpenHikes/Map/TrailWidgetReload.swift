@@ -5,10 +5,10 @@
 //  Where the *trail* feed asks WidgetKit to redraw the home screen widget,
 //  and the one place the recording precedence rule costs anything.
 //
-//  The rule itself is stated in three places that must not disagree:
+//  The rule itself is stated in four places that must not disagree:
 //  `TrailWidgetEntry.init` applies it to the widget, `HikeLiveActivityController`
-//  to the Lock Screen, and `HikeRecordingControlState` to the Control Center
-//  button. A recording always outranks a selected trail, because a follow can
+//  to the Lock Screen, `HikeRecordingControlState` to the Control Center
+//  button, and `MapActivityCapsule` to the map's capsule. A recording always outranks a selected trail, because a follow can
 //  be re-derived from the trail and a fix and a recording cannot.
 //
 

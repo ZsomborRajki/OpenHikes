@@ -4,11 +4,12 @@
 //
 //  The one question a Stop asks, whichever Stop was tapped.
 //
-//  Stop is in two places: the bar of the recording's own screen, and the
+//  Stop is in three places: the bar of the recording's own screen, the
 //  capsule on the map that stands in for that bar on every other screen —
-//  see ``MapActivityCapsule``. Each used to need the name alert, the discard
-//  alert behind it and the save, and two copies of a question are two
-//  questions that come to ask different things. So the question is this
+//  see ``MapActivityCapsule`` — and the Live Activity, whose Stop opens the
+//  app and asks here — see ``TrailWidgetDeepLink/stopRecordingURL()``. Each
+//  would need the name alert, the discard alert behind it and the save, and
+//  copies of a question come to ask different things. So the question is this
 //  object's, on the model, and it is put up with what the map's controls
 //  open — see ``MapControlModals`` — from the map sheet's contents or a place
 //  card over them, whichever is in front.
@@ -54,6 +55,12 @@ final class RecordingStopQuestion {
     /// ``HikeRecorder/suggestedTitle()`` reads the live distance, and a body
     /// that read it would run again on every accepted fix.
     private(set) var offeredTitle: String?
+    /// The recording the question was asked about, which an answer acts on
+    /// only while it is still the one under way. The capsule's question can
+    /// stay up while the watch or an intent ends that recording and starts
+    /// another, and *Discard Recording* given for the first must not delete
+    /// the second, nor *Save* stop it under the first one's name.
+    @ObservationIgnored private var askedSession: UUID?
 
     init(recorder: HikeRecorder, endings: EventFeed<ActivityEnding>) {
         self.recorder = recorder
@@ -66,9 +73,15 @@ final class RecordingStopQuestion {
     /// Settled first, because a recording the live figures call empty can
     /// still have fixes on their way to its journal — see
     /// ``HikeRecorder/settledStopStep()``. A tap while an earlier one is still
-    /// counting does nothing.
+    /// counting does nothing. And a recording being recovered is recovered
+    /// first: the Live Activity's Stop can be what launched the app.
     func ask() async {
-        switch await recorder.settledStopStep() {
+        await recorder.settleAutomaticRecovery()
+        let step = await recorder.settledStopStep()
+        // Read with the step's answer, before any suspension, so both are
+        // about one recording.
+        askedSession = recorder.sessionID
+        switch step {
         case .askName: await askForName()
         case .confirmDiscard: isConfirmingDiscard = true
         case .endEmpty: await discard()
@@ -76,9 +89,17 @@ final class RecordingStopQuestion {
         }
     }
 
-    /// Asks whether to throw the recording away: the name alert's *Discard
-    /// Recording*, and a failed save's.
+    /// Asks whether to throw the recording away: a failed save's *Discard
+    /// Recording*, on the screen of the recording it is about.
     func confirmDiscard() {
+        askedSession = recorder.sessionID
+        isConfirmingDiscard = true
+    }
+
+    /// The name alert's *Discard Recording*: asks once more, about the
+    /// recording the name was asked for rather than whichever is under way
+    /// by now — see ``askedSession``.
+    func discardInstead() {
         isConfirmingDiscard = true
     }
 
@@ -86,6 +107,7 @@ final class RecordingStopQuestion {
     /// it was offered, when the field still says that or says nothing. See
     /// ``RecordingStopName``.
     func save() async {
+        guard isStillAsked() else { return }
         let customName = RecordingStopName.typed(nameDraft, over: offeredTitle)
         do {
             let hike = try await recorder.stop(customName: customName, offeredTitle: offeredTitle)
@@ -99,14 +121,41 @@ final class RecordingStopQuestion {
         }
     }
 
+    /// Saves again after a failed save, the card's *Retry Save*, and lands
+    /// where a Stop's save lands, through the same ending, so that a saved
+    /// recording opens one way whichever save wrote it.
+    func retrySave() async {
+        do {
+            let hike = try await recorder.retrySave()
+            endings.send(.recordingSaved(hikeID: hike.id))
+        } catch {
+            // Still failed, and its screen still says so.
+            HikeRecorder.logger.error(
+                "Recording save retry failed: \(error.localizedDescription, privacy: .public)"
+            )
+        }
+    }
+
     /// Throws the recording away. A discard the recorder refused leaves it
     /// where it was, and says nothing here: its screen does.
     func discard() async {
+        guard isStillAsked() else { return }
         let hikeID = recorder.currentHike?.id
         await recorder.discard()
         if recorder.phase == .idle {
             endings.send(.recordingDiscarded(hikeID: hikeID))
         }
+    }
+
+    /// Whether the recording under way is the one the question was asked
+    /// about — see ``askedSession``. An answer for one that has gone is
+    /// dropped: what it was about has ended without it.
+    private func isStillAsked() -> Bool {
+        guard recorder.sessionID == askedSession else {
+            HikeRecorder.logger.notice("Stop's answer came after its recording ended; dropped")
+            return false
+        }
+        return true
     }
 
     /// Opens the name alert holding the offered name.

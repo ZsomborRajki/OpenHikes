@@ -223,19 +223,13 @@ struct HikeDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         // Start, then Pause or Resume and End, in the bar, which is still
-        // showing at the sheet's smallest detent — see ``WalkToggleButton``
-        // and ``WalkEndButton``. Handed the session as a reference, like
-        // ``WalkControls`` below: this closure is inlined into the body, and
-        // neither dereferences it.
+        // showing at the sheet's smallest detent, with the walk's phase and
+        // clock in the title's place while it is under way — see
+        // ``WalkToggleButton``, ``WalkEndButton`` and ``WalkBarTitle``.
+        // Handed the session as a reference, like ``WalkControls`` below:
+        // this closure is inlined into the body, and none dereferences it.
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                WalkToggleButton(
-                    hike: hike, profile: profile, walkRevision: preparedLine?.walkRevision, session: walkSession
-                )
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                WalkEndButton(hike: hike, session: walkSession)
-            }
+            WalkBar(hike: hike, profile: profile, walkRevision: preparedLine?.walkRevision, session: walkSession)
         }
         // On the container rather than on the Details face, so flipping to
         // History neither restarts the profile build nor stops the follow
