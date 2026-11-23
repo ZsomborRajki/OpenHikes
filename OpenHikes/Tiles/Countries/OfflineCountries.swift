@@ -20,7 +20,10 @@
 //  *Extra Detail* decides which files an area takes: to zoom 14 always, and
 //  zoom 15, with its buildings and most of its points, when it is on.
 //  Turning it on brings zoom 15 to every area already down; turning it off
-//  deletes it from them and keeps the areas (``reconcile()``).
+//  deletes it from them and keeps the areas (``reconcile()``). A file the
+//  list names for a build already down that the area did not take is
+//  brought the same way: the day hikes' squares, which builds already
+//  listed gained after many areas were down.
 //
 //  A download is `.speculative`, as a bulk tile download is: it waits for
 //  Wi-Fi, and it is refused outright in Low Power Mode or while the device is
@@ -173,18 +176,20 @@ final class OfflineCountries {
     }
 
     /// Brings every area down, and not coming down, to *Extra Detail*'s
-    /// setting. A download under way is left to finish, and brought to it
-    /// then. An area the server has a newer build of is left for its update
-    /// to bring zoom 15: the server deletes a build it has moved past, and
-    /// asking for that build's files failed at every launch. So is one with
-    /// a file that would not open, for the hiker's *Try Again*, which brings
-    /// zoom 15 with it: here it would come down again unasked at every
-    /// launch, even where the device only refused a read for the moment.
+    /// setting, and to the files the list now names for its build. A
+    /// download under way is left to finish, and brought to it then. An area
+    /// the server has a newer build of is left for its update to bring zoom
+    /// 15: the server deletes a build it has moved past, and asking for that
+    /// build's files failed at every launch. So is one with a file that
+    /// would not open, for the hiker's *Try Again*, which brings zoom 15
+    /// with it: here it would come down again unasked at every launch, even
+    /// where the device only refused a read for the moment.
     private func reconcile() {
         for record in installed.values where downloads[record.country.id] == nil {
+            let current = offeredBuild(of: record)
             if includesDetail, !record.hasDetail {
                 guard update(for: record.country.id) == nil, !needsRepair(record.country.id) else { continue }
-                download(record.country)
+                download(current ?? record.country)
             } else if !includesDetail, record.hasDetail {
                 let before = installed
                 var stripped = record
@@ -194,8 +199,18 @@ final class OfflineCountries {
                 forgetUnopenable(record.files.filter(\.role.isDetail).map(\.role), of: record.country.id)
                 reopenArchives()
                 store.remove(record.files.filter(\.role.isDetail), keeping: Array(installed.values))
+            } else if let current, !needsRepair(record.country.id), !filesToFetch(for: current).isEmpty {
+                // A file its build gained since it came down: its day hikes.
+                download(current)
             }
         }
+    }
+
+    /// The area `record` is of, as the list offers it now, where the list
+    /// offers the same build: what it names may have grown since the area
+    /// came down. `nil` where the list offers another build, or none.
+    private func offeredBuild(of record: Record) -> Country? {
+        offered.first { $0.id == record.country.id && $0.build == record.country.build }
     }
 
     // MARK: - The list
@@ -220,6 +235,8 @@ final class OfflineCountries {
             let manifest = try await server.manifest()
             offered = manifest.readableCountries
             listPhase = .loaded
+            // A build already down may name a file it did not.
+            reconcile()
             await Self.cache(manifest, in: store)
         } catch {
             Self.logger.error("Country list: \(String(describing: error), privacy: .public)")
@@ -597,7 +614,8 @@ extension OfflineCountries {
                 extras: opened[.extras],
                 record: record,
                 detail: opened[.detail],
-                detailExtras: opened[.detailExtras]
+                detailExtras: opened[.detailExtras],
+                trails: opened[.trails]
             ))
         }
         return opening

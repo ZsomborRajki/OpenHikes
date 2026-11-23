@@ -15,6 +15,9 @@
 //  and is kept current by the same rule when the language changes
 //  (``VectorTileArchives/language``).
 //
+//  An area's day hikes are here too, for the Community tab's search to read
+//  before it asks the tile server (``trailCells(named:)``).
+//
 //  The cache files a drawn tile under the provider's key, which says nothing
 //  of the build it was drawn from, so a tile drawn before a country's build
 //  was installed would otherwise answer for a week in place of the new one.
@@ -45,6 +48,8 @@ nonisolated final class OfflineCountryArchives: Sendable {
         /// Zoom 15 and its extras, where *Extra Detail* brought them.
         var detail: PMTilesArchive?
         var detailExtras: PMTilesArchive?
+        /// The day hikes' squares round it, where its download brought them.
+        var trails: PMTilesArchive?
     }
 
     /// What a country holds for a tile: the archive tile it is drawn from,
@@ -127,6 +132,41 @@ nonisolated final class OfflineCountryArchives: Sendable {
                 return (try? basemap.contains(z: dataTile.z, x: dataTile.x, y: dataTile.y)) == true
             }
         }
+    }
+
+    /// The day hikes' squares of `names` that a downloaded area covers, by
+    /// name, each its ``TrailCellFile``'s bytes: an empty square's too,
+    /// which its file holds as a square with no routes. A name missing from
+    /// the answer is a square no area here covers, or whose file could not
+    /// be read.
+    ///
+    /// Of two areas that cover a square, the newer build's answers, so the
+    /// seam between two areas downloaded a refresh apart is read as the
+    /// newer one has it; the squares the device keeps from the tile server
+    /// mix builds the same way (``TrailCellStore``).
+    func trailCells(named names: [String]) -> [String: Data] {
+        let held = countries.withLock { $0 }
+            .filter { $0.trails != nil }
+            .sorted { ($0.record?.country.build ?? "") > ($1.record?.country.build ?? "") }
+        guard !held.isEmpty else { return [:] }
+        var found: [String: Data] = [:]
+        for name in names {
+            guard let tile = SquareArchive.trails.tile(named: name) else { continue }
+            for country in held {
+                guard let trails = country.trails else { continue }
+                do {
+                    guard let bytes = try trails.tile(z: tile.zoom, x: tile.x, y: tile.y) else { continue }
+                    found[name] = bytes
+                    break
+                } catch {
+                    let reason = String(describing: error)
+                    Self.logger.error(
+                        "Country \(country.id, privacy: .public)'s trails unreadable: \(reason, privacy: .public)"
+                    )
+                }
+            }
+        }
+        return found
     }
 
     private static func middle(of tile: VectorTileAddress) -> (longitude: Double, latitude: Double) {

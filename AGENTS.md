@@ -993,10 +993,23 @@ Maps*. `OfflineCountries` is the one owner, on the main actor.
   Russia), which are cut by state or province and are never themselves
   downloadable. An area is keyed by its ISO 3166 code, and a region goes into
   the country its code names, where Natural Earth draws otherwise.
-- **Zoom 14 always, zoom 15 with *Extra Detail*.** An area is four files:
-  the basemap and the extras to zoom 14, which every download takes, and
-  both at zoom 15, which the switch adds
+- **Zoom 14 always, zoom 15 with *Extra Detail*.** An area's map is four
+  files: the basemap and the extras to zoom 14, which every download takes,
+  and both at zoom 15, which the switch adds
   (`SettingsKey.offlineCountriesDetail`, on by default).
+- **An area carries its day hikes** (`OfflineCountryManifest.Role.trails`),
+  a fifth file every download takes: the trails archive's squares within a
+  wide margin of the outline (`Scripts/lib/offline-countries/Trails.swift`),
+  so the Community tab searches there with no signal.
+  - Copied out of the world's archive, never rebuilt from an extract, and
+    every square it covers is a tile of it, an empty one included. A square
+    it has no tile for is one it says nothing about, so a search reads the
+    downloads square by square before its cache and the server
+    (`DownloadedTrailCells`, `TrailCellLibrary`).
+  - A file a build gains after it is up goes up beside it under the same
+    build (`Scripts/offline-countries.sh trails`, then `upload`), and an area
+    already down brings it at the next read of the list
+    (`OfflineCountries.reconcile()`), never as an update.
 - **Cut on the server, read in place.** `Scripts/offline-countries.sh` cuts
   each area out of the archives the map draws; its header is the procedure.
   A build is named for the later of its archives' days. Its files go under
@@ -1517,7 +1530,8 @@ packed and read on the same terms.
   is answered from the squares only when the server lists an archive of them
   this build reads, and every square within reach of the search was read or
   has no tile. Otherwise `CuratedTrailSource` asks Overpass as it did before.
-  So an empty answer from the squares means *no trails here*.
+  So an empty answer from the squares means *no trails here*. A downloaded
+  area's squares are read first (*The offline countries*).
 - **Only a build of the whole planet goes up.** A square with no tile is read
   as ground with nothing on it, so `pack` and `upload-archive` refuse a build
   without `--world`.

@@ -3,9 +3,12 @@
 //  OpenHikes
 //
 //  A curated search answered from the pre-built squares: which squares the
-//  area needs, the ones this device already holds, a request for the rest —
-//  several, for a wide search — and the day hikes in them that are in the
-//  area and nearest its middle.
+//  area needs, the ones this device already holds — those a downloaded area
+//  brought (``DownloadedTrailCells``), then those kept from earlier searches
+//  — a request for the rest, several for a wide search, and the day hikes in
+//  them that are in the area and nearest its middle. So a search over ground
+//  the hiker downloaded asks nothing of the network, and answers with no
+//  signal.
 //
 //  ``CuratedTrailSource`` asks this first and Overpass only when this has no
 //  answer. What makes that safe is that **having no answer is one of the
@@ -122,20 +125,27 @@ nonisolated struct TrailCellLibrary: Sendable {
     static let resourceTimeout: TimeInterval = 30
 
     private let database: any TrailCellFetching
+    /// The squares the downloaded areas brought, read first. `nil` for a
+    /// launch with none to read, every suite's unless it passes some.
+    private let downloads: (any DownloadedTrailCells)?
     /// `nil` for a launch with nowhere to keep squares, which costs a fetch
     /// per search and breaks nothing.
     private let store: TrailCellStore?
 
+    /// - Parameter downloads: The squares downloaded areas hold, which the
+    ///   app's launch reads out of ``OfflineCountryArchives/shared``.
     /// - Parameter directory: Where fetched squares are kept between
     ///   launches. A suite passes one of its own, and must: the default is
     ///   the app's `Caches`. See *Deliberate test seams* in the repository
     ///   instructions.
     init(
         database: any TrailCellFetching,
+        downloads: (any DownloadedTrailCells)? = nil,
         directory: URL? = TrailCellStore.defaultDirectory(),
         clock: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.database = database
+        self.downloads = downloads
         store = directory.map { TrailCellStore(directory: $0, clock: clock) }
     }
 
@@ -155,7 +165,19 @@ nonisolated struct TrailCellLibrary: Sendable {
         guard !names.isEmpty, names.count <= Self.maximumCellsPerSearch else { return .uncovered }
 
         var held: [String: TrailCellFile] = [:]
-        for name in names {
+        // What a download holds is the square the server would send, kept
+        // for as long as the download, so it answers ahead of a kept copy:
+        // the search reads one build where it can, and the copy no longer
+        // has to last.
+        for (name, bytes) in downloads?.trailCells(named: names) ?? [:] {
+            guard let cell = try? TrailCellFile(decoding: bytes) else {
+                Self.logger.error("Downloaded square \(name, privacy: .public) is not a file this build reads.")
+                continue
+            }
+            held[name] = cell
+        }
+        let downloaded = held.count
+        for name in names where held[name] == nil {
             // A kept square that no longer reads is one to fetch again, not a
             // reason to fail: the file is only a cache.
             guard let bytes = store?.bytes(ofCellNamed: name),
@@ -193,7 +215,8 @@ nonisolated struct TrailCellLibrary: Sendable {
         Self.logger.notice(
             """
             A search read \(names.count, privacy: .public) trail squares, \
-            \(missing.count, privacy: .public) of them fetched, found \
+            \(downloaded, privacy: .public) of them downloaded and \
+            \(missing.count, privacy: .public) fetched, found \
             \(candidates.count, privacy: .public) routes and offers \
             \(trails.count, privacy: .public).
             """

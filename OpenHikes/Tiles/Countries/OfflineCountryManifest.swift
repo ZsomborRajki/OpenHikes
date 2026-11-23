@@ -4,12 +4,15 @@
 //
 //  What the tile server offers to download: one entry an area, which is a
 //  country, or a state or province of one of the few countries too big for
-//  one download (`group` names the country). Each area is four archives cut
-//  out of the planet build the OpenHikes map draws, with the outline they
-//  were cut along: the basemap and its extras to zoom 14, which every
-//  download takes, and the two at zoom 15, which *Extra Detail* adds. It
-//  lives at `countries/manifest.json` on `tiles.openhikes.app`, beside the
-//  files, and `Scripts/offline-countries.sh` writes it.
+//  one download (`group` names the country). Each area is archives cut out
+//  of the planet build the OpenHikes map draws, with the outline they were
+//  cut along: the basemap and its extras to zoom 14, which every download
+//  takes, and the two at zoom 15, which *Extra Detail* adds. And every
+//  download takes the Community tab's day hikes around it, the squares of
+//  the trails archive (``SquareArchive/trails``) out to a wide margin, so a
+//  search there is answered with no signal (``Role/trails``). It lives at
+//  `countries/manifest.json` on `tiles.openhikes.app`, beside the files, and
+//  `Scripts/offline-countries.sh` writes it.
 //
 //  The tool compiles this file as it stands, so it imports Foundation and
 //  nothing of the app's and says `nonisolated` on every declaration.
@@ -139,6 +142,14 @@ nonisolated struct OfflineCountryManifest: Codable, Equatable, Sendable {
         case detail = "detail"
         /// The extras' zoom 15.
         case detailExtras = "detail-extras"
+        /// The day hikes' squares (``TrailCellGrid``) of the area and a wide
+        /// margin round it, copied out of the trails archive the tile server
+        /// lists. Every square it covers is a tile of it, an empty one
+        /// included, so a square that is no tile of it is one it says
+        /// nothing about (``OfflineCountryArchives/trailCell(named:)``).
+        /// Added to builds already listed: a build that does not know the
+        /// role leaves the file off the list it chooses a download from.
+        case trails = "trails"
 
         var isDetail: Bool { self == .detail || self == .detailExtras }
     }
@@ -162,9 +173,9 @@ nonisolated extension OfflineCountryManifest.File {
     var fileName: String { path.split(separator: "/").last.map(String.init) ?? "" }
 
     /// Whether the name is one the tile server's route serves — an area's
-    /// code, then `-detail`, `-extras`, both or neither, then a build's eight
-    /// digits — so that no name off the network can reach outside the
-    /// directory it is kept in.
+    /// code, then `-detail`, `-extras`, both or neither, or `-trails`, then
+    /// a build's eight digits — so that no name off the network can reach
+    /// outside the directory it is kept in.
     var hasSafeName: Bool {
         guard fileName.hasSuffix(Self.fileExtension) else { return false }
         let stem = String(fileName.dropLast(Self.fileExtension.count))
@@ -172,8 +183,12 @@ nonisolated extension OfflineCountryManifest.File {
         guard parts.count >= 2 else { return false }
         let build = parts.removeLast()
         guard build.count == 8, build.allSatisfy({ $0.isASCII && $0.isNumber }) else { return false }
-        if parts.last == "extras" { parts.removeLast() }
-        if parts.last == "detail" { parts.removeLast() }
+        if parts.last == "trails" {
+            parts.removeLast()
+        } else {
+            if parts.last == "extras" { parts.removeLast() }
+            if parts.last == "detail" { parts.removeLast() }
+        }
         return OfflineCountryManifest.isAreaCode(parts.joined(separator: "-"))
     }
 }

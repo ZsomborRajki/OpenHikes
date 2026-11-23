@@ -36,5 +36,7 @@ struct OfflineCountryDownloadKeyTests {
         let detailExtras = OfflineCountryDownloadKey(country: "US-CO", build: "20261117", role: .detailExtras)
         #expect(detail.fileName == "US-CO-detail-20261117.pmtiles")
         #expect(detailExtras.fileName == "US-CO-detail-extras-20261117.pmtiles")
+        let trails = OfflineCountryDownloadKey(country: "US-CO", build: "20261117", role: .trails)
+        #expect(trails.fileName == "US-CO-trails-20261117.pmtiles")
     }
 }

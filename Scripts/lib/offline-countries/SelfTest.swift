@@ -80,7 +80,94 @@ extension Tool {
         guard try archive.tile(z: maximumZoom, x: 0, y: 0) == nil else { fail("the cut kept a tile it should not") }
         guard archive.header.isClustered else { fail("the cut is not clustered") }
         try checkAreas()
-        print("offline-countries: selftest passed (\(wanted.count) tiles cut, \(tiles.count) in the world)")
+        let squares = try await checkTrails(in: directory)
+        print("offline-countries: selftest passed (\(wanted.count) tiles cut, \(tiles.count) in the world, \(squares) squares)")
+    }
+
+    /// The day hikes: a made-up trails archive with routes in three squares
+    /// round Ljubljana and one in Brazil, cut along a square of Slovenia with
+    /// a margin. Every square within it is read back, the three with their
+    /// routes and the rest empty, and neither Brazil's nor one past the
+    /// margin is there. And the margin goes on round the antimeridian, and
+    /// round the pole.
+    static func checkTrails(in directory: URL) async throws -> Int {
+        func route(_ id: Int64) -> TrailCellFile {
+            let point = TrailCellFile.Point(latitude: 46_000_000, longitude: 14_500_000)
+            return TrailCellFile(relations: [
+                TrailCellFile.Relation(id: id, tags: ["route": "hiking"], ways: [TrailCellFile.Way(role: "", points: [point])]),
+            ])
+        }
+        let routed: [TrailCell: TrailCellFile] = [
+            TrailCellGrid.cell(containingLatitude: 46.05, longitude: 14.5): route(1),
+            TrailCellGrid.cell(containingLatitude: 46.3, longitude: 14.1): route(2),
+            TrailCellGrid.cell(containingLatitude: 45.6, longitude: 13.6): route(3),
+            TrailCellGrid.cell(containingLatitude: -22.9, longitude: -43.2): route(4),
+        ]
+        var tiles: [(id: UInt64, bytes: [UInt8])] = []
+        for (square, file) in routed {
+            guard let tile = SquareArchive.trails.tile(named: TrailCellGrid.recordName(for: square)) else {
+                fail("square \(square) is no tile")
+            }
+            tiles.append((PMTilesTileID.id(z: tile.zoom, x: tile.x, y: tile.y), Array(file.encoded())))
+        }
+        tiles.sort { $0.id < $1.id }
+        var data: [UInt8] = []
+        var entries: [PMTilesEntry] = []
+        for tile in tiles {
+            entries.append(PMTilesEntry(tileID: tile.id, offset: UInt64(data.count), length: UInt64(tile.bytes.count), runLength: 1))
+            data += tile.bytes
+        }
+        var header = PMTilesHeader()
+        header.minimumZoom = UInt8(SquareArchive.trails.zoom)
+        header.maximumZoom = UInt8(SquareArchive.trails.zoom)
+        let world = directory.appending(path: "trails-20261122-00.pmtiles")
+        let prefix = PMTilesLayout.prefix(header: header, entries: entries, metadata: Array("{}".utf8),
+                                          tileDataLength: UInt64(data.count))
+        try Data(prefix + data).write(to: world)
+
+        let slovenia: Ring = [(13.4, 45.5), (16.5, 45.5), (16.5, 46.8), (13.4, 46.8), (13.4, 45.5)]
+        let margin = 30.0
+        let source = TrailsSource(
+            extractor: try await Extractor(source: FileSource(url: world)),
+            name: "trails-20261122-00",
+            marginKilometers: margin,
+            metadata: Array("{}".utf8)
+        )
+        let file = try await cutTrails(id: "SI", rings: [slovenia], build: "20261117", from: source, into: directory, server: nil)
+        guard file.role == .trails, file.path == "countries/SI-trails-20261117.pmtiles", file.hasSafeName else {
+            fail("the day hikes are listed as \(file)")
+        }
+        let archive = try PMTilesArchive(contentsOf: directory.appending(path: file.fileName))
+        let covered = TrailSquares.squares(rings: [slovenia], marginKilometers: margin)
+        func read(_ square: TrailCell) throws -> TrailCellFile? {
+            guard let tile = SquareArchive.trails.tile(named: TrailCellGrid.recordName(for: square)),
+                  let bytes = try archive.tile(z: tile.zoom, x: tile.x, y: tile.y)
+            else { return nil }
+            return try TrailCellFile(decoding: bytes)
+        }
+        for square in covered {
+            let expected = routed[square] ?? TrailCellFile(relations: [])
+            guard try read(square) == expected else { fail("the day hikes read wrong at \(square)") }
+        }
+        // 13.4°E less 30 km, a quarter of a degree further, is past the margin.
+        let beyond = TrailCellGrid.cell(containingLatitude: 46.0, longitude: 13.4 - 30 / (110 * cos(46 * Double.pi / 180)) - 0.3)
+        for outside in [TrailCellGrid.cell(containingLatitude: -22.9, longitude: -43.2), beyond] where try read(outside) != nil {
+            fail("the day hikes hold \(outside), outside the margin")
+        }
+        guard covered.count == Int(archive.header.addressedTiles) else { fail("the day hikes address other squares") }
+
+        // A square on the antimeridian takes in squares on both sides of it,
+        // and one by the pole takes in the whole of its row.
+        let fiji = TrailSquares.squares(rings: [[(179.8, -17.0), (179.95, -17.0), (179.95, -16.8), (179.8, -17.0)]],
+                                        marginKilometers: margin)
+        guard fiji.contains(where: { $0.column == 0 }), fiji.contains(where: { $0.column == TrailCellGrid.columnCount - 1 }) else {
+            fail("the margin does not go round the antimeridian")
+        }
+        let pole = TrailSquares.squares(rings: [[(10, 89.7), (10.2, 89.7), (10.2, 89.8), (10, 89.7)]], marginKilometers: margin)
+        guard pole.filter({ $0.row == TrailCellGrid.rowCount - 1 }).count == TrailCellGrid.columnCount else {
+            fail("the margin does not go round the pole")
+        }
+        return covered.count
     }
 
     /// What is cut: a split country as its regions, a region filed under it

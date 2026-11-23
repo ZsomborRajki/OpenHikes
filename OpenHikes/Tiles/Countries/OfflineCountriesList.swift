@@ -228,7 +228,12 @@ struct OfflineCountriesList: View {
             }
         } footer: {
             if isLast {
-                Text("The OpenHikes map draws a downloaded country with no signal. Downloads use Wi-Fi.")
+                Text(
+                    """
+                    The OpenHikes map draws a downloaded country with no signal, and Community finds its \
+                    OpenStreetMap trails. Downloads use Wi-Fi.
+                    """
+                )
             }
         }
         if case let .letter(letter) = part.heading {
