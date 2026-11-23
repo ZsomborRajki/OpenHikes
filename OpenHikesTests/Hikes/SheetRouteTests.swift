@@ -50,6 +50,37 @@ struct SheetRouteTests {
         #expect(path == [.recording])
     }
 
+    /// The map's capsule can stop a recording with one of the walk's own
+    /// screens over its screen, so throwing the walk away takes those too.
+    @Test("discarding a recording takes its screen and every screen about its draft")
+    func discardedRecordingTakesItsScreens() throws {
+        let context = try Fixture.modelContext()
+        let draft = Fixture.hike(in: context, title: "Morning Hike", route: []) { $0.isRecording = true }
+        let other = Fixture.hike(in: context, title: "Valley Walk")
+        var selectedHike: Hike? = draft
+        var path: [SheetRoute] = [.hike(other), .recording, .place(draft, UUID()), .photo(draft, UUID())]
+
+        let wasSelected = SheetRoute.removeDiscardedRecording(draft.id, selectedHike: &selectedHike, from: &path)
+
+        #expect(path == [.hike(other)])
+        #expect(wasSelected)
+        #expect(selectedHike == nil)
+    }
+
+    @Test("a recording with no draft takes only its own screen")
+    func discardedRecordingWithoutADraft() throws {
+        let context = try Fixture.modelContext()
+        let other = Fixture.hike(in: context, title: "Valley Walk")
+        var selectedHike: Hike? = other
+        var path: [SheetRoute] = [.recording, .hike(other)]
+
+        let wasSelected = SheetRoute.removeDiscardedRecording(nil, selectedHike: &selectedHike, from: &path)
+
+        #expect(path == [.hike(other)])
+        #expect(!wasSelected)
+        #expect(selectedHike?.id == other.id)
+    }
+
     @Test("deleting a hike takes its pushed photo viewer, place screens, place form and route style with it")
     func photoRouteBelongsToItsHike() throws {
         let context = try Fixture.modelContext()

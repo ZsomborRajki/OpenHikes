@@ -24,9 +24,6 @@ struct RecordingView: View {
     /// the same way a saved hike's detail screen draws its own. Optional for
     /// the same reason as above.
     var photoPins: PhotoMapPinController?
-    /// A failed save that was retried. A Stop's save is said through
-    /// ``ActivityEnding``, wherever it was tapped.
-    var onSaved: (Hike) -> Void
     /// Pushes the gallery when one of those pins is tapped. Carries the draft
     /// with it because the caller builds a route out of the pair, and the
     /// recorder's hike is this screen's to know, not the sheet's.
@@ -71,7 +68,7 @@ struct RecordingView: View {
             // The first-run tip about *Add Place*, on the camera pill — see
             // ``RecordingPlaceTips``.
             RecordingPlaceTips(recorder: recorder)
-            RecordingCard(recorder: recorder, question: stopQuestion, onSaved: onSaved)
+            RecordingCard(recorder: recorder, question: stopQuestion)
                 .padding()
             // The places added so far on this walk, each opening its own
             // screen. Nothing at all until the first one.
@@ -135,9 +132,6 @@ struct RecordingView: View {
                 }
             }
         }
-        // The walk's whole haptic vocabulary, and a boundary for the same
-        // reason the pins above are one — see ``RecordingHaptics``.
-        .background { RecordingHaptics(recorder: recorder) }
         // The phase is a coloured dot and a word in the bar, so a change
         // nobody is looking at is a change nobody hears.
         .onChange(of: recorder.phase) { _, phase in

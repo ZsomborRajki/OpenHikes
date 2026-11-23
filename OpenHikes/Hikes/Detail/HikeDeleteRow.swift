@@ -27,14 +27,17 @@ struct HikeDeleteRow: View {
     let onWithdraw: (Hike) -> Void
 
     @State private var isConfirming = false
+    /// The question's words, built at the tap from the hike as it stands
+    /// then: the wording counts its photographs and walks, and a body that
+    /// read them on every pass would run again on every one added. Kept after
+    /// the question closes, so the dialog does not go blank as it animates
+    /// away, and built again by the next tap.
+    @State private var prompt: HikeDeletionPrompt?
 
     var body: some View {
-        // Built only while the question is up, from the hike as it stands
-        // then: the wording counts its photographs and walks, and a body that
-        // read them on every pass would run again on every one added.
-        let prompt = isConfirming ? HikeDeletionPrompt(hike: hike) : nil
         PlaceCardList {
             Button(role: .destructive) {
+                prompt = HikeDeletionPrompt(hike: hike)
                 isConfirming = true
             } label: {
                 Label(String(localized: "Delete Hike"), systemImage: "trash")

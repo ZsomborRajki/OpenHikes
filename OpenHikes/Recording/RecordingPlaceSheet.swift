@@ -19,7 +19,9 @@
 //  recording screen's bar, beside *Add Place*, until the bar was given to
 //  Pause and Stop and *Add Place* moved to the camera pill (2026-11-22).
 //
-//  *Your own place* is always there under it, and never waits on the search.
+//  *Your own place* is there under it whenever the walk has a fix, and never
+//  waits on the search. Between fixes, as after a Resume, nothing can be
+//  marked and the sheet says so, but *Places Nearby* is still offered.
 //  It closes the sheet and opens the form a hike's own screen adds places
 //  with — see ``HikePlaceAdder`` — at the spot the hiker is standing on, with
 //  the map uncovered and its pin in the middle of it: the place a hiker marks
@@ -49,7 +51,11 @@ struct RecordingPlaceSheet: View {
     /// Where the hiker was standing when they tapped *Add Place*. Held rather
     /// than followed: the place is where they stopped, not where they have
     /// walked to while typing its name.
-    let coordinate: CLLocationCoordinate2D
+    ///
+    /// `nil` while the walk has no fix of its own, as after a Resume until the
+    /// next one lands. Nothing can be marked then, but *Places Nearby* reads
+    /// the walk's trace and the map, and stays a tap away.
+    let coordinate: CLLocationCoordinate2D?
     /// `nil` for a launch that must not ask OpenStreetMap, which offers only
     /// the hiker's own place.
     var source: (any TrailPointSourcing)?
@@ -85,8 +91,12 @@ struct RecordingPlaceSheet: View {
         NavigationStack {
             Form {
                 if onFindNearby != nil { nearbySection }
-                if source != nil { mappedSection }
-                ownSection
+                if let coordinate {
+                    if source != nil { mappedSection(at: coordinate) }
+                    ownSection
+                } else {
+                    noSpotSection
+                }
             }
             .navigationTitle("Add Place")
             #if os(iOS)
@@ -101,20 +111,20 @@ struct RecordingPlaceSheet: View {
         }
         .dismiss(after: exit) { exit in
             switch exit {
-            case .addOwn: onAddOwn(coordinate)
+            case .addOwn: if let coordinate { onAddOwn(coordinate) }
             case .findNearby: onFindNearby?()
             case .opened(let id): if let id { onAdded(id) }
             }
         }
         .task {
-            guard let source else { return }
+            guard let source, let coordinate else { return }
             finder.start(around: coordinate, excluding: hike.places, from: source)
         }
         .onDisappear { finder.cancel() }
         .accessibilityIdentifier("recording-place-sheet")
     }
 
-    private var mappedSection: some View {
+    private func mappedSection(at coordinate: CLLocationCoordinate2D) -> some View {
         Section {
             ForEach(finder.suggestions) { place in
                 Button { add(place) } label: {
@@ -159,6 +169,16 @@ struct RecordingPlaceSheet: View {
                 exit = .findNearby
             }
             .accessibilityIdentifier("recording-places-nearby")
+        }
+    }
+
+    /// What stands where the marking would, while there is no spot to mark.
+    private var noSpotSection: some View {
+        Section {
+            Text("A place is marked where you are standing. Try again once the hike has a location.")
+                .foregroundStyle(.secondary)
+        } header: {
+            Text("No Location Yet")
         }
     }
 
@@ -277,7 +297,7 @@ private struct RecordingAddPlace: ViewModifier {
     private struct Spot: Identifiable {
         let id = UUID()
         let hike: Hike
-        let coordinate: CLLocationCoordinate2D
+        let coordinate: CLLocationCoordinate2D?
     }
 
     let recorder: HikeRecorder
@@ -325,12 +345,13 @@ private struct RecordingAddPlace: ViewModifier {
     }
 
     /// Marks the spot at the tap, read off the recorder's last accepted fix —
-    /// the one a photograph taken now would be pinned to.
+    /// the one a photograph taken now would be pinned to. Without one the
+    /// sheet still opens for *Places Nearby*, and says why nothing can be
+    /// marked; only with nothing at all to offer is the hiker told instead.
     private func addPlace() {
         tips?.used(AddPlaceTip())
-        guard recorder.isActive, let hike = recorder.currentHike,
-              let coordinate = PhotoTrailAnchor.recordingCoordinate(recorder.lastAcceptedPoint)
-        else {
+        let coordinate = PhotoTrailAnchor.recordingCoordinate(recorder.lastAcceptedPoint)
+        guard recorder.isActive, let hike = recorder.currentHike, coordinate != nil || onFindNearby != nil else {
             isMissingLocation = true
             return
         }

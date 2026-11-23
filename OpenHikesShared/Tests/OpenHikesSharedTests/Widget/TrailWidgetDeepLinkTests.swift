@@ -48,6 +48,14 @@ struct TrailWidgetDeepLinkTests {
         #expect(TrailWidgetDeepLink.hikeID(from: url) == nil)
     }
 
+    @Test("the live recording's Stop link round trips")
+    func stopRecordingRoundTrip() throws {
+        let url = try #require(TrailWidgetDeepLink.stopRecordingURL())
+        #expect(url.absoluteString == "openhikes://recording/stop")
+        #expect(TrailWidgetDeepLink.destination(from: url) == .stopRecording)
+        #expect(TrailWidgetDeepLink.hikeID(from: url) == nil)
+    }
+
     /// Anything unrecognised has to come back `nil` so the app falls through
     /// to "just launch" rather than acting on a link it misread.
     @Test("unrecognised links are refused", arguments: [
@@ -55,6 +63,8 @@ struct TrailWidgetDeepLinkTests {
         "openhikes://hike/",
         "openhikes://hike",
         "openhikes://recording/unexpected",
+        "openhikes://recording/stop/now",
+        "openhikes://hike/stop",
         "openhikes://settings/\(UUID().uuidString)",
         "https://example.com/hike/\(UUID().uuidString)",
         "othertrails://hike/\(UUID().uuidString)",
@@ -62,6 +72,6 @@ struct TrailWidgetDeepLinkTests {
     ])
     func refusesUnknownLinks(string: String) throws {
         let url = try #require(URL(string: string))
-        #expect(TrailWidgetDeepLink.hikeID(from: url) == nil)
+        #expect(TrailWidgetDeepLink.destination(from: url) == nil)
     }
 }

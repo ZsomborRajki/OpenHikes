@@ -586,7 +586,6 @@ private extension MapSheet {
             mapController: mapController,
             photoCapture: photoCapture,
             photoPins: photoPins,
-            onSaved: showSavedHike,
             onOpenPhoto: { hike, photo in
                 presentation.path.append(.photo(hike, photo.id))
             },
@@ -853,16 +852,14 @@ private func closeTrailDraft() {
     presentation.path.removeAll { $0 == .trailDraft }
 }
 
-/// Where a hike this app has just written lands: selected, drawn on the map,
-/// and open at its own screen. Shared by a stopped recording and a saved
-/// drawing, because the two produce the same thing and should arrive the same
-/// way.
+/// Where a drawn trail lands once it is saved: selected, drawn on the map,
+/// and open at its own screen, as a saved recording lands through
+/// ``ActivityEnding``.
 private func showSavedHike(_ hike: Hike) {
     selectedHike = hike
     presentation.makeRoomForTheMap()
-    // The path last: a recording's save and a new trail's finish on a task,
-    // not in a tap — see ``SheetPresentation/path``. An edit's finishes in
-    // its tap, where the order would not matter.
+    // The path last: a new trail's save finishes on a task, not in a tap —
+    // see ``SheetPresentation/path``.
     presentation.path = [.hike(hike)]
 }
 

@@ -24,13 +24,14 @@
 //  library. The protocol below is the narrow bridge back to the app's
 //  recorder; this package never owns or guesses recording state.
 //
-//  ## Why pause and resume and not stop
+//  ## Why Stop is not an intent
 //
-//  Stop does not earn its place. In the app it asks first — a name, with
-//  *Discard Recording* and *Keep Recording* beside it — and a button on the
-//  Lock Screen can ask nothing, so a tap there, in a pocket as easily as on
-//  purpose, would end a walk with no way back into it. Opening the app to be
-//  asked is exactly what tapping the panel already does.
+//  In the app Stop asks first — a name, with *Discard Recording* and *Keep
+//  Recording* beside it — and a button on the Lock Screen can ask nothing, so
+//  an intent that stopped from there would end a walk on a tap made in a
+//  pocket as easily as on purpose, with no way back into it. The panel's Stop
+//  is a link instead, which opens the app with that question up (the owner's
+//  decision, 2026-11-23) — see ``TrailWidgetDeepLink/stopRecordingURL()``.
 //
 //  ## Why a refusal has to be *said*
 //

@@ -21,8 +21,7 @@
 //
 //  Stop is beside Pause here as on the bar: Stop asks first — see
 //  ``RecordingStopQuestion`` — so a stray Stop costs less than a stray Pause.
-//  The Live Activity has no Stop for a reason that does not carry over: a
-//  stop that needs the app's question cannot be answered on the Lock Screen.
+//  The Live Activity's Stop asks the same question, by opening the app.
 //
 //  A recording outranks a walk, as on every surface (*The app* in
 //  `AGENTS.md`), though a hiker never has both.

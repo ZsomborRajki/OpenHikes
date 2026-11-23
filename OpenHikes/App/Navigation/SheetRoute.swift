@@ -169,6 +169,26 @@ enum SheetRoute: Hashable {
         return wasSelected
     }
 
+    /// Takes a discarded recording's screen out of the navigation stack, and
+    /// every screen about its draft with it, as a deleted hike's go — see
+    /// ``removeHike(_:selectedHike:from:)``. The map's capsule can stop a
+    /// recording with one of the walk's photographs or places open over its
+    /// screen, and a screen left showing the deleted draft is a stale one.
+    ///
+    /// - Parameter hikeID: The draft, or `nil` for a recording that never had
+    ///   one, which only its own screen was about.
+    /// - Returns: `true` when the draft was the selected hike, so the caller
+    ///   knows to clear the map highlight with it.
+    @discardableResult static func removeDiscardedRecording(
+        _ hikeID: UUID?,
+        selectedHike: inout Hike?,
+        from path: inout [Self]
+    ) -> Bool {
+        path.removeAll { $0 == .recording }
+        guard let hikeID else { return false }
+        return removeHike(hikeID, selectedHike: &selectedHike, from: &path)
+    }
+
     /// Whether this route belongs to a stranger's preview: the preview itself
     /// and the gallery over it, whose files the preview underneath owns.
     /// What ``SheetPresentation/showCommunityHike(_:)`` clears when a

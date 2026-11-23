@@ -45,16 +45,17 @@ struct PhaseClock: View {
 /// recording counts from a monotonic source wherever it has one — see
 /// ``HikeRecorder/elapsedSeconds()`` — and a walk leaves its pauses out. The
 /// figure is read when this is built, which is when the phase moves.
+///
+/// A stopped clock is the same timer paused where it stands, rather than the
+/// figure formatted apart: a formatter of its own read `0:05:12` where the
+/// running clock had read `5:12` a moment before.
 struct ActivityClock: View {
     let elapsed: TimeInterval
     let isRunning: Bool
 
     var body: some View {
-        if isRunning {
-            let start = Date.now.addingTimeInterval(-elapsed)
-            Text(timerInterval: start...Date.distantFuture, countsDown: false)
-        } else {
-            Text(Duration.seconds(elapsed.rounded(.down)).formatted(.time(pattern: .hourMinuteSecond)))
-        }
+        let now = Date.now
+        let start = now.addingTimeInterval(-elapsed)
+        Text(timerInterval: start...Date.distantFuture, pauseTime: isRunning ? nil : now, countsDown: false)
     }
 }

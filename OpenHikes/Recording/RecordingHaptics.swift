@@ -13,15 +13,17 @@
 //  naming alert and saves some seconds later; Start waits on a fix that may
 //  not come. The phase is where those two answers arrive.
 //
-//  It is a `View` and not a modifier on `RecordingView` for the reason
-//  ``HikePhotoPinClaim`` is one, and `AGENTS.md` states it as a
-//  rule under *Render isolation, in practice*: a `sensoryFeedback` modifier is
-//  inlined into the body that declares it, so writing it on the screen would
-//  register `phase` as an input of the screen. That happens to be harmless
-//  today — the screen already reads `phase` for its header — and it is exactly
-//  the kind of harmless that stops being true when somebody later moves the
-//  header into a subview and cannot work out why the screen still redraws.
-//  The boundary costs a zero-sized `Color.clear` and says what it is.
+//  It stands at the root, in `OpenHikesView`'s background, rather than on the
+//  recording screen: the map's capsule pauses, resumes and stops a recording
+//  from any screen — see ``MapActivityCapsule`` — and a hiker who tapped
+//  Pause there feels it as they would on the recording's own bar.
+//
+//  It is a `View` and not a modifier for the reason ``HikePhotoPinClaim`` is
+//  one, and `AGENTS.md` states it as a rule under *Render isolation, in
+//  practice*: a `sensoryFeedback` modifier is inlined into the body that
+//  declares it, so writing it on the root would register `phase` as an input
+//  of the root. The boundary costs a zero-sized `Color.clear` and says what
+//  it is.
 //
 //  Nothing here is gated on a setting. See ``HapticMoment`` for why the
 //  system's own Haptics switch is the whole answer.

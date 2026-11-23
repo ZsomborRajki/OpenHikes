@@ -60,21 +60,8 @@ struct WalkControls: View {
             HapticMoment.walkSaved.play()
             onOpenWalk(ended)
         }
-        // The beginning and the middle. The endings are reported by whoever
-        // ended the walk, which knows what kind of ending it was — see
-        // ``WalkHaptics`` and ``WalkEndQuestion``.
-        //
-        // Scoped to the walked hike for the reason the `onChange` above is:
-        // the session is one object and this view is on *every* hike's detail,
-        // so two details alive in the stack at once would both answer the same
-        // change. A phase can move without this screen being the one that
-        // moved it — ``MovementReminderActions`` resumes a walk from a
-        // notification — and that is the case where a hiker would feel the
-        // same Resume twice.
-        .sensoryFeedback(trigger: session.phase) { old, new in
-            guard session.walkedHikeID == hike.id else { return nil }
-            return hapticFeedback(forWalkPhase: old, to: new)?.feedback
-        }
+        // The beginning and the middle are felt at the root, wherever the
+        // phase was moved from — see ``WalkPhaseHaptics``.
     }
 }
 
@@ -111,6 +98,73 @@ private struct WalkPhaseRow: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("walk-phase")
+    }
+}
+
+/// A trail's bar: Start, then Pause or Resume and End beside the walk's
+/// phase and clock — see ``WalkToggleButton``, ``WalkEndButton`` and
+/// ``WalkBarTitle``. Its own `ToolbarContent`, as the recording's
+/// ``RecordingBar`` is, so the hike's screen gains a line rather than three
+/// items.
+struct WalkBar: ToolbarContent {
+    let hike: Hike
+    let profile: RouteProfile?
+    let walkRevision: String?
+    let session: TrailWalkSession
+
+    var body: some ToolbarContent {
+        ToolbarItem(placement: .principal) {
+            WalkBarTitle(hike: hike, session: session)
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            WalkToggleButton(hike: hike, profile: profile, walkRevision: walkRevision, session: session)
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            WalkEndButton(hike: hike, session: session)
+        }
+    }
+}
+
+/// The middle of the trail's bar: its name, or, while it is the one being
+/// walked, the walk's phase and clock in its place, as the recording's bar
+/// shows its own (``RecordingBar``). The bar is all a hiker sees at the
+/// sheet's smallest detent, and Pause and End beside a walk nobody could see
+/// the state of were controls without their readout.
+///
+/// A view of its own for the reason ``WalkToggleButton`` is one: a `.toolbar`
+/// closure is inlined into the screen's body, which reads no walk.
+struct WalkBarTitle: View {
+    let hike: Hike
+    let session: TrailWalkSession
+
+    var body: some View {
+        if session.walkedHikeID == hike.id, let phase = session.phase {
+            VStack(spacing: 0) {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(phase == .following ? Color.accentColor : Color.secondary)
+                        .frame(width: 8, height: 8)
+                        .accessibilityHidden(true)
+                    Text(phase == .following ? String(localized: "Hike Active") : String(localized: "Hike Paused"))
+                        .font(.subheadline.weight(.semibold))
+                }
+                // Read when the phase moves, and ticking by itself between.
+                ActivityClock(elapsed: session.activeSeconds(), isRunning: phase == .following)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            .lineLimit(1)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityIdentifier("walk-bar-status")
+        } else {
+            // What the bar says without this item, in the system's words for
+            // an inline title.
+            Text(hike.displayTitle)
+                .font(.headline)
+                .lineLimit(1)
+                .accessibilityAddTraits(.isHeader)
+        }
     }
 }
 
