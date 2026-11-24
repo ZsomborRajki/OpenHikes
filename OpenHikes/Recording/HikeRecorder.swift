@@ -182,6 +182,12 @@ final class HikeRecorder: NSObject {
     /// let go of it, so the one waiting finds, when it wakes, that it is no
     /// longer wanted, and leaves the recorder as they left it (#1608).
     @ObservationIgnored var resumeID: UUID?
+    /// Whether a ``discard()`` is under way, from before its first wait to its
+    /// end. The phase stays where it was until the end, so a Resume asked for
+    /// in those waits would find a walk still paused, and start the GPS for
+    /// one about to be thrown away, behind an idle recorder. ``resumeID``
+    /// lets go of a Resume already waiting; this refuses one asked for after.
+    @ObservationIgnored var isDiscarding = false
     /// What the Start now being waited on begins with, for a recording that
     /// takes over from a hike already under way — see ``RecordingSeed``.
     /// Taken by the activation that makes the session, and let go of by
@@ -500,7 +506,7 @@ extension HikeRecorder {
     }
 
     func resume() async {
-        guard phase == .paused, let session = sessionID else { return }
+        guard phase == .paused, !isDiscarding, let session = sessionID else { return }
         let attempt = UUID()
         resumeID = attempt
         defer {
@@ -639,9 +645,12 @@ extension HikeRecorder {
         // precision answer itself fires — begin a fresh activation inside
         // those waits, and one that finished before `resetSession()` would
         // record on behind an idle recorder. A Resume waiting is let go of
-        // for the same reason: the phase stays paused until the end.
+        // for the same reason, and one asked for in the waits is refused
+        // (`isDiscarding`): the phase stays paused until the end.
         activationID = nil
         resumeID = nil
+        isDiscarding = true
+        defer { isDiscarding = false }
         startRequested = false
         resetAutoPause()
         cancelLiveMatching(clearWindow: true)

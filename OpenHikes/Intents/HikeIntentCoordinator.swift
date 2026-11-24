@@ -133,9 +133,31 @@ extension HikeIntentCoordinator {
     func resumeRecording() async throws(HikeIntentFailure) -> LiveRecordingReport {
         await settleRecorder()
         guard recorder.phase == .paused else { throw .notPaused }
+        let session = recorder.sessionID
         await recorder.resume()
         try throwIfRecorderFailed()
+        // A Resume that a Stop, a Discard or another walk overtook returns
+        // having done nothing, and leaves no failure to read (#1608). Only
+        // the walk asked about taking fixes again is a resumed one.
+        guard recorder.sessionID == session, recorder.isCapturingFixes else {
+            throw unresumedRefusal()
+        }
         return liveReport()
+    }
+
+    /// Why a Resume that did not fail left the walk it asked about not
+    /// recording, read off where the recorder is now. Exhaustive for the
+    /// reason ``startRecording()`` is.
+    private func unresumedRefusal() -> HikeIntentFailure {
+        switch recorder.phase {
+        // Saved or thrown away, or still paused: a Discard is under way, or
+        // another Resume is waiting on the precision prompt.
+        case .idle, .paused: .noActiveRecording
+        case .saving, .recovering: .busyFinishing
+        // Another walk, started after this one ended.
+        case .waitingForFix, .recording: .alreadyRecording
+        case .failed(let failure): .recording(failure)
+        }
     }
 
     /// Stops the recording as the recording screen's Stop button does, and

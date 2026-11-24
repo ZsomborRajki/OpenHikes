@@ -3,7 +3,8 @@
 //  OpenHikesTests
 //
 //  A Resume that is still waiting on the precision sheet when the hiker
-//  discards or stops the walk, or starts another (#1608).
+//  discards or stops the walk, or starts another, and one asked for while a
+//  Discard is still finishing (#1608).
 //
 //  Resume checked for a paused walk once, on the way in, and then woke from
 //  the sheet and carried on: a refusal failed a recorder that was idle, and
@@ -16,6 +17,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
+import OpenHikesShared
 import SwiftData
 import Testing
 
@@ -102,7 +104,39 @@ extension HikeRecorderTests {
         #expect(hikes.map(\.id) == [saved.id])
     }
 
-    /// The precondition the three above lean on: a Resume nobody interrupted
+    /// Discard's phase stays paused across its waits, so a Resume from the
+    /// bar, the panel or an intent found a paused walk of its own there, and
+    /// started the GPS for it after the Discard had stopped it. The Discard
+    /// then left the recorder idle with the GPS still on.
+    @Test("a Resume asked for while a Discard is still finishing starts no GPS")
+    func resumeDuringDiscard() async {
+        let sharedStore = HeldFixReadSharedStateStore()
+        let hikeRecorder = makeRecorder(sharedStateStore: sharedStore)
+        await hikeRecorder.start()
+        // The first fix asks the widget's store for its fixes, and the read
+        // is held: the Discard below waits on it first.
+        source.deliver(fix(latitude: Self.pausedWalkStart))
+        clock.advance(by: Self.pausedWalkMinute)
+        source.deliver(fix(latitude: Self.pausedWalkEnd))
+        hikeRecorder.pause()
+        await settleDelegateHop(until: "the pause to stop the GPS") { self.source.stopCount == 1 }
+        let discarding = Task { await hikeRecorder.discard() }
+        await settleDelegateHop(until: "Discard to stop the GPS before its first wait") {
+            self.source.stopCount == 2
+        }
+        #expect(hikeRecorder.phase == .paused, "the Discard still waiting on the widget's fixes")
+        let sensorStarts = source.startCount
+
+        await hikeRecorder.resume()
+        await sharedStore.releaseReads()
+        await discarding.value
+
+        #expect(hikeRecorder.phase == .idle)
+        #expect(hikeRecorder.sessionID == nil)
+        #expect(source.startCount == sensorStarts, "no GPS for a walk being thrown away")
+    }
+
+    /// The precondition the four above lean on: a Resume nobody interrupted
     /// still resumes once the sheet is answered.
     @Test("a Resume nothing interrupted resumes once precise location is granted")
     func uninterruptedResume() async {
@@ -112,5 +146,37 @@ extension HikeRecorderTests {
         await resuming.value
 
         #expect(hikeRecorder.phase == .recording)
+    }
+}
+
+/// A widget's store whose reads of its queued fixes wait until let go, which
+/// holds a Discard in its first wait: the merge a fix started.
+private actor HeldFixReadSharedStateStore: RecordingSharedStateStoring {
+    private var heldReads: [CheckedContinuation<Void, Never>] = []
+    private var holdsReads = true
+
+    func save(_ snapshot: SharedRecordingSnapshot, reloadWidget: Bool) { /* no-op stub */ }
+
+    func clear(sessionID: UUID?) { /* no-op stub */ }
+
+    func pendingFixes(for sessionID: UUID) async -> [SharedRecordingFix] {
+        if holdsReads {
+            await withCheckedContinuation { continuation in
+                heldReads.append(continuation)
+            }
+        }
+        return []
+    }
+
+    func removePendingFixes(ids: Set<UUID>) { /* no-op stub */ }
+
+    /// Answers every read held, and every read after, with no fixes.
+    func releaseReads() {
+        holdsReads = false
+        let held = heldReads
+        heldReads = []
+        for continuation in held {
+            continuation.resume()
+        }
     }
 }
