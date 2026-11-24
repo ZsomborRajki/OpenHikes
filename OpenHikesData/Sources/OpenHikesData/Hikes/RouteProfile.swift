@@ -240,16 +240,17 @@ nonisolated public struct RouteProfile: Sendable {
         )
     }
 
-    /// Adds `sample` to a series in route order, keeping at most one pair of
-    /// samples at any distance where a pause falls: the step.
+    /// Adds `sample` to a series in route order.
     ///
     /// The fix before a pause and the fix after it stand at the same distance
     /// (the paused leg has no length), and both heights are kept, because the
-    /// chart's step between them is the pause. Any other sample at the
-    /// distance of a pause's resume folds into it, because the run it starts
-    /// is the same. `mergingRepeats` folds the remaining case too, two plain
-    /// samples at one distance, which only the downsampled series does; an
-    /// undownsampled route draws every point it has.
+    /// chart's step between them is the pause. A sample after the resume at
+    /// the same distance folds into it, because the run it starts is the
+    /// same. `mergingRepeats` folds the remaining case too, two plain samples
+    /// at one distance, which only the downsampled series does, so it keeps
+    /// at most that pair at a pause's distance and one sample at any other.
+    /// The route's own series, and with it any route drawn whole, keeps every
+    /// plain repeat, those before a resume included.
     ///
     /// Nothing here numbers a sample. Each arrives with the identity of the
     /// route's sample it was read from, and a fold keeps the identity of the
