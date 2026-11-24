@@ -103,16 +103,6 @@ nonisolated struct RouteReviewSection: Identifiable, Sendable {
         Self.distance(of: rawPoints)
     }
 
-    func points(for choice: TrailRouteChoice) -> [RecordingPoint] {
-        switch choice {
-        case .matched: matchedPoints
-        case .gps: rawPoints
-        case .alternative(let alternativeID): alternatives.first { alternative in
-            alternative.id == alternativeID
-        }?.points ?? matchedPoints
-        }
-    }
-
     /// Every choice this section can offer, in the order the review shows them.
     ///
     /// A gap the matcher could not bridge offers exactly one, which makes the

@@ -308,13 +308,17 @@ nonisolated enum CommunitySchema {
     /// What a reviewer publishes from one of those. The only type a hike's
     /// contributed photographs are ever found through.
     static let contributionType = "CommunityPhotoContribution"
+    // periphery:ignore - the third family is written and read only by the
+    // tool behind `Scripts/trail-cells.sh`, which compiles this file, for
+    // builds v1.5-1 to v1.7-1. The app reads its squares from the tile server.
     /// One square of OpenStreetMap's waymarked day hikes, written by
-    /// `Scripts/trail-cells.sh` and fetched by name. See *The third family*
-    /// in this file's header. The hiking-routes layer's squares, the places'
-    /// and the trail graph's are records of this type too, under names of
-    /// their own — see ``RouteSquareGrid``, ``PlaceSquareGrid`` and
-    /// ``TrailGraphSquareGrid``.
+    /// `Scripts/trail-cells.sh` and fetched by name by builds v1.5-1 to
+    /// v1.7-1. See *The third family* in this file's header. The
+    /// hiking-routes layer's squares, the places' and the trail graph's are
+    /// records of this type too, under names of their own — see
+    /// ``RouteSquareGrid``, ``PlaceSquareGrid`` and ``TrailGraphSquareGrid``.
     static let trailCellType = "CuratedTrailCell"
+    // periphery:ignore - the tool's, as ``trailCellType`` is.
     /// What one generation of those squares covers: a single record, under
     /// ``TrailCellGrid/manifestRecordName`` — and the hiking-routes layer's,
     /// the places' and the trail graph's, under
@@ -323,6 +327,7 @@ nonisolated enum CommunitySchema {
     /// ``TrailGraphSquareGrid/manifestRecordName``.
     static let trailManifestType = "CuratedTrailManifest"
 
+    // periphery:ignore - the tool's, as ``trailCellType`` is.
     /// Fields on ``trailCellType``.
     enum TrailCell {
         /// The square's routes, a ``TrailCellFile``, carried as an asset — or
@@ -334,39 +339,32 @@ nonisolated enum CommunitySchema {
         /// and the busiest squares are several hundred kilobytes of that
         /// before OpenStreetMap maps another route into one.
         static let routes = "routes"
-        // periphery:ignore - written and read by the tool behind
-        // `Scripts/trail-cells.sh`, which compiles this file.
         /// SHA-256 of the file's body, in hex, which the upload compares so
-        /// that a square OpenStreetMap has not changed is not sent again. The
-        /// app never reads it.
+        /// that a square OpenStreetMap has not changed is not sent again.
+        /// No build of the app reads it.
         static let digest = "digest"
     }
 
-    /// Fields on ``trailManifestType``. All but ``complete`` are written and
-    /// read by the tool behind `Scripts/trail-cells.sh`, which compiles this
-    /// file, and by nothing in the app.
+    // periphery:ignore - the tool's, as ``trailCellType`` is.
+    /// Fields on ``trailManifestType``.
     enum TrailManifest {
-        // periphery:ignore - the tool's.
         /// When the squares were built.
         static let builtAt = "builtAt"
-        // periphery:ignore - the tool's.
         /// How many squares there are.
         static let cellCount = "cellCount"
-        // periphery:ignore - the tool's.
         /// Every square's record name, one a line, carried as an asset: the
         /// only record of which squares exist. See *The third family* in this
-        /// file's header. The upload reads it; the app never asks for it.
+        /// file's header. The upload reads it; no build of the app asks for
+        /// it.
         static let cells = "cells"
         /// `1` when the squares were built from the whole planet, so that a
         /// square with no record is a square with no routes in it. Anything
-        /// else, and the app reads none of the squares and asks Overpass —
-        /// see ``TrailCellFetch/Manifest``.
+        /// else, and a build that reads these records reads none of the
+        /// squares and asks Overpass, which is how `prune` retires a set.
         static let complete = "complete"
-        // periphery:ignore - the tool's.
         /// When the OpenStreetMap data the squares were built from was
         /// current.
         static let osmTimestamp = "osmTimestamp"
-        // periphery:ignore - the tool's.
         /// How many routes the squares hold between them.
         static let routeCount = "routeCount"
     }

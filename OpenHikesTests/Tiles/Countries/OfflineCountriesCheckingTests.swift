@@ -26,7 +26,7 @@ private final class HeldCheck {
         holdsNext = true
     }
 
-    func check(_ file: OfflineCountryManifest.File, at url: URL) async -> Bool {
+    func check(_: OfflineCountryManifest.File, at _: URL) async -> Bool {
         guard holdsNext else { return true }
         holdsNext = false
         return await withCheckedContinuation { held = $0 }
