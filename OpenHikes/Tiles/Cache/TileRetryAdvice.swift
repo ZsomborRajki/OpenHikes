@@ -26,8 +26,8 @@
 //  server asked ahead of that fallback is not the server that refused.
 //
 
-import Algorithms
 import Foundation
+import HeapModule
 import Synchronization
 
 /// Reads `Retry-After` off a response.
@@ -134,13 +134,42 @@ nonisolated enum RetryAfterHeader {
 /// afternoon can refuse every tile a user pans across, and a table that only
 /// ever grows would hold them all. Entries are dropped as they come due, so
 /// in practice this holds only the tiles refused inside the current window.
+///
+/// Two stores, because this is written under the cache's lock on every
+/// refusal and read under it by every renderer. The dictionary answers a
+/// key's deadline at once. The heap orders them by when they come due, so
+/// pruning what is due and evicting what is closest to due take only those
+/// entries, where both used to walk the whole table: at the cap, a burst of
+/// refusals scanned it twice for each one.
 nonisolated struct TileRetryAdvice: Sendable {
     /// Ceiling on how many deadlines are remembered at once.
     static let maximumTrackedKeys = 512
 
+    /// One deadline as the heap holds it: ordered by when it comes due, and
+    /// on its key within one instant, so ties go the same way every time
+    /// rather than in a hash-seeded order.
+    private struct Expiry: Comparable, Sendable {
+        let deadline: ContinuousClock.Instant
+        let key: String
+
+        static func < (lhs: Self, rhs: Self) -> Bool {
+            lhs.deadline == rhs.deadline ? lhs.key < rhs.key : lhs.deadline < rhs.deadline
+        }
+    }
+
     private var deadlines: [String: ContinuousClock.Instant] = [:]
+    /// Every deadline recorded, soonest first. A deadline pushed out leaves
+    /// its earlier entry here, stale once ``deadlines`` holds the later one;
+    /// a stale entry is skipped as it surfaces, and the heap is rebuilt from
+    /// ``deadlines`` once it holds twice the keys the table may keep, so
+    /// repeated extensions cannot grow it.
+    private var expiries = Heap<Expiry>()
 
     var count: Int { deadlines.count }
+
+    /// How many entries the heap holds, stale ones included — for a suite to
+    /// hold it to its bound.
+    var indexedCount: Int { expiries.count }
 
     /// Records that `key` may not be asked for before `notBefore`, keeping the
     /// later of that and anything already recorded — a second refusal from a
@@ -153,7 +182,9 @@ nonisolated struct TileRetryAdvice: Sendable {
         prune(at: now)
         if let existing = deadlines[key], existing >= notBefore { return }
         deadlines[key] = notBefore
+        expiries.insert(Expiry(deadline: notBefore, key: key))
         evictIfNeeded()
+        compactIfNeeded()
     }
 
     /// The deadline still standing for `key`, if a server named one.
@@ -163,7 +194,9 @@ nonisolated struct TileRetryAdvice: Sendable {
     }
 
     private mutating func prune(at now: ContinuousClock.Instant) {
-        deadlines = deadlines.filter { $0.value > now }
+        while let soonest = expiries.min, soonest.deadline <= now {
+            forget(expiries.removeMin())
+        }
     }
 
     /// Drops the entries closest to coming due, exactly as ``TileFailureLog``
@@ -171,15 +204,20 @@ nonisolated struct TileRetryAdvice: Sendable {
     /// allowed anyway, while forgetting the tile a server most recently asked
     /// us to leave alone is the one that matters.
     private mutating func evictIfNeeded() {
-        let excess = deadlines.count - Self.maximumTrackedKeys
-        guard excess > 0 else { return }
-        // Sorted on the key as well as the instant, since entries recorded in
-        // the same instant would otherwise be offered up in a hash-seeded
-        // order.
-        let doomed = deadlines.min(count: excess) { lhs, rhs in
-            lhs.value == rhs.value ? lhs.key < rhs.key : lhs.value < rhs.value
+        while deadlines.count > Self.maximumTrackedKeys, let soonest = expiries.popMin() {
+            forget(soonest)
         }
-        for entry in doomed { deadlines.removeValue(forKey: entry.key) }
+    }
+
+    /// Drops `entry`'s key, unless a later deadline has replaced the one it
+    /// carries — then it was stale, and the key's own entry is still to come.
+    private mutating func forget(_ entry: Expiry) {
+        if deadlines[entry.key] == entry.deadline { deadlines.removeValue(forKey: entry.key) }
+    }
+
+    private mutating func compactIfNeeded() {
+        guard expiries.count > 2 * Self.maximumTrackedKeys else { return }
+        expiries = Heap(deadlines.map { Expiry(deadline: $0.value, key: $0.key) })
     }
 }
 
