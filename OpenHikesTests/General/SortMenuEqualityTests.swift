@@ -35,7 +35,8 @@ struct SortMenuEqualityTests {
         label: LocalizedStringResource = "Sort hikes",
         value: String? = nil,
         identifier: String = "hike-order-button",
-        onSet: @escaping (Order?) -> Void = { _ in /* No list to reorder. */ }
+        // `@Sendable`, as `Binding(get:set:)` takes its setter.
+        onSet: @escaping @Sendable (Order?) -> Void = { _ in /* No list to reorder. */ }
     ) -> SortMenu<Order> {
         SortMenu(
             options: options,
