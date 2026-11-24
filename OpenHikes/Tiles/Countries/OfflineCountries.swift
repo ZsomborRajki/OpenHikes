@@ -115,6 +115,10 @@ final class OfflineCountries {
     @ObservationIgnored private let archivesDidChange: () -> Void
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private let freeSpace: () -> Int64?
+    /// Whether a staged file is the file the manifest names, to the byte —
+    /// ``OfflineCountryStore/isWhole(_:at:)``, unless a suite holds the
+    /// answer back.
+    @ObservationIgnored private let checksFile: @Sendable (OfflineCountryManifest.File, URL) async -> Bool
     /// The read of the server's list under way, which a second caller waits
     /// for rather than going by the list before it.
     @ObservationIgnored private var listRead: Task<Void, Never>?
@@ -141,7 +145,10 @@ final class OfflineCountries {
         networkDecision: @escaping () -> TileNetworkDecision = { .allowed },
         archivesDidChange: @escaping () -> Void = { /* nothing draws from them */ },
         now: @escaping () -> Date = Date.init,
-        freeSpace: (() -> Int64?)? = nil
+        freeSpace: (() -> Int64?)? = nil,
+        checksFile: @escaping @Sendable (OfflineCountryManifest.File, URL) async -> Bool = { file, url in
+            await OfflineCountryStore.isWhole(file, at: url)
+        }
     ) {
         self.store = store
         self.server = server
@@ -153,6 +160,7 @@ final class OfflineCountries {
         self.now = now
         // The volume the store is on, unless a suite says how full it is.
         self.freeSpace = freeSpace ?? { store.availableBytes() }
+        self.checksFile = checksFile
         includesDetail = defaults?.object(forKey: SettingsKey.offlineCountriesDetail) as? Bool
             ?? SettingsDefault.offlineCountriesDetail
         downloader?.onEvent = { [weak self] event in self?.handle(event) }
@@ -373,19 +381,27 @@ final class OfflineCountries {
     }
 
     /// Checks every staged file, then moves them into place.
+    ///
+    /// **Only while it is still the area's download.** Each check is a wait
+    /// of seconds, over which the hiker can cancel this try and start another
+    /// of the same build, which stages its files at the same paths. A check
+    /// that resumes for a try no longer current touches nothing: deleting a
+    /// file it found broken would delete the new try's, and installing would
+    /// install it.
     private func finish(_ download: OfflineCountryDownload) async {
         guard download.phase != .checking else { return }
         download.set(.checking)
         let country = download.country
         for file in download.files {
             let staged = store.stagedURL(for: file)
-            guard await OfflineCountryStore.isWhole(file, at: staged) else {
+            let isWhole = await checksFile(file, staged)
+            guard downloads[country.id] === download else { return }
+            guard isWhole else {
                 try? FileManager.default.removeItem(at: staged)
                 download.discard(file.role)
                 return
             }
         }
-        guard downloads[country.id] === download else { return }
         do {
             try store.install(download.files)
         } catch {

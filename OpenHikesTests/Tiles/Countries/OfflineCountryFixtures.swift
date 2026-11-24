@@ -298,7 +298,8 @@ struct OfflineCountryHarness {
     static func make(
         in directory: URL,
         offering offered: [OfflineCountryManifest.Country],
-        defaults: UserDefaults? = nil
+        defaults: UserDefaults? = nil,
+        checksFile: (@Sendable (OfflineCountryManifest.File, URL) async -> Bool)? = nil
     ) async -> Self {
         let madeStore = OfflineCountryStore(directory: directory)
         let madeServer = StubCountryServer(OfflineCountryFixture.manifest(offered))
@@ -310,7 +311,8 @@ struct OfflineCountryHarness {
             downloader: madeDownloader,
             archives: madeArchives,
             defaults: defaults,
-            freeSpace: { 1 << 40 }
+            freeSpace: { 1 << 40 },
+            checksFile: checksFile ?? { file, url in await OfflineCountryStore.isWhole(file, at: url) }
         )
         await model.start()
         await model.refreshList()
