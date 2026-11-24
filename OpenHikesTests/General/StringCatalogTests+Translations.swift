@@ -3,8 +3,8 @@
 //  OpenHikesTests
 //
 //  The translations, German, French, Spanish, Italian, Russian, Polish,
-//  Ukrainian and Romanian, read out of the source tree like the rest of this
-//  suite. A key with no translation falls back to English without a word, and
+//  Ukrainian, Romanian and Dutch, read out of the source tree like the rest of
+//  this suite. A key with no translation falls back to English without a word, and
 //  a translated value that drops or retypes a placeholder formats the wrong
 //  argument. Neither shows anywhere else, because the hosted tests run in
 //  English.
@@ -24,7 +24,7 @@ import Testing
 
 extension StringCatalogTests {
     /// The languages the app ships besides English, its development language.
-    nonisolated static let translations = ["de", "fr", "es", "it", "ru", "pl", "uk", "ro"]
+    nonisolated static let translations = ["de", "fr", "es", "it", "ru", "pl", "uk", "ro", "nl"]
 
     /// The languages whose `one` form is handed more than 1. French reads
     /// zero as singular. Russian and Ukrainian read every number that ends in
