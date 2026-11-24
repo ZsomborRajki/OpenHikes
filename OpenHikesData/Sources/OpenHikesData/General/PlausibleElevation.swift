@@ -21,6 +21,7 @@
 //  breaking its run.
 //
 
+import Algorithms
 import CoreLocation
 import OpenHikesShared
 
@@ -62,11 +63,13 @@ nonisolated public enum PlausibleElevation {
     public static func spikes(
         in samples: [(coordinate: CLLocationCoordinate2D, elevation: Double?)]
     ) -> Set<Int> {
+        // Offsets into `samples`, so a run of missing heights stays between
+        // two neighbours and its points still count toward the distance.
         let measured = samples.indices.filter { samples[$0].elevation != nil }
-        guard measured.count > 2 else { return [] }
         var spikes = Set<Int>()
-        for position in 1..<(measured.count - 1) {
-            let (before, here, after) = (measured[position - 1], measured[position], measured[position + 1])
+        for window in measured.windows(ofCount: 3) {
+            let start = window.startIndex
+            let (before, here, after) = (window[start], window[start + 1], window[start + 2])
             guard let previous = samples[before].elevation,
                   let height = samples[here].elevation,
                   let next = samples[after].elevation

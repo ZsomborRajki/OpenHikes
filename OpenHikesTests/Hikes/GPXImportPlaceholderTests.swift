@@ -7,6 +7,7 @@
 //  thousands of kilometres long.
 //
 
+import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
@@ -58,6 +59,24 @@ struct GPXImportPlaceholderTests {
 
         #expect(track.points.count == 119)
         #expect(track.distanceMeters < 8000)
+    }
+
+    /// The first and last fixes have one neighbour each, so the rule cannot
+    /// judge them, and two bad points in a row vouch for each other: all of
+    /// these are kept, in order.
+    @Test("far-off points at either end, or two in a row, are kept")
+    func keepsEndsAndPairs() throws {
+        var points = Self.walk
+        points[0] = (10, 40)
+        points[119] = (10, 40)
+        points[60] = (10, 40)
+        points[61] = (10, 40.0005)
+        let track = try GPXImport.load(from: try gpxFile(points: points))
+
+        #expect(track.points.count == 120)
+        #expect(track.points.first?.coordinate.latitude == 10)
+        #expect(track.points.last?.coordinate.latitude == 10)
+        #expect(track.points[60].coordinate.longitude == 40)
     }
 
     @Test("a genuine long leg between far-apart points is untouched")

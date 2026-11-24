@@ -7,6 +7,7 @@
 //  still add up.
 //
 
+import Algorithms
 import CoreLocation
 import OpenHikesData
 
@@ -42,18 +43,19 @@ nonisolated extension GPXImport {
 
     private static func droppingPlaceholderFixes(from points: [Point], isRecordedTrack: Bool) -> [Point] {
         let located = points.filter { $0.coordinate.latitude != 0 || $0.coordinate.longitude != 0 }
-        guard isRecordedTrack, located.count > 2 else { return located }
-        var kept = [located[0]]
-        for index in 1..<(located.count - 1) {
-            let before = located[index - 1].coordinate
-            let here = located[index].coordinate
-            let after = located[index + 1].coordinate
-            let isolated = RouteGeometry.distanceMeters(from: before, to: here) > teleportDistanceMeters
-                && RouteGeometry.distanceMeters(from: here, to: after) > teleportDistanceMeters
-                && RouteGeometry.distanceMeters(from: before, to: after) < teleportNeighborSpanMeters
-            if !isolated { kept.append(located[index]) }
+        guard isRecordedTrack, located.count > 2, let first = located.first, let last = located.last else {
+            return located
         }
-        kept.append(located[located.count - 1])
+        var kept = [first]
+        for window in located.windows(ofCount: 3) {
+            let start = window.startIndex
+            let (before, here, after) = (window[start].coordinate, window[start + 1], window[start + 2].coordinate)
+            let isolated = RouteGeometry.distanceMeters(from: before, to: here.coordinate) > teleportDistanceMeters
+                && RouteGeometry.distanceMeters(from: here.coordinate, to: after) > teleportDistanceMeters
+                && RouteGeometry.distanceMeters(from: before, to: after) < teleportNeighborSpanMeters
+            if !isolated { kept.append(here) }
+        }
+        kept.append(last)
         return kept
     }
 
