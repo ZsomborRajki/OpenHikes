@@ -652,11 +652,20 @@ final class WeatherManager {
     /// may still succeed, and WeatherKit need not fail one with Swift's own
     /// error. That error from a loop still running is an ordinary failure:
     /// the loop is there to back off, and its badge has to stop spinning.
+    ///
+    /// **An answer about a subject the badge has left is kept, and not
+    /// shown.** The loop asks for a subject without waiting on the answer, so
+    /// the hiker can open another trail while the first one's request is
+    /// still out, and that trail owns the badge from then on. The reading
+    /// goes in the cache, where going back to the first trail finds it, and
+    /// nowhere else: not the badge, the store or the widget, which are all
+    /// about what the badge shows. A failure leaves the badge as it is.
     func update(for subject: WeatherSubject) async -> Bool {
         do {
             let snapshot = try await readings.reading(at: subject.coordinate)
             try Task.checkCancellation()
             remember(snapshot, for: subject)
+            guard isOnTheBadge(subject) else { return true }
             publish(.reading(snapshot, subject: subject))
             store?.save(snapshot: snapshot, subject: subject)
             return true
@@ -674,6 +683,7 @@ final class WeatherManager {
                 \(error.localizedDescription, privacy: .public)
                 """
             )
+            guard isOnTheBadge(subject) else { return false }
             if let cached = cache[subject.key] {
                 publish(.reading(cached.snapshot, subject: subject))
             } else {
@@ -847,6 +857,12 @@ final class WeatherManager {
     /// `HikeLiveActivityController.settle()`.
     func settleWidgetPublishing() async {
         await pendingWidgetPublish?.value
+    }
+
+    /// Whether the badge is about `subject` still: the one it was last
+    /// pointed at, wherever that subject has since moved.
+    private func isOnTheBadge(_ subject: WeatherSubject) -> Bool {
+        state.subject?.key == subject.key
     }
 
     private func remember(_ snapshot: WeatherSnapshot, for subject: WeatherSubject) {

@@ -29,6 +29,16 @@
 //  search the user just typed is owed a request now, and a cell handoff is
 //  not.
 //
+//  **A request runs beside the loop, not in it.** Awaited in place, a
+//  forecast that stalled for one trail held the loop there: opening another
+//  trail could not move the badge, not even to a reading already cached for
+//  it, and when the first answer finally landed it went on the badge over
+//  the trail the hiker was looking at. So each request is a task of its
+//  own, one per subject, whose answer comes back to the loop as a fifth
+//  wake to be counted against that subject's freshness or backoff — and
+//  ``WeatherManager/update(for:)`` shows it only if its subject still has
+//  the badge.
+//
 
 import AsyncAlgorithms
 import CoreLocation
@@ -38,10 +48,20 @@ import Foundation
 /// separate because "the hiker moved" also has to be *applied* to the focus
 /// before anything is asked about it.
 private enum WeatherWake: Sendable {
+    /// A request the loop sent came back — see this file's header.
+    case answered(WeatherAnswer)
     case expiry
     case focus
     case movement
     case session
+}
+
+/// What one request came back with, for the loop to record against its
+/// subject.
+private struct WeatherAnswer: Sendable {
+    let key: String
+    let succeeded: Bool
+    let at: Date
 }
 
 extension OpenHikesModel {
@@ -61,10 +81,18 @@ extension OpenHikesModel {
         let (dueDates, dueDatesContinuation) = AsyncStream<Void>.makeStream(
             bufferingPolicy: .bufferingNewest(1)
         )
+        let (answers, answersContinuation) = AsyncStream<WeatherAnswer>.makeStream()
         var dueTask: Task<Void, Never>?
+        // The requests out now, by subject: one each, so a subject the hiker
+        // comes back to while its forecast is on its way is not asked twice.
+        var requests: [String: Task<Void, Never>] = [:]
         defer {
             dueTask?.cancel()
             dueDatesContinuation.finish()
+            // A request is the loop's, and goes with it: cancelled, its
+            // answer reaches nothing — see ``WeatherManager/update(for:)``.
+            for request in requests.values { request.cancel() }
+            answersContinuation.finish()
         }
 
         // Nested because `merge` takes at most three. The session is
@@ -72,7 +100,10 @@ extension OpenHikesModel {
         // pause or a resume is not a session starting.
         let wakes = merge(
             weatherFocus.subjects.map { _ in WeatherWake.focus },
-            significantLocations.movements.map { _ in WeatherWake.movement },
+            merge(
+                significantLocations.movements.map { _ in WeatherWake.movement },
+                answers.map { WeatherWake.answered($0) }
+            ),
             merge(
                 dueDates.map { _ in WeatherWake.expiry },
                 observedValues { self.weatherAlertSession }
@@ -82,6 +113,15 @@ extension OpenHikesModel {
         )
 
         for await wake in wakes {
+            if case .answered(let answer) = wake {
+                requests[answer.key] = nil
+                record(answer, in: &state, policy: policy)
+                // A fresh reading for the subject on the badge is as much news
+                // to a hiker out in the weather as a focus is.
+                await weatherManager.announceStandingAlerts(during: weatherAlertSession)
+                rearm(&dueTask, for: state, policy: policy, unlessAsking: requests, onDue: dueDatesContinuation)
+                continue
+            }
             // A session starting or ending changes whose weather the badge
             // is, not whether it is current — nothing to fetch.
             guard let reason = wake.requestReason else {
@@ -93,10 +133,7 @@ extension OpenHikesModel {
             // about where the hiker is now rather than where they were.
             // Ignore movements that leave a searched place or distant trail
             // unchanged; those readings still wait for their freshness deadline.
-            if wake == .movement {
-                guard let coordinate = significantLocations.coordinate,
-                      weatherFocus.hikerMoved(to: coordinate) else { continue }
-            }
+            if case .movement = wake, !subjectFollowedTheHiker() { continue }
 
             guard let subject = weatherFocus.subject else {
                 weatherManager.focus(on: nil, willRequest: false)
@@ -104,42 +141,94 @@ extension OpenHikesModel {
                 continue
             }
             let key = subject.key
+            let isAsking = requests[key] != nil
             let willRequest = state.shouldRequest(
                 key: key,
                 reason: reason,
                 at: .now,
                 policy: policy
-            )
+            ) && !isAsking
             // Every pass, not only the ones that fetch: this is what carries a
             // changed subject — a new city, or `me` with a new coordinate — to
             // the badge, and what decides between a spinner and a plain
-            // "unavailable" when the backoff has ruled a request out.
-            weatherManager.focus(on: subject, willRequest: willRequest)
+            // "unavailable" when the backoff has ruled a request out. One
+            // already out is a forecast on its way, as much as one sent now.
+            weatherManager.focus(on: subject, willRequest: willRequest || isAsking)
 
             if willRequest {
-                if await weatherManager.update(for: subject) {
-                    state.recordSuccess(key: key, at: .now)
-                } else {
-                    state.recordFailure(key: key, at: .now, policy: policy)
-                }
+                requests[key] = ask(about: subject, answeringTo: answersContinuation)
             }
-            // Every pass too, and after the fetch: a focus that lands on a
-            // cached reading is as much news to a hiker who just started
-            // recording as a fresh one.
+            // Every pass too: a focus that lands on a cached reading is as
+            // much news to a hiker who just started recording as a fresh one.
             await weatherManager.announceStandingAlerts(during: weatherAlertSession)
+            rearm(&dueTask, for: state, policy: policy, unlessAsking: requests, onDue: dueDatesContinuation)
+        }
+    }
 
-            // Re-armed against whatever the subject is *now*, which after an
-            // await may not be the one this pass started with. Cancelling
-            // first is what stops a subject the user has moved on from
-            // waking the loop on its own deadline.
-            dueTask?.cancel()
-            guard let currentKey = weatherFocus.subject?.key,
-                  let due = state.nextEligibleDate(key: currentKey, policy: policy) else { continue }
-            dueTask = Task {
-                try? await Task.sleep(until: .now + .seconds(max(0, due.timeIntervalSinceNow)))
-                guard !Task.isCancelled else { return }
-                dueDatesContinuation.yield(())
-            }
+    /// Whether a movement moved the subject: the hiker went far enough, and
+    /// the subject is one that follows them — see
+    /// ``WeatherFocus/hikerMoved(to:)``.
+    private func subjectFollowedTheHiker() -> Bool {
+        guard let coordinate = significantLocations.coordinate else { return false }
+        return weatherFocus.hikerMoved(to: coordinate)
+    }
+
+    /// Asks WeatherKit about `subject` beside the loop rather than in it,
+    /// and hands the answer back to the loop — see this file's header.
+    private func ask(
+        about subject: WeatherSubject,
+        answeringTo answers: AsyncStream<WeatherAnswer>.Continuation
+    ) -> Task<Void, Never> {
+        Task { [weatherManager] in
+            let succeeded = await weatherManager.update(for: subject)
+            answers.yield(WeatherAnswer(key: subject.key, succeeded: succeeded, at: .now))
+        }
+    }
+
+    /// Counts `answer` against its subject's freshness or backoff.
+    ///
+    /// And settles the badge, when the hiker has come back to that subject
+    /// since: a focus that landed while the request was still out drew a
+    /// spinner for an answer that may already have been kept without
+    /// showing. Asked with no request to come, the badge draws what is
+    /// cached, or that there is none.
+    private func record(
+        _ answer: WeatherAnswer,
+        in state: inout WeatherRequestState,
+        policy: WeatherPollingPolicy
+    ) {
+        if answer.succeeded {
+            state.recordSuccess(key: answer.key, at: answer.at)
+        } else {
+            state.recordFailure(key: answer.key, at: answer.at, policy: policy)
+        }
+        guard let subject = weatherFocus.subject, subject.key == answer.key else { return }
+        weatherManager.focus(on: subject, willRequest: false)
+    }
+
+    /// Wakes the loop when the subject on the badge comes due, and not for
+    /// any other.
+    ///
+    /// Re-armed against whatever the subject is *now*, which after an await
+    /// may not be the one the pass started with. Cancelling first is what
+    /// stops a subject the user has moved on from waking the loop on its own
+    /// deadline. Not while that subject's request is out: its answer re-arms
+    /// it, and a deadline already past would wake the loop for nothing until
+    /// then.
+    private func rearm(
+        _ dueTask: inout Task<Void, Never>?,
+        for state: WeatherRequestState,
+        policy: WeatherPollingPolicy,
+        unlessAsking requests: [String: Task<Void, Never>],
+        onDue continuation: AsyncStream<Void>.Continuation
+    ) {
+        dueTask?.cancel()
+        guard let key = weatherFocus.subject?.key, requests[key] == nil,
+              let due = state.nextEligibleDate(key: key, policy: policy) else { return }
+        dueTask = Task {
+            try? await Task.sleep(until: .now + .seconds(max(0, due.timeIntervalSinceNow)))
+            guard !Task.isCancelled else { return }
+            continuation.yield(())
         }
     }
 }
@@ -151,7 +240,7 @@ private extension WeatherWake {
         case .expiry: .expiry
         case .focus: .focus
         case .movement: .movement
-        case .session: nil
+        case .answered, .session: nil
         }
     }
 }
