@@ -224,6 +224,11 @@ final class StubCountryDownloader: OfflineCountryDownloading {
         let key: OfflineCountryDownloadKey
         let staged: URL
         let resumeData: Data?
+        /// The task identifier ``start(_:from:stagingAt:resumeData:)``
+        /// answered, one more than the last.
+        let task: Int
+
+        var transfer: OfflineCountryTransfer { OfflineCountryTransfer(key: key, task: task) }
     }
 
     var onEvent: ((OfflineCountryDownloadEvent) -> Void)?
@@ -239,8 +244,15 @@ final class StubCountryDownloader: OfflineCountryDownloading {
 
     nonisolated deinit { /* intentionally empty */ }
 
-    func start(_ key: OfflineCountryDownloadKey, from url: URL, stagingAt staged: URL, resumeData: Data?) {
-        requests.append(Request(key: key, staged: staged, resumeData: resumeData))
+    @discardableResult func start(
+        _ key: OfflineCountryDownloadKey,
+        from url: URL,
+        stagingAt staged: URL,
+        resumeData: Data?
+    ) -> Int {
+        let task = requests.count + 1
+        requests.append(Request(key: key, staged: staged, resumeData: resumeData, task: task))
+        return task
     }
 
     func cancel(country: String) {
@@ -266,22 +278,32 @@ final class StubCountryDownloader: OfflineCountryDownloading {
     /// The last request for `role`'s file came down as `bytes`.
     func land(_ role: OfflineCountryManifest.Role, as bytes: Data) throws {
         guard let request = requests.last(where: { $0.key.role == role }) else { return }
+        try land(request, as: bytes)
+    }
+
+    /// `request` came down as `bytes`, whichever request is the file's last.
+    func land(_ request: Request, as bytes: Data) throws {
         try FileManager.default.createDirectory(
             at: request.staged.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
         try bytes.write(to: request.staged)
-        onEvent?(.finished(request.key, request.staged))
+        onEvent?(.finished(request.transfer, request.staged))
     }
 
     func progress(_ role: OfflineCountryManifest.Role, _ bytes: Int64) {
         guard let request = requests.last(where: { $0.key.role == role }) else { return }
-        onEvent?(.wrote(request.key, bytes))
+        onEvent?(.wrote(request.transfer, bytes))
     }
 
     func fail(_ role: OfflineCountryManifest.Role, resumeData: Data?) {
         guard let request = requests.last(where: { $0.key.role == role }) else { return }
-        onEvent?(.failed(request.key, resumeData: resumeData, cancelled: false))
+        fail(request, resumeData: resumeData)
+    }
+
+    /// `request` stopped, as a cancel or a failed connection reports it.
+    func fail(_ request: Request, resumeData: Data?, cancelled: Bool = false) {
+        onEvent?(.failed(request.transfer, resumeData: resumeData, cancelled: cancelled))
     }
 }
 

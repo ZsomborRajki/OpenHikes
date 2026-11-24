@@ -291,13 +291,13 @@ final class OfflineCountries {
         // A file a transfer is still out for is left to it: a sibling's
         // failure is what this retries.
         for file in files where download.staged[file.role] == nil && !download.inFlight.contains(file.role) {
-            downloader.start(
+            let task = downloader.start(
                 Self.key(country, file),
                 from: server.url(of: file),
                 stagingAt: store.stagedURL(for: file),
                 resumeData: download.resumeData[file.role]
             )
-            download.began(file.role)
+            download.began(file.role, transfer: task)
         }
         if download.isStaged {
             Task { await finish(download) }
@@ -368,29 +368,33 @@ final class OfflineCountries {
 
     private func handle(_ event: OfflineCountryDownloadEvent) {
         switch event {
-        case let .wrote(key, bytes):
-            download(for: key)?.wrote(bytes, of: key.role)
-        case let .finished(key, staged):
-            guard let download = download(for: key),
-                  let file = download.files.first(where: { $0.role == key.role })
+        case let .wrote(transfer, bytes):
+            download(for: transfer)?.wrote(bytes, of: transfer.key.role)
+        case let .finished(transfer, staged):
+            guard let download = download(for: transfer),
+                  let file = download.files.first(where: { $0.role == transfer.key.role })
             else { return }
             download.landed(file, at: staged)
             if download.isStaged {
                 Task { await finish(download) }
             }
-        case let .failed(key, resumeData, cancelled):
+        case let .failed(transfer, resumeData, cancelled):
             guard !cancelled else { return }
-            download(for: key)?.stopped(key.role, resumeData: resumeData)
+            download(for: transfer)?.stopped(transfer.key.role, resumeData: resumeData)
         }
     }
 
-    /// The download a transfer is for: of its area and build, and asking
-    /// for its file. A try that replaced a failed one with fewer files, once
-    /// *Extra Detail* was turned off, leaves the earlier try's other
-    /// transfers running, and they are no part of it.
-    private func download(for key: OfflineCountryDownloadKey) -> OfflineCountryDownload? {
+    /// The download a transfer is for: of its area and build, asking for its
+    /// file, and by that transfer. A try that replaced a failed one with
+    /// fewer files, once *Extra Detail* was turned off, leaves the earlier
+    /// try's other transfers running, and they are no part of it; nor is a
+    /// transfer a cancel ended, whose events can still arrive after the same
+    /// file was asked for again under the same key.
+    private func download(for transfer: OfflineCountryTransfer) -> OfflineCountryDownload? {
+        let key = transfer.key
         guard let download = downloads[key.country], download.country.build == key.build,
-              download.files.contains(where: { $0.role == key.role })
+              download.files.contains(where: { $0.role == key.role }),
+              download.isCurrent(transfer.task, for: key.role)
         else { return nil }
         return download
     }
