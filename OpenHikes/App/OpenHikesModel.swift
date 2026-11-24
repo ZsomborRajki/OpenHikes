@@ -94,43 +94,28 @@ final class OpenHikesModel {
     /// has to survive being navigated away from, which is the whole point of
     /// writing it down. See ``TrailDraftController``.
     let trailMaker: TrailDraftController
-    /// The record button under the maker's on the map. Built on first use
-    /// rather than in `init`, which is at its length limit; nothing about it
-    /// needs to exist before the map does. See ``RecordingEntry``.
-    @ObservationIgnored private(set) lazy var recordingEntry = RecordingEntry(
-        recorder: hikeRecorder,
-        walkSession: walkSession,
-        openRequests: hikeOpenRequests
-    )
+    /// The record button under the maker's on the map. See ``RecordingEntry``.
+    let recordingEntry: RecordingEntry
     /// Every hike in the library, as the map draws it faded beneath the
     /// selected one, read off the main actor by the task the map's view
-    /// starts. Built on first use for the reason ``recordingEntry`` is; a tap
-    /// on one opens through ``hikeOpenRequests``. See ``LibraryLines``.
-    @ObservationIgnored private(set) lazy var libraryLines = LibraryLines(openRequests: hikeOpenRequests)
+    /// starts; a tap on one opens through ``hikeOpenRequests``. See
+    /// ``LibraryLines``.
+    let libraryLines: LibraryLines
     /// What a Stop or an End came to, for the view that owns the sheet's
     /// path — see ``ActivityEnding``.
     let activityEndings = EventFeed<ActivityEnding>()
     /// The question both of a recording's Stops ask — the bar's and the
-    /// capsule's. Built on first use for the reason ``recordingEntry`` is. See
-    /// ``RecordingStopQuestion``.
-    @ObservationIgnored private(set) lazy var recordingStop = RecordingStopQuestion(
-        recorder: hikeRecorder,
-        endings: activityEndings
-    )
+    /// capsule's. See ``RecordingStopQuestion``.
+    let recordingStop: RecordingStopQuestion
     /// The question both of a walk's Ends ask. See ``WalkEndQuestion``.
-    @ObservationIgnored private(set) lazy var walkEnd = WalkEndQuestion(session: walkSession, endings: activityEndings)
+    let walkEnd: WalkEndQuestion
     /// The recording's or the walk's controls on the map, wherever their own
     /// screen is not in front. See ``MapActivityCapsule``.
-    @ObservationIgnored private(set) lazy var activityCapsule = MapActivityCapsule(
-        recorder: hikeRecorder,
-        walk: walkSession,
-        recordingStop: recordingStop,
-        walkEnd: walkEnd,
-        openRequests: hikeOpenRequests
-    )
+    let activityCapsule: MapActivityCapsule
     /// The first-run tips, or `nil` for a launch that shows none. Loaded by
-    /// ``startTips()`` rather than in `init`, which is at its length limit and
-    /// runs for suites that build their own model — see ``AppTips``.
+    /// ``startTips()`` rather than in `init`, because TipKit is configured
+    /// once a process and `init` runs for every model a suite builds — see
+    /// ``AppTips``.
     @ObservationIgnored private(set) var tips: AppTips?
 
     /// The open hike's marked places, observed directly by the map. Owned
@@ -159,8 +144,8 @@ final class OpenHikesModel {
     let selectedLineStoreWatch: SelectedLineStoreWatch
     /// What the place cards ask Wikipedia through, and what it has answered
     /// this launch, or `nil` for a launch that must not ask. Made beside its
-    /// declaration rather than in `init`, which is at its length limit. See
-    /// ``makeWikidataLookup()``.
+    /// declaration, as ``offlineCountries`` is, because it needs nothing
+    /// `init` is handed. See ``makeWikidataLookup()``.
     let wikidataLookup: WikidataPlaceLookup? = OpenHikesModel.makeWikidataLookup()
     /// The countries downloaded for the OpenHikes map, and those to download
     /// (#1482). A suite's has no server and lists nothing — see
@@ -275,6 +260,19 @@ final class OpenHikesModel {
         hikeRecorder.recordingDidSave = { [weak session] hikeID in
             session?.recordingDidSave(hikeID: hikeID)
         }
+        // The map's controls for a recording and a walk, and the questions
+        // their Stop and End ask.
+        recordingEntry = RecordingEntry(recorder: hikeRecorder, walkSession: session, openRequests: hikeOpenRequests)
+        libraryLines = LibraryLines(openRequests: hikeOpenRequests)
+        recordingStop = RecordingStopQuestion(recorder: hikeRecorder, endings: activityEndings)
+        walkEnd = WalkEndQuestion(session: session, endings: activityEndings)
+        activityCapsule = MapActivityCapsule(
+            recorder: hikeRecorder,
+            walk: session,
+            recordingStop: recordingStop,
+            walkEnd: walkEnd,
+            openRequests: hikeOpenRequests
+        )
         self.communityTransport = communityTransport
         self.hikingRouteSquares = hikingRouteSquares
         // Before the maker, which asks it whether its line may be coloured by
@@ -322,6 +320,22 @@ final class OpenHikesModel {
             isSyncingThisLaunch: isSyncingThisLaunch,
             storageIsDurable: startupIssue == nil
         )
+        startLaunchWork()
+        // Last, because both halves need dependencies built above: the
+        // recorder answers the precedence question the walk's reminder asks,
+        // and the buttons act on the recorder and the session. Only a launch
+        // that has a controller registers a delegate — a suite has neither.
+        if let movementReminders {
+            wire(movementReminders)
+        }
+    }
+
+    /// What a launch sets going once every dependency is built: the sync
+    /// report, the launch's own deletions and downloads, and the walk a
+    /// background relaunch has to adopt. Apart from `init` so that `init`
+    /// only builds; each start keeps the guard that keeps it from a suite or
+    /// from a store that failed to open.
+    private func startLaunchWork() {
         cloudSync.start()
         // Behind the test guard for the same reason every other startup writer
         // is: both unit-test bundles are hosted by the app, and a launch a
@@ -340,14 +354,7 @@ final class OpenHikesModel {
         // a background relaunch never shows a view — see
         // ``TrailWalkSession/restoreAtLaunch(now:)``.
         if !AppLaunchEnvironment.isRunningTests, startupIssue == nil {
-            self.walkSession.restoreAtLaunch()
-        }
-        // Last, because both halves need dependencies built above: the
-        // recorder answers the precedence question the walk's reminder asks,
-        // and the buttons act on the recorder and the session. Only a launch
-        // that has a controller registers a delegate — a suite has neither.
-        if let movementReminders {
-            wire(movementReminders)
+            walkSession.restoreAtLaunch()
         }
     }
 
