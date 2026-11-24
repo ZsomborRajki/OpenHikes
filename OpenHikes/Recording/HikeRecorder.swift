@@ -171,6 +171,12 @@ final class HikeRecorder: NSObject {
     /// cancelled — see ``observePowerState()``.
     @ObservationIgnored var powerStateObservation: Task<Void, Never>?
     @ObservationIgnored var startRequested = false
+    /// Whether the failure in ``phase`` is a refused resume's, which left the
+    /// walk as paused as it was — see ``refuseResume(_:)``. Cleared by every
+    /// ``fail(_:endLocationUpdates:endsActivity:)`` and set after one by the
+    /// refusal alone, and read only through ``isResumeRefused``, which asks
+    /// the phase too: so it can only ever describe the failure it came with.
+    @ObservationIgnored var failureIsRefusedResume = false
     /// The Start currently between asking for a session and having one — see
     /// ``activateSessionIfPossible()``. Cleared by a Discard and by
     /// ``resetSession()``; a failure clears ``startRequested`` instead, which
@@ -568,8 +574,35 @@ extension HikeRecorder {
     /// phone with no walk on it (#1606). Paused is what it says, which a walk
     /// that cannot resume is; nothing publishes to it while the recording is
     /// failed, and the refusal goes with the panel.
+    ///
+    /// The panel it leaves up still offers Resume and Stop, so both have to
+    /// work on it: see ``reopenRefusedResume()``.
     private func refuseResume(_ failure: RecordingFailure) {
         fail(failure, endsActivity: false)
+        failureIsRefusedResume = true
+    }
+
+    /// Whether the recording has failed only because a resume was refused,
+    /// and is still the paused walk it was — see ``refuseResume(_:)``.
+    var isResumeRefused: Bool {
+        guard case .failed = phase else { return false }
+        return failureIsRefusedResume
+    }
+
+    /// Puts a walk whose resume was refused back to paused, for a control
+    /// that acts on a paused walk, and does nothing to any other.
+    ///
+    /// For the controls the refusal's panel leaves up. Its Resume, tapped
+    /// again, asks Core Location again, rather than finding a failed recording
+    /// and saying the hike is no longer being recorded: the hiker may well
+    /// have turned Precise Location on in Settings since, and gone straight
+    /// back to the Lock Screen. Its Stop opens the app on Stop's question,
+    /// which a failed recording would leave unasked. What dismissing the
+    /// recording screen's alert does, done for the hiker who asked for
+    /// something past it — see ``dismissFailure()``.
+    func reopenRefusedResume() {
+        guard isResumeRefused else { return }
+        dismissFailure()
     }
 
     /// Ends the walk and saves it, with the stretches trail matching left a

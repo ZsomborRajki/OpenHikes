@@ -130,8 +130,14 @@ extension HikeIntentCoordinator {
         return liveReport()
     }
 
+    /// A walk whose resume was refused is still paused, so asked again it is
+    /// tried again, and Core Location asked again — see
+    /// ``HikeRecorder/reopenRefusedResume()``. The Lock Screen's panel keeps
+    /// its Resume up after a refusal, and a second tap told that the hike was
+    /// no longer recording took down the only words saying how to put it right.
     func resumeRecording() async throws(HikeIntentFailure) -> LiveRecordingReport {
         await settleRecorder()
+        recorder.reopenRefusedResume()
         guard recorder.phase == .paused else { throw .notPaused }
         let session = recorder.sessionID
         await recorder.resume()
@@ -174,8 +180,13 @@ extension HikeIntentCoordinator {
     /// the hike is written with the measurement there and the question kept
     /// on it, for *Edit Route* to ask — see ``RouteAssembly``. A choice
     /// between two lines on a map has no voice answer, and now needs none.
+    ///
+    /// A walk whose resume was refused is stopped as the paused walk it still
+    /// is, as the panel's Stop stops it — see
+    /// ``HikeRecorder/reopenRefusedResume()``.
     func stopRecording() async throws(HikeIntentFailure) -> StoppedRecordingReport {
         await settleRecorder()
+        recorder.reopenRefusedResume()
         try throwUnlessStoppable()
         // Acted on without a suspension in between, as the button acts on it:
         // the wait for the walk's last fixes is inside the step, and
