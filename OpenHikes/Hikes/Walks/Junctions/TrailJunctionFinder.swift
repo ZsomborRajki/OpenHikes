@@ -308,7 +308,10 @@ nonisolated enum TrailJunctionFinder {
             var filed: [Cell: [Int64]] = [:]
             for nodeID in junctionIDs {
                 guard let node = nodes[nodeID] else { continue }
-                filed[Self.cell(of: node.coordinate), default: []].append(nodeID)
+                // Wrapped too, so a node OpenStreetMap puts at 180° itself is
+                // filed where a search across the date line looks.
+                let cell = Self.cell(of: node.coordinate)
+                filed[Cell(row: cell.row, column: Self.wrapped(cell.column)), default: []].append(nodeID)
             }
             cells = filed
         }
@@ -318,6 +321,17 @@ nonisolated enum TrailJunctionFinder {
                 row: Int((coordinate.latitude / TrailJunctionFinder.cellDegrees).rounded(.down)),
                 column: Int((coordinate.longitude / TrailJunctionFinder.cellDegrees).rounded(.down))
             )
+        }
+
+        /// How many columns of cells go round the world.
+        private static let columnsAround = Int((360 / TrailJunctionFinder.cellDegrees).rounded())
+
+        /// `column` counted round the world into the columns a node's own
+        /// longitude, in `-180..<180`, is filed under: a column past the
+        /// antimeridian on either side is the one beyond it on the other.
+        private static func wrapped(_ column: Int) -> Int {
+            let half = columnsAround / 2
+            return ((column + half) % columnsAround + columnsAround) % columnsAround - half
         }
 
         /// The junction nodes in the cells a leg from `start` to `end`,
@@ -330,15 +344,19 @@ nonisolated enum TrailJunctionFinder {
             let latitudeReach = reach / RouteGeometry.metersPerDegreeLatitude
             let longitudeReach = reach / (RouteGeometry.metersPerDegreeLatitude
                 * max(cos(start.latitude * .pi / 180), TrailJunctionFinder.minimumLongitudeScale))
-            // A leg across the antimeridian is a gap, never a walked leg.
-            guard abs(end.longitude - start.longitude) < 180 else { return [] }
+            // The leg's span the short way round, as every measure of it on
+            // the line is taken: a walked leg across the antimeridian is a
+            // few metres of ground, and the graph keeps the ways that cross
+            // it. Its columns run on past ±180° and are wrapped back. A paused
+            // leg never gets here — see ``passes(along:of:)``.
+            let span = RouteGeometry.normalizedLongitudeDelta(end.longitude - start.longitude)
             let low = Self.cell(of: CLLocationCoordinate2D(
                 latitude: min(start.latitude, end.latitude) - latitudeReach,
-                longitude: min(start.longitude, end.longitude) - longitudeReach
+                longitude: start.longitude + min(span, 0) - longitudeReach
             ))
             let high = Self.cell(of: CLLocationCoordinate2D(
                 latitude: max(start.latitude, end.latitude) + latitudeReach,
-                longitude: max(start.longitude, end.longitude) + longitudeReach
+                longitude: start.longitude + max(span, 0) + longitudeReach
             ))
             let rows = high.row - low.row + 1
             let columns = high.column - low.column + 1
@@ -346,7 +364,7 @@ nonisolated enum TrailJunctionFinder {
             var found: [Int64] = []
             for row in low.row...high.row {
                 for column in low.column...high.column {
-                    found.append(contentsOf: cells[Cell(row: row, column: column)] ?? [])
+                    found.append(contentsOf: cells[Cell(row: row, column: Self.wrapped(column))] ?? [])
                 }
             }
             return found
