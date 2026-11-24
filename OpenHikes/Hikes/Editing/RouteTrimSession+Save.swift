@@ -80,13 +80,27 @@ extension RouteTrimSession {
     /// ``RouteEditSave/markChecked(_:in:save:)``. Once the line has caught
     /// up with the last answer given, and only if that left nothing changed:
     /// an answer given on the way to it is the hiker's, and Save keeps it.
+    ///
+    /// The look is at the line and the record the screen showed when the
+    /// hiker tapped, and is refused, as Save refuses, when the hike no longer
+    /// holds both: an edit from the other device can land while this screen
+    /// is up and before it has reloaded, and its checks are ones nobody here
+    /// has seen. They stay owed, and the screen loads them.
     @discardableResult func confirmChecks(in destination: Destination) async -> Bool {
         guard !isSaving else { return false }
         isSaving = true
         defer { isSaving = false }
+        let reviewed = sources
         await settled()
-        guard let sources, !hasChanges,
-              let edit = RouteEditSave.markChecked(destination.hike, in: destination.context, save: destination.save)
+        guard let sources, !hasChanges else { return false }
+        guard sources == reviewed,
+              destination.settledLine() == sources.current,
+              destination.hike.routeEdit == sources.edit
+        else {
+            refusal = .lineChanged
+            return false
+        }
+        guard let edit = RouteEditSave.markChecked(destination.hike, in: destination.context, save: destination.save)
         else { return false }
         // The hike's line has not moved, so nothing reloads this visit: it
         // takes the looks itself, on what it works from and on what it shows.
