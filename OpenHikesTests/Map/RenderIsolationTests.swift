@@ -147,11 +147,11 @@ struct RecordingIsolationTests {
         #expect(trace.tail.isEmpty)
     }
 
-    /// `RecordingView.body` and the whole hikes sheet (via
-    /// `HikeRecorder.isActive`) read `phase`, and the accepted-fix path in
-    /// `HikeRecorder` touches it on every fix. Those bodies are budgeted at
-    /// one invalidation per phase change, not one per fix, so a fix that
-    /// leaves the phase alone must wake nothing.
+    /// `RecordingView.body`, the bar's items and the recording's row in the
+    /// hikes list read `phase`, and the accepted-fix path in `HikeRecorder`
+    /// touches it on every fix. Those bodies are budgeted at one invalidation
+    /// per phase change, not one per fix, so a fix that leaves the phase
+    /// alone must wake nothing.
     @Test("a fix that doesn't change the phase doesn't wake a body reading it")
     func steadyRecordingDoesNotInvalidatePhaseReaders() async throws {
         let container = try Fixture.modelContainer()

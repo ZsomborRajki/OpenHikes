@@ -12,15 +12,19 @@
 //  handler when `isRecording` is true as the view appears or turns true, so
 //  no body reads a value that changes with every fix.
 //
-//  The two values it compares are not isolated. `trail:` and `isRecording:`
-//  are arguments, and a modifier's arguments are evaluated by the body that
-//  applies it (*Render isolation, in practice* in AGENTS.md): the selected
-//  hike's name and displayed route, and the recorder's phase behind
-//  `isActive`, stay inputs of `OpenHikesView` however they are compared
-//  here. They move with the selection, its line or its name, and the
-//  recording's phase, not with each fix, and no trace has put a cost on
-//  them; taking them out of that body would mean moving the observation
-//  itself, and measuring it.
+//  `isRecording` is a closure too, called by this modifier's own body, which
+//  is a boundary for what it reads (*Render isolation, in practice* in
+//  AGENTS.md). The root passes the recorder's `isActive`, which reads its
+//  phase, and the phase moves at the first fix, at every pause and resume
+//  and at every stop Auto-Pause calls. Passed as a value, it was an input of
+//  `OpenHikesView`: each of those re-ran the root and the sheet under it,
+//  to compare a Bool that had not changed (traced on 2026-11-24). Now they
+//  re-run this modifier and nothing it modifies.
+//
+//  `trail:` is still an argument, evaluated by the body that applies it: the
+//  selected hike's name and displayed route stay inputs of `OpenHikesView`.
+//  They move with the selection, its line or its name, which re-run that
+//  body anyway.
 //
 //  The third edge — search — is not here because it is not a change handler:
 //  `MapSheet` sets the subject in the same breath as it zooms the map, which
@@ -42,7 +46,9 @@ extension View {
     ///   - trail: the subject the current selection implies, or `nil` when
     ///     nothing is selected. Built by the caller because the route's
     ///     geometry belongs to the map, not to the weather domain.
-    ///   - isRecording: whether a recording owns the badge right now.
+    ///   - isRecording: whether a recording owns the badge right now. A
+    ///     closure, read by this modifier's body rather than by the caller's
+    ///     — see the file's header.
     ///   - hiker: where the hiker is, asked only at the moment a recording
     ///     starts. A closure rather than a value so it is not read on every
     ///     pass — the position changes with every fix, and this modifier must
@@ -50,7 +56,7 @@ extension View {
     func weatherFocus(
         _ focus: WeatherFocus,
         trail: WeatherSubject?,
-        isRecording: Bool,
+        isRecording: @escaping () -> Bool,
         hiker: @escaping () -> CLLocationCoordinate2D?
     ) -> some View {
         modifier(
@@ -67,7 +73,7 @@ extension View {
 private struct WeatherFocusModifier: ViewModifier {
     let focus: WeatherFocus
     let trail: WeatherSubject?
-    let isRecording: Bool
+    let isRecording: () -> Bool
     let hiker: () -> CLLocationCoordinate2D?
 
     func body(content: Content) -> some View {
@@ -82,7 +88,7 @@ private struct WeatherFocusModifier: ViewModifier {
             // Keyed on whether a recording is running rather than on its phase,
             // so a pause doesn't hand the badge back to a search the hiker
             // made an hour ago.
-            .onChange(of: isRecording, initial: true) { _, isRecording in
+            .onChange(of: isRecording(), initial: true) { _, isRecording in
                 guard isRecording else {
                     focus.unpinFromHiker()
                     return

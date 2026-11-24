@@ -85,11 +85,12 @@ struct MapSheetHikes: View, Equatable {
     /// True at the smallest detent, where only the search field shows.
     let isCompact: Bool
     var completer: SearchCompleter
+    /// Read for which hike is being recorded, and never for its phase: the
+    /// row under way reads that itself — see `HikeRow.swift`'s header.
     var recorder: HikeRecorder
-    /// Read for the one thing about a row a walk changes: its `Active` /
-    /// `Paused` badge, in the recording badge's shape. Only the coarse
-    /// properties are read — the ones that change on a tap — so a fix that
-    /// extends coverage never reaches this body.
+    /// Read for which hike is being walked, and never for its phase, for the
+    /// same reason as ``recorder``. Nothing that changes per fix is read
+    /// either, so a fix that extends coverage never reaches this body.
     var walkSession: TrailWalkSession
     /// Published hikes and whether the hiker has asked for them. Only the
     /// coarse properties are read here — the two result lists, the state, the
@@ -480,7 +481,7 @@ private extension MapSheetHikes {
     ///   ``hikesSection`` read it for this pass.
     func hikesList(positions: [UUID: Int]) -> some View {
         // Read once per pass and handed to both the pin and the rows: asking
-        // `status(for:)` inside the `ForEach` would ask it per row per pass,
+        // `activity(for:)` inside the `ForEach` would ask it per row per pass,
         // and the answer is a property of the list.
         let activeID = activeHikeID
         // `orderRevision` is read for its effect rather than its value. The
@@ -563,17 +564,17 @@ private extension MapSheetHikes {
 
     /// The hike being recorded or walked right now, if there is one.
     ///
-    /// Derived from the badge rather than from a second reading of the
-    /// recorder and the walk session: a row that says *Recording* and a row
-    /// that sorts to the top must be the same row, and there is one rule for
-    /// that already.
+    /// Derived from the row's activity rather than from a second reading of
+    /// the recorder and the walk session: a row that says *Recording* and a
+    /// row that sorts to the top must be the same row, and there is one rule
+    /// for that already.
     var activeHikeID: UUID? {
         activeHike?.id
     }
 
     /// The row ``activeHikeID`` names — see there for the rule.
     var activeHike: Hike? {
-        hikes.first { status(for: $0) != nil }
+        hikes.first { activity(for: $0) != nil }
     }
 
     func hikeRow(_ hike: Hike) -> some View {
@@ -583,7 +584,7 @@ private extension MapSheetHikes {
             HikeRow(
                 hike: hike,
                 isSelected: hike.id == selectedHikeID,
-                status: status(for: hike)
+                activity: activity(for: hike)
             )
                 .contentShape(.rect)
         }
@@ -762,7 +763,7 @@ private extension MapSheetHikes {
                         HikeRow(
                             hike: hike,
                             isSelected: hike.id == selectedHikeID,
-                            status: status(for: hike)
+                            activity: activity(for: hike)
                         )
                         .contentShape(.rect)
                     }
@@ -801,48 +802,16 @@ private extension MapSheetHikes {
 // MARK: - Recording and walk state
 
 private extension MapSheetHikes {
-    /// A recording's badge outranks a walk's, as it does on every surface —
-    /// though a hike can only carry one of the two, since a recording's own
-    /// draft never gets a walk.
-    func status(for hike: Hike) -> HikeRow.Status? {
-        recordingStatus(for: hike) ?? walkStatus(for: hike)
-    }
-
-    /// `Active` / `Paused`, exactly as a recording's row carries
-    /// `Recording` / `Paused`: the one thing about the row that changes, so a
-    /// walk left running by mistake is visible from the list and one tap from
-    /// the controls that end it.
-    func walkStatus(for hike: Hike) -> HikeRow.Status? {
-        guard walkSession.walkedHikeID == hike.id, let phase = walkSession.phase else { return nil }
-        return switch phase {
-        case .following: HikeRow.Status(title: String(localized: "Active"), tint: hike.tintOpaque)
-        case .paused: HikeRow.Status(title: String(localized: "Paused"), tint: .secondary)
-        }
-    }
-
-    func recordingStatus(for hike: Hike) -> HikeRow.Status? {
-        guard belongsToActiveRecording(hike) else { return nil }
-        guard hike.id == recorder.currentHike?.id else {
-            return HikeRow.Status(title: String(localized: "Recording"), tint: .red)
-        }
-        return switch recorder.phase {
-        case .idle: HikeRow.Status(title: String(localized: "Recording"), tint: .red)
-        case .recovering: HikeRow.Status(title: String(localized: "Recovering"), tint: .orange)
-        case .waitingForFix: HikeRow.Status(title: String(localized: "Finding GPS"), tint: .orange)
-        case .recording: HikeRow.Status(title: String(localized: "Recording"), tint: .red)
-        case .paused: HikeRow.Status(title: String(localized: "Paused"), tint: .secondary)
-        case .saving: HikeRow.Status(title: String(localized: "Saving"), tint: .orange)
-        case .failed: HikeRow.Status(title: String(localized: "Needs Attention"), tint: .red)
-        }
-    }
-
-    func belongsToActiveRecording(_ hike: Hike) -> Bool {
-        hike.belongsToActiveRecording(currentHikeID: recorder.currentHike?.id)
+    /// What is under way on `hike`, for its row's badge. The rule, and why
+    /// the phase is not read here, are ``HikeRowActivity``'s.
+    func activity(for hike: Hike) -> HikeRowActivity? {
+        HikeRowActivity(hike, recorder: recorder, walk: walkSession)
     }
 
     /// Whether this row gets a Delete swipe built for it.
     ///
-    /// Deliberately not `!belongsToActiveRecording(_:)`. That spelling took
+    /// Deliberately not `!belongsToActiveRecording(currentHikeID:)`, the rule
+    /// a recording's badge goes by. That spelling took
     /// the mirrored `isRecording` flag as proof a walk was under way, so a
     /// draft that arrived from CloudKit without this device's journal — after
     /// a reinstall, say — was left with no Delete action in the list, no
