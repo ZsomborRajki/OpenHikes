@@ -219,6 +219,10 @@ struct ElevationChartLayersTests {
     /// The second: what the graph speaks, read off the tracker in the outer
     /// body. A scrub step moves the tracker, and so does every fix while
     /// following.
+    ///
+    /// Read through ``ElevationChartView/graph(plotWidth:)``, which is the
+    /// body less its one `@State`: the body read by hand would read that
+    /// state from a view nobody installed.
     @Test("the view around the plot does not read the tracker")
     func outerBodyDoesNotReadTheTracker() async {
         let tracker = TrackerState()
@@ -227,7 +231,7 @@ struct ElevationChartLayersTests {
             tint: .green,
             tracker: tracker
         ) { _ in /* no-op */ }
-        let bodyCounter = ObservationCounter { _ = chart.body }
+        let bodyCounter = ObservationCounter { _ = chart.graph(plotWidth: 320) }
         let readCounter = ObservationCounter { _ = tracker.trackerDistance }
 
         tracker.trackerDistance = 500
