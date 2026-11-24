@@ -68,16 +68,15 @@ struct WalkControls: View {
 /// The phase word, its dot, and the walk's clock.
 ///
 /// The same arrangement as the recording header, for the same reasons: the
-/// dot is a colour so the word beside it is spoken, and the clock is a 1 Hz
-/// `TimelineView` that exists only while it is on screen. The clock reads
-/// `session.activeSeconds()` — a function over ignored storage, so the tick
-/// costs a `Text` and not an observation.
+/// dot is a colour so the word beside it is spoken. The clock is the one the
+/// bar above it and the map's capsule draw (``ActivityClock``), ticking by
+/// itself with no body run for it, read off `session.activeSeconds()` when
+/// the phase moves. It was a 1 Hz `TimelineView`, a pass of this row every
+/// second of a walk.
 private struct WalkPhaseRow: View {
     let session: TrailWalkSession
     let phase: TrailWalkPhase
     let tint: Color
-
-    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         HStack(spacing: 10) {
@@ -88,13 +87,9 @@ private struct WalkPhaseRow: View {
             Text(phase == .following ? String(localized: "Hike Active") : String(localized: "Hike Paused"))
                 .font(.headline)
             Spacer()
-            if phase == .following, scenePhase == .active {
-                TimelineView(.periodic(from: .now, by: 1)) { _ in
-                    PhaseClock(readout: HikeFormat.duration(session.activeSeconds()))
-                }
-            } else {
-                PhaseClock(readout: HikeFormat.duration(session.activeSeconds()))
-            }
+            ActivityClock(elapsed: session.activeSeconds(), isRunning: phase == .following)
+                .font(.headline.monospacedDigit())
+                .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("walk-phase")
