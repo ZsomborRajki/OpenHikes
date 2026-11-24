@@ -27,6 +27,9 @@ struct SystemMovementReminderNotifierTests {
         struct RequestFailed: Error {}
 
         var status = UNAuthorizationStatus.notDetermined
+        /// Makes the next `add` throw, as the real centre can after
+        /// permission was given.
+        var failsNextAdd = false
         private(set) var authorizationRequests = 0
         private(set) var categoryRegistrations = 0
         private(set) var added: [String] = []
@@ -44,7 +47,11 @@ struct SystemMovementReminderNotifierTests {
             categoryRegistrations += 1
         }
 
-        func add(_ request: UNNotificationRequest) {
+        func add(_ request: UNNotificationRequest) throws {
+            guard !failsNextAdd else {
+                failsNextAdd = false
+                throw RequestFailed()
+            }
             added.append(request.identifier)
         }
 
@@ -97,6 +104,21 @@ struct SystemMovementReminderNotifierTests {
 
         #expect(center.authorizationRequests == 0)
         #expect(center.categoryRegistrations == 0)
+    }
+
+    /// The answer a caller that marked something said before posting reads
+    /// to take it back (`WeatherManager`'s alert watch).
+    @Test("a post reports whether the centre took the request")
+    func postReportsWhetherTheRequestWasTaken() async {
+        let center = StubCenter()
+        center.status = .authorized
+        let notifier = SystemMovementReminderNotifier(center: center)
+        let reminder = MovementReminder(kind: .severeWeather, title: "Weather warning", body: "Storm")
+
+        center.failsNextAdd = true
+        #expect(await notifier.post(reminder) == false)
+        #expect(await notifier.post(reminder) == true)
+        #expect(center.added == [MovementReminderKind.severeWeather.notificationIdentifier])
     }
 
     /// A walk keeps its pause through a refusal, so it is the subject a

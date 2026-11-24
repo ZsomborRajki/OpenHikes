@@ -202,6 +202,24 @@ struct WeatherAlertWatchTests {
         #expect(watch.observed(standing).count == 1)
     }
 
+    /// A banner the system refused takes back what its pass recorded, and
+    /// only that: an alert announced by an earlier pass stays said.
+    @Test("retracting makes only the retracted alerts news again")
+    func retractMakesOnlyThoseAlertsNewsAgain() {
+        var watch = WeatherAlertWatch()
+        _ = watch.observed(.active([Self.alert(id: "earlier")]))
+        let standing = WeatherAlerts.active([
+            Self.alert(id: "earlier"),
+            Self.alert(id: "storm-1"),
+            Self.alert(id: "wind-1", severity: .extreme),
+        ])
+        let said = watch.observed(standing)
+
+        watch.retract(said)
+
+        #expect(watch.observed(standing).map(\.id) == ["wind-1", "storm-1"])
+    }
+
     /// The bound is a leak stop rather than a policy — evicting an alert that
     /// is still standing re-announces it, so the limit sits well above any
     /// plausible number over one place at one time.

@@ -89,7 +89,7 @@ final class SystemMovementReminderNotifier: MovementReminderNotifying {
         #endif
     }
 
-    func post(_ reminder: MovementReminder) async {
+    @discardableResult func post(_ reminder: MovementReminder) async -> Bool {
         #if canImport(UserNotifications)
         let content = UNMutableNotificationContent()
         content.title = reminder.title
@@ -107,12 +107,16 @@ final class SystemMovementReminderNotifier: MovementReminderNotifying {
         )
         do {
             try await center.add(request)
+            return true
         } catch {
             let kind = reminder.kind.rawValue
             Self.logger.error(
                 "Could not post \(kind, privacy: .public): \(error.localizedDescription, privacy: .public)"
             )
+            return false
         }
+        #else
+        return false
         #endif
     }
 

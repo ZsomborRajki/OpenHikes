@@ -104,6 +104,19 @@ nonisolated struct WeatherAlertWatch: Equatable {
         return worthSaying
     }
 
+    /// Takes back what ``observed(_:)`` recorded for `alerts`, so the next
+    /// reading announces them again.
+    ///
+    /// For a banner the system refused after permission was given: the
+    /// commitment was made before the post, which is what keeps two
+    /// overlapping attempts to one banner, and an alert marked said behind a
+    /// post that never reached the screen would stay silent for as long as it
+    /// stands.
+    mutating func retract(_ alerts: [WeatherAlertSummary]) {
+        let ids = Set(alerts.map(\.id))
+        announced.removeAll { ids.contains($0) }
+    }
+
     /// What ``observed(_:)`` would answer, without recording any of it.
     func unannounced(in alerts: WeatherAlerts) -> [WeatherAlertSummary] {
         alerts.summaries

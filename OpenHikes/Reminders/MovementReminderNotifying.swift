@@ -57,7 +57,12 @@ protocol MovementReminderNotifying: AnyObject {
     /// the same kind. Silent on failure, for the reason a Live Activity
     /// refusal is silent: it is the system's answer about a banner, and there
     /// is nothing to be done about it in the middle of a hike.
-    func post(_ reminder: MovementReminder) async
+    ///
+    /// Silent to the hiker, but not to the caller: the answer is whether the
+    /// system took the request. A caller that records something as said
+    /// before it posts (``WeatherManager``'s alert watch) takes that back on
+    /// a `false`, so the next pass still has it to say.
+    @discardableResult func post(_ reminder: MovementReminder) async -> Bool
 
     /// Takes a reminder back down — pending and already delivered.
     ///

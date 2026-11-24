@@ -99,8 +99,19 @@ final class StubMovementReminderNotifier: MovementReminderNotifying {
         return isAuthorized
     }
 
-    func post(_ reminder: MovementReminder) {
+    /// Refuses the next this many posts, as a centre that throws from `add`
+    /// does. A refused post is not in ``posted``: nothing reached the screen.
+    var refusesPosts = 0
+    private(set) var refusedPosts = 0
+
+    func post(_ reminder: MovementReminder) -> Bool {
+        guard refusesPosts == 0 else {
+            refusesPosts -= 1
+            refusedPosts += 1
+            return false
+        }
         posted.append(reminder)
+        return true
     }
 
     func withdraw(_ kind: MovementReminderKind) {
