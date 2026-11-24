@@ -603,6 +603,10 @@ nonisolated private extension GPXImport {
             static let time = "time"
             static let symbol = "sym"
             static let link = "link"
+            /// What ``path`` holds for an element of another namespace, and
+            /// for everything inside one. A `#` cannot begin an XML name, so
+            /// it is never one of the names above.
+            static let foreign = "#foreign"
         }
 
         private enum PointKind {
@@ -617,21 +621,21 @@ nonisolated private extension GPXImport {
             var value: ParsedPoint
         }
 
-        private let fractionalDateStrategy = Date.ISO8601FormatStyle(
-            includingFractionalSeconds: true
-        )
-        private let dateStrategy = Date.ISO8601FormatStyle()
-        /// The same grammar with the zone designator taken out of it, so what
-        /// the string omits is supplied by the device instead. See
-        /// ``date(from:)`` for why that is the reading chosen.
-        private let localDateStrategy = DocumentParser.localStyle(includingFractionalSeconds: true)
-        /// And without the fraction, as the strict pair has it. iOS 26's
-        /// parser lets a style's fraction be left out of the string; iOS 18's
-        /// requires it, so below 26 a whole-second time with no designator
-        /// is read by this one or not at all.
-        private let localWholeSecondDateStrategy = DocumentParser.localStyle(includingFractionalSeconds: false)
+        /// How a `<time>` is read — see `GPXImport+Time.swift`.
+        private let times = TimeReader()
         private let maximumPointCount: Int
         private var path: [String] = []
+        /// The namespace the file's own elements are in: its root's, `nil`
+        /// for a file that names none. Taken from the root rather than
+        /// listed, so GPX 1.0, 1.1 and an exporter's own spelling of either
+        /// all read as themselves.
+        private var documentNamespace: String?
+        /// How many elements deep the parse is inside one of another
+        /// namespace: an extension's, which can reuse GPX's own names. A
+        /// Garmin or Strava `<…:trkpt>` there is the vendor's, and must not
+        /// become a point of the track. Everything inside it is the vendor's
+        /// too, whatever its namespace.
+        private var foreignDepth = 0
         private var text = ""
         private var currentTrackIndex = -1
         private var currentRouteIndex = -1
@@ -668,6 +672,14 @@ nonisolated private extension GPXImport {
             qualifiedName qName: String?,
             attributes attributeDict: [String: String]
         ) {
+            text = ""
+            let namespace = namespaceURI.flatMap { $0.isEmpty ? nil : $0 }
+            if path.isEmpty { documentNamespace = namespace }
+            guard foreignDepth == 0, namespace == documentNamespace else {
+                foreignDepth += 1
+                path.append(Element.foreign)
+                return
+            }
             // GPX defines its element names in lower case and `XMLParser` is
             // handing back the local name already, so this is a straight
             // append: `lowercased()` here allocated a fresh `String` for every
@@ -675,7 +687,6 @@ nonisolated private extension GPXImport {
             // of thousands of allocations to normalise names that were already
             // normal.
             path.append(elementName)
-            text = ""
 
             switch elementName {
             case Element.track:
@@ -737,6 +748,12 @@ nonisolated private extension GPXImport {
             namespaceURI: String?,
             qualifiedName qName: String?
         ) {
+            guard foreignDepth == 0 else {
+                foreignDepth -= 1
+                path.removeLast()
+                text = ""
+                return
+            }
             let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
             updatePendingPoint(element: elementName, value: value)
             apply(value: value, for: elementName)
@@ -869,42 +886,8 @@ nonisolated private extension GPXImport {
             if parsedPointCount > maximumPointCount { hasExceededPointLimit = true }
         }
 
-        /// GPX 1.1 says a `<time>` is UTC and carries a designator, and the two
-        /// strict strategies are that file. The local pair is for the files
-        /// people actually have: exporters that write `2020-01-01T10:00:00`
-        /// with no `Z` and no offset are common enough that refusing them
-        /// costs the hike its duration, both its speeds and its date — a whole
-        /// track's worth of timestamps discarded over a missing letter.
-        ///
-        /// Read as the device's own time rather than as UTC. Both are guesses
-        /// and both are wrong by the same offset when the guess is wrong; what
-        /// decides it is that an exporter omitting the designator is writing
-        /// wall-clock time, so reading it locally is the one that shows the
-        /// hiker the hour their own file says. Last because the lenient
-        /// grammar also accepts a string that *does* carry a designator and
-        /// would quietly ignore it.
-        private static func localStyle(includingFractionalSeconds: Bool) -> Date.ISO8601FormatStyle {
-            Date.ISO8601FormatStyle(timeZone: .autoupdatingCurrent)
-                .year()
-                .month()
-                .day()
-                .dateSeparator(.dash)
-                .dateTimeSeparator(.standard)
-                .time(includingFractionalSeconds: includingFractionalSeconds)
-        }
-
         private func date(from value: String) -> Date? {
-            guard !value.isEmpty else { return nil }
-            // A placeholder parses as readily as a real time, and one at the
-            // front of a file makes the walk decades long; see
-            // ``PlausibleTimestamp``. Here rather than at each caller because
-            // the metadata time and every point's time come through this.
-            return PlausibleTimestamp.validated(
-                (try? fractionalDateStrategy.parse(value))
-                    ?? (try? dateStrategy.parse(value))
-                    ?? (try? localDateStrategy.parse(value))
-                    ?? (try? localWholeSecondDateStrategy.parse(value))
-            )
+            times.date(from: value)
         }
     }
 }
