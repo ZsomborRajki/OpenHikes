@@ -1812,10 +1812,14 @@ Reopening one needs new evidence, not a fresh reading of the same code.
 - **Photo pixels stay on the device the photo was added on.** A `CKAsset` column, an
   app-owned zone and fetch-on-demand were each rejected, because the private
   quota belongs to the hiker. Another device shows the photo as unavailable
-  (`PhotoUnavailability`), with no retry and no remove. The community's public
-  copies do not reopen this. A Wikimedia Commons copy is the one exception:
-  it is somebody else's picture that Commons still holds, so a device without
-  its file downloads it again (`HikePhotoStore.restore(_:)`).
+  (`PhotoUnavailability`), and its page offers no retry, since there is no
+  file to wait for. The photograph itself is the synced hike's, so the
+  gallery's Delete is still offered there: it removes it from the hike on
+  every device, and says so first (`PhotoUITests+Deletion.swift`). The
+  community's public copies do not reopen this. A Wikimedia Commons copy is
+  the one exception: it is somebody else's picture that Commons still holds,
+  so a device without its file downloads it again
+  (`HikePhotoStore.restore(_:)`).
 - **The live average speed keeps its clock, and is spoken in full.** Every
   *Avg Speed* that is not named for a clock divides by the walk's active
   clock: the time between kept fixes, which leaves pauses out and counts a
