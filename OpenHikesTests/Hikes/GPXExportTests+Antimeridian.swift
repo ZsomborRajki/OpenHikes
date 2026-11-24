@@ -20,7 +20,9 @@ import Testing
 extension GPXExportTests {
     /// What each longitude is written as. Both ways onto +180 are here, and
     /// the values beside them on both sides of the meridian, which must keep
-    /// every one of their seven places.
+    /// every one of their seven places, rounded the way the style rounds
+    /// them: the halves (`…85`, `…64999999`) are the ones a second rounding
+    /// moved. The last four lie outside the range and come back a turn round.
     @Test(
         "a longitude is written inside GPX's range, to seven places",
         arguments: [
@@ -29,15 +31,39 @@ extension GPXExportTests {
             (179.99999996, "-180.0000000"),
             (179.99999994, "179.9999999"),
             (179.9999999, "179.9999999"),
+            (179.99999985, "179.9999998"),
             (-180.0, "-180.0000000"),
             (-179.99999999, "-180.0000000"),
             (-179.9999999, "-179.9999999"),
+            (-179.99999985, "-179.9999998"),
             (12.7654321, "12.7654321"),
             (-0.000002, "-0.0000020"),
+            (120.00000064999999, "120.0000006"),
+            (180.00000004, "-180.0000000"),
+            (-180.00000004, "-180.0000000"),
+            (190.0, "-170.0000000"),
+            (-190.0, "170.0000000"),
         ]
     )
     func writesLegalLongitude(degrees: Double, written: String) {
         #expect(GPXExport.formattedLongitude(degrees) == written)
+    }
+
+    /// A longitude keeps the rounding a latitude gets, so a point whose two
+    /// are the same number is written with the same digits twice. Each value
+    /// is one where rounding the `Double` by hand and rounding its digits
+    /// disagree about the seventh place.
+    @Test(
+        "a longitude is rounded as a latitude is",
+        arguments: [47.71816765, -57.41586205, 82.09270215, -10.30400765]
+    )
+    func roundsLongitudeAsLatitude(degrees: Double) throws {
+        let point = RouteCoordinate(latitude: degrees, longitude: degrees)
+
+        let xml = GPXExport.xml(for: track(route: [point]))
+
+        let written = try #require(xml.firstMatch(of: #/<trkpt lat="([^"]+)" lon="([^"]+)"/#))
+        #expect(written.output.1 == written.output.2)
     }
 
     /// A track point, a photograph and a place on +180, and one point that
