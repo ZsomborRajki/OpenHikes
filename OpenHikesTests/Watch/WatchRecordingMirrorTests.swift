@@ -126,6 +126,27 @@ final class WatchRecordingMirrorTests {
         #expect(published.readings.last?.state == .recording)
     }
 
+    /// Stopped before its first fix and started again from the phone, both
+    /// between two ticks: each reading says recording, nothing walked and no
+    /// trail. The second is another recording with a clock of its own, and a
+    /// watch left with the first would count from the wrong start.
+    @Test("a new recording between two ticks that read the same is sent")
+    func aNewRecordingIsSentWhenItReadsTheSame() async throws {
+        let published = Published()
+        let coordinator = makeCoordinator()
+        let mirror = makeMirror(publishing: published, coordinator: coordinator)
+        _ = try await coordinator.startRecording()
+        await mirror.publishCurrentState()
+
+        _ = try await coordinator.stopRecording()
+        _ = try await coordinator.startRecording()
+        await mirror.publishCurrentState()
+        await mirror.publishCurrentState()
+
+        #expect(published.readings.map(\.state) == [.recording, .recording])
+        #expect(published.readings.map(\.distanceMeters) == [0, 0], "precondition: the two read the same")
+    }
+
     @Test("pausing is sent even though the figures did not move")
     func aStateChangeIsAlwaysSent() async throws {
         let published = Published()
