@@ -440,12 +440,10 @@ struct OpenHikesView: View {
             .onOpenURL { url in openInboundURL(url) }
             // Navigation asked for from outside the view tree: an intent or
             // the record button asking for a hike, the maker's pill, the
-            // camera pill's *Add Place*. Read as events rather than observed
-            // as tokens — see ``EventFeed`` — each by a task of its own.
-            .task { await readHikeOpenRequests() }
-            .task { await readMakerOpenRequests() }
-            .task { await readPlaceRequests() }
-            .task { await readActivityEndings() }
+            // camera pill's *Add Place*, a recording or a walk ending. Read
+            // as events rather than observed as tokens — see ``EventFeed`` —
+            // in one task — see ``RootNavigationRequest``.
+            .task { await readNavigationRequests() }
             // What a recording and a walk feel like, on whatever screen is
             // up — see ``ActivityHaptics``.
             .background { ActivityHaptics(recorder: appModel.hikeRecorder, walk: appModel.walkSession) }
@@ -610,58 +608,58 @@ extension OpenHikesView {
 
 // MARK: - Navigation requests
 
-/// The readers of the three ``EventFeed``s that ask this view to navigate.
+/// The reader of the ``EventFeed``s that ask this view to navigate.
 ///
-/// Each loop outlives the body pass that started it, and that is safe only
+/// The loop outlives the body pass that started it, and that is safe only
 /// because everything the handlers read is `@State` or an environment object
 /// — storage that is shared, not a value copied into this struct when the task
 /// began.
 private extension OpenHikesView {
-    /// An intent asked for a hike, or the record button for the recording.
-    /// Handed to the same router the widget's taps go through rather than a
-    /// second way in — see ``HikeOpenRequests``.
-    func readHikeOpenRequests() async {
-        for await url in appModel.hikeOpenRequests.links() {
-            openInboundURL(url)
-        }
-    }
-
-    /// The pill that shares the camera's slot. The push belongs here because
-    /// this view owns the sheet's navigation stack.
-    func readMakerOpenRequests() async {
-        for await _ in appModel.trailMaker.openRequests() {
-            openMaker()
-        }
-    }
-
-    func readPlaceRequests() async {
-        for await _ in photoCapture.placeRequests() {
-            openPlaceAdder()
+    /// Every request, in one loop — see ``RootNavigationRequest``.
+    ///
+    /// An intent's hike, or the record button's recording, goes to the same
+    /// router the widget's taps go through rather than a second way in — see
+    /// ``HikeOpenRequests``. The maker's pill shares the camera's slot, and
+    /// its push belongs here because this view owns the sheet's navigation
+    /// stack.
+    ///
+    /// The capsule follows this view's sheet from here, before anything is
+    /// read, for as long as this view reads what the activities end with: it
+    /// stands down on the activity's own screen, which only the sheet's path
+    /// can say is in front.
+    func readNavigationRequests() async {
+        appModel.activityCapsule.follow(sheet)
+        await RootNavigationRequest.read(
+            hikeLinks: appModel.hikeOpenRequests.links(),
+            makerRequests: appModel.trailMaker.openRequests(),
+            placeRequests: photoCapture.placeRequests(),
+            endings: appModel.activityEndings.events()
+        ) { request in
+            switch request {
+            case .hike(let url): openInboundURL(url)
+            case .maker: openMaker()
+            case .place: openPlaceAdder()
+            case .ending(let ending): end(ending)
+            }
         }
     }
 
     /// A Stop or an End, from the activity's bar or from its capsule on the
     /// map — see ``ActivityEnding``. A saved recording opens its hike, a
     /// discarded one takes its screen and its selection with it, and a walk
-    /// kept opens its summary over its trail's screen. And the capsule
-    /// follows this view's sheet from here, for as long as this view reads
-    /// what it ends with: it stands down on the activity's own screen, which
-    /// only the sheet's path can say is in front.
-    func readActivityEndings() async {
-        appModel.activityCapsule.follow(sheet)
-        for await ending in appModel.activityEndings.events() {
-            switch ending {
-            case let .recordingSaved(hikeID): openHike(id: hikeID)
-            case let .recordingDiscarded(hikeID):
-                // The selection first and the path last, in one write — see
-                // ``SheetPresentation/path``.
-                var path = sheet.path
-                if SheetRoute.removeDiscardedRecording(hikeID, selectedHike: &selectedHike, from: &path) {
-                    highlight.move(to: nil)
-                }
-                sheet.path = path
-            case let .walkKept(hikeID, walkID): openHike(id: hikeID, showingWalk: walkID)
+    /// kept opens its summary over its trail's screen.
+    func end(_ ending: ActivityEnding) {
+        switch ending {
+        case let .recordingSaved(hikeID): openHike(id: hikeID)
+        case let .recordingDiscarded(hikeID):
+            // The selection first and the path last, in one write — see
+            // ``SheetPresentation/path``.
+            var path = sheet.path
+            if SheetRoute.removeDiscardedRecording(hikeID, selectedHike: &selectedHike, from: &path) {
+                highlight.move(to: nil)
             }
+            sheet.path = path
+        case let .walkKept(hikeID, walkID): openHike(id: hikeID, showingWalk: walkID)
         }
     }
 
