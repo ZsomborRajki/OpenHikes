@@ -40,7 +40,7 @@
 //
 //  ## Why it is main-actor rather than `@concurrent`
 //
-//  Unlike ``WeatherManager/update(for:)``, this one cannot choose:
+//  Unlike ``WeatherManager/update(for:inFront:)``, this one cannot choose:
 //  `MKReverseGeocodingRequest.mapItems` is declared `NS_SWIFT_UI_ACTOR` in the
 //  SDK, so MapKit delivers its answer on the main actor whatever the caller
 //  does — and below iOS 26, where ``ReverseGeocode`` asks `CLGeocoder`

@@ -48,11 +48,12 @@ nonisolated struct WeatherSnapshot: Equatable, Sendable {
     let conditionDescription: String
     /// When the reading itself was produced — not when this app asked for it.
     ///
-    /// ``WeatherManager/update(for:)`` deliberately keeps the last successful
-    /// reading when WeatherKit is unavailable, which is right (a temperature
-    /// from twenty minutes ago beats an empty badge) and was previously
-    /// indistinguishable from a current one, because nothing recorded how old
-    /// it was. This is what ``isStale(asOf:policy:)`` answers from.
+    /// ``WeatherManager/update(for:inFront:)`` deliberately keeps the last
+    /// successful reading when WeatherKit is unavailable, which is right (a
+    /// temperature from twenty minutes ago beats an empty badge) and was
+    /// previously indistinguishable from a current one, because nothing
+    /// recorded how old it was. This is what ``isStale(asOf:policy:)``
+    /// answers from.
     ///
     /// Taken from WeatherKit's own `metadata.date` rather than from `Date.now`
     /// at the call site: WeatherKit serves cached payloads, so a response that
@@ -642,30 +643,44 @@ final class WeatherManager {
     ///
     /// **A cancelled attempt says nothing, whatever the request came back
     /// with.** The poll belongs to a SwiftUI `.task` and this manager outlives
-    /// it, so a request can still answer or throw after the loop that
-    /// replaced the one waiting on it has moved the badge. Nothing of it
-    /// reaches the badge, the cache, the store or the widget. A spinner left
-    /// behind is the next loop's, whose first pass asks again, and the `false`
-    /// goes nowhere: the backoff it would count against ends with its loop.
+    /// it, so a request can still answer or throw after its loop has been
+    /// cancelled and the one that replaced it has moved the badge. Nothing
+    /// of it reaches the badge, the cache, the store or the widget. A spinner
+    /// left behind is the next loop's, whose first pass asks again, and the
+    /// `false` goes nowhere: the backoff it would count against ends with its
+    /// loop.
     ///
     /// Asked of the task rather than of the error, because a cancelled request
     /// may still succeed, and WeatherKit need not fail one with Swift's own
     /// error. That error from a loop still running is an ordinary failure:
     /// the loop is there to back off, and its badge has to stop spinning.
     ///
-    /// **An answer about a subject the badge has left is kept, and not
+    /// **An answer about a subject the hiker has left is kept, and not
     /// shown.** The loop asks for a subject without waiting on the answer, so
     /// the hiker can open another trail while the first one's request is
     /// still out, and that trail owns the badge from then on. The reading
     /// goes in the cache, where going back to the first trail finds it, and
     /// nowhere else: not the badge, the store or the widget, which are all
-    /// about what the badge shows. A failure leaves the badge as it is.
-    func update(for subject: WeatherSubject) async -> Bool {
+    /// about what the badge shows. A failure leaves the badge as it is. It
+    /// goes in behind the subject in front, so that a run of late answers
+    /// cannot push that subject's reading out of the cache.
+    ///
+    /// `inFront` is the hiker's focus, read when the answer lands. Not the
+    /// badge's subject: the badge follows the focus only once the loop has
+    /// taken the wake, so for a moment after another trail is opened it is
+    /// still about the old one, and an answer landing in that moment would
+    /// go on the badge, the store and the widget for a trail nobody is
+    /// looking at any more.
+    func update(
+        for subject: WeatherSubject,
+        inFront: @autoclosure () -> WeatherSubject?
+    ) async -> Bool {
         do {
             let snapshot = try await readings.reading(at: subject.coordinate)
             try Task.checkCancellation()
-            remember(snapshot, for: subject)
-            guard isOnTheBadge(subject) else { return true }
+            let inFrontKey = inFront()?.key
+            remember(snapshot, for: subject, keeping: inFrontKey)
+            guard inFrontKey == subject.key else { return true }
             publish(.reading(snapshot, subject: subject))
             store?.save(snapshot: snapshot, subject: subject)
             return true
@@ -683,7 +698,7 @@ final class WeatherManager {
                 \(error.localizedDescription, privacy: .public)
                 """
             )
-            guard isOnTheBadge(subject) else { return false }
+            guard inFront()?.key == subject.key else { return false }
             if let cached = cache[subject.key] {
                 publish(.reading(cached.snapshot, subject: subject))
             } else {
@@ -700,12 +715,12 @@ final class WeatherManager {
     /// ``WeatherAlertSession``. Browsing trails moves the badge from one
     /// ridge to the next, and none of those is weather anybody is out in.
     ///
-    /// Asked by the poll loop on every pass rather than from ``update(for:)``,
-    /// because the moment an alert becomes the hiker's is not always a fetch:
-    /// starting a walk on the trail already showing changes nothing the poll
-    /// would request for, and the reading that came in while they were
-    /// browsing it is the one with the storm in it. Repeating the call costs
-    /// nothing — the watch says each alert once.
+    /// Asked by the poll loop on every pass rather than from
+    /// ``update(for:inFront:)``, because the moment an alert becomes the
+    /// hiker's is not always a fetch: starting a walk on the trail already
+    /// showing changes nothing the poll would request for, and the reading
+    /// that came in while they were browsing it is the one with the storm in
+    /// it. Repeating the call costs nothing — the watch says each alert once.
     ///
     /// A stale reading is not announced. The restored one at launch is
     /// usually last night's, and a walk adopted on relaunch should hear about
@@ -859,13 +874,14 @@ final class WeatherManager {
         await pendingWidgetPublish?.value
     }
 
-    /// Whether the badge is about `subject` still: the one it was last
-    /// pointed at, wherever that subject has since moved.
-    private func isOnTheBadge(_ subject: WeatherSubject) -> Bool {
-        state.subject?.key == subject.key
-    }
-
-    private func remember(_ snapshot: WeatherSnapshot, for subject: WeatherSubject) {
+    /// Caches `snapshot` as the most recently used reading, or the one just
+    /// behind `inFrontKey` when that is another subject's, as
+    /// ``WeatherRequestState`` orders the same subjects.
+    private func remember(
+        _ snapshot: WeatherSnapshot,
+        for subject: WeatherSubject,
+        keeping inFrontKey: String? = nil
+    ) {
         // The reading is stored where the subject already sits and the entry
         // is *then* moved to the end of the recency order, which is what makes
         // `removeFirst` drop the least recently read subject. A subject not
@@ -873,6 +889,9 @@ final class WeatherManager {
         // already last and does nothing.
         cache[subject.key] = StoredWeatherReading(snapshot: snapshot, subject: subject)
         cache.move(keys: CollectionOfOne(subject.key), to: cache.count)
+        if let inFrontKey, inFrontKey != subject.key, cache[inFrontKey] != nil {
+            cache.move(keys: CollectionOfOne(inFrontKey), to: cache.count)
+        }
         if cache.count > WeatherRequestState.trackedSubjectLimit {
             cache.removeFirst()
         }

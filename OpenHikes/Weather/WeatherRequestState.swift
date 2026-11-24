@@ -121,20 +121,30 @@ nonisolated struct WeatherRequestState: Sendable {
         }
     }
 
-    mutating func recordSuccess(key: String, at now: Date) {
-        update(key) { entry in
+    /// Counts a reading for `key`.
+    ///
+    /// `inFront` is the subject the hiker is looking at, when the answer is
+    /// another's: a request that was still out when they moved on. It stays
+    /// the most recently used, because a run of those answers would
+    /// otherwise push it out of the memory, and with it the freshness or
+    /// backoff that its next request is timed by.
+    mutating func recordSuccess(key: String, at now: Date, keeping inFront: String? = nil) {
+        update(key, keeping: inFront) { entry in
             entry.lastSuccess = now
             entry.failureCount = 0
             entry.nextAttempt = nil
         }
     }
 
+    /// Counts a failure for `key`, keeping `inFront` as
+    /// ``recordSuccess(key:at:keeping:)`` does.
     mutating func recordFailure(
         key: String,
         at now: Date,
-        policy: WeatherPollingPolicy = .standard
+        policy: WeatherPollingPolicy = .standard,
+        keeping inFront: String? = nil
     ) {
-        update(key) { entry in
+        update(key, keeping: inFront) { entry in
             entry.lastSuccess = nil
             entry.failureCount += 1
             entry.nextAttempt = now.addingTimeInterval(policy.retryDelay(after: entry.failureCount))
@@ -167,14 +177,22 @@ nonisolated struct WeatherRequestState: Sendable {
     }
 
     /// Applies `change` to `key`'s entry and marks it the most recently used,
+    /// or the one just behind `inFront` when that is another remembered key,
     /// evicting the least recent one if that puts the memory over its limit.
-    private mutating func update(_ key: String, _ change: (inout Entry) -> Void) {
+    private mutating func update(
+        _ key: String,
+        keeping inFront: String? = nil,
+        _ change: (inout Entry) -> Void
+    ) {
         // Two separate things, said separately: the entry is changed where it
         // sits, and *then* moved to the end of the recency order. A key not
         // seen before is appended by `updateValue`, so the move that follows
         // finds it already last and does nothing.
         entries.updateValue(forKey: key, default: Entry(), with: change)
         entries.move(keys: CollectionOfOne(key), to: entries.count)
+        if let inFront, inFront != key, entries[inFront] != nil {
+            entries.move(keys: CollectionOfOne(inFront), to: entries.count)
+        }
         if entries.count > Self.trackedSubjectLimit {
             entries.removeFirst()
         }

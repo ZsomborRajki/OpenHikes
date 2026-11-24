@@ -111,7 +111,8 @@ struct WeatherUpdateCancellationTests {
     /// and returns once the request is waiting on the service.
     private func request(_ subject: WeatherSubject) async -> Task<Bool, Never> {
         manager.focus(on: subject, willRequest: true)
-        let attempt = Task { await manager.update(for: subject) }
+        // The badge stands in for the hiker's focus: these cases move it by hand.
+        let attempt = Task { await manager.update(for: subject, inFront: manager.state.subject) }
         await settleDelegateHop(until: "the request to reach the service") { held.isHolding }
         return attempt
     }
