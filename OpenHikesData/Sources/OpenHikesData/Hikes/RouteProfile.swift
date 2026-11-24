@@ -230,16 +230,20 @@ nonisolated public struct RouteProfile: Sendable {
     }
 
     /// Adds `sample` to a series in route order, keeping at most one pair of
-    /// samples at any distance: the step at a pause.
+    /// samples at any distance where a pause falls: the step.
     ///
     /// The fix before a pause and the fix after it stand at the same distance
     /// (the paused leg has no length), and both heights are kept, because the
     /// chart's step between them is the pause. Any other sample at the
-    /// distance of a pause's resume folds into it — the run it starts is the
-    /// same, and a second resumed sample at one distance would share its
-    /// identity. `mergingRepeats` folds the remaining case too, two plain
+    /// distance of a pause's resume folds into it, because the run it starts
+    /// is the same. `mergingRepeats` folds the remaining case too, two plain
     /// samples at one distance, which only the downsampled series does; an
     /// undownsampled route draws every point it has.
+    ///
+    /// A sample kept at the distance of the one before it takes the next
+    /// ``ElevationSample/repeatIndex``, and one folded in keeps the index of
+    /// the sample it replaces, so no two samples in a series share an
+    /// identity.
     private static func append(
         _ sample: ElevationSample,
         to series: inout [ElevationSample],
@@ -249,16 +253,23 @@ nonisolated public struct RouteProfile: Sendable {
             series.append(sample)
             return
         }
+        let repeated = ElevationSample(
+            distanceMeters: sample.distanceMeters,
+            elevation: sample.elevation,
+            resumesAfterPause: sample.resumesAfterPause,
+            repeatIndex: last.repeatIndex + 1
+        )
         if sample.resumesAfterPause, !last.resumesAfterPause {
-            series.append(sample)
+            series.append(repeated)
         } else if last.resumesAfterPause || sample.resumesAfterPause || mergingRepeats {
             series[series.count - 1] = ElevationSample(
                 distanceMeters: sample.distanceMeters,
                 elevation: sample.elevation,
-                resumesAfterPause: last.resumesAfterPause || sample.resumesAfterPause
+                resumesAfterPause: last.resumesAfterPause || sample.resumesAfterPause,
+                repeatIndex: last.repeatIndex
             )
         } else {
-            series.append(sample)
+            series.append(repeated)
         }
     }
 
@@ -316,10 +327,10 @@ nonisolated public struct RouteProfile: Sendable {
         picked.append(last)
 
         // Distances are cumulative, so they never decrease — but a stationary
-        // stretch can repeat one, and `Charts` plots (and `ElevationSample`
-        // identifies) by distance. Keep the later point of any such pair so the
-        // series stays ascending without losing the route's end; only a
-        // pause's step keeps two (see ``append(_:to:mergingRepeats:)``).
+        // stretch can repeat one, and `Charts` plots by distance. Keep the
+        // later point of any such pair so the series stays ascending without
+        // losing the route's end; only a pause's step keeps two (see
+        // ``append(_:to:mergingRepeats:)``).
         //
         // A pause whose resumed sample was not picked is carried to the next
         // sample that was, which is the first plotted one past the pause, so
