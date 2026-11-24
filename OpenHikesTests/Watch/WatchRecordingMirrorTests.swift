@@ -264,7 +264,92 @@ final class WatchRecordingMirrorTests {
         #expect(published.readings.last?.state == .idle)
     }
 
+    /// The coordinator settles the recorder's recovery before it reads, and
+    /// the watch can go out of range meanwhile. The read that comes back to
+    /// the ended loop must not become the reading the next loop dedupes its
+    /// first against: the link dropped it, as it drops anything sent while
+    /// the watch is away.
+    @Test("a read that comes back after the watch left does not swallow the first reading when it returns")
+    @MainActor
+    func aReadOutlivingItsLoopLeavesTheBaselineClear() async {
+        let reads = HeldReads(answering: WatchPhoneRecording(
+            state: .recording,
+            elapsedSeconds: 600,
+            distanceMeters: 1200,
+            trailName: "Ridge",
+            isTrailNameStale: false
+        ))
+        let link = Link()
+        let mirror = WatchRecordingMirror(
+            coordinator: nil,
+            publish: { link.send($0) },
+            readsState: { await reads.read() }
+        )
+        link.isReachable = true
+        mirror.reachabilityChanged(to: true)
+        await settleDelegateHop(until: "the loop's first read is held") { reads.isHolding }
+        link.isReachable = false
+        mirror.reachabilityChanged(to: false)
+
+        // The held read comes back while the watch is away, and then the
+        // watch returns with not a figure moved: the one way a hiker standing
+        // still comes back into range. The mirror's code after a read runs
+        // before anything else on the main actor, so the read having
+        // returned is that code having run.
+        reads.release()
+        await settleDelegateHop(until: "the held read has come back") { reads.answered == 1 }
+        link.isReachable = true
+        mirror.reachabilityChanged(to: true)
+
+        await settleDelegateHop(until: "the returned watch is told of the recording") { !link.delivered.isEmpty }
+        #expect(link.delivered.map(\.state) == [.recording])
+        mirror.reachabilityChanged(to: false)
+    }
+
     // MARK: - Harness
+
+    /// A recorder read that waits, the first time, until it is released, as
+    /// one does while the coordinator settles a recovery; every later read
+    /// answers at once.
+    @MainActor
+    private final class HeldReads {
+        private let answer: WatchPhoneRecording
+        private var held: CheckedContinuation<Void, Never>?
+        private var reads = 0
+        /// How many reads have returned.
+        private(set) var answered = 0
+
+        init(answering answer: WatchPhoneRecording) {
+            self.answer = answer
+        }
+
+        var isHolding: Bool { held != nil }
+
+        func read() async -> WatchPhoneRecording {
+            reads += 1
+            if reads == 1 { await withCheckedContinuation { held = $0 } }
+            answered += 1
+            return answer
+        }
+
+        func release() {
+            held?.resume()
+            held = nil
+        }
+    }
+
+    /// The `WCSession` link as the mirror meets it: what it sends while the
+    /// watch is away is dropped.
+    @MainActor
+    private final class Link {
+        var isReachable = false
+        private(set) var delivered: [WatchPhoneRecording] = []
+
+        func send(_ recording: WatchPhoneRecording) {
+            guard isReachable else { return }
+            delivered.append(recording)
+        }
+    }
 
     /// Collects what the mirror sent, in order.
     @MainActor
