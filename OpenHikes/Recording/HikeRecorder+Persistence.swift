@@ -399,7 +399,8 @@ extension HikeRecorder {
 
     func fail(
         _ failure: RecordingFailure,
-        endLocationUpdates: Bool = true
+        endLocationUpdates: Bool = true,
+        endsActivity: Bool = true
     ) {
         cancelLiveMatching(clearWindow: false)
         cancelTrailGraphPrefetches()
@@ -414,8 +415,9 @@ extension HikeRecorder {
         if sessionID != nil {
             publishSharedRecordingSnapshot(force: true)
         }
-        // Unconditionally, from every one of its call sites, because no
-        // failure leaves a recording still taking fixes. The flag
+        // From every one of its call sites but a refused resume's — see
+        // `HikeRecorder.refuseResume(_:)` — because no failure leaves a
+        // recording still taking fixes. The flag
         // `endLocationUpdates: false` does not mean "it carries on" — it means
         // the sensors are already off or were never started: `stop()` and
         // `discard()` stop them first, and the activation and recovery paths
@@ -432,7 +434,7 @@ extension HikeRecorder {
         // succeeds is looking at the app, not at the Lock Screen. Harmless
         // where no recording panel is up — `endRecordingActivity(_:)` checks —
         // so a followed trail's activity is left where it is.
-        endRecordingActivity(.abandoned)
+        if endsActivity { endRecordingActivity(.abandoned) }
     }
 
     func resetSession() {
