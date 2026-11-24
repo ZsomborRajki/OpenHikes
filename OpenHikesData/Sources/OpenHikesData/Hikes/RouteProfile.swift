@@ -175,6 +175,10 @@ nonisolated public struct RouteProfile: Sendable {
 
         var cumulative = 0.0
         var previous: RouteCoordinate?
+        // The second half of each sample's identity, counted here over the
+        // route's own samples and never again: see ``ElevationSample``.
+        var repeatIndex = 0
+        var lastSampleDistance: Double?
         for (index, point) in route.enumerated() {
             if index.isMultiple(of: 255), !shouldContinue() { break }
             let coordinate = point.clCoordinate
@@ -207,8 +211,15 @@ nonisolated public struct RouteProfile: Sendable {
             // same reason; `GPXImport` refuses it at the door, and this is
             // what covers hikes stored before it did.
             if let pointElevation = point.elevation, pointElevation.isFinite {
+                repeatIndex = lastSampleDistance == cumulative ? repeatIndex + 1 : 0
+                lastSampleDistance = cumulative
                 Self.append(
-                    ElevationSample(distanceMeters: cumulative, elevation: pointElevation, resumesAfterPause: resumes),
+                    ElevationSample(
+                        distanceMeters: cumulative,
+                        elevation: pointElevation,
+                        resumesAfterPause: resumes,
+                        repeatIndex: repeatIndex
+                    ),
                     to: &routeSamples,
                     mergingRepeats: false
                 )
@@ -240,10 +251,11 @@ nonisolated public struct RouteProfile: Sendable {
     /// samples at one distance, which only the downsampled series does; an
     /// undownsampled route draws every point it has.
     ///
-    /// A sample kept at the distance of the one before it takes the next
-    /// ``ElevationSample/repeatIndex``, and one folded in keeps the index of
-    /// the sample it replaces, so no two samples in a series share an
-    /// identity.
+    /// Nothing here numbers a sample. Each arrives with the identity of the
+    /// route's sample it was read from, and a fold keeps the identity of the
+    /// sample whose height it keeps, the later one. So no two samples in a
+    /// series share an identity, and an identity names the same height in
+    /// every series it appears in, thinned or not.
     private static func append(
         _ sample: ElevationSample,
         to series: inout [ElevationSample],
@@ -253,23 +265,17 @@ nonisolated public struct RouteProfile: Sendable {
             series.append(sample)
             return
         }
-        let repeated = ElevationSample(
-            distanceMeters: sample.distanceMeters,
-            elevation: sample.elevation,
-            resumesAfterPause: sample.resumesAfterPause,
-            repeatIndex: last.repeatIndex + 1
-        )
         if sample.resumesAfterPause, !last.resumesAfterPause {
-            series.append(repeated)
+            series.append(sample)
         } else if last.resumesAfterPause || sample.resumesAfterPause || mergingRepeats {
             series[series.count - 1] = ElevationSample(
                 distanceMeters: sample.distanceMeters,
                 elevation: sample.elevation,
                 resumesAfterPause: last.resumesAfterPause || sample.resumesAfterPause,
-                repeatIndex: last.repeatIndex
+                repeatIndex: sample.repeatIndex
             )
         } else {
-            series.append(repeated)
+            series.append(sample)
         }
     }
 
@@ -332,6 +338,10 @@ nonisolated public struct RouteProfile: Sendable {
         // losing the route's end; only a pause's step keeps two (see
         // ``append(_:to:mergingRepeats:)``).
         //
+        // Every picked sample keeps the identity the route gave it. Numbered
+        // again here, a sample's would depend on which of the samples before
+        // it at its distance were picked, and so change as a recording grows.
+        //
         // A pause whose resumed sample was not picked is carried to the next
         // sample that was, which is the first plotted one past the pause, so
         // the flag still means a pause falls between a sample and the one
@@ -347,7 +357,8 @@ nonisolated public struct RouteProfile: Sendable {
                 ElevationSample(
                     distanceMeters: sample.distanceMeters,
                     elevation: sample.elevation,
-                    resumesAfterPause: resumes
+                    resumesAfterPause: resumes,
+                    repeatIndex: sample.repeatIndex
                 ),
                 to: &plotted,
                 mergingRepeats: true
