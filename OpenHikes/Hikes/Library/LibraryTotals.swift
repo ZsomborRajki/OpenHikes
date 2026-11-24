@@ -38,12 +38,18 @@
 //  down it would read twice as steep as it was, and could take the record
 //  from a steeper recording.
 //
-//  Following a trail and recording are independent — starting a recording
-//  leaves a walk under way alone — so one afternoon can leave both a
-//  recording and a walk along the trail it followed. Whatever part of a
-//  followed walk's time a counted hike's clock also covers is that
-//  afternoon's second copy, and is left out: the recording is the whole of
-//  it, the walk only the stretch that lay on the trail. The rest of the walk
+//  A walk and a recording never run together — the record button offers to
+//  end a walk under way before it records — but one afternoon can still
+//  leave a walk along a trail and a clocked hike over the same time. *Record
+//  Instead* begins the recording with what the walk covered, clocked over the
+//  very time the walk's History row spans (`TrailWalkSession+OffTrail.swift`);
+//  the watch can record the walk the phone is following; a dated GPX can be
+//  the same afternoon from another app. A clocked hike whose line lies where
+//  the walk's trail does (``LibraryFootprint``) is that afternoon's second
+//  copy, and whatever part of the walk's time its clock covers is left out:
+//  the hike is the whole of it, the walk only the stretch that lay on the
+//  trail. One that lies somewhere else only shares the hours — a friend's
+//  file from another trail — and takes nothing from the walk. The rest of the walk
 //  still counts, in proportion to the time left over — a ten-minute
 //  recording in the middle of a four-hour walk takes ten minutes out of it,
 //  not the four hours. A walk kept only by a figure for the whole of it
@@ -157,6 +163,10 @@ nonisolated struct LibraryHikeFacts: Equatable, Sendable {
     /// First stamp to last, or `nil` for a hike with no clock.
     let clock: DateInterval?
     let isFromCommunity: Bool
+    /// Where its line lies, or `nil` when that is not known, which counts as
+    /// anywhere: a clock is only kept from a walk by knowing it lies
+    /// elsewhere.
+    var footprint: LibraryFootprint?
 
     var hasClock: Bool { clock != nil }
 }
@@ -341,10 +351,16 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
         return date.formatted(style)
     }
 
+    /// How far beyond its trail's box a clocked hike's line may lie and
+    /// still be taken for the walk's ground: GPS beside a path, and a path a
+    /// little off the line drawn for it.
+    static let sameGroundMarginMeters = 200.0
+
     /// Every outing in the library, by the rules the file header gives.
     static func outings(hikes: [LibraryHikeFacts], walks: [LibraryWalkFacts]) -> [LibraryOuting] {
         let counted = hikes.filter { $0.hasClock && !$0.isFromCommunity }
         let clocks = RecordedClocks(counted.compactMap(\.clock))
+        let trails = byID(hikes)
         let clocked = counted.map { hike in
             LibraryOuting(
                 hikeID: hike.hikeID,
@@ -358,7 +374,12 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
         }
         let followed = walks.compactMap { walk -> LibraryOuting? in
             guard !walk.isRecordingsOwn else { return nil }
-            let share = unrecordedShare(of: walk, clocks: clocks)
+            let share = unrecordedShare(
+                of: walk,
+                clocks: clocks,
+                among: counted,
+                along: trails[walk.hikeID]?.footprint
+            )
             guard share > 0 else { return nil }
             return LibraryOuting(
                 hikeID: walk.hikeID,
@@ -373,11 +394,31 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
         return clocked + followed
     }
 
-    /// The fraction of `walk`'s time no clock in `clocks` covers, from 0 to 1.
-    private static func unrecordedShare(of walk: LibraryWalkFacts, clocks: RecordedClocks) -> Double {
+    /// The fraction of `walk`'s time no clock of the same ground covers,
+    /// from 0 to 1.
+    ///
+    /// Every clock merged first, which answers almost every walk at once:
+    /// nothing else was clocked over its hours. Only a walk something did
+    /// overlap is weighed hike by hike, keeping the clocks of `counted` that
+    /// meet its hours and lie where `trail` does, or whose line is not known.
+    /// A trail whose box is not known keeps them all, as before.
+    private static func unrecordedShare(
+        of walk: LibraryWalkFacts,
+        clocks: RecordedClocks,
+        among counted: [LibraryHikeFacts],
+        along trail: LibraryFootprint?
+    ) -> Double {
         let length = walk.endedAt.timeIntervalSince(walk.startedAt)
         guard length > 0 else { return 1 }
-        let recorded = clocks.seconds(from: walk.startedAt, to: walk.endedAt)
+        var recorded = clocks.seconds(from: walk.startedAt, to: walk.endedAt)
+        if recorded > 0, let trail {
+            let sameGround = counted.compactMap { hike -> DateInterval? in
+                guard let clock = hike.clock, clock.end > walk.startedAt, clock.start < walk.endedAt else { return nil }
+                guard let footprint = hike.footprint else { return clock }
+                return footprint.meets(trail, within: sameGroundMarginMeters) ? clock : nil
+            }
+            recorded = RecordedClocks(sameGround).seconds(from: walk.startedAt, to: walk.endedAt)
+        }
         return max(0, 1 - recorded / length)
     }
 
@@ -519,7 +560,8 @@ nonisolated enum LibraryTotalsSweep {
                 clock: statistics.duration == nil ? nil : statistics.startDate.flatMap { start in
                     statistics.endDate.map { DateInterval(start: start, end: max(start, $0)) }
                 },
-                isFromCommunity: hike.importedFromListingID != nil
+                isFromCommunity: hike.importedFromListingID != nil,
+                footprint: LibraryFootprint(route: route)
             )
         }
         return (hikeFacts, walkFacts(walks, revisions: revisions, routes: routes))
