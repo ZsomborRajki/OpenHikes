@@ -38,17 +38,23 @@
 //  down it would read twice as steep as it was, and could take the record
 //  from a steeper recording.
 //
-//  Following a trail and recording are independent — starting a recording
-//  leaves a walk under way alone — so one afternoon can leave both a
-//  recording and a walk along the trail it followed. Whatever part of a
+//  A walk and a recording never run together — the record button offers to
+//  end a walk under way before it records (`RecordingEntry`) — but one
+//  afternoon can still leave a walk along a trail and a clocked hike over the
+//  same time. *Record Instead* ends a walk that left its trail and begins the
+//  recording with what the walk covered, clocked over the very time the
+//  walk's History row spans (`TrailWalkSession+OffTrail.swift`). And any
+//  clocked hike can overlap a walk: a dated GPX of the same afternoon, a hike
+//  the watch recorded while the phone followed the trail, or rows saved by a
+//  build that let a recording start beside a walk. Whatever part of a
 //  followed walk's time a counted hike's clock also covers is that
-//  afternoon's second copy, and is left out: the recording is the whole of
-//  it, the walk only the stretch that lay on the trail. The rest of the walk
-//  still counts, in proportion to the time left over — a ten-minute
-//  recording in the middle of a four-hour walk takes ten minutes out of it,
-//  not the four hours. A walk kept only by a figure for the whole of it
-//  cannot say which kilometres fell in which minutes, so the proportion is
-//  an even pace's; a walk wholly inside a recording is left out entirely.
+//  afternoon's second copy, and is left out: the hike is the whole of it, the
+//  walk only the stretch that lay on the trail. The rest of the walk still
+//  counts, in proportion to the time left over — a ten-minute recording in
+//  the middle of a four-hour walk takes ten minutes out of it, not the four
+//  hours. A walk kept only by a figure for the whole of it cannot say which
+//  kilometres fell in which minutes, so the proportion is an even pace's; a
+//  walk wholly inside a recording is left out entirely.
 //
 //  A record is one outing, not one trail: the longest is the furthest anyone
 //  walked in one go, so a thirty-kilometre trail walked for two is a
