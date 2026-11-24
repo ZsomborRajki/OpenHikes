@@ -523,7 +523,7 @@ extension HikeRecorder {
         // reminders anyway.
         movementReminders?.recordingDidResume()
         guard source.authorization == .authorized else {
-            fail(.locationDenied)
+            refuseResume(.locationDenied)
             return
         }
         if !source.hasFullAccuracy {
@@ -531,7 +531,7 @@ extension HikeRecorder {
             guard isResumeWanted(attempt, of: session) else { return }
         }
         guard source.hasFullAccuracy else {
-            fail(.preciseLocationRequired)
+            refuseResume(.preciseLocationRequired)
             return
         }
         guard let resumedAt = await reopenJournal(resuming: attempt, of: session) else { return }
@@ -554,6 +554,22 @@ extension HikeRecorder {
         source.startRecordingUpdates(profile: resolvedEnergyProfile())
         phase = stats.pointCount == 0 ? .waitingForFix : .recording
         publishSharedRecordingSnapshot(force: true)
+    }
+
+    /// A resume refused before it changed anything: the walk is as it was,
+    /// paused, and only the app can put right what stopped it.
+    ///
+    /// Failed all the same, so the recording screen says why, and dismissing
+    /// that puts the walk back to paused (``dismissFailure()``). But its panel
+    /// stays up, paused as it was: a Resume tapped on the Lock Screen is
+    /// refused there by the intent that asked, after this returns — see
+    /// ``HikeIntentCoordinator/performHikeActivityControl(_:)`` — and a panel
+    /// ended here took the reason down with it, leaving the hiker a locked
+    /// phone with no walk on it (#1606). Paused is what it says, which a walk
+    /// that cannot resume is; nothing publishes to it while the recording is
+    /// failed, and the refusal goes with the panel.
+    private func refuseResume(_ failure: RecordingFailure) {
+        fail(failure, endsActivity: false)
     }
 
     /// Ends the walk and saves it, with the stretches trail matching left a
