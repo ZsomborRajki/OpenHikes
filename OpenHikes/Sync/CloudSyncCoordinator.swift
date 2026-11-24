@@ -217,7 +217,7 @@ final class CloudSyncCoordinator {
             // `Event` is a class whose `error` is an existential, and keeping
             // it out of `apply(_:)` is what lets that reducer take a
             // `Sendable` value a test can construct. Everything the row can
-            // say about a pass is in the four cases of ``CloudSyncOutcome``.
+            // say about a pass is in the five cases of ``CloudSyncOutcome``.
             guard let outcome = CloudSyncOutcome(notification: notification) else { return }
             MainActor.assumeIsolated { self?.apply(outcome) }
         }
@@ -231,6 +231,8 @@ final class CloudSyncCoordinator {
         switch outcome {
         case .began:
             status.began()
+        case .setUpFinished:
+            status.finished(stampingSync: false)
         case .succeeded:
             status.finished()
         case .transientFailure(let reason):

@@ -12,6 +12,7 @@
 //
 
 import CloudKit
+import CoreData
 import Foundation
 @testable import OpenHikes
 import Testing
@@ -157,6 +158,30 @@ struct CloudSyncOutcomeTests {
     func notificationWithoutEventIsIgnored() {
         let notification = Notification(name: .init("test"), object: nil, userInfo: [:])
         #expect(CloudSyncOutcome(notification: notification) == nil)
+    }
+
+    // MARK: The kind of event
+
+    /// The SDK's setup, import and export are separate event types, and only
+    /// a transfer is a sync.
+    @Test("a finished setup is not a sync, and a finished import or export is")
+    func aFinishedSetupIsNotASync() {
+        #expect(CloudSyncOutcome(type: .setup, hasEnded: true, error: nil) == .setUpFinished)
+        #expect(CloudSyncOutcome(type: .import, hasEnded: true, error: nil) == .succeeded)
+        #expect(CloudSyncOutcome(type: .export, hasEnded: true, error: nil) == .succeeded)
+    }
+
+    @Test("a setup still shows while it runs, and its failures are still told")
+    func setUpProgressAndFailuresStayVisible() {
+        #expect(CloudSyncOutcome(type: .setup, hasEnded: false, error: nil) == .began)
+        #expect(
+            CloudSyncOutcome(type: .setup, hasEnded: true, error: CKError(.quotaExceeded))
+                == .failed(CloudSyncOutcome.reason(for: CKError(.quotaExceeded)))
+        )
+        #expect(
+            CloudSyncOutcome(type: .setup, hasEnded: true, error: CKError(.networkUnavailable))
+                == .transientFailure(CKError(.networkUnavailable).localizedDescription)
+        )
     }
 }
 

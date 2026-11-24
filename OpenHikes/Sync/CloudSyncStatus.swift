@@ -197,10 +197,14 @@ final class CloudSyncStatus {
 
     /// Ends a pass. One that raised something goes on saying so, and does not
     /// claim a sync time it did not earn.
-    func finished() {
+    ///
+    /// - Parameter stampingSync: whether the pass moved hikes. A setup does
+    ///   not, so it settles the row and leaves the last sync time where an
+    ///   import or an export put it.
+    func finished(stampingSync: Bool = true) {
         guard passProblem == nil else { return }
         activity = .idle
-        lastSyncedAt = .now
+        if stampingSync { lastSyncedAt = .now }
     }
 
     func failed(_ reason: String) {
