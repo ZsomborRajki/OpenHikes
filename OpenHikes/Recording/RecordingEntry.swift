@@ -68,6 +68,7 @@ final class RecordingEntry {
     private let walkUnderWay: @MainActor () -> String?
     private let endWalk: @MainActor () -> Bool
     private let takeOverWalk: @MainActor () async -> WalkTakeover
+    private let unclaimedSeed: @MainActor () -> RecordingSeed?
     private let openRequests: HikeOpenRequests
 
     /// Whether the store refused the End that ``endWalkAndRecord()`` asked
@@ -88,6 +89,9 @@ final class RecordingEntry {
     ///     store refused leaves it under way.
     ///   - takeOverWalk: ends that walk for a recording that begins with what
     ///     it covered, and hands that over.
+    ///   - unclaimedSeed: what a handoff whose start failed carried, for the
+    ///     recording screen's Start to try it again — see
+    ///     ``HikeRecorder/unclaimedSeed``.
     ///   - openRequests: where the request for the screen is sent.
     init(
         isLive: @escaping @MainActor () -> Bool,
@@ -95,6 +99,7 @@ final class RecordingEntry {
         walkUnderWay: @escaping @MainActor () -> String? = { nil },
         endWalk: @escaping @MainActor () -> Bool = { true },
         takeOverWalk: @escaping @MainActor () async -> WalkTakeover = { .ended(carrying: nil) },
+        unclaimedSeed: @escaping @MainActor () -> RecordingSeed? = { nil },
         openRequests: HikeOpenRequests
     ) {
         self.isLive = isLive
@@ -102,6 +107,7 @@ final class RecordingEntry {
         self.walkUnderWay = walkUnderWay
         self.endWalk = endWalk
         self.takeOverWalk = takeOverWalk
+        self.unclaimedSeed = unclaimedSeed
         self.openRequests = openRequests
     }
 
@@ -136,6 +142,7 @@ final class RecordingEntry {
                     return .overtaken
                 }
             },
+            unclaimedSeed: { [weak recorder] in recorder?.unclaimedSeed },
             openRequests: openRequests
         )
     }
@@ -162,6 +169,19 @@ final class RecordingEntry {
         guard walkToEnd == nil else { return }
         Task {
             if !isLive() { await start(nil) }
+            openRequests.openRecording()
+        }
+    }
+
+    /// The recording screen's Start: ``requestRecording()``, except that a
+    /// handoff from a walk whose start failed there is tried again with what
+    /// the walk covered — see ``HikeRecorder/unclaimedSeed``. The screen is
+    /// where that failure was explained, so its Start is the retry; the
+    /// map's button starts a recording of its own.
+    func startOnRecordingScreen() {
+        guard walkToEnd == nil else { return }
+        Task {
+            if !isLive() { await start(unclaimedSeed()) }
             openRequests.openRecording()
         }
     }

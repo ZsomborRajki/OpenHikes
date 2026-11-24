@@ -199,6 +199,12 @@ final class HikeRecorder: NSObject {
     /// Taken by the activation that makes the session, and let go of by
     /// ``resetSession()``.
     @ObservationIgnored var carriedSeed: RecordingSeed?
+    /// The walk a handoff carried when its start failed before a session
+    /// took it — see ``RecordingSeed``. Kept past the failure, which
+    /// ``resetSession()`` does not touch, for the recording screen's Start to
+    /// try that handoff again; let go of by any session that starts and by
+    /// any other start asked for.
+    @ObservationIgnored var unclaimedSeed: RecordingSeed?
     @ObservationIgnored var pendingResumeFlag = false
     /// Refuses live fixes taken before this recording, or its current leg,
     /// began — see ``RecordingFixWindow``. `nil` until a session is under way.
