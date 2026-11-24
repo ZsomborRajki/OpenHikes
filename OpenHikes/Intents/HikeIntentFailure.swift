@@ -25,6 +25,14 @@ nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
     /// underlying text is logged where it is caught rather than carried here:
     /// every string this enum holds is read out loud.
     case couldNotSave
+    /// Asked to start from somewhere that cannot put up the location prompt
+    /// a start would meet — the watch — while the phone has never been
+    /// asked, or holds only approximate location. Nothing was started, and
+    /// the hiker is told why rather than told it began.
+    ///
+    /// The whole sentence is the description, for the reason
+    /// ``walking(trail:)`` gives: the watch shows the description alone.
+    case needsLocationPermission
     /// Asked to stop, pause or report on a recording that is not running.
     case noActiveRecording
     /// Nothing has been recorded or imported yet.
@@ -72,6 +80,7 @@ nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
             localized: "You’re hiking \(trail). End the hike in OpenHikes to start recording."
         )
         case .notPaused: String(localized: "That hike isn’t paused.")
+        case .needsLocationPermission: String(localized: "OpenHikes needs your location before it can record a hike.")
         case .recordingNeedsDiscardChoice: String(
             localized: """
                 Your recording is too short to save, but it has photos or places on it. \
@@ -88,7 +97,7 @@ nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
     var recoverySuggestion: String? {
         switch self {
         case .alreadyRecording, .noActiveRecording, .notPaused, .noHikesYet, .nothingWalkedYet,
-            .recordingNeedsDiscardChoice, .unknownDay, .walking:
+            .needsLocationPermission, .recordingNeedsDiscardChoice, .unknownDay, .walking:
             nil
         case .busyFinishing: String(localized: "Try again in a moment.")
         case .recording(let failure): failure.recoverySuggestion

@@ -109,11 +109,17 @@ extension HikeIntentCoordinator {
         // the hiker whether they mean to, and the map's button can.
         if let trail = walkUnderWay() { throw .walking(trail: trail) }
         await recorder.start()
+        // `start()` answers an install that has never asked by putting up the
+        // system's prompt and returning, and no recording exists until the
+        // hiker answers it. Waited for, so what is reported is the answer — a
+        // session, or the refusal — and never the question: Siri said
+        // "Recording your hike" over a prompt the hiker then declined.
+        await recorder.settleStart()
         try throwIfRecorderFailed()
         // A failed session that kept its id is not reset by `start()`, which
         // then returns having done nothing. Without this the hiker is told
         // their hike is being recorded by the very call that declined to.
-        guard recorder.isCapturingFixes else { throw .busyFinishing }
+        guard recorder.isCapturingFixes, recorder.sessionID != nil else { throw .busyFinishing }
         return liveReport()
     }
 

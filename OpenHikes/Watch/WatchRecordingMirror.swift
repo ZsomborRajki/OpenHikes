@@ -142,11 +142,17 @@ final class WatchRecordingMirror {
             )
         }
         var refusal: String?
-        do {
+        do throws(HikeIntentFailure) {
             switch command.action {
             case .pause: _ = try await coordinator.pauseRecording()
             case .resume: _ = try await coordinator.resumeRecording()
-            case .start: _ = try await coordinator.startRecording()
+            case .start:
+                // The prompt a start would meet is the phone's, and a phone
+                // in a pocket cannot show it: the start would wait on an
+                // answer nobody can give. Said instead, as Control Center
+                // defers to the app for the same reason.
+                if coordinator.authorization.needsForeground { throw HikeIntentFailure.needsLocationPermission }
+                _ = try await coordinator.startRecording()
             case .stop: _ = try await coordinator.stopRecording()
             }
         } catch {

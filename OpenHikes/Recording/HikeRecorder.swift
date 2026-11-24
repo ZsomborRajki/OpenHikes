@@ -128,7 +128,9 @@ final class HikeRecorder: NSObject {
     @ObservationIgnored let clock: @Sendable () -> Date
     @ObservationIgnored let uptime: @Sendable () -> TimeInterval
     @ObservationIgnored let journalFlushDelay: Duration
-    @ObservationIgnored var sessionID: UUID?
+    @ObservationIgnored var sessionID: UUID? {
+        didSet { releaseStartWaiters() }
+    }
     @ObservationIgnored var sessionUptimeBase: TimeInterval?
     @ObservationIgnored var lastAcceptedPoint: RecordingPoint?
     /// The stretch of walk behind ``lastAcceptedPoint``, with its timestamps,
@@ -170,7 +172,11 @@ final class HikeRecorder: NSObject {
     /// The live subscription to ``PowerStateMonitor/state``. Held so it can be
     /// cancelled — see ``observePowerState()``.
     @ObservationIgnored var powerStateObservation: Task<Void, Never>?
-    @ObservationIgnored var startRequested = false
+    @ObservationIgnored var startRequested = false {
+        didSet { releaseStartWaiters() }
+    }
+    /// Whoever is waiting for a Start to be answered — see ``settleStart()``.
+    @ObservationIgnored var startWaiters: [CheckedContinuation<Void, Never>] = []
     /// Whether the failure in ``phase`` is a refused resume's, which left the
     /// walk as paused as it was — see ``refuseResume(_:)``. Cleared by every
     /// ``fail(_:endLocationUpdates:endsActivity:)`` and set after one by the
