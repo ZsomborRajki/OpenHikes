@@ -162,8 +162,9 @@ enum StatCaption: Equatable {
 /// One figure in a ``StatStrip``: a small caption over the number.
 ///
 /// It stores the formatted value rather than anything it was formatted from,
-/// which is what lets the recording screen's clock tick through it — see
-/// ``PhaseClock`` for the freeze a stored reference causes.
+/// which is what lets the recording screen's clock tick through it: a view
+/// holding only a reference is the same view on every tick, so SwiftUI skips
+/// its body and the clock silently freezes.
 struct StatFigure: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
