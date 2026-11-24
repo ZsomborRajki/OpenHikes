@@ -28,7 +28,6 @@ struct SquareArchiveServerTests {
     static let next = SquareArchiveServer.Listing.Archive(name: "routing-20261129-00", generation: 1, zoom: 12)
     /// The region over `OverpassGraphFixture.alpineRoute`, which is its tile.
     static let region = TrailGraphRegion(zoom: 12, x: 2194, y: 1430)
-    static let tile = TrailGraphSquare(x: 2194, y: 1430)
     static let tileName = "routing1_z12_2194_1430"
 
     static func tilePath(_ archive: SquareArchiveServer.Listing.Archive) -> String {

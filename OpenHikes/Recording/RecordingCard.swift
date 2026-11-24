@@ -12,7 +12,6 @@
 //
 
 import Foundation
-import OpenHikesData
 import SwiftUI
 
 struct RecordingCard: View {

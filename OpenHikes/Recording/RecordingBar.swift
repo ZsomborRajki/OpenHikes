@@ -23,7 +23,6 @@
 //
 
 import Foundation
-import OpenHikesData
 import SwiftUI
 
 /// The bar's three items.
