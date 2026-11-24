@@ -82,7 +82,9 @@ struct HikePlaceView: View {
     }
 
     private func content(_ card: HikePlaceCard) -> some View {
-        ScrollView {
+        // Read once for the strip and the pins, which show the same ones.
+        let photos = hike.photos(ofPlace: placeID)
+        return ScrollView {
             VStack(alignment: .leading, spacing: StatCardMetrics.sectionSpacing) {
                 header(card)
                 actions(card)
@@ -92,7 +94,7 @@ struct HikePlaceView: View {
                         .accessibilityIdentifier("hike-place-note")
                 }
                 HikePlacePhotoStrip(
-                    photos: hike.photos(ofPlace: placeID),
+                    photos: photos,
                     store: store,
                     onOpen: onOpenPhoto
                 )
@@ -134,7 +136,7 @@ struct HikePlaceView: View {
         // A photograph taken now is of this place, pinned where it stands —
         // whenever its shutter fired.
         .photoCaptureSubject(photoCapture, for: hike, place: placeID) { _ in card.coordinate }
-        .photoMapPins(photoPins, photos: hike.photos(ofPlace: placeID)) { photoID in
+        .photoMapPins(photoPins, photos: photos) { photoID in
             guard let photo = hike.photos.first(where: { $0.id == photoID }) else { return }
             onOpenPhoto(photo)
         }

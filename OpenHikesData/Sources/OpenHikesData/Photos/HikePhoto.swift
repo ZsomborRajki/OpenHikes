@@ -411,7 +411,17 @@ public extension Hike {
         // A full sort behind a computed property, and a computed property is
         // invisible at its call sites: the viewer used to read it six times
         // per body pass without any of them looking like work.
-        photos.sorted { lhs, rhs in
+        photos.inGalleryOrder()
+    }
+
+    var hasPhotos: Bool { !photos.isEmpty }
+}
+
+nonisolated public extension Sequence<HikePhoto> {
+    /// These photos in the order a hike's gallery pages through — see
+    /// ``Hike/orderedPhotos``.
+    func inGalleryOrder() -> [HikePhoto] {
+        sorted { lhs, rhs in
             // The timestamps are compared first and the identifiers only on a
             // tie. `UUID.uuidString` allocates a 36-character string, and
             // building the pair up front meant two allocations for *every*
@@ -421,9 +431,9 @@ public extension Hike {
             return lhs.id.uuidString < rhs.id.uuidString
         }
     }
+}
 
-    var hasPhotos: Bool { !photos.isEmpty }
-
+public extension Hike {
     /// Appends a photo whose pixels are already on disk.
     func addPhoto(_ photo: HikePhoto) {
         guard !photos.contains(where: { $0.id == photo.id }) else { return }
@@ -431,8 +441,12 @@ public extension Hike {
     }
 
     /// The photographs filed under one place, in gallery order.
+    ///
+    /// Picked out before they are sorted: a place holds a handful of a
+    /// hike's photographs, often none, and sorting the whole gallery to keep
+    /// those was the cost of opening its card.
     func photos(ofPlace placeID: UUID) -> [HikePhoto] {
-        orderedPhotos.filter { $0.placeID == placeID }
+        photos.filter { $0.placeID == placeID }.inGalleryOrder()
     }
 
     /// Files one photograph under a place, answering it as filed.
