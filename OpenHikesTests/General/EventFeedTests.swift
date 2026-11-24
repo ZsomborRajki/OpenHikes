@@ -111,6 +111,37 @@ struct EventFeedTests {
         #expect(await reader.next() == 3)
     }
 
+    /// What the root view reads its navigation by — see
+    /// ``RootNavigationRequest``. Separate streams cannot keep the order of
+    /// two messages sent down two feeds; one stream both feeds yield to as
+    /// they send can. Each feed's part is a reader until it is taken out.
+    @Test("feeds yielding to one stream keep, between them, the order they were sent in")
+    func feedsIntoOneStreamKeepTheirOrder() async {
+        let numbers = EventFeed<Int>()
+        let words = EventFeed<String>()
+        let (stream, continuation) = AsyncStream<String>.makeStream()
+        let leaves = [
+            numbers.events(into: continuation) { String($0) },
+            words.events(into: continuation) { $0 },
+        ]
+        let reader = FeedReader(stream)
+
+        numbers.send(1)
+        words.send("a")
+        words.send("b")
+        numbers.send(2)
+        await settleDelegateHop(until: "all four to arrive") { reader.received.count == 4 }
+
+        #expect(reader.received == ["1", "a", "b", "2"])
+        #expect(numbers.readerCount == 1)
+        #expect(words.readerCount == 1)
+        for leave in leaves {
+            leave()
+        }
+        #expect(numbers.readerCount == 0, "taken out at once")
+        #expect(words.readerCount == 0, "taken out at once")
+    }
+
     /// What `AutoSaveTaskLifecycleTests` reads a drain's end by: a stream is
     /// counted from the moment it is handed out, until its reader stops or
     /// the stream is let go, and the rest stay counted.

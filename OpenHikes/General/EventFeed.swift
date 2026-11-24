@@ -47,10 +47,10 @@ import Synchronization
 
 /// Messages sent to every current reader, and to nobody who arrives later.
 nonisolated final class EventFeed<Element: Sendable>: Sendable {
-    /// Every reader's continuation, keyed so a reader's termination can take
-    /// its own out. A `Mutex` because `onTermination` runs wherever the
+    /// How each reader is handed a message, keyed so a reader's leaving can
+    /// take its own out. A `Mutex` because `onTermination` runs wherever the
     /// stream happened to finish.
-    private let readers = Mutex([UUID: AsyncStream<Element>.Continuation]())
+    private let readers = Mutex([UUID: @Sendable (Element) -> Void]())
 
     init() {
         // No readers until something asks for ``events()``.
@@ -62,13 +62,31 @@ nonisolated final class EventFeed<Element: Sendable>: Sendable {
     func events(
         bufferingPolicy: AsyncStream<Element>.Continuation.BufferingPolicy = .unbounded
     ) -> AsyncStream<Element> {
-        let id = UUID()
         let (stream, continuation) = AsyncStream<Element>.makeStream(bufferingPolicy: bufferingPolicy)
-        continuation.onTermination = { [weak self] _ in
-            self?.readers.withLock { readers in readers[id] = nil }
-        }
-        readers.withLock { readers in readers[id] = continuation }
+        let leave = join { element in continuation.yield(element) }
+        continuation.onTermination = { _ in leave() }
         return stream
+    }
+
+    /// The messages sent from now on, each made a `Merged` and yielded to
+    /// `continuation` as it is sent, for a reader of several feeds as one
+    /// stream. Nothing sent before the call is replayed.
+    ///
+    /// Each feed's own stream keeps its messages in order, but nothing keeps
+    /// the order between two streams: their readers are woken as the
+    /// executor gets to them, so of two messages sent one after the other
+    /// down two feeds, either can be read first. Feeds that yield to one
+    /// continuation as they send keep, in its stream, the order their
+    /// messages were sent in.
+    ///
+    /// One continuation takes several feeds, so its `onTermination` is the
+    /// reader's to set. This returns what takes this feed's part out again,
+    /// for the reader to call when it stops reading.
+    func events<Merged: Sendable>(
+        into continuation: AsyncStream<Merged>.Continuation,
+        as transform: @escaping @Sendable (Element) -> Merged
+    ) -> @Sendable () -> Void {
+        join { element in continuation.yield(transform(element)) }
     }
 
     /// Hands `element` to every current reader and returns at once, whether
@@ -76,18 +94,27 @@ nonisolated final class EventFeed<Element: Sendable>: Sendable {
     /// and handed the element after it is let go.
     func send(_ element: Element) {
         let current = readers.withLock { readers in Array(readers.values) }
-        for continuation in current {
-            continuation.yield(element)
+        for deliver in current {
+            deliver(element)
         }
     }
 
-    /// How many streams ``events(bufferingPolicy:)`` has handed out that have
-    /// not ended.
+    /// How many readers ``events(bufferingPolicy:)`` and
+    /// ``events(into:as:)`` have taken on that have not left.
     ///
     /// **Test seam.** A stream ends when its reader's task is cancelled or
     /// the stream is let go, and takes itself out then, so a suite can see a
     /// read really end without waiting out a duration.
     var readerCount: Int {
         readers.withLock { readers in readers.count }
+    }
+
+    /// Takes on a reader, and returns what takes it out again.
+    private func join(_ deliver: @escaping @Sendable (Element) -> Void) -> @Sendable () -> Void {
+        let id = UUID()
+        readers.withLock { readers in readers[id] = deliver }
+        return { [weak self] in
+            self?.readers.withLock { readers in readers[id] = nil }
+        }
     }
 }
