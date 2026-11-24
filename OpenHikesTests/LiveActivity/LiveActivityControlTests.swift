@@ -9,9 +9,9 @@
 //  here presses a real button. What is asserted is everything above
 //  ``HikeActivityPresenting``, which is where the behaviour lives: that a
 //  refusal reaches the panel at all, that it is rate-limited as the status
-//  flip it is, that it stops being shown the moment the thing the hiker
-//  asked for actually happens, and that it never outlives the panel it was
-//  drawn on.
+//  flip it is, on a clock no other flip can hold it back by, that it stops
+//  being shown the moment the thing the hiker asked for actually happens,
+//  and that it never outlives the panel it was drawn on.
 //
 //  The clock is driven by hand for the reason ``LiveActivityStatusFloorTests``
 //  gives: a suite that waited out a ten-second floor would be measuring
@@ -65,7 +65,8 @@ struct LiveActivityControlTests {
     }
 
     /// A button can be hammered even though it cannot flap at GPS rates, and
-    /// `NSSupportsLiveActivitiesFrequentUpdates` is deliberately absent.
+    /// `NSSupportsLiveActivitiesFrequentUpdates` is deliberately absent. A
+    /// different refusal, because the same one is not sent again at all.
     @Test("a second refusal inside the flip floor is not sent")
     func refusalsAreFloored() async {
         let harness = LiveActivityHarness.harness()
@@ -79,10 +80,53 @@ struct LiveActivityControlTests {
 
         // Two seconds later, inside the ten-second flip floor.
         harness.now.date = at(32)
+        harness.controller.noteControlRefusal(.failed)
+        await harness.controller.settle()
+
+        #expect(harness.presenter.updatedStates.count == after)
+    }
+
+    /// What the panel already says costs nothing to say again, however long
+    /// after.
+    @Test("the refusal already on the panel is not sent again")
+    func aShownRefusalIsNotResent() async {
+        let harness = LiveActivityHarness.harness()
+        harness.controller.update(LiveActivityHarness.recordingRequest())
+        await harness.controller.settle()
+
+        harness.now.date = at(30)
+        harness.controller.noteControlRefusal(.needsPreciseLocation)
+        await harness.controller.settle()
+        let after = harness.presenter.updatedStates.count
+
+        harness.now.date = at(45)
         harness.controller.noteControlRefusal(.needsPreciseLocation)
         await harness.controller.settle()
 
         #expect(harness.presenter.updatedStates.count == after)
+    }
+
+    /// The Pause moved the run-state clock a second before, and a refusal
+    /// floored on that clock was held back for good: the paused walk takes no
+    /// fixes, so nothing pushed again to carry it.
+    @Test("a refusal just after a pause is sent at once")
+    func aRefusalIsNotFlooredByThePause() async {
+        let harness = LiveActivityHarness.harness()
+        harness.controller.update(LiveActivityHarness.recordingRequest())
+        await harness.controller.settle()
+        harness.now.date = at(30)
+        harness.controller.update(
+            LiveActivityHarness.recordingRequest(runState: .paused, at: at(30))
+        )
+        await harness.controller.settle()
+
+        harness.now.date = at(31)
+        harness.controller.noteControlRefusal(.needsPreciseLocation)
+        await harness.controller.settle()
+
+        #expect(harness.presenter.updatedStates.count == 2)
+        #expect(harness.presenter.updatedStates.last?.runState == .paused)
+        #expect(harness.presenter.updatedStates.last?.controlRefusal == .needsPreciseLocation)
     }
 
     /// The run state changing is the proof that what the hiker asked for has

@@ -38,7 +38,9 @@
 //    later fix arrives to carry the correction. The panel went on reading
 //    "Recording", with its self-ticking clock still running, until the hiker
 //    resumed or stopped. Two clocks fix the interference; ``stopsTheFixStream``
-//    fixes the permanence. See ``updateReason(to:from:now:)``.
+//    fixes the permanence. See ``updateReason(to:from:now:)``. A refusal drawn
+//    for one of the panel's buttons is floored on a third clock, for the same
+//    two reasons — see ``noteControlRefusal(_:)``.
 //
 //  - **The elapsed clock is never a reason to update.** It ticks by itself —
 //    see `HikeActivityAttributes.ContentState.timerStart`.
@@ -151,6 +153,10 @@ final class HikeLiveActivityController {
     /// and sharing a floor let either starve the other.
     @ObservationIgnored private var lastRunStateFlipAt: Date?
     @ObservationIgnored private var lastRouteFlipAt: Date?
+    /// When a refusal was last pushed — a third clock, for the third kind of
+    /// change, so that neither of the others can hold one back. See
+    /// ``noteControlRefusal(_:)``.
+    @ObservationIgnored private var lastRefusalAt: Date?
     /// What the panel should be saying about the last button tap, carried
     /// onto every push until the run state proves it is no longer true.
     ///
@@ -273,7 +279,16 @@ final class HikeLiveActivityController {
     /// status flip in the sense ``minimumFlipInterval`` exists for — the hiker
     /// just touched the panel and is looking at it — so it bypasses the
     /// twenty-second update floor exactly as a pause does, and pays the
-    /// ten-second one instead.
+    /// ten-second one instead, on a clock of its own (``lastRefusalAt``).
+    ///
+    /// Its own clock because the run state's held the first refusal back. A
+    /// Resume refused within ten seconds of the Pause before it found that
+    /// Pause's flip still on the floor, and the refusal was held for good:
+    /// the walk it was refused for is paused, or failed, and takes no fixes,
+    /// so nothing pushed again to carry it. So the first refusal a panel
+    /// shows is always sent. One it already shows is not sent again, so a
+    /// button tapped over and over costs nothing; only a different refusal
+    /// inside the floor waits, carried by ``pendingRefusal`` on the next push.
     ///
     /// Dropped when there is no panel to say it on, rather than kept for
     /// whichever one comes next — see ``pendingRefusal``. A cold launch made to
@@ -283,10 +298,11 @@ final class HikeLiveActivityController {
     func noteControlRefusal(_ refusal: HikeActivityControlRefusal) {
         guard isEnabled, let showing = current else { return }
         pendingRefusal = refusal
+        guard showing.state.controlRefusal != refusal else { return }
         let now = clock()
-        guard elapsed(since: lastRunStateFlipAt, now: now, atLeast: Self.minimumFlipInterval)
+        guard elapsed(since: lastRefusalAt, now: now, atLeast: Self.minimumFlipInterval)
         else { return }
-        lastRunStateFlipAt = now
+        lastRefusalAt = now
         lastUpdateAt = now
         let request = showing.carrying(refusal)
         current = request
@@ -541,6 +557,7 @@ final class HikeLiveActivityController {
         lastUpdateAt = now
         lastRunStateFlipAt = nil
         lastRouteFlipAt = nil
+        lastRefusalAt = nil
         // Whatever the replaced panel was saying about its buttons, this one's
         // have not been pressed.
         pendingRefusal = nil
@@ -568,6 +585,7 @@ final class HikeLiveActivityController {
         lastUpdateAt = nil
         lastRunStateFlipAt = nil
         lastRouteFlipAt = nil
+        lastRefusalAt = nil
         pendingRefusal = nil
         enqueue { [presenter] in
             await presenter.end(

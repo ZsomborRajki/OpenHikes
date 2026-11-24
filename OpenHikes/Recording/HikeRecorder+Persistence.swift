@@ -410,6 +410,7 @@ extension HikeRecorder {
         }
         journalFlushTask?.cancel()
         journalFlushTask = nil
+        failureIsRefusedResume = false
         phase = .failed(failure)
         startRequested = false
         if sessionID != nil {

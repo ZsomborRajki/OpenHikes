@@ -75,8 +75,13 @@ final class RecordingStopQuestion {
     /// ``HikeRecorder/settledStopStep()``. A tap while an earlier one is still
     /// counting does nothing. And a recording being recovered is recovered
     /// first: the Live Activity's Stop can be what launched the app.
+    ///
+    /// A walk whose resume was refused is asked as the paused walk it still
+    /// is: the panel the refusal left up offers Stop, and a failed recording
+    /// has no Stop step — see ``HikeRecorder/reopenRefusedResume()``.
     func ask() async {
         await recorder.settleAutomaticRecovery()
+        recorder.reopenRefusedResume()
         let step = await recorder.settledStopStep()
         // Read with the step's answer, before any suspension, so both are
         // about one recording.
