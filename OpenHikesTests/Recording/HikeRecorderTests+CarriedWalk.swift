@@ -19,6 +19,7 @@ import Foundation
 import OpenHikesData
 import RealModule
 import SwiftData
+import Synchronization
 import Testing
 
 extension HikeRecorderTests {
@@ -182,9 +183,11 @@ extension HikeRecorderTests {
         #expect(relaunched.currentHike?.date == seed.startedAt)
     }
 
-    /// A start refused for want of location is over. One made later, from the
-    /// recording screen, begins where the hiker stands then.
-    @Test("a refused start lets go of its walk, and the next recording begins empty")
+    /// A start refused for want of location is over. One made later by
+    /// anything but the recording screen's Start — Siri here — is a
+    /// recording of its own, begins where the hiker stands then, and lets the
+    /// walk go.
+    @Test("a refused start's walk is not carried by a recording of its own")
     func aRefusedStartCarriesNothingForward() async {
         let hikeRecorder = makeRecorder()
         source.authorization = .denied
@@ -195,7 +198,75 @@ extension HikeRecorderTests {
         await hikeRecorder.start()
 
         #expect(hikeRecorder.carriedSeed == nil)
+        #expect(hikeRecorder.unclaimedSeed == nil, "the session that started let it go")
         #expect(hikeRecorder.phase == .waitingForFix)
+        #expect(hikeRecorder.stats.pointCount == 0)
+        #expect(hikeRecorder.sessionStartedAt == clock.now)
+    }
+
+    /// The walk was ended before the recording was asked for, so a start
+    /// that fails before a session takes its points would leave them nowhere.
+    @Test("a handoff refused precise location keeps its walk, and the retry begins with it")
+    func aHandoffRefusedPrecisionKeepsItsWalk() async {
+        let hikeRecorder = makeRecorder()
+        let seed = carriedWalk()
+        source.hasFullAccuracy = false
+        await hikeRecorder.start(carrying: seed)
+        #expect(hikeRecorder.phase == .failed(.preciseLocationRequired))
+        #expect(hikeRecorder.unclaimedSeed == seed)
+
+        // The alert answered, as its OK does.
+        hikeRecorder.dismissFailure()
+        #expect(hikeRecorder.phase == .idle)
+        #expect(hikeRecorder.unclaimedSeed == seed, "still there for the retry")
+
+        source.hasFullAccuracy = true
+        await hikeRecorder.start(carrying: hikeRecorder.unclaimedSeed)
+
+        #expect(hikeRecorder.phase == .recording)
+        #expect(hikeRecorder.sessionStartedAt == seed.startedAt)
+        #expect(hikeRecorder.stats.pointCount == seed.points.count)
+        #expect(hikeRecorder.unclaimedSeed == nil)
+    }
+
+    @Test("a handoff whose journal will not open keeps its walk, and the retry begins with it")
+    func aHandoffWithNoJournalKeepsItsWalk() async throws {
+        struct Refused: Error {}
+        let refuses = Mutex(true)
+        let hikeRecorder = makeRecorder(openJournalHandle: { url in
+            if refuses.withLock({ $0 }) { throw Refused() }
+            return try FileHandle(forWritingTo: url)
+        })
+        let seed = carriedWalk()
+        await hikeRecorder.start(carrying: seed)
+        guard case .failed = hikeRecorder.phase else {
+            Issue.record("precondition: the start failed, as \(hikeRecorder.phase)")
+            return
+        }
+        #expect(hikeRecorder.sessionID == nil)
+        #expect(hikeRecorder.unclaimedSeed == seed)
+
+        hikeRecorder.dismissFailure()
+        refuses.withLock { $0 = false }
+        await hikeRecorder.start(carrying: hikeRecorder.unclaimedSeed)
+
+        #expect(hikeRecorder.stats.pointCount == seed.points.count)
+        let journal = try #require(hikeRecorder.journal)
+        #expect(try await journal.loadSession()?.points == seed.points)
+    }
+
+    /// The map's button is a recording of its own, whatever failed before it.
+    @Test("a start asked for afresh lets an unclaimed walk go")
+    func aFreshStartLetsTheWalkGo() async {
+        let hikeRecorder = makeRecorder()
+        source.hasFullAccuracy = false
+        await hikeRecorder.start(carrying: carriedWalk())
+        hikeRecorder.dismissFailure()
+
+        source.hasFullAccuracy = true
+        await hikeRecorder.start(carrying: nil)
+
+        #expect(hikeRecorder.unclaimedSeed == nil)
         #expect(hikeRecorder.stats.pointCount == 0)
         #expect(hikeRecorder.sessionStartedAt == clock.now)
     }

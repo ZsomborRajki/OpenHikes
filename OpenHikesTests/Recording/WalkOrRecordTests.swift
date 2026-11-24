@@ -148,6 +148,43 @@ final class WalkOrRecordTests {
         #expect(!entry.walkEndRefused)
     }
 
+    /// A walk too short for its trail's History is in no row once it has
+    /// ended, so a handoff whose start fails keeps it, and the recording
+    /// screen's Start, where the failure was explained, begins with it.
+    @Test("a short walk handed to a start that fails is kept for the recording screen's Start")
+    func aShortWalkSurvivesAFailedStart() async throws {
+        let hikeRecorder = makeRecorder()
+        let session = walkSession(asking: hikeRecorder)
+        let requests = HikeOpenRequests()
+        let sent = FeedReader(requests.links())
+        let entry = RecordingEntry(recorder: hikeRecorder, walkSession: session, openRequests: requests)
+        let walked = trail()
+        let profile = RouteProfile(route: walked.route)
+        #expect(session.start(hike: walked, profile: profile))
+        for point in 0...1 {
+            clock.advance(by: 60)
+            session.recordForegroundMatch(hike: walked, profile: profile, distance: profile.distances[point])
+        }
+        clock.advance(by: 180)
+        source.hasFullAccuracy = false
+
+        entry.recordInsteadOfWalk()
+        await settleDelegateHop(until: "the recording's screen to be asked for") { sent.received.count == 1 }
+        #expect(hikeRecorder.phase == .failed(.preciseLocationRequired))
+        #expect(session.walkUnderWayTitle == nil, "the walk is over")
+        #expect(walked.walks?.isEmpty != false, "precondition: too short for the History")
+        let kept = try #require(hikeRecorder.unclaimedSeed)
+
+        hikeRecorder.dismissFailure()
+        source.hasFullAccuracy = true
+        entry.startOnRecordingScreen()
+        await settleDelegateHop(until: "the screen's Start to be asked for") { sent.received.count == 2 }
+
+        #expect(hikeRecorder.isActive)
+        #expect(hikeRecorder.sessionStartedAt == kept.startedAt)
+        #expect(hikeRecorder.stats.pointCount == kept.points.count)
+    }
+
     /// A walk adopted at launch reads its line to be handed over. A read that
     /// fails ends nothing: the walk is still under way, nothing records
     /// beside it, and its question is asked again, saying so, for the hiker

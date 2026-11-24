@@ -152,6 +152,10 @@ private struct RecordingBarAction: View {
 /// anything records. A refused End is said by the map's alert, which is
 /// attached above this screen — see ``MapScreenAlerts``.
 ///
+/// After a *Record Instead* whose start failed here, it is that handoff
+/// tried again, beginning with what the walk covered — see
+/// ``RecordingEntry/startOnRecordingScreen()``.
+///
 /// Its own view so that the walk it asks about is read here, rather than in
 /// the bar's other items.
 struct RecordingStartButton: View {
@@ -172,7 +176,7 @@ struct RecordingStartButton: View {
                 }
             } else {
                 Button {
-                    entry.requestRecording()
+                    entry.startOnRecordingScreen()
                 } label: {
                     startLabel
                 }

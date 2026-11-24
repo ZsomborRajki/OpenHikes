@@ -21,11 +21,16 @@
 //  points are the record, and the live state is rebuilt from them rather than
 //  kept beside them.
 //
-//  A seed is one start's. A start refused for want of location lets go of it
-//  with the rest of the session, so a recording started later, from the
-//  recording screen, begins where the hiker stands then. The walk it came
-//  from was ended before the recording was asked for, into its trail's
-//  History when it had covered enough to be kept there.
+//  A seed is one start's, and one handoff's. The walk it came from was ended
+//  before the recording was asked for, into its trail's History only when it
+//  had covered enough to be kept there, so a start that fails before a
+//  session takes the seed (precise location refused, a journal that will not
+//  open) would leave the ground walked nowhere at all. The recorder keeps it
+//  then, as ``HikeRecorder/unclaimedSeed``, and the recording screen's Start,
+//  where that failure is explained, tries the handoff again with it. Any
+//  other start, the map's button or Siri, is a recording of its own and
+//  begins where the hiker stands; it, or any session that starts, lets the
+//  walk go.
 //
 
 import Foundation
@@ -57,6 +62,9 @@ extension HikeRecorder {
             resetSession()
         }
         guard phase == .idle else { return }
+        // A retry hands the unclaimed walk back in as `seed`; any other start
+        // is a recording of its own, which the walk is not part of.
+        unclaimedSeed = nil
         carriedSeed = seed.flatMap { carried in carried.points.isEmpty ? nil : carried }
         await start()
     }
