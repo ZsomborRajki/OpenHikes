@@ -109,6 +109,21 @@ struct ElevationChartView: View, Equatable {
     }
 
     var body: some View {
+        graph(plotWidth: plotWidth)
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.width
+            } action: { plotWidth = $0 }
+    }
+
+    /// Everything the body draws, at the measured `plotWidth`, which is the
+    /// one thing it reads from its own state.
+    ///
+    /// Part of the body, and not a boundary — see *Render isolation, in
+    /// practice* in `AGENTS.md`. Internal so `ElevationChartLayersTests` can
+    /// count what the body depends on through it: read by hand, outside an
+    /// installed view, the body itself would read a `@State` nobody had
+    /// installed.
+    func graph(plotWidth: CGFloat) -> some View {
         // Neither a scrub step nor a published fix reaches this body: the
         // marks, the spoken value and the progress row are what follow the
         // tracker. This runs when the graph itself changes — its profile, its
@@ -142,9 +157,6 @@ struct ElevationChartView: View, Equatable {
             guard let distance = adjustedDistance(direction) else { return }
             onScrub(distance)
         }
-        .onGeometryChange(for: CGFloat.self) { proxy in
-            proxy.size.width
-        } action: { plotWidth = $0 }
     }
 
     // MARK: Accessibility
