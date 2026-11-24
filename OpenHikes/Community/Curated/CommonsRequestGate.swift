@@ -23,6 +23,7 @@
 //  repository instructions.
 //
 
+import DequeModule
 import Foundation
 
 /// Lets one Action API request through at a time, in the order they came.
@@ -31,7 +32,9 @@ actor CommonsRequestGate {
     static let shared = CommonsRequestGate()
 
     private var isBusy = false
-    private var waiting: [CheckedContinuation<Void, Never>] = []
+    /// The requests waiting, oldest first: a deque, so letting the oldest
+    /// through does not shift every one behind it.
+    private var waiting: Deque<CheckedContinuation<Void, Never>> = []
 
     /// The gate for a source: ``shared`` for one that reaches the network,
     /// and a new one for a suite's, which was handed a transport.

@@ -57,6 +57,7 @@
 //  no longer give is said to be gone, and left for the hiker to remove.
 //
 
+import DequeModule
 import Foundation
 import OpenHikesData
 import os
@@ -154,8 +155,9 @@ actor CommonsPhotoRefetch {
     private let transport: Transport
     private let gate: CommonsRequestGate
     /// The names the next question asks about, in the order they were asked
-    /// for, with who is waiting on each.
-    private var queued: [String] = []
+    /// for, with who is waiting on each. A deque, so a question taken off the
+    /// front does not shift the names left for the next one.
+    private var queued: Deque<String> = []
     private var waiting: [String: Waiters] = [:]
     /// The names in the question that is out now, with who is waiting on each
     /// — the ones who asked before it went and the ones who asked since.
@@ -178,7 +180,7 @@ actor CommonsPhotoRefetch {
     /// past a few dozen missing copies would otherwise ask for all of them
     /// at once, because no download stops when its tile scrolls away.
     private var downloadsUnderway = 0
-    private var downloadTurns: [CheckedContinuation<Void, Never>] = []
+    private var downloadTurns: Deque<CheckedContinuation<Void, Never>> = []
 
     /// - Parameter gate: The app's own when `nil` and this reaches the
     ///   network, and one of its own for a suite's transport — see
@@ -265,7 +267,10 @@ private extension CommonsPhotoRefetch {
     /// for the next.
     func askWhileAnyWait() async {
         while !queued.isEmpty {
-            let titles = Array(queued.prefix(CommonsPhotoQuery.imageInfoCount(fitting: queued)))
+            // No question holds more than a batch, so only that much of the
+            // backlog is copied out to be measured.
+            let front = Array(queued.prefix(CommonsPhotoQuery.imageInfoBatch))
+            let titles = Array(front.prefix(CommonsPhotoQuery.imageInfoCount(fitting: front)))
             queued.removeFirst(titles.count)
             for title in titles {
                 asking[title] = waiting.removeValue(forKey: title) ?? []

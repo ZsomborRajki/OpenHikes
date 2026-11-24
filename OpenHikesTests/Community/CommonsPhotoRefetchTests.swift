@@ -230,6 +230,35 @@ struct CommonsPhotoRefetchTests {
         #expect(commons.questions == [["First.jpg"], ["Second.jpg", "Third.jpg"]])
     }
 
+    @Test("more names than one question holds go a batch at a time, in the order they were asked for")
+    func aBacklogGoesABatchAtATime() async {
+        let commons = CommonsRefetchStub(holdingFirstQuestion: true)
+        let refetch = CommonsPhotoRefetch(transport: commons.transport)
+        let names = (0..<(CommonsPhotoQuery.imageInfoBatch + 2)).map { "Photo_\($0).jpg" }
+
+        async let first = refetch.picture(of: Self.copy("First.jpg"))
+        await settleDelegateHop(until: "the first question is out") { commons.isHoldingQuestion }
+        let answers = await withTaskGroup(of: CommonsPictureAnswer.self) { group in
+            // One at a time, so the order they wait in is the order asked.
+            for name in names {
+                group.addTask { await refetch.picture(of: Self.copy(name)) }
+                await Self.waitUntil(refetch, has: 1, waitingOn: name)
+            }
+            commons.answerHeldQuestion()
+            var answers: [CommonsPictureAnswer] = []
+            for await answer in group { answers.append(answer) }
+            return answers
+        }
+
+        #expect(await first == Self.picture)
+        #expect(answers.count == names.count)
+        #expect(answers.allSatisfy { $0 == Self.picture })
+        #expect(Array(commons.questions.dropFirst()) == [
+            Array(names.prefix(CommonsPhotoQuery.imageInfoBatch)),
+            Array(names.dropFirst(CommonsPhotoQuery.imageInfoBatch)),
+        ])
+    }
+
     @Test("a picture asked for again while its question is out is asked about and downloaded once")
     func pictureInFlightIsFetchedOnce() async {
         let commons = CommonsRefetchStub(holdingFirstQuestion: true)
