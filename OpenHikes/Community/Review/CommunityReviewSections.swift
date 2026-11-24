@@ -15,7 +15,7 @@
 //
 //  Only a `View` is a boundary — see *Render isolation, in practice* in
 //  `AGENTS.md` — so each of these reads its own: the submission section the
-//  title and its focus, the decision section the title again for what
+//  title, its field the field's focus, the decision section the title again for what
 //  Publish may do, and the place section the rows
 //  ``CommunityHikeReviewSession`` keeps. What the form reads itself changes
 //  when a download lands and when a decision is made.
@@ -35,58 +35,10 @@ struct CommunityReviewSubmissionSection: View {
     let pending: CommunityPendingSubmission
     let review: CommunityHikeReviewSession
 
-    /// Whether the title field has the keyboard.
-    ///
-    /// Written by the *Done* button above the keyboard and by nothing else —
-    /// see the field for why that button is here rather than being a
-    /// convenience. Here rather than on the form, because a screen's focus
-    /// re-runs that screen whenever the keyboard comes or goes.
-    @FocusState private var isEditingTitle: Bool
-
-    /// Written out because ``isEditingTitle`` is private, which would make
-    /// the memberwise initializer private too.
-    init(pending: CommunityPendingSubmission, review: CommunityHikeReviewSession) {
-        self.pending = pending
-        self.review = review
-    }
-
     var body: some View {
         Section {
             LabeledContent("Title") {
-                TextField("Title", text: Bindable(review).titleDraft)
-                    .multilineTextAlignment(.trailing)
-                    .disabled(review.decisions.isDeciding)
-                    .focused($isEditingTitle)
-                    .submitLabel(.done)
-                    // The hike's own title field used to carry the same
-                    // *Done* and does not any more — a keyboard accessory that
-                    // arrives and leaves with its field stops the app ever
-                    // reporting itself idle, at 60 seconds a gesture, which is
-                    // what issue #539 was. This one is safe for the reason
-                    // that one was not, and it was measured rather than
-                    // assumed: the field and the accessory are both always in
-                    // this hierarchy, and
-                    // `testAReviewerCanCorrectTheTitleBeforePublishing` runs
-                    // clean at 20.5s on the simulator that took 677.9s over
-                    // the rename.
-                    //
-                    // It stays because here it is the difference between
-                    // reaching the decision and not. This screen is a `Form` in a sheet that rests
-                    // at half height: the keyboard covers what is left of it,
-                    // *Publish* and *Decline* are at the foot, and a `Form`
-                    // builds its rows lazily — so a reviewer who has just
-                    // corrected a name can be left with neither the room to
-                    // scroll to the decision nor a row down there to scroll
-                    // to. `CommunityReviewUITests` failed on both halves of
-                    // that before this button existed.
-                    .toolbar {
-                        ToolbarItemGroup(placement: .keyboard) {
-                            Spacer()
-                            RoleButton(.confirm) { isEditingTitle = false }
-                                .accessibilityIdentifier("keyboard-done")
-                        }
-                    }
-                    .accessibilityIdentifier("review-title-field")
+                CommunityReviewTitleField(review: review)
             }
             LabeledContent("Credit") {
                 // An empty credit is ordinary rather than wrong — the field is
@@ -123,6 +75,65 @@ struct CommunityReviewSubmissionSection: View {
                 }
             }
         }
+    }
+}
+
+/// The title, as a field the reviewer can correct.
+///
+/// A view of its own because it holds the field's focus, and a view's focus
+/// re-runs that view whenever the keyboard comes or goes: here that is the
+/// field, rather than the section around it or the form.
+private struct CommunityReviewTitleField: View {
+    let review: CommunityHikeReviewSession
+
+    /// Whether the title field has the keyboard.
+    ///
+    /// Written by the *Done* button above the keyboard and by nothing else —
+    /// see below for why that button is here rather than being a
+    /// convenience.
+    @FocusState private var isEditingTitle: Bool
+
+    /// Written out because ``isEditingTitle`` is private, which would make
+    /// the memberwise initializer private too.
+    init(review: CommunityHikeReviewSession) {
+        self.review = review
+    }
+
+    var body: some View {
+        TextField("Title", text: Bindable(review).titleDraft)
+            .multilineTextAlignment(.trailing)
+            .disabled(review.decisions.isDeciding)
+            .focused($isEditingTitle)
+            .submitLabel(.done)
+            // The hike's own title field used to carry the same
+            // *Done* and does not any more — a keyboard accessory that
+            // arrives and leaves with its field stops the app ever
+            // reporting itself idle, at 60 seconds a gesture, which is
+            // what issue #539 was. This one is safe for the reason
+            // that one was not, and it was measured rather than
+            // assumed: the field and the accessory are both always in
+            // this hierarchy, and
+            // `testAReviewerCanCorrectTheTitleBeforePublishing` runs
+            // clean at 20.5s on the simulator that took 677.9s over
+            // the rename.
+            //
+            // It stays because here it is the difference between
+            // reaching the decision and not. This screen is a `Form` in a sheet that rests
+            // at half height: the keyboard covers what is left of it,
+            // *Publish* and *Decline* are at the foot, and a `Form`
+            // builds its rows lazily — so a reviewer who has just
+            // corrected a name can be left with neither the room to
+            // scroll to the decision nor a row down there to scroll
+            // to. `CommunityReviewUITests` failed on both halves of
+            // that before this button existed.
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    RoleButton(.confirm) { isEditingTitle = false }
+                        .accessibilityIdentifier("keyboard-done")
+                }
+            }
+            .accessibilityIdentifier("review-title-field")
     }
 }
 
