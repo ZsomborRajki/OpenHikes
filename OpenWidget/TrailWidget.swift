@@ -218,16 +218,36 @@ struct TrailWidgetProvider: AppIntentTimelineProvider {
         in context: Context
     ) async -> Timeline<TrailWidgetEntry> {
         let pinned = configuration.hike?.id
-        let entry = Self.currentEntry(pinnedTo: pinned)
-        guard let recording = entry.recordingSnapshot,
-              recording.isCapturingFixes else {
-            return Self.currentTimeline(pinnedTo: pinned)
+        return await Self.timeline(
+            reading: { Self.currentEntry(pinnedTo: pinned) },
+            sampling: { sessionID in await WidgetRecordingLocationSampler.shared.fix(for: sessionID) }
+        )
+    }
+
+    /// The timeline from one read of the App Group, or from a second read
+    /// when a recording's location sample was awaited after the first.
+    ///
+    /// A read is the recording and the trail, the basemap's metadata and the
+    /// weather, so it is not made twice for nothing. Without a sample to wait
+    /// for (a trail, an empty store, a *paused* recording) nothing separates
+    /// the read that decided from the one that would draw, and the entry
+    /// already read is the timeline. A recording capturing fixes is read
+    /// again after the sample, best-effort as it is: the sampler answers
+    /// whether or not it got a fix, a timeline is owed either way, and what
+    /// it managed to write is in the second read.
+    ///
+    /// Takes the read and the sample rather than reaching for them, because
+    /// `timeline(for:in:)` needs a `Context` no test can build.
+    static func timeline(
+        reading read: () -> TrailWidgetEntry,
+        sampling sample: (UUID) async -> Void
+    ) async -> Timeline<TrailWidgetEntry> {
+        let entry = read()
+        guard let recording = entry.recordingSnapshot, recording.isCapturingFixes else {
+            return timeline(from: entry)
         }
-        // Best-effort: the sampler answers whether or not it got a fix, and a
-        // timeline is owed either way. Whatever it managed to write is picked
-        // up by re-reading the store below.
-        await WidgetRecordingLocationSampler.shared.fix(for: recording.sessionID)
-        return Self.currentTimeline(pinnedTo: pinned)
+        await sample(recording.sessionID)
+        return timeline(from: read())
     }
 
     /// What the Smart Stack ranks this widget by.
@@ -319,7 +339,13 @@ struct TrailWidgetProvider: AppIntentTimelineProvider {
         date: Date = .now,
         pinnedTo pinnedHikeID: UUID? = nil
     ) -> Timeline<TrailWidgetEntry> {
-        let entry = currentEntry(date: date, pinnedTo: pinnedHikeID)
+        timeline(from: currentEntry(date: date, pinnedTo: pinnedHikeID))
+    }
+
+    /// `entry`, and the same entry without its temperature once the reading
+    /// expires, reloading at the cadence its recording, if any, earns.
+    static func timeline(from entry: TrailWidgetEntry) -> Timeline<TrailWidgetEntry> {
+        let date = entry.date
         let expiry = entry.weather?.expiresAt
         var entries = [entry]
         // The entry that draws no temperature, scheduled for the moment the
