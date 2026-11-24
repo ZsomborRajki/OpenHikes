@@ -40,6 +40,11 @@ final class OfflineCountryDownload {
     /// The files a transfer is still out for, which trying again after
     /// another file failed leaves to it rather than asking for twice.
     @ObservationIgnored private(set) var inFlight: Set<OfflineCountryManifest.Role> = []
+    /// The session task this launch started for each file, whose events are
+    /// the file's. Another task's are a transfer it replaced, after a cancel
+    /// and a new download of the same build. A file with none, picked up
+    /// from an earlier launch, takes its transfer's events as they come.
+    @ObservationIgnored private var transfers: [OfflineCountryManifest.Role: Int] = [:]
 
     init(country: OfflineCountryManifest.Country, files: [OfflineCountryManifest.File], phase: Phase) {
         self.country = country
@@ -95,12 +100,21 @@ final class OfflineCountryDownload {
         staged = previous.staged.filter { roles.contains($0.key) }
         written = previous.written.filter { roles.contains($0.key) }
         inFlight = previous.inFlight.intersection(roles)
+        transfers = previous.transfers.filter { roles.contains($0.key) }
         sumWritten()
     }
 
-    /// A transfer is out for the file in `role`.
-    func began(_ role: OfflineCountryManifest.Role) {
+    /// A transfer is out for the file in `role`: the session task `task`,
+    /// or one an earlier launch started, when `nil`.
+    func began(_ role: OfflineCountryManifest.Role, transfer task: Int? = nil) {
         inFlight.insert(role)
+        transfers[role] = task
+    }
+
+    /// Whether an event from the session task `task` is about this
+    /// download's transfer of the file in `role`.
+    func isCurrent(_ task: Int, for role: OfflineCountryManifest.Role) -> Bool {
+        transfers[role].map { $0 == task } ?? true
     }
 
     /// `bytes` of the file in `role` have come down so far.
