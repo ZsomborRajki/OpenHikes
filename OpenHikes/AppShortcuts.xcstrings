@@ -49,6 +49,15 @@
             ]
           }
         },
+        "nl" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Hoe ver heb ik vandaag gewandeld in ${applicationName}",
+              "Mijn afstand van vandaag in ${applicationName}"
+            ]
+          }
+        },
         "pl" : {
           "stringSet" : {
             "state" : "translated",
@@ -135,6 +144,15 @@
             "values" : [
               "Quanta strada ho fatto in ${applicationName}",
               "Come va la mia escursione in ${applicationName}"
+            ]
+          }
+        },
+        "nl" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Hoe ver heb ik gewandeld in ${applicationName}",
+              "Hoe gaat mijn wandeling in ${applicationName}"
             ]
           }
         },
@@ -229,6 +247,16 @@
               "Quanto è durata la mia escursione in ${applicationName}",
               "Quanto era lunga la mia escursione in ${applicationName}",
               "Riassumi un’escursione in ${applicationName}"
+            ]
+          }
+        },
+        "nl" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Hoe lang was mijn wandeling in ${applicationName}",
+              "Hoe ver was mijn wandeling in ${applicationName}",
+              "Vat een wandeling samen in ${applicationName}"
             ]
           }
         },
@@ -332,6 +360,17 @@
             ]
           }
         },
+        "nl" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Open een wandeling in ${applicationName}",
+              "Toon een wandeling in ${applicationName}",
+              "Open ${hike} in ${applicationName}",
+              "Laat ${hike} zien in ${applicationName}"
+            ]
+          }
+        },
         "pl" : {
           "stringSet" : {
             "state" : "translated",
@@ -426,6 +465,15 @@
             ]
           }
         },
+        "nl" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Pauzeer mijn wandeling in ${applicationName}",
+              "Pauzeer mijn opname in ${applicationName}"
+            ]
+          }
+        },
         "pl" : {
           "stringSet" : {
             "state" : "translated",
@@ -514,6 +562,16 @@
               "Registra lungo un sentiero in ${applicationName}",
               "Inizia a registrare lungo ${hike} in ${applicationName}",
               "Percorri ${hike} con ${applicationName}"
+            ]
+          }
+        },
+        "nl" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Neem op langs een pad in ${applicationName}",
+              "Start een opname langs ${hike} in ${applicationName}",
+              "Wandel ${hike} met ${applicationName}"
             ]
           }
         },
@@ -607,6 +665,15 @@
             ]
           }
         },
+        "nl" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Hervat mijn wandeling in ${applicationName}",
+              "Hervat mijn opname in ${applicationName}"
+            ]
+          }
+        },
         "pl" : {
           "stringSet" : {
             "state" : "translated",
@@ -695,6 +762,16 @@
               "Avvia un’escursione in ${applicationName}",
               "Inizia a registrare un’escursione in ${applicationName}",
               "Registra un’escursione con ${applicationName}"
+            ]
+          }
+        },
+        "nl" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Start een wandeling in ${applicationName}",
+              "Start de opname van een wandeling in ${applicationName}",
+              "Neem een wandeling op met ${applicationName}"
             ]
           }
         },
@@ -793,6 +870,16 @@
             ]
           }
         },
+        "nl" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Stop mijn wandeling in ${applicationName}",
+              "Beëindig mijn wandeling in ${applicationName}",
+              "Bewaar mijn wandeling in ${applicationName}"
+            ]
+          }
+        },
         "pl" : {
           "stringSet" : {
             "state" : "translated",
@@ -880,6 +967,15 @@
             "values" : [
               "Qual è stata la mia ultima escursione in ${applicationName}",
               "Mostra la mia ultima escursione in ${applicationName}"
+            ]
+          }
+        },
+        "nl" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Wat was mijn laatste wandeling in ${applicationName}",
+              "Toon mijn laatste wandeling in ${applicationName}"
             ]
           }
         },

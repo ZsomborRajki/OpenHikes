@@ -40,7 +40,7 @@ struct AreaPlan: Decodable {
 
 enum Areas {
     /// The app's languages, whose names a region carries.
-    static let languages = ["en", "de", "fr", "es", "it", "ru", "pl", "uk"]
+    static let languages = ["en", "de", "fr", "es", "it", "ru", "pl", "uk", "nl"]
     /// Web Mercator's edge: Antarctica's outline reaches the pole, which no
     /// tile row does.
     static let mercatorLatitude = 85.0511

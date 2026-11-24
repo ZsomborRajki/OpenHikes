@@ -37,6 +37,12 @@
             "value" : "%@ in totale"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ in totaal"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -93,6 +99,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ di dislivello positivo, %2$@ di dislivello negativo"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ stijging, %2$@ daling"
           }
         },
         "pl" : {
@@ -226,6 +238,24 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld escursioni in attesa del tuo iPhone"
+                }
+              }
+            }
+          }
+        },
+        "nl" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld wandeling wacht op je iPhone"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld wandelingen wachten op je iPhone"
                 }
               }
             }
@@ -373,6 +403,12 @@
             "value" : "%lld per cento"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld procent"
+          }
+        },
         "pl" : {
           "variations" : {
             "plural" : {
@@ -497,6 +533,12 @@
             "value" : "Escursione interrotta – vai a «Registra»"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Een wandeling is onderbroken – zie ‘Neem op’"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -547,6 +589,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Impossibile avviare un allenamento: la registrazione non continuerebbe a schermo spento."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Er kon geen work-out worden gestart, dus een opname zou het uitgaan van het scherm niet overleven."
           }
         },
         "pl" : {
@@ -601,6 +649,12 @@
             "value" : "Richiesta dei sentieri all’iPhone…"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Je iPhone wordt om je paden gevraagd…"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -651,6 +705,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pausa automatica – la registrazione riprende quando riparti."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatisch gepauzeerd – de opname gaat verder zodra je verder loopt."
           }
         },
         "pl" : {
@@ -705,6 +765,12 @@
             "value" : "Velocità media"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gemiddelde snelheid"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -757,6 +823,12 @@
             "value" : "Vel. media"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gem. snelheid"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -807,6 +879,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Avvicina il tuo iPhone, con l’app OpenHikes installata, per trasferire i tuoi sentieri."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Houd je iPhone met OpenHikes erop in de buurt om je paden over te zetten."
           }
         },
         "pl" : {
@@ -862,6 +940,12 @@
             "value" : "Annulla"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annuleer"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -912,6 +996,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dislivello +"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stijging"
           }
         },
         "pl" : {
@@ -966,6 +1056,12 @@
             "value" : "Continua"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ga door"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1016,6 +1112,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Scarta"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verwijder"
           }
         },
         "pl" : {
@@ -1070,6 +1172,12 @@
             "value" : "Scarta escursione"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verwijder wandeling"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1122,6 +1230,12 @@
             "value" : "Scartare questa escursione?"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze wandeling verwijderen?"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1172,6 +1286,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Distanza"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afstand"
           }
         },
         "pl" : {
@@ -1227,6 +1347,12 @@
             "value" : "Fine"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gereed"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1277,6 +1403,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Recupero del sentiero dall’iPhone…"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dit pad wordt van je iPhone opgehaald…"
           }
         },
         "pl" : {
@@ -1331,6 +1463,12 @@
             "value" : "Ricerca della tua posizione sul sentiero…"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Je positie op het pad bepalen…"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1381,6 +1519,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ricerca della tua posizione…"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Je positie bepalen…"
           }
         },
         "pl" : {
@@ -1435,6 +1579,12 @@
             "value" : "Arrivo"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eindpunt"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1485,6 +1635,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Segui la tua posizione"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volg je locatie"
           }
         },
         "pl" : {
@@ -1546,6 +1702,12 @@
             "value" : "Completato"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gereed"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1596,6 +1758,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "All’incrocio, prosegui dritto"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ga bij de kruising rechtdoor"
           }
         },
         "pl" : {
@@ -1650,6 +1818,12 @@
             "value" : "Battito"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hartslag"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1700,6 +1874,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nasconde questo avviso."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verbergt deze waarschuwing."
           }
         },
         "pl" : {
@@ -1755,6 +1935,12 @@
             "value" : "Escursione"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wandeling"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1805,6 +1991,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Escursione interrotta"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wandeling onderbroken"
           }
         },
         "pl" : {
@@ -1859,6 +2051,12 @@
             "value" : "Escursione conservata"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wandeling behouden"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1909,6 +2107,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Escursione non salvata"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wandeling niet bewaard"
           }
         },
         "pl" : {
@@ -1963,6 +2167,12 @@
             "value" : "Importa un file GPX o registra un’escursione sul tuo iPhone e comparirà qui."
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importeer een GPX-bestand of neem een wandeling op met je iPhone, dan verschijnt ze hier."
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2013,6 +2223,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Installa OpenHikes sull’iPhone abbinato a questo orologio per trasferire i sentieri."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Installeer OpenHikes op de iPhone die aan dit horloge is gekoppeld om paden over te zetten."
           }
         },
         "pl" : {
@@ -2067,6 +2283,12 @@
             "value" : "Non è stata salvata da nessuna parte, quindi non può essere recuperata."
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ze is nergens bewaard, dus ze kan niet worden hersteld."
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2117,6 +2339,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Al bivio, tieni la sinistra"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Houd bij de splitsing links aan"
           }
         },
         "pl" : {
@@ -2171,6 +2399,12 @@
             "value" : "Al bivio, tieni la destra"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Houd bij de splitsing rechts aan"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2221,6 +2455,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ultima escursione non salvata"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Laatste wandeling niet bewaard"
           }
         },
         "pl" : {
@@ -2275,6 +2515,12 @@
             "value" : "Ultimo sentiero: %@"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Laatst op %@"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2325,6 +2571,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rimanenti"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resterend"
           }
         },
         "pl" : {
@@ -2379,6 +2631,12 @@
             "value" : "La localizzazione è disattivata, quindi la tua posizione non viene mostrata."
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Locatie staat uit, dus je positie wordt niet getoond."
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2429,6 +2687,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mappa di %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kaart van %@"
           }
         },
         "pl" : {
@@ -2483,6 +2747,12 @@
             "value" : "OpenHikes non è sul tuo iPhone"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geen OpenHikes op je iPhone"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2533,6 +2803,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ancora nessun sentiero"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nog geen paden"
           }
         },
         "pl" : {
@@ -2587,6 +2863,12 @@
             "value" : "Impossibile registrare"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geen opname"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2637,6 +2919,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Deviazione"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afwijking"
           }
         },
         "pl" : {
@@ -2692,6 +2980,12 @@
             "value" : "Nessuna"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Op koers"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2742,6 +3036,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sul tuo iPhone"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Op je iPhone"
           }
         },
         "pl" : {
@@ -2796,6 +3096,12 @@
             "value" : "OpenHikes ha bisogno dell’accesso alla posizione per registrare un’escursione."
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes heeft locatietoegang nodig om een wandeling op te nemen."
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2846,6 +3152,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes ha bisogno dell’autorizzazione ad avviare un allenamento: è ciò che mantiene attiva la registrazione."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes heeft toestemming nodig om een work-out te starten, want die houdt een opname draaiende."
           }
         },
         "pl" : {
@@ -2901,6 +3213,12 @@
             "value" : "OpenHikes ha bisogno della tua posizione per poter registrare un’escursione."
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes heeft je locatie nodig voordat het een wandeling kan opnemen."
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2951,6 +3269,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pausa"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pauzeer"
           }
         },
         "pl" : {
@@ -3006,6 +3330,12 @@
             "value" : "Metti in pausa l’escursione"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pauzeer wandeling"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3056,6 +3386,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Metti in pausa la registrazione"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pauzeer opname"
           }
         },
         "pl" : {
@@ -3110,6 +3446,12 @@
             "value" : "Metti in pausa la registrazione sull’iPhone"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pauzeer opname op je iPhone"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3160,6 +3502,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "In pausa. La strada che fai ora non fa parte dell’escursione."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gepauzeerd. De afstand die je nu aflegt, hoort niet bij de wandeling."
           }
         },
         "pl" : {
@@ -3215,6 +3563,12 @@
             "value" : "Mette in pausa l’escursione in registrazione, dal suo pannello nella schermata di blocco."
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pauzeert de wandeling die wordt opgenomen, vanaf het paneel op het toegangsscherm."
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3265,6 +3619,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Progressi lungo il sentiero"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voortgang langs het pad"
           }
         },
         "pl" : {
@@ -3319,6 +3679,12 @@
             "value" : "Registra"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neem op"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3369,6 +3735,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Registra questa escursione"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neem deze wandeling op"
           }
         },
         "pl" : {
@@ -3423,6 +3795,12 @@
             "value" : "In registrazione"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opname"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3473,6 +3851,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Registrazione interrotta alle %@. Tutto ciò che precede è stato conservato."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opname gestopt om %@. Alles daarvoor blijft bewaard."
           }
         },
         "pl" : {
@@ -3527,6 +3911,12 @@
             "value" : "Registra su questo orologio, con o senza iPhone. L’escursione passa all’iPhone quando torna a portata."
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neemt op met dit horloge, met of zonder je iPhone. De wandeling gaat naar je iPhone zodra die weer binnen bereik is."
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3577,6 +3967,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Riprendi"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hervat"
           }
         },
         "pl" : {
@@ -3632,6 +4028,12 @@
             "value" : "Riprendi l’escursione"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hervat wandeling"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3684,6 +4086,12 @@
             "value" : "Riprendi la registrazione"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hervat opname"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3734,6 +4142,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Riprendi la registrazione sull’iPhone"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hervat opname op je iPhone"
           }
         },
         "pl" : {
@@ -3789,6 +4203,12 @@
             "value" : "Riprende l’escursione in pausa, dal suo pannello nella schermata di blocco."
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hervat de gepauzeerde wandeling, vanaf het paneel op het toegangsscherm."
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3839,6 +4259,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Salva escursione"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bewaar wandeling"
           }
         },
         "pl" : {
@@ -3893,6 +4319,12 @@
             "value" : "Salvataggio…"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bewaren…"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3943,6 +4375,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Inviata al tuo iPhone."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Naar je iPhone gestuurd."
           }
         },
         "pl" : {
@@ -3998,6 +4436,12 @@
             "value" : "Mostra un sentiero a tua scelta, il sentiero selezionato o un’escursione in fase di registrazione."
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toont een pad dat je kiest, of je geselecteerde pad, of een wandeling die nu wordt opgenomen."
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -4048,6 +4492,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Partenza"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start"
           }
         },
         "pl" : {
@@ -4102,6 +4552,12 @@
             "value" : "Avvia escursione"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start wandeling"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -4152,6 +4608,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Avvio…"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Starten…"
           }
         },
         "pl" : {
@@ -4206,6 +4668,12 @@
             "value" : "Interrompi"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -4256,6 +4724,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Smetti di seguire la tua posizione"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop met je locatie volgen"
           }
         },
         "pl" : {
@@ -4310,6 +4784,12 @@
             "value" : "Interrompi la registrazione"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop opname"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -4360,6 +4840,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Interrompi la registrazione sull’iPhone"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop opname op je iPhone"
           }
         },
         "pl" : {
@@ -4414,6 +4900,12 @@
             "value" : "La richiesta non è arrivata all’iPhone."
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dat heeft je iPhone niet bereikt."
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -4464,6 +4956,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Quell’escursione era troppo breve per essere conservata."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die wandeling was te kort om te bewaren."
           }
         },
         "pl" : {
@@ -4518,6 +5016,12 @@
             "value" : "Questo orologio non riesce a leggere l’escursione interrotta in questo momento. Riprova, oppure scartala per registrarne una nuova."
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dit horloge kan de onderbroken wandeling nu niet lezen. Probeer het opnieuw, of verwijder haar om een nieuwe op te nemen."
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -4568,6 +5072,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Questo orologio non può avviare un allenamento, quindi la registrazione non potrebbe restare attiva."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dit horloge kan geen work-out starten, dus een opname zou niet kunnen blijven lopen."
           }
         },
         "pl" : {
@@ -4622,6 +5132,12 @@
             "value" : "Questo orologio non è riuscito a scartare l’escursione. Riprova più tardi."
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dit horloge kon de wandeling niet verwijderen. Probeer het later opnieuw."
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -4674,6 +5190,12 @@
             "value" : "Lo spazio su questo orologio è esaurito. Libera dello spazio, poi riprova."
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De opslag van dit horloge is vol. Maak wat ruimte vrij en probeer het opnieuw."
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -4724,6 +5246,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tempo in cammino"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wandeltijd"
           }
         },
         "pl" : {
@@ -4779,6 +5307,12 @@
             "value" : "Attiva/disattiva registrazione"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zet opname van wandeling aan/uit"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -4829,6 +5363,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sentiero"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pad"
           }
         },
         "pl" : {
@@ -4883,6 +5423,12 @@
             "value" : "Dati del sentiero"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cijfers van pad"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -4933,6 +5479,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sentieri"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paden"
           }
         },
         "pl" : {
@@ -4987,6 +5539,12 @@
             "value" : "Riprova"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Probeer opnieuw"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -5037,6 +5595,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "All’incrocio, gira a sinistra"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sla bij de kruising linksaf"
           }
         },
         "pl" : {
@@ -5091,6 +5655,12 @@
             "value" : "All’incrocio, gira a destra"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sla bij de kruising rechtsaf"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -5141,6 +5711,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "All’incrocio, gira decisamente a sinistra"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sla bij de kruising scherp linksaf"
           }
         },
         "pl" : {
@@ -5195,6 +5771,12 @@
             "value" : "All’incrocio, gira decisamente a destra"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sla bij de kruising scherp rechtsaf"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -5245,6 +5827,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ruota la mappa mentre cammini"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Draai de kaart mee terwijl je wandelt"
           }
         },
         "pl" : {
@@ -5299,6 +5887,12 @@
             "value" : "In attesa dell’iPhone"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wachten op je iPhone"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -5349,6 +5943,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "In attesa che l’iPhone torni a portata…"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wachten tot je iPhone weer binnen bereik is…"
           }
         },
         "pl" : {
@@ -5403,6 +6003,12 @@
             "value" : "In attesa dell’iPhone. Il trasferimento avverrà da solo."
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wachten op je iPhone. Hij gaat vanzelf over."
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -5453,6 +6059,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Il tuo iPhone non ha potuto rispondere."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Je iPhone kon daar niet op antwoorden."
           }
         },
         "pl" : {
@@ -5507,6 +6119,12 @@
             "value" : "Il tuo iPhone è fuori portata."
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Je iPhone is buiten bereik."
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -5557,6 +6175,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Il tuo iPhone sta registrando"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Je iPhone neemt op"
           }
         },
         "pl" : {

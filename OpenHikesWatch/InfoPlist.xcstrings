@@ -61,6 +61,12 @@
             "value" : "OpenHikes legge la tua frequenza cardiaca da Salute mentre registri un’escursione, così l’orologio può mostrarla mentre cammini. Nient’altro viene letto da Salute."
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes leest je hartslag uit Gezondheid terwijl je een wandeling opneemt, zodat het horloge hem onderweg kan tonen. Verder wordt niets uit Gezondheid gelezen."
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -119,6 +125,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes avvia un allenamento di escursionismo in Salute mentre registri sull’orologio: è questo che mantiene attiva la registrazione a schermo spento. L’allenamento in sé non viene salvato – è il tuo iPhone a salvare l’escursione terminata."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes start een wandeltochtwork-out in Gezondheid terwijl je met je horloge opneemt, en die houdt de opname draaiende met het scherm uit. De work-out zelf wordt niet bewaard – je iPhone bewaart de voltooide wandeling."
           }
         },
         "pl" : {
@@ -181,6 +193,12 @@
             "value" : "OpenHikes usa la tua posizione per mostrarti dove ti trovi sul sentiero che stai seguendo e per registrare la tua escursione."
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes gebruikt je locatie om te tonen waar je bent op het pad dat je volgt, en om je wandeling op te nemen."
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -239,6 +257,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes usa i sensori di movimento per migliorare l’altitudine registrata durante l’escursione."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes gebruikt de bewegingssensoren om de hoogte te verbeteren die tijdens je wandeling wordt opgenomen."
           }
         },
         "pl" : {

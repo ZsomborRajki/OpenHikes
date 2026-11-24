@@ -15,8 +15,8 @@
 //  ## In the language the app speaks
 //
 //  Those two are published in English, German, French, Spanish, Italian,
-//  Russian, Polish, Ukrainian and Romanian, and the app opens the copy in its
-//  own language (``PageLanguage``).
+//  Russian, Polish, Ukrainian, Romanian and Dutch, and the app opens the copy
+//  in its own language (``PageLanguage``).
 //  A German screen that says *Datenschutzerklärung* and opens an English page
 //  fails the reader the policy is written for: the GDPR asks for information
 //  its audience can understand, and the transparency guidelines the EDPB
@@ -46,7 +46,10 @@
 //  Romania's consumer law asks for Romanian in everything a consumer is told
 //  about a service, and in the contract, standard terms included (Ordonanța
 //  Guvernului nr. 21/1992 privind protecția consumatorilor, art. 20
-//  alin. (5)), so the Romanian app opens Romanian pages.
+//  alin. (5)), so the Romanian app opens Romanian pages. The EU's unfair
+//  terms directive asks that terms put to a consumer be drafted in plain,
+//  intelligible language, and reads any doubt about one in the consumer's
+//  favor (Directive 93/13/EEC, art. 5), so the Dutch app opens Dutch pages.
 //
 //  Apple's EULA stays one URL, because it is Apple's text and not this app's
 //  to translate.
@@ -66,9 +69,10 @@ enum MapPurchaseLinks {
     /// English is the site's root, and each translation is a folder named
     /// for its language, page for page: German is `docs/de/`, French
     /// `docs/fr/`, Spanish `docs/es/`, Italian `docs/it/`, Russian `docs/ru/`,
-    /// Polish `docs/pl/`, Ukrainian `docs/uk/` and Romanian `docs/ro/`, so
-    /// `docs/ro/privacy/index.html` translates `docs/privacy/index.html`, and
-    /// `docs/ro/terms/index.html` translates `docs/terms/index.html`. Each
+    /// Polish `docs/pl/`, Ukrainian `docs/uk/`, Romanian `docs/ro/` and Dutch
+    /// `docs/nl/`, so `docs/nl/privacy/index.html` translates
+    /// `docs/privacy/index.html`, and `docs/nl/terms/index.html` translates
+    /// `docs/terms/index.html`. Each
     /// translation carries its original's effective date, so an English change
     /// that bumps the date fails `Scripts/check-legal-pages.sh` until every
     /// translation says the same. That script finds the pages by reading the
@@ -76,6 +80,7 @@ enum MapPurchaseLinks {
     /// to be a case here with a folder there; `MapPurchaseLinksTests` fails on
     /// one that is not a case, and the script on a folder that is missing.
     nonisolated enum PageLanguage: String, CaseIterable, Sendable {
+        case dutch = "nl"
         case english = "en"
         case french = "fr"
         case german = "de"
@@ -98,8 +103,8 @@ enum MapPurchaseLinks {
         /// pages, so `de-AT` and `de-CH` open the German ones, `fr-CA` and
         /// `fr-CH` the French ones, `es-MX` and `es-419` the Spanish ones,
         /// `it-CH` the Italian ones, `ru-KZ` and `ru-BY` the Russian ones,
-        /// `pl-PL` the Polish ones, `uk-UA` the Ukrainian ones and `ro-MD` the
-        /// Romanian ones.
+        /// `pl-PL` the Polish ones, `uk-UA` the Ukrainian ones, `ro-MD` the
+        /// Romanian ones and `nl-BE` the Dutch ones.
         init(localization: String?) {
             let code = localization.flatMap { Locale.Language(identifier: $0).languageCode?.identifier }
             self = code.flatMap(Self.init(rawValue:)) ?? .english
@@ -107,6 +112,7 @@ enum MapPurchaseLinks {
 
         var privacyPolicy: URL {
             switch self {
+            case .dutch: URL(string: "https://zsomborrajki.github.io/OpenHikes/nl/privacy/")!
             case .english: URL(string: "https://zsomborrajki.github.io/OpenHikes/privacy/")!
             case .french: URL(string: "https://zsomborrajki.github.io/OpenHikes/fr/privacy/")!
             case .german: URL(string: "https://zsomborrajki.github.io/OpenHikes/de/privacy/")!
@@ -121,6 +127,7 @@ enum MapPurchaseLinks {
 
         var termsAndConditions: URL {
             switch self {
+            case .dutch: URL(string: "https://zsomborrajki.github.io/OpenHikes/nl/terms/")!
             case .english: URL(string: "https://zsomborrajki.github.io/OpenHikes/terms/")!
             case .french: URL(string: "https://zsomborrajki.github.io/OpenHikes/fr/terms/")!
             case .german: URL(string: "https://zsomborrajki.github.io/OpenHikes/de/terms/")!
