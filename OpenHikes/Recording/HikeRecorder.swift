@@ -471,6 +471,34 @@ extension HikeRecorder {
         }
     }
 
+    /// Reopens the journal and marks the resume in it, answering when the
+    /// walk resumed — or `nil` when it did not: the Resume stopped being
+    /// wanted across one of the waits, or the journal failed, which fails
+    /// the walk.
+    private func reopenJournal(resuming attempt: UUID, of session: UUID) async -> Date? {
+        do {
+            guard let journal else { throw RecordingFailure.storageUnavailable }
+            await journalQueue.drain()
+            guard isResumeWanted(attempt, of: session) else { return nil }
+            try await journal.reopenForAppending()
+            guard isResumeWanted(attempt, of: session) else { return nil }
+            let resumedAt = clock()
+            try await journal.resume(at: resumedAt)
+            return isResumeWanted(attempt, of: session) ? resumedAt : nil
+        } catch {
+            guard isResumeWanted(attempt, of: session) else { return nil }
+            fail(error as? RecordingFailure ?? .storage(error.localizedDescription))
+            return nil
+        }
+    }
+
+    /// Whether the Resume `attempt` is still the one wanted, for the session
+    /// it was asked about, which is still paused: nothing has stopped,
+    /// discarded or resumed it meanwhile, or replaced it with another walk.
+    private func isResumeWanted(_ attempt: UUID, of session: UUID) -> Bool {
+        resumeID == attempt && sessionID == session && phase == .paused
+    }
+
     func resume() async {
         guard phase == .paused, let session = sessionID else { return }
         let attempt = UUID()
@@ -520,34 +548,6 @@ extension HikeRecorder {
         source.startRecordingUpdates(profile: resolvedEnergyProfile())
         phase = stats.pointCount == 0 ? .waitingForFix : .recording
         publishSharedRecordingSnapshot(force: true)
-    }
-
-    /// Reopens the journal and marks the resume in it, answering when the
-    /// walk resumed — or `nil` when it did not: the Resume stopped being
-    /// wanted across one of the waits, or the journal failed, which fails
-    /// the walk.
-    private func reopenJournal(resuming attempt: UUID, of session: UUID) async -> Date? {
-        do {
-            guard let journal else { throw RecordingFailure.storageUnavailable }
-            await journalQueue.drain()
-            guard isResumeWanted(attempt, of: session) else { return nil }
-            try await journal.reopenForAppending()
-            guard isResumeWanted(attempt, of: session) else { return nil }
-            let resumedAt = clock()
-            try await journal.resume(at: resumedAt)
-            return isResumeWanted(attempt, of: session) ? resumedAt : nil
-        } catch {
-            guard isResumeWanted(attempt, of: session) else { return nil }
-            fail(error as? RecordingFailure ?? .storage(error.localizedDescription))
-            return nil
-        }
-    }
-
-    /// Whether the Resume `attempt` is still the one wanted, for the session
-    /// it was asked about, which is still paused: nothing has stopped,
-    /// discarded or resumed it meanwhile, or replaced it with another walk.
-    private func isResumeWanted(_ attempt: UUID, of session: UUID) -> Bool {
-        resumeID == attempt && sessionID == session && phase == .paused
     }
 
     /// Ends the walk and saves it, with the stretches trail matching left a
