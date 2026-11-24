@@ -34,8 +34,9 @@ extension OfflineCountries {
             download(failed.country)
             return
         }
-        // What came down of the old build is no part of the new one.
-        cancel(id)
+        // What came down of the old build is no part of the new one, and
+        // the new one waits for it to go: kept, it would resume from it.
+        guard cancel(id) else { return }
         download(current)
     }
 

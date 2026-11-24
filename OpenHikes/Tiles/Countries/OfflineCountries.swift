@@ -318,26 +318,41 @@ final class OfflineCountries {
     /// of downloads under way says whether there is one: taken off that
     /// list, it is left alone by the launch (``resumePending(_:)``) rather
     /// than installed after the hiker ended it.
-    func cancel(_ id: String) {
+    ///
+    /// **Taken off that list first, or not stopped at all.** A list that
+    /// cannot be written, or read, still names the download, and the next
+    /// launch would bring back as failed a row whose staged files this had
+    /// deleted. So a refusal stops nothing and deletes nothing: the row
+    /// stays, its transfers run on, the list and the staged files still
+    /// agree, and Cancel can be tried again. Answers whether the download is
+    /// stopped, as one never started always is.
+    @discardableResult func cancel(_ id: String) -> Bool {
+        // A list that cannot be read may name it, so it is written as one
+        // that does: refused, as ``writePending(_:)`` refuses such a list.
+        let (waiting, mayBeListed) = switch store.downloadsUnderWay() {
+        case .holding(let pending): (pending.filter { $0.country.id == id }, pending.contains { $0.country.id == id })
+        case .unreadable: ([OfflineCountryStore.Pending](), true)
+        }
+        guard downloads[id] != nil || !waiting.isEmpty else { return true }
+        if mayBeListed, !writePending({ $0.removeAll { $0.country.id == id } }) { return false }
         let download = downloads.removeValue(forKey: id)
-        let waiting = store.pending().filter { $0.country.id == id }
-        guard download != nil || !waiting.isEmpty else { return }
         downloader?.cancel(country: id)
-        writePending { $0.removeAll { $0.country.id == id } }
         let files = (download?.files ?? []) + waiting.flatMap(\.files)
         for staged in Set(files.map(store.stagedURL(for:))) {
             try? FileManager.default.removeItem(at: staged)
         }
+        return true
     }
 
     /// Deletes a downloaded area, and the tiles drawn from it go with the
     /// cache as any tile does. A download still under way for it, of its
-    /// zoom 15 or of an update, goes too: landing later, it would put back
-    /// an area with none of its other files left.
+    /// zoom 15 or of an update, goes too, and first: landing later, it would
+    /// put back an area with none of its other files left, so an area whose
+    /// download cannot be stopped stays until it can.
     func delete(_ id: String) {
+        guard installed[id] != nil, cancel(id) else { return }
         let before = installed
         guard let record = installed.removeValue(forKey: id), commitIndex(restoring: before) else { return }
-        cancel(id)
         forgetUnopenable(record.files.map(\.role), of: id)
         reopenArchives()
         store.remove(record.files, keeping: Array(installed.values))
