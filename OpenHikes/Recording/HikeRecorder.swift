@@ -177,6 +177,11 @@ final class HikeRecorder: NSObject {
     /// the activation checks as well. Either way, an activation waking from a
     /// suspension can tell whether it is still the one being waited for.
     @ObservationIgnored var activationID: UUID?
+    /// The Resume now being waited on, on the precision sheet or the journal.
+    /// What ``activationID`` is to a Start: Stop, Discard and a newer Resume
+    /// let go of it, so the one waiting finds, when it wakes, that it is no
+    /// longer wanted, and leaves the recorder as they left it (#1608).
+    @ObservationIgnored var resumeID: UUID?
     /// What the Start now being waited on begins with, for a recording that
     /// takes over from a hike already under way — see ``RecordingSeed``.
     /// Taken by the activation that makes the session, and let go of by
@@ -467,7 +472,12 @@ extension HikeRecorder {
     }
 
     func resume() async {
-        guard phase == .paused else { return }
+        guard phase == .paused, let session = sessionID else { return }
+        let attempt = UUID()
+        resumeID = attempt
+        defer {
+            if resumeID == attempt { resumeID = nil }
+        }
         // Whoever made the pause, the hiker is ending it: the walk from here
         // is watched for its next stop afresh.
         resetAutoPause()
@@ -484,25 +494,13 @@ extension HikeRecorder {
         }
         if !source.hasFullAccuracy {
             await source.requestTemporaryFullAccuracy()
+            guard isResumeWanted(attempt, of: session) else { return }
         }
         guard source.hasFullAccuracy else {
             fail(.preciseLocationRequired)
             return
         }
-        let resumedAt: Date
-        do {
-            guard let journal else { throw RecordingFailure.storageUnavailable }
-            await journalQueue.drain()
-            try await journal.reopenForAppending()
-            resumedAt = clock()
-            try await journal.resume(at: resumedAt)
-        } catch let failure as RecordingFailure {
-            fail(failure)
-            return
-        } catch {
-            fail(.storage(error.localizedDescription))
-            return
-        }
+        guard let resumedAt = await reopenJournal(resuming: attempt, of: session) else { return }
         // Before any of the recording sensors start: the watch owns the same
         // `CLLocationManager`, and starting a recording feed on top of
         // significant-change monitoring leaves the monitoring behind.
@@ -522,6 +520,34 @@ extension HikeRecorder {
         source.startRecordingUpdates(profile: resolvedEnergyProfile())
         phase = stats.pointCount == 0 ? .waitingForFix : .recording
         publishSharedRecordingSnapshot(force: true)
+    }
+
+    /// Reopens the journal and marks the resume in it, answering when the
+    /// walk resumed — or `nil` when it did not: the Resume stopped being
+    /// wanted across one of the waits, or the journal failed, which fails
+    /// the walk.
+    private func reopenJournal(resuming attempt: UUID, of session: UUID) async -> Date? {
+        do {
+            guard let journal else { throw RecordingFailure.storageUnavailable }
+            await journalQueue.drain()
+            guard isResumeWanted(attempt, of: session) else { return nil }
+            try await journal.reopenForAppending()
+            guard isResumeWanted(attempt, of: session) else { return nil }
+            let resumedAt = clock()
+            try await journal.resume(at: resumedAt)
+            return isResumeWanted(attempt, of: session) ? resumedAt : nil
+        } catch {
+            guard isResumeWanted(attempt, of: session) else { return nil }
+            fail(error as? RecordingFailure ?? .storage(error.localizedDescription))
+            return nil
+        }
+    }
+
+    /// Whether the Resume `attempt` is still the one wanted, for the session
+    /// it was asked about, which is still paused: nothing has stopped,
+    /// discarded or resumed it meanwhile, or replaced it with another walk.
+    private func isResumeWanted(_ attempt: UUID, of session: UUID) -> Bool {
+        resumeID == attempt && sessionID == session && phase == .paused
     }
 
     /// Ends the walk and saves it, with the stretches trail matching left a
@@ -545,6 +571,9 @@ extension HikeRecorder {
             localized: "No active recording is ready to stop."
         )) }
         self.offeredTitle = HikeTitle.bounded(offeredTitle)
+        // A Resume waiting is no longer wanted, and the phase below says so
+        // too, before any wait.
+        resumeID = nil
         guard let journal, sessionStartedAt != nil else {
             let failure = RecordingFailure.storageUnavailable
             fail(failure)
@@ -609,8 +638,10 @@ extension HikeRecorder {
         // without the other would let the authorization callback — which the
         // precision answer itself fires — begin a fresh activation inside
         // those waits, and one that finished before `resetSession()` would
-        // record on behind an idle recorder.
+        // record on behind an idle recorder. A Resume waiting is let go of
+        // for the same reason: the phase stays paused until the end.
         activationID = nil
+        resumeID = nil
         startRequested = false
         resetAutoPause()
         cancelLiveMatching(clearWindow: true)
