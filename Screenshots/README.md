@@ -466,7 +466,7 @@ another shape, which is the point of shooting it. Its output directory,
 `iphone_duo_en_ie_YYYY_MM_DD/`, keeps the set apart from the 6.9" one, whose
 file names it shares. Add `--locale de_DE` for German.
 
-The device type needs a runtime of its own (*The iPhone Duo* in `AGENTS.md`),
+The device type needs a runtime of its own (*The iPhone Duo* in `OPERATIONS.md`),
 and its template, `OpenHikes Template (iPhone Duo, …)`, is built the first
 time like any other: one download of the system's models, then clones.
 
@@ -474,7 +474,7 @@ time like any other: one download of the system's models, then clones.
 hand, in Device Hub. The capture runs `Scripts/duo-pose.sh open` on the clean
 device, which has hinge post the event Device Hub's hinge slider posts and
 reads the display state back: open, with the inner display on its side, the
-way it unfolds, or the run stops. hinge is an optional tool (*The iPhone Duo* in `AGENTS.md`), and on a
+way it unfolds, or the run stops. hinge is an optional tool (*The iPhone Duo* in `OPERATIONS.md`), and on a
 machine without it the set is skipped, with a message saying so, before a
 simulator is touched. One unfold from cold is what that script can be relied
 on for; see its header for the one that did not take, and what folding back

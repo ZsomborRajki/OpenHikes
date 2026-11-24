@@ -3,7 +3,9 @@
 How code is written in this repository: the commands, the architecture, the
 conventions, and the decisions that are already settled. Read it before
 changing anything. [`README.md`](README.md) says what the app is,
-[`CONTRIBUTING.md`](CONTRIBUTING.md) is the short path to a first change, and
+[`CONTRIBUTING.md`](CONTRIBUTING.md) is the short path to a first change,
+[`OPERATIONS.md`](OPERATIONS.md) has the procedures run by hand around the app
+(releasing, CloudKit promotes, the tile server) and what is deployed, and
 open work lives in [issues](https://github.com/ZsomborRajki/OpenHikes/issues).
 
 Most source files open with a header that argues for their design. When a rule
@@ -193,27 +195,12 @@ either: the second run waits silently on the first run's build lock.
 
 ### The iPhone Duo
 
-- **It needs a runtime of its own, which runs no other device:** iOS 27.1 as
-  Xcode 27.1 installed it, and a build of iOS 27.2 for the Duo alone under
-  Xcode 27.2. CI's Xcode 27.0 has neither, so no gate runs on a Duo, and the
+- **No gate runs on a Duo.** Its runtime is one CI's Xcode 27.0 lacks, so the
   27.1 SDK's Duo APIs do not exist where CI compiles (*CI* has the gate).
-  Templates and the pool pick the newest runtime that runs their device type,
-  never just the newest.
-- **It boots closed**, on the cover display (466 × 678 points).
-  `Scripts/duo-pose.sh open --device <udid>` unfolds it to the inner display
-  (669 × 951, upright) and reads the display state back.
-  `--orientation landscape` leaves it 951 × 669, wide enough for the map
-  screen's side panel.
-- **Opening it takes hinge**
-  ([artemnovichkov/hinge](https://github.com/artemnovichkov/hinge)), an
-  optional Homebrew tool. Give it the pool device every time (`-d "$udid"`):
-  without `-d` it folds the only booted iPhone Duo, which on a shared machine
-  can be another session's.
-- **XCTest sees it through the cover.** `XCUIScreen.main` is the cover display
-  open or closed, and on the inner display turned sideways `app.frame` stays
-  portrait while `app.windows.firstMatch.frame` turns. There `isHittable` also
-  answers no for everything in the side panel, so the shared helpers measure
-  the window and skip it (`OpenHikesUITests/WindowSupport.swift`).
+- **Give hinge the pool device every time** (`-d "$udid"`): without `-d` it
+  folds the only booted iPhone Duo, which on a shared machine can be another
+  session's. Its runtime, its poses and how XCTest sees it are *The iPhone
+  Duo* in `OPERATIONS.md`.
 
 ### The iPad
 
@@ -262,13 +249,9 @@ either: the second run waits silently on the first run's build lock.
 - **What a Mac lacks is asked about at run time**, as on an iPad: GPS, Health,
   the watch, the Live Activity, motion and the barometer. Settings shows a Mac
   only what a Mac uses (`SettingsView.fieldSections`).
-- **Running it outside Xcode.** Build with `-destination 'platform=macOS,
-  arch=arm64,variant=Designed for iPad'`, put the `Debug-iphoneos` app inside
-  a wrapper (`X.app/Wrapper/OpenHikes.app`, with an `X.app/WrappedBundle`
-  symlink to it) and `open` the wrapper.
 - **No gate runs on a Mac**, only macOS 27 has been checked, and whether the
   App Store offers the app there is App Store Connect's switch, not the
-  build's.
+  build's. *Running the Mac build outside Xcode* in `OPERATIONS.md` says how.
 
 ### UI automation
 
@@ -396,30 +379,10 @@ a change to recording, the map, the sheet or the render path; the PR template,
 
 ### Releasing
 
-- **Upload with the TestFlight workflow.** `.github/workflows/testflight.yml`
-  runs on demand with the version to ship (`gh workflow run testflight.yml -f
-  version=<version> -f cloudkit_promoted=true`). It archives the branch it is
-  run from, uploads it and pushes its tag. Its header lists the `testflight`
-  environment's secrets and how to set them.
-  - It stamps the version at build time and commits nothing, because `main`
-    takes no pushes. So the tags, not `project.pbxproj`, record what shipped.
-  - Each version's builds start at 1. After that, the build number is one
-    past the highest build tagged or committed for that version
-    (`Scripts/release-version.sh`).
-  - It writes the gitignored `OpenHikes/Secrets.plist` (the Stadia and
-    Thunderforest keys) from its secrets, then runs
-    `Scripts/check-release-secrets.sh` on that file and on the archived app's
-    copy. An archive succeeds without the file, shipping paid map styles that
-    draw nothing, and `ci.yml` archives without keys on purpose.
-- **Promote the CloudKit schema before uploading.** An App Store Connect
-  upload, TestFlight included, is signed for the production container, and a
-  save there cannot add a field. Check production against the model first (see
-  *CloudKit*). Nothing can check it for the workflow, so it refuses to start
-  until `cloudkit_promoted` is ticked.
-- **Every archived commit carries a tag**,
-  `v<MARKETING_VERSION>-<CURRENT_PROJECT_VERSION>`, which the workflow pushes.
-  There are no release branches, so a tag is the only way to map an Organizer
-  crash report to a revision. Add a GitHub Release for App Store builds.
+Every upload goes through the TestFlight workflow, after the CloudKit schema
+is promoted, and stamps the version at build time: the tags, not
+`project.pbxproj`, record what shipped. The steps are *Releasing* in
+`OPERATIONS.md`.
 
 ## Architecture
 
@@ -963,23 +926,9 @@ a change to recording, the map, the sheet or the render path; the PR template,
   manifest again when it comes to the front and when an archive answers 410,
   so it moves without a release (`VectorTileArchives`). It names each set of
   squares' archives too, under a list a set (*The trail squares*).
-- **Refreshing the server is a run of commands, each safe to run again.**
-  Each script's header has its options.
-  1. `Scripts/trail-cells.sh update-planet <planet.osm.pbf>`, then
-     `Scripts/vector-extras.sh build <planet.osm.pbf>` and `upload`, and the
-     four sets of squares (*The trail squares*).
-  2. `Scripts/vector-archives.sh basemap` copies Protomaps' newest daily
-     build of the schema the app reads into the bucket.
-  3. `Scripts/vector-archives.sh use` with each new name, then `publish`, and
-     commit the manifest.
-  4. `Scripts/offline-countries.sh publish` cuts every area again from the
-     new archives and puts it up.
-  5. `prune` in `Scripts/vector-archives.sh` and
-     `Scripts/offline-countries.sh`, once the apps have read the new
-     manifests. An archive leaves the manifest before it leaves the bucket.
-     `Scripts/trail-cells.sh prune` is no part of a refresh: it takes the
-     public database's copies from 1.5–1.7 (*The trail squares*).
 - **The server is not in this repository.** It is a Worker and an R2 bucket.
+  Refreshing it, and what it holds now, are *The tile server* in
+  `OPERATIONS.md`.
 
 ### The offline countries
 
@@ -1062,16 +1011,6 @@ Maps*. `OfflineCountries` is the one owner, on the main actor.
   one way past the server is
   `--ui-test-offline-countries=<seeded|showcase|refused>`
   (`SeededOfflineCountryServer`), and still no session, so nothing downloads.
-- **Deployment state, checked 2026-11-23.** The bucket holds every area of
-  build `20261122`, cut from `planet-20261118` and `extras-20261122-00`, with
-  its day hikes from `trails-20261122-00` 50 km round it: 381 of them (234
-  countries, and the 51 states, 13 provinces and 83 regions of the three
-  split ones), 1,905 files and 180.8 GB, of which the day hikes are 279 MB,
-  and no other country file. Beside them it holds those two archives, the
-  four sets of squares (*The trail squares*), and the manifest at revision
-  11, which names all six, and nothing else. The squares are `routing-20261122-00`,
-  `trails-20261122-00`, `routes-20261122-00` and `places-20261122-00`, each
-  the planet of 2026-11-22 00:00 UTC.
 
 ### Accessibility
 
@@ -1336,41 +1275,9 @@ in its source header. Do not weaken one without a measurement.
   development on the first non-nil save, but a save in production cannot add a
   field. So a new synced field must be promoted before any build that writes it
   reaches the production environment, and an App Store Connect upload,
-  TestFlight included, does:
-  1. `xcrun cktool export-schema`, then add the line.
-  2. `validate-schema`, then `import-schema --environment development`.
-  3. Re-export and check the result.
-  4. Promote in the Console. `cktool` has no promote command.
-
-  Field shapes:
-
-  | Swift type | CloudKit field |
-  |---|---|
-  | `String?` | `STRING QUERYABLE SEARCHABLE SORTABLE` |
-  | `Data?` or a `Codable` array, without external storage | `BYTES QUERYABLE SORTABLE` |
-  | `Int` or `Bool` | `INT64 QUERYABLE SORTABLE` |
-  | `Double` or `Double?` | `DOUBLE QUERYABLE SORTABLE` |
-
-  A hand-declared shape is inferred, so let a development build save the field
-  once before promoting. An `@Attribute(.externalStorage)` column, such as
-  `Hike.route`, also mirrors through a `CD_<name>_ckAsset` asset field: check
-  that the development export has it, and promote both.
-- **Deployment state, checked 2026-11-21.** Development and production both
-  export `md5 74a5b5d91372f08c92c3af7402df7892`. Both have the two
-  trail-square record types, `CuratedTrailCell` and `CuratedTrailManifest`,
-  neither with an index. Both hold the same build of all four sets of
-  squares, from OpenStreetMap as of 2026-11-17 23:00 UTC, each marked as the
-  whole world under its own manifest (checked 2026-11-18): `trails1_manifest`,
-  `routes1_manifest`, `places1_manifest` and `graph1_manifest`. Builds
-  v1.5-1 to v1.7-1 read them, and nothing later does (*The trail squares*).
-  Both have a
-  column for every attribute in `MirroredCloudKitSchema.recordTypes`. The
-  only live columns the contract does not name are SwiftData's own
-  `CD_entityName`, the to-one reference columns that the contract lists as
-  relationships, and the `CD_route_ckAsset`, `CD_rawRoute_ckAsset` and
-  `CD_originalRoute_ckAsset` asset fields of the three external-storage
-  attributes. Re-export before believing these numbers, and update this
-  paragraph when they move. Deployment facts live here, not in code.
+  TestFlight included, does. The steps and the field shapes are *Promoting a
+  CloudKit field* in `OPERATIONS.md`, and what both environments hold now is
+  *CloudKit deployment state* there.
 
 ## The community feature
 
@@ -1409,8 +1316,9 @@ is world-readable, because browsing needs no account.
   no index either, or anyone could enumerate one person's hikes.
 - **A new field arrives indexed.** A field that a first save auto-creates
   arrives with every index, and an auto-created type also gets
-  `GRANT WRITE TO "_creator"`. Change the schema by import (as in *CloudKit*
-  above) and **re-read the index list after every change**. A promote can also
+  `GRANT WRITE TO "_creator"`. Change the schema by import (*Promoting a
+  CloudKit field* in `OPERATIONS.md`) and **re-read the index list after
+  every change**. A promote can also
   drop indexes and downgrade grants.
 - **No export shows the role membership.** `reviewer` membership is set per
   environment in the Console. Whether an account can add itself to `reviewer`
@@ -1570,25 +1478,12 @@ packed and read on the same terms.
   app's, and `Scripts/run-script-tests.sh` builds the tool, which is what
   holds them to that.
 - **Building and publishing** is `Scripts/trail-cells.sh`, whose header has
-  every option:
-  1. `update-planet <planet.osm.pbf>`. The planet is downloaded once and then
-     kept current with the hourly changes openstreetmap.org publishes,
-     because the volunteers who serve it asked that it not be downloaded
-     again for each refresh.
-  2. `build <planet.osm.pbf> --world`, `build-routes`, `build-places` and
-     `build-routing`, each with `--world`.
-  3. `pack <dir>` for the first three; `build-routing` writes its archive
-     itself.
-  4. `upload-archive <dir>` for all four, then `Scripts/vector-archives.sh
-     use` with each name, `publish`, and commit the manifest (*Tiles*).
+  every option. The order is *Building the squares* in `OPERATIONS.md`.
 - **The public database's copies are for builds v1.5-1 to v1.7-1.** Those
   read the squares as `CuratedTrailCell` records, under the same names
-  (*Persisted identifiers*), and nothing later does. `upload` refreshes them,
-  and `prune` takes a set down once those builds are gone: it marks the
-  set's manifest incomplete first, so they fall back to Overpass, deletes
-  the squares, and deletes the manifest record last, because it is the only
-  list of them. Both record types were added by schema import before the
-  first upload, for the reason *A new field arrives indexed* gives.
+  (*Persisted identifiers*), and nothing later does. Refreshing and taking
+  them down is *The public database's copies of the squares* in
+  `OPERATIONS.md`.
 - **No suite reaches any of the squares.** Each set's source is `nil` under
   `isRunningTests`: `makeCommunityTransport()`,
   `HikingRouteSquares.forThisLaunch()`, `makeTrailPointSource()` and
@@ -1874,7 +1769,8 @@ Each fact lives in one file:
 
 | File | What it owns |
 |---|---|
-| `AGENTS.md` (this file) | Commands, architecture, conventions, policies, settled decisions, CloudKit deployment facts |
+| `AGENTS.md` (this file) | Commands, architecture, conventions, policies, settled decisions |
+| `OPERATIONS.md` | What is run by hand around the app (releasing, CloudKit promotes, the tile server's refresh, the squares' builds, the Duo simulator, the Mac build outside Xcode) and what CloudKit and the tile server hold now. Agents do not load it; this file points to it where a rule needs it. |
 | `README.md` | What the app is and needs, and how to build it and find your way around. No engineering rationale. |
 | `CONTRIBUTING.md` | A person's short path to a first change. It points here. |
 | `SECURITY.md` | Vulnerability reporting, and what the public database grants to whom (the argument stays in `CommunitySchema.swift`) |

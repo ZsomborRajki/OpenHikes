@@ -15,8 +15,8 @@
 # the bucket. A manifest from before one of these lists has none of it, and
 # is written without it. That manifest is
 # OpenHikes/Tiles/Vector/VectorTileArchiveManifest.json: the app bundles it,
-# and this puts it on the server. *Tiles* in AGENTS.md has the whole refresh,
-# extras and countries included.
+# and this puts it on the server. *Refreshing the tile server* in OPERATIONS.md
+# has the whole refresh, extras and countries included.
 #
 # `basemap` copies Protomaps' newest daily build of the schema the app reads
 # (the manifest's first basemap's) into the R2 bucket `openhikes-tiles` as

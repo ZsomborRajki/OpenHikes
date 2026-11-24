@@ -19,8 +19,10 @@
 # held to the source before it is listed.
 # `countries/manifest.json` lists them, with each file's size and SHA-256 and
 # the outline the map draws; the app reads it from tiles.openhikes.app.
-# *The offline countries* in AGENTS.md is the procedure, and
-# OpenHikes/Tiles/Countries/OfflineCountryManifest.swift the format.
+# *The offline countries* in AGENTS.md is what the app expects of them,
+# *Refreshing the tile server* in OPERATIONS.md where this falls in a
+# refresh, and OpenHikes/Tiles/Countries/OfflineCountryManifest.swift the
+# format.
 #
 # It is a development tool and is in no gate, though its parts are:
 # Scripts/run-script-tests.sh builds the tool and runs `selftest`.
