@@ -195,8 +195,9 @@ struct ElevationChartWorkloadTests {
 
     /// `ForEach` diffs the plotted samples by `id`, and `ElevationSample.id`
     /// is the sample's own `distanceMeters`, told apart from any other sample
-    /// at that distance by how many came before it there — unique within a
-    /// profile (`ElevationSampleIdentityTests` in `OpenHikesData`) and identical
+    /// at that distance by how many of the route's samples came before it
+    /// there — unique within a profile, kept through thinning
+    /// (`ElevationSampleIdentityTests` in `OpenHikesData`) and identical
     /// across rebuilds, so redrawing the same route diffs as a match rather
     /// than a wholesale replacement. A per-instance `UUID` would give
     /// neither, and would be allocated per sample besides.

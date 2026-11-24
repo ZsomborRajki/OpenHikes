@@ -77,15 +77,20 @@ nonisolated public struct OfflineDownloadFootprint: Codable, Hashable, Sendable 
 /// along the route is identical across rebuilds, and costs nothing to derive,
 /// where `UUID()` is allocated per sample.
 ///
-/// Distance alone is not unique, so the identity carries ``repeatIndex`` too:
-/// how many samples before this one in its series stand at the same distance.
+/// Distance alone is not unique, so the identity carries ``repeatIndex`` too.
 /// A pause puts two samples at one distance. A paused leg has no length (see
 /// ``RouteBoundary``), so the fix before it and the fix after it stand at the
 /// same distance, and the chart steps between their two heights there. And a
 /// route short enough to be drawn whole keeps every point it has, so two fixes
 /// recorded at one place, with no pause between them, share a distance too.
-/// Counted in route order, the index is as stable across rebuilds as the
-/// distance is, and a sample keeps its identity as a recording grows past it.
+///
+/// The index is the route's, not the plotted series': it is counted once,
+/// over the route's own samples, and a sample keeps it wherever it is plotted.
+/// Read off the route alone, it is as stable across rebuilds as the distance
+/// is, a sample keeps it as a recording grows past it, and thinning a long
+/// route to ``RouteProfile/plottedSampleBudget`` never renumbers what it
+/// keeps. So an identity names one height for good. Where two samples fold
+/// into one, the one whose height is kept keeps its identity.
 nonisolated public struct ElevationSample: Identifiable, Equatable, Sendable {
     public struct Identity: Hashable, Sendable {
         public let distanceMeters: Double
@@ -100,21 +105,12 @@ nonisolated public struct ElevationSample: Identifiable, Equatable, Sendable {
     /// climb does not read it: that is counted over every height, not along
     /// the plotted samples (see ``RouteProfile/climb(from:to:)``).
     public let resumesAfterPause: Bool
-    /// How many samples before this one in its series stand at the same
-    /// distance: 0 for nearly every sample, 1 for the second of two fixes at
-    /// one place or for the resumed half of a pause's step. Only the series
-    /// sets it (``RouteProfile/samples``), because only the series knows what
+    /// How many of the route's samples (its points with a height) before this
+    /// one stand at the same distance: 0 for nearly every sample, 1 for the
+    /// second of two fixes at one place or for the fix a pause resumed on.
+    /// Only ``RouteProfile`` sets it, because only the whole route knows what
     /// came before.
     public let repeatIndex: Int
-
-    public init(distanceMeters: Double, elevation: Double, resumesAfterPause: Bool = false) {
-        self.init(
-            distanceMeters: distanceMeters,
-            elevation: elevation,
-            resumesAfterPause: resumesAfterPause,
-            repeatIndex: 0
-        )
-    }
 
     init(distanceMeters: Double, elevation: Double, resumesAfterPause: Bool, repeatIndex: Int) {
         self.distanceMeters = distanceMeters
