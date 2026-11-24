@@ -1,22 +1,22 @@
 {
   "version": 1,
-  "revision": 11,
+  "revision": 12,
   "basemaps": [
-    { "name": "planet-20261118", "schema": 4, "maximumZoom": 15 }
+    { "name": "planet-20261124", "schema": 4, "maximumZoom": 15 }
   ],
   "extras": [
-    { "name": "extras-20261122-00", "generation": 2, "minimumZoom": 4 }
+    { "name": "extras-20261124-16", "generation": 2, "minimumZoom": 4 }
   ],
   "routing": [
-    { "name": "routing-20261122-00", "generation": 1, "zoom": 12 }
+    { "name": "routing-20261124-16", "generation": 1, "zoom": 12 }
   ],
   "trails": [
-    { "name": "trails-20261122-00", "generation": 1, "zoom": 11 }
+    { "name": "trails-20261124-16", "generation": 1, "zoom": 11 }
   ],
   "routes": [
-    { "name": "routes-20261122-00", "generation": 1, "zoom": 11 }
+    { "name": "routes-20261124-16", "generation": 1, "zoom": 11 }
   ],
   "places": [
-    { "name": "places-20261122-00", "generation": 1, "zoom": 9 }
+    { "name": "places-20261124-16", "generation": 1, "zoom": 9 }
   ]
 }
