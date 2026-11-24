@@ -184,6 +184,29 @@ extension TrailCellLibraryTests {
         #expect(secondAsked == left)
     }
 
+    /// The same search with a square of the second request arriving as bytes
+    /// this build cannot read. The server answered, so the requests after it
+    /// are asked as they would have been, and their routes are the part's.
+    @Test("a square that arrives unreadable does not end the fetch")
+    func anUnreadableSquareDoesNotEndTheFetch() async throws {
+        let boxes = Self.widestSearch(atLatitude: 60)
+        let center = Self.searchCenter(atLatitude: 60)
+        let rehearsal = StubTrailCellDatabase(manifest: .complete)
+        _ = try await Self.makeLibrary(rehearsal).trails(in: boxes, nearest: center, limit: 50)
+        let requests = rehearsal.requests
+        try #require(requests.count > 2, "precondition: this search is more than two requests")
+        let unreadable = try #require(requests[1].first)
+
+        let database = StubTrailCellDatabase(
+            manifest: .complete,
+            cells: [unreadable: .found(Data("not a square".utf8))]
+        )
+        let answer = try await Self.makeLibrary(database).trails(in: boxes, nearest: center, limit: 50)
+
+        #expect(answer == .partial([]))
+        #expect(database.requests == requests, "every request was asked")
+    }
+
     /// The request that was out finished rather than heard of it, as one may.
     /// The browser starts the next search only once this one has ended, so
     /// the requests after it would be time the hiker waits through.

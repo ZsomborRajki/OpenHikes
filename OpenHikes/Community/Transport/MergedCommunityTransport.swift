@@ -679,10 +679,13 @@ nonisolated private extension MergedCommunityTransport {
     /// drawing nothing, and claiming they are the answer would be worse than
     /// either. See ``CuratedTrailStore/trails(near:limit:)``.
     ///
-    /// A listing that answered for part of the area is not an outage, and
-    /// falls back on nothing: its rows are that part's own, ranked as a whole
-    /// answer is, and its gap goes to the caption — see
-    /// ``CuratedListing/gap``.
+    /// A listing that answered for part of the area is not an outage. Its
+    /// rows are that part's own, ranked as a whole answer is, and its gap
+    /// goes to the caption — see ``CuratedListing/gap``. Only a part with no
+    /// rows in it falls back, because there the alternative is an empty half
+    /// too: the squares that were read hold no routes, and the one that was
+    /// not may hold one an earlier search kept. The gap stays, for the reason
+    /// the outage does.
     func listCurated(
         near area: CommunitySearchArea,
         limit: Int,
@@ -692,7 +695,8 @@ nonisolated private extension MergedCommunityTransport {
         let attempt = await attemptCurated {
             try await curated.listings(near: area, limit: limit)
         }
-        guard let outage = attempt.outage else { return attempt }
+        let isEmptyPart = attempt.gap != nil && attempt.trails.isEmpty
+        guard attempt.outage != nil || isEmptyPart else { return attempt }
         let stored = await curated.cachedTrails(near: area, limit: limit)
         Self.logger.notice(
             """
@@ -700,7 +704,7 @@ nonisolated private extension MergedCommunityTransport {
             trails already on this device.
             """
         )
-        return CuratedAttempt(trails: stored, outage: outage)
+        return CuratedAttempt(trails: stored, outage: attempt.outage, gap: attempt.gap)
     }
 
     /// The geometry pass, with its refusal reported rather than raised.

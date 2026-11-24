@@ -1532,9 +1532,10 @@ packed and read on the same terms.
   this build reads, and every square within reach of the search was read or
   has no tile. Otherwise `CuratedTrailSource` asks Overpass as it did before.
   So an empty answer from the squares means *no trails here*. Where some
-  squares were read and another could not be, and Overpass cannot be asked or
-  does not answer, the routes of those read are offered as a part, and the
-  caption says some may be missing (`TrailCellAnswer.partial`). A downloaded
+  squares were read and another could not be, or the server no longer lists
+  any, and Overpass cannot be asked or does not answer, the routes of those
+  read are offered as a part, and the caption says some may be missing
+  (`TrailCellAnswer.partial`). A downloaded
   area's squares are read first (*The offline countries*).
 - **Only a build of the whole planet goes up.** A square with no tile is read
   as ground with nothing on it, so `pack` and `upload-archive` refuse a build

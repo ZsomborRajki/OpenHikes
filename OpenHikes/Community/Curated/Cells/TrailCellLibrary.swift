@@ -22,10 +22,14 @@
 //    or is known not to exist.
 //  - ``TrailCellAnswer/uncovered`` is the squares not reaching this area:
 //    no archive of them the tile server lists that this build reads, or a
-//    set that is only part of the world. See ``TrailCellFetch/Manifest``.
+//    set that is only part of the world, and none of the area's on this
+//    device. See ``TrailCellFetch/Manifest``.
 //  - ``TrailCellAnswer/partial(_:)`` is the same page chosen from the
 //    squares this device could read, when at least one other square the area
-//    needs should be readable and was not.
+//    needs should be readable and was not, or the server no longer lists one
+//    to read. A square this device holds came out of a set that was the
+//    whole world, a download's included, so it answers for its own ground
+//    whatever the server lists now.
 //  - ``TrailCellAnswer/unreachable`` is no square the area needs that could
 //    be read.
 //
@@ -79,7 +83,8 @@ nonisolated enum TrailCellAnswer: Equatable, Sendable {
     /// point asked about — as many as were asked for, nearest first, each
     /// with its line. Fewer than were asked for is all there are.
     case trails([CuratedTrail])
-    /// The squares do not reach this area, so nothing is known about it.
+    /// The squares do not reach this area, and this device holds none of
+    /// its own, so nothing is known about it.
     case uncovered
     /// No square the area needs could be read.
     case unreachable
@@ -208,9 +213,16 @@ nonisolated struct TrailCellLibrary: Sendable {
                 // read all the same: see ``TrailCellAnswer/partial(_:)``.
                 held.merge(cells) { _, fresh in fresh }
 
-            case .uncovered:
-                Self.logger.notice("The trail squares are not the whole world, so they give no answer.")
-                return .uncovered
+            case .uncovered(let cells):
+                // A server that lists no whole world says nothing of the
+                // squares already here, a download's above all, which were
+                // each read out of one: see ``TrailCellAnswer/partial(_:)``.
+                held.merge(cells) { _, fresh in fresh }
+                guard !held.isEmpty else {
+                    Self.logger.notice("The trail squares are not the whole world, so they give no answer.")
+                    return .uncovered
+                }
+                Self.logger.notice("The trail squares are not the whole world; offering the ones this device holds.")
             }
         }
 
@@ -245,20 +257,27 @@ nonisolated struct TrailCellLibrary: Sendable {
 
 nonisolated private extension TrailCellLibrary {
     /// What a fetch of the squares this device did not hold amounts to.
+    /// Each case carries the squares that arrived and were read, every one of
+    /// them out of a set that is the whole world, as every kept square is.
+    /// A square named and not among them is one this search could not read.
     nonisolated enum Fetched {
+        /// The server answered for every square it was asked about, though
+        /// one may have come as a file this build does not read.
         case cells([String: TrailCellFile])
-        case uncovered
-        /// A square could not be read, and these are the ones that were: each
-        /// out of a set that is the whole world, as every kept square is.
+        /// The server lists no set of squares that is the whole world.
+        case uncovered([String: TrailCellFile])
+        /// A square did not arrive: the server, or the way to it, failed.
         case unreachable([String: TrailCellFile])
     }
 
     /// The squares named `names`, asked for a request's worth at a time.
     ///
-    /// A request that could not be read whole ends the fetch: the network
+    /// A request a square did not arrive for ends the fetch: the network
     /// that failed it would most likely fail the ones after it, and the
-    /// search already has no whole answer. What the requests before it
-    /// brought is kept — see this file's header — and handed back, for a
+    /// search already has no whole answer. A square that arrived and does not
+    /// read does not: that is the one file, and the requests after it are
+    /// asked as they would have been. What the requests before it brought is
+    /// kept — see this file's header — and handed back, for a
     /// ``TrailCellAnswer/partial(_:)``. A cancellation ends it too.
     func fetched(_ names: [String]) async throws -> Fetched {
         var cells: [String: TrailCellFile] = [:]
@@ -271,8 +290,9 @@ nonisolated private extension TrailCellLibrary {
             case .cells(let arrived):
                 cells.merge(arrived) { _, fresh in fresh }
 
-            case .uncovered:
-                return .uncovered
+            case .uncovered(let arrived):
+                cells.merge(arrived) { _, fresh in fresh }
+                return .uncovered(cells)
 
             case .unreachable(let arrived):
                 cells.merge(arrived) { _, fresh in fresh }
@@ -304,7 +324,7 @@ nonisolated private extension TrailCellLibrary {
             break
 
         case .absent, .partial:
-            return .uncovered
+            return .uncovered([:])
 
         case .unread:
             return .unreachable([:])
@@ -317,10 +337,12 @@ nonisolated private extension TrailCellLibrary {
             switch fetch.cells[name] ?? .failed {
             case .found(let bytes):
                 // Read before it is kept, so bytes that are not a square are
-                // never what the next search finds on disk.
+                // never what the next search finds on disk. Left out of
+                // `cells`, so the answer is a part, and not counted as
+                // `unread`: the server answered, and the next request may
+                // still be asked.
                 guard let cell = try? TrailCellFile(decoding: bytes) else {
                     Self.logger.error("Square \(name, privacy: .public) is not a file this build reads.")
-                    unread += 1
                     continue
                 }
                 cells[name] = cell
@@ -343,7 +365,7 @@ nonisolated private extension TrailCellLibrary {
             Self.logger.notice(
                 """
                 \(unread, privacy: .public) of \(names.count, privacy: .public) trail squares \
-                could not be read; the rest are kept.
+                did not arrive; the rest are kept.
                 """
             )
             return .unreachable(cells)

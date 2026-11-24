@@ -116,6 +116,23 @@ struct TrailCellLibraryDownloadTests {
         #expect(database.requests == [[Valley.eastSquare]])
     }
 
+    /// A server that lists no squares this build reads — a generation it
+    /// has retired, or a set that is part of the world — says nothing of
+    /// the download, which was cut out of the whole world's.
+    @Test(
+        "where the server lists no whole world, a search reaching past the download offers its routes, as a part",
+        arguments: [TrailCellFetch.Manifest.absent, .partial]
+    )
+    func pastWithNoListedSquares(manifest: TrailCellFetch.Manifest) async throws {
+        let database = StubTrailCellDatabase(manifest: manifest)
+        let downloads = StubDownloadedTrailCells([Valley.westSquare: Self.bytes([Valley.nearLoop])])
+
+        let answer = try await Self.search(Self.makeLibrary(database, downloads: downloads))
+
+        #expect(Valley.offeredInPart(answer) == [11])
+        #expect(database.requests == [[Valley.eastSquare]])
+    }
+
     @Test("with no signal and nothing downloaded or kept, a search is no answer")
     func nothingHeldWithNoSignal() async throws {
         let database = StubTrailCellDatabase()
