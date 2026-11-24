@@ -51,9 +51,10 @@
 //  deactivated, until it is activated again. A package or a receipt is the
 //  end of an asynchronous job and can finish in either window, so each goes
 //  through ``WatchSessionActivation``, which holds it and lets it go on the
-//  next activation that succeeds. The library waits the same way, as
-//  `pendingCatalog`. The watch keeps the same rule on its side, in
-//  `WatchLinkActivation`.
+//  next activation that succeeds. The library waits the same way, in
+//  ``WatchLibraryPublication``, which also keeps it waiting when the session
+//  refuses the context, until one is taken. The watch keeps the same rule on
+//  its side, in `WatchLinkActivation`.
 //
 //  ## Isolation
 //
@@ -146,25 +147,16 @@ final class WatchSessionCoordinator: NSObject {
 
     #if canImport(WatchConnectivity)
     @ObservationIgnored private var session: WCSession?
-    /// The library that arrived before the session could take one.
+    /// The library, what the watch was last sent of it and whether it still
+    /// has to go.
     ///
     /// `updateApplicationContext` is refused until activation has completed,
     /// and the one sweep that publishes runs from `OpenHikesApp.init` — before
-    /// `activate()` has even been called, let alone finished. Without this the
-    /// watch's list would miss the launch that produced it, and there is no
-    /// second sweep behind it.
-    @ObservationIgnored private var pendingCatalog: SharedHikeCatalog?
-    /// The library last handed to ``publish(_:)``, sent again with the
-    /// switch when only the switch has changed.
-    @ObservationIgnored private var latestCatalog: SharedHikeCatalog?
-    /// The switch as the watch was last sent it, so that only a change of it
-    /// sends the library again: the suite's notification names no key.
-    @ObservationIgnored private var publishedAutoPause: Bool? // swiftlint:disable:this discouraged_optional_boolean
-    // swiftlint:disable discouraged_optional_boolean
-    /// The junction warnings switch as the library last sent carried it, for
-    /// the reason ``publishedAutoPause`` is kept.
-    @ObservationIgnored private var publishedJunctionWarnings: Bool?
-    // swiftlint:enable discouraged_optional_boolean
+    /// `activate()` has even been called, let alone finished. Without holding
+    /// it the watch's list would miss the launch that produced it, and there
+    /// is no second sweep behind it. A context the session refuses waits the
+    /// same way.
+    @ObservationIgnored private var library = WatchLibraryPublication()
     /// Whether the session can take a transfer, and the packages and receipts
     /// that finished while it could not. See ``WatchSessionActivation``.
     @ObservationIgnored private var activation = WatchSessionActivation()
@@ -235,26 +227,12 @@ final class WatchSessionCoordinator: NSObject {
     /// Group's copy wholesale rather than writing per change.
     ///
     /// Silent on failure, like the catalogue sweep it rides beside: nothing a
-    /// hiker does depends on this having worked this second, and the next
-    /// sweep puts it right.
+    /// hiker does depends on this having worked this second. What failed is
+    /// kept and sent again — see ``flushLibrary()``.
     func publish(_ catalog: SharedHikeCatalog) {
         #if canImport(WatchConnectivity)
-        latestCatalog = catalog
-        guard let session, session.activationState == .activated else {
-            pendingCatalog = catalog
-            return
-        }
-        pendingCatalog = nil
-        let digest = Self.digest(of: catalog, defaults: defaults)
-        publishedAutoPause = digest.autoPauseEnabled
-        publishedJunctionWarnings = digest.junctionWarningsEnabled
-        do {
-            try session.updateApplicationContext(WatchLink.message(digest))
-        } catch {
-            Self.logger.debug(
-                "The watch library could not be published: \(error.localizedDescription, privacy: .public)"
-            )
-        }
+        library.offer(catalog)
+        flushLibrary()
         #endif
     }
 
@@ -336,13 +314,8 @@ final class WatchSessionCoordinator: NSObject {
     /// switch is not what the watch was last sent.
     private func switchesMayHaveChanged() {
         #if canImport(WatchConnectivity)
-        guard let catalog = Self.catalogToResend(
-            latestCatalog,
-            sentAutoPause: publishedAutoPause,
-            sentJunctionWarnings: publishedJunctionWarnings,
-            defaults: defaults
-        ) else { return }
-        publish(catalog)
+        guard library.switchesMayHaveChanged(defaults: defaults) else { return }
+        flushLibrary()
         #endif
     }
 
@@ -364,15 +337,27 @@ final class WatchSessionCoordinator: NSObject {
         return latest
     }
 
-    /// Publishes the library that arrived before the session was activated.
+    /// Sets the library as the session's context, if it still has to go
+    /// and the session can take one.
     ///
-    /// Silent when there is none, and harmless when activation failed:
-    /// ``publish(_:)`` simply holds it again.
-    private func flushPendingCatalog() {
+    /// Silent when nothing is pending, and harmless when the session is not
+    /// activated or refuses the context: the library stays pending, with the
+    /// switches the watch was last sent unchanged, for the next activation,
+    /// the watch coming to the front, or the next change of a switch or of
+    /// the library — whichever comes first, and with the switches as they
+    /// stand then.
+    private func flushLibrary() {
         #if canImport(WatchConnectivity)
-        guard let pending = pendingCatalog else { return }
-        pendingCatalog = nil
-        publish(pending)
+        guard let session, session.activationState == .activated else { return }
+        do {
+            try library.flush(defaults: defaults) { digest in
+                try session.updateApplicationContext(WatchLink.message(digest))
+            }
+        } catch {
+            Self.logger.debug(
+                "The watch library could not be published: \(error.localizedDescription, privacy: .public)"
+            )
+        }
         #endif
     }
 
@@ -515,7 +500,7 @@ nonisolated extension WatchSessionCoordinator: WCSessionDelegate {
             // mirror is otherwise started only by a *change* of reachability,
             // which a watch app already in the foreground when this process
             // launched never produces.
-            flushPendingCatalog()
+            flushLibrary()
             activationFinished(activated: activated)
             mirror?.reachabilityChanged(to: reachable)
         }
@@ -553,8 +538,11 @@ nonisolated extension WatchSessionCoordinator: WCSessionDelegate {
             // coming to the front is the one moment its list is certainly
             // being looked at, and a context costs nothing to set again. It
             // also covers the watch's request being lost, which a transfer
-            // can be if the app is killed between sending and delivery.
+            // can be if the app is killed between sending and delivery. A
+            // library the session refused goes first, as it stands, for a
+            // launch with no coordinator to sweep it again.
             guard reachable else { return }
+            self?.flushLibrary()
             Task { await self?.republishLibrary() }
         }
     }
