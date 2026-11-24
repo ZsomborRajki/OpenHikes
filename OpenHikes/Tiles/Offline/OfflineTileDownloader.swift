@@ -122,7 +122,9 @@ final class OfflineTileDownloader {
     private var claim: Claim?
     /// What a previous run already saved and claimed for this hike, so this
     /// one neither re-fetches it nor forgets it. Empty for a first attempt.
+    /// Narrowed during planning to the claims whose files are still on disk.
     private var resumedKeys: Set<String> = []
+    private let durableKeys: DurableCheck
     /// Keys saved by this run and already committed, so a batch claim sends
     /// only what is new. The merge would union them anyway — this is about not
     /// handing a four-thousand-element array to the store thirty-two times.
@@ -191,6 +193,7 @@ final class OfflineTileDownloader {
         registry: OfflineDownloadRegistry = .shared,
         backgroundTime: BackgroundTimeReservation = .default,
         claimBatchSize: Int = defaultClaimBatchSize,
+        durableKeys: @escaping DurableCheck = standardDurableCheck,
         saveTile: @escaping @Sendable (String, URL) async -> Bool = { key, url in
             await TileCache.shared.saveTileDurably(forKey: key, url: url)
         }
@@ -201,6 +204,7 @@ final class OfflineTileDownloader {
         self.registry = registry
         self.backgroundTime = backgroundTime
         self.claimBatchSize = max(1, claimBatchSize)
+        self.durableKeys = durableKeys
         self.saveTile = saveTile
     }
 
@@ -320,7 +324,9 @@ final class OfflineTileDownloader {
         // gap would report a four-thousand-tile map as a thousand-tile one.
         // Partial records may also cover an older route. Only saved keys in
         // this plan contribute to its progress.
-        resumedKeys.formIntersection(tiles.map { $0.cacheKey(providerID: source.providerID) })
+        //
+        // **And the disk, not the claim** — see ``keepResumedKeysOnDisk(of:source:generation:)``.
+        guard await keepResumedKeysOnDisk(of: tiles, source: source, generation: generation) else { return }
         completed = resumedKeys.count
         let outstanding = tiles.filter { !resumedKeys.contains($0.cacheKey(providerID: source.providerID)) }
         total = tiles.count
@@ -613,6 +619,61 @@ extension OfflineTileDownloader {
         for waiter in waiters {
             waiter.resume()
         }
+    }
+}
+
+// MARK: - Checking a resume against the disk
+
+// Out of the class for the reason the extensions around it are: its body is
+// at `type_body_length`. Same file, so it can read `resumedKeys`.
+extension OfflineTileDownloader {
+    /// Which of the keys a previous run claimed still have a durable file —
+    /// see ``TileCache/durableKeys(among:)``. Injected for the reason the
+    /// save is: the live one reads `TileCache.shared`, which no suite may.
+    typealias DurableCheck = @Sendable (Set<String>) async throws(CancellationError) -> Set<String>
+
+    /// The disk's answer in the app, and the claims taken at their word in
+    /// both unit-test bundles and the UI tests, which are hosted by the app
+    /// and may not read its own tile store — the split
+    /// ``QuotaBroker/standard`` makes. A suite about the check injects one
+    /// over its own ``TileCache``.
+    static var standardDurableCheck: DurableCheck {
+        if AppLaunchEnvironment.isRunningTests {
+            return trustingClaims
+        }
+        return { keys throws(CancellationError) in try await TileCache.shared.durableKeys(among: keys) }
+    }
+
+    nonisolated private static func trustingClaims(_ keys: Set<String>) -> Set<String> {
+        keys
+    }
+
+    /// Narrows the resumed keys to those among `tiles` whose files are still
+    /// on disk, and says whether the run that asked should go on.
+    ///
+    /// A claim can outlive its file: the durable directory is not in the
+    /// device backup, so a restored phone brings a hike's partial record back
+    /// without its tiles. A claimed tile is skipped only once its file is
+    /// found, and one that is gone goes back into the gap. Asked off the main
+    /// actor, and answered only to a run that is still current and not
+    /// cancelled, which is otherwise put to rest as planning puts one.
+    private func keepResumedKeysOnDisk(of tiles: [Tile], source: ActiveTileSource, generation: Int) async -> Bool {
+        let claimed = resumedKeys.intersection(tiles.map { $0.cacheKey(providerID: source.providerID) })
+        var present: Set<String> = []
+        if !claimed.isEmpty {
+            do throws(CancellationError) {
+                present = try await durableKeys(claimed)
+            } catch {
+                // Cancelled, which the guard below reads as well.
+            }
+        }
+        guard generation == self.generation, !Task.isCancelled else {
+            resetPhaseIfPreparing(generation: generation)
+            finishPlanning()
+            return false
+        }
+        resumedKeys = present
+        return true
     }
 }
 
