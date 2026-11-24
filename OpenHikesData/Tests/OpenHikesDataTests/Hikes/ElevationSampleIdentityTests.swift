@@ -72,20 +72,22 @@ struct ElevationSampleIdentityTests {
         #expect(Set(profile.samples.map(\.id)).count == profile.samples.count)
     }
 
-    /// A resumed fix followed by another at the same place folds into the
-    /// resume, as it always has, and the later height is the one plotted. The
-    /// sample is the later fix's, so it carries that fix's identity: the
-    /// resume's would name 900 m until the second fix came and 905 m after.
+    /// A resumed fix followed by more at the same place folds them into the
+    /// resume, as it always has, and the last height is the one plotted. The
+    /// sample is the last fix's, so it carries that fix's identity: the
+    /// resume's would name 900 m until the next fix came and 905 m after. And
+    /// each fix folded in counts on from the route's fixes before it, not
+    /// from the series' samples, which the fold left one fewer: counted from
+    /// those, 905 m and then 907 m would each be the third at the place.
     @Test("a fix folded into a pause's resume brings its own identity")
     func foldedFixBringsItsOwnIdentity() {
-        let profile = RouteProfile(
-            route: Self.route([500, 900, 905, 910], stayingAt: [1, 2], resumingAt: [1])
-        )
+        let route = Self.route([500, 900, 905, 907, 910], stayingAt: [1, 2, 3], resumingAt: [1])
+        let profile = RouteProfile(route: route)
 
-        #expect(profile.samples.map(\.elevation) == [500, 905, 910])
+        #expect(profile.samples.map(\.elevation) == [500, 907, 910])
         #expect(profile.samples.map(\.resumesAfterPause) == [false, true, false])
-        #expect(profile.samples.map(\.repeatIndex) == [0, 2, 0])
-        #expect(Set(profile.samples.map(\.id)).count == profile.samples.count)
+        #expect(profile.samples.map(\.repeatIndex) == [0, 3, 0])
+        Self.expectEachIdentityNamesOneHeight(growing: route, through: 1...route.count)
     }
 
     @Test("a rebuild of a route with repeats gives the same identities")
@@ -138,28 +140,56 @@ struct ElevationSampleIdentityTests {
     /// past it, and every growth step thins the series afresh. Whatever each
     /// step keeps, an identity must go on naming the height it named first,
     /// or the chart's marks would be diffed onto heights that are not theirs.
-    /// The route stands still at every fifth point and pauses at every 45th,
-    /// each pause with a fix at the same place after it, so repeats, steps
-    /// and folds all fall across the budget.
+    /// The route stands still at every fifth point and pauses at every
+    /// twentieth, each pause with a fix at the same place after it and every
+    /// other pause with two, so repeats, steps, folds and a second fold into
+    /// one resume all fall across the budget. The folds leave the route fewer
+    /// samples than points, so it runs well past the budget in points, and
+    /// the plotted count falling as it grows, which only thinning does, is
+    /// what shows the budget was crossed.
     @Test("an identity names one height as a recording grows past the plotting budget")
     func identitiesNameOneHeightAcrossTheBudget() {
         let budget = RouteProfile.plottedSampleBudget
-        let count = budget + 30
+        let count = budget + 80
         let elevations = (0..<count).map { 500 + Double(($0 * 37) % 61) }
-        let stayed = Set((1..<count).filter { $0.isMultiple(of: 5) })
-        let resumed = Set((1..<count).filter { $0 % 45 == 44 })
+        let stayed = Set((1..<count).filter { $0.isMultiple(of: 5) || $0 % 40 == 16 })
+        let resumed = Set((1..<count).filter { $0 % 20 == 14 })
         let route = Self.route(elevations, stayingAt: stayed, resumingAt: resumed)
 
+        let plotted = Self.expectEachIdentityNamesOneHeight(growing: route, through: (budget - 10)...count)
+        #expect(zip(plotted, plotted.dropFirst()).contains { $1 < $0 })
+    }
+
+    /// Builds the profile of the first `length` points of `route` for each
+    /// length in `lengths`, as a recording growing through them would, and
+    /// holds each profile's identities to one sample apiece and every
+    /// identity to the height it first named. Returns how many samples each
+    /// profile plotted.
+    @discardableResult private static func expectEachIdentityNamesOneHeight(
+        growing route: [RouteCoordinate],
+        through lengths: ClosedRange<Int>,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) -> [Int] {
         var heights: [ElevationSample.Identity: Double] = [:]
-        for length in (budget - 10)...count {
+        var plotted: [Int] = []
+        for length in lengths {
             let samples = RouteProfile(route: Array(route.prefix(length))).samples
-            #expect(Set(samples.map(\.id)).count == samples.count, "\(length) points")
+            plotted.append(samples.count)
+            #expect(
+                Set(samples.map(\.id)).count == samples.count,
+                "\(length) points",
+                sourceLocation: sourceLocation
+            )
             for sample in samples {
                 let named = heights[sample.id, default: sample.elevation]
-                #expect(named == sample.elevation, "\(sample.id) at \(length) points")
+                #expect(
+                    named == sample.elevation,
+                    "\(sample.id) at \(length) points",
+                    sourceLocation: sourceLocation
+                )
                 heights[sample.id] = sample.elevation
             }
         }
-        #expect(RouteProfile(route: route).samples.count < count)
+        return plotted
     }
 }
