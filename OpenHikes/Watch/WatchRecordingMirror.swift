@@ -54,6 +54,9 @@ final class WatchRecordingMirror {
     /// What to do with a fresh reading. Handed in rather than reached for, so
     /// this type can be driven without a `WCSession` behind it.
     private let publish: @MainActor (WatchPhoneRecording) -> Void
+    /// Reads the recording in place of the coordinator, for a suite that has
+    /// to hold a read while the watch goes and comes back. `nil` in the app.
+    private let readsState: (@MainActor () async -> WatchPhoneRecording)?
 
     private var pump: Task<Void, Never>?
     /// The last reading sent, so an unchanged one is not sent again. A hiker
@@ -63,10 +66,12 @@ final class WatchRecordingMirror {
 
     init(
         coordinator: HikeIntentCoordinator?,
-        publish: @escaping @MainActor (WatchPhoneRecording) -> Void
+        publish: @escaping @MainActor (WatchPhoneRecording) -> Void,
+        readsState: (@MainActor () async -> WatchPhoneRecording)? = nil
     ) {
         self.coordinator = coordinator
         self.publish = publish
+        self.readsState = readsState
     }
 
     deinit { pump?.cancel() }
@@ -106,6 +111,13 @@ final class WatchRecordingMirror {
     /// Reads the recorder and sends the result if it has moved.
     func publishCurrentState() async {
         let reading = await currentState()
+        // A read can outlast its loop: the coordinator settles the recorder's
+        // recovery first, and the watch can go out of range meanwhile. That
+        // loop has ended and forgotten what it sent, and an answer it took as
+        // sent — the link drops it while the watch is away — would be the
+        // baseline the next loop's first reading is deduped against, leaving
+        // a wrist that came back to unchanged figures with nothing on it.
+        guard !Task.isCancelled else { return }
         // `updatedAt` moves on every read by construction, so the comparison
         // deliberately ignores it: what is being asked is whether anything a
         // hiker would *see* has changed.
@@ -170,6 +182,7 @@ final class WatchRecordingMirror {
     /// there is no running hike to show — and the one place that sentence
     /// matters is the reply to a button, which carries it.
     private func currentState() async -> WatchPhoneRecording {
+        if let readsState { return await readsState() }
         guard let coordinator else { return .idle() }
         do {
             let report = try await coordinator.currentRecording()
