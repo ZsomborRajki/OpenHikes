@@ -640,16 +640,51 @@ extension OfflineCountries {
         return opening
     }
 
+    /// Whether `entry` is a download the index has already installed: its
+    /// build, with every file it asked for, none of them staged, coming down
+    /// or refused by this launch's opening.
+    ///
+    /// The install moves the files into place and writes the index before it
+    /// takes the entry off the list, so a launch after an interruption
+    /// between the two, or a list that refused that last write, finds both.
+    /// Picked up, the entry had nothing staged and nothing running, and came
+    /// back as a failed download, with Try Again, of an area already drawn.
+    /// One for a newer build, or for a file the index does not hold, is a
+    /// download still owed, and one whose file would not open is a repair.
+    private func isAlreadyInstalled(
+        _ entry: OfflineCountryStore.Pending,
+        running: [OfflineCountryDownloadKey: Int64]
+    ) -> Bool {
+        let country = entry.country
+        guard let record = installed[country.id], record.country.build == country.build else { return false }
+        let held = Set(record.files.map(\.fileName))
+        let failed = unopenable[country.id] ?? []
+        return entry.files.allSatisfy { file in
+            held.contains(file.fileName) && !failed.contains(file.role)
+                && running[Self.key(country, file)] == nil
+                && !FileManager.default.fileExists(atPath: store.stagedURL(for: file).path)
+        }
+    }
+
     /// Picks up what `pending`, read as the launch began, names. The areas
     /// are listed before the session has said what it still has, so the
     /// hiker can delete one meanwhile, or while an earlier entry is checked;
     /// each entry is read again first, and one no longer on the list is left
     /// alone.
+    ///
+    /// An entry the index has already installed is taken off the list rather
+    /// than picked up — see ``isAlreadyInstalled(_:running:)``.
     private func resumePending(_ pending: [OfflineCountryStore.Pending]) async {
         guard !pending.isEmpty else { return }
         let running = await downloader?.running() ?? [:]
         for entry in pending {
             guard store.pending().contains(entry) else { continue }
+            if isAlreadyInstalled(entry, running: running) {
+                // Kept when the list refuses the write: the area is drawn
+                // either way, and the next launch asks again.
+                writePending { $0.removeAll { $0 == entry } }
+                continue
+            }
             let country = entry.country
             let download = OfflineCountryDownload(country: country, files: entry.files, phase: .downloading)
             downloads[country.id] = download
