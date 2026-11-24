@@ -8,18 +8,31 @@
 //
 //  Each comes from an ``EventFeed`` of its own, and each used to have a task
 //  of its own on the root view, four tasks with one lifetime writing the
-//  same selection and the same sheet. They are merged here instead, as the
-//  weather loop merges its wakes (`OpenHikesModel+Weather.swift`).
+//  same selection and the same sheet. They are one stream here, read by one
+//  loop.
 //
-//  Nothing about delivery changes. Each feed's stream is asked for before
-//  any is read, as the arguments of ``read(hikeLinks:makerRequests:placeRequests:endings:handle:)``,
-//  so a message sent while the others are set up still reaches this reader;
-//  each keeps every message it is sent, in order, until it is read; and
-//  cancelling the reading task ends every stream, which takes each reader
-//  out of its feed.
+//  ## In the order they were sent
+//
+//  The requests have to be handled in the order they were sent, across the
+//  feeds: *Make a Trail* and then a saved route's tap must end on the route,
+//  because opening the maker clears the selection and replaces the sheet.
+//  Reading each feed's own stream cannot promise that, whether with a task
+//  for each stream or with `AsyncAlgorithms.merge`, as the weather loop
+//  merges its wakes: each stream's reader is woken as the executor gets to
+//  it. With the maker's request and then a hike's link sent, `merge` opened
+//  the hike first in nearly every run, and a main-actor task for each
+//  stream took each feed's second request after the others' first. So every
+//  feed yields to the one stream as it sends — see
+//  ``EventFeed/events(into:as:)`` — and the stream's order is the order of
+//  the sends.
+//
+//  Nothing else about delivery changes. Every feed is joined before the
+//  stream is read, so a message sent while the others join still reaches
+//  it; the stream keeps every message, in order, until it is read; and
+//  cancelling the reading task ends the loop, which takes each feed's part
+//  out again.
 //
 
-import AsyncAlgorithms
 import Foundation
 
 /// One thing the root view is asked to do.
@@ -35,24 +48,22 @@ nonisolated enum RootNavigationRequest: Equatable, Sendable {
 }
 
 extension RootNavigationRequest {
-    /// Reads the four feeds' streams in one loop, handing each request to
-    /// `handle` as it comes, until the reading task is cancelled.
+    /// Reads every request the feeds `join` joins, in the order it was sent,
+    /// handing each to `handle`, until the reading task is cancelled.
+    ///
+    /// `join` hands each feed the stream's continuation and returns what
+    /// takes each out again — see ``EventFeed/events(into:as:)``.
     static func read(
-        hikeLinks: AsyncStream<URL>,
-        makerRequests: AsyncStream<Void>,
-        placeRequests: AsyncStream<Void>,
-        endings: AsyncStream<ActivityEnding>,
+        joining join: (AsyncStream<Self>.Continuation) -> [@Sendable () -> Void],
         handle: (Self) -> Void
     ) async {
-        // Nested because `merge` takes at most three.
-        let requests = merge(
-            hikeLinks.map { Self.hike($0) },
-            merge(
-                makerRequests.map { _ in Self.maker },
-                placeRequests.map { _ in Self.place }
-            ),
-            endings.map { Self.ending($0) }
-        )
+        let (requests, continuation) = AsyncStream<Self>.makeStream()
+        let leaves = join(continuation)
+        defer {
+            for leave in leaves {
+                leave()
+            }
+        }
         for await request in requests {
             handle(request)
         }

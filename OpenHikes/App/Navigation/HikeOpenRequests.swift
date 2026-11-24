@@ -51,6 +51,15 @@ final class HikeOpenRequests {
         feed.events()
     }
 
+    /// The same requests, yielded to a reader of several feeds as they are
+    /// made — see ``EventFeed/events(into:as:)``.
+    func links<Merged: Sendable>(
+        into continuation: AsyncStream<Merged>.Continuation,
+        as transform: @escaping @Sendable (URL) -> Merged
+    ) -> @Sendable () -> Void {
+        feed.events(into: continuation, as: transform)
+    }
+
     /// Asks for `hikeID` to be opened, as though its widget had been tapped.
     ///
     /// Silently does nothing when the id cannot be made into a link, which is

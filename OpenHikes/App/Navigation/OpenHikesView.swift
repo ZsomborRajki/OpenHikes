@@ -615,7 +615,8 @@ extension OpenHikesView {
 /// — storage that is shared, not a value copied into this struct when the task
 /// began.
 private extension OpenHikesView {
-    /// Every request, in one loop — see ``RootNavigationRequest``.
+    /// Every request, in one loop and in the order it was sent — see
+    /// ``RootNavigationRequest``.
     ///
     /// An intent's hike, or the record button's recording, goes to the same
     /// router the widget's taps go through rather than a second way in — see
@@ -629,12 +630,14 @@ private extension OpenHikesView {
     /// can say is in front.
     func readNavigationRequests() async {
         appModel.activityCapsule.follow(sheet)
-        await RootNavigationRequest.read(
-            hikeLinks: appModel.hikeOpenRequests.links(),
-            makerRequests: appModel.trailMaker.openRequests(),
-            placeRequests: photoCapture.placeRequests(),
-            endings: appModel.activityEndings.events()
-        ) { request in
+        await RootNavigationRequest.read { requests in
+            [
+                appModel.hikeOpenRequests.links(into: requests) { .hike($0) },
+                appModel.trailMaker.openRequests(into: requests, as: .maker),
+                photoCapture.placeRequests(into: requests, as: .place),
+                appModel.activityEndings.events(into: requests) { .ending($0) },
+            ]
+        } handle: { request in
             switch request {
             case .hike(let url): openInboundURL(url)
             case .maker: openMaker()

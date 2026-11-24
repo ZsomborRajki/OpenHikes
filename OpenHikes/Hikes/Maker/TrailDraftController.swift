@@ -384,6 +384,15 @@ final class TrailDraftController {
         openFeed.events()
     }
 
+    /// The same requests, yielded to a reader of several feeds as they are
+    /// made — see ``EventFeed/events(into:as:)``.
+    func openRequests<Merged: Sendable>(
+        into continuation: AsyncStream<Merged>.Continuation,
+        as request: Merged
+    ) -> @Sendable () -> Void {
+        openFeed.events(into: continuation) { _ in request }
+    }
+
     /// Fills the first open field, or puts a new destination at the end — the
     /// list's *Add Stop* row, as in Apple Maps, where a new stop joins the
     /// bottom of the list to be dragged into place.

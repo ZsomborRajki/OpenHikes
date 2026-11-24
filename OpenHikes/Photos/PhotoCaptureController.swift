@@ -244,6 +244,15 @@ final class PhotoCaptureController {
         placeFeed.events()
     }
 
+    /// The same requests, yielded to a reader of several feeds as they are
+    /// made — see ``EventFeed/events(into:as:)``.
+    func placeRequests<Merged: Sendable>(
+        into continuation: AsyncStream<Merged>.Continuation,
+        as request: Merged
+    ) -> @Sendable () -> Void {
+        placeFeed.events(into: continuation) { _ in request }
+    }
+
     private func refreshAvailability() {
         let available = subject != nil && hasHostScreen
         if isAvailable != available { isAvailable = available }
