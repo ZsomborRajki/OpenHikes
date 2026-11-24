@@ -102,28 +102,20 @@ struct HikePhotoViewer: View {
     /// main thread, which is exactly where a toolbar's condition is evaluated.
     @State private var shareablePhotos: Set<UUID> = []
 
-    /// The sorted gallery, read once per body pass and handed down.
+    /// The sorted gallery, read once per body pass and handed down, and
+    /// sorted only when the hike's photographs or their times have changed.
     ///
     /// It used to be a computed property, which made every use of it look free
     /// — and there were six, so a swipe cost six full sorts of the hike's
-    /// photos, each one allocating a `uuidString` per comparison. A computed
-    /// property that does real work is invisible at its call sites, which is
-    /// exactly how that survived review; passing the value down makes the cost
-    /// countable and pays it once.
-    ///
-    /// There is deliberately no `photos` property here any more. One existed,
-    /// spelled `hike.orderedPhotos`, and its innocence is the whole bug — so
-    /// the sort is now written out at each of the three places that take a
-    /// snapshot, where it is visible.
-
-    private func index(of id: UUID?, in photos: [HikePhoto]) -> Int? {
-        guard let id else { return nil }
-        return photos.firstIndex { $0.id == id }
-    }
+    /// photos, each one allocating a `uuidString` per comparison. Read once
+    /// per pass, it was still a sort per pass, and a page turned, a tap on
+    /// Delete that only asks, and a page finding its file are each a pass
+    /// that moves no photograph. See ``OrderedHikePhotos``.
+    @State private var ordering = OrderedHikePhotos()
 
     var body: some View {
-        let photos = hike.orderedPhotos
-        let currentIndex = index(of: currentID, in: photos)
+        let photos = ordering.photos(of: hike)
+        let currentIndex = ordering.index(of: currentID)
         // A coarse flag that moves when the map is brought in or covered
         // again, which is exactly when the photograph's tap changes meaning.
         let coversMap = presentation?.isShowingFullHeightScreen ?? true
@@ -362,9 +354,9 @@ struct HikePhotoViewer: View {
     }
 
     private func step(by offset: Int) {
-        let photos = hike.orderedPhotos
+        let photos = ordering.photos(of: hike)
         guard let target = destination(
-            from: index(of: currentID, in: photos),
+            from: ordering.index(of: currentID),
             by: offset,
             in: photos
         ) else { return }
@@ -418,8 +410,8 @@ struct HikePhotoViewer: View {
         // Step off the photo first: removing the one the scroll view is
         // resting on leaves `scrollPosition` pointing at an id that no longer
         // exists, and the view stays blank until something else moves it.
-        let photos = hike.orderedPhotos
-        let currentIndex = index(of: currentID, in: photos)
+        let photos = ordering.photos(of: hike)
+        let currentIndex = ordering.index(of: currentID)
         let successor = destination(from: currentIndex, by: 1, in: photos)
             ?? destination(from: currentIndex, by: -1, in: photos)
         currentID = successor.map { photos[$0].id }

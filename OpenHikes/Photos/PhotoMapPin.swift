@@ -320,10 +320,15 @@ struct HikePhotoPinClaim: View {
     var controller: PhotoMapPinController?
     var onOpen: (HikePhoto) -> Void
 
+    /// The hike's photographs in order, sorted again only when they or their
+    /// times change: `onOpen` is a closure, so every pass of the screen
+    /// claiming the pins is a pass of this — see ``OrderedHikePhotos``.
+    @State private var ordering = OrderedHikePhotos()
+
     var body: some View {
         Color.clear
             .frame(width: 0, height: 0)
-            .photoMapPins(controller, photos: hike.orderedPhotos) { photoID in
+            .photoMapPins(controller, photos: ordering.photos(of: hike)) { photoID in
                 guard let photo = hike.photos.first(where: { $0.id == photoID }) else { return }
                 onOpen(photo)
             }
