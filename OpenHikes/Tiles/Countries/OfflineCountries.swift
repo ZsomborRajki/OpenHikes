@@ -464,6 +464,14 @@ final class OfflineCountries {
         download.set(.failed(.space))
     }
 
+    private static func key(_ country: Country, _ file: OfflineCountryManifest.File) -> OfflineCountryDownloadKey {
+        OfflineCountryDownloadKey(country: country.id, build: country.build, role: file.role)
+    }
+}
+
+// MARK: - The index and the list on disk
+
+extension OfflineCountries {
     /// Writes ``installed`` as the index, or puts back `previous` when the
     /// write fails, which a caller then deletes nothing for: a file is never
     /// deleted while the index on disk still names it.
@@ -495,10 +503,6 @@ final class OfflineCountries {
             Self.logger.error("Countries' downloads under way: \(String(describing: error), privacy: .public)")
             return false
         }
-    }
-
-    private static func key(_ country: Country, _ file: OfflineCountryManifest.File) -> OfflineCountryDownloadKey {
-        OfflineCountryDownloadKey(country: country.id, build: country.build, role: file.role)
     }
 }
 
