@@ -4,7 +4,7 @@
 //
 //  What the app's String Catalog changes at run time in English, the
 //  development language (#32). The German, French, Spanish, Italian, Russian,
-//  Polish, Ukrainian and Romanian are held to the English in
+//  Polish, Ukrainian, Romanian and Dutch are held to the English in
 //  `StringCatalogTests+Translations.swift`.
 //
 //  Not whether every string is *in* it. An English key with no English entry
