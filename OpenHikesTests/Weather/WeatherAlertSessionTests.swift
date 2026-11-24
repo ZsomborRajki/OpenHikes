@@ -171,6 +171,45 @@ struct WeatherAlertSessionTests {
         #expect(notifier.postedKinds == [.severeWeather])
     }
 
+    // MARK: A banner the system refused
+
+    /// Permission given is not a banner shown: the centre's `add` can still
+    /// throw. The alert must stay unsaid then, so the next poll under the
+    /// same warning posts it, and the poll after that says nothing again.
+    @Test("a refused banner leaves the alert for the next poll")
+    func refusedBannerIsRetried() async throws {
+        let (manager, notifier) = try Self.manager(showing: Self.walkedTrail)
+        let walk = WeatherAlertSession.walking(hikeID: Self.walkedID)
+        notifier.refusesPosts = 1
+
+        await manager.announceStandingAlerts(during: walk)
+        #expect(notifier.refusedPosts == 1)
+        #expect(notifier.posted.isEmpty)
+
+        await manager.announceStandingAlerts(during: walk)
+        await manager.announceStandingAlerts(during: walk)
+
+        #expect(notifier.postedKinds == [.severeWeather])
+        #expect(notifier.refusedPosts == 1)
+    }
+
+    /// Two new alerts are still one banner on the retry, and it is the worse
+    /// one: the refusal takes back both, not only the one it tried to say.
+    @Test("a retried banner is still one banner, for the worst alert")
+    func retriedBannerKeepsTheWorstOne() async throws {
+        let (manager, notifier) = try Self.manager(showing: Self.walkedTrail)
+        let walk = WeatherAlertSession.walking(hikeID: Self.walkedID)
+        manager.applyUITestSnapshot(Self.snapshot(alerts: Self.storms), subject: Self.walkedTrail)
+        notifier.refusesPosts = 1
+
+        await manager.announceStandingAlerts(during: walk)
+        await manager.announceStandingAlerts(during: walk)
+        await manager.announceStandingAlerts(during: walk)
+
+        #expect(notifier.posted.count == 1)
+        #expect(notifier.posted.first?.body.hasPrefix("Extreme wind warning") == true)
+    }
+
     // MARK: An answer that outlives its question
 
     /// The prompt can stay up for as long as the hiker leaves it, and the poll
@@ -338,6 +377,24 @@ struct WeatherAlertSessionTests {
             summary: "Severe thunderstorm warning",
             severity: .severe,
             detailsURL: URL(string: "https://weather.example/storm-1") ?? URL(filePath: "/"),
+            source: "Deutscher Wetterdienst"
+        ),
+    ])
+
+    /// ``storm`` and a worse alert beside it, for the one-banner rule.
+    private static let storms = WeatherAlerts.active([
+        WeatherAlertSummary(
+            id: "storm-1",
+            summary: "Severe thunderstorm warning",
+            severity: .severe,
+            detailsURL: URL(string: "https://weather.example/storm-1") ?? URL(filePath: "/"),
+            source: "Deutscher Wetterdienst"
+        ),
+        WeatherAlertSummary(
+            id: "wind-1",
+            summary: "Extreme wind warning",
+            severity: .extreme,
+            detailsURL: URL(string: "https://weather.example/wind-1") ?? URL(filePath: "/"),
             source: "Deutscher Wetterdienst"
         ),
     ])
