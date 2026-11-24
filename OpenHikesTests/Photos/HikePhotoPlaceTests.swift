@@ -94,6 +94,26 @@ struct HikePhotoPlaceTests {
         #expect(hike.photos(ofPlace: Self.spring.id).map(\.id) == [earlier.id, later.id])
     }
 
+    /// Picked out before they are sorted, and sorted as the gallery is: two
+    /// taken in the same second keep the gallery's order between them.
+    @Test("a place's photographs taken in the same second keep the gallery's order, and a place with none has none")
+    func photosOfAPlaceTie() throws {
+        let (hike, _) = try hike()
+        let instant = Date(timeIntervalSince1970: 100)
+        var first = HikePhoto(capturedAt: instant)
+        first.placeID = Self.spring.id
+        var second = HikePhoto(capturedAt: instant)
+        second.placeID = Self.spring.id
+        hike.addPhoto(second)
+        hike.addPhoto(HikePhoto(capturedAt: instant))
+        hike.addPhoto(first)
+
+        let gallery = hike.orderedPhotos.filter { $0.placeID == Self.spring.id }.map(\.id)
+        #expect(hike.photos(ofPlace: Self.spring.id).map(\.id) == gallery)
+        #expect(Set(gallery) == [first.id, second.id])
+        #expect(hike.photos(ofPlace: UUID()).isEmpty)
+    }
+
     @Test("a picture added from a place's screen is filed under the place")
     func addFilesUnderPlace() async throws {
         let (hike, _) = try hike()
