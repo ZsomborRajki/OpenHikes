@@ -217,11 +217,11 @@ struct OpenHikesView: View {
     var body: some View {
         // Every observable read here re-runs this whole body. The inputs that
         // move are `appModel.weatherManager.state` (a focus change, or ~15
-        // min), `appModel.hikeRecorder.currentHike` (start/stop) and
-        // `appModel.hikeRecorder.isActive`, which reads the recorder's phase
-        // and so moves a handful of times per session — everything
-        // high-frequency is passed by reference and read inside MapKit
-        // instead. `locationManager.coordinate` in particular is deliberately
+        // min) and `appModel.hikeRecorder.currentHike` (start/stop). The
+        // recorder's phase is not one: it moves at every pause and every stop
+        // Auto-Pause calls, so ``WeatherFocusModifier`` reads it in a body of
+        // its own. Everything high-frequency is passed by reference and read
+        // inside MapKit instead. `locationManager.coordinate` in particular is deliberately
         // *not* an input, so this body re-running at the fix rate means
         // something upstream has started reading it, and neither is
         // `weatherFocus.subject`: the badge's subject reaches this body only
@@ -495,14 +495,14 @@ struct OpenHikesView: View {
                 highlight.move(to: nil)
             }
             // Which place the weather badge is about — see ``WeatherFocus``.
-            // `trail:` and `isRecording:` are read here, by this body, as any
-            // modifier's arguments are; the modifier keeps only what their
-            // changes do, and calls `hiker` only when `isRecording` is true
-            // as the view appears or turns true.
+            // `trail:` is read here, by this body, as any modifier's
+            // arguments are. `isRecording` is called by the modifier's own
+            // body, because it reads the recorder's phase, and `hiker` only
+            // when `isRecording` is true as the view appears or turns true.
             .weatherFocus(
                 appModel.weatherFocus,
                 trail: selectedTrailSubject,
-                isRecording: appModel.hikeRecorder.isActive,
+                isRecording: { appModel.hikeRecorder.isActive },
                 hiker: {
                     appModel.locationManager.coordinate
                         ?? appModel.significantLocations.coordinate
