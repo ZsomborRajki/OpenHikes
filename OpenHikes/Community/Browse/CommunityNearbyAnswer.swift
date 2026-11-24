@@ -283,6 +283,22 @@ nonisolated enum CuratedTrailNotice: Equatable, Sendable {
     var caption: MapCaptionNotice {
         MapCaptionNotice(text: text, symbolName: symbolName, isWarning: isWarning)
     }
+
+    /// What of this caption comes back with the rows when the hiker leaves
+    /// the tab and returns to them, which asks nothing again — see
+    /// ``CommunityBrowser/startBrowsing()``.
+    ///
+    /// Only a part's, because only it is about the rows: without it, the
+    /// part reads as the area's whole answer. And only that it is a part,
+    /// since why the rest was missing, and how long to wait, was the moment
+    /// of the search's. An outage or an empty area is a sentence about the
+    /// last search, which the next tap says again.
+    var keptWithRows: Self? {
+        switch self {
+        case .incomplete: .incomplete(.unavailable)
+        case .noTrailsHere, .outage: nil
+        }
+    }
 }
 
 /// What the OpenStreetMap half of a nearby answer came to.

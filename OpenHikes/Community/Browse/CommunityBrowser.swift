@@ -287,10 +287,15 @@ final class CommunityBrowser {
     ///
     /// Written only by a ``CommunityNearbyScope/withCuratedTrails`` answer, so
     /// a refill after a block cannot clear a limit that is still running, and
-    /// cleared by leaving the tab or by ``dismissCuratedNotice()``. `Equatable`
+    /// cleared by leaving the tab or by ``dismissCuratedNotice()``; a part's
+    /// comes back with its rows (``heldNotice``). `Equatable`
     /// so `@Observable` filters the same-value writes a run of refused taps
     /// produces.
     private(set) var curatedNotice: CuratedTrailNotice?
+    /// What of ``curatedNotice`` the held rows take back on screen when the
+    /// tab opens over them again: see ``CuratedTrailNotice/keptWithRows``.
+    /// Written by ``stopBrowsing()`` and read by ``startBrowsing()`` alone.
+    @ObservationIgnored private var heldNotice: CuratedTrailNotice?
 
     /// Where the hiker has put community rows by hand, by listing id.
     ///
@@ -586,7 +591,9 @@ final class CommunityBrowser {
             // Held rows — see ``stopBrowsing()``. `resultsArea` rather than a
             // non-empty `nearbyResults`, because an area that genuinely has no
             // hikes in it is an answer too, and re-asking for it on every tab
-            // switch is the same unrequested request in a quieter form.
+            // switch is the same unrequested request in a quieter form. A
+            // part comes back saying it is one.
+            curatedNotice = heldNotice
             state = .loaded
             if let latestRegion { offer(policy.action(for: latestRegion)) }
             return
@@ -696,6 +703,9 @@ final class CommunityBrowser {
         // running will say so again on the next tap — ``CuratedTrailSource``
         // refuses one without a round trip — and a caption left standing over
         // a list nobody is looking at is a caption nothing will ever clear.
+        // What it says about the held rows themselves is put by, for the
+        // return that draws them again without asking.
+        heldNotice = curatedNotice?.keptWithRows
         curatedNotice = nil
         state = .idle
     }

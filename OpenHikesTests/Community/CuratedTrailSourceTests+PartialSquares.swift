@@ -59,6 +59,35 @@ extension CuratedTrailSourceTests {
         #expect(await overpass.requestCount == 1)
     }
 
+    /// An area Overpass lists without lines, whose geometry pass is then
+    /// refused. The route a square read keeps the line it came with, so it
+    /// is drawn, and opened, without asking Overpass again.
+    @Test("a part keeps its lines when Overpass lists the area without them, and only the rest are asked for")
+    func aPartKeepsItsLinesThroughTwoPasses() async throws {
+        let (source, overpass) = Self.makeSource(
+            [
+                Self.ok(Self.listingBody),
+                OverpassHTTPResponse(data: Data(), statusCode: Self.httpRateLimited, headers: [:]),
+            ],
+            cells: Self.halfTheValley
+        )
+
+        let completion = try await Self.completion(source)
+        let opened = try await source.trail(of: 11)
+
+        #expect(completion.trails.map(\.relationID) == [11, 22])
+        #expect(completion.trails.first?.route.count ?? 0 > 1, "the square's line stands")
+        #expect(completion.trails.last?.route.isEmpty == true, "the refused one has none")
+        guard case .rateLimited = completion.outage else {
+            Issue.record("the geometry pass was not refused: \(String(describing: completion.outage))")
+            return
+        }
+        let bodies = await overpass.bodies
+        #expect(bodies.count == 2, "opening the square's route asked nothing")
+        #expect(bodies.last?.contains("rel(id:22);") == true, "the geometry pass named only the rest")
+        #expect(opened?.route.count ?? 0 > 1)
+    }
+
     @Test("with Overpass refusing as well, the part is the answer, and its gap is the refusal")
     func aPartWithOverpassRefusing() async throws {
         let (source, _) = Self.makeSource(

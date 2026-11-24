@@ -296,13 +296,30 @@ actor CuratedTrailSource: CuratedTrailSourcing {
 
     /// What a listing pass brought, before it is cut to a page.
     private struct ListedPage {
+        /// The rows, with their lines where they came with them: always from
+        /// the squares, and from Overpass when the area was small enough to
+        /// ask for both.
         var trails: [CuratedTrail]
-        /// Whether the rows came with their lines: always from the squares,
-        /// and from Overpass when the area was small enough to ask for both.
-        var drawsLines: Bool
         /// How many rows the page may hold: all that were asked for when the
         /// squares answer, and one geometry pass's worth when Overpass does.
         var limit: Int
+
+        /// This page with each row that came without its line replaced by
+        /// the same relation as a square read it, line and all.
+        ///
+        /// What a search the squares answered in part keeps of that part when
+        /// Overpass answers without lines. Those rows' lines are in hand, so
+        /// they cost no geometry request and are drawn, and opened, whether
+        /// or not Overpass answers the next one. A whole answer from the
+        /// squares is drawn from them on the same terms.
+        func drawing(from squares: [CuratedTrail]) -> Self {
+            let read = Dictionary(squares.map { ($0.relationID, $0) }) { first, _ in first }
+            var page = self
+            page.trails = trails.map { trail in
+                trail.route.isEmpty ? read[trail.relationID] ?? trail : trail
+            }
+            return page
+        }
     }
 
     /// The gate in front of the endpoint, and the one retry a busy answer
@@ -462,18 +479,20 @@ extension CuratedTrailSource {
             // hikes there is something the squares can say, and asking
             // Overpass to confirm it would bring the wait back for every
             // search beside a lake.
-            page = ListedPage(trails: prebuilt, drawsLines: true, limit: limit)
+            page = ListedPage(trails: prebuilt, limit: limit)
 
         case .partial(let prebuilt):
             // Part of an answer, which Overpass can still make whole where it
-            // may be asked. Where it may not, or does not answer, the part is
-            // what there is to draw, and the gap is said beside it: see
+            // may be asked, keeping the lines the part already has. Where it
+            // may not, or does not answer, the part is what there is to draw,
+            // and the gap is said beside it: see
             // ``CuratedTrailSourcing/listings(near:limit:)``.
             do {
                 page = try await askOverpass(about: area, in: boxes, limit: limit)
+                    .drawing(from: prebuilt)
             } catch {
                 guard let outage = CuratedTrailOutage(error) else { throw error }
-                page = ListedPage(trails: prebuilt, drawsLines: true, limit: limit)
+                page = ListedPage(trails: prebuilt, limit: limit)
                 gap = outage
             }
 
@@ -501,12 +520,12 @@ extension CuratedTrailSource {
             .map { (trail: $0, distance: RouteGeometry.distanceMeters(from: center, to: $0.coordinate)) }
             .min(count: page.limit) { $0.distance < $1.distance }
             .map(\.trail)
-        // The lines a small search brought, kept the way a geometry pass keeps
-        // its own, so drawing one of these rows or opening it asks nothing
-        // more. Only the page's: the rest of the box was measured and thrown
-        // away, and a cache full of routes nobody was offered would evict the
-        // ones somebody was.
-        if page.drawsLines { remember(nearest) }
+        // The lines the page came with, a small search's or the squares',
+        // kept the way a geometry pass keeps its own, so drawing one of these
+        // rows or opening it asks nothing more. Only the page's: the rest of
+        // the box was measured and thrown away, and a cache full of routes
+        // nobody was offered would evict the ones somebody was.
+        remember(nearest.filter { !$0.route.isEmpty })
         lastArea = area
         return CuratedListing(trails: nearest, gap: gap)
     }
@@ -530,11 +549,7 @@ extension CuratedTrailSource {
                 ? CuratedTrailDecoding.trails(fromListingWithLines: body)
                 : CuratedTrailDecoding.trails(fromListing: body)
         }
-        return ListedPage(
-            trails: listed,
-            drawsLines: request.drawsLines,
-            limit: min(limit, CuratedTrailQuery.geometryBatchLimit)
-        )
+        return ListedPage(trails: listed, limit: min(limit, CuratedTrailQuery.geometryBatchLimit))
     }
 
     /// Fills in each listed route's line, keeping a row whose line was refused

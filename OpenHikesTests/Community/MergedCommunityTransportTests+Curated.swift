@@ -276,6 +276,25 @@ extension MergedCommunityTransportTests {
         #expect(merged.overpass.recording.cacheReads.isEmpty)
     }
 
+    /// The squares that were read hold no routes, and the one that was not
+    /// holds a route an earlier search kept. With CloudKit out too, an
+    /// empty part would leave nothing to draw, and the answer would fail.
+    @Test("a part with no routes in it draws the routes already on the device, and stays a part")
+    func anEmptyPartFallsBack() async throws {
+        let merged = Self.merged()
+        merged.cloudKit.listingsResult = .failure(.unreachable)
+        merged.overpass.listingGap = .unavailable
+        merged.overpass.storedTrails = [
+            Self.trail(Relation.wimbach, named: "Wimbachgries", metersNorth: Offset.nearest),
+        ]
+
+        let answer = try await Self.answer(merged)
+
+        #expect(answer.listings.compactMap(\.relationID) == [Relation.wimbach])
+        #expect(answer.curated == .partial(.unavailable), "the stored rows are no whole answer either")
+        #expect(merged.overpass.recording.cacheReads.count == 1)
+    }
+
     // MARK: The heights OpenStreetMap does not have
 
     /// A curated hike opens with a profile now, and this is where the heights

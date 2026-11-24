@@ -409,4 +409,58 @@ extension CommunityCuratedScopeTests {
             "the rows still answer about the area they came back for"
         )
     }
+
+    /// A part drawn again without its caption reads as the area's whole
+    /// answer, and the return asks nothing that would say otherwise. What
+    /// comes back is that it is a part: the refusal behind it, and its wait,
+    /// were the search's.
+    @Test("coming back to a part's rows says again that they are a part")
+    func returningToAPartKeepsItsCaption() async {
+        let transport = StubCommunityTransport()
+        transport.listingsResult = .success([.stub(id: "curated-1")])
+        transport.curatedOutcome = .partial(.rateLimited(retryAfter: 60))
+        let browser = await browsing(transport)
+        #expect(browser.curatedNotice == .incomplete(.rateLimited(retryAfter: 60)))
+
+        browser.stopBrowsing()
+        #expect(browser.curatedNotice == nil, "nothing of the list is drawn while it is away")
+        browser.startBrowsing()
+        await settle(browser)
+
+        #expect(browser.curatedNotice == .incomplete(.unavailable))
+        #expect(browser.nearbyListings.map(\.id) == ["curated-1"])
+        #expect(transport.recording.nearbyScopes == [.withCuratedTrails], "the return asked nothing")
+    }
+
+    /// The *x* is the hiker having read it, and a tab switch is not a new
+    /// search to say it again for.
+    @Test("a part's caption dismissed before leaving stays off on the return")
+    func aDismissedPartStaysDismissed() async {
+        let transport = StubCommunityTransport()
+        transport.curatedOutcome = .partial(.unavailable)
+        let browser = await browsing(transport)
+        browser.dismissCuratedNotice()
+
+        browser.stopBrowsing()
+        browser.startBrowsing()
+        await settle(browser)
+
+        #expect(browser.curatedNotice == nil)
+    }
+
+    /// An outage is about the last search rather than about the rows, and
+    /// the next tap says it again: see `leavingTheTabClearsTheNotice`.
+    @Test("an outage's caption does not come back with the rows")
+    func anOutageDoesNotComeBack() async {
+        let transport = StubCommunityTransport()
+        transport.curatedOutcome = .outage(.unavailable)
+        let browser = await browsing(transport)
+        #expect(browser.curatedNotice == .outage(.unavailable))
+
+        browser.stopBrowsing()
+        browser.startBrowsing()
+        await settle(browser)
+
+        #expect(browser.curatedNotice == nil)
+    }
 }
