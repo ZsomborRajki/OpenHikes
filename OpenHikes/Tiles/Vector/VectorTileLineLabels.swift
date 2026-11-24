@@ -30,6 +30,7 @@ import Algorithms
 import CoreGraphics
 import CoreText
 import Foundation
+import RealModule
 
 nonisolated enum VectorTileLineLabels {
     /// One or more of the archive's ways, joined end to end, in the picture's
@@ -252,8 +253,8 @@ nonisolated enum VectorTileLineLabels {
         let name: String
     }
 
-    /// Ends closer than this are one point: the archive gives both ways the
-    /// node they share, and only rounding parts them.
+    /// Ends this close on each axis, or closer, are one point: the archive
+    /// gives both ways the node they share, and only rounding parts them.
     private static let joinTolerance: CGFloat = 0.5
 
     /// More important first, then longer, then by name and place, so every
@@ -274,9 +275,17 @@ nonisolated enum VectorTileLineLabels {
         return position.x
     }
 
+    /// Whether two ends are one node, to ``joinTolerance`` on each axis.
+    ///
+    /// Never for an end that is not finite, even beside an equal one:
+    /// `isApproximatelyEqual` calls two equal infinities equal, and an
+    /// infinite end is no node. The subtraction this replaced refused them
+    /// by giving a NaN.
     private static func close(_ lhs: CGPoint?, _ rhs: CGPoint?) -> Bool {
-        guard let lhs, let rhs else { return false }
-        return abs(lhs.x - rhs.x) <= joinTolerance && abs(lhs.y - rhs.y) <= joinTolerance
+        guard let lhs, let rhs,
+              lhs.x.isFinite, lhs.y.isFinite, rhs.x.isFinite, rhs.y.isFinite else { return false }
+        return lhs.x.isApproximatelyEqual(to: rhs.x, absoluteTolerance: joinTolerance)
+            && lhs.y.isApproximatelyEqual(to: rhs.y, absoluteTolerance: joinTolerance)
     }
 
     private static func touches(_ part: [CGPoint], _ line: [CGPoint]) -> Bool {

@@ -37,6 +37,29 @@ struct VectorTileLineLabelsTests {
         #expect(joined.map(\.count).sorted() == [2, 4])
     }
 
+    /// Half a pixel on each axis is rounding, and is one node; anything past
+    /// it on either axis is two.
+    @Test("ends half a pixel apart on each axis join, and ends just past that do not")
+    func joinToleranceIsInclusive() {
+        let end = CGPoint(x: 10, y: 20)
+        func joins(_ next: CGPoint) -> Bool {
+            VectorTileLineLabels.joined([[.zero, end], [next, CGPoint(x: 30, y: 20)]]).count == 1
+        }
+
+        #expect(joins(CGPoint(x: 10.5, y: 20.5)))
+        #expect(joins(CGPoint(x: 9.5, y: 19.5)))
+        #expect(!joins(CGPoint(x: CGFloat(10.5).nextUp, y: 20)))
+        #expect(!joins(CGPoint(x: 10, y: CGFloat(19.5).nextDown)))
+    }
+
+    @Test("ends that are not finite never join, even when equal")
+    func infiniteEndsDoNotJoin() {
+        let infinite = CGPoint(x: CGFloat.infinity, y: 0)
+        let joined = VectorTileLineLabels.joined([[.zero, infinite], [infinite, CGPoint(x: 30, y: 0)]])
+
+        #expect(joined.count == 2)
+    }
+
     // MARK: Setting letters
 
     @Test("letters follow a straight line in order, level")
