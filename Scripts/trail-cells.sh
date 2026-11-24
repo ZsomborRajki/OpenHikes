@@ -18,7 +18,7 @@
 # server by name. `OpenHikes/Community/Curated/Cells/TrailCellGrid.swift` argues
 # the design and has the measurements, and
 # `OpenHikes/Tiles/Squares/SquareArchive.swift` says where a square goes in an
-# archive; *The trail squares* in AGENTS.md is the procedure.
+# archive; *Building the squares* in OPERATIONS.md is the procedure.
 #
 # It is a *development* tool and is in no gate, though its parts are:
 # Scripts/run-script-tests.sh builds the tool and runs it against fixtures.

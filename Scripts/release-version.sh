@@ -8,7 +8,7 @@
 # than one it already has for that version, and nothing in this repository
 # asks it which those are. So the build is one past the highest this
 # repository knows for the same version: its `v<version>-<build>` tags
-# (*Releasing* in AGENTS.md tags every archived commit) and any
+# (*Releasing* in OPERATIONS.md tags every archived commit) and any
 # `CURRENT_PROJECT_VERSION` committed beside that `MARKETING_VERSION` in the
 # project, whichever is higher. A build uploaded from Xcode and never tagged
 # is invisible here. App Store Connect then refuses the upload by name, and

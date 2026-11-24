@@ -1,7 +1,7 @@
 name: TestFlight
 
 # Archives the chosen branch, uploads it to App Store Connect for TestFlight,
-# and tags the commit `v<version>-<build>` (*Releasing* in AGENTS.md). Run it
+# and tags the commit `v<version>-<build>` (*Releasing* in OPERATIONS.md). Run it
 # from the Actions tab, or with
 #
 #   gh workflow run testflight.yml -f version=1.5 -f cloudkit_promoted=true
@@ -66,7 +66,8 @@ name: TestFlight
 #
 # What it does not do:
 # - Promote the CloudKit schema. No command can, so the run refuses to start
-#   until `cloudkit_promoted` is ticked (*CloudKit* in AGENTS.md).
+#   until `cloudkit_promoted` is ticked (*Promoting a CloudKit field* in
+#   OPERATIONS.md).
 # - Run the tests. `ci.yml` does that on every push to `main` and every pull
 #   request; check that its run is green for the commit being shipped.
 # - Publish a GitHub Release. Those are for App Store builds.
