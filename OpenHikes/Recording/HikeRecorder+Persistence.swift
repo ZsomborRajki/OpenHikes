@@ -455,6 +455,7 @@ extension HikeRecorder {
         autoPause.refresh = nil
         startRequested = false
         activationID = nil
+        resumeID = nil
         carriedSeed = nil
         pendingResumeFlag = false
         acceptedFixRevision = 0
