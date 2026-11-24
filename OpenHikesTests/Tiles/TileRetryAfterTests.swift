@@ -169,6 +169,53 @@ struct TileRetryAfterTests {
         #expect(advice.count == 1)
     }
 
+    /// The table answers a key at once and the heap orders the deadlines; a
+    /// deadline pushed out leaves its old entry in the heap, and that must
+    /// neither grow without end nor forget the key it no longer speaks for.
+    @Test("repeated extensions of one deadline keep the index bounded")
+    func extensionsKeepTheIndexBounded() {
+        var advice = TileRetryAdvice()
+        for second in 1...5000 {
+            advice.record(key, notBefore: start.advanced(by: .seconds(second)), at: start)
+        }
+
+        #expect(advice.count == 1)
+        #expect(advice.indexedCount <= 2 * TileRetryAdvice.maximumTrackedKeys + 1)
+        #expect(advice.deadline(for: key, at: start) == start.advanced(by: .seconds(5000)))
+    }
+
+    @Test("the deadline a key was pushed out from does not expire it, or evict it")
+    func aStaleEntryNeitherExpiresNorEvictsItsKey() {
+        var advice = TileRetryAdvice()
+        advice.record(key, notBefore: start.advanced(by: .seconds(10)), at: start)
+        advice.record(key, notBefore: start.advanced(by: .seconds(600)), at: start)
+        for index in 0..<TileRetryAdvice.maximumTrackedKeys {
+            advice.record("osm/14/\(index)/6357@2.0", notBefore: start.advanced(by: .seconds(300)), at: start)
+        }
+
+        #expect(advice.count == TileRetryAdvice.maximumTrackedKeys)
+        #expect(advice.deadline(for: key, at: start) != nil, "the latest refusal is the last to go")
+        advice.record("one more", notBefore: start.advanced(by: .seconds(400)), at: start.advanced(by: .seconds(20)))
+        #expect(advice.deadline(for: key, at: start.advanced(by: .seconds(20))) == start.advanced(by: .seconds(600)))
+    }
+
+    /// Entries refused in the same instant go in the order of their keys,
+    /// not in whatever order a hash seed lays the table out.
+    @Test("the soonest deadline is evicted first, and a tie goes by key")
+    func evictionIsSoonestThenByKey() {
+        var advice = TileRetryAdvice()
+        for index in 0..<TileRetryAdvice.maximumTrackedKeys {
+            advice.record("tile-\(1000 + index)", notBefore: start.advanced(by: .seconds(60)), at: start)
+        }
+
+        advice.record("tile-9999", notBefore: start.advanced(by: .seconds(60)), at: start)
+
+        #expect(advice.count == TileRetryAdvice.maximumTrackedKeys)
+        #expect(advice.deadline(for: "tile-1000", at: start) == nil)
+        #expect(advice.deadline(for: "tile-1001", at: start) != nil)
+        #expect(advice.deadline(for: "tile-9999", at: start) != nil)
+    }
+
     // MARK: Feeding the backoff
 
     /// The join. The server's deadline replaces the policy's when it is
