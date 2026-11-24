@@ -106,31 +106,39 @@ nonisolated enum GPXExport {
     /// is the one behaviour `String(format:)` gave for free, by never
     /// consulting a locale at all.
     private static let coordinateStyle = FloatingPointFormatStyle<Double>()
-        .precision(.fractionLength(coordinateDecimals))
+        .precision(.fractionLength(7))
         .grouping(.never)
         .locale(Locale(identifier: "en_US_POSIX"))
-    private static let coordinateDecimals = 7
-    /// ``coordinateDecimals`` as a factor, for rounding a longitude to the
-    /// places it will be written with before it is wrapped.
-    private static let coordinateScale = pow(10, Double(coordinateDecimals))
     /// Every `lon` in the file, track point, photograph and place alike.
     ///
     /// GPX 1.1's `longitudeType` runs from −180 inclusive to +180
     /// **exclusive**, so the antimeridian has one spelling, `-180.0000000`,
     /// and a schema-validating reader refuses the other. Two positions reach
     /// it: a fix exactly on +180, and one a hair short of it that seven
-    /// places round up. So the value is rounded to those places first, and
-    /// what would be written is moved a whole turn when it falls outside the
-    /// range: the same meridian, the same position to the last place.
+    /// places round up.
+    ///
+    /// **The style does the only rounding**, as it does for every latitude.
+    /// Rounding the `Double` by hand first moved the last place of ordinary
+    /// longitudes (`120.00000064999999` came out `120.0000007`): scaling by
+    /// 10⁷ can itself round onto a half, which `.rounded()` then breaks
+    /// another way than the style does. So nothing is rounded here. A
+    /// position outside the range is moved a whole turn, a subtraction that
+    /// is exact within a turn of it, and the one written value the range
+    /// forbids is respelled.
     static func formattedLongitude(_ degrees: Double) -> String {
-        let written = (degrees * coordinateScale).rounded() / coordinateScale
-        let wrapped = switch written {
-        case 180...: written - 360
-        case ..<(-180): written + 360
-        default: written
+        let inRange = switch degrees {
+        case 180...: degrees - 360
+        case ..<(-180): degrees + 360
+        default: degrees
         }
-        return wrapped.formatted(coordinateStyle)
+        let written = inRange.formatted(coordinateStyle)
+        return written == eastAntimeridian ? westAntimeridian : written
     }
+
+    /// +180 as ``coordinateStyle`` writes it, which GPX 1.1 refuses, and the
+    /// same meridian as it accepts it.
+    private static let eastAntimeridian = 180.0.formatted(coordinateStyle)
+    private static let westAntimeridian = (-180.0).formatted(coordinateStyle)
 
     /// Centimetres. Barometric elevation carries fractions worth keeping, but
     /// not more than this.
