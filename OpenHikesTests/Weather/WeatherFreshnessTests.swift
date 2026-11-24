@@ -9,8 +9,8 @@ import Testing
 
 /// When a preserved reading stops counting as the current conditions.
 ///
-/// ``WeatherManager/update(for:)`` keeps the last successful snapshot when
-/// WeatherKit fails, which is deliberate — an empty badge is worse than a
+/// ``WeatherManager/update(for:inFront:)`` keeps the last successful snapshot
+/// when WeatherKit fails, which is deliberate — an empty badge is worse than a
 /// twenty-minute-old temperature — and used to leave a hiker who had lost
 /// signal reading an hours-old number with nothing saying so.
 @Suite("Weather freshness")

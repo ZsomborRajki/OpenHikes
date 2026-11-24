@@ -4,8 +4,8 @@
 //
 //  The round trip behind the badge, on the far side of a seam.
 //
-//  ``WeatherManager/update(for:)`` decides what the badge, the stored reading
-//  and the widget say once a request comes back, and it used to ask
+//  ``WeatherManager/update(for:inFront:)`` decides what the badge, the stored
+//  reading and the widget say once a request comes back, and it used to ask
 //  `WeatherService.shared` itself, which left that decision out of every
 //  suite's reach. None of WeatherKit's answers has a public initializer, and
 //  the real call is a metered request against an entitlement — see *Deliberate

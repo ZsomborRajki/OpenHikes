@@ -281,4 +281,29 @@ struct WeatherRequestStateTests {
         )
         #expect(revisitsOldest, "the oldest subject was still the one evicted")
     }
+
+    /// The poll does not wait on a request, so answers for subjects the hiker
+    /// has left can land in a run while they look at another. Counted as the
+    /// most recent, enough of them would evict the subject in front, and the
+    /// poll would find no deadline to wake it for its retry.
+    @Test("answers for subjects the hiker left keep the one in front")
+    func answersForSubjectsLeftKeepTheOneInFront() {
+        var state = WeatherRequestState()
+        let left = (0..<WeatherRequestState.trackedSubjectLimit).map { "place:left\($0)" }
+        for key in left {
+            _ = state.shouldRequest(key: key, reason: .focus, at: start, policy: policy)
+        }
+        _ = state.shouldRequest(key: "me", reason: .focus, at: start, policy: policy)
+        state.recordFailure(key: "me", at: start, policy: policy)
+
+        for key in left {
+            state.recordSuccess(key: key, at: start.addingTimeInterval(1), keeping: "me")
+        }
+
+        #expect(state.nextEligibleDate(key: "me", policy: policy) == start.addingTimeInterval(5))
+        let revisitsLast = state.shouldRequest(
+            key: left[left.count - 1], reason: .focus, at: start.addingTimeInterval(2), policy: policy
+        )
+        #expect(!revisitsLast, "the answers still count for their own subjects")
+    }
 }
