@@ -24,12 +24,18 @@
 //  That also decides where this type sits. It hangs off the *Community* tab
 //  being selected, exactly as ``CommunityBrowser`` does, because the tab is
 //  the opt-in and the repository's rule is that nothing reaches the network
-//  until it is taken. One request per launch rather than one per selection:
-//  almost every launch is a hiker who is not a reviewer, and asking again on
-//  every tap between the two segments would spend a request on the same empty
-//  answer forever. A reviewer who has just acted gets a fresh one on their
-//  next selection of the tab — see ``forget(_:)`` — because acting is the
-//  thing that changes the answer, and it is the only thing that does.
+//  until it is taken. One answer per launch rather than one request per
+//  selection: almost every launch is a hiker who is not a reviewer, and asking
+//  again on every tap between the two segments would spend a request on the
+//  same empty answer forever. A reviewer who has just acted gets a fresh one
+//  on their next selection of the tab — see ``forget(_:)`` — because acting is
+//  the thing that changes the answer, and it is the only thing that does.
+//
+//  An *answer* is rows, or the server's refusal. A read that failed for want
+//  of a connection or a service that was busy answered nothing, so a later
+//  selection of the tab asks again, no sooner than ``retryDelay`` after it:
+//  a reviewer who opened the tab in a valley otherwise had no queue for the
+//  rest of the launch.
 //
 //  That budget is why the rows outlive the tab — see ``stopBrowsing()``. A
 //  list held for one request a launch and thrown away on every tap between
@@ -139,22 +145,35 @@ final class CommunityReviewQueue {
     /// overlapping would stop holding — for the reader who wonders why the
     /// cancel above is not enough on its own.
     @ObservationIgnored private var loadGeneration = 0
-    /// Whether this launch has already asked. See the header for why the
-    /// answer is not asked for again on every tab selection.
+    /// Whether this launch has asked, and not been left without an answer.
+    /// See the header for why the answer is not asked for again on every tab
+    /// selection.
     @ObservationIgnored private var hasAsked = false
+    /// When a selection of the tab may ask again after a read that answered
+    /// nothing, or `nil` when none failed.
+    @ObservationIgnored private var retryNotBefore: Date?
+    @ObservationIgnored private let now: () -> Date
     /// Requests that reached the transport, which is what proves the paragraph
     /// above rather than merely asserting it.
     @ObservationIgnored private(set) var issuedRequests = 0
 
     private static let logger = Logger(subsystem: "OpenHikes", category: "Community")
 
-    init(transport: (any CommunityTransporting)?) {
+    /// How long after a read that answered nothing a selection of the tab may
+    /// ask again. Long enough that tapping between the segments in a valley
+    /// does not ask on every tap, short enough that a reviewer back in signal
+    /// has the queue on their next look.
+    static let retryDelay: TimeInterval = 30
+
+    init(transport: (any CommunityTransporting)?, now: @escaping () -> Date = { .now }) {
         self.transport = transport
+        self.now = now
     }
 
-    /// The *Community* tab was selected. Asks once per launch.
+    /// The *Community* tab was selected. Asks until the launch has an answer.
     func startBrowsing() {
         guard !hasAsked else { return }
+        if let retryNotBefore, now() < retryNotBefore { return }
         refresh()
     }
 
@@ -182,6 +201,7 @@ final class CommunityReviewQueue {
                 await MainActor.run {
                     guard let self, generation == self.loadGeneration else { return }
                     self.isReviewer = false
+                    self.retryNotBefore = nil
                     self.isLoading = false
                 }
                 return
@@ -198,10 +218,7 @@ final class CommunityReviewQueue {
                     \(error.localizedDescription, privacy: .public)
                     """
                 )
-                await MainActor.run {
-                    guard let self, generation == self.loadGeneration else { return }
-                    self.isLoading = false
-                }
+                self?.answeredNothing(generation: generation)
                 return
             }
             guard !Task.isCancelled else {
@@ -218,9 +235,20 @@ final class CommunityReviewQueue {
                 self.isReviewer = true
                 self.pending = result.hikes
                 self.pendingPhotos = result.photographs
+                self.retryNotBefore = nil
                 self.isLoading = false
             }
         }
+    }
+
+    /// A read that failed for want of a connection or a busy service: the
+    /// launch has not had its answer, so a later selection of the tab asks
+    /// again, no sooner than ``retryDelay`` from now.
+    private func answeredNothing(generation: Int) {
+        guard generation == loadGeneration else { return }
+        hasAsked = false
+        retryNotBefore = now().addingTimeInterval(Self.retryDelay)
+        isLoading = false
     }
 
     /// The tab was left. Abandons a request still in flight; keeps the rows.
