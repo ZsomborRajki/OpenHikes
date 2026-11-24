@@ -40,6 +40,12 @@
             "value" : "File GPX"
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GPX-bestand"
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -98,6 +104,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes usa la fotocamera per permetterti di fotografare un’escursione mentre sei in cammino. Le foto restano con quell’escursione, nel punto del sentiero che avevi selezionato."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes gebruikt de camera zodat je onderweg foto’s van een wandeling kunt maken. Foto’s worden bij die wandeling bewaard en vastgezet op het punt op het pad dat je had geselecteerd."
           }
         },
         "pl" : {
@@ -160,6 +172,12 @@
             "value" : "OpenHikes si collega a Salute per salvare le escursioni terminate come allenamenti, con la loro distanza e il loro percorso, quando attivi «Salva escursioni in Salute». OpenHikes non legge nulla da Salute sul tuo iPhone."
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes maakt verbinding met Gezondheid om je voltooide wandelingen als work-outs te bewaren, inclusief afstand en route, als je ‘Bewaar wandelingen in Gezondheid’ aanzet. OpenHikes leest niets uit Gezondheid op je iPhone."
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -218,6 +236,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes salva le escursioni terminate in Salute come allenamenti di escursionismo, con la loro distanza e il loro percorso, quando attivi «Salva escursioni in Salute». OpenHikes non legge nulla da Salute sul tuo iPhone."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes bewaart je voltooide wandelingen in Gezondheid als wandeltochtwork-outs, met hun afstand en route, als je ‘Bewaar wandelingen in Gezondheid’ aanzet. OpenHikes leest niets uit Gezondheid op je iPhone."
           }
         },
         "pl" : {
@@ -280,6 +304,12 @@
             "value" : "OpenHikes usa l’accesso «Sempre» alla posizione, solo se attivi «Monitoraggio del sentiero in background» nelle impostazioni dell’app, perché il widget della schermata Home e l’Attività in tempo reale continuino a mostrare i tuoi progressi lungo il sentiero quando l’app non è aperta."
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes gebruikt locatietoegang ‘Altijd’, alleen als je ‘Padvolging op achtergrond’ aanzet in de instellingen, zodat je widget op het beginscherm en je live activiteit je voortgang langs het pad tonen terwijl de app niet open is."
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -338,6 +368,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes usa la tua posizione per mostrarti dove ti trovi sulla mappa, per registrare le escursioni che scegli di avviare e, con gli avvisi agli incroci attivati, per indicarti da che parte andare a ogni incrocio del sentiero che segui."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes gebruikt je locatie om te tonen waar je op de kaart bent, om wandelingen op te nemen die je zelf start en, met kruisingswaarschuwingen aan, om bij elke kruising van een pad dat je volgt te zeggen welke kant je op moet."
           }
         },
         "pl" : {
@@ -400,6 +436,12 @@
             "value" : "OpenHikes usa i sensori di movimento per migliorare l’altitudine registrata, ricostruire il sentiero percorso quando il segnale GPS si interrompe e mettere in pausa una registrazione quando ti fermi."
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes gebruikt de bewegingssensoren om de opgenomen hoogte te verbeteren, het gewandelde pad af te leiden waar GPS wegvalt, en een opname te pauzeren als je stilstaat."
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -458,6 +500,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Attiva «Salva anche in Foto» per conservare una copia di ogni foto dell’escursione nella tua libreria foto, con la data e il luogo in cui è stata scattata."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zet ‘Bewaar ook in Foto’s’ aan om een kopie van elke wandelfoto in je fotobibliotheek te bewaren, met het tijdstip en de plek waar hij is gemaakt."
           }
         },
         "pl" : {
@@ -520,6 +568,12 @@
             "value" : "OpenHikes cerca nella tua libreria foto le immagini scattate durante un’escursione, per collocare ciascuna nel punto del sentiero in cui ti trovavi. Legge solo le foto scattate durante quell’escursione."
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes zoekt in je fotobibliotheek naar foto’s die je tijdens een wandeling hebt gemaakt, zodat het elke foto kan vastzetten op het punt van het pad waar je stond. Het leest alleen foto’s die tijdens die wandeling zijn gemaakt."
+          }
+        },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
@@ -578,6 +632,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes ha bisogno della tua posizione esatta per registrare il sentiero che percorri."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes heeft je exacte locatie nodig om het pad op te nemen dat je wandelt."
           }
         },
         "pl" : {
