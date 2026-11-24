@@ -177,6 +177,15 @@ final class HikeLiveActivityController {
     @ObservationIgnored private var pendingWork: Task<Void, Never>?
     @ObservationIgnored private var workSequence: UInt64 = 0
 
+    /// A resume the flip floor held back, waiting for the floor to lift —
+    /// see ``holdIfResume(_:over:now:)``. Cancelled by anything that lands
+    /// and by the panel ending or being replaced.
+    @ObservationIgnored private var heldResume: Task<Void, Never>?
+    /// How a held resume waits for its floor. `Task.sleep` in the app; a
+    /// suite hands in a wait it ends itself, so it moves its clock instead
+    /// of sleeping.
+    @ObservationIgnored private let sleep: @Sendable (TimeInterval) async throws -> Void
+
     /// Both halves of ``isEnabled``, watched and held — see
     /// ``PreferenceObservation``, which owns the deregistration this used to
     /// spell out here.
@@ -186,12 +195,14 @@ final class HikeLiveActivityController {
         presenter: any HikeActivityPresenting,
         defaults: UserDefaults = .standard,
         clock: @escaping @Sendable () -> Date = { Date() },
-        lifecycleCenter: NotificationCenter = .default
+        lifecycleCenter: NotificationCenter = .default,
+        sleep: @escaping @Sendable (TimeInterval) async throws -> Void = { try await Task.sleep(for: .seconds($0)) }
     ) {
         self.presenter = presenter
         self.defaults = defaults
         self.clock = clock
         self.lifecycleCenter = lifecycleCenter
+        self.sleep = sleep
         observePreferences()
     }
 
@@ -244,7 +255,14 @@ final class HikeLiveActivityController {
             to: request.state,
             from: current.state,
             now: now
-        ) else { return }
+        ) else {
+            holdIfResume(request, over: current.state, now: now)
+            return
+        }
+        // Whatever lands supersedes a resume still waiting: a later resume
+        // carries the newer figures, and a pause undoes it.
+        heldResume?.cancel()
+        heldResume = nil
         switch reason {
         case .runStateChanged:
             lastRunStateFlipAt = now
@@ -489,7 +507,9 @@ final class HikeLiveActivityController {
     /// is what says whether that timer may run.
     ///
     /// Resuming is the opposite and stays floored: sensors restart, so the
-    /// very next fix re-offers the change.
+    /// very next fix re-offers the change. A hiker who stands still offers no
+    /// fix, so a floored resume is also held and offered again the moment
+    /// the floor lifts — see ``holdIfResume(_:over:now:)``.
     private static func stopsTheFixStream(
         _ runState: HikeActivityAttributes.ContentState.RunState
     ) -> Bool {
@@ -553,6 +573,8 @@ final class HikeLiveActivityController {
     private func start(_ request: HikeActivityRequest) {
         let replaced = current
         current = request
+        heldResume?.cancel()
+        heldResume = nil
         let now = clock()
         lastUpdateAt = now
         lastRunStateFlipAt = nil
@@ -582,6 +604,8 @@ final class HikeLiveActivityController {
         dismissAfter: TimeInterval?
     ) {
         current = nil
+        heldResume?.cancel()
+        heldResume = nil
         lastUpdateAt = nil
         lastRunStateFlipAt = nil
         lastRouteFlipAt = nil
@@ -592,6 +616,38 @@ final class HikeLiveActivityController {
                 finalState: finalState,
                 dismissAfter: dismissAfter
             )
+        }
+    }
+
+    // MARK: A held resume
+
+    /// Holds `request` when it is a resume the flip floor refused, and offers
+    /// it again once the floor lifts.
+    ///
+    /// The recorder publishes a resume at once, and a resume inside
+    /// ``minimumFlipInterval`` of the pause before it is refused here, as
+    /// every floored change is, for the next call to correct. A walk going
+    /// again restarts the sensors, so that call is normally the next fix —
+    /// but a hiker who resumed and stands where no fix is accepted offers
+    /// none, and the panel stayed paused, its timer frozen, over a walk that
+    /// was recording. Only the latest offer is held, and only while it is a
+    /// resume: another refused offer replaces it, a refused pause drops it,
+    /// and anything that lands, a start or an end cancels it.
+    private func holdIfResume(
+        _ request: HikeActivityRequest,
+        over previous: HikeActivityAttributes.ContentState,
+        now: Date
+    ) {
+        heldResume?.cancel()
+        heldResume = nil
+        guard request.state.runState == .running, previous.runState != .running,
+              let flippedAt = lastRunStateFlipAt
+        else { return }
+        let remaining = max(0, Self.minimumFlipInterval - now.timeIntervalSince(flippedAt))
+        heldResume = Task { [weak self, sleep] in
+            guard (try? await sleep(remaining)) != nil, !Task.isCancelled, let self else { return }
+            heldResume = nil
+            update(request)
         }
     }
 
