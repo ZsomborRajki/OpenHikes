@@ -210,6 +210,37 @@ struct WeatherAlertSessionTests {
         #expect(notifier.posted.first?.body.hasPrefix("Extreme wind warning") == true)
     }
 
+    /// A refusal takes back only what its own pass marked. While the post is
+    /// out, walks on as many other trails as the manager keeps watches for
+    /// evict the walked trail's, and the walk back to it makes a fresh watch
+    /// that says the same warning and is taken. The late refusal must leave
+    /// that newer mark alone, or the next poll says the warning twice.
+    @Test("a late refusal leaves a newer pass's banner said")
+    func lateRefusalKeepsANewerBanner() async throws {
+        let (manager, notifier) = try Self.manager(showing: Self.walkedTrail)
+        let walk = WeatherAlertSession.walking(hikeID: Self.walkedID)
+        notifier.holdsThePost = true
+
+        let first = Task { await manager.announceStandingAlerts(during: walk) }
+        guard await notifier.awaitPost() else { return }
+        for index in 0..<WeatherRequestState.trackedSubjectLimit {
+            let hikeID = UUID()
+            let trail = WeatherSubject.trail(Self.ridge, hikeID: hikeID, name: "Trail \(index)")
+            manager.applyUITestSnapshot(Self.snapshot(alerts: .clear), subject: trail)
+            await manager.announceStandingAlerts(during: .walking(hikeID: hikeID))
+        }
+        manager.applyUITestSnapshot(Self.snapshot(), subject: Self.walkedTrail)
+        await manager.announceStandingAlerts(during: walk)
+        #expect(notifier.postedKinds == [.severeWeather])
+
+        notifier.answerPost(taken: false)
+        await first.value
+        await manager.announceStandingAlerts(during: walk)
+
+        #expect(notifier.postedKinds == [.severeWeather])
+        #expect(notifier.refusedPosts == 1)
+    }
+
     // MARK: An answer that outlives its question
 
     /// The prompt can stay up for as long as the hiker leaves it, and the poll
