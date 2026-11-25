@@ -21,8 +21,8 @@
 //    walk a recording writes of itself is left out — the recording already
 //    counted, and counting its walk would count it twice.
 //  - **The year is the walk's own**: a clocked hike's `date` is its first
-//    stamp, and a walk's is when it started. The import date — what a
-//    clockless hike's `date` is — never places anything in a year, because a
+//    stamp, and a walk's is when it started. A clockless hike's `date`,
+//    often the day it was saved, never places anything in a year, because a
 //    clockless hike never counts.
 //
 //  A followed walk's climb is its own: each stretch it covered, climbed the
@@ -44,17 +44,18 @@
 //  the same time. *Record Instead* ends a walk that left its trail and begins
 //  the recording with what the walk covered, clocked over the very time the
 //  walk's History row spans (`TrailWalkSession+OffTrail.swift`). And any
-//  clocked hike can overlap a walk: a dated GPX of the same afternoon, a hike
-//  the watch recorded while the phone followed the trail, or rows saved by a
-//  build that let a recording start beside a walk. Whatever part of a
-//  followed walk's time a counted hike's clock also covers is that
-//  afternoon's second copy, and is left out: the hike is the whole of it, the
-//  walk only the stretch that lay on the trail. The rest of the walk still
-//  counts, in proportion to the time left over — a ten-minute recording in
-//  the middle of a four-hour walk takes ten minutes out of it, not the four
-//  hours. A walk kept only by a figure for the whole of it cannot say which
-//  kilometres fell in which minutes, so the proportion is an even pace's; a
-//  walk wholly inside a counted hike's clock is left out entirely.
+//  clocked hike can overlap a walk: a GPX with timestamps from the same
+//  afternoon, a hike the watch or another device recorded during the walk,
+//  or rows saved by a build that let a recording start beside a walk.
+//  Whatever part of a followed walk's time a counted hike's clock also covers
+//  is that afternoon's second copy, and is left out: the hike is the whole of
+//  it, the walk only the stretch that lay on the trail. The rest of the walk
+//  still counts, in proportion to the time left over — a ten-minute
+//  recording in the middle of a four-hour walk takes ten minutes out of it,
+//  not the four hours. A walk kept only by a figure for the whole of it
+//  cannot say which kilometres fell in which minutes, so the proportion is an
+//  even pace's; a walk wholly inside a counted hike's clock is left out
+//  entirely.
 //
 //  A record is one outing, not one trail: the longest is the furthest anyone
 //  walked in one go, so a thirty-kilometre trail walked for two is a
@@ -99,7 +100,7 @@
 //  what comes back is values: ``LibraryOuting``s, arithmetic over which is
 //  ordinary to assert. The counting stays off the main actor too, and comes
 //  back finished (``LibraryTotalsSweep/totals(from:asOf:calendar:using:)``):
-//  it weighs every walk against the recordings' clocks, which are merged
+//  it weighs every walk against the counted hikes' clocks, which are merged
 //  once (``RecordedClocks``) rather than scanned again for each walk, a
 //  scan that grew with the square of the library (#1118).
 //
@@ -533,7 +534,7 @@ nonisolated enum LibraryTotalsSweep {
 
     /// The *Totals* screen's figures: the library read, then counted, both
     /// off the main actor. The counting weighs every walk against every
-    /// recording's clock, which grows with the library as the read does, so
+    /// counted hike's clock, which grows with the library as the read does, so
     /// it does not come back to its caller's actor to do it (#1118).
     @concurrent
     static func totals(
