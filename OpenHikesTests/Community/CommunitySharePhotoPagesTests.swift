@@ -138,11 +138,47 @@ struct CommunitySharePhotoPagesTests {
         #expect(pages.choiceBuilds == 1)
     }
 
+    /// The disk is asked again whenever the list's ids change, and a row
+    /// synced from another device brings no file, so the answer can name the
+    /// same files in a new set. Held on the old one, every page turned after
+    /// it compared the two id by id. The exclusions are held the same way.
+    @Test("an equal answer from the disk, and equal exclusions, are held in place of the old")
+    func equalSetsAreHeld() {
+        let photos = Self.photos(4)
+        let pages = CommunitySharePhotoPages()
+        let excluded: Set<UUID> = [photos[0].id]
+        let here = Set(photos.map(\.id))
+        _ = pages.choices(for: photos, excluding: excluded, files: .answered(here))
+        let excludedAgain = Set([photos[0].id])
+        let hereAgain = Set(photos.reversed().map(\.id))
+        #expect(!Self.sharesStorage(excludedAgain, excluded))
+        #expect(!Self.sharesStorage(hereAgain, here))
+
+        _ = pages.choices(for: photos, excluding: excludedAgain, files: .answered(hereAgain))
+
+        #expect(Self.sharesStorage(pages.excluded, excludedAgain))
+        if case .answered(let held) = pages.files {
+            #expect(Self.sharesStorage(held, hereAgain))
+        } else {
+            Issue.record("the disk's answer should still be held, got \(pages.files)")
+        }
+        #expect(pages.choiceBuilds == 1)
+    }
+
     /// Whether two arrays are one buffer, which is when `==` answers without
     /// comparing a photograph.
     private static func sharesStorage(_ lhs: [HikePhoto], _ rhs: [HikePhoto]) -> Bool {
         lhs.withUnsafeBufferPointer { lhs in
             rhs.withUnsafeBufferPointer { rhs in lhs.baseAddress == rhs.baseAddress }
+        }
+    }
+
+    /// Whether two sets are one table, which is when `==` answers without
+    /// looking an id up. `Set` is frozen around a single reference to its
+    /// table, so its bytes are that reference.
+    private static func sharesStorage(_ lhs: Set<UUID>, _ rhs: Set<UUID>) -> Bool {
+        withUnsafeBytes(of: lhs) { lhs in
+            withUnsafeBytes(of: rhs) { rhs in lhs.elementsEqual(rhs) }
         }
     }
 }
