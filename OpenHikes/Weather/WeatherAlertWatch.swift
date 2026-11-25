@@ -61,12 +61,19 @@ nonisolated enum WeatherAlertPolicy {
 
 /// One subject's relationship to the alerts standing over it.
 nonisolated struct WeatherAlertWatch: Equatable {
-    /// The identifiers already announced, oldest first.
+    /// The alerts already announced, oldest first, each with the pass that
+    /// announced it.
     ///
     /// An array rather than a `Set` because eviction needs an order, and at
     /// ``WeatherAlertPolicy/rememberedAlertLimit`` entries a linear
     /// `contains` is cheaper than the hashing it would replace.
-    private var announced: [String] = []
+    private var announced: [Mark] = []
+
+    /// One alert marked said, and by which pass — see ``retract(markedBy:)``.
+    nonisolated private struct Mark: Equatable {
+        let alertID: String
+        let pass: UUID
+    }
 
     init() {
         // Nothing announced yet, which is what a fresh watch means.
@@ -92,11 +99,18 @@ nonisolated struct WeatherAlertWatch: Equatable {
     /// ``unannounced(in:)`` first and calls this only once it can. An alert
     /// marked said behind a refused prompt would stay silent after the hiker
     /// allowed notifications, for as long as it stands.
-    mutating func observed(_ alerts: WeatherAlerts) -> [WeatherAlertSummary] {
+    ///
+    /// `pass` names the attempt the marks belong to, for a caller that may
+    /// have to take them back once its post is answered. A caller that never
+    /// will leaves it to the default, a pass of its own.
+    mutating func observed(
+        _ alerts: WeatherAlerts,
+        by pass: UUID = UUID()
+    ) -> [WeatherAlertSummary] {
         let worthSaying = unannounced(in: alerts)
 
         for alert in worthSaying {
-            announced.append(alert.id)
+            announced.append(Mark(alertID: alert.id, pass: pass))
         }
         if announced.count > WeatherAlertPolicy.rememberedAlertLimit {
             announced.removeFirst(announced.count - WeatherAlertPolicy.rememberedAlertLimit)
@@ -104,24 +118,30 @@ nonisolated struct WeatherAlertWatch: Equatable {
         return worthSaying
     }
 
-    /// Takes back what ``observed(_:)`` recorded for `alerts`, so the next
-    /// reading announces them again.
+    /// Takes back what ``observed(_:by:)`` recorded for `pass`, so the next
+    /// reading announces those alerts again.
     ///
     /// For a banner the system refused after permission was given: the
     /// commitment was made before the post, which is what keeps two
     /// overlapping attempts to one banner, and an alert marked said behind a
     /// post that never reached the screen would stay silent for as long as it
     /// stands.
-    mutating func retract(_ alerts: [WeatherAlertSummary]) {
-        let ids = Set(alerts.map(\.id))
-        announced.removeAll { ids.contains($0) }
+    ///
+    /// **Only that pass's marks**, never the alerts by identifier. A refusal
+    /// can arrive long after the pass marked them, and by then the same
+    /// alert may be marked by a newer pass whose banner went up, the old mark
+    /// having gone with ``reset()`` or the bound, or with the whole watch,
+    /// which the manager keeps only for so many subjects. Taking that one
+    /// back would say the warning twice.
+    mutating func retract(markedBy pass: UUID) {
+        announced.removeAll { $0.pass == pass }
     }
 
-    /// What ``observed(_:)`` would answer, without recording any of it.
+    /// What ``observed(_:by:)`` would answer, without recording any of it.
     func unannounced(in alerts: WeatherAlerts) -> [WeatherAlertSummary] {
         alerts.summaries
             .filter { $0.severity >= WeatherAlertPolicy.interruptionThreshold }
-            .filter { !announced.contains($0.id) }
+            .filter { alert in !announced.contains { $0.alertID == alert.id } }
             .sorted { $0.severity > $1.severity }
     }
 

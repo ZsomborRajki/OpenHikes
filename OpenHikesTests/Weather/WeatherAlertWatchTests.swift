@@ -162,7 +162,7 @@ struct WeatherAlertWatchTests {
     }
 
     /// The question asked before notification permission is: an alert it
-    /// answers with is still news until ``WeatherAlertWatch/observed(_:)``
+    /// answers with is still news until ``WeatherAlertWatch/observed(_:by:)``
     /// records it.
     @Test("asking what is unannounced records nothing")
     func unannouncedRecordsNothing() {
@@ -213,11 +213,33 @@ struct WeatherAlertWatchTests {
             Self.alert(id: "storm-1"),
             Self.alert(id: "wind-1", severity: .extreme),
         ])
-        let said = watch.observed(standing)
+        let pass = UUID()
+        let said = watch.observed(standing, by: pass)
+        #expect(said.count == 2)
 
-        watch.retract(said)
+        watch.retract(markedBy: pass)
 
         #expect(watch.observed(standing).map(\.id) == ["wind-1", "storm-1"])
+    }
+
+    /// A refusal can arrive after the alert its pass marked was forgotten and
+    /// said again by a newer pass, whose banner went up. Taking back by
+    /// identifier would unsay that one too, and the next reading would say
+    /// the warning twice.
+    @Test("retracting a pass leaves the same alert said by a later pass")
+    func retractLeavesALaterPassAlone() {
+        var watch = WeatherAlertWatch()
+        let standing = WeatherAlerts.active([Self.alert()])
+        let refused = UUID()
+        let refusedSaid = watch.observed(standing, by: refused)
+        watch.reset()
+        let takenSaid = watch.observed(standing, by: UUID())
+        #expect(refusedSaid.count == 1)
+        #expect(takenSaid.count == 1)
+
+        watch.retract(markedBy: refused)
+
+        #expect(watch.observed(standing).isEmpty)
     }
 
     /// The bound is a leak stop rather than a policy — evicting an alert that
