@@ -300,13 +300,11 @@ final class OfflineTileDownloader {
             // Planning was cancelled. `cancel()` already moved the phase to
             // `.idle`; anything else that cancelled the task would otherwise
             // strand the UI on "Preparing offline tiles…" forever.
-            resetPhaseIfPreparing(generation: generation)
-            finishPlanning()
+            abandonPlanning(generation: generation)
             return
         }
         guard generation == self.generation, !Task.isCancelled else {
-            resetPhaseIfPreparing(generation: generation)
-            finishPlanning()
+            abandonPlanning(generation: generation)
             return
         }
         let tiles = plan.tiles
@@ -412,13 +410,6 @@ final class OfflineTileDownloader {
             )
         }
         lastRun = task
-    }
-
-    /// Leaves a stale generation alone — a newer `start()` owns the phase — but
-    /// never leaves the current run advertising a download that will not begin.
-    private func resetPhaseIfPreparing(generation: Int) {
-        guard generation == self.generation, phase == .downloading, total == 0 else { return }
-        phase = .idle
     }
 
     private func run(tiles: [Tile], source: ActiveTileSource, generation: Int) async {
@@ -620,6 +611,26 @@ extension OfflineTileDownloader {
             waiter.resume()
         }
     }
+
+    /// Ends planning that will not go on, for the run of `generation`: puts
+    /// the phase to rest and releases the waiters, but only while that run is
+    /// still the current one.
+    ///
+    /// A stale run touches neither. Only ``cancel()`` makes a run stale while
+    /// it plans (`start()` refuses while one is downloading), and it has
+    /// already put the phase to rest and released every waiter parked for
+    /// that run. Any parked since are waiting on the run that replaced it,
+    /// whose planning may still be out: released here, ``waitForPlanning()``
+    /// came back with no tiles counted. A current run whose task was
+    /// cancelled some other way is put to rest, rather than leaving the UI on
+    /// "Preparing offline tiles…".
+    private func abandonPlanning(generation: Int) {
+        guard generation == self.generation else { return }
+        if phase == .downloading, total == 0 {
+            phase = .idle
+        }
+        finishPlanning()
+    }
 }
 
 // MARK: - Checking a resume against the disk
@@ -632,20 +643,30 @@ extension OfflineTileDownloader {
     /// save is: the live one reads `TileCache.shared`, which no suite may.
     typealias DurableCheck = @Sendable (Set<String>) async throws(CancellationError) -> Set<String>
 
-    /// The disk's answer in the app, and the claims taken at their word in
-    /// both unit-test bundles and the UI tests, which are hosted by the app
-    /// and may not read its own tile store — the split
-    /// ``QuotaBroker/standard`` makes. A suite about the check injects one
-    /// over its own ``TileCache``.
+    /// The answer of `TileCache.shared`, the store the default save writes
+    /// into, except in a hosted suite, where that is the test host's own tile
+    /// store and no suite may read it.
+    ///
+    /// There the default finds nothing, which is what the app finds on a disk
+    /// that holds none of the claimed tiles, so a resumed run fetches its
+    /// whole plan. It never takes a claim at its word, which the app never
+    /// does: a suite whose run skips claimed tiles saves them in its own
+    /// ``TileSandbox`` and checks that, through the same
+    /// ``TileCache/durableKeys(among:)`` (`OfflineDownloadResumeTests`).
+    ///
+    /// `isHostingTests` rather than the `isRunningTests` of
+    /// ``QuotaBroker/standard``: a UI-automation launch is the app itself,
+    /// whose default save writes to `TileCache.shared`, so checking that store
+    /// is the pairing the app ships.
     static var standardDurableCheck: DurableCheck {
-        if AppLaunchEnvironment.isRunningTests {
-            return trustingClaims
+        if AppLaunchEnvironment.isHostingTests {
+            return findingNothing
         }
         return { keys throws(CancellationError) in try await TileCache.shared.durableKeys(among: keys) }
     }
 
-    nonisolated private static func trustingClaims(_ keys: Set<String>) -> Set<String> {
-        keys
+    nonisolated private static func findingNothing(_: Set<String>) -> Set<String> {
+        []
     }
 
     /// Narrows the resumed keys to those among `tiles` whose files are still
@@ -656,7 +677,8 @@ extension OfflineTileDownloader {
     /// without its tiles. A claimed tile is skipped only once its file is
     /// found, and one that is gone goes back into the gap. Asked off the main
     /// actor, and answered only to a run that is still current and not
-    /// cancelled, which is otherwise put to rest as planning puts one.
+    /// cancelled. Otherwise planning is abandoned as it is when the plan
+    /// itself comes back too late — see ``abandonPlanning(generation:)``.
     private func keepResumedKeysOnDisk(of tiles: [Tile], source: ActiveTileSource, generation: Int) async -> Bool {
         let claimed = resumedKeys.intersection(tiles.map { $0.cacheKey(providerID: source.providerID) })
         var present: Set<String> = []
@@ -668,8 +690,7 @@ extension OfflineTileDownloader {
             }
         }
         guard generation == self.generation, !Task.isCancelled else {
-            resetPhaseIfPreparing(generation: generation)
-            finishPlanning()
+            abandonPlanning(generation: generation)
             return false
         }
         resumedKeys = present

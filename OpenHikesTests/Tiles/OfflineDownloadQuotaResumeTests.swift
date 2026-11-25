@@ -6,6 +6,10 @@
 //  correct shortfall helper alone cannot prove a resumed run passes the gap
 //  into that helper or keeps it after the hiker agrees to reclaim space.
 //
+//  A resumed run skips a claimed tile only once it finds the file, so every
+//  test here puts the coverage it resumes from in a `TileSandbox` and hands
+//  the run the real check over it.
+//
 
 import Foundation
 @testable import OpenHikes
@@ -53,8 +57,16 @@ struct OfflineDownloadQuotaResumeTests {
         return plan.tiles.map { $0.cacheKey(providerID: Self.source.providerID) }
     }
 
+    /// A durable tier holding `keys`, as a previous run's saves left it.
+    private func disk(holding keys: some Sequence<String>) throws -> TileSandbox {
+        let sandbox = TileSandbox()
+        for key in keys { try sandbox.save(key: key) }
+        return sandbox
+    }
+
     private func downloader(
         log: RunLog,
+        disk: TileSandbox,
         quota: OfflineTileDownloader.QuotaBroker = .unlimited
     ) -> OfflineTileDownloader {
         OfflineTileDownloader(
@@ -62,6 +74,7 @@ struct OfflineDownloadQuotaResumeTests {
             isOnline: { true },
             quota: quota,
             registry: OfflineDownloadRegistry(),
+            durableKeys: { keys throws(CancellationError) in try await disk.cache.durableKeys(among: keys) },
             saveTile: { key, _ in await log.save(key) }
         )
     }
@@ -71,8 +84,10 @@ struct OfflineDownloadQuotaResumeTests {
         let keys = try await plannedKeys()
         let log = RunLog()
         let limit = Int64(keys.count) * TileCache.estimatedTileBytes
+        let saved = try disk(holding: keys.dropLast())
         let downloader = downloader(
             log: log,
+            disk: saved,
             quota: .init(
                 space: { _ in (limit: limit, used: limit - TileCache.estimatedTileBytes) },
                 reclaimable: { _, protected in await log.reclaimable(protecting: protected) },
@@ -99,8 +114,10 @@ struct OfflineDownloadQuotaResumeTests {
         let keys = try await plannedKeys()
         let log = RunLog()
         let limit = Int64(keys.count) * TileCache.estimatedTileBytes
+        let saved = try disk(holding: keys.dropLast(2))
         let downloader = downloader(
             log: log,
+            disk: saved,
             quota: .init(
                 space: { _ in (limit: limit, used: limit) },
                 reclaimable: { _, protected in await log.reclaimable(protecting: protected) },
@@ -145,6 +162,7 @@ struct OfflineDownloadQuotaResumeTests {
         let available = Int64(missingCount) * TileCache.estimatedTileBytes
         let downloader = downloader(
             log: log,
+            disk: sandbox,
             quota: .init(
                 space: { _ in (limit: limit, used: limit - available) },
                 reclaimable: { _, protected in await log.reclaimable(protecting: protected) },
@@ -173,11 +191,12 @@ struct OfflineDownloadQuotaResumeTests {
     func progressIgnoresOldCoverage(missingCount: Int) async throws {
         let keys = try await plannedKeys()
         let log = RunLog()
-        let downloader = downloader(log: log)
         var alreadySaved = Set(keys.dropLast(missingCount))
         // A partial record survives editing a trail, so it may also hold
         // coverage outside the new plan. Zoom zero is outside this plan.
         alreadySaved.insert("\(Self.source.providerID)/0/0/0")
+        let saved = try disk(holding: alreadySaved)
+        let downloader = downloader(log: log, disk: saved)
         downloader.start(
             route: Fixture.ridgeRoute,
             source: Self.source,
