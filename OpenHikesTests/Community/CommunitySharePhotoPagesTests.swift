@@ -114,4 +114,35 @@ struct CommunitySharePhotoPagesTests {
         #expect(pages.indexBuilds == 1)
         #expect(pages.choiceBuilds == 1)
     }
+
+    /// A tap writes the form's set, and the form's pass hands the viewer its
+    /// photographs again in a new array. Kept on the array before it, every
+    /// page turned after that tap compared the two photograph by photograph,
+    /// once for the position and once for the choices. Held, the next pass
+    /// hands in the array held, and the comparison is of storage alone.
+    @Test("the same photographs in a new array are held in place of the old")
+    func equalCopyIsHeld() {
+        let photos = Self.photos(4)
+        let pages = CommunitySharePhotoPages()
+        _ = pages.choices(for: photos, excluding: [], files: .unasked)
+        let copy = photos.map(\.self)
+        #expect(!Self.sharesStorage(copy, photos))
+
+        _ = pages.index(of: copy[0].id, in: copy)
+        #expect(Self.sharesStorage(pages.photos, copy))
+
+        let another = copy.map(\.self)
+        _ = pages.choices(for: another, excluding: [], files: .unasked)
+        #expect(Self.sharesStorage(pages.photos, another))
+        #expect(pages.indexBuilds == 1)
+        #expect(pages.choiceBuilds == 1)
+    }
+
+    /// Whether two arrays are one buffer, which is when `==` answers without
+    /// comparing a photograph.
+    private static func sharesStorage(_ lhs: [HikePhoto], _ rhs: [HikePhoto]) -> Bool {
+        lhs.withUnsafeBufferPointer { lhs in
+            rhs.withUnsafeBufferPointer { rhs in lhs.baseAddress == rhs.baseAddress }
+        }
+    }
 }

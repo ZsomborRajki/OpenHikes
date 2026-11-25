@@ -20,6 +20,13 @@
 //  a set handed in again unchanged compares its storage first, and costs no
 //  walk.
 //
+//  So whatever is handed in is held, equal or not. The form derives its list
+//  again on each of its own passes, a tap that strikes a picture off among
+//  them, so from that tap on the viewer is handed the same photographs in a
+//  new array. Held on the old one, every page turned after it compared the
+//  two photograph by photograph, once for the position and once for the
+//  choices. Only the pass that brings the new array walks it now.
+//
 //  A reference held in `@State`, and not `@Observable`, for the reason
 //  ``OrderedHikePhotos`` gives: it caches the body's own reads, and nothing
 //  should re-run because it changed.
@@ -33,7 +40,10 @@ final class CommunitySharePhotoPages {
     /// we're on the main actor — see ``LocationManager``'s deinit for why.
     nonisolated deinit { /* intentionally empty */ }
 
-    private var photos: [HikePhoto] = []
+    /// The photographs last handed in, which the positions are of. The
+    /// newest of equal arrays, so that the next pass handing it in again
+    /// compares storage alone; read by a suite to tell which one is held.
+    private(set) var photos: [HikePhoto] = []
     private var positions: [UUID: Int] = [:]
     private var excluded: Set<UUID> = []
     private var files = CommunityPhotoFiles.unasked
@@ -58,20 +68,23 @@ final class CommunitySharePhotoPages {
         files: CommunityPhotoFiles
     ) -> CommunitySharePhotoChoices {
         take(photos)
-        if let kept, excluded == self.excluded, files == self.files { return kept }
-        let built = CommunitySharePhotoChoices(photos: photos, excluding: excluded, files: files)
+        let isUnchanged = excluded == self.excluded && files == self.files
+        // Held even when equal, for the reason the photographs are.
         self.excluded = excluded
         self.files = files
+        if isUnchanged, let kept { return kept }
+        let built = CommunitySharePhotoChoices(photos: photos, excluding: excluded, files: files)
         kept = built
         choiceBuilds += 1
         return built
     }
 
-    /// Indexes `photos` when they are not the ones indexed last, and drops
-    /// the choices made from the old ones.
+    /// Holds `photos` in place of the ones before, and indexes them when
+    /// they differ, dropping the choices made from the old ones.
     private func take(_ photos: [HikePhoto]) {
-        guard photos != self.photos || indexBuilds == 0 else { return }
+        let isNew = photos != self.photos || indexBuilds == 0
         self.photos = photos
+        guard isNew else { return }
         positions = Dictionary(zip(photos.map(\.id), photos.indices)) { first, _ in first }
         kept = nil
         indexBuilds += 1
