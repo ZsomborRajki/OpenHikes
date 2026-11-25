@@ -11,8 +11,9 @@
 //  along the route — see ``PendingWalkStart`` — or on the detail's Start —
 //  ``start(hike:profile:)`` — and keeps the union of along-route intervals its consecutive matches spanned, can be
 //  paused and resumed, and ends into a `HikeWalk` row the History segment
-//  lists. It outlives the screen that started it: popping the detail,
-//  opening another trail, or starting a recording changes nothing here.
+//  lists. It outlives the screen that started it: popping the detail or
+//  opening another trail changes nothing here. A recording asked for on this
+//  phone does: it ends the walk first, or is refused — see ``isRecording``.
 //
 //  One `@Observable` reference type, read by the leaves and never by
 //  `HikeDetailView.body`, with its properties split by rate. `walkedHikeID`,
