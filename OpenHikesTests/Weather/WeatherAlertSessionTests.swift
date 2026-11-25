@@ -171,76 +171,6 @@ struct WeatherAlertSessionTests {
         #expect(notifier.postedKinds == [.severeWeather])
     }
 
-    // MARK: A banner the system refused
-
-    /// Permission given is not a banner shown: the centre's `add` can still
-    /// throw. The alert must stay unsaid then, so the next poll under the
-    /// same warning posts it, and the poll after that says nothing again.
-    @Test("a refused banner leaves the alert for the next poll")
-    func refusedBannerIsRetried() async throws {
-        let (manager, notifier) = try Self.manager(showing: Self.walkedTrail)
-        let walk = WeatherAlertSession.walking(hikeID: Self.walkedID)
-        notifier.refusesPosts = 1
-
-        await manager.announceStandingAlerts(during: walk)
-        #expect(notifier.refusedPosts == 1)
-        #expect(notifier.posted.isEmpty)
-
-        await manager.announceStandingAlerts(during: walk)
-        await manager.announceStandingAlerts(during: walk)
-
-        #expect(notifier.postedKinds == [.severeWeather])
-        #expect(notifier.refusedPosts == 1)
-    }
-
-    /// Two new alerts are still one banner on the retry, and it is the worse
-    /// one: the refusal takes back both, not only the one it tried to say.
-    @Test("a retried banner is still one banner, for the worst alert")
-    func retriedBannerKeepsTheWorstOne() async throws {
-        let (manager, notifier) = try Self.manager(showing: Self.walkedTrail)
-        let walk = WeatherAlertSession.walking(hikeID: Self.walkedID)
-        manager.applyUITestSnapshot(Self.snapshot(alerts: Self.storms), subject: Self.walkedTrail)
-        notifier.refusesPosts = 1
-
-        await manager.announceStandingAlerts(during: walk)
-        await manager.announceStandingAlerts(during: walk)
-        await manager.announceStandingAlerts(during: walk)
-
-        #expect(notifier.posted.count == 1)
-        #expect(notifier.posted.first?.body.hasPrefix("Extreme wind warning") == true)
-    }
-
-    /// A refusal takes back only what its own pass marked. While the post is
-    /// out, walks on as many other trails as the manager keeps watches for
-    /// evict the walked trail's, and the walk back to it makes a fresh watch
-    /// that says the same warning and is taken. The late refusal must leave
-    /// that newer mark alone, or the next poll says the warning twice.
-    @Test("a late refusal leaves a newer pass's banner said")
-    func lateRefusalKeepsANewerBanner() async throws {
-        let (manager, notifier) = try Self.manager(showing: Self.walkedTrail)
-        let walk = WeatherAlertSession.walking(hikeID: Self.walkedID)
-        notifier.holdsThePost = true
-
-        let first = Task { await manager.announceStandingAlerts(during: walk) }
-        guard await notifier.awaitPost() else { return }
-        for index in 0..<WeatherRequestState.trackedSubjectLimit {
-            let hikeID = UUID()
-            let trail = WeatherSubject.trail(Self.ridge, hikeID: hikeID, name: "Trail \(index)")
-            manager.applyUITestSnapshot(Self.snapshot(alerts: .clear), subject: trail)
-            await manager.announceStandingAlerts(during: .walking(hikeID: hikeID))
-        }
-        manager.applyUITestSnapshot(Self.snapshot(), subject: Self.walkedTrail)
-        await manager.announceStandingAlerts(during: walk)
-        #expect(notifier.postedKinds == [.severeWeather])
-
-        notifier.answerPost(taken: false)
-        await first.value
-        await manager.announceStandingAlerts(during: walk)
-
-        #expect(notifier.postedKinds == [.severeWeather])
-        #expect(notifier.refusedPosts == 1)
-    }
-
     // MARK: An answer that outlives its question
 
     /// The prompt can stay up for as long as the hiker leaves it, and the poll
@@ -429,4 +359,121 @@ struct WeatherAlertSessionTests {
             source: "Deutscher Wetterdienst"
         ),
     ])
+}
+
+// MARK: A banner the system refused
+
+/// In an extension of its own because the suite's body is at its length
+/// limit. The fixtures are the suite's.
+extension WeatherAlertSessionTests {
+    /// Permission given is not a banner shown: the centre's `add` can still
+    /// throw. The alert must stay unsaid then, so the next poll under the
+    /// same warning posts it, and the poll after that says nothing again.
+    @Test("a refused banner leaves the alert for the next poll")
+    func refusedBannerIsRetried() async throws {
+        let (manager, notifier) = try Self.manager(showing: Self.walkedTrail)
+        let walk = WeatherAlertSession.walking(hikeID: Self.walkedID)
+        notifier.refusesPosts = 1
+
+        await manager.announceStandingAlerts(during: walk)
+        #expect(notifier.refusedPosts == 1)
+        #expect(notifier.posted.isEmpty)
+
+        await manager.announceStandingAlerts(during: walk)
+        await manager.announceStandingAlerts(during: walk)
+
+        #expect(notifier.postedKinds == [.severeWeather])
+        #expect(notifier.refusedPosts == 1)
+    }
+
+    /// Two new alerts are still one banner on the retry, and it is the worse
+    /// one: the refusal takes back both, not only the one it tried to say.
+    @Test("a retried banner is still one banner, for the worst alert")
+    func retriedBannerKeepsTheWorstOne() async throws {
+        let (manager, notifier) = try Self.manager(showing: Self.walkedTrail)
+        let walk = WeatherAlertSession.walking(hikeID: Self.walkedID)
+        manager.applyUITestSnapshot(Self.snapshot(alerts: Self.storms), subject: Self.walkedTrail)
+        notifier.refusesPosts = 1
+
+        await manager.announceStandingAlerts(during: walk)
+        await manager.announceStandingAlerts(during: walk)
+        await manager.announceStandingAlerts(during: walk)
+
+        #expect(notifier.posted.count == 1)
+        #expect(notifier.posted.first?.body.hasPrefix("Extreme wind warning") == true)
+    }
+
+    /// The mark comes before the post, so a pass that starts while another's
+    /// banner is still on its way finds nothing to say. Marked only once the
+    /// system took the banner, both would post it.
+    @Test("an attempt overlapping a post that is out says nothing")
+    func overlapDuringThePostSaysNothing() async throws {
+        let (manager, notifier) = try Self.manager(showing: Self.walkedTrail)
+        let walk = WeatherAlertSession.walking(hikeID: Self.walkedID)
+        notifier.holdsThePost = true
+
+        let first = Task { await manager.announceStandingAlerts(during: walk) }
+        guard await notifier.awaitPost() else { return }
+        await manager.announceStandingAlerts(during: walk)
+        #expect(notifier.posted.isEmpty)
+
+        notifier.answerPost(taken: true)
+        await first.value
+        await manager.announceStandingAlerts(during: walk)
+
+        #expect(notifier.postedKinds == [.severeWeather])
+    }
+
+    /// The same overlap with the banner refused: the pass that overlapped it
+    /// marked nothing, so the refusal leaves exactly one retry.
+    @Test("an attempt overlapping a refused post leaves one retry")
+    func overlapDuringARefusedPostRetriesOnce() async throws {
+        let (manager, notifier) = try Self.manager(showing: Self.walkedTrail)
+        let walk = WeatherAlertSession.walking(hikeID: Self.walkedID)
+        notifier.holdsThePost = true
+
+        let first = Task { await manager.announceStandingAlerts(during: walk) }
+        guard await notifier.awaitPost() else { return }
+        await manager.announceStandingAlerts(during: walk)
+        #expect(notifier.posted.isEmpty)
+
+        notifier.answerPost(taken: false)
+        await first.value
+        await manager.announceStandingAlerts(during: walk)
+        await manager.announceStandingAlerts(during: walk)
+
+        #expect(notifier.postedKinds == [.severeWeather])
+        #expect(notifier.refusedPosts == 1)
+    }
+
+    /// A refusal takes back only what its own pass marked. While the post is
+    /// out, walks on as many other trails as the manager keeps watches for
+    /// evict the walked trail's, and the walk back to it makes a fresh watch
+    /// that says the same warning and is taken. The late refusal must leave
+    /// that newer mark alone, or the next poll says the warning twice.
+    @Test("a late refusal leaves a newer pass's banner said")
+    func lateRefusalKeepsANewerBanner() async throws {
+        let (manager, notifier) = try Self.manager(showing: Self.walkedTrail)
+        let walk = WeatherAlertSession.walking(hikeID: Self.walkedID)
+        notifier.holdsThePost = true
+
+        let first = Task { await manager.announceStandingAlerts(during: walk) }
+        guard await notifier.awaitPost() else { return }
+        for index in 0..<WeatherRequestState.trackedSubjectLimit {
+            let hikeID = UUID()
+            let trail = WeatherSubject.trail(Self.ridge, hikeID: hikeID, name: "Trail \(index)")
+            manager.applyUITestSnapshot(Self.snapshot(alerts: .clear), subject: trail)
+            await manager.announceStandingAlerts(during: .walking(hikeID: hikeID))
+        }
+        manager.applyUITestSnapshot(Self.snapshot(), subject: Self.walkedTrail)
+        await manager.announceStandingAlerts(during: walk)
+        #expect(notifier.postedKinds == [.severeWeather])
+
+        notifier.answerPost(taken: false)
+        await first.value
+        await manager.announceStandingAlerts(during: walk)
+
+        #expect(notifier.postedKinds == [.severeWeather])
+        #expect(notifier.refusedPosts == 1)
+    }
 }
