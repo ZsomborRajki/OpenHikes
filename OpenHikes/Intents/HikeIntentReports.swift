@@ -64,9 +64,11 @@ nonisolated struct LiveRecordingReport: Equatable, Sendable {
     /// minute ago must not be told flatly that they are still on it.
     let isTrailNameStale: Bool
     /// Which recording this is: ``HikeRecorder/sessionID``, new with every
-    /// start. Never spoken; it is what tells a surface that keeps the last
-    /// report it showed (the watch's mirror) that a recording stopped and
-    /// another began between two reports that read the same.
+    /// start, and `nil` until the recorder has made it, which a Start still
+    /// waiting for location permission or its journal has not. Never spoken;
+    /// it is what tells a surface that keeps the last report it showed (the
+    /// watch's mirror) that a recording stopped and another began between
+    /// two reports that read the same.
     var sessionID: UUID?
 }
 

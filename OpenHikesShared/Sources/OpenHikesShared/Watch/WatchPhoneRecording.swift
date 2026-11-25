@@ -30,9 +30,11 @@
 //  a start date would be identity for the watch to reconcile against, and
 //  there is nothing to reconcile: the phone is the only authority, every
 //  reading replaces the one before it, and a button's reply carries the state
-//  that button produced. `LiveRecordingReport` carries neither, so the only
-//  way to fill them would be to widen the description Siri reads for a screen
-//  that draws neither of them.
+//  that button produced. `LiveRecordingReport` does carry the recorder's
+//  session, but for the phone alone: `WatchRecordingMirror` compares it to
+//  tell a new recording from the last reading it sent when the two read the
+//  same, and sends the watch only the figures. No start date is carried at
+//  all.
 //
 //  ## The clock is not sent
 //

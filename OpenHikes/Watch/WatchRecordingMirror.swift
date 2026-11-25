@@ -214,7 +214,13 @@ final class WatchRecordingMirror {
 /// clock from them, and has no use for an identity it would only compare.
 private struct Reading {
     let recording: WatchPhoneRecording
-    /// ``LiveRecordingReport/sessionID``; `nil` when nothing is recording.
+    /// ``LiveRecordingReport/sessionID``. `nil` when nothing is recording,
+    /// and also while a Start still waits for location permission, the
+    /// precision prompt or its journal: the recorder reads as recording then,
+    /// with no clock run, but has no session yet. The first reading once it
+    /// has one is sent although it shows the same, and that is wanted: the
+    /// watch's clock then counts from when the recording began, rather than
+    /// from the tick that read the wait.
     let session: UUID?
 
     /// Whether this says the same as `other`: the same recording, showing the
