@@ -128,7 +128,10 @@ struct RouteTrimView: View {
     }
 
     private func revert() {
-        if session.revert(in: destination) { onDone() }
+        let target = destination
+        Task {
+            if await session.revert(in: target) { onDone() }
+        }
     }
 
     private func confirm(tappedOn shown: Int) {

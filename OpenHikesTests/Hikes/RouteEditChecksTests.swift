@@ -295,7 +295,7 @@ struct RouteEditChecksTests {
         await session.choose(.gps, forCheck: Line.checkID)
         await session.save(to: destination(for: hike, in: context))
 
-        #expect(session.revert(in: destination(for: hike, in: context)))
+        #expect(await session.revert(in: destination(for: hike, in: context)))
 
         #expect(hike.route == Self.saved)
         let check = try #require(hike.routeEdit?.assembly?.checks.first)

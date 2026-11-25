@@ -7,13 +7,16 @@
 //  from ``ShownLine``. The hike holds the saved row before the screen's line
 //  hears of it, because the store watch brings the row in before it asks for
 //  the line to be compared, and the hikes list's query can bring it in
-//  before the watch has looked at the store. Until both have landed the
-//  screen's line still reads as settled, so *Looks Good* and Save wait for
-//  them rather than act on a line the hike no longer has.
+//  before the watch has heard of the save. Until both have landed the
+//  screen's line still reads as settled, so *Looks Good*, Save and *Revert
+//  to Original* ask the watch to look and wait for it, rather than act on a
+//  line the hike no longer has.
 //
 //  Each look is held where it can be, and the tap is made while it is: the
 //  watch's check, with the row brought in as the query brings it, and the
-//  comparison, with the row brought in by the watch.
+//  comparison, with the row brought in by the watch. And the row is brought
+//  in as the query brings it before the store's remote change has reached
+//  the watch, with nothing looking at it when the tap comes.
 //
 //  On-disk stores, as the store watch's own suite has them: history is what
 //  the watch reads.
@@ -38,10 +41,10 @@ final class RouteTrimDestinationTests {
         case comparison = "comparison"
     }
 
-    /// A screen up on a recording with a stretch to check, its line read
-    /// through the selection's reader, as the app wires it.
+    /// A screen up on a hike, its line read through the selection's
+    /// reader, as the app wires it.
     private struct Stage {
-        let hold: Hold
+        let hold: Hold?
         let hike: Hike
         let line: ShownLine
         let session: RouteTrimSession
@@ -79,15 +82,31 @@ final class RouteTrimDestinationTests {
         container.mainContext.autosaveEnabled = false
     }
 
-    /// Opens *Edit Route* on a saved recording that asks for a look, with
-    /// the next look at a save of its row to be held at `hold`. The selected
-    /// line's first fetch is the selection's own read, so its second is the
+    /// Opens *Edit Route* on a saved recording that asks for a look, or on
+    /// one trimmed before with its original kept, with the next look at a
+    /// save of its row to be held at `hold`, or nowhere. The selected line's
+    /// first fetch is the selection's own read, so its second is the
     /// comparison.
-    private func stage(holding hold: Hold) async throws -> Stage {
+    private func stage(holding hold: Hold?, edited: Bool = false) async throws -> Stage {
         let main = container.mainContext
-        let hike = Fixture.hike(in: main, route: RouteEditChecksTests.saved)
+        let saved = RouteEditChecksTests.saved
+        let trimmed = Array(saved.prefix(9))
+        let hike = Fixture.hike(in: main, route: edited ? trimmed : saved)
         hike.rawRoute = RouteEditChecksTests.raw
-        hike.routeEdit = RouteEdit(assembly: RouteEditChecksTests.assembly)
+        if edited {
+            hike.originalRoute = saved
+            hike.routeEdit = RouteEdit(
+                original: RouteEdit.Original(
+                    distanceMeters: saved.lengthMeters,
+                    date: hike.date,
+                    recordedWalk: nil,
+                    notOnFoot: nil
+                ),
+                lineRevision: TrailWalkRecord.routeRevision(of: trimmed)
+            )
+        } else {
+            hike.routeEdit = RouteEdit(assembly: RouteEditChecksTests.assembly)
+        }
         try await RemoteChangeLog.save(main, settling: hike)
         let checks = HeldStoreCheck()
         let fetches = HeldLineFetch(holding: hold == .comparison ? 2 : 0)
@@ -102,7 +121,11 @@ final class RouteTrimDestinationTests {
         let drawn = try #require(line.current?.route)
         let session = RouteTrimSession()
         await session.load(RouteEditSources.reading(hike, drawn: drawn, in: container))
-        #expect(session.isOwedALook, "precondition: the hike asks for a look")
+        if edited {
+            #expect(session.hasOriginal, "precondition: the original can be put back")
+        } else {
+            #expect(session.isOwedALook, "precondition: the hike asks for a look")
+        }
         return Stage(
             hold: hold,
             hike: hike,
@@ -128,7 +151,30 @@ final class RouteTrimDestinationTests {
             _ = try SelectedLine.fetchHike(container.mainContext, stage.hike.persistentModelID)
         case .comparison:
             await settleDelegateHop(until: "the comparison is held") { stage.lines.refreshing != nil }
+        case nil:
+            break
         }
+    }
+
+    /// Saves `route` as the hike's line through another context, as the
+    /// mirroring import does, and brings the row into the hike as the hikes
+    /// list's query does, without leaving the main actor: the store's remote
+    /// change cannot have reached the watch by the time the next tap begins.
+    private func saveUnheard(_ route: [RouteCoordinate], to stage: Stage) throws {
+        let other = ModelContext(container)
+        other.author = "NSCloudKitMirroringDelegate.import"
+        let id = stage.hike.id
+        let row = try #require(try other.fetch(FetchDescriptor<Hike>(predicate: #Predicate { $0.id == id })).first)
+        row.replaceRoute(with: route)
+        try other.save()
+        _ = try SelectedLine.fetchHike(container.mainContext, stage.hike.persistentModelID)
+        #expect(stage.hike.route == route, "precondition: the hike holds the other device's line")
+        #expect(stage.line.isSettled, "precondition: and the screen's line still reads as the hike's")
+        #expect(stage.watch.check == nil && stage.lines.refreshing == nil, "precondition: and nothing is looking")
+    }
+
+    private func destination(of stage: Stage) -> RouteTrimSession.Destination {
+        RouteTrimSession.Destination(hike: stage.hike, context: container.mainContext, health: nil, line: stage.line)
     }
 
     /// Taps as the screen does, in a task of its own, through the screen's
@@ -139,19 +185,14 @@ final class RouteTrimDestinationTests {
         _ action: @escaping (RouteTrimSession.Destination) async -> Bool
     ) async -> Bool {
         let reached = Reached()
-        var destination = RouteTrimSession.Destination(
-            hike: stage.hike,
-            context: container.mainContext,
-            health: nil,
-            line: stage.line
-        )
-        let settle = destination.settle
-        destination.settle = {
+        var target = destination(of: stage)
+        let settle = target.settle
+        target.settle = {
             reached.isReached = true
             await settle()
         }
         let tapped = Task {
-            let landed = await action(destination)
+            let landed = await action(target)
             reached.isReached = true
             return landed
         }
@@ -204,5 +245,47 @@ final class RouteTrimDestinationTests {
         #expect(stage.session.refusal == .lineChanged)
         #expect(stage.hike.route == replacement, "the other device's line is not cut by distances measured on another")
         #expect(!stage.hike.hasOriginalRoute)
+    }
+
+    @Test("Revert waits for a line the other device saved, and is refused once it is in", arguments: Hold.allCases)
+    func revertWaitsForASavedLine(hold: Hold) async throws {
+        let stage = try await stage(holding: hold, edited: true)
+        let replacement = Self.moved
+        try await saveElsewhere(stage) { $0.replaceRoute(with: replacement) }
+
+        let landed = await tap(stage) { await stage.session.revert(in: $0) }
+
+        #expect(!landed)
+        #expect(stage.session.refusal == .lineChanged)
+        #expect(stage.hike.route == replacement, "the other device's line is not written over")
+    }
+
+    /// The tap's own question to the store: with nothing yet looking at the
+    /// save, waiting only for a look already begun would wait for nothing.
+    @Test("Looks Good on a line brought in before the watch heard of it is refused")
+    func lookAtAnUnheardLineIsRefused() async throws {
+        let stage = try await stage(holding: nil)
+        try saveUnheard(Self.moved, to: stage)
+
+        let landed = await stage.session.confirmChecks(
+            in: destination(of: stage),
+            tappedOn: stage.session.sourcesRevision
+        )
+
+        #expect(!landed)
+        #expect(stage.session.refusal == .lineChanged)
+        #expect(stage.hike.routeEdit?.isOwedALook == true)
+    }
+
+    @Test("Revert over a line brought in before the watch heard of it is refused")
+    func revertOverAnUnheardLineIsRefused() async throws {
+        let stage = try await stage(holding: nil, edited: true)
+        try saveUnheard(Self.moved, to: stage)
+
+        let landed = await stage.session.revert(in: destination(of: stage))
+
+        #expect(!landed)
+        #expect(stage.session.refusal == .lineChanged)
+        #expect(stage.hike.route == Self.moved, "the other device's line is not written over")
     }
 }

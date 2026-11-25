@@ -263,14 +263,14 @@ struct RouteTrimSessionTests {
         await session.save(to: destination(for: hike, in: context) { Self.route })
         let trimmed = hike.route
 
-        #expect(!session.revert(in: destination(for: hike, in: context) { [] }))
+        #expect(await !session.revert(in: destination(for: hike, in: context) { [] }))
         #expect(session.refusal == .lineChanged)
         session.refusal = nil
 
-        #expect(session.revert(in: destination(for: hike, in: context) { trimmed }))
+        #expect(await session.revert(in: destination(for: hike, in: context) { trimmed }))
         #expect(hike.route == Self.route)
 
-        #expect(!session.revert(in: destination(for: hike, in: context) { Self.route }))
+        #expect(await !session.revert(in: destination(for: hike, in: context) { Self.route }))
         #expect(session.refusal == .noOriginal)
     }
 
