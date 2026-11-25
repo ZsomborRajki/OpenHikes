@@ -63,6 +63,11 @@ final class RouteTrimSession {
     /// What the visit works from. Kept to tell the same hike again from a
     /// new one, and for what a save compares against.
     @ObservationIgnored private(set) var sources: RouteEditSources?
+    /// Moves each time the visit starts over on new ``sources``: which of
+    /// them the screen is showing. *Looks Good* names the one it was drawn
+    /// over, so a look is never taken at sources that landed after the tap
+    /// — see ``confirmChecks(in:tappedOn:)``.
+    private(set) var sourcesRevision = 0
 
     /// Where the kept line begins and ends, in metres along ``line``.
     private(set) var startMeters = 0.0
@@ -261,6 +266,7 @@ final class RouteTrimSession {
         guard !Task.isCancelled, mine == loads else { return }
         (currentLengthMeters, choiceMeters, currentRecordedSeconds) = lengths
         self.sources = sources
+        sourcesRevision += 1
         checks = saved?.checks ?? []
         steps = made
         isSelectingStretch = false

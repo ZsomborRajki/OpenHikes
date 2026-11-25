@@ -92,6 +92,16 @@ struct RouteEditChecksTests {
         RouteTrimSession.Destination(hike: hike, context: context) { hike.route }
     }
 
+    /// *Looks Good*, tapped on what the visit shows now, or on `shown`.
+    func look(
+        _ session: RouteTrimSession,
+        at hike: Hike,
+        in context: ModelContext,
+        tappedOn shown: Int? = nil
+    ) async -> Bool {
+        await session.confirmChecks(in: destination(for: hike, in: context), tappedOn: shown ?? session.sourcesRevision)
+    }
+
     // MARK: Opening
 
     @Test("a recording with a stretch to check opens whole, with nothing changed")
@@ -327,7 +337,7 @@ struct RouteEditChecksTests {
         let session = await visit(hike, in: context)
         let revision = session.lineRevision
 
-        #expect(await session.confirmChecks(in: destination(for: hike, in: context)))
+        #expect(await look(session, at: hike, in: context))
 
         #expect(hike.route == Self.saved)
         #expect(hike.originalRoute.isEmpty)

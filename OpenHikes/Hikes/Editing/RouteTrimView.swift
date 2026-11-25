@@ -117,12 +117,7 @@ struct RouteTrimView: View {
     }
 
     private var destination: RouteTrimSession.Destination {
-        RouteTrimSession.Destination(
-            hike: hike,
-            context: modelContext,
-            health: health,
-            settledLine: { [line] in line.isSettled ? line.current?.route ?? [] : [] }
-        )
+        RouteTrimSession.Destination(hike: hike, context: modelContext, health: health, line: line)
     }
 
     private func save() {
@@ -136,10 +131,10 @@ struct RouteTrimView: View {
         if session.revert(in: destination) { onDone() }
     }
 
-    private func confirm() {
+    private func confirm(tappedOn shown: Int) {
         let target = destination
         Task {
-            if await session.confirmChecks(in: target) { onDone() }
+            if await session.confirmChecks(in: target, tappedOn: shown) { onDone() }
         }
     }
 }
