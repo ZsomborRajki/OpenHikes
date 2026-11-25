@@ -45,8 +45,12 @@ final class CommunitySharePhotoPages {
     /// compares storage alone; read by a suite to tell which one is held.
     private(set) var photos: [HikePhoto] = []
     private var positions: [UUID: Int] = [:]
-    private var excluded: Set<UUID> = []
-    private var files = CommunityPhotoFiles.unasked
+    /// The exclusions and the disk's answer the choices were last asked
+    /// with, held the same way: the disk is asked again whenever the list's
+    /// ids change, and an answer naming the same files is a new set. Read by
+    /// a suite, as `photos` is.
+    private(set) var excluded: Set<UUID> = []
+    private(set) var files = CommunityPhotoFiles.unasked
     private var kept: CommunitySharePhotoChoices?
     /// How many times the positions and the choices have been worked out,
     /// for a suite to tell a rebuild from a read.
