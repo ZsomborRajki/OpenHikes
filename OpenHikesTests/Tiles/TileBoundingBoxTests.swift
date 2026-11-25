@@ -37,8 +37,8 @@ struct TileBoundingBoxTests {
     /// column at every deeper zoom: an ordinary walk, a walk across ±180°
     /// that ends on column 1 (-179.6484375), and a walk across Greenwich
     /// that ends on column 513 (0.3515625). Each lost the column it ends in
-    /// at zoom 10 and at every deeper one while the span was 360 less the
-    /// widest gap.
+    /// at zoom 10 and at every deeper one once the start was exact and the
+    /// span still 360 less the widest gap.
     @Test("both ends of a route are in its box at every zoom", arguments: [
         [-73.8390275, -73.828125],
         [179.6, -179.6484375],
