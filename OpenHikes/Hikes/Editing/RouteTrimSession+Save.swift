@@ -26,6 +26,12 @@ extension RouteTrimSession {
         /// The hike's line as its screens hold it, or no line while a newer
         /// one is still being read — see ``ShownLine/isSettled``.
         let settledLine: () -> [RouteCoordinate]
+        /// Waits until ``settledLine`` answers for every save of the hike's
+        /// row this device has heard of: until then the hike can hold a line
+        /// another context saved while the line its screens hold still reads
+        /// as settled — see ``ShownLine/settle()``. Nothing to wait for by
+        /// default, as for a suite that hands in a line of its own.
+        var settle: () async -> Void = { /* nothing being brought in */ }
         /// The seam the commit goes through, as in ``RouteEditSave``.
         var save: (ModelContext) throws -> Void = { try $0.save() }
     }
@@ -43,6 +49,9 @@ extension RouteTrimSession {
         // After the line has caught up with the last answer given — see
         // ``editedLine()``.
         guard let edited = await editedLine(), let sources else { return false }
+        // And once any line another device saved is in — see
+        // ``Destination/settle``.
+        await destination.settle()
         guard destination.settledLine() == sources.current else {
             refusal = .lineChanged
             return false
@@ -86,16 +95,22 @@ extension RouteTrimSession {
     /// holds both: an edit from the other device can land while this screen
     /// is up and before it has reloaded, and its checks are ones nobody here
     /// has seen. They stay owed, and the screen loads them.
-    @discardableResult func confirmChecks(in destination: Destination) async -> Bool {
+    ///
+    /// - Parameter shown: the ``sourcesRevision`` the button was drawn over.
+    ///   Taken there rather than here, because a reload already queued when
+    ///   the hiker tapped lands before this runs, and its checks would be
+    ///   the ones looked at. The record is held to by its bytes — see
+    ///   ``RouteEditSources/recordData``.
+    @discardableResult func confirmChecks(in destination: Destination, tappedOn shown: Int) async -> Bool {
         guard !isSaving else { return false }
         isSaving = true
         defer { isSaving = false }
-        let reviewed = sources
         await settled()
+        await destination.settle()
         guard let sources, !hasChanges else { return false }
-        guard sources == reviewed,
+        guard sourcesRevision == shown,
               destination.settledLine() == sources.current,
-              destination.hike.routeEdit == sources.edit
+              let record = sources.recordData, destination.hike.routeEditData == record
         else {
             refusal = .lineChanged
             return false
@@ -104,7 +119,13 @@ extension RouteTrimSession {
         else { return false }
         // The hike's line has not moved, so nothing reloads this visit: it
         // takes the looks itself, on what it works from and on what it shows.
-        let looked = RouteEditSources(current: sources.current, saved: sources.saved, raw: sources.raw, edit: edit)
+        let looked = RouteEditSources(
+            current: sources.current,
+            saved: sources.saved,
+            raw: sources.raw,
+            edit: edit,
+            recordData: destination.hike.routeEditData
+        )
         adopt(looked)
         return true
     }
@@ -140,6 +161,21 @@ extension RouteTrimSession {
             with: route,
             distanceMeters: distance,
             through: health
+        )
+    }
+}
+
+extension RouteTrimSession.Destination {
+    /// Where *Edit Route* writes: `hike`, whose line its screens hold as
+    /// `line`. A line still being read, or one another context saved that is
+    /// still being brought in, is no line to write against.
+    init(hike: Hike, context: ModelContext, health: RouteEditWorkout.Health?, line: ShownLine) {
+        self.init(
+            hike: hike,
+            context: context,
+            health: health,
+            settledLine: { [line] in line.isSettled ? line.current?.route ?? [] : [] },
+            settle: { [line] in await line.settle() }
         )
     }
 }

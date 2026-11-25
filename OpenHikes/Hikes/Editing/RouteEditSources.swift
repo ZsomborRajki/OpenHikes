@@ -44,6 +44,13 @@ nonisolated struct RouteEditSources: Equatable, Sendable {
     let raw: [RouteCoordinate]
     /// What the hike remembers of its edits and its stretches to check.
     let edit: RouteEdit?
+    /// ``Hike/routeEditData`` as ``edit`` was read from it, or `nil` where
+    /// `edit` is not the hike's record as stored: a hike with none, or one
+    /// whose record no longer describes its line, opened
+    /// ``RouteEdit/rebased``. What *Looks Good* holds the hike to: the bytes,
+    /// because a record holding a figure that is not a number, which
+    /// ``RouteEdit/encoder()`` keeps, is never equal to itself decoded.
+    let recordData: Data?
     /// Whether the hike was edited and the line it was edited from is not
     /// on this device: iCloud has brought the hike and not yet its original.
     /// Nothing can be edited until it has, because the hike's trim and its
@@ -61,11 +68,18 @@ nonisolated struct RouteEditSources: Equatable, Sendable {
         self.init(current: current, saved: current, raw: [], edit: nil)
     }
 
-    init(current: [RouteCoordinate], saved: [RouteCoordinate], raw: [RouteCoordinate], edit: RouteEdit?) {
+    init(
+        current: [RouteCoordinate],
+        saved: [RouteCoordinate],
+        raw: [RouteCoordinate],
+        edit: RouteEdit?,
+        recordData: Data? = nil
+    ) {
         self.current = current
         self.saved = saved
         self.raw = raw
         self.edit = edit
+        self.recordData = recordData
     }
 
     /// The whole line the editor opens on — see the file header — with where
@@ -104,9 +118,12 @@ nonisolated struct RouteEditSources: Equatable, Sendable {
         drawn current: [RouteCoordinate],
         in container: ModelContainer
     ) async -> Self {
+        // Taken with the record, before anything is awaited, so the two are
+        // one save's.
+        let data = hike.routeEditData
         guard let record = hike.routeEdit else {
             var sources = Self(current: current)
-            sources.isUnreadable = hike.routeEditData != nil
+            sources.isUnreadable = data != nil
             return sources
         }
         guard await describes(current, record) else {
@@ -115,7 +132,7 @@ nonisolated struct RouteEditSources: Equatable, Sendable {
         // Nothing stored to read, but still a record: a drive off the end is
         // a look the hike owes without an edit or a stretch to check.
         guard record.original != nil || record.assembly != nil else {
-            return Self(current: current, saved: current, raw: [], edit: record)
+            return Self(current: current, saved: current, raw: [], edit: record, recordData: data)
         }
         let stored = await storedLines(of: hike.persistentModelID, in: container)
         // A hike never edited has no original: the line it has is the one it
@@ -126,7 +143,8 @@ nonisolated struct RouteEditSources: Equatable, Sendable {
             current: current,
             saved: isEdited && hasOriginal ? stored.original : current,
             raw: stored.raw,
-            edit: record
+            edit: record,
+            recordData: data
         )
         sources.isMissingOriginal = isEdited && !hasOriginal
         return sources
