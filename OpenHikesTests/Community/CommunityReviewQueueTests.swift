@@ -32,8 +32,9 @@ struct CommunityReviewQueueTests {
     )
 
     /// Waits on the effect rather than a duration, the way the browser suites
-    /// do.
-    private func settle(_ queue: CommunityReviewQueue) async {
+    /// do. Not private, because `CommunityReviewQueueTests+Retry.swift` waits
+    /// the same way.
+    func settle(_ queue: CommunityReviewQueue) async {
         while queue.isLoading {
             await Task.yield()
         }
