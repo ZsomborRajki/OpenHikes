@@ -31,11 +31,14 @@
 //  on their next selection of the tab — see ``forget(_:)`` — because acting is
 //  the thing that changes the answer, and it is the only thing that does.
 //
-//  An *answer* is rows, or the server's refusal. A read that failed for want
-//  of a connection or a service that was busy answered nothing, so a later
-//  selection of the tab asks again, no sooner than ``retryDelay`` after it:
-//  a reviewer who opened the tab in a valley otherwise had no queue for the
-//  rest of the launch.
+//  An *answer* is rows, the server's refusal, or a device with no account the
+//  server could place in the role, which asking again would only repeat: a
+//  signed-out hiker's launch spends its one request like everybody else's.
+//  A read that failed otherwise, for want of a connection or a service that
+//  was busy, answered nothing, so a later selection of the tab asks again, no
+//  sooner than ``retryDelay`` after it: a reviewer who opened the tab in a
+//  valley otherwise had no queue for the rest of the launch. A read abandoned
+//  by leaving the tab answers nothing either way, and holds nothing back.
 //
 //  That budget is why the rows outlive the tab — see ``stopBrowsing()``. A
 //  list held for one request a launch and thrown away on every tap between
@@ -143,7 +146,8 @@ final class CommunityReviewQueue {
     /// set ``isLoading``. Without this it would clear the flag out from under
     /// the request in flight, and the guard that keeps two requests from
     /// overlapping would stop holding — for the reader who wonders why the
-    /// cancel above is not enough on its own.
+    /// cancel above is not enough on its own. Leaving the tab moves it on for
+    /// the same reason: see ``stopBrowsing()``.
     @ObservationIgnored private var loadGeneration = 0
     /// Whether this launch has asked, and not been left without an answer.
     /// See the header for why the answer is not asked for again on every tab
@@ -179,8 +183,9 @@ final class CommunityReviewQueue {
 
     /// Asks again, whatever has been asked before.
     ///
-    /// What ``startBrowsing()`` runs once a launch, and what it runs again
-    /// after a decision has spent that answer — see ``forget(_:)``.
+    /// What ``startBrowsing()`` runs until the launch has an answer, and what
+    /// it runs again after a decision has spent that answer — see
+    /// ``forget(_:)``.
     func refresh() {
         guard let transport else { return }
         guard !isLoading else { return }
@@ -204,6 +209,14 @@ final class CommunityReviewQueue {
                     self.retryNotBefore = nil
                     self.isLoading = false
                 }
+                return
+            } catch CommunityFailure.notSignedIn {
+                // No account the server could place in the role, which the
+                // next selection would only be told again: settled as a
+                // refusal is, so a signed-out hiker's launch spends one
+                // request. ``isReviewer`` is left alone, since this is no
+                // word from the server about the role.
+                self?.answeredSignedOut(generation: generation)
                 return
             } catch {
                 // A real failure — no network, a busy service — and still
@@ -251,6 +264,14 @@ final class CommunityReviewQueue {
         isLoading = false
     }
 
+    /// A read refused for want of an account: the launch's answer, as a
+    /// refusal is, though not one about the role.
+    private func answeredSignedOut(generation: Int) {
+        guard generation == loadGeneration else { return }
+        retryNotBefore = nil
+        isLoading = false
+    }
+
     /// The tab was left. Abandons a request still in flight; keeps the rows.
     ///
     /// The rows stay, and this is the one place this type deliberately parts
@@ -276,8 +297,14 @@ final class CommunityReviewQueue {
         // A request cancelled on the way out never answered, so the launch has
         // not in fact asked yet — otherwise leaving the tab during the one
         // request of the launch would lose it, which is the same disappearance
-        // in a narrower window.
-        if isLoading { hasAsked = false }
+        // in a narrower window. Nor may anything it brings back count: a
+        // cancelled read usually comes back as a failure, and taken for one
+        // it would hold the next selection behind ``retryDelay`` for a read
+        // nobody waited for.
+        if isLoading {
+            hasAsked = false
+            loadGeneration += 1
+        }
         isLoading = false
     }
 

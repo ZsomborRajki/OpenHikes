@@ -76,8 +76,8 @@ extension MapSheetHikes {
                     // The same opt-in covers both lists, because it is the
                     // same tap: selecting *Community* is what the repository's
                     // rule about reaching the network is about, and the queue
-                    // asks at most once a launch behind it. See
-                    // ``CommunityReviewQueue``.
+                    // asks once a launch behind it, again only after a read
+                    // that answered nothing. See ``CommunityReviewQueue``.
                     review.startBrowsing()
                     // And the first-run tip about this tab has made its point.
                     tips?.used(CommunityTabTip())
