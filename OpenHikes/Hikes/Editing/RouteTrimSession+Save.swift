@@ -73,11 +73,19 @@ extension RouteTrimSession {
         return land(outcome, in: destination)
     }
 
-    /// Puts the hike's original line back.
-    @discardableResult func revert(in destination: Destination) -> Bool {
+    /// Puts the hike's original line back over the line the screen showed,
+    /// once any line another device saved is in — see
+    /// ``Destination/settle``. One that came meanwhile is not the line the
+    /// hiker asked to put the original back over, and is refused as Save
+    /// refuses it, rather than reverted or found to have no original here.
+    @discardableResult func revert(in destination: Destination) async -> Bool {
         guard !isSaving else { return false }
+        isSaving = true
+        defer { isSaving = false }
+        let shown = destination.settledLine()
+        await destination.settle()
         let base = destination.settledLine()
-        guard base.count > 1 else {
+        guard base.count > 1, base == shown else {
             refusal = .lineChanged
             return false
         }
