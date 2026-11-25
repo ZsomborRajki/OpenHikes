@@ -99,9 +99,9 @@ struct CircularSpanTests {
     /// period less the widest gap, whose sum with the period rounds away the
     /// ends' low bits: each pair here came back an ulp short of its last
     /// position that way. The first is a walk whose east end lies on the
-    /// west edge of a zoom 10 tile column, which an offline download then
-    /// left out; the second is the same across ±180°, its end given back a
-    /// turn on (-179.6484375 + 360); the third is unit x.
+    /// west edge of a zoom 10 tile column, which a download planned from
+    /// that arc left out; the second is the same across ±180°, its end
+    /// given back a turn on (-179.6484375 + 360); the third is unit x.
     @Test("the arc ends on its last position given, unrounded", arguments: [
         ([-73.8390275, -73.828125], 360.0, -73.828125),
         ([179.6, -179.6484375], 360.0, 180.3515625),
