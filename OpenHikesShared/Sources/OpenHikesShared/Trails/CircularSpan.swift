@@ -37,6 +37,17 @@ public struct CircularSpan: Equatable, Sendable {
     public let start: Double
     /// How far the arc runs from ``start``, in `0..<period`. Zero for one
     /// position, or for one position repeated.
+    ///
+    /// Measured between the arc's own two ends, both positions given, rather
+    /// than as `period` less the widest gap. The gap through the wrap is a
+    /// sum with `period`, which rounds away the low bits of both ends, and
+    /// its complement left `start + length` an ulp short of the last
+    /// position. Measured end to end, `start + length` gives the last
+    /// position back (past `period` when the arc runs through the wrap)
+    /// wherever the difference is exact, as it is between two ends of one
+    /// sign within a factor of two of each other. A box rebuilds its east
+    /// edge that way, so a route whose east end lies on a tile column's west
+    /// edge keeps that column.
     public let length: Double
 
     /// `nil` for no positions, which have no arc to speak of.
@@ -52,11 +63,14 @@ public struct CircularSpan: Equatable, Sendable {
 
         var widestGap = first + period - last
         var arcStart = first
+        var arcEnd = last
         for (west, east) in zip(sorted, sorted.dropFirst()) where east - west > widestGap {
             widestGap = east - west
             arcStart = east
+            arcEnd = west
         }
         start = arcStart
-        length = period - widestGap
+        // The gap is only compared, never subtracted: see `length`.
+        length = arcEnd >= arcStart ? arcEnd - arcStart : arcEnd + period - arcStart
     }
 }

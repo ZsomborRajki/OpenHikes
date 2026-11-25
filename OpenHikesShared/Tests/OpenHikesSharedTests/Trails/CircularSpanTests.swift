@@ -94,4 +94,22 @@ struct CircularSpanTests {
         let throughEast = try #require(CircularSpan(enclosing: [east, -170.1, -160.2], period: 360))
         #expect(throughEast.start == east)
     }
+
+    /// The length is measured between the arc's two ends, never as the
+    /// period less the widest gap, whose sum with the period rounds away the
+    /// ends' low bits: each pair here came back an ulp short of its last
+    /// position that way. The first is a walk whose east end lies on the
+    /// west edge of a zoom 10 tile column, which an offline download then
+    /// left out; the second is the same across ±180°, its end given back a
+    /// turn on (-179.6484375 + 360); the third is unit x.
+    @Test("the arc ends on its last position given, unrounded", arguments: [
+        ([-73.8390275, -73.828125], 360.0, -73.828125),
+        ([179.6, -179.6484375], 360.0, 180.3515625),
+        ([0.1, 0.3], 1.0, 0.3),
+    ])
+    func endIsAPositionGiven(positions: [Double], period: Double, end: Double) throws {
+        let arc = try #require(CircularSpan(enclosing: positions, period: period))
+
+        #expect(arc.start + arc.length == end)
+    }
 }
