@@ -265,20 +265,25 @@ final class HikeIntentCoordinatorTests {
     /// defer to: `recorder.start()` is the call that asks Core Location, and
     /// refusing a second time would be a control that can never start a hike.
     ///
-    /// The prompt itself is what is asserted rather than a started session:
-    /// the stub answers `.notDetermined` and never changes its mind, which is
-    /// the same shape a real hiker who has not tapped Allow yet presents.
-    @Test("a foregrounded control action asks rather than deferring again")
+    /// The prompt is put up, and the toggle reports only once the hiker has
+    /// answered it — here with Allow, as the stub's callback delivers it.
+    @Test("a foregrounded control action asks rather than deferring again", .timeLimit(.minutes(1)))
     func controlStartsOnceForegrounded() async throws {
         source.authorization = .notDetermined
         let coordinator = makeCoordinator()
 
-        let outcome = try await coordinator.toggleHikeRecording(
-            canPromptForLocation: true
-        )
+        let toggling = Task {
+            try await coordinator.toggleHikeRecording(canPromptForLocation: true)
+        }
+        await settleDelegateHop(until: "the control's start to put up the prompt") {
+            self.source.authorizationRequests == 1
+        }
+        source.authorization = .authorized
+        recorder?.locationManagerDidChangeAuthorization(CLLocationManager())
 
-        #expect(outcome == .completed)
+        #expect(try await toggling.value == .completed)
         #expect(source.authorizationRequests == 1)
+        #expect(recorder?.sessionID != nil)
     }
 
     /// A Control Center tap is the likeliest of all to launch this process

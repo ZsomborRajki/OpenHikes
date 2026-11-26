@@ -152,7 +152,10 @@ final class WatchRecordingMirror {
             switch command.action {
             case .pause: _ = try await coordinator.pauseRecording()
             case .resume: _ = try await coordinator.resumeRecording()
-            case .start: _ = try await coordinator.startRecording()
+            // The prompt a start would meet is the phone's, and a phone in a
+            // pocket cannot show it — see
+            // ``HikeIntentCoordinator/startRecording(canPromptForLocation:)``.
+            case .start: _ = try await coordinator.startRecording(canPromptForLocation: false)
             case .stop: _ = try await coordinator.stopRecording()
             }
         } catch {

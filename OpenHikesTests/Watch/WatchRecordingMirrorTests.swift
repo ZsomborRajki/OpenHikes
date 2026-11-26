@@ -152,20 +152,28 @@ final class WatchRecordingMirrorTests {
     /// clock run. The reading once it has one shows the same, and is sent
     /// because the watch's clock should count from when the recording began,
     /// not from the tick that read the wait.
-    @Test("a reading from before the recording had its session is sent again once it has one")
+    ///
+    /// Started in a task, because the coordinator reports a start only once
+    /// the prompt it put up is answered (#1655); held for the answer, it
+    /// would wait on a prompt this test answers only afterwards.
+    @Test(
+        "a reading from before the recording had its session is sent again once it has one",
+        .timeLimit(.minutes(1))
+    )
     func aReadingFromBeforeTheSessionIsSentAgain() async throws {
         source.authorization = .notDetermined
         let published = Published()
         let coordinator = makeCoordinator()
         let mirror = makeMirror(publishing: published, coordinator: coordinator)
         let hikeRecorder = try #require(recorder)
-        _ = try await coordinator.startRecording()
+        let starting = Task { try await coordinator.startRecording() }
+        await settleDelegateHop(until: "the start to put up the prompt") { self.source.authorizationRequests == 1 }
         await mirror.publishCurrentState()
         #expect(hikeRecorder.sessionID == nil, "precondition: the Start is waiting for permission")
 
         source.authorization = .authorized
         hikeRecorder.locationManagerDidChangeAuthorization(CLLocationManager())
-        await settleDelegateHop(until: "the permission to make the session") { hikeRecorder.sessionID != nil }
+        _ = try await starting.value
         await mirror.publishCurrentState()
         await mirror.publishCurrentState()
 
