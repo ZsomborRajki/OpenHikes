@@ -17,6 +17,7 @@
 //  `hike.route`, `hike.tint` and builds a `RouteProfile` from them.
 //
 
+import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
@@ -28,8 +29,10 @@ import Testing
 struct HikeDeletionTests {
     /// What a deleted `Hike` still answers. SwiftData doesn't invalidate the
     /// object — it detaches it — so reads keep working against the last known
-    /// values rather than trapping. That's the good news, and it's why the gap
-    /// below is a stale screen rather than a crash.
+    /// values rather than trapping: every plain column, and a decoded one
+    /// read since the hike was last saved, as this hike's line was set and
+    /// never saved. A decoded column the save forgot traps instead — see
+    /// `deletionKeepsWhatItsScreenReads` below.
     @Test("a deleted hike is detached, not invalidated")
     func deletedHikeStillReadsBack() throws {
         let context = try Fixture.modelContext()
@@ -45,6 +48,34 @@ struct HikeDeletionTests {
 
         let remaining = try context.fetch(FetchDescriptor<Hike>())
         #expect(remaining.isEmpty, "and it really is gone from the store")
+    }
+
+    /// The crash in 1.7.1 (3): *Delete Hike* at the foot of a hike's own
+    /// screen, with a change of the hike's not yet saved — such as the
+    /// surface and difficulty a newly imported hike's screen fetches and
+    /// writes when it opens. The deletion saved that change first, which
+    /// forgot the photographs it had just read. The screen, drawn once more
+    /// as the pop took it away, built its Share payload from the detached
+    /// hike, and reading `photos` trapped. See
+    /// ``Hike/resolveDecodedColumns()``.
+    @Test("a hike deleted with a change of its own unsaved still answers what its screen reads")
+    func deletionKeepsWhatItsScreenReads() throws {
+        let sandbox = HikePhotoImportTests.Sandbox()
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context) { hike in
+            hike.photos = [HikePhoto(coordinate: CLLocationCoordinate2D(latitude: 47.5, longitude: 11))]
+        }
+        try context.save()
+        hike.surfaceMetersByCategory = ["paved": 400]
+
+        try HikeDeletion.delete([hike], store: sandbox.store)
+
+        #expect(hike.modelContext == nil, "the save detached it")
+        let payload = GPXExport.Track(hike: hike, route: Fixture.ridgeRoute, places: [])
+        #expect(payload.photographs.count == 1, "the Share tile's payload, built as the pop draws the screen")
+        #expect(hike.orderedPhotos.count == 1, "the gallery")
+        #expect(hike.surfaceMetersByCategory == ["paved": 400], "the surface section")
+        #expect(hike.difficultyMetersByGrade.isEmpty, "the difficulty section")
     }
 
     /// The screen this prevents. A hike left in the navigation stack after

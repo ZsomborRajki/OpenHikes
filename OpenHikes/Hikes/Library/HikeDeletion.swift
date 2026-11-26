@@ -226,6 +226,11 @@ nonisolated enum HikeDeletion {
             hike.deleteLocalState()
             guard let hikeContext = hike.modelContext else { continue }
             rows.append(ChildRows(deleting: hike, in: hikeContext))
+            // After the save above, which forgets what was read of a hike it
+            // saved changes of, so a screen still showing the hike can draw
+            // it once more after the deletion — see
+            // ``Hike/resolveDecodedColumns()``.
+            hike.resolveDecodedColumns()
             hikeContext.delete(hike)
         }
         if let context {

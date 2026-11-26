@@ -657,6 +657,31 @@ public extension Hike {
     /// it. `HikeAttachmentTests` pins the behaviour this reads.
     var isAttached: Bool { !isDeleted && modelContext != nil }
 
+    /// Reads the columns SwiftData decodes on first read, other than the
+    /// lines, so that a hike about to be deleted still answers them once the
+    /// save has detached it: its photographs and its two trail breakdowns.
+    ///
+    /// A detached hike answers its plain columns, but a decoded one read off
+    /// it traps ("detached from a context without resolving attribute
+    /// faults") unless it was read since the hike's last save. A save of the
+    /// hike's own changes forgets what was read, so this is asked for after
+    /// any such save and just before the delete. It matters because a
+    /// hike's screen is drawn once more as the pop takes it away, after the
+    /// deletion has been saved: deleting a hike from its own screen, with a
+    /// change not yet saved, crashed in the Share payload's read of
+    /// ``photos`` (1.7.1).
+    ///
+    /// The lines are left out. Decoding one on the main actor is the cost the
+    /// app's screens avoid by reading the line off it, and a reader of a
+    /// deleted hike's line asks ``isAttached`` first, as
+    /// ``orderedPlaces`` does. `HikeDecodedColumnTests` holds this list to
+    /// the schema, so a new decoded column has to be added here or be a line.
+    func resolveDecodedColumns() {
+        _ = photos
+        _ = surfaceMetersByCategory
+        _ = difficultyMetersByGrade
+    }
+
     /// The persisted flag covers normal recording and recovery. The recorder's
     /// current ID bridges the short window after the finished route is saved
     /// but before shared-state and journal cleanup release ownership.

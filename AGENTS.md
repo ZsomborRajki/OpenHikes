@@ -673,6 +673,12 @@ is promoted, and stamps the version at build time: the tags, not
     deployment (*Schema and migration policy*).
   - The rows join on `hikeID`, so deleting a hike calls
     `hike.deleteLocalState()`, after the tile-deletion plan is built.
+  - **A hike's screen is drawn once more after its deletion is saved**, by
+    the pop. A column SwiftData decodes traps when read off the detached row
+    unless it was read since the hike's last save, so `HikeDeletion` reads
+    them just before the delete (`Hike.resolveDecodedColumns()`, which
+    `HikeDecodedColumnTests` holds to the schema). The lines are left out,
+    and a reader of a deleted hike's line asks `isAttached` first.
 - **A route is written only through `Hike.replaceRoute(with:)`**, which keeps
   `Hike.durationSeconds` describing it. That column is the synced clock Siri,
   Spotlight and the widget's catalogue read instead of decoding every route at
