@@ -169,23 +169,43 @@ struct TileRetryAfterTests {
         #expect(advice.count == 1)
     }
 
-    /// The table answers a key at once and the heap orders the deadlines; a
-    /// deadline pushed out leaves its old entry in the heap, and that must
-    /// neither grow without end nor forget the key it no longer speaks for.
-    @Test("repeated extensions of one deadline keep the index bounded")
-    func extensionsKeepTheIndexBounded() {
+    /// The table answers a key at once and the sorted index orders the
+    /// deadlines; a deadline pushed out must move its key's entry, or the
+    /// index would grow with every extension.
+    @Test("repeated extensions of one deadline keep the index to the table")
+    func extensionsKeepTheIndexToTheTable() {
         var advice = TileRetryAdvice()
         for second in 1...5000 {
             advice.record(key, notBefore: start.advanced(by: .seconds(second)), at: start)
         }
 
         #expect(advice.count == 1)
-        #expect(advice.indexedCount <= 2 * TileRetryAdvice.maximumTrackedKeys + 1)
+        #expect(advice.indexedCount == 1)
         #expect(advice.deadline(for: key, at: start) == start.advanced(by: .seconds(5000)))
     }
 
-    @Test("the deadline a key was pushed out from does not expire it, or evict it")
-    func aStaleEntryNeitherExpiresNorEvictsItsKey() {
+    /// The prune reads the index, so an entry the key was pushed out from,
+    /// left behind there, would take the key with it when it came due. Other
+    /// deadlines stand beside it, so the one due is few enough to be taken
+    /// out of the table on its own rather than by building the table again.
+    @Test("the deadline a key was pushed out from does not expire it")
+    func aReplacedDeadlineDoesNotExpireItsKey() {
+        var advice = TileRetryAdvice()
+        advice.record(key, notBefore: start.advanced(by: .seconds(10)), at: start)
+        advice.record(key, notBefore: start.advanced(by: .seconds(600)), at: start)
+        for index in 0..<4 {
+            advice.record("standing/\(index)", notBefore: start.advanced(by: .seconds(500)), at: start)
+        }
+
+        advice.record("another", notBefore: start.advanced(by: .seconds(400)), at: start.advanced(by: .seconds(20)))
+
+        #expect(advice.count == 6)
+        #expect(advice.indexedCount == 6)
+        #expect(advice.deadline(for: key, at: start.advanced(by: .seconds(20))) == start.advanced(by: .seconds(600)))
+    }
+
+    @Test("the deadline a key was pushed out from does not evict it")
+    func aReplacedDeadlineDoesNotEvictItsKey() {
         var advice = TileRetryAdvice()
         advice.record(key, notBefore: start.advanced(by: .seconds(10)), at: start)
         advice.record(key, notBefore: start.advanced(by: .seconds(600)), at: start)
@@ -194,9 +214,39 @@ struct TileRetryAfterTests {
         }
 
         #expect(advice.count == TileRetryAdvice.maximumTrackedKeys)
-        #expect(advice.deadline(for: key, at: start) != nil, "the latest refusal is the last to go")
-        advice.record("one more", notBefore: start.advanced(by: .seconds(400)), at: start.advanced(by: .seconds(20)))
-        #expect(advice.deadline(for: key, at: start.advanced(by: .seconds(20))) == start.advanced(by: .seconds(600)))
+        #expect(advice.indexedCount == TileRetryAdvice.maximumTrackedKeys)
+        #expect(
+            advice.deadline(for: key, at: start) == start.advanced(by: .seconds(600)),
+            "the latest refusal is the last to go"
+        )
+        #expect(advice.deadline(for: "osm/14/0/6357@2.0", at: start) == nil, "the soonest went instead")
+    }
+
+    /// A prune takes the keys that came due out of the table one by one when
+    /// they are few, and builds the table again from those still standing
+    /// when they are most of it. Both ways must leave the same table, with a
+    /// key pushed out past the batch it was first refused with still in it.
+    @Test("a prune keeps exactly the deadlines still standing", arguments: [(10, 30), (100, 10)])
+    func pruneKeepsWhatStillStands(dueCount: Int, standingCount: Int) {
+        var advice = TileRetryAdvice()
+        let due = (0..<dueCount).map { "due/\($0)" }
+        let standing = (0..<standingCount).map { "standing/\($0)" }
+        advice.record(standing[0], notBefore: start.advanced(by: .seconds(60)), at: start)
+        for tile in due {
+            advice.record(tile, notBefore: start.advanced(by: .seconds(60)), at: start)
+        }
+        for tile in standing {
+            advice.record(tile, notBefore: start.advanced(by: .seconds(600)), at: start)
+        }
+
+        let later = start.advanced(by: .seconds(120))
+        advice.record("fresh", notBefore: start.advanced(by: .seconds(700)), at: later)
+
+        #expect(advice.count == standingCount + 1)
+        #expect(advice.indexedCount == advice.count)
+        #expect(due.allSatisfy { advice.deadline(for: $0, at: start) == nil })
+        #expect(standing.allSatisfy { advice.deadline(for: $0, at: later) == start.advanced(by: .seconds(600)) })
+        #expect(advice.deadline(for: "fresh", at: later) == start.advanced(by: .seconds(700)))
     }
 
     /// Entries refused in the same instant go in the order of their keys,
