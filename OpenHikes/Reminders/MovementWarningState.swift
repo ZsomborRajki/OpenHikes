@@ -15,12 +15,15 @@
 //
 //  Taking a proposal commits its watch before the notifier suspends again.
 //  Overlapping attempts find no proposal left, so they cannot post twice.
-//  A banner the notification centre then refuses reached nobody, so its
-//  commitment is taken back while the condition it was about lasts, and the
-//  next observation that qualifies proposes and posts it again (#1682). One
-//  that lands after the condition ended or was replaced touches nothing: a
-//  rejoin, the walk's end or moving again has re-armed the watch already, and
-//  a newer departure is not this banner's to un-say.
+//  A banner the notification centre then refuses reached nobody, so while the
+//  condition it was about lasts, its commitment is taken back and it is
+//  pending again under the same proposal (#1682), as a refused permission
+//  leaves it: the next observation that qualifies posts it, and so does the
+//  way back into the app, even from the band that holds a departure without
+//  maturing one. A refusal that lands after the condition ended or was
+//  replaced touches nothing: a rejoin, the walk's end or moving again has
+//  re-armed the watch already, and a newer departure is not this banner's to
+//  un-say.
 //
 //  Leaving the trail is also asked about in the app, and that needs nobody's
 //  permission. So a second watch counts the same departures for it, shown
@@ -45,6 +48,18 @@ struct MovementWarningState {
         let expiresAt: Date?
     }
 
+    /// A proposal taken for a banner, kept while its condition lasts — see
+    /// ``retract(_:id:)``.
+    private struct SpentWarning {
+        let proposal: PendingWarning
+        /// Whether a refusal makes it pending again. Whatever cancels a
+        /// proposal waiting for permission cancels this one too (a pause,
+        /// the switch, an estimate back before dusk): a refusal after that
+        /// leaves the watch unsaid and nothing pending, as the cancel leaves
+        /// a proposal nobody took.
+        var isProposed = true
+    }
+
     private var offTrail = OffTrailWatch()
     /// The departures ``offTrail`` counts, as the app's own question counts
     /// them — see this file's header.
@@ -54,7 +69,7 @@ struct MovementWarningState {
     private var pendingWarnings: [MovementReminderKind: PendingWarning] = [:]
     /// The proposal each watch was last committed for, for as long as the
     /// condition it was said about lasts — see ``retract(_:id:)``.
-    private var spent: [MovementReminderKind: UUID] = [:]
+    private var spent: [MovementReminderKind: SpentWarning] = [:]
 
     var isOffTrail: Bool { offTrail.isOffTrail }
 
@@ -131,6 +146,9 @@ struct MovementWarningState {
         guard reported.observed(finishAt: finishAt, civilDusk: civilDusk, now: date),
               let civilDusk else {
             pendingWarnings[.afterDark] = nil
+            if !DuskWatch.endsAfterDusk(finishAt: finishAt, civilDusk: civilDusk, now: date) {
+                spent[.afterDark]?.isProposed = false
+            }
             return false
         }
         prepare(
@@ -152,25 +170,32 @@ struct MovementWarningState {
         case let .dusk(reported): dusk = reported
         case let .stillness(reported): stillness = reported
         }
-        spent[kind] = id
+        spent[kind] = SpentWarning(proposal: warning)
         return warning.reminder
     }
 
     /// Takes back what ``take(_:id:at:)`` committed for proposal `id`, for a
     /// banner the notification centre refused: the watch reads as unsaid
-    /// again, and the next observation that qualifies proposes it anew.
+    /// again, and the proposal is pending again under its own identity, so
+    /// the next observation that qualifies or the next foreground check
+    /// posts it.
     ///
     /// Only while the condition it was said about lasts — see this file's
-    /// header.
+    /// header — and pending again only if nothing has cancelled it since
+    /// (``SpentWarning/isProposed``). Its watch is still the one that was
+    /// committed then: nothing but the end of that condition moves a watch
+    /// that has reported.
     mutating func retract(_ kind: MovementReminderKind, id: UUID) {
-        guard spent[kind] == id else { return }
+        guard let taken = spent[kind], taken.proposal.id == id else { return }
         spent[kind] = nil
         switch kind {
         case .leftTheTrail: offTrail.retractReport()
         case .afterDark: dusk.retractReport()
         case .pauseRecording: stillness.retractReport()
-        default: break
+        default: return
         }
+        guard taken.isProposed, pendingWarnings[kind] == nil else { return }
+        pendingWarnings[kind] = taken.proposal
     }
 
     mutating func resetRecording() {
@@ -182,6 +207,8 @@ struct MovementWarningState {
     mutating func cancelWalkWarnings() {
         pendingWarnings[.leftTheTrail] = nil
         pendingWarnings[.afterDark] = nil
+        spent[.leftTheTrail]?.isProposed = false
+        spent[.afterDark]?.isProposed = false
     }
 
     mutating func stopFollowing() {

@@ -206,6 +206,12 @@ nonisolated struct MovementWatch: Equatable, Sendable {
     /// reminder nobody has heard yet. Current rather than frozen, so a
     /// reminder held back by a refusal says how far they have come by now.
     private(set) var owedMeters: Double?
+    /// Where among the readings since the last spend the reminder owed was
+    /// last let go of: the time of the newest reading taken before
+    /// ``dropOwedReminder()`` was, or `nil` when nothing has been let go
+    /// since that spend. For ``refund(_:)``, which has to let go of it at the
+    /// same place.
+    private var droppedAfter: Date?
 
     /// Whether this pause has already said everything it is allowed to say.
     var isSpent: Bool {
@@ -274,6 +280,7 @@ nonisolated struct MovementWatch: Equatable, Sendable {
         // would let the same two hundred and fifty metres argue for the next
         // reminder as well.
         samples.removeAll()
+        droppedAfter = nil
         return owed
     }
 
@@ -285,6 +292,7 @@ nonisolated struct MovementWatch: Equatable, Sendable {
     /// and the next reading the watch is shown decides afresh.
     mutating func dropOwedReminder() {
         owedMeters = nil
+        droppedAfter = lastObservedAt ?? .distantPast
     }
 
     /// What one ``spend(at:)`` took from the watch, for ``refund(_:)``.
@@ -315,15 +323,21 @@ nonisolated struct MovementWatch: Equatable, Sendable {
     /// spend emptied the window, so the window now holds exactly those. A
     /// hiker who walked back while the post was out is therefore owed
     /// nothing, and one who walked on is owed the ground they have reached.
+    /// A ``dropOwedReminder()`` since the spend is made again where it fell
+    /// among them, because the reading it stood for was never shown to the
+    /// watch: what the refund restores was worked out without it too.
     ///
     /// Nothing at all once a later reminder has gone out, which this one no
     /// longer stands before.
     mutating func refund(_ spending: Spending) {
         guard remindersSent == spending.remindersSent else { return }
         var restored = spending.before
-        for sample in samples {
+        let dropAt = droppedAfter.map { mark in samples.firstIndex { $0.at > mark } ?? samples.endIndex }
+        for (index, sample) in samples.enumerated() {
+            if index == dropAt { restored.dropOwedReminder() }
             _ = restored.observe(awayMeters: sample.awayMeters, at: sample.at)
         }
+        if dropAt == samples.endIndex { restored.dropOwedReminder() }
         self = restored
     }
 }

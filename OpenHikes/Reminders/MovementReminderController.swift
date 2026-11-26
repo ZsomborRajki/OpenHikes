@@ -132,6 +132,12 @@ final class MovementReminderController {
     /// Eligibility and delivery are separate: permission can be refused, or
     /// arrive after the condition has changed. See ``MovementWarningState``.
     private var warnings = MovementWarningState()
+    /// The warning and the Resume reminder whose banners are with the
+    /// notification centre, spent and not yet answered. A refusal makes
+    /// either owed again after the way back into the app has looked, so that
+    /// looks at these too — see ``reconcileWithAuthorization(prompting:)``.
+    private var postingWarning: (kind: MovementReminderKind, id: UUID)?
+    private var postingResume: ResumeAttempt?
 
     /// What to do when a pause stops being watched for a reason the recorder
     /// has not heard about — today, the hiker turning the switch off with a
@@ -587,6 +593,8 @@ extension MovementReminderController {
 
     private func postAuthorizedResume(_ attempt: ResumeAttempt) async {
         guard mayPostResume(attempt), let taken = takeResume(attempt.kind) else { return }
+        postingResume = attempt
+        defer { postingResume = nil }
         if await notifier.post(taken.reminder) { return }
         refund(taken.spending, to: attempt)
     }
@@ -678,6 +686,8 @@ extension MovementReminderController {
 
     private func postAuthorizedWarning(_ kind: MovementReminderKind, id: UUID) async {
         guard mayPostWarning(kind), let reminder = warnings.take(kind, id: id, at: clock()) else { return }
+        postingWarning = (kind, id)
+        defer { postingWarning = nil }
         if await notifier.post(reminder) { return }
         warnings.retract(kind, id: id)
     }
@@ -720,6 +730,10 @@ extension MovementReminderController {
     /// reminder a refusal held back gets the same retry and the same checks.
     /// It does not wait out the quiet period, which paces asking again: this
     /// is a check rather than a question, and the reminder was already owed.
+    /// A banner still on its way is included, because the queue runs this
+    /// after its answer and a refusal makes it owed again (#1682). Posting it
+    /// then checks what it is owed afresh, so one the system took, or a
+    /// repeat of one already listed, finds nothing left to send.
     ///
     /// - Parameter prompting: whether the hiker may be asked. True at a
     ///   pause, which is a question about something they are doing right now;
@@ -746,8 +760,8 @@ extension MovementReminderController {
     /// nobody refused.
     func reconcileWithAuthorization(prompting: Bool) {
         let watched = pausedRecording?.id
-        let pendingWarnings = warnings.pending
-        let heldBack = owedResumes
+        let pendingWarnings = warnings.pending + (postingWarning.map { [$0] } ?? [])
+        let heldBack = owedResumes + (postingResume.map { [$0] } ?? [])
         guard prompting || watched != nil || !pendingWarnings.isEmpty || !heldBack.isEmpty else { return }
         enqueue { [weak self] in
             guard let self else { return }
