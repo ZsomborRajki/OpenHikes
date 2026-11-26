@@ -85,15 +85,25 @@ nonisolated enum VectorTileRasterizer {
     ///   - language: the language whose names the map prefers.
     ///   - height: a summit's height in meters as the reader reads one.
     ///   - points: what the points are drawn with.
+    ///   - palette: the colors it is drawn in: Carto's own, or the dark map's.
     static func png(
         of tile: MapboxVectorTile,
         from source: VectorTileAddress,
         drawing target: VectorTileAddress,
         language: String,
         height: @escaping (Double) -> String,
-        points: VectorTilePointSet = .standard
+        points: VectorTilePointSet = .standard,
+        palette: VectorTilePalette = .carto
     ) -> Data? {
-        let image = image(of: tile, from: source, drawing: target, language: language, height: height, points: points)
+        let image = image(
+            of: tile,
+            from: source,
+            drawing: target,
+            language: language,
+            height: height,
+            points: points,
+            palette: palette
+        )
         guard let image else { return nil }
         let data = CFDataCreateMutable(nil, 0)
         guard let data,
@@ -110,7 +120,8 @@ nonisolated enum VectorTileRasterizer {
         drawing target: VectorTileAddress,
         language: String,
         height: @escaping (Double) -> String,
-        points: VectorTilePointSet = .standard
+        points: VectorTilePointSet = .standard,
+        palette: VectorTilePalette = .carto
     ) -> CGImage? {
         guard target.z >= source.z,
               let space = CGColorSpace(name: CGColorSpace.sRGB),
@@ -135,7 +146,8 @@ nonisolated enum VectorTileRasterizer {
             target: target,
             language: language,
             height: height,
-            points: points
+            points: points,
+            palette: palette
         )
         .paint()
         return context.makeImage()
@@ -153,6 +165,9 @@ nonisolated struct VectorTilePainter {
     let language: String
     let height: (Double) -> String
     let points: VectorTilePointSet
+    /// What each of the style's colors is on this picture. Every color goes
+    /// through it on its way to the context, by what it is put down as.
+    let palette: VectorTilePalette
     /// Pixels per pixel of a 256-pixel tile, the unit the style's widths are in.
     let unit = CGFloat(VectorTileRasterizer.pixelSize) / VectorTileRasterizer.styleTileSize
 
@@ -165,7 +180,7 @@ nonisolated struct VectorTilePainter {
 
     /// Everything, in the order OpenStreetMap Carto's layers draw it.
     func paint() {
-        context.setFillColor(VectorTileStyle.ocean)
+        context.setFillColor(palette.color(VectorTileStyle.ocean, as: .fill))
         context.fill(bounds)
         paintGround()
         paintCutlines()
@@ -193,7 +208,7 @@ nonisolated struct VectorTilePainter {
             fill(path, VectorTileStyle.building)
             if outlined {
                 context.addPath(path)
-                context.setStrokeColor(VectorTileStyle.buildingOutline)
+                context.setStrokeColor(palette.color(VectorTileStyle.buildingOutline, as: .line))
                 context.setLineWidth(0.5 * unit)
                 context.strokePath()
             }
@@ -218,16 +233,17 @@ nonisolated struct VectorTilePainter {
         }
         for (feature, geometry) in features(in: VectorTileRasterizer.powerPointsLayer, type: .point) {
             guard let mark = VectorTileStyle.powerPoint(kind: feature.string("kind"), z: z) else { continue }
+            let color = palette.color(mark.color, as: .line)
             for point in geometry.points(of: feature) {
                 let side = mark.side * unit
-                context.setFillColor(mark.color)
+                context.setFillColor(color)
                 context.fill(CGRect(x: point.x - side / 2, y: point.y - side / 2, width: side, height: side))
                 guard mark.eye > 0 else { continue }
                 let eye = mark.eye * unit
-                context.setFillColor(VectorTileStyle.powerPointEye)
+                context.setFillColor(palette.color(VectorTileStyle.powerPointEye, as: .line))
                 context.fillEllipse(in: CGRect(x: point.x - eye / 2, y: point.y - eye / 2, width: eye, height: eye))
                 guard mark.hasCross else { continue }
-                context.setStrokeColor(mark.color)
+                context.setStrokeColor(color)
                 context.setLineWidth(side / VectorTileStyle.powerPointCrossShare)
                 for corner in [side / 2, -side / 2] {
                     context.move(to: CGPoint(x: point.x - side / 2, y: point.y - corner))
@@ -265,7 +281,7 @@ nonisolated struct VectorTilePainter {
 
     func fill(_ path: CGPath, _ color: CGColor) {
         context.addPath(path)
-        context.setFillColor(color)
+        context.setFillColor(palette.color(color, as: .fill))
         context.fillPath(using: .evenOdd)
     }
 
@@ -274,7 +290,7 @@ nonisolated struct VectorTilePainter {
     /// (``VectorTilePatterns/lay(_:in:target:)``). Nothing where the picture
     /// is not to be had.
     func fill(_ path: CGPath, with pattern: VectorTilePatterns.Pattern) {
-        guard let image = points.icons.pattern(asset: pattern.asset, unit: unit) else { return }
+        guard let image = palette.pattern(pattern.asset, unit: unit, from: points.icons) else { return }
         context.saveGState()
         context.addPath(path)
         context.clip(using: .evenOdd)
@@ -286,18 +302,20 @@ nonisolated struct VectorTilePainter {
     /// - Parameters:
     ///   - cap: how an unbroken line ends.
     ///   - dashCap: how each dash of a broken one ends.
+    ///   - role: what the palette takes the line's color as.
     func stroke(
         _ path: CGPath,
         _ line: VectorTileStyle.Line,
         cap: CGLineCap = .round,
-        dashCap: CGLineCap = .butt
+        dashCap: CGLineCap = .butt,
+        as role: VectorTilePalette.Role = .line
     ) {
         let width = line.width.value(at: z)
         guard width > 0 else { return }
         context.saveGState()
         context.setAlpha(line.alpha)
         context.addPath(path)
-        context.setStrokeColor(line.color)
+        context.setStrokeColor(palette.color(line.color, as: role))
         context.setLineWidth(width * unit)
         context.setLineJoin(.round)
         if line.dash.isEmpty {
@@ -311,9 +329,15 @@ nonisolated struct VectorTilePainter {
     }
 
     /// A line, and then what it carries down its middle: a railway's white
-    /// dashes, a lift's cabins, a city wall's dark line.
-    func strokeWithCenter(_ path: CGPath, _ line: VectorTileStyle.Line, cap: CGLineCap = .round) {
-        stroke(path, line, cap: cap)
+    /// dashes, a lift's cabins, a city wall's dark line. `role` is the
+    /// line's own; what it carries is a line whatever it runs down.
+    func strokeWithCenter(
+        _ path: CGPath,
+        _ line: VectorTileStyle.Line,
+        cap: CGLineCap = .round,
+        as role: VectorTilePalette.Role = .line
+    ) {
+        stroke(path, line, cap: cap, as: role)
         guard let center = line.center else { return }
         stroke(
             path,

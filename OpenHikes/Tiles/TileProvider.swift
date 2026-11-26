@@ -75,9 +75,22 @@ nonisolated struct TileProvider: Identifiable, Hashable, Sendable {
     /// drawn from, or `nil` for one whose tiles come from ``urlTemplate``
     /// alone. See `VectorTileClient` for when the template still answers.
     let vectorSource: VectorTileSource?
+    /// The colors a provider with a ``vectorSource`` is drawn in:
+    /// OpenStreetMap Carto's own, or another map's. Two providers can share
+    /// an archive, and the downloaded countries with it, and differ only
+    /// here: the data is fetched and kept once, and each draws its own
+    /// pictures of it under its own id.
+    var vectorPalette: VectorTilePalette = .carto
 
     /// Whether this entry draws MapKit's own base map instead of raster tiles.
     var usesSystemBaseMap: Bool { systemStyle != nil }
+
+    /// Whether ``urlTemplate``'s tiles can stand in for a tile the tile
+    /// server could not draw: only where they are the same map. The raster
+    /// tiles behind the OpenHikes map are OpenStreetMap Carto's, so they
+    /// stand in for a tile drawn in Carto's colors and for no other. A light
+    /// tile among dark ones would be filed for a week as one of them.
+    var fallsBackToRasterTiles: Bool { vectorPalette.isCarto }
 
     /// The template with `{key}` replaced by `apiKey`. Keyless providers ignore it.
     func resolvedTemplate(apiKey: String) -> String {
@@ -206,14 +219,51 @@ nonisolated extension TileProvider {
         vectorSource: nil
     )
 
+    /// The OpenHikes map in dark colors: the same vector tiles, off the tile
+    /// server or out of a downloaded country, drawn in
+    /// ``VectorTilePalette/dark``. Second in the list, beside the map it is
+    /// the night's half of.
+    ///
+    /// An id of its own, because a tile's key is its provider's and the two
+    /// maps' pictures of one tile differ. Nothing else is its own: the
+    /// archives, the countries, the language and the redraws when any of
+    /// them moves are ``openStreetMap``'s (`VectorTileArchives`).
+    ///
+    /// No raster tiles stand behind it (``fallsBackToRasterTiles``), so
+    /// ``urlTemplate`` is never asked. It names the tile all the same,
+    /// because a tile's load is told apart by its address, and names it on
+    /// the OpenHikes server so that no mistake could send a request for it
+    /// to the OpenStreetMap Foundation's.
+    static let openHikesDark = TileProvider(
+        id: "osm_dark",
+        name: String(
+            localized: "OpenHikes Dark",
+            comment: "The name of a map style on Map Modes: the OpenHikes map, drawn in dark colors"
+        ),
+        summary: String(localized: """
+            The OpenHikes map in dark colors. Countries you download are drawn on it too.
+            """),
+        urlTemplate: "https://tiles.openhikes.app/dark/{z}/{x}/{y}.png",
+        maximumZ: osmMaximumZ,
+        attribution: TileAttribution([.openStreetMap, .esaWorldCover]),
+        supportsBulkDownload: false,
+        durableQuota: nil,
+        requiresPaidAccess: false,
+        apiKeyPlistKey: nil,
+        systemStyle: nil,
+        vectorSource: .openHikesPlanet,
+        vectorPalette: .dark
+    )
+
     /// MapKit's own base map: no raster tiles, and therefore no tile pipeline.
     ///
-    /// Second in the list rather than last because it is the cheapest thing the
-    /// app can draw, not a fallback. Nothing is fetched, nothing is written to
-    /// disk, nothing is auto-saved and nothing can be bulk-downloaded — the map
-    /// data is already on the device, served by the system's own cache. It is
-    /// the option to pick when battery and data matter more than a topographic
-    /// rendering, and the only one whose entire storage cost is zero.
+    /// Ahead of the commercial maps rather than last because it is the
+    /// cheapest thing the app can draw, not a fallback. Nothing is fetched,
+    /// nothing is written to disk, nothing is auto-saved and nothing can be
+    /// bulk-downloaded — the map data is already on the device, served by the
+    /// system's own cache. It is the option to pick when battery and data
+    /// matter more than a topographic rendering, and the only one whose
+    /// entire storage cost is zero.
     ///
     /// `maximumZ` is 0 because it is meaningless here: MapKit chooses its own
     /// levels of detail, and no code path reads this value for a provider that
@@ -344,8 +394,8 @@ nonisolated extension TileProvider {
 
     /// All selectable providers, in display order.
     static let all: [TileProvider] = [
-        openStreetMap, appleMaps, appleSatellite, openStreetMapRaster, stadiaOutdoors, stamenTerrain,
-        thunderforestOutdoors,
+        openStreetMap, openHikesDark, appleMaps, appleSatellite, openStreetMapRaster, stadiaOutdoors,
+        stamenTerrain, thunderforestOutdoors,
     ]
 
     /// The entries that actually fetch raster tiles — ``all`` minus both
@@ -364,6 +414,26 @@ nonisolated extension TileProvider {
     static let vectorSources: [String: VectorTileSource] = Dictionary(
         uniqueKeysWithValues: all.compactMap { provider in provider.vectorSource.map { (provider.id, $0) } }
     )
+
+    /// The palette of every provider drawn in one that is not Carto's, by
+    /// provider id.
+    private static let ownPalettes: [String: VectorTilePalette] = Dictionary(
+        uniqueKeysWithValues: all.filter { !$0.vectorPalette.isCarto }.map { ($0.id, $0.vectorPalette) }
+    )
+
+    /// The colors the provider with `id` is drawn in from vector tiles:
+    /// Carto's, for every id but a map's with a palette of its own. What a
+    /// drawing asks with the id out of a tile's key.
+    static func vectorPalette(forProviderID id: String) -> VectorTilePalette {
+        ownPalettes[id] ?? .carto
+    }
+
+    /// Whether the tile `key` names may be asked of its provider's raster
+    /// template when the tile server draws nothing for it. See
+    /// ``fallsBackToRasterTiles``.
+    static func fallsBackToRasterTiles(forKey key: String) -> Bool {
+        TileCacheKey.named(key).map { vectorPalette(forProviderID: $0.providerID).isCarto } ?? true
+    }
 
     static let `default` = openStreetMap
 
@@ -504,16 +574,4 @@ enum MapBase: Equatable {
         guard case let .tiles(source) = self else { return nil }
         return source
     }
-
-    /// Whether the controls over this base take the light appearance in
-    /// either one.
-    ///
-    /// Yes over raster tiles, every one of which draws a light page at every
-    /// hour. No over Apple's maps, whose chrome follows the phone, the
-    /// satellite map's included. `MapView.applyTileSource(to:_:)` has the
-    /// argument and the measurement, and the UIKit controls inside the map
-    /// take this through the override it sets there. SwiftUI drawn over the
-    /// map rather than inside it, the weather badge and the walk-started
-    /// pill, takes it as its colour scheme.
-    var keepsChromeLight: Bool { tileSource != nil }
 }

@@ -291,7 +291,8 @@ nonisolated final class VectorTileClient: Sendable {
             from: dataTile,
             drawing: target,
             language: language,
-            height: { HikeFormat.elevation(Measurement(value: $0, unit: .meters)) }
+            height: { HikeFormat.elevation(Measurement(value: $0, unit: .meters)) },
+            palette: TileCacheKey.named(key).map { TileProvider.vectorPalette(forProviderID: $0.providerID) } ?? .carto
         )
         #if DEBUG
         let size = png?.count ?? 0

@@ -183,21 +183,22 @@ nonisolated enum VectorTileLabels {
 
         /// `candidates` set at `z` and placed inside `bounds`, with `unit`
         /// pixels for each pixel of the style's 256-pixel tile, clear of
-        /// `occupied`.
+        /// `occupied`, and inked as `palette` has each look's color.
         init(
             _ candidates: [Candidate],
             z: Int,
             unit: CGFloat,
             bounds: CGRect,
             language: String,
-            occupied: [CGRect] = []
+            occupied: [CGRect] = [],
+            palette: VectorTilePalette = .carto
         ) {
-            var fonts = LabelFonts(language: language)
+            var fonts = LabelFonts(language: language, palette: palette)
             blocks = candidates.map { candidate in
                 let look = VectorTileLabelStyle.look(of: candidate.category)
                 let size = (candidate.size ?? look.size.value(at: z)) * unit
                 let font = fonts.font(size: size, face: look.face)
-                return Block(candidate.name, font: font, color: look.color, unit: unit)
+                return Block(candidate.name, font: font, color: look.color, unit: unit, palette: palette)
             }
             placements = VectorTileLabels.place(
                 candidates,
@@ -235,12 +236,12 @@ nonisolated enum VectorTileLabels {
             )
         }
 
-        init(_ name: String, font: CTFont, color: CGColor, unit: CGFloat) {
+        init(_ name: String, font: CTFont, color: CGColor, unit: CGFloat, palette: VectorTilePalette) {
             let em = CTFontGetSize(font)
             let broken = VectorTilePoints.wrapped(name, width: em * VectorTileLabelStyle.placeWrapEms) { line in
                 InkedText.width(of: line, font: font)
             }
-            lines = broken.map { InkedText($0, font: font, color: color, unit: unit) }
+            lines = broken.map { InkedText($0, font: font, color: color, unit: unit, palette: palette) }
             squeeze = em * VectorTileLabelStyle.placeLineSqueeze
         }
 
@@ -266,6 +267,10 @@ nonisolated enum VectorTileLabels {
 /// Text set in a label's font and color, with a halo drawn around its
 /// letters, measured. Drawn into a context whose y runs down and whose
 /// text matrix flips glyphs upright.
+///
+/// Every name on a tile is set here, so this is where a name's color and
+/// its halo's become the palette's: the styles that hand them in keep
+/// Carto's.
 nonisolated struct InkedText {
     let ink: CTLine
     /// None where the halo has no width: a stroke of no width is CoreText's
@@ -275,28 +280,33 @@ nonisolated struct InkedText {
     let ascent: CGFloat
     let descent: CGFloat
 
-    /// - Parameter haloWidth: how far the halo reaches past the letters, in
-    ///   the pixels of the style's 256-pixel tile.
+    /// - Parameters:
+    ///   - color: the letters' color, as the style has it.
+    ///   - haloColor: the halo's, as the style has it.
+    ///   - haloWidth: how far the halo reaches past the letters, in the
+    ///     pixels of the style's 256-pixel tile.
+    ///   - palette: what both colors are on the picture.
     init(
         _ text: String,
         font: CTFont,
         color: CGColor,
         unit: CGFloat,
         halo haloColor: CGColor = VectorTileLabelStyle.halo,
-        haloWidth: CGFloat = VectorTileLabelStyle.haloWidth
+        haloWidth: CGFloat = VectorTileLabelStyle.haloWidth,
+        palette: VectorTilePalette = .carto
     ) {
         let size = CTFontGetSize(font)
         let key = { (name: CFString) in NSAttributedString.Key(name as String) }
         ink = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [
             key(kCTFontAttributeName): font,
-            key(kCTForegroundColorAttributeName): color,
+            key(kCTForegroundColorAttributeName): palette.color(color, as: .text),
         ]))
         // A positive stroke width strokes without filling. It is a share of
         // the font's size, and half of it lies outside the letters.
         let haloPercent = 2 * haloWidth * unit / max(size, 1) * 100
         halo = haloPercent > 0 ? CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [
             key(kCTFontAttributeName): font,
-            key(kCTStrokeColorAttributeName): haloColor,
+            key(kCTStrokeColorAttributeName): palette.color(haloColor, as: .halo),
             key(kCTStrokeWidthAttributeName): haloPercent,
         ])) : nil
         var rise: CGFloat = 0
@@ -328,12 +338,18 @@ nonisolated struct InkedText {
 /// The fonts one tile's names are set in, each made once. Making the system
 /// font at a size is most of what setting a name costs, and a name along a
 /// line is set a letter at a time.
+///
+/// It carries the tile's palette too, because it is what every layout that
+/// sets a name is already handed: the names, the stations and the roads'
+/// plates take their colors through it.
 nonisolated struct LabelFonts {
     let language: String
+    let palette: VectorTilePalette
     private var made: [Key: CTFont] = [:]
 
-    init(language: String) {
+    init(language: String, palette: VectorTilePalette = .carto) {
         self.language = language
+        self.palette = palette
     }
 
     mutating func font(size: CGFloat, face: VectorTileLabelStyle.Face) -> CTFont {

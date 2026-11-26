@@ -62,18 +62,21 @@ nonisolated enum VectorTileFixture {
         "\(Int(meters.rounded())) m"
     }
 
-    /// `layers`, decoded, drawn as `target` from the archive tile `source`.
+    /// `layers`, decoded, drawn as `target` from the archive tile `source`,
+    /// in `palette`'s colors.
     static func image(
         _ layers: [Layer],
         from source: VectorTileAddress,
-        drawing target: VectorTileAddress
+        drawing target: VectorTileAddress,
+        palette: VectorTilePalette = .carto
     ) throws -> CGImage? {
         VectorTileRasterizer.image(
             of: try decoded(layers),
             from: source,
             drawing: target,
             language: "en",
-            height: height
+            height: height,
+            palette: palette
         )
     }
 

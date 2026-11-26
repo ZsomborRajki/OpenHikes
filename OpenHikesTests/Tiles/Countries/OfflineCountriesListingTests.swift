@@ -172,11 +172,12 @@ struct OfflineCountriesListingTests {
         }
     }
 
-    @Test("only the map drawn from the tiles the areas are cut from draws them")
-    func drawnOnTheOpenHikesMap() {
-        #expect(OfflineCountries.areDrawn(on: .openStreetMap))
-        for provider in TileProvider.all where provider.id != TileProvider.openStreetMap.id {
-            #expect(!OfflineCountries.areDrawn(on: provider), "\(provider.id)")
+    /// The OpenHikes map and OpenHikes Dark: one download is both maps'.
+    @Test("only the maps drawn from the tiles the areas are cut from draw them")
+    func drawnOnTheOpenHikesMaps() {
+        let drawn: Set = [TileProvider.openStreetMap.id, TileProvider.openHikesDark.id]
+        for provider in TileProvider.all {
+            #expect(OfflineCountries.areDrawn(on: provider) == drawn.contains(provider.id), "\(provider.id)")
         }
     }
 

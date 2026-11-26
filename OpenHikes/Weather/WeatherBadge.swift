@@ -93,17 +93,16 @@ struct WeatherBadge: View {
     private static let heightDrivingTextStyle: Font.TextStyle = .title3
 
     let state: WeatherBadgeState
-    /// Whether the map under the badge is a light page whatever the phone's
-    /// appearance — ``MapBase/keepsChromeLight``. The tracking button is
-    /// inside the map view and takes the map's override; the badge is over
-    /// it, so it is handed the same answer instead. Without it, dark mode
-    /// drew a white temperature and white cloud on clear glass over light
-    /// tiles.
+    /// The appearance the map under the badge keeps whatever the phone's —
+    /// ``MapBase/chrome``. The tracking button is inside the map view and
+    /// takes the map's override; the badge is over it, so it is handed the
+    /// same answer instead. Without it, dark mode drew a white temperature
+    /// and white cloud on clear glass over light tiles.
     ///
     /// Over Apple's satellite imagery it follows the phone, as the tracking
     /// button does: the clear glass veils the imagery in its own appearance,
     /// so a black reading in light mode still reads over dark forest.
-    var keepsLight = false
+    var chrome = MapChrome.system
     let onTap: () -> Void
 
     /// Whether the reading has passed ``WeatherPollingPolicy/stalenessInterval``.
@@ -151,7 +150,7 @@ struct WeatherBadge: View {
         // so that over Apple's maps the phone's own appearance passes through
         // untouched, as it does past the override's `.unspecified`.
         .transformEnvironment(\.colorScheme) { scheme in
-            if keepsLight { scheme = .light }
+            if let kept = chrome.colorScheme { scheme = kept }
         }
         .task(id: state.snapshot?.capturedAt) { await trackStaleness() }
         // A symbol and a number that only mean anything together, and the

@@ -796,7 +796,8 @@ nonisolated extension TileCache {
         // comes down to its raster template below whenever that brings nothing,
         // unless the device itself is offline, which the template would be too,
         // or the server is failing over a saved copy, which then stays the tile
-        // rather than be replaced for a week by the template's.
+        // rather than be replaced for a week by the template's, or the template
+        // draws another map than the provider is.
         switch await vectorTiles?.drawing(forKey: key) {
         case let .png(drawn):
             if let image = TileImage(data: drawn) { return FetchedTile(data: drawn, image: image) }
@@ -805,7 +806,10 @@ nonisolated extension TileCache {
         case .unavailable where hasSavedCopy(ofKey: key), .offline:
             return nil
         case .fallBack, .unavailable, nil:
-            break
+            // A map drawn in colors of its own has no raster tiles behind
+            // it: the template's are another map's, so the load fails here
+            // and is tried again, as it does offline.
+            guard TileProvider.fallsBackToRasterTiles(forKey: key) else { return nil }
         }
         // A deadline a raster server named stands for its URL, whichever
         // style is asking: the comparison style asks the very URL the vector

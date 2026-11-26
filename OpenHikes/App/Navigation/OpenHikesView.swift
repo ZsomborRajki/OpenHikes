@@ -253,7 +253,7 @@ struct OpenHikesView: View {
                 if appModel.weatherManager.state != .idle, !panelCoversMap {
                     WeatherBadge(
                         state: appModel.weatherManager.state,
-                        keepsLight: activeBase.keepsChromeLight
+                        chrome: activeBase.chrome
                     ) {
                         mapControls.weatherDetail.present()
                     }
@@ -281,7 +281,7 @@ struct OpenHikesView: View {
                     WalkStartedPill(
                         session: appModel.walkSession,
                         usesSidePanel: usesSidePanel,
-                        keepsLight: activeBase.keepsChromeLight
+                        chrome: activeBase.chrome
                     ) { openHike(id: $0) }
                 }
             }

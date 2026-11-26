@@ -367,7 +367,9 @@ struct MapView: MapViewRepresentable, Equatable {
         // pills did the same.
         // Forcing the light appearance for as long as those tiles are drawn
         // puts every control back on the side of the contrast it was designed
-        // for: 17.5:1 for that arrow, measured.
+        // for: 17.5:1 for that arrow, measured. `openHikesDark` is the other
+        // way round, a dark page at every hour, so its controls are forced
+        // dark by the same argument (`MapChrome`).
         //
         // `.unspecified` for the system base map, and that is the whole reason
         // this is decided here rather than once at build time: `appleMaps` is
@@ -375,7 +377,7 @@ struct MapView: MapViewRepresentable, Equatable {
         // also the one whose chrome should. `appleSatellite` draws dark
         // imagery at every hour, and its chrome follows the phone all the
         // same, as Apple Maps' does, rather than being forced dark.
-        mapView.overrideUserInterfaceStyle = base.keepsChromeLight ? .light : .unspecified
+        mapView.overrideUserInterfaceStyle = base.chrome.interfaceStyle
         #endif
 
         // Before the early return below: the system base map is a change of

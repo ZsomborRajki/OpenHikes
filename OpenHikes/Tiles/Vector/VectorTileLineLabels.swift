@@ -336,7 +336,8 @@ nonisolated extension VectorTileLineLabels {
             unit: CGFloat,
             bounds: CGRect,
             occupied: [CGRect],
-            language: String
+            language: String,
+            palette: VectorTilePalette = .carto
         ) {
             let z = target.z
             let spacing = VectorTileLabelStyle.spacing * unit
@@ -346,7 +347,7 @@ nonisolated extension VectorTileLineLabels {
             var room = Room(inner: bounds.insetBy(dx: spacing, dy: spacing), spacing: spacing, taken: occupied)
             var placed: [SetName] = []
             var texts: [String: SetText] = [:]
-            var fonts = LabelFonts(language: language)
+            var fonts = LabelFonts(language: language, palette: palette)
             for line in lines {
                 let look = VectorTileLabelStyle.look(of: line.category)
                 let offset = look.offset(at: z) * unit
@@ -360,8 +361,8 @@ nonisolated extension VectorTileLineLabels {
                 // never set letter by letter: most of a city's ways are that.
                 guard line.length > CGFloat(line.name.count) * size * Self.narrowestLetter else { continue }
                 let key = "\(line.category)/\(line.name)"
-                let text = texts[key]
-                    ?? SetText(line.name, font: fonts.font(size: size, face: look.face), look: look, unit: unit)
+                let font = fonts.font(size: size, face: look.face)
+                let text = texts[key] ?? SetText(line.name, font: font, look: look, unit: unit, palette: palette)
                 texts[key] = text
                 let repeatDistance = look.repeatDistance * unit
                 // A name written beside its line is set along the line that
@@ -489,9 +490,15 @@ nonisolated private struct SetText {
     var advances: [CGFloat] { characters.map(\.width) }
     var width: CGFloat { advances.reduce(0, +) }
 
-    init(_ text: String, font: CTFont, look: VectorTileLabelStyle.LineLook, unit: CGFloat) {
+    init(
+        _ text: String,
+        font: CTFont,
+        look: VectorTileLabelStyle.LineLook,
+        unit: CGFloat,
+        palette: VectorTilePalette
+    ) {
         characters = VectorTileLineLabels.visualOrder(of: text).map { character in
-            InkedText(character, font: font, color: look.color, unit: unit)
+            InkedText(character, font: font, color: look.color, unit: unit, palette: palette)
         }
         let rise = characters.map(\.ascent).max() ?? 0
         let fall = characters.map(\.descent).max() ?? 0
