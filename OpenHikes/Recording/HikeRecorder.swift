@@ -199,6 +199,8 @@ final class HikeRecorder: NSObject {
     /// in those waits would find a walk still paused, and start the GPS for
     /// one about to be thrown away, behind an idle recorder. ``resumeID``
     /// lets go of a Resume already waiting; this refuses one asked for after.
+    /// It refuses a Pause too, which would find the walk still taking fixes
+    /// and mark a journal already thrown away (`pause()`).
     @ObservationIgnored var isDiscarding = false
     /// What the Start now being waited on begins with, for a recording that
     /// takes over from a hike already under way — see ``RecordingSeed``.
@@ -469,11 +471,15 @@ extension HikeRecorder {
             return
         }
         guard phase == .waitingForFix || phase == .recording else { return }
-        // A Start still waiting on the location prompt or the precision sheet
-        // has no journal to mark, and the session its answer makes would run
-        // under the Pause anyway: there is nothing to pause yet (#1683). See
-        // `HikeRecorder+StartAnswer.swift`.
-        guard !isAwaitingStartAnswer else { return }
+        // Nothing to pause without a session to mark the Pause in. A Start
+        // still waiting on the location prompt or the precision sheet has
+        // none yet, and the session its answer makes would run under the
+        // Pause anyway (#1683; `HikeRecorder+StartAnswer.swift`). A Discard
+        // lets go of the Start, or throws the session's journal away, before
+        // its last wait, and leaves the phase as it was until its end: a
+        // Pause in those waits would mark a journal that is gone, and fail
+        // the recording being ended.
+        guard sessionID != nil, !isDiscarding else { return }
         resetAutoPause()
         phase = .paused
         cancelLiveMatching(clearWindow: false)

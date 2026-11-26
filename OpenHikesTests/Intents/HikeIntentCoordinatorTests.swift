@@ -330,7 +330,8 @@ final class HikeIntentCoordinatorTests {
     func makeCoordinator(
         calendar: Calendar = Calendar(identifier: .gregorian),
         automaticallyRecovers: Bool = false,
-        walkUnderWay: String? = nil
+        walkUnderWay: String? = nil,
+        sharedStateStore: (any RecordingSharedStateStoring)? = nil
     ) -> HikeIntentCoordinator {
         let instance = HikeRecorder(
             container: container,
@@ -342,6 +343,7 @@ final class HikeIntentCoordinatorTests {
                 read: { PowerState() },
                 observesNotifications: false
             ),
+            sharedStateStore: sharedStateStore,
             journalDirectory: directory,
             clock: clock.read,
             journalFlushDelay: .zero,
