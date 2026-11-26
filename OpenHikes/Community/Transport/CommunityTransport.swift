@@ -78,9 +78,10 @@ nonisolated enum CommunityFailure: LocalizedError, Equatable, Sendable {
     case notPermitted
     /// No Apple Account on the device, or iCloud is switched off for it.
     ///
-    /// Only ever raised by a *write*. Reading the public database needs no
-    /// account at all, which is why browsing works on a signed-out phone and
-    /// sharing does not.
+    /// Raised by a *write*, and by the one read that needs an account: the
+    /// review queue, whose record type only the `reviewer` role may read.
+    /// Every other read of the public database needs no account, which is why
+    /// browsing works on a signed-out phone and sharing does not.
     case notSignedIn
     /// Everything else, with the diagnostic kept for the log.
     case unavailable(String)
@@ -385,7 +386,8 @@ nonisolated protocol CommunityTransporting: Sendable {
     /// reviewer, and that is the whole access control.** The queue is
     /// ``CommunitySchema/noticeType``, which grants read to the `reviewer`
     /// role and to nobody else, so this asks the server a question it answers
-    /// differently depending on who is asking.
+    /// differently depending on who is asking. A phone with no account may be
+    /// told ``CommunityFailure/notSignedIn`` instead.
     ///
     /// The refusal is reported rather than flattened into an empty list,
     /// because *a reviewer with an empty queue* and *not a reviewer* are
