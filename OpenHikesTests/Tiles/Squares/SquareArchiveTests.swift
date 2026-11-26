@@ -30,6 +30,7 @@ struct SquareArchiveTests {
         (.routes, routes(.region, row: 137, column: 198), SquareArchiveTile(zoom: 9, x: 198, y: 137)),
         (.routes, routes(.area, row: 275, column: 398), SquareArchiveTile(zoom: 10, x: 398, y: 275)),
         (.routes, routes(.detail, row: 550, column: 796), SquareArchiveTile(zoom: 11, x: 796, y: 550)),
+        (.elevation, "elevation1_339_1543", SquareArchiveTile(zoom: 12, x: 1543, y: 339)),
     ])
     func aSquareIsATile(set: SquareArchive, name: String, tile: SquareArchiveTile) {
         #expect(set.tile(named: name) == tile)
@@ -59,11 +60,16 @@ struct SquareArchiveTests {
             zooms.insert(tile.zoom)
         }
         #expect(zooms == [7, 9, 10, 11])
+        let elevation = try #require(SquareArchive.elevation.tile(named: ElevationSquareGrid.recordName(
+            for: ElevationSquare(row: ElevationSquareGrid.rowCount - 1, column: ElevationSquareGrid.columnCount - 1)
+        )))
+        #expect(elevation.x < 1 << elevation.zoom && elevation.y < 1 << elevation.zoom)
         #expect(SquareArchive.routes.zooms == 7...11)
         #expect(SquareArchive.routing.zoom == 12)
         #expect(SquareArchive.trails.zoom == 11)
         #expect(SquareArchive.routes.zoom == 11)
         #expect(SquareArchive.places.zoom == 9)
+        #expect(SquareArchive.elevation.zooms == 12...12)
     }
 
     @Test("a tile no square of the set is names none")
@@ -75,6 +81,8 @@ struct SquareArchiveTests {
         #expect(SquareArchive.routes.name(of: SquareArchiveTile(zoom: 8, x: 0, y: 0)) == nil)
         #expect(SquareArchive.routes.name(of: SquareArchiveTile(zoom: 7, x: 90, y: 0)) == nil)
         #expect(SquareArchive.routing.name(of: SquareArchiveTile(zoom: 11, x: 0, y: 0)) == nil)
+        #expect(SquareArchive.elevation.name(of: SquareArchiveTile(zoom: 12, x: 2880, y: 0)) == nil)
+        #expect(SquareArchive.elevation.name(of: SquareArchiveTile(zoom: 12, x: 0, y: 1440)) == nil)
     }
 
     @Test("a set reads no other set's names")
@@ -84,6 +92,7 @@ struct SquareArchiveTests {
             "trails1_550_796",
             "places1_137_188",
             Self.routes(.detail, row: 550, column: 796),
+            "elevation1_339_1543",
         ]
         for set in SquareArchive.allCases {
             #expect(names.filter { set.tile(named: $0) != nil }.count == 1, "\(set) reads one name")
@@ -103,6 +112,8 @@ struct SquareArchiveTests {
         (.trails, "trails-20261122-00", true),
         (.routes, "routes-20261122-00", true),
         (.places, "places-20261122-00", true),
+        (.elevation, "elevation-20261126-20", true),
+        (.elevation, "routing-20261122-00", false),
         (.routing, "routes-20261122-00", false),
         (.routes, "routing-20261122-00", false),
         (.trails, "planet-20261118", false),

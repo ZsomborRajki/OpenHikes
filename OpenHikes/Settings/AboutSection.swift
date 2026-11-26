@@ -2,8 +2,8 @@
 //  AboutSection.swift
 //  OpenHikes
 //
-//  The settings section that links out: the privacy policy, and the project
-//  the app is built in the open as.
+//  The settings section that links out: the privacy policy, the terms, the
+//  credit for the heights, and the project the app is built in the open as.
 //
 //  Its own file for a different reason than ``CloudSyncSection`` and
 //  ``BlockedHikersSection`` have one — there is no live state here and
@@ -94,6 +94,24 @@ struct AboutSection: View {
                 Label("Terms & Conditions", systemImage: "doc.text")
             }
             .accessibilityIdentifier("terms-link")
+
+            // The heights' credit, in the licensor's words: the licence of
+            // the Copernicus DEM asks for it wherever its data is shown, and
+            // a profile drawn from it is. Not translated — see
+            // ``ElevationCredit``.
+            Link(destination: ElevationCredit.productPage) {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Elevation Data")
+                        Text(verbatim: ElevationCredit.notice)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: "mountain.2")
+                }
+            }
+            .accessibilityIdentifier("elevation-credit-link")
 
             Link(destination: URL(string: "https://github.com/ZsomborRajki/OpenHikes")!) {
                 Label("Project on GitHub", systemImage: "chevron.left.forwardslash.chevron.right")

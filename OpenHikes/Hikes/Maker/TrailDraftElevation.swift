@@ -9,18 +9,17 @@
 //  is the figure that actually decides whether Saturday is a walk or a day
 //  out, and there is nothing in OpenStreetMap's walking graph that can answer
 //  it: measured while the curated feature was built, `ele` was on **zero** of
-//  1,725 geometry nodes. So this asks the one elevation source this app
-//  already carries a key for — ``StadiaElevationSource``, through
-//  ``CuratedElevationSourcing`` — and the whole of what it adds to that is
-//  *when*.
+//  1,725 geometry nodes. So this asks the elevation squares on the tile
+//  server — ``ElevationSquareLibrary``, through ``CuratedElevationSourcing``
+//  — and the whole of what it adds to that is *when*.
 //
 //  ## When, because a drawn line is not a route that was opened once
 //
 //  A curated hike is asked about once, on open, and never again. A drawing
 //  changes under the question: every tap adds a point, every leg that snaps
 //  reshapes the line without the hiker touching anything, and each of those is
-//  a different trail with a different climb. Asking per change would spend a
-//  **billed** call per tap against the key the paid map styles are behind.
+//  a different trail with a different climb. Asking per change would read the
+//  squares again per tap, and draw a figure that is gone before it is read.
 //
 //  So the question waits for the drawing to settle — ``settleSeconds`` of
 //  nothing happening — and every change before that cancels the one before it.
@@ -50,7 +49,7 @@
 //
 //  Left at two hundred anyway, for three reasons that agree. The chart plots
 //  at most ``RouteProfile/plottedSampleBudget`` points, so a denser request
-//  buys resolution the screen cannot draw, on a call that is billed. The climb
+//  buys resolution the screen cannot draw. The climb
 //  is a *true reading at a coarser interval* rather than an interpolation of a
 //  finer-looking one, which is the same claim ``CuratedElevation`` makes about
 //  its own sampling. And finer is not automatically more accurate here: the
@@ -59,8 +58,8 @@
 //
 //  ## Nothing here may ever block drawing, or saving
 //
-//  The line, the legs, the list and Save do not know this file exists. A free
-//  hiker's drawn trail, a build with no key and a refused request are all the
+//  The line, the legs, the list and Save do not know this file exists. No
+//  signal, a launch with no server and ground with no heights are all the
 //  same state — no figures and no chart — which is exactly how a curated route
 //  behaves today. And a Save that happens while a question is out saves what
 //  is in hand: see ``TrailDraftSave``, which does not wait for Overpass either.
@@ -86,9 +85,9 @@ final class TrailDraftElevation {
     /// How long the drawing has to stand still before it is worth asking
     /// about, in seconds.
     ///
-    /// Two, and it is a bargain between a bill and a figure. A hiker putting
+    /// Two, and it is a bargain between requests and a figure. A hiker putting
     /// points down does it about once a second, so anything shorter asks a
-    /// billed question per tap; anything much longer and the figure arrives
+    /// question per tap; anything much longer and the figure arrives
     /// after they have stopped looking for it. Picked by argument — the thing
     /// that would settle it is a hiker with a phone, not a paragraph.
     static let settleSeconds: TimeInterval = 2
@@ -187,8 +186,8 @@ final class TrailDraftElevation {
     ///
     /// Called from every edit that changes the *line* and from every leg that
     /// lands — see ``TrailDraftController``. Not from an edit that only
-    /// touches a place, which changes no geometry and would otherwise spend a
-    /// billed call to be told the same number.
+    /// touches a place, which changes no geometry and would otherwise ask
+    /// again to be told the same number.
     func drawingDidChange() {
         guard isAvailable else { return }
         // Before the reschedule, so the figure goes the instant the line does
@@ -214,11 +213,10 @@ final class TrailDraftElevation {
         guard let source else { return }
         // Not while a leg is still waiting for its path. Its straight
         // placeholder is not the line that will be saved, the answer would be
-        // thrown away when the leg lands, and every call is billed. A leg that
-        // lands asks again — see ``TrailDraftController`` — so the last one
-        // to land is what gets measured. Overpass often takes longer than the
-        // settle between two legs, so without this a long route paid for a
-        // question per gap.
+        // thrown away when the leg lands. A leg that lands asks again — see
+        // ``TrailDraftController`` — so the last one to land is what gets
+        // measured. Overpass often takes longer than the settle between two
+        // legs, so without this a long route asked a question per gap.
         guard !draft.isRouting else { return }
         let route = draft.routeCoordinates
         // One point is a place rather than a trail, and has no climb —

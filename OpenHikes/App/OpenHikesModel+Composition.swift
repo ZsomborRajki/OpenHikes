@@ -226,8 +226,7 @@ extension OpenHikesModel {
     static func makeTrailMaker(
         container: ModelContainer,
         graph trailGraphProvider: (any TrailGraphProviding)?,
-        defaults: UserDefaults,
-        entitlement: MapEntitlementStore
+        defaults: UserDefaults
     ) -> TrailDraftController {
         let directions = Self.makeDirectionsRouters()
         return TrailDraftController(
@@ -244,10 +243,7 @@ extension OpenHikesModel {
             // recents in the scratch domain rather than the developer's.
             recents: TrailStopRecents(defaults: defaults),
             placeFilter: TrailPlaceFilter(defaults: defaults),
-            photos: TrailDraftPhotos(source: Self.makeTrailPhotoSource(), photoCopy: Self.makeTrailPhotoCopy()),
-            // The same answer the elevation source asks before it spends a
-            // call, read through the store so a purchase repaints the line.
-            elevationUnlocked: { entitlement.isEntitled }
+            photos: TrailDraftPhotos(source: Self.makeTrailPhotoSource(), photoCopy: Self.makeTrailPhotoCopy())
         )
     }
 
@@ -288,19 +284,14 @@ extension OpenHikesModel {
         return MapKitTrailStopNaming()
     }
 
-    /// Where the maker's climb and descent come from, or `nil` for a launch
-    /// that must not ask.
+    /// Where the heights of a line with none come from — the maker's climb
+    /// and descent, and a library hike's profile — or `nil` for a launch that
+    /// must not ask.
     ///
-    /// The same guard ``makeTrailPointSource()`` makes, for the commercial
-    /// half of the same reason: every call is billed against the key the paid
-    /// map styles are behind, and a suite that fell into it would be spending
-    /// real money to assert on a stub's worth of numbers.
-    ///
-    /// ``StadiaElevationSource``'s own entitlement check is the *other* guard
-    /// and not a substitute for this one. That one asks whether the hiker has
-    /// paid; this one asks whether anybody is watching — and a developer
-    /// running the suite may well be a subscriber, which is exactly the launch
-    /// where the first guard would let every assertion reach the network.
+    /// The elevation squares on the tile server (``ElevationSquareLibrary``),
+    /// behind the guard ``makeTrailPointSource()`` makes, because no suite
+    /// reaches the tile server (*The trail squares* in the repository
+    /// instructions).
     ///
     /// `nil` rather than ``DormantElevationSource`` so nothing is even
     /// scheduled: see ``TrailDraftElevation/isAvailable``, which is what keeps
@@ -308,12 +299,12 @@ extension OpenHikesModel {
     ///
     /// The one launch under automation that asks is the one that said so by
     /// name — ``AppLaunchEnvironment/asksLiveMakerServices``, which only the
-    /// App Store frame of a drawn trail passes, and which spends one call.
+    /// App Store frame of a drawn trail passes.
     static func makeTrailElevationSource() -> (any CuratedElevationSourcing)? {
         let isStubbed = AppLaunchEnvironment.isRunningTests
             && !AppLaunchEnvironment.asksLiveMakerServices
         guard !isStubbed else { return nil }
-        return StadiaElevationSource()
+        return ElevationSquareLibrary.live
     }
 }
 
@@ -602,10 +593,10 @@ private extension OpenHikesModel {
                 ),
                 downloads: OfflineCountryArchives.shared
             )),
-            // The one launch that may spend a billable call: a real one, with
-            // a key. Every other path here keeps the dormant default — see
+            // The one launch that reads the elevation squares off the tile
+            // server. Every other path here keeps the dormant default — see
             // ``MergedCommunityTransport/elevation``.
-            elevation: StadiaElevationSource(),
+            elevation: ElevationSquareLibrary.live,
             // The one launch that asks Wikimedia, for the same reason.
             commons: makeLiveCommonsSource()
         )

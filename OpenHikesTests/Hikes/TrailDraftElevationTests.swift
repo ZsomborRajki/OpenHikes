@@ -43,10 +43,6 @@ struct TrailDraftElevationTests {
     /// main actor and an actor would turn every read below into a suspension
     /// point.
     nonisolated private final class StubHeightSource: CuratedElevationSourcing, @unchecked Sendable {
-        /// What a refusing stub throws. Any failure would do — the caller
-        /// draws all of them the same way, which is the point.
-        static let serviceUnavailable = 503
-
         private struct State {
             var askedCounts: [Int] = []
             var heights: [Double] = []
@@ -67,21 +63,12 @@ struct TrailDraftElevationTests {
         /// was folded into one question.
         var askedCounts: [Int] { state.withLock(\.askedCounts) }
 
-        /// Stops refusing and answers `heights` from the next question on —
-        /// a hiker who has just subscribed.
-        func startAnswering(_ heights: [Double]) {
-            state.withLock { current in
-                current.heights = heights
-                current.refuses = false
-            }
-        }
-
         @concurrent
         func heights(at coordinates: [CLLocationCoordinate2D]) async throws -> [Double] {
             try state.withLock { current in
                 current.askedCounts.append(coordinates.count)
                 guard !current.refuses else {
-                    throw CuratedElevationFailure.server(statusCode: Self.serviceUnavailable)
+                    throw CuratedElevationFailure.unreachable
                 }
                 // Cycled to the length that was asked about, because the
                 // source refuses an answer of the wrong length and every case
@@ -331,41 +318,6 @@ struct TrailDraftElevationTests {
     }
 
     // MARK: - What the controller asks about, and what it does not
-
-    /// A free hiker's line was refused its heights, and nothing asks again
-    /// until the line moves. A purchase made from the locked *Elevation* has
-    /// to ask, or the line turns to *Elevation* with nothing to colour it by.
-    @Test("unlocking elevation asks again about a line that was refused")
-    func unlockingAsksAgain() async {
-        let source = StubHeightSource(heights: [])
-        let maker = Self.maker(source: source)
-        for latitude in Line.all { maker.appendWaypoint(at: Line.at(latitude)) }
-        await Self.measured(maker.elevation, by: source)
-        #expect(maker.elevation.summary == nil, "refused without the subscription")
-
-        source.startAnswering(Heights.all)
-        maker.elevationDidUnlock()
-        await Self.measured(maker.elevation, by: source, questions: 2)
-        await Self.settle { !maker.shading.stretches(for: .elevation).isEmpty }
-
-        #expect(maker.elevation.summary?.gainMeters == Heights.climbed)
-        #expect(!maker.shading.stretches(for: .elevation).isEmpty, "and the line is coloured by it")
-    }
-
-    /// A line that already has its heights is not paid for twice.
-    @Test("unlocking asks nothing about a line already measured")
-    func unlockingAMeasuredLineAsksNothing() async {
-        let source = StubHeightSource(heights: Heights.all)
-        let maker = Self.maker(source: source)
-        for latitude in Line.all { maker.appendWaypoint(at: Line.at(latitude)) }
-        await Self.measured(maker.elevation, by: source)
-
-        maker.elevationDidUnlock()
-        await Self.settle { source.askedCounts.count > 1 }
-
-        #expect(source.askedCounts.count == 1)
-        #expect(maker.elevation.summary != nil)
-    }
 
     /// A point going down moves the line, so the climb is asked about again.
     @Test("a point going down asks about the climb")

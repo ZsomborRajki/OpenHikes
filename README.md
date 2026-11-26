@@ -28,7 +28,7 @@ There is no OpenHikes account and no server holding your hikes: they live on the
 - **Community**: browse what others published, with no account needed, and publish your own, which a person reviews before anyone else sees it. Waymarked routes from OpenStreetMap, with photos from Wikimedia Commons, fill the same list.
 - **English, German, French, Spanish, Italian, Russian, Polish, Ukrainian, Romanian and Dutch**, following the device's language.
 
-**OpenHikes Pro**, a monthly subscription, unlocks the paid map styles (OpenHikes Dark, Stadia Outdoors, Stamen Terrain and Thunderforest Outdoors), offline Stadia maps (Thunderforest's can't be downloaded ahead) and Stadia elevation for trails that have none. Everything else is free, the community included.
+**OpenHikes Pro**, a monthly subscription, unlocks the paid map styles (OpenHikes Dark, Stadia Outdoors, Stamen Terrain and Thunderforest Outdoors) and offline Stadia maps (Thunderforest's can't be downloaded ahead). Everything else is free, elevation for trails that have none and the community included.
 
 ## Requirements
 
@@ -110,6 +110,7 @@ The source is released under the [MIT License](LICENSE). The data and imagery th
 
 - OpenStreetMap data is © OpenStreetMap contributors, under the [Open Database License](https://www.openstreetmap.org/copyright).
 - The Stadia Maps and Thunderforest styles are used under their own terms.
+- The heights given to a route that has none are produced using Copernicus WorldDEM-30 © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved.
 - The two *Hiking Routes* pictures on *Map Modes* (`OpenHikes/Assets.xcassets/MapModes*.imageset`) are crops of OpenStreetMap's standard map, one with the app's own hiking-route layer drawn over it, under the terms on OpenStreetMap's [copyright page](https://www.openstreetmap.org/copyright).
 - Wikimedia Commons photographs are shown under the licence each one names, with its credit. The Wikipedia text on a place's card is CC BY-SA 4.0, linked to its article, and is never stored or shared.
 

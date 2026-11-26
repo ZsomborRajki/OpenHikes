@@ -279,18 +279,14 @@ final class OpenHikesModel {
         )
         self.communityTransport = communityTransport
         self.hikingRouteSquares = hikingRouteSquares
-        // Before the maker, which asks it whether its line may be coloured by
-        // elevation.
-        let store = Self.makeEntitlement(defaults: defaults)
-        entitlement = store
+        entitlement = Self.makeEntitlement(defaults: defaults)
         // The maker routes over roads as well as trails, so it reads a graph
         // of its own where a launch has one: see
         // ``makeDependencies(container:defaults:)``.
         trailMaker = Self.makeTrailMaker(
             container: container,
             graph: routingGraphProvider ?? trailGraphProvider,
-            defaults: defaults,
-            entitlement: store
+            defaults: defaults
         )
         placePins = Self.makePlacePins(defaults: defaults, maker: trailMaker)
         self.selectedLine = selectedLine

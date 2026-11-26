@@ -719,9 +719,10 @@ is promoted, and stamps the version at build time: the tags, not
   - the Live Activity attributes type name
   - the first-run tips' ids (`FirstRunTipsTests`) and the name of
     `AppTips.isNewHiker`, the TipKit parameter that keeps a new hiker
-  - the record names of the four sets of squares, which every installed
+  - the record names of the five sets of squares, which every installed
     build asks for (`TrailCellGridTests`, `RouteSquareGridTests`,
-    `PlaceSquareGridTests`, `TrailGraphSquareGridTests`)
+    `PlaceSquareGridTests`, `TrailGraphSquareGridTests`,
+    `ElevationSquareGridTests`)
   - the background session the areas download in
     (`BackgroundCountryDownloader.sessionIdentifier`), and
     `countries/manifest.json` with the names of the files it lists and the
@@ -1118,14 +1119,15 @@ Maps*. `OfflineCountries` is the one owner, on the main actor.
   - **`MapPaywallView` lists everything Pro unlocks and unlocks everything it
     lists**, because App Review checks both directions. Today that is the paid
     map styles (OpenHikes Dark, Stadia Outdoors, Stamen Terrain, Thunderforest
-    Outdoors), offline Stadia maps, and Stadia elevation where a trail has
-    none. OpenHikes Dark is behind Pro by the owner's decision, though nobody
-    bills for its tiles, so the copy calls only the commercial maps billed
-    per view; a downloaded country stays free, whichever map draws it. A
-    change updates the paywall, `OpenHikes.storekit`, `docs/terms/` and
-    `docs/support/` in every language, the home page in `docs/`, the README
-    and App Store Connect together.
-  - Everything else is free, the community included.
+    Outdoors) and offline Stadia maps. OpenHikes Dark is behind Pro by the
+    owner's decision, though nobody bills for its tiles, so the copy calls
+    only the commercial maps billed per view; a downloaded country stays
+    free, whichever map draws it. A change updates the paywall,
+    `OpenHikes.storekit`, `docs/terms/` and `docs/support/` in every
+    language, the home page in `docs/`, the README and App Store Connect
+    together.
+  - Everything else is free, the community and the elevation squares
+    included.
   - The paywall stays reachable from About even when no keys are bundled.
 - **Remember only the negative entitlement answer.** `MapEntitlementStore` starts
   as `.notEntitled` if that was the last answer, and as `.unknown` otherwise.
@@ -1426,9 +1428,8 @@ is world-readable, because browsing needs no account.
   `CommunityQueryPolicy` turns a pan into an *offer*, never a request, and
   nothing is fetched until the *Community* tab opens. All requests share
   `OverpassConversation`'s gate and its single retry.
-- **Stadia elevation is Pro-only and never fetched for a list.**
-  `StadiaElevationSource` is billed per call, so it refuses before forming a
-  request unless `MapEntitlement.current` is entitled (`.unknown` refuses too).
+- **A curated route's heights are read when it is opened, never for a
+  list**, from the elevation squares (*The elevation squares*).
 - **Commons photographs** fill a curated route's strip and the area search
   (`CommonsPhotoSourcing`, live only from the composition root).
   - Keep only CC BY, CC0 or public-domain files, credited with
@@ -1475,7 +1476,7 @@ packed and read on the same terms.
   as ground with nothing on it, so `pack` and `upload-archive` refuse a build
   without `--world`.
 - **Each set has a list of its own in the server's manifest**: `routing`,
-  `trails`, `routes` and `places`, newest first (*Tiles*). A build reads the
+  `trails`, `routes`, `places` and `elevation`, newest first (*Tiles*). A build reads the
   first archive of its set's generation and zoom, a new build is a new
   archive name, never one replaced in place, and a 410 has the manifest read
   again and every square of that call asked again, so that a call's squares
@@ -1512,8 +1513,9 @@ packed and read on the same terms.
   `OPERATIONS.md`.
 - **No suite reaches any of the squares.** Each set's source is `nil` under
   `isRunningTests`: `makeCommunityTransport()`,
-  `HikingRouteSquares.forThisLaunch()`, `makeTrailPointSource()` and
-  `TrailGraphSquareLibrary.forThisLaunch()`.
+  `HikingRouteSquares.forThisLaunch()`, `makeTrailPointSource()`,
+  `TrailGraphSquareLibrary.forThisLaunch()` and
+  `makeTrailElevationSource()`.
 
 ### The hiking-routes layer
 
@@ -1600,6 +1602,32 @@ trail squares' terms. `RoutingGraphArchive` argues the design.
   index of every such node's position in the planet fits in memory. The
   bands' edges, and the time and the disk a planet's build takes, are
   measured in `Scripts/trail-cells.sh`'s header.
+
+### The elevation squares
+
+A line with no heights (a drawn trail, a curated route, a GPX file without
+`<ele>`) is given them from a fifth set of squares: the Copernicus DEM's
+30 m heights (GLO-30), filed by eighth of a degree into the `elevation`
+archive and read on the trail squares' terms (`ElevationSquareLibrary`).
+`ElevationSquareGrid` argues the grid and has the measurements. They replaced
+Stadia's billed elevation service, and are free, by the owner's decision.
+Nothing asks Stadia for heights, and nothing falls back to it.
+
+- **Copernicus' posts as they are.** A square holds the tile's own posts in
+  whole metres, never resampled (`ElevationSquareFile`). The bands' column
+  counts and the north-west post are a storage contract, held tile by tile
+  when the archive is built and by `ElevationSquareGridTests`.
+- **No tile is sea, at 0 m.** Land whose 30 m heights Copernicus withholds is
+  filed as posts with no height, and a point there gets none. The 90 m model
+  is never used to fill it: its tiles there are under ESA's restricted
+  licence (`Scripts/lib/trail-cells/ElevationBuild.swift`).
+- **The credit is the licensor's words** (`ElevationCredit`): in *About*, in
+  the archive's metadata, and in the terms in every language with the
+  liability sentence the licence asks for. It is never translated.
+- **Built by `Scripts/trail-cells.sh build-elevation`**, which reads the
+  Copernicus tiles with a reader of its own (`CopernicusTile.swift`). The
+  heights do not change between OpenStreetMap refreshes, so the archive is
+  rebuilt only for a new Copernicus release or a new generation.
 
 ## The watch app
 

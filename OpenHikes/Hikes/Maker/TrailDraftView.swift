@@ -175,9 +175,6 @@ struct TrailDraftView: View {
         // screen is being built — so the restore from disk has already happened
         // by the time this fires, and there is a line here to frame.
         .onAppear(perform: frameTheDrawing)
-        // On the root for the reason the pair below is: a section of the lazy
-        // list may not be there. See ``TrailDraftElevationUnlock``.
-        .modifier(TrailDraftElevationUnlock(maker: maker))
         // On the screen's root, and that is the point of it rather than a
         // placement: a `List` is lazy, so this pair on a `Section` of its own
         // would run when that section scrolled out of view — and a hiker

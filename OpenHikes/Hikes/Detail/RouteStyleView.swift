@@ -167,20 +167,11 @@ struct RouteColoringPicker: View {
     /// positions would do, but plainly not what the map is showing.
     private static let offKeyOpacity = 0.4
 
-    /// What tapping a locked *Elevation* does, or `nil` when it is not locked.
-    ///
-    /// Locked in the trail maker without OpenHikes Pro, whose heights are
-    /// what it would colour by — see ``TrailDraftShading``. A locked tap
-    /// leaves the shared setting alone, and the control shows *Difficulty*
-    /// while the setting is *Elevation*, because that is what the maker draws.
-    var unlockElevation: (() -> Void)?
-
     @Environment(OpenHikesModel.self) private var appModel
 
     var body: some View {
         let shading = appModel.routeShading
-        let isLocked = unlockElevation != nil
-        let shown = shading.coloring.locking(elevation: isLocked)
+        let shown = shading.coloring
         VStack(alignment: .leading, spacing: 8) {
             Label("Color By", systemImage: "mountain.2")
                 .frame(minHeight: StatCardMetrics.rowMinimumHeight)
@@ -189,39 +180,20 @@ struct RouteColoringPicker: View {
                 "Color By",
                 selection: Binding(
                     get: { shown },
-                    set: { picked in
-                        if picked == .elevation, let unlockElevation {
-                            unlockElevation()
-                        } else {
-                            shading.setColoring(picked)
-                        }
-                    }
+                    set: { shading.setColoring($0) }
                 )
             ) {
                 Text("Difficulty").tag(RouteColoring.difficulty)
-                if isLocked {
-                    // A segment draws a title or an image, never both, so the
-                    // lock is a character of the title.
-                    Text("Elevation \u{1F512}")
-                        .accessibilityLabel("Elevation, OpenHikes Pro")
-                        .tag(RouteColoring.elevation)
-                } else {
-                    Text("Elevation").tag(RouteColoring.elevation)
-                }
+                Text("Elevation").tag(RouteColoring.elevation)
                 Text("None").tag(RouteColoring.off)
             }
             .pickerStyle(.segmented)
             .accessibilityIdentifier("route-coloring-picker")
             RouteShadeKey(coloring: shown)
                 .opacity(shown == .off ? Self.offKeyOpacity : 1)
-            Group {
-                caption(for: shown)
-                if isLocked {
-                    Text("Elevation colors for a trail you draw come with OpenHikes Pro.")
-                }
-            }
-            .font(.caption2)
-            .foregroundStyle(.secondary)
+            caption(for: shown)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
         .padding(.bottom, 10)
     }

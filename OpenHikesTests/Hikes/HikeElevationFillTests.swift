@@ -37,11 +37,12 @@ struct HikeElevationFillTests {
         }
     }
 
-    /// A source that cannot answer — a refusal, a timeout, no key.
+    /// A source that cannot answer — a square that would not come, a
+    /// timeout, no server.
     nonisolated private struct RefusingSource: CuratedElevationSourcing {
         @concurrent
         func heights(at coordinates: [CLLocationCoordinate2D]) async throws -> [Double] {
-            throw CuratedElevationFailure.notEntitled
+            throw CuratedElevationFailure.unreachable
         }
     }
 

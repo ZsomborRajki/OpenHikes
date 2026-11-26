@@ -12,7 +12,6 @@
 import CoreLocation
 import Foundation
 import MapKit
-import Observation
 @testable import OpenHikes
 import OpenHikesData
 import Testing
@@ -26,21 +25,10 @@ extension MapCoordinatorTests {
         static let high: Double = 200
     }
 
-    /// Whether OpenHikes Pro is on, observable as the entitlement store is.
-    /// Not private: the `@Observable` expansion cannot see a private type.
-    @Observable
-    final class Unlock {
-        var isOn = false
-    }
-
-    /// A two-stop hiking trail with its heights in, on a map, coloured by
-    /// `shading`'s control. `maker` defaults to the suite's own.
-    private func coloredTrail(
-        _ coordinator: MapView.Coordinator,
-        shading: RouteShading,
-        maker: TrailDraftController? = nil
-    ) async -> MKMapView {
-        let drawing = maker ?? trailMaker
+    /// A two-stop hiking trail with its heights in, on the suite's maker, on
+    /// a map, coloured by `shading`'s control.
+    private func coloredTrail(_ coordinator: MapView.Coordinator, shading: RouteShading) async -> MKMapView {
+        let drawing = trailMaker
         let map = makeMap(mapView(trailMaker: drawing, routeShading: shading), coordinator)
         drawing.setEditing(true)
         drawing.appendWaypoint(at: CLLocationCoordinate2D(latitude: Slope.south, longitude: Slope.longitude))
@@ -117,31 +105,6 @@ extension MapCoordinatorTests {
         trailMaker.appendWaypoint(at: CLLocationCoordinate2D(latitude: Slope.north + 0.01, longitude: Slope.longitude))
 
         await settle(until: "the edit to take them off") { coordinator.trailDraftShades.line == nil }
-        #endif
-    }
-
-    /// Without OpenHikes Pro the maker's *Elevation* draws by difficulty —
-    /// none here, since this maker has no graph — so heights alone colour
-    /// nothing, and a purchase brings the steepness in without the line
-    /// being touched.
-    @Test("without Pro, Elevation draws no steepness until the subscription arrives")
-    func elevationWaitsForPro() async throws {
-        #if os(iOS)
-        let unlock = Unlock()
-        let maker = TrailDraftController(elevationUnlocked: { unlock.isOn })
-        let coordinator = MapView.Coordinator()
-        // Held here: the map holds the control weakly.
-        let shading = try scratchShading(.elevation)
-        let map = await coloredTrail(coordinator, shading: shading, maker: maker)
-        defer { detach(map) }
-
-        #expect(!maker.shading.stretches(for: .elevation).isEmpty, "precondition: the steepness is measured")
-        coordinator.refreshTrailDraftShades(on: map)
-        #expect(coordinator.trailDraftShades.coloring === shading)
-        #expect(coordinator.trailDraftShades.line == nil)
-
-        unlock.isOn = true
-        await settle(until: "the purchase to bring the colours") { coordinator.trailDraftShades.line != nil }
         #endif
     }
 }

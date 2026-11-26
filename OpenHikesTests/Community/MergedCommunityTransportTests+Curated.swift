@@ -408,7 +408,7 @@ nonisolated final class StubElevationSource: CuratedElevationSourcing, @unchecke
     @concurrent
     func heights(at coordinates: [CLLocationCoordinate2D]) async throws -> [Double] {
         requests.withLock { $0 += 1 }
-        guard let height else { throw CuratedElevationFailure.noKey }
+        guard let height else { throw CuratedElevationFailure.uncovered }
         return coordinates.map { _ in height }
     }
 }

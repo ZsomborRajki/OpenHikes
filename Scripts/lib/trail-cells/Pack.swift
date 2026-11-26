@@ -224,6 +224,8 @@ enum SquarePack {
         case .routes: "OpenStreetMap's hiking routes, one OpenHikes hiking-routes square a tile, a zoom a level "
             + "of detail (RouteSquareFile)"
         case .places: "The places an OpenHikes place search offers, one square a tile (PlaceSquareFile)"
+        // Never packed: build-elevation writes its own archive.
+        case .elevation: "The Copernicus DEM's heights, one OpenHikes elevation square a tile (ElevationSquareFile)"
         }
         var metadata: [String: Any] = [
             "name": "OpenHikes \(set.listName)",

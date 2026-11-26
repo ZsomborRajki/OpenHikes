@@ -2,18 +2,21 @@
 //  SquareArchive.swift
 //  OpenHikes
 //
-//  OpenStreetMap's pre-built squares on the OpenHikes tile server: the four
-//  sets, what an archive of each is called there, which tile of it a square
-//  is, and where that tile is asked for.
+//  The pre-built squares on the OpenHikes tile server: the five sets, what
+//  an archive of each is called there, which tile of it a square is, and
+//  where that tile is asked for.
 //
-//  Each set answers ahead of time a question that used to wait in Overpass's
-//  queue: the day hikes the Community tab searches (``TrailCellGrid``), the
-//  hiking-routes layer (``RouteSquareGrid``), the places a place search
-//  offers (``PlaceSquareGrid``), and the trail graph with the roads that join
-//  its trails (``RoutingGraphArchive``), which the trail maker routes over and
-//  a recording is matched against. Each set is one PMTiles archive in the
-//  tile server's bucket, built from the planet by `Scripts/trail-cells.sh`,
-//  and read a tile at a time through the server (``SquareArchiveServer``).
+//  Four of the sets answer ahead of time a question that used to wait in
+//  Overpass's queue: the day hikes the Community tab searches
+//  (``TrailCellGrid``), the hiking-routes layer (``RouteSquareGrid``), the
+//  places a place search offers (``PlaceSquareGrid``), and the trail graph
+//  with the roads that join its trails (``RoutingGraphArchive``), which the
+//  trail maker routes over and a recording is matched against. The fifth is
+//  the heights a line with none is given (``ElevationSquareGrid``), which
+//  were a billed service's. Each set is one PMTiles archive in the tile
+//  server's bucket, built by `Scripts/trail-cells.sh` (the four from the
+//  planet, the heights from the Copernicus DEM), and read a tile at a time
+//  through the server (``SquareArchiveServer``).
 //  The server's manifest names each set's archives under a list of its own,
 //  newest first.
 //
@@ -28,7 +31,7 @@
 //  ## A tile is a square
 //
 //  A PMTiles archive keys its tiles by zoom, column and row. The trail
-//  graph's tiles are the slippy-map tiles of its regions. The other three
+//  graph's tiles are the slippy-map tiles of its regions. The other four
 //  sets are filed by squares of latitude and longitude, which no slippy-map
 //  tile lines up with, so a square goes in at its own row and column, at the
 //  shallowest zoom whose grid has room for every square of its kind: the
@@ -57,6 +60,8 @@ nonisolated struct SquareArchiveTile: Hashable, Sendable {
 
 /// One set of pre-built squares on the tile server.
 nonisolated enum SquareArchive: String, CaseIterable, Sendable {
+    /// The heights a line with none is given (``ElevationSquareGrid``).
+    case elevation = "elevation"
     /// What a place search offers (``PlaceSquareGrid``).
     case places = "places"
     /// The hiking-routes layer (``RouteSquareGrid``), four levels of it.
@@ -80,6 +85,7 @@ nonisolated enum SquareArchive: String, CaseIterable, Sendable {
         case .trails: TrailCellGrid.generation
         case .routes: RouteSquareGrid.generation
         case .places: PlaceSquareGrid.generation
+        case .elevation: ElevationSquareGrid.generation
         }
     }
 
@@ -94,6 +100,8 @@ nonisolated enum SquareArchive: String, CaseIterable, Sendable {
             Self.routesZoom(of: .overview)...Self.routesZoom(of: .detail)
         case .places:
             Self.placesZoom...Self.placesZoom
+        case .elevation:
+            Self.elevationZoom...Self.elevationZoom
         }
     }
 
@@ -153,6 +161,11 @@ nonisolated extension SquareArchive {
             return PlaceSquareGrid.square(named: name).map { square in
                 SquareArchiveTile(zoom: Self.placesZoom, x: square.column, y: square.row)
             }
+
+        case .elevation:
+            return ElevationSquareGrid.square(named: name).map { square in
+                SquareArchiveTile(zoom: Self.elevationZoom, x: square.column, y: square.row)
+            }
         }
     }
 
@@ -180,6 +193,11 @@ nonisolated extension SquareArchive {
             tile.zoom == Self.placesZoom
                 ? PlaceSquareGrid.recordName(for: PlaceSquare(row: tile.y, column: tile.x))
                 : nil
+
+        case .elevation:
+            tile.zoom == Self.elevationZoom
+                ? ElevationSquareGrid.recordName(for: ElevationSquare(row: tile.y, column: tile.x))
+                : nil
         }
         // Only a name that reads back as this very tile: one past the grid's
         // last row or column names no square.
@@ -195,6 +213,13 @@ nonisolated extension SquareArchive {
     /// The places' zoom: a one-degree grid, 360 squares round.
     private static var placesZoom: Int {
         zoom(holdingRows: PlaceSquareGrid.rowCount, columns: PlaceSquareGrid.columnCount)
+    }
+
+    /// The heights' zoom: an eighth-degree grid, 2,880 squares round, rows
+    /// from the North Pole. A degree is the 8 × 8 tiles under one tile of
+    /// zoom 9, so its squares are one run of tile ids.
+    static var elevationZoom: Int {
+        zoom(holdingRows: ElevationSquareGrid.rowCount, columns: ElevationSquareGrid.columnCount)
     }
 
     /// A hiking-routes level's zoom: 7 for the 4° overview, then 9, 10 and

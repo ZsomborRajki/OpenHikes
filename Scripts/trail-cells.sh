@@ -45,10 +45,14 @@
 #   Scripts/trail-cells.sh build-graph <extract.osm.pbf> [--out <dir>] [--world] [--keep-work]
 #   Scripts/trail-cells.sh build-routing <extract.osm.pbf> [--out <dir>] [--world] [--keep-work]
 #   Scripts/trail-cells.sh pack <dir> [--out <dir>] [--name <archive>]
+#   Scripts/trail-cells.sh build-elevation [--out <dir>] [--area <s>,<w>,<n>,<e>] [--name <archive>]
+#                                 [--source <url|dir>] [--coarser <url|dir>] [--jobs <n>]
 #   Scripts/trail-cells.sh upload-archive <dir>
 #   Scripts/trail-cells.sh upload-routing <dir>
 #   Scripts/trail-cells.sh routing-tile <archive.pmtiles> <x> <y> [--json]
 #   Scripts/trail-cells.sh archive-tile <archive.pmtiles> <square-name> [--json]
+#   Scripts/trail-cells.sh copernicus-tile <file.tif> [--post <row>,<column>]...
+#   Scripts/trail-cells.sh elevation-height <archive.pmtiles> <latitude> <longitude>
 #   Scripts/trail-cells.sh upload <dir> --environment development|production
 #                                 [--dry-run] [--yes] [--replace-world]
 #   Scripts/trail-cells.sh prune trails|routes|places|graph
@@ -132,8 +136,22 @@
 #             not hold as ground with nothing on it. The archive is written
 #             beside the output and read back, every tile held to its file,
 #             before it replaces an earlier pack there.
+#   build-elevation
+#             File the Copernicus DEM's heights at 30 m into the elevation
+#             squares, one PMTiles archive in <dir> (default
+#             .build/trail-cells/elevation), named for the hour the build
+#             began, elevation-YYYYMMDD-HH, with archive-build.json beside it:
+#             see OpenHikes/Hikes/Elevation/ElevationSquareGrid.swift. It
+#             reads every tile of the model's public bucket (--source, a
+#             directory of its tiles for a test) and the names of the 90 m
+#             model's (--coarser), for the land the 30 m one withholds; see
+#             Scripts/lib/trail-cells/ElevationBuild.swift. --area limits it
+#             to whole degrees, south,west,north,east, which upload-archive
+#             then refuses. --jobs reads that many tiles at once (16).
+#             Measured on the world on 2026-11-26: 549 GiB read, an archive
+#             of some 60 GB, about three hours at 60 MB/s.
 #   upload-archive
-#             Put the archive build-routing or pack wrote in <dir> in the R2
+#             Put the archive build-routing, pack or build-elevation wrote in <dir> in the R2
 #             bucket openhikes-tiles under its own name, refusing one that is
 #             not the whole world and a name the bucket already holds, as
 #             Scripts/vector-extras.sh upload does. Then name it in the app's
@@ -159,6 +177,12 @@
 #   archive-tile
 #             Print what the square of that name holds, read out of an archive
 #             of its set as the tile server reads it.
+#   copernicus-tile
+#             Print a Copernicus DEM tile's size, place and range, and the
+#             heights at the posts asked for, as build-elevation reads them.
+#   elevation-height
+#             Print the height at a point, read out of an elevation archive's
+#             squares as the app reads them, and which squares it read.
 #   whoami    Print the account the server-to-server key acts as.
 #   inspect   Print what a square's file holds.
 #   cell      Print the record name of the square a point is in.
@@ -231,6 +255,9 @@ tool_sources() {
         "$repository_root/OpenHikes/Recording/Squares/TrailGraphSquareFile.swift" \
         "$repository_root/OpenHikes/Recording/Squares/RoutingGraphArchive.swift" \
         "$repository_root/OpenHikes/Tiles/Squares/SquareArchive.swift" \
+        "$repository_root/OpenHikes/Hikes/Elevation/ElevationSquareGrid.swift" \
+        "$repository_root/OpenHikes/Hikes/Elevation/ElevationSquareFile.swift" \
+        "$repository_root/OpenHikes/Hikes/Elevation/ElevationCredit.swift" \
         "$repository_root/OpenHikes/Recording/TrailGraphHighway.swift" \
         "$repository_root/OpenHikes/Tiles/Countries/PMTilesFile.swift" \
         "$repository_root/OpenHikes/Community/Transport/CommunitySchema.swift"
@@ -545,8 +572,36 @@ pack() {
     echo "Next, Scripts/trail-cells.sh upload-archive $out"
 }
 
-# `upload-archive <dir>`: the archive a whole-world build-routing or pack
-# wrote, into the bucket under its own name, refusing one already there.
+# `build-elevation [--out <dir>] [--area …] [--name …] [--source …]
+# [--coarser …] [--jobs <n>]`: the tool's command of the same name, into
+# .build/trail-cells/elevation by default.
+build_elevation() {
+    local out="$build_dir/elevation" arguments=()
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --out)
+                [[ $# -ge 2 ]] || usage_error "missing value for --out."
+                out="$2"
+                shift 2
+                ;;
+            --area|--name|--source|--coarser|--jobs)
+                [[ $# -ge 2 ]] || usage_error "missing value for $1."
+                arguments+=("$1" "$2")
+                shift 2
+                ;;
+            *)
+                usage_error "unknown option '$1'."
+                ;;
+        esac
+    done
+    prepare_tool
+    "$tool" build-elevation --out "$out" ${arguments[@]+"${arguments[@]}"}
+    echo "Next, Scripts/trail-cells.sh upload-archive $out"
+}
+
+# `upload-archive <dir>`: the archive a whole-world build-routing, pack or
+# build-elevation wrote, into the bucket under its own name, refusing one
+# already there.
 upload_archive() {
     [[ $# -eq 1 ]] || usage_error "upload-archive takes the directory build-routing or pack wrote."
     local directory="$1" record="" file name complete archive
@@ -562,8 +617,9 @@ build-routing, or pack a build of squares, first."
     complete="$(plutil -extract complete raw -o - "$record" 2>/dev/null)" || die "$record does not say what it covers."
     [[ "$complete" == true ]] || die "$name is not the whole world. The app reads a tile the archive does \
 not hold as ground with nothing on it, so only a build of the planet with --world goes up."
-    [[ "$name" =~ ^(routing|trails|routes|places)-[0-9]{8}-[0-9]{2}$ ]] \
-        || die "$name is not named for the hour its planet is current to. Build it from a planet whose header says."
+    [[ "$name" =~ ^(routing|trails|routes|places|elevation)-[0-9]{8}-[0-9]{2}$ ]] \
+        || die "$name is not named for the hour its planet is current to, or its elevation build began. \
+Build it from a planet whose header says."
     archive="$directory/$name.pmtiles"
     [[ -f "$archive" ]] || die "there is no archive at $archive."
     r2_load_keys
@@ -722,7 +778,10 @@ case "$command" in
     upload|prune|whoami)
         with_database "$command" "$@"
         ;;
-    inspect|cell|sign|routing-tile|archive-tile)
+    build-elevation)
+        build_elevation "$@"
+        ;;
+    inspect|cell|sign|routing-tile|archive-tile|copernicus-tile|elevation-height|copernicus-fixture)
         prepare_tool
         "$tool" "$command" "$@"
         ;;

@@ -306,9 +306,8 @@ struct HikeTrailProgress: View {
 
 /// Keeps the empty chart's tint observation out of `HikeDetailView.body`.
 ///
-/// A hike with no heights at all is one OpenHikes Pro fills in: without the
-/// subscription the card is a way to it, and with it the heights are read
-/// once and saved onto the hike — see ``HikeElevationFill``. The chart then
+/// A hike with no heights at all has them read once from the elevation
+/// squares and saved onto it — see ``HikeElevationFill``. The chart then
 /// takes this card's place, because the line the detail screen keys its
 /// profile on has changed.
 ///
@@ -320,29 +319,19 @@ struct HikeElevationPlaceholder: View {
     let hike: Hike
     let line: ShownLine
 
-    @Environment(OpenHikesModel.self) private var appModel
     @Environment(\.modelContext) private var context
     /// The request whose answer is out. Only its own end clears it: a new
     /// line starts the next request while this one is still winding down.
     @State private var reading: HikeElevationFill.Request?
 
     var body: some View {
-        let entitlement = appModel.entitlement
-        let request = HikeElevationFill.Request(hike: hike, line: line, isEntitled: entitlement.isEntitled)
-        Group {
-            if entitlement.state == .notEntitled, request.isFillable {
-                ElevationProPrompt(tint: hike.tintOpaque, message: Self.message)
-            } else {
-                ElevationPlaceholderView(
-                    tint: hike.tintOpaque,
-                    message: reading == request ? "Reading elevation\u{2026}" : Self.message
-                )
-            }
-        }
-        // Keyed on the subscription, so a purchase made from the card asks at
-        // once rather than the next time the hike is opened, on the line
-        // turning out to need heights, and on the line itself — see
-        // ``HikeElevationFill/Request``.
+        let request = HikeElevationFill.Request(hike: hike, line: line)
+        ElevationPlaceholderView(
+            tint: hike.tintOpaque,
+            message: reading == request ? "Reading elevation\u{2026}" : Self.message
+        )
+        // Keyed on the line turning out to need heights, and on the line
+        // itself — see ``HikeElevationFill/Request``.
         .task(id: request) {
             guard request.asks, let source = OpenHikesModel.makeTrailElevationSource() else { return }
             reading = request
@@ -352,10 +341,8 @@ struct HikeElevationPlaceholder: View {
     }
 
     // "in this file" for as long as every hike without heights had arrived as
-    // one. A recorded walk with no barometer never had a file, and since the
-    // trail maker neither has a drawn trail — which is exactly the hike a
-    // free subscriber's drawn trail *always* is, because the heights ride the
-    // gate ``StadiaElevationSource`` enforces.
+    // one. A recorded walk with no barometer never had a file, and neither
+    // has a drawn trail whose heights could not be read when it was saved.
     private static let message: LocalizedStringKey = "No elevation data for this hike"
 }
 
