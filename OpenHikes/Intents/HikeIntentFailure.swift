@@ -25,10 +25,13 @@ nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
     /// underlying text is logged where it is caught rather than carried here:
     /// every string this enum holds is read out loud.
     case couldNotSave
-    /// Asked to start from somewhere that cannot put up the location prompt
-    /// a start would meet — the watch — while the phone has never been
-    /// asked, or holds only approximate location. Nothing was started, and
-    /// the hiker is told why rather than told it began.
+    /// A start that is waiting on location the hiker has not given. Asked
+    /// for from somewhere that cannot put the prompt up — the watch — while
+    /// the phone has never been asked, or holds only approximate location;
+    /// asked for again while another Start waits on that prompt; or a Start
+    /// whose intent was cancelled before the prompt was answered, and which
+    /// was withdrawn with it. Nothing was started, and the hiker is told why
+    /// rather than told it began.
     ///
     /// The whole sentence is the description, for the reason
     /// ``walking(trail:)`` gives: the watch shows the description alone.

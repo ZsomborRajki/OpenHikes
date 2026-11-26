@@ -94,13 +94,28 @@ extension HikeIntentCoordinator {
     /// the wrong problem. Exhaustive so that a phase
     /// added later fails to compile here rather than falling into a default
     /// that quietly reports success.
-    func startRecording() async throws(HikeIntentFailure) -> LiveRecordingReport {
+    ///
+    /// - Parameter canPromptForLocation: whether a location prompt the start
+    ///   would meet can be answered where this runs. `false` from the watch:
+    ///   the prompt is the phone's, and a phone in a pocket cannot show it, so
+    ///   the start would wait on an answer nobody can give. It is refused
+    ///   with why instead, as Control Center's toggle defers to the app for
+    ///   the same reason.
+    func startRecording(
+        canPromptForLocation: Bool = true
+    ) async throws(HikeIntentFailure) -> LiveRecordingReport {
         await settleRecorder()
         switch recorder.phase {
         // `start()` resets a failed session and tries again, so a refusal the
         // hiker has since fixed — permission granted in Settings — starts
         // cleanly on the second ask.
         case .idle, .failed: break
+        // Another Start, still waiting on the hiker's answer to a location
+        // prompt. What it comes to is not known yet, and "already recording"
+        // said over the prompt is the sentence #1655 took away from the first
+        // Start; this one is told what the recording waits on.
+        case .waitingForFix where recorder.isAwaitingStartAnswer && authorization.needsForeground:
+            throw .needsLocationPermission
         case .waitingForFix, .recording, .paused: throw .alreadyRecording
         case .saving, .recovering: throw .busyFinishing
         }
@@ -108,19 +123,43 @@ extension HikeIntentCoordinator {
         // that. A walk is not ended from here: Siri and the watch cannot ask
         // the hiker whether they mean to, and the map's button can.
         if let trail = walkUnderWay() { throw .walking(trail: trail) }
+        // After both, so what stands in the way first is named first.
+        guard canPromptForLocation || !authorization.needsForeground else { throw .needsLocationPermission }
         await recorder.start()
         // `start()` answers an install that has never asked by putting up the
         // system's prompt and returning, and no recording exists until the
         // hiker answers it. Waited for, so what is reported is the answer — a
         // session, or the refusal — and never the question: Siri said
-        // "Recording your hike" over a prompt the hiker then declined.
+        // "Recording your hike" over a prompt the hiker then declined. It
+        // waits for as long as the prompt is up, as a Start already allowed
+        // waits inside `start()` on the precision sheet.
         await recorder.settleStart()
+        try await withdrawUnansweredStart()
         try throwIfRecorderFailed()
+        // Ended before it had a session, by a Stop from Siri, the watch or
+        // Control Center while the prompt was up: nothing is recording, and
+        // nothing is being finished either.
+        guard recorder.sessionID != nil else { throw .noActiveRecording }
         // A failed session that kept its id is not reset by `start()`, which
         // then returns having done nothing. Without this the hiker is told
         // their hike is being recorded by the very call that declined to.
-        guard recorder.isCapturingFixes, recorder.sessionID != nil else { throw .busyFinishing }
+        guard recorder.isCapturingFixes else { throw .busyFinishing }
         return liveReport()
+    }
+
+    /// Withdraws the Start when ``HikeRecorder/settleStart()`` stopped waiting
+    /// before it had an answer, which it does only when the intent was
+    /// cancelled: by the hiker, or by the system giving up on it.
+    ///
+    /// Left standing, an Allow tapped afterwards would start a recording
+    /// behind a request that had already ended, and nobody would have been
+    /// told it began. It is ended as a Stop ends a Start that has no session,
+    /// and the prompt, still up, is then only a question about permission.
+    private func withdrawUnansweredStart() async throws(HikeIntentFailure) {
+        guard recorder.isAwaitingStartAnswer else { return }
+        await recorder.discard()
+        try throwIfRecorderFailed()
+        throw .needsLocationPermission
     }
 
     func pauseRecording() async throws(HikeIntentFailure) -> LiveRecordingReport {
