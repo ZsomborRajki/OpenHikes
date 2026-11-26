@@ -669,8 +669,11 @@ private func delete(_ hike: Hike, among hikes: [Hike]) {
     // longer exists — stats, elevation chart, and live Offline controls
     // writing to a detached object nothing will persist. SwiftData
     // detaches rather than invalidates, so it's a stale screen rather than a
-    // crash. `SheetRoute.removeHike` owns both, including why the path is
-    // cleared unconditionally where the selection is not.
+    // crash, because the deletion read what that screen reads before the
+    // delete — see `Hike.resolveDecodedColumns()`. The pop still draws the
+    // screen once more, after the save. `SheetRoute.removeHike` owns both,
+    // including why the path is cleared unconditionally where the selection
+    // is not.
     //
     // Safe to leave until after the save because no body runs in between:
     // this method holds the main actor from the delete to here, and SwiftUI
