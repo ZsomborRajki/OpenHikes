@@ -7,7 +7,12 @@
 //  two such boxes meet. Which clocks that keeps from a walk is
 //  `LibraryTotalsSameGroundTests`.
 //
+//  A walk's stretches are placed through blocks of its trail's points
+//  (`LibraryFootprint.Line`), and held here to the box of every point they
+//  pass, taken one by one, on lines and stretches laid down at random.
+//
 
+import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesData
@@ -149,13 +154,13 @@ struct LibraryFootprintTests {
         let profile = RouteProfile(route: Self.trail)
         let leg = profile.distances[1]
 
-        let footprint = try #require(LibraryFootprint(covering: [leg / 2...leg * 1.5], along: profile))
+        let footprint = try #require(LibraryFootprint.Line(profile).footprint(covering: [leg / 2...leg * 1.5]))
 
         #expect(footprint.southLat.isApproximatelyEqual(to: 47.0045, absoluteTolerance: 1e-6))
         #expect(footprint.northLat.isApproximatelyEqual(to: 47.0135, absoluteTolerance: 1e-6))
         #expect(footprint.lonSpan == 0)
-        #expect(LibraryFootprint(covering: [], along: profile) == nil, "a walk that covered nothing")
-        #expect(LibraryFootprint(covering: [0...leg], along: RouteProfile(route: [])) == nil)
+        #expect(LibraryFootprint.Line(profile).footprint(covering: []) == nil, "a walk that covered nothing")
+        #expect(LibraryFootprint.Line(RouteProfile(route: [])).footprint(covering: [0...leg]) == nil)
     }
 
     @Test("two stretches lie in one box that holds both, and nothing past them")
@@ -164,7 +169,7 @@ struct LibraryFootprintTests {
         let distances = profile.distances
 
         let footprint = try #require(
-            LibraryFootprint(covering: [0...distances[1], distances[3]...distances[3]], along: profile)
+            LibraryFootprint.Line(profile).footprint(covering: [0...distances[1], distances[3]...distances[3]])
         )
 
         #expect(footprint.southLat == 47.0)
@@ -181,9 +186,94 @@ struct LibraryFootprintTests {
         line[2].boundary = .paused
         let profile = RouteProfile(route: line)
 
-        let footprint = try #require(LibraryFootprint(covering: [0...profile.distances[1]], along: profile))
+        let footprint = try #require(LibraryFootprint.Line(profile).footprint(covering: [0...profile.distances[1]]))
 
         #expect(profile.distances[1] == profile.distances[2], "precondition: the pause has no length")
         #expect(footprint.northLat == 47.5)
+    }
+
+    /// Lines of up to a dozen blocks, some across the antimeridian and some
+    /// with pauses, and stretches that start and end anywhere, past either
+    /// end and on a point included: the blocks give the box the points give
+    /// one by one, to the bit.
+    @Test("a walk placed through blocks lies where every point it passed lies", arguments: [1, 64, 1679])
+    func blocksPlaceAStretchAsItsPointsDo(seed: UInt64) {
+        var generator = SeededGenerator(seed: seed)
+        for _ in 0..<200 {
+            let count = Int.random(in: 0...(12 * LibraryFootprint.Line.blockLength + 1), using: &generator)
+            let longitude = Bool.random(using: &generator) ? 179.9 : 12.0
+            var heading = 0.0
+            let line = (0..<count).map { index in
+                heading += Double.random(in: -0.6...0.6, using: &generator)
+                var point = RouteCoordinate(
+                    latitude: 47 + Double(index) * 0.0003 * cos(heading),
+                    longitude: longitude + Double(index) * 0.0003 * sin(heading)
+                )
+                if index > 0, Int.random(in: 0..<40, using: &generator) == 0 {
+                    point.boundary = .paused
+                }
+                return point
+            }
+            let profile = RouteProfile(route: line)
+            let blocks = LibraryFootprint.Line(profile)
+            let total = profile.totalDistanceMeters
+            let stretches = (0..<Int.random(in: 1...3, using: &generator)).map { _ in
+                // Half of them from one point to another, so that a stretch
+                // often ends on a point at a block's edge or beside it.
+                guard count > 0, Bool.random(using: &generator) else {
+                    let start = Double.random(in: -50...(total + 50), using: &generator)
+                    return start...(start + Double.random(in: 0...(total / 2 + 1), using: &generator))
+                }
+                let ends = [Int.random(in: 0..<count, using: &generator), Int.random(in: 0..<count, using: &generator)]
+                return profile.distances[ends.min() ?? 0]...profile.distances[ends.max() ?? 0]
+            }
+
+            let pointByPoint = LibraryFootprint(points: stretches.flatMap { Self.pointsPassed(by: $0, along: profile) })
+
+            #expect(blocks.footprint(covering: stretches) == pointByPoint, "seed \(seed), \(count) points")
+        }
+    }
+
+    /// Every stretch from one point to another of a line two blocks and a
+    /// bit long, heading north so that each point further on is a new
+    /// northern edge: a block taken whole one point too soon, or too late,
+    /// shows.
+    @Test("a stretch from any point to any other lies where the points between lie")
+    func everyStretchBetweenPointsLiesWhereItsPointsDo() {
+        let count = 2 * LibraryFootprint.Line.blockLength + 3
+        let line = (0..<count).map { index in
+            RouteCoordinate(
+                latitude: 47 + Double(index) * 0.0003,
+                longitude: 12 + (index.isMultiple(of: 2) ? 0.0002 : 0)
+            )
+        }
+        let profile = RouteProfile(route: line)
+        let blocks = LibraryFootprint.Line(profile)
+        var mismatches: [ClosedRange<Int>] = []
+
+        for first in 0..<count {
+            for last in first..<count {
+                let stretch = profile.distances[first]...profile.distances[last]
+                let pointByPoint = LibraryFootprint(points: Self.pointsPassed(by: stretch, along: profile))
+                if blocks.footprint(covering: [stretch]) != pointByPoint {
+                    mismatches.append(first...last)
+                }
+            }
+        }
+
+        #expect(mismatches.isEmpty)
+    }
+
+    /// The ends of `stretch` and every point of the line whose distance lies
+    /// within it, found by looking at each.
+    private static func pointsPassed(
+        by stretch: ClosedRange<Double>,
+        along profile: RouteProfile
+    ) -> [CLLocationCoordinate2D] {
+        let ends = [stretch.lowerBound, stretch.upperBound].compactMap(profile.coordinate(atDistance:))
+        let passed = profile.coordinates.indices
+            .filter { stretch.contains(profile.distances[$0]) }
+            .map { profile.coordinates[$0] }
+        return ends + passed
     }
 }

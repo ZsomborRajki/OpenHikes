@@ -174,8 +174,9 @@ nonisolated struct LibraryHikeFacts: Equatable, Sendable {
     let clock: DateInterval?
     let isFromCommunity: Bool
     /// Where its line lay over its clock, from its first stamped point to its
-    /// last; `nil` for a hike with no clock, and for one whose line says
-    /// nowhere, which counts as anywhere — see the file header.
+    /// last; `nil`, which counts as anywhere — see the file header — for a
+    /// hike with no clock, a copy saved from the community, which is never
+    /// weighed, and one whose line says nowhere.
     var footprint: LibraryFootprint?
 
     var hasClock: Bool { clock != nil }
@@ -551,7 +552,7 @@ nonisolated enum LibraryTotalsSweep {
         using reads: Reads = .store
     ) async throws -> LibraryTotals {
         let library = try await read(from: container, using: reads)
-        assertOffMainThread("Counting the library weighs every walk against every clock")
+        assertOffMainThread("Counting the library weighs every walk against the clocks over its hours")
         return LibraryTotals(hikes: library.hikes, walks: library.walks, asOf: date, calendar: calendar)
     }
 
@@ -565,7 +566,7 @@ nonisolated enum LibraryTotalsSweep {
         using reads: Reads = .store
     ) async throws -> (hikes: [LibraryHikeFacts], outings: [LibraryOuting]) {
         let library = try await read(from: container, using: reads)
-        assertOffMainThread("Counting the library weighs every walk against every clock")
+        assertOffMainThread("Counting the library weighs every walk against the clocks over its hours")
         return (library.hikes, LibraryTotals.outings(hikes: library.hikes, walks: library.walks))
     }
 
@@ -573,15 +574,16 @@ nonisolated enum LibraryTotalsSweep {
     /// draws now when that is the line it was walked on — see the file
     /// header.
     ///
-    /// A trail's profile is built once, on its first walk that needs it, and
-    /// never for a recording's own walk, which the totals leave out: most
-    /// hikes have one, and few have been followed.
+    /// A trail's profile, and its line in blocks (``LibraryFootprint/Line``),
+    /// are built once, on its first walk that needs them, and never for a
+    /// recording's own walk, which the totals leave out: most hikes have
+    /// one, and few have been followed.
     private static func walkFacts(
         _ walks: [HikeWalk],
         revisions: [UUID: String],
         routes: [UUID: [RouteCoordinate]]
     ) -> [LibraryWalkFacts] {
-        var profiles: [UUID: RouteProfile] = [:]
+        var lines: [UUID: (profile: RouteProfile, ground: LibraryFootprint.Line)] = [:]
         return walks.map { walk in
             let coverage = walk.coverage
             let isRecordingsOwn = walk.endReason == .recorded
@@ -589,10 +591,13 @@ nonisolated enum LibraryTotalsSweep {
             var climb = 0.0
             var footprint: LibraryFootprint?
             if !isRecordingsOwn, !trailHasChanged, let route = routes[walk.hikeID] {
-                let profile = profiles[walk.hikeID] ?? RouteProfile(route: route)
-                profiles[walk.hikeID] = profile
-                climb = profile.climb(walking: coverage)?.gainMeters ?? 0
-                footprint = LibraryFootprint(covering: coverage.ranges, along: profile)
+                let line = lines[walk.hikeID] ?? {
+                    let profile = RouteProfile(route: route)
+                    return (profile, LibraryFootprint.Line(profile))
+                }()
+                lines[walk.hikeID] = line
+                climb = line.profile.climb(walking: coverage)?.gainMeters ?? 0
+                footprint = line.ground.footprint(covering: coverage.ranges)
             }
             return LibraryWalkFacts(
                 hikeID: walk.hikeID,
