@@ -91,6 +91,26 @@ struct CloudSyncStatusTests {
         #expect(status.detail.contains("Last synced"))
     }
 
+    /// A setup that runs again later in a launch, as mirroring's does after
+    /// it resets, settles the row and leaves the time the last import or
+    /// export earned where it was.
+    @Test("A pass that is not a sync settles the row and keeps the earned time")
+    func unstampedPassKeepsThePreviousTime() throws {
+        let status = CloudSyncStatus()
+        status.account = .available
+        status.began()
+        status.finished()
+        let earned = try #require(status.lastSyncedAt)
+
+        status.began()
+        #expect(status.activity == .working)
+        status.finished(stampingSync: false)
+
+        #expect(status.activity == .idle)
+        #expect(status.lastSyncedAt == earned)
+        #expect(status.detail.contains("Last synced"))
+    }
+
     /// "Waiting for iCloud" is not "Sync Problem": there is nothing for the
     /// user to do, and the retry that succeeds is silent.
     @Test("A transient failure is not reported as a problem")

@@ -97,11 +97,11 @@ final class CloudSyncStatus {
     /// What the pass currently running has raised, if anything.
     ///
     /// A pass is one mirroring event's start/end bracket. Without this,
-    /// ``finished()`` had no way to tell a clean pass from one that failed a
-    /// moment earlier, so every failure raised during an export was erased by
-    /// the event immediately after it: "Sync Problem", its detail line and
-    /// ``CloudSyncSection``'s warning icon were unreachable, and
-    /// ``lastSyncedAt`` was stamped for passes that had just failed.
+    /// ``finished(stampingSync:)`` had no way to tell a clean pass from one
+    /// that failed a moment earlier, so every failure raised during an export
+    /// was erased by the event immediately after it: "Sync Problem", its
+    /// detail line and ``CloudSyncSection``'s warning icon were unreachable,
+    /// and ``lastSyncedAt`` was stamped for passes that had just failed.
     ///
     /// Transient problems are held here too, for the same reason and with the
     /// same consequence: a pass the network cut short has not synced, so it
@@ -187,9 +187,9 @@ final class CloudSyncStatus {
         }
     }
 
-    /// Starts a pass. Clearing the flag here rather than in ``finished()`` is
-    /// what lets a failure outlive the pass that raised it while still being
-    /// cleared by the next attempt.
+    /// Starts a pass. Clearing the flag here rather than in
+    /// ``finished(stampingSync:)`` is what lets a failure outlive the pass
+    /// that raised it while still being cleared by the next attempt.
     func began() {
         passProblem = nil
         activity = .working
@@ -198,9 +198,11 @@ final class CloudSyncStatus {
     /// Ends a pass. One that raised something goes on saying so, and does not
     /// claim a sync time it did not earn.
     ///
-    /// - Parameter stampingSync: whether the pass moved hikes. A setup does
-    ///   not, so it settles the row and leaves the last sync time where an
-    ///   import or an export put it.
+    /// - Parameter stampingSync: whether the pass was an import or an export,
+    ///   which stamps the time whether or not it carried any hikes: the time
+    ///   says when this device and iCloud last agreed, not when something
+    ///   last moved. A setup is neither, so it settles the row and leaves the
+    ///   time where the last import or export put it.
     func finished(stampingSync: Bool = true) {
         guard passProblem == nil else { return }
         activity = .idle
