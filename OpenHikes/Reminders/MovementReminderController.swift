@@ -293,6 +293,12 @@ extension MovementReminderController {
     /// delivers none, and that is the recording this is for. Whatever ends
     /// the pause takes it back down, shown or not.
     ///
+    /// Not posted again when the notification centre refuses it (#1682),
+    /// unlike every reminder that a fix decides. The stop is the one moment it
+    /// can be scheduled from: the phone it is for hears nothing more until the
+    /// hiker walks on, which takes it down, or opens the app, which shows the
+    /// paused recording itself.
+    ///
     /// - Parameter stoppedAt: when the stop began, which the pause is counted
     ///   from.
     func recordingDidAutoPause(since stoppedAt: Date) {
@@ -569,7 +575,9 @@ extension MovementReminderController {
     /// Nothing is spent until both have passed. An attempt that was refused
     /// or dropped was heard by nobody, so its pause keeps the allowance and
     /// the reminder stays owed, for ``reconcileWithAuthorization(prompting:)``
-    /// or for the next attempt ``MovementWatch`` allows.
+    /// or for the next attempt ``MovementWatch`` allows. So does one the
+    /// notification centre refuses after it was spent: see
+    /// ``refund(_:to:)``.
     private func postResume(_ attempt: ResumeAttempt) {
         enqueue { [weak self] in
             guard let self, mayPostResume(attempt), await notifier.authorize() else { return }
@@ -578,8 +586,31 @@ extension MovementReminderController {
     }
 
     private func postAuthorizedResume(_ attempt: ResumeAttempt) async {
-        guard mayPostResume(attempt), let reminder = takeResume(attempt.kind) else { return }
-        await notifier.post(reminder)
+        guard mayPostResume(attempt), let taken = takeResume(attempt.kind) else { return }
+        if await notifier.post(taken.reminder) { return }
+        refund(taken.spending, to: attempt)
+    }
+
+    /// Gives a pause back the reminder a refused banner spent (#1682), as a
+    /// refused permission would have left it — see
+    /// ``MovementWatch/refund(_:)``. The spend came before the post, which
+    /// keeps overlapping attempts to one banner, and the refusal can land
+    /// after the pause it was spent for has ended or been replaced: then
+    /// there is nothing of this one's to give back, and a newer pause is not
+    /// touched.
+    private func refund(_ spending: MovementWatch.Spending, to attempt: ResumeAttempt) {
+        switch attempt.kind {
+        case .resumeRecording:
+            guard var paused = pausedRecording, paused.id == attempt.pauseID else { return }
+            paused.watch.refund(spending)
+            pausedRecording = paused
+        case .resumeWalk:
+            guard var paused = pausedWalk, paused.id == attempt.pauseID else { return }
+            paused.watch.refund(spending)
+            pausedWalk = paused
+        default:
+            return
+        }
     }
 
     private func mayPostResume(_ attempt: ResumeAttempt) -> Bool {
@@ -601,21 +632,29 @@ extension MovementReminderController {
 
     /// Spends the allowance and words the reminder, with no suspension between
     /// the check before it and the post after it, so a second attempt finds
-    /// nothing left to send.
-    private func takeResume(_ kind: MovementReminderKind) -> MovementReminder? {
+    /// nothing left to send. Answers what was spent as well, for a refusal
+    /// to give back.
+    private func takeResume(
+        _ kind: MovementReminderKind
+    ) -> (reminder: MovementReminder, spending: MovementWatch.Spending)? {
         let now = clock()
         switch kind {
         case .resumeRecording:
-            guard var paused = pausedRecording, let moved = paused.watch.spendReminder(at: now) else { return nil }
+            guard var paused = pausedRecording, let spending = paused.watch.spend(at: now) else { return nil }
             pausedRecording = paused
-            return MovementReminderWording.resumeRecording(
-                movedMeters: moved,
+            let reminder = MovementReminderWording.resumeRecording(
+                movedMeters: spending.meters,
                 pausedFor: now.timeIntervalSince(paused.pausedAt)
             )
+            return (reminder, spending)
         case .resumeWalk:
-            guard var paused = pausedWalk, let moved = paused.watch.spendReminder(at: now) else { return nil }
+            guard var paused = pausedWalk, let spending = paused.watch.spend(at: now) else { return nil }
             pausedWalk = paused
-            return MovementReminderWording.resumeWalk(trailTitle: paused.trailTitle, movedMeters: moved)
+            let reminder = MovementReminderWording.resumeWalk(
+                trailTitle: paused.trailTitle,
+                movedMeters: spending.meters
+            )
+            return (reminder, spending)
         default:
             return nil
         }
@@ -624,6 +663,10 @@ extension MovementReminderController {
     /// Permission does not spend a once-only warning. Revalidate its current
     /// condition and subject after the ask, then commit immediately before
     /// posting so another queued attempt finds no allowance left to spend.
+    /// A banner the notification centre refuses takes its commitment back,
+    /// while the departure, walk or stop it was about lasts, so the next
+    /// observation that qualifies says it (#1682) — see
+    /// ``MovementWarningState/retract(_:id:)``.
     private func postWarning(_ kind: MovementReminderKind) {
         guard let id = warnings.pendingID(for: kind) else { return }
         enqueue { [weak self] in
@@ -635,7 +678,8 @@ extension MovementReminderController {
 
     private func postAuthorizedWarning(_ kind: MovementReminderKind, id: UUID) async {
         guard mayPostWarning(kind), let reminder = warnings.take(kind, id: id, at: clock()) else { return }
-        await notifier.post(reminder)
+        if await notifier.post(reminder) { return }
+        warnings.retract(kind, id: id)
     }
 
     private func mayPostWarning(_ kind: MovementReminderKind) -> Bool {

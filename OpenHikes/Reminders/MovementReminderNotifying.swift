@@ -62,9 +62,9 @@ protocol MovementReminderNotifying: AnyObject {
     /// did not take the request, so nothing reached the screen. What follows
     /// is the caller's. ``WeatherManager`` marks an alert said before it
     /// posts and takes its marks back on a `false`, so the next poll still
-    /// has the alert to say. ``MovementReminderController`` does not yet: a
-    /// warning or a Resume reminder it spent before posting stays spent
-    /// (#1682).
+    /// has the alert to say. ``MovementReminderController`` does the same
+    /// with a warning or a Resume reminder it spent before posting, so the
+    /// next observation that earns it says it (#1682).
     @discardableResult func post(_ reminder: MovementReminder) async -> Bool
 
     /// Takes a reminder back down — pending and already delivered.

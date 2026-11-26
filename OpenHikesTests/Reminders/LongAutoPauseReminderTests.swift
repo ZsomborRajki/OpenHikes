@@ -104,6 +104,28 @@ struct LongAutoPauseReminderTests {
         #expect(!harness.notifier.postedKinds.contains(.longAutoPause))
     }
 
+    /// The owner's call in #1682 was left to this change: the stop is the one
+    /// moment the banner can be scheduled from, so one the system refuses is
+    /// not posted again, not even on the way back into the app. The next
+    /// stop still has its own.
+    @Test("a banner the system refuses is not posted again, and the next stop has its own")
+    func aRefusedBannerIsNotRetried() async {
+        let harness = MovementReminderHarness.harness()
+        harness.notifier.refusesPosts = 1
+        harness.controller.recordingDidAutoPause(since: stoppedAt)
+        await harness.controller.settle()
+
+        harness.postDidBecomeActive()
+        await harness.controller.settle()
+        #expect(harness.notifier.refusedPosts == 1)
+        #expect(harness.notifier.posted.isEmpty)
+
+        harness.controller.recordingAutoPauseDidEnd()
+        harness.controller.recordingDidAutoPause(since: start)
+        await harness.controller.settle()
+        #expect(harness.notifier.postedKinds == [.longAutoPause])
+    }
+
     /// Answered so late that the half hour has already passed: the banner is
     /// shown at once rather than not at all.
     @Test("an overdue banner is shown at once")
