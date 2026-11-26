@@ -2,7 +2,7 @@
 //  CloudSyncOutcome.swift
 //  OpenHikes
 //
-//  One mirroring event, reduced to the only four things the settings row can
+//  One mirroring event, reduced to the only five things the settings row can
 //  say about it.
 //
 //  Its own `Sendable` type for two reasons. `NSPersistentCloudKitContainer`
@@ -27,6 +27,16 @@ nonisolated enum CloudSyncOutcome: Equatable, Sendable {
     case began
     /// Something waiting will not fix.
     case failed(String)
+    /// Mirroring finished setting itself up, and nothing failed. Not a sync:
+    /// nothing was imported or exported, and on a first launch the setup
+    /// finishes before the first import has even begun, so it settles the row
+    /// without the "Last synced" time only a finished import or export earns.
+    /// An event of a kind this build does not know ends here too, since only
+    /// those two are known to sync.
+    case setUpFinished
+    /// An import or an export finished, and nothing failed, whether or not it
+    /// had anything to carry: one that found nothing new still says this
+    /// device and iCloud agreed when it ended.
     case succeeded
     /// Something the network will fix on its own — see ``isTransient(_:)``.
     case transientFailure(String)
@@ -42,14 +52,28 @@ nonisolated enum CloudSyncOutcome: Equatable, Sendable {
     }
 
     init(event: NSPersistentCloudKitContainer.Event) {
+        self.init(type: event.type, hasEnded: event.endDate != nil, error: event.error)
+    }
+
+    /// The reduction itself, over what an event carries, so a suite can ask
+    /// it without an `Event`, which cannot be constructed.
+    ///
+    /// The kind is read only where it changes the answer: a setup that
+    /// finished is not a sync, while one that began or failed says what any
+    /// other event would.
+    init(type: NSPersistentCloudKitContainer.EventType, hasEnded: Bool, error: (any Error)?) {
         // An event with no end date has only just started; the same event is
         // posted again, with one, when it finishes.
-        guard event.endDate != nil else {
+        guard hasEnded else {
             self = .began
             return
         }
-        guard let error = event.error else {
-            self = .succeeded
+        guard let error else {
+            switch type {
+            case .import, .export: self = .succeeded
+            case .setup: self = .setUpFinished
+            @unknown default: self = .setUpFinished
+            }
             return
         }
         self = Self.isTransient(error)

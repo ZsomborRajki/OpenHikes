@@ -202,6 +202,41 @@ struct CloudSyncCoordinatorTests {
         #expect(coordinator.status.lastSyncedAt == nil)
     }
 
+    /// Core Data configuring its mirror is not a sync, and on a first launch
+    /// it finishes before the first import has begun: the row settles, but
+    /// "Last synced" waits for the import.
+    @Test("a finished setup settles the row without a sync time, and the import that follows stamps one")
+    func setUpThenImportStampsOnlyTheImport() throws {
+        let defaults = try Self.defaults()
+        let coordinator = Self.coordinator(defaults: defaults, isSyncingThisLaunch: true)
+        coordinator.status.account = .available
+
+        coordinator.apply(.began)
+        #expect(coordinator.status.activity == .working, "setting up shows as syncing")
+        coordinator.apply(.setUpFinished)
+        #expect(coordinator.status.lastSyncedAt == nil)
+        #expect(coordinator.status.activity == .idle)
+
+        coordinator.apply(.began)
+        coordinator.apply(.succeeded)
+        #expect(coordinator.status.lastSyncedAt != nil)
+    }
+
+    @Test("a finished setup followed by a failed import stamps nothing and shows the failure")
+    func setUpThenFailedImportStampsNothing() throws {
+        let defaults = try Self.defaults()
+        let coordinator = Self.coordinator(defaults: defaults, isSyncingThisLaunch: true)
+        coordinator.status.account = .available
+
+        coordinator.apply(.began)
+        coordinator.apply(.setUpFinished)
+        coordinator.apply(.began)
+        coordinator.apply(.failed("The operation couldn’t be completed."))
+
+        #expect(coordinator.status.lastSyncedAt == nil)
+        #expect(coordinator.status.activity == .failed("The operation couldn’t be completed."))
+    }
+
     /// A launch that deliberately does not mirror used to pause without ever
     /// resolving the account, and the account is what the row answers from —
     /// so the section read "Checking iCloud…" about a check nobody had

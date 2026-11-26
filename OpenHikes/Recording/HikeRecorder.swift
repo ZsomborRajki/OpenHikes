@@ -128,7 +128,9 @@ final class HikeRecorder: NSObject {
     @ObservationIgnored let clock: @Sendable () -> Date
     @ObservationIgnored let uptime: @Sendable () -> TimeInterval
     @ObservationIgnored let journalFlushDelay: Duration
-    @ObservationIgnored var sessionID: UUID?
+    @ObservationIgnored var sessionID: UUID? {
+        didSet { releaseStartWaiters() }
+    }
     @ObservationIgnored var sessionUptimeBase: TimeInterval?
     @ObservationIgnored var lastAcceptedPoint: RecordingPoint?
     /// The stretch of walk behind ``lastAcceptedPoint``, with its timestamps,
@@ -170,7 +172,11 @@ final class HikeRecorder: NSObject {
     /// The live subscription to ``PowerStateMonitor/state``. Held so it can be
     /// cancelled — see ``observePowerState()``.
     @ObservationIgnored var powerStateObservation: Task<Void, Never>?
-    @ObservationIgnored var startRequested = false
+    @ObservationIgnored var startRequested = false {
+        didSet { releaseStartWaiters() }
+    }
+    /// Whoever is waiting for a Start to be answered — see ``settleStart()``.
+    @ObservationIgnored var startWaiters: [CheckedContinuation<Void, Never>] = []
     /// Whether the failure in ``phase`` is a refused resume's, which left the
     /// walk as paused as it was — see ``refuseResume(_:)``. Cleared by every
     /// ``fail(_:endLocationUpdates:endsActivity:)`` and set after one by the
@@ -199,6 +205,14 @@ final class HikeRecorder: NSObject {
     /// Taken by the activation that makes the session, and let go of by
     /// ``resetSession()``.
     @ObservationIgnored var carriedSeed: RecordingSeed?
+    /// The walk a handoff carried when its start failed before a session
+    /// took it — see ``RecordingSeed``. Kept past the failure, which
+    /// ``resetSession()`` does not touch, for the recording screen's Start to
+    /// try that handoff again. Let go of by every other start asked for,
+    /// from any surface and whether or not it starts, by any session that
+    /// starts, and by ``letGoOfUnclaimedWalk()``: a walk starting, and the
+    /// recording screen opened for something else.
+    @ObservationIgnored var unclaimedSeed: RecordingSeed?
     @ObservationIgnored var pendingResumeFlag = false
     /// Refuses live fixes taken before this recording, or its current leg,
     /// began — see ``RecordingFixWindow``. `nil` until a session is under way.
@@ -434,6 +448,10 @@ extension HikeRecorder {
             resetSession()
         }
         guard phase == .idle else { return }
+        // Every start asked for, from any surface, lets a failed handoff's
+        // walk go: a retry hands it back in as the carried seed first, and
+        // anything else is a recording of its own — see ``unclaimedSeed``.
+        unclaimedSeed = nil
         startRequested = true
         phase = .waitingForFix
         switch source.authorization {

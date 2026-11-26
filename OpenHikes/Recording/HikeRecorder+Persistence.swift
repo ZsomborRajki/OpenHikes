@@ -411,6 +411,9 @@ extension HikeRecorder {
         journalFlushTask?.cancel()
         journalFlushTask = nil
         failureIsRefusedResume = false
+        // A handoff whose start failed before a session took its walk keeps
+        // the walk for a retry — see ``unclaimedSeed``.
+        if sessionID == nil, let carriedSeed { unclaimedSeed = carriedSeed }
         phase = .failed(failure)
         startRequested = false
         if sessionID != nil {
@@ -518,6 +521,7 @@ extension HikeRecorder {
 
     func initializeSessionState(id: UUID, startedAt: Date) {
         cancelTrailGraphPrefetches()
+        unclaimedSeed = nil
         sessionID = id
         sessionStartedAt = startedAt
         fixWindow = RecordingFixWindow(opensAt: startedAt)

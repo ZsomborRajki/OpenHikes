@@ -107,11 +107,8 @@ public struct UnitMercatorRect: Codable, Sendable, Equatable {
     /// West edge and width of the narrowest arc of the world containing every
     /// one of `unitXs`, each already inside `0..<1`.
     ///
-    /// The arc is the complement of the widest gap between neighbouring x
-    /// values around the circle — including the gap that runs through `x = 0`,
-    /// which is the one an ordinary route falls in and the one a plain
-    /// min/max mistakes for the route itself. `TileBoundingBox` finds an
-    /// offline download's columns the same way, in degrees.
+    /// The arc is ``CircularSpan``'s, which `TileBoundingBox` measures an
+    /// offline download's columns with too, in degrees.
     ///
     /// Sorting costs an array the length of the route, which a min/max pass
     /// does not. Affordable wherever a box is bounded. The basemap renderer
@@ -121,19 +118,8 @@ public struct UnitMercatorRect: Codable, Sendable, Equatable {
     /// ``SharedTrailSnapshot/polyline``, which is already decimated to a
     /// widget's worth of points.
     private static func cyclicSpan(ofUnitX unitXs: [Double]) -> (origin: Double, width: Double) {
-        let sorted = unitXs.sorted()
-        guard let west = sorted.first, let east = sorted.last else { return (origin: 0, width: 0) }
-
-        var widestGap = west + 1 - east
-        var arcStart = west
-        for index in 1..<sorted.count {
-            let gap = sorted[index] - sorted[index - 1]
-            if gap > widestGap {
-                widestGap = gap
-                arcStart = sorted[index]
-            }
-        }
-        return (origin: arcStart, width: 1 - widestGap)
+        guard let arc = CircularSpan(enclosing: unitXs, period: 1) else { return (origin: 0, width: 0) }
+        return (origin: arc.start, width: arc.length)
     }
 
     /// A coordinate whose position within a rendered image is known — the

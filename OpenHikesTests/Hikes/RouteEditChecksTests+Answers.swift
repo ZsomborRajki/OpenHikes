@@ -253,7 +253,7 @@ extension RouteEditChecksTests {
 
         #expect(session.isOwedALook)
         #expect(!session.hasChanges)
-        #expect(await session.confirmChecks(in: destination(for: hike, in: context)))
+        #expect(await look(session, at: hike, in: context))
         #expect(hike.routeEdit?.isOwedALook == false)
         #expect(hike.routeEdit?.notOnFoot?.trailingMeters == ends.trailingMeters, "a ride kept on purpose")
         #expect(hike.route == Self.saved)

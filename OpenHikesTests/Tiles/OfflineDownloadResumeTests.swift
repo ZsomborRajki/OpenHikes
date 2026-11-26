@@ -19,6 +19,9 @@
 //  not, and the assertion here is about what was already committed before
 //  either.
 //
+//  A resumed run skips a claimed tile only once it finds the file, so the
+//  runs here save into a `TileSandbox` of their own and resume against it.
+//
 
 import Foundation
 @testable import OpenHikes
@@ -51,14 +54,31 @@ struct OfflineDownloadResumeTests {
     /// where the threshold sits.
     private static let batchSize = 5
 
-    private static func downloader(
+    /// This test's durable tier: where its runs' saves land, and what a
+    /// resumed run checks before it skips a claimed tile, as the app's saves
+    /// land in `TileCache.shared` and its resume checks there.
+    private let disk = TileSandbox()
+
+    /// A downloader over ``disk``. `saveTile` decides whether a tile is
+    /// saved, and one it saves is then on the disk, so a resumed run finds
+    /// what the run before it claimed.
+    private func downloader(
         saveTile: @escaping @Sendable (String, URL) async -> Bool
     ) -> OfflineTileDownloader {
         OfflineTileDownloader(
             isOnline: { true },
             registry: OfflineDownloadRegistry(),
-            claimBatchSize: batchSize,
-            saveTile: saveTile
+            claimBatchSize: Self.batchSize,
+            durableKeys: { [disk] keys throws(CancellationError) in try await disk.cache.durableKeys(among: keys) },
+            saveTile: { [disk] key, url in
+                guard await saveTile(key, url) else { return false }
+                do {
+                    try disk.save(key: key)
+                    return true
+                } catch {
+                    return false
+                }
+            }
         )
     }
 
@@ -157,7 +177,7 @@ struct OfflineDownloadResumeTests {
                     FetchDescriptor<Hike>(predicate: #Predicate { $0.id == id })
                 ).first
             )
-            let downloader = Self.downloader(saveTile: { _, _ in await saves.save() })
+            let downloader = downloader(saveTile: { _, _ in await saves.save() })
             downloader.start(
                 route: started.route,
                 source: Self.source,
@@ -206,7 +226,7 @@ struct OfflineDownloadResumeTests {
                     FetchDescriptor<Hike>(predicate: #Predicate { $0.id == id })
                 ).first
             )
-            let downloader = Self.downloader(saveTile: { _, _ in await saves.save() })
+            let downloader = downloader(saveTile: { _, _ in await saves.save() })
             downloader.start(
                 route: started.route,
                 source: Self.source,
@@ -257,7 +277,7 @@ struct OfflineDownloadResumeTests {
             )
             let saves = SavesThenStalls(limit: Self.batchSize * 2)
             let signal = BatchSignal()
-            let downloader = Self.downloader(saveTile: { _, _ in await saves.save() })
+            let downloader = downloader(saveTile: { _, _ in await saves.save() })
             downloader.start(
                 route: started.route,
                 source: Self.source,
@@ -284,7 +304,7 @@ struct OfflineDownloadResumeTests {
                     FetchDescriptor<Hike>(predicate: #Predicate { $0.id == id })
                 ).first
             )
-            let downloader = Self.downloader { _, _ in
+            let downloader = downloader { _, _ in
                 await requested.increment()
                 return true
             }
@@ -326,7 +346,7 @@ struct OfflineDownloadResumeTests {
             )
             let saves = SavesThenStalls(limit: Self.batchSize * 2)
             let signal = BatchSignal()
-            let downloader = Self.downloader(saveTile: { _, _ in await saves.save() })
+            let downloader = downloader(saveTile: { _, _ in await saves.save() })
             downloader.start(
                 route: started.route,
                 source: Self.source,
@@ -345,7 +365,7 @@ struct OfflineDownloadResumeTests {
                     FetchDescriptor<Hike>(predicate: #Predicate { $0.id == id })
                 ).first
             )
-            let downloader = Self.downloader(saveTile: { _, _ in true })
+            let downloader = downloader(saveTile: { _, _ in true })
             downloader.start(
                 route: resumed.route,
                 source: Self.source,

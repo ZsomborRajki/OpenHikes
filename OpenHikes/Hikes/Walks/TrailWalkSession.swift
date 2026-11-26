@@ -11,8 +11,9 @@
 //  along the route — see ``PendingWalkStart`` — or on the detail's Start —
 //  ``start(hike:profile:)`` — and keeps the union of along-route intervals its consecutive matches spanned, can be
 //  paused and resumed, and ends into a `HikeWalk` row the History segment
-//  lists. It outlives the screen that started it: popping the detail,
-//  opening another trail, or starting a recording changes nothing here.
+//  lists. It outlives the screen that started it: popping the detail or
+//  opening another trail changes nothing here. A recording asked for on this
+//  phone does: it ends the walk first, or is refused — see ``isRecording``.
 //
 //  One `@Observable` reference type, read by the leaves and never by
 //  `HikeDetailView.body`, with its properties split by rate. `walkedHikeID`,
@@ -112,6 +113,13 @@ final class TrailWalkSession {
     /// Assigned by ``OpenHikesModel/makeWalkSession(_:_:_:_:_:)``. Until it is,
     /// the draft alone answers, which is all a suite about the walk needs.
     @ObservationIgnored var hasActiveRecording: () -> Bool = { false }
+    /// Told whenever a walk is taken up — started by hand, confirmed from
+    /// matched fixes, or adopted at launch — so the recorder can let go of
+    /// the walk a failed *Record Instead* left for a retry, which would
+    /// otherwise clock a recording over this one: see
+    /// ``HikeRecorder/unclaimedSeed``. Assigned by ``OpenHikesModel``, which
+    /// joins the two, as it has the recorder say when a draft is saved.
+    @ObservationIgnored var walkDidStart: () -> Void = { /* nothing to tell */ }
     /// The reminder a paused walk can produce, when the app has one.
     ///
     /// The same instance the recorder holds, which is what makes "a recording
@@ -443,6 +451,7 @@ final class TrailWalkSession {
         // relaunch inherits is exactly the one a hiker forgets: the phone has
         // been in a pocket since.
         updateReminder(for: walk)
+        walkDidStart()
     }
 
     // MARK: Pause and resume

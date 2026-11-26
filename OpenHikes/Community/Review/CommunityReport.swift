@@ -13,8 +13,8 @@
 //
 //  **Browsing is account-free, and reporting has to be too.** Public reads
 //  need no Apple Account, which is why a signed-out phone can find a hike and
-//  open it — see ``CommunityFailure/notSignedIn``, which is raised by writes
-//  alone. Writes are the other half of that same rule: the public database
+//  open it — see ``CommunityFailure/notSignedIn``, which browsing never
+//  raises. Writes are the other half of that same rule: the public database
 //  accepts one only from an authenticated account, so no permission on any
 //  record type can let a signed-out hiker file a report. A record-backed
 //  report would therefore be missing for exactly the hikers the account-free

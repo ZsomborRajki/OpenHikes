@@ -218,16 +218,45 @@ struct TrailWidgetProvider: AppIntentTimelineProvider {
         in context: Context
     ) async -> Timeline<TrailWidgetEntry> {
         let pinned = configuration.hike?.id
-        let entry = Self.currentEntry(pinnedTo: pinned)
-        guard let recording = entry.recordingSnapshot,
-              recording.isCapturingFixes else {
-            return Self.currentTimeline(pinnedTo: pinned)
+        return await Self.timeline(
+            reading: { Self.currentEntry(pinnedTo: pinned) },
+            sampling: { sessionID in await WidgetRecordingLocationSampler.shared.fix(for: sessionID) }
+        )
+    }
+
+    /// The timeline from one read of the App Group, or from a second read
+    /// when a recording's location sample made the provider wait.
+    ///
+    /// A read is the recording and the trail, the basemap's metadata and the
+    /// weather, so it is not made twice for nothing. Without a wait (a trail,
+    /// an empty store, a *paused* recording, or a sample the sampler
+    /// declined) nothing separates the read that decided from the one that
+    /// would draw, and the entry already read is the timeline.
+    ///
+    /// A recording capturing fixes whose sample did wait on a location
+    /// request is read again afterwards. Not for the fix: the sampler appends
+    /// it to the pending queue, which the widget never reads back, and it is
+    /// drawn only once the app has merged it and published again. The second
+    /// read is for whatever the app wrote during the wait (a pause, a stop, a
+    /// newer snapshot), and it dates the timeline, and so its next reload,
+    /// from after the wait. The sample is best-effort: a timeline is owed
+    /// whether or not it got a fix.
+    ///
+    /// Takes the read and the sample rather than reaching for them, because
+    /// `timeline(for:in:)` needs a `Context` no test can build.
+    ///
+    /// - Parameter sample: asks for a location anchor for the session, and
+    ///   answers whether it issued a request and waited for it.
+    static func timeline(
+        reading read: () -> TrailWidgetEntry,
+        sampling sample: (UUID) async -> Bool
+    ) async -> Timeline<TrailWidgetEntry> {
+        let entry = read()
+        guard let recording = entry.recordingSnapshot, recording.isCapturingFixes,
+              await sample(recording.sessionID) else {
+            return timeline(from: entry)
         }
-        // Best-effort: the sampler answers whether or not it got a fix, and a
-        // timeline is owed either way. Whatever it managed to write is picked
-        // up by re-reading the store below.
-        await WidgetRecordingLocationSampler.shared.fix(for: recording.sessionID)
-        return Self.currentTimeline(pinnedTo: pinned)
+        return timeline(from: read())
     }
 
     /// What the Smart Stack ranks this widget by.
@@ -319,7 +348,13 @@ struct TrailWidgetProvider: AppIntentTimelineProvider {
         date: Date = .now,
         pinnedTo pinnedHikeID: UUID? = nil
     ) -> Timeline<TrailWidgetEntry> {
-        let entry = currentEntry(date: date, pinnedTo: pinnedHikeID)
+        timeline(from: currentEntry(date: date, pinnedTo: pinnedHikeID))
+    }
+
+    /// `entry`, and the same entry without its temperature once the reading
+    /// expires, reloading at the cadence its recording, if any, earns.
+    static func timeline(from entry: TrailWidgetEntry) -> Timeline<TrailWidgetEntry> {
+        let date = entry.date
         let expiry = entry.weather?.expiresAt
         var entries = [entry]
         // The entry that draws no temperature, scheduled for the moment the
@@ -398,33 +433,44 @@ struct TrailWidgetProvider: AppIntentTimelineProvider {
             manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
         }
 
-        /// `requestFix` as an `await`. The callback is invoked exactly once on
+        /// `requestFix` as an `await`, answering whether a location request
+        /// was issued and waited for. The callback is invoked exactly once on
         /// every path — `WidgetRecordingRequest.consume()` is what guarantees
         /// it for the two that race (a fix arriving and the timeout firing) —
         /// which is the precondition a checked continuation needs.
-        func fix(for sessionID: UUID) async {
+        ///
+        /// `false` is a request declined, which resumes at once: one already
+        /// in flight, a location the widget is not allowed, or a sample
+        /// already taken for this recording in the last fifteen minutes.
+        /// Nothing was waited for then, so the timeline has nothing new to
+        /// read.
+        func fix(for sessionID: UUID) async -> Bool {
+            var issued = false
             await withCheckedContinuation { continuation in
-                requestFix(for: sessionID) { continuation.resume() }
+                issued = requestFix(for: sessionID) { continuation.resume() }
             }
+            return issued
         }
 
-        func requestFix(for sessionID: UUID, completion: @escaping () -> Void) {
+        /// Whether a request went out. A declined one has called `completion`
+        /// before this returns.
+        func requestFix(for sessionID: UUID, completion: @escaping () -> Void) -> Bool {
             guard request == nil else {
                 completion()
-                return
+                return false
             }
             guard manager.isAuthorizedForWidgetUpdates else {
                 completion()
-                return
+                return false
             }
             switch manager.authorizationStatus {
             case .authorizedAlways, .authorizedWhenInUse: break
             case .notDetermined, .restricted, .denied:
                 completion()
-                return
+                return false
             @unknown default:
                 completion()
-                return
+                return false
             }
             guard (
                 try? SharedStore.claimRecordingWidgetSample(
@@ -433,7 +479,7 @@ struct TrailWidgetProvider: AppIntentTimelineProvider {
                 )
             ) == true else {
                 completion()
-                return
+                return false
             }
 
             request = WidgetRecordingRequest(
@@ -447,6 +493,7 @@ struct TrailWidgetProvider: AppIntentTimelineProvider {
                 } catch { return }
                 self?.finish()
             }
+            return true
         }
 
         nonisolated func locationManager(

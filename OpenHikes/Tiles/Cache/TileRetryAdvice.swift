@@ -134,13 +134,51 @@ nonisolated enum RetryAfterHeader {
 /// afternoon can refuse every tile a user pans across, and a table that only
 /// ever grows would hold them all. Entries are dropped as they come due, so
 /// in practice this holds only the tiles refused inside the current window.
+///
+/// Two stores, because this is written under the cache's lock on every
+/// refusal and read under it by every tile request. The dictionary answers a
+/// key's deadline at once. Beside it the same entries are kept sorted by when
+/// they come due, so a write finds what is due by bisection and evicts the
+/// soonest from the front, where both used to walk the whole table: at the
+/// cap, a burst of refusals filtered it and then scanned it again for each
+/// one.
+///
+/// A sorted array rather than a `Heap`, measured. A pop from a heap of these
+/// entries took about half a microsecond, so a batch that came due together
+/// after a quiet spell held the lock for a quarter of a millisecond as it
+/// was popped entry by entry. The array holds no entry the table does not,
+/// so its due prefix is counted by bisection before anything is removed,
+/// and leaves in one move. In an optimized build at 512 keys, a new refusal
+/// at the cap fell from about 22 µs to 0.5 µs, and no prune measured more
+/// than the filter it replaced: the worst, a third of the table due at once,
+/// about 20 µs.
 nonisolated struct TileRetryAdvice: Sendable {
     /// Ceiling on how many deadlines are remembered at once.
     static let maximumTrackedKeys = 512
 
+    /// One deadline as the sorted index holds it: ordered by when it comes
+    /// due, and on its key within one instant, so ties go the same way every
+    /// time rather than in a hash-seeded order.
+    private struct Expiry: Comparable, Sendable {
+        let deadline: ContinuousClock.Instant
+        let key: String
+
+        static func < (lhs: Self, rhs: Self) -> Bool {
+            lhs.deadline == rhs.deadline ? lhs.key < rhs.key : lhs.deadline < rhs.deadline
+        }
+    }
+
     private var deadlines: [String: ContinuousClock.Instant] = [:]
+    /// Exactly the entries of ``deadlines``, soonest first. A deadline pushed
+    /// out moves its key's entry rather than leaving the old one behind, so
+    /// the two stores are always the same size.
+    private var expiries: [Expiry] = []
 
     var count: Int { deadlines.count }
+
+    /// How many entries the sorted index holds — for a suite to hold it to
+    /// the table.
+    var indexedCount: Int { expiries.count }
 
     /// Records that `key` may not be asked for before `notBefore`, keeping the
     /// later of that and anything already recorded — a second refusal from a
@@ -151,8 +189,13 @@ nonisolated struct TileRetryAdvice: Sendable {
         at now: ContinuousClock.Instant
     ) {
         prune(at: now)
-        if let existing = deadlines[key], existing >= notBefore { return }
+        if let existing = deadlines[key] {
+            guard existing < notBefore else { return }
+            remove(Expiry(deadline: existing, key: key))
+        }
         deadlines[key] = notBefore
+        let entry = Expiry(deadline: notBefore, key: key)
+        expiries.insert(entry, at: position(of: entry))
         evictIfNeeded()
     }
 
@@ -162,24 +205,49 @@ nonisolated struct TileRetryAdvice: Sendable {
         return deadline
     }
 
+    /// Where `entry` is in the index, or would go: the first entry not
+    /// sorted before it.
+    private func position(of entry: Expiry) -> Int {
+        expiries.partitioningIndex { !($0 < entry) }
+    }
+
+    /// Takes `entry` out of the index, which holds one for every entry of
+    /// the table.
+    private mutating func remove(_ entry: Expiry) {
+        let index = position(of: entry)
+        guard index < expiries.endIndex, expiries[index] == entry else {
+            assertionFailure("the index holds every entry of the table")
+            return
+        }
+        expiries.remove(at: index)
+    }
+
+    /// Drops every entry due at `now`. Removing a key from the table measured
+    /// about twice what inserting one into a new table does, so the due keys
+    /// are removed one by one while they are at most a third of the index,
+    /// and past that the table is built again from the keys still standing.
     private mutating func prune(at now: ContinuousClock.Instant) {
-        deadlines = deadlines.filter { $0.value > now }
+        let due = expiries.partitioningIndex { $0.deadline > now }
+        guard due > 0 else { return }
+        if 2 * due <= expiries.count - due {
+            for entry in expiries[..<due] { deadlines.removeValue(forKey: entry.key) }
+        } else {
+            var standing = [String: ContinuousClock.Instant](minimumCapacity: expiries.count - due)
+            for entry in expiries[due...] { standing[entry.key] = entry.deadline }
+            deadlines = standing
+        }
+        expiries.removeFirst(due)
     }
 
     /// Drops the entries closest to coming due, exactly as ``TileFailureLog``
     /// does: forgetting one costs at most an early retry it was about to be
     /// allowed anyway, while forgetting the tile a server most recently asked
-    /// us to leave alone is the one that matters.
+    /// us to leave alone is the one that matters. The soonest is the index's
+    /// first entry, with ties already ordered by key.
     private mutating func evictIfNeeded() {
-        let excess = deadlines.count - Self.maximumTrackedKeys
-        guard excess > 0 else { return }
-        // Sorted on the key as well as the instant, since entries recorded in
-        // the same instant would otherwise be offered up in a hash-seeded
-        // order.
-        let doomed = deadlines.min(count: excess) { lhs, rhs in
-            lhs.value == rhs.value ? lhs.key < rhs.key : lhs.value < rhs.value
+        while expiries.count > Self.maximumTrackedKeys {
+            deadlines.removeValue(forKey: expiries.removeFirst().key)
         }
-        for entry in doomed { deadlines.removeValue(forKey: entry.key) }
     }
 }
 

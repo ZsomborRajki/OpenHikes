@@ -260,6 +260,10 @@ final class OpenHikesModel {
         hikeRecorder.recordingDidSave = { [weak session] hikeID in
             session?.recordingDidSave(hikeID: hikeID)
         }
+        // And the session says when a walk starts, which the retry of a
+        // *Record Instead* whose start failed must not reach over — see
+        // ``HikeRecorder/unclaimedSeed``.
+        session.walkDidStart = { [weak hikeRecorder] in hikeRecorder?.letGoOfUnclaimedWalk() }
         // The map's controls for a recording and a walk, and the questions
         // their Stop and End ask.
         recordingEntry = RecordingEntry(recorder: hikeRecorder, walkSession: session, openRequests: hikeOpenRequests)
