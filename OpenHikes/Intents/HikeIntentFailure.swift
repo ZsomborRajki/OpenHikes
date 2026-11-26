@@ -29,9 +29,9 @@ nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
     /// for from somewhere that cannot put the prompt up — the watch — while
     /// the phone has never been asked, or holds only approximate location;
     /// asked for again while another Start waits on that prompt; or a Start
-    /// whose intent was cancelled before the prompt was answered, and which
-    /// was withdrawn with it. Nothing was started, and the hiker is told why
-    /// rather than told it began.
+    /// whose intent was cancelled before the prompt, or the precision sheet,
+    /// was answered, and which was withdrawn with it. Nothing was started,
+    /// and the hiker is told why rather than told it began.
     ///
     /// The whole sentence is the description, for the reason
     /// ``walking(trail:)`` gives: the watch shows the description alone.

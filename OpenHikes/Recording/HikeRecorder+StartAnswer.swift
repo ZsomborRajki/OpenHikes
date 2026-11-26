@@ -14,7 +14,8 @@
 //  watch show the Start as the recording it is about to be, which is what
 //  keeps the watch from starting a second one beside it, and a Stop from
 //  any surface ends it. Only a caller that confirms a start asks the
-//  difference.
+//  difference, and a Pause, which has nothing to pause until the session
+//  exists: the session the Allow makes would run under it.
 //
 
 import Foundation

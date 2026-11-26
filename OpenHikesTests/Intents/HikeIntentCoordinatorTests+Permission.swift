@@ -22,7 +22,10 @@ import OpenHikesShared
 import Testing
 
 extension HikeIntentCoordinatorTests {
-    @Test("a start that puts up the location prompt reports a recording only once it is allowed")
+    @Test(
+        "a start that puts up the location prompt reports a recording only once it is allowed",
+        .timeLimit(.minutes(1))
+    )
     func startWaitsForAnAllowedPrompt() async throws {
         source.authorization = .notDetermined
         let coordinator = makeCoordinator()
@@ -43,7 +46,10 @@ extension HikeIntentCoordinatorTests {
         #expect(source.startCount == 1)
     }
 
-    @Test("a start whose location prompt is declined reports the refusal, not a recording")
+    @Test(
+        "a start whose location prompt is declined reports the refusal, not a recording",
+        .timeLimit(.minutes(1))
+    )
     func startReportsADeclinedPrompt() async throws {
         source.authorization = .notDetermined
         let coordinator = makeCoordinator()
@@ -66,7 +72,10 @@ extension HikeIntentCoordinatorTests {
     /// activation the answer began rather than from inside `start()`. The
     /// start is still the hiker's question there, and is reported once that
     /// sheet has its answer too.
-    @Test("a start allowed at approximate location waits for the precision sheet as well")
+    @Test(
+        "a start allowed at approximate location waits for the precision sheet as well",
+        .timeLimit(.minutes(1))
+    )
     func startWaitsThroughThePrecisionSheet() async throws {
         source.authorization = .notDetermined
         source.holdsFullAccuracyRequests = true
@@ -92,7 +101,10 @@ extension HikeIntentCoordinatorTests {
     }
 
     /// The prompt is the phone's, and a phone in a pocket cannot show it.
-    @Test("a watch's Start on an unasked phone is refused with why, and asks nothing")
+    @Test(
+        "a watch's Start on an unasked phone is refused with why, and asks nothing",
+        .timeLimit(.minutes(1))
+    )
     func watchStartOnAnUnaskedPhoneIsRefused() async {
         source.authorization = .notDetermined
         // Held here: the mirror holds its coordinator weakly.
@@ -110,7 +122,10 @@ extension HikeIntentCoordinatorTests {
 
     /// What stands in the way first is named first: ending the walk is the
     /// hiker's next step, and the permission only matters after it.
-    @Test("a watch's Start mid-walk on an unasked phone names the walk, not the permission")
+    @Test(
+        "a watch's Start mid-walk on an unasked phone names the walk, not the permission",
+        .timeLimit(.minutes(1))
+    )
     func watchStartMidWalkNamesTheWalk() async {
         source.authorization = .notDetermined
         let coordinator = makeCoordinator(walkUnderWay: "Ridge Loop")
@@ -126,7 +141,10 @@ extension HikeIntentCoordinatorTests {
     /// cancelled, or the system gave up on the request. The Start goes with
     /// it, so an Allow tapped afterwards answers the question and starts
     /// nothing behind a request that had already ended.
-    @Test("a start whose intent is cancelled at the prompt is withdrawn, and a later Allow records nothing")
+    @Test(
+        "a start whose intent is cancelled at the prompt is withdrawn, and a later Allow records nothing",
+        .timeLimit(.minutes(1))
+    )
     func aCancelledStartIsWithdrawn() async throws {
         source.authorization = .notDetermined
         let coordinator = makeCoordinator()
@@ -160,7 +178,10 @@ extension HikeIntentCoordinatorTests {
     /// "Already recording", said over the prompt, is the sentence #1655 took
     /// away from the first Start. A second is told what the recording waits
     /// on, and leaves the first to its answer.
-    @Test("a second start while the prompt is up is told it waits on location, not that it is recording")
+    @Test(
+        "a second start while the prompt is up is told it waits on location, not that it is recording",
+        .timeLimit(.minutes(1))
+    )
     func aSecondStartAtThePromptIsToldWhy() async throws {
         source.authorization = .notDetermined
         let coordinator = makeCoordinator()
@@ -185,7 +206,10 @@ extension HikeIntentCoordinatorTests {
     /// recording it is about to be, and their Stop ends it. The Start that
     /// was waiting is told nothing is recording, rather than that a last
     /// recording is still being finished.
-    @Test("a start ended by a Stop while its prompt is up reports that nothing is recording")
+    @Test(
+        "a start ended by a Stop while its prompt is up reports that nothing is recording",
+        .timeLimit(.minutes(1))
+    )
     func aStartStoppedAtThePromptReportsNothingRecording() async throws {
         source.authorization = .notDetermined
         let coordinator = makeCoordinator()
@@ -201,5 +225,65 @@ extension HikeIntentCoordinatorTests {
         }
         #expect(recorder?.phase == .idle)
         #expect(source.startCount == 0)
+    }
+
+    /// The precision sheet an approximate-only grant meets is waited for
+    /// inside `start()`, not in the wait for the prompt's answer, and an
+    /// intent cancelled there is withdrawn all the same: a grant arriving
+    /// afterwards makes no session and starts no GPS.
+    @Test(
+        "a start whose intent is cancelled at the precision sheet is withdrawn, and a later grant records nothing",
+        .timeLimit(.minutes(1))
+    )
+    func aStartCancelledAtThePrecisionSheetIsWithdrawn() async throws {
+        source.hasFullAccuracy = false
+        source.holdsFullAccuracyRequests = true
+        let coordinator = makeCoordinator()
+        let hikeRecorder = try #require(recorder)
+        let starting = Task { try await coordinator.startRecording() }
+        await settleDelegateHop(until: "the start to put up the precision sheet") {
+            self.source.fullAccuracyRequests == 1
+        }
+
+        starting.cancel()
+        // The withdrawal hops to the main actor from wherever the cancel ran.
+        await settleDelegateHop(until: "the cancellation to withdraw the Start") {
+            !hikeRecorder.isAwaitingStartAnswer
+        }
+        source.answerFullAccuracyRequests(granted: true)
+
+        await #expect(throws: HikeIntentFailure.needsLocationPermission) {
+            _ = try await starting.value
+        }
+        await settleDelegateHop(until: "the withdrawal to end the Start") { hikeRecorder.phase == .idle }
+        #expect(hikeRecorder.sessionID == nil)
+        #expect(source.startCount == 0)
+    }
+
+    /// A Pause has nothing to pause until the hiker allows the Start: taken
+    /// here, the Allow would make the session and run it anyway, under a
+    /// Pause the hiker was told had landed.
+    @Test(
+        "a Pause while the start's prompt is up is refused, and the Allow starts a recording that runs",
+        .timeLimit(.minutes(1))
+    )
+    func aPauseAtThePromptIsRefused() async throws {
+        source.authorization = .notDetermined
+        let coordinator = makeCoordinator()
+        let starting = Task { try await coordinator.startRecording() }
+        await settleDelegateHop(until: "the start to put up the prompt") {
+            self.source.authorizationRequests == 1
+        }
+
+        await #expect(throws: HikeIntentFailure.noActiveRecording) {
+            _ = try await coordinator.pauseRecording()
+        }
+        #expect(recorder?.phase == .waitingForFix)
+
+        source.authorization = .authorized
+        recorder?.locationManagerDidChangeAuthorization(CLLocationManager())
+        let report = try await starting.value
+        #expect(!report.isPaused)
+        #expect(recorder?.phase == .waitingForFix)
     }
 }

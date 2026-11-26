@@ -267,7 +267,7 @@ final class HikeIntentCoordinatorTests {
     ///
     /// The prompt is put up, and the toggle reports only once the hiker has
     /// answered it — here with Allow, as the stub's callback delivers it.
-    @Test("a foregrounded control action asks rather than deferring again")
+    @Test("a foregrounded control action asks rather than deferring again", .timeLimit(.minutes(1)))
     func controlStartsOnceForegrounded() async throws {
         source.authorization = .notDetermined
         let coordinator = makeCoordinator()

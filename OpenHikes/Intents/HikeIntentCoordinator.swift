@@ -125,7 +125,7 @@ extension HikeIntentCoordinator {
         if let trail = walkUnderWay() { throw .walking(trail: trail) }
         // After both, so what stands in the way first is named first.
         guard canPromptForLocation || !authorization.needsForeground else { throw .needsLocationPermission }
-        await recorder.start()
+        await startWithdrawingOnCancellation()
         // `start()` answers an install that has never asked by putting up the
         // system's prompt and returning, and no recording exists until the
         // hiker answers it. Waited for, so what is reported is the answer — a
@@ -147,17 +147,43 @@ extension HikeIntentCoordinator {
         return liveReport()
     }
 
-    /// Withdraws the Start when ``HikeRecorder/settleStart()`` stopped waiting
-    /// before it had an answer, which it does only when the intent was
-    /// cancelled: by the hiker, or by the system giving up on it.
+    /// `recorder.start()`, with the Start withdrawn if the intent is cancelled
+    /// while it waits.
+    ///
+    /// A grant at approximate location is met inside `start()` by the
+    /// precision sheet, which waits for as long as the hiker leaves it up and
+    /// which no cancellation reaches. So the cancellation is answered where it
+    /// lands: the Start is ended as ``withdrawUnansweredStart()`` ends one at
+    /// the prompt, and the activation, let go of before the sheet is
+    /// answered, makes no session from the answer (#967). The handler runs
+    /// wherever `cancel()` was called, so the withdrawal hops to the main
+    /// actor. It reads the Start and begins the Discard with no suspension
+    /// in between, as ``withdrawUnansweredStart()`` does, so however the two
+    /// race only one of them ends it.
+    private func startWithdrawingOnCancellation() async {
+        await withTaskCancellationHandler {
+            await recorder.start()
+        } onCancel: { [recorder] in
+            Task { @MainActor in
+                guard recorder.isAwaitingStartAnswer else { return }
+                await recorder.discard()
+            }
+        }
+    }
+
+    /// Withdraws the Start when the intent was cancelled before it had a
+    /// session: by the hiker, or by the system giving up on it.
+    /// ``HikeRecorder/settleStart()`` stops waiting on the prompt then, and a
+    /// cancellation inside `start()` has already set the withdrawal going —
+    /// see ``startWithdrawingOnCancellation()``.
     ///
     /// Left standing, an Allow tapped afterwards would start a recording
     /// behind a request that had already ended, and nobody would have been
     /// told it began. It is ended as a Stop ends a Start that has no session,
     /// and the prompt, still up, is then only a question about permission.
     private func withdrawUnansweredStart() async throws(HikeIntentFailure) {
-        guard recorder.isAwaitingStartAnswer else { return }
-        await recorder.discard()
+        guard Task.isCancelled, recorder.sessionID == nil else { return }
+        if recorder.isAwaitingStartAnswer { await recorder.discard() }
         try throwIfRecorderFailed()
         throw .needsLocationPermission
     }
@@ -166,8 +192,11 @@ extension HikeIntentCoordinator {
         await settleRecorder()
         // A pause the app made is one the hiker can still ask for: it becomes
         // theirs, and is no longer ended for them (`HikeRecorder+AutoPause.swift`).
-        guard recorder.phase == .waitingForFix || recorder.phase == .recording
-            || recorder.isAutoPaused else {
+        // A Start still waiting on the hiker's answer has nothing to pause
+        // yet: the session the Allow makes would run under a Pause the hiker
+        // had been told landed.
+        guard !recorder.isAwaitingStartAnswer,
+              recorder.phase == .waitingForFix || recorder.phase == .recording || recorder.isAutoPaused else {
             throw .noActiveRecording
         }
         recorder.pause()
