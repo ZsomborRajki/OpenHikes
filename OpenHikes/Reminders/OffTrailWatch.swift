@@ -84,6 +84,13 @@ nonisolated struct OffTrailWatch: Equatable {
         return true
     }
 
+    /// Lets this departure be reported again, for a banner the notification
+    /// centre refused — see ``MovementWarningState/retract(_:id:)``. The
+    /// dwell stays: the next fix that is still off the line says it.
+    mutating func retractReport() {
+        hasReported = false
+    }
+
     /// Forgets everything, which is what ending or un-following a walk does.
     ///
     /// Distinct from rejoining only in that there is nothing left to rejoin;

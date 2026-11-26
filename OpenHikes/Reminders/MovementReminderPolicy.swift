@@ -167,6 +167,11 @@ nonisolated enum MovementReminderPolicy {
 ///   refusal would be asked about again per fix. With it a refusal is asked
 ///   about once a quarter of an hour, which also lets a later fix find a
 ///   permission given in Settings by a hiker who never reopened the app.
+///
+/// The spend still comes before the post, so two attempts cannot both find
+/// the reminder owed. A banner the notification centre then refuses was heard
+/// by nobody either, and ``refund(_:)`` leaves the watch as that refused
+/// permission would have.
 nonisolated struct MovementWatch: Equatable, Sendable {
     private struct Sample: Equatable, Sendable {
         let awayMeters: Double
@@ -281,6 +286,46 @@ nonisolated struct MovementWatch: Equatable, Sendable {
     mutating func dropOwedReminder() {
         owedMeters = nil
     }
+
+    /// What one ``spend(at:)`` took from the watch, for ``refund(_:)``.
+    nonisolated struct Spending: Equatable, Sendable {
+        /// How far from the anchor the reminder it paid for is about.
+        let meters: Double
+        /// The watch as it stood before the spend.
+        let before: MovementWatch
+        /// How many reminders had gone out once this one was counted.
+        let remindersSent: Int
+    }
+
+    /// ``spendReminder(at:)``, keeping what it took so a banner the system
+    /// refused can give it back.
+    mutating func spend(at date: Date) -> Spending? {
+        let before = self
+        guard let meters = spendReminder(at: date) else { return nil }
+        return Spending(meters: meters, before: before, remindersSent: remindersSent)
+    }
+
+    /// Gives back what `spending` took, for a reminder that never reached the
+    /// hiker: the notification centre refused it (#1682).
+    ///
+    /// The watch goes back to how it stood before the spend, so the reminder
+    /// is owed again, the allowance and the baseline are as they were, and
+    /// the quiet period runs from the attempt, as after a refused permission.
+    /// Then every reading taken since is shown to it again, in order: the
+    /// spend emptied the window, so the window now holds exactly those. A
+    /// hiker who walked back while the post was out is therefore owed
+    /// nothing, and one who walked on is owed the ground they have reached.
+    ///
+    /// Nothing at all once a later reminder has gone out, which this one no
+    /// longer stands before.
+    mutating func refund(_ spending: Spending) {
+        guard remindersSent == spending.remindersSent else { return }
+        var restored = spending.before
+        for sample in samples {
+            _ = restored.observe(awayMeters: sample.awayMeters, at: sample.at)
+        }
+        self = restored
+    }
 }
 
 /// A *running* recording's stillness, which is the mirror of the watch above.
@@ -308,5 +353,11 @@ nonisolated struct StillnessWatch: Equatable, Sendable {
               date.timeIntervalSince(since) >= MovementReminderPolicy.stillFor else { return false }
         hasReminded = true
         return true
+    }
+
+    /// Lets this stop say its reminder again, for one the notification
+    /// centre refused — see ``MovementWarningState/retract(_:id:)``.
+    mutating func retractReport() {
+        hasReminded = false
     }
 }

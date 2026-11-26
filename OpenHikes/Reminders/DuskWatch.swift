@@ -43,6 +43,13 @@ nonisolated struct DuskWatch: Equatable {
         return true
     }
 
+    /// Lets this walk say it again, for a banner the notification centre
+    /// refused — see ``MovementWarningState/retract(_:id:)``. The next
+    /// estimate that still ends after dusk, before dusk, says it.
+    mutating func retractReport() {
+        hasReported = false
+    }
+
     /// Forgets that it has spoken, which is what a walk ending does.
     mutating func reset() {
         hasReported = false
