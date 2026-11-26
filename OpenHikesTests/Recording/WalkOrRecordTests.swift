@@ -18,7 +18,9 @@
 //
 //  And one place the two do meet, on purpose: a hiker who left the trail they
 //  were walking and said to record instead. The walk still ends before the
-//  recording begins, and what it covered goes with it.
+//  recording begins, and what it covered goes with it — or, when that start
+//  fails, waits on the recorder for the recording screen's Start, until
+//  anything else starts.
 //
 
 import Foundation
@@ -75,6 +77,7 @@ final class WalkOrRecordTests {
             authority?.currentHike?.id
         }
         session.hasActiveRecording = { [weak authority] in authority?.isActive ?? false }
+        session.walkDidStart = { [weak authority] in authority?.letGoOfUnclaimedWalk() }
         return session
     }
 
@@ -319,5 +322,128 @@ final class WalkOrRecordTests {
         #expect(hikeRecorder.currentHike == nil, "precondition: with no draft yet")
 
         #expect(session.isRecording)
+    }
+}
+
+// MARK: - A handoff whose start failed
+
+extension WalkOrRecordTests {
+    /// What the walk under way covered when the hiker said to record instead
+    /// and the start was refused precise location: the walk over, and the
+    /// recorder keeping what it covered for the recording screen's Start.
+    private func failedHandoff(
+        _ hikeRecorder: HikeRecorder,
+        session: TrailWalkSession,
+        entry: RecordingEntry,
+        sent: FeedReader<URL>
+    ) async throws -> RecordingSeed {
+        let walked = trail()
+        let profile = RouteProfile(route: walked.route)
+        #expect(session.start(hike: walked, profile: profile))
+        for point in 0...6 {
+            clock.advance(by: 60)
+            session.recordForegroundMatch(hike: walked, profile: profile, distance: profile.distances[point])
+        }
+        clock.advance(by: 180)
+        source.hasFullAccuracy = false
+        let asked = sent.received.count
+        entry.recordInsteadOfWalk()
+        await settleDelegateHop(until: "the recording's screen to be asked for") { sent.received.count == asked + 1 }
+        #expect(hikeRecorder.phase == .failed(.preciseLocationRequired))
+        // The alert answered, as its OK does.
+        hikeRecorder.dismissFailure()
+        source.hasFullAccuracy = true
+        return try #require(hikeRecorder.unclaimedSeed, "precondition: kept for the retry")
+    }
+
+    /// A retry is clocked from the first walk's start, so one made after
+    /// another walk would cover that walk too: the library leaves out a walk
+    /// inside a counted hike's clock, and its ground would be in no
+    /// recording. So a walk that starts lets the first one go.
+    @Test("a walk started after a failed handoff lets its walk go, and the screen's Start begins afresh")
+    func aLaterWalkLetsAFailedHandoffGo() async throws {
+        let hikeRecorder = makeRecorder()
+        let session = walkSession(asking: hikeRecorder)
+        let requests = HikeOpenRequests()
+        let sent = FeedReader(requests.links())
+        let entry = RecordingEntry(recorder: hikeRecorder, walkSession: session, openRequests: requests)
+        _ = try await failedHandoff(hikeRecorder, session: session, entry: entry, sent: sent)
+
+        let next = trail()
+        let profile = RouteProfile(route: next.route)
+        #expect(session.start(hike: next, profile: profile))
+        #expect(hikeRecorder.unclaimedSeed == nil, "let go of as the next walk started")
+        for point in 0...6 {
+            clock.advance(by: 60)
+            session.recordForegroundMatch(hike: next, profile: profile, distance: profile.distances[point])
+        }
+        session.end()
+        #expect(next.walks?.count == 1, "precondition: the next walk is in its trail's History")
+
+        entry.startOnRecordingScreen()
+        await settleDelegateHop(until: "the screen's Start to be asked for") { sent.received.count == 2 }
+
+        #expect(hikeRecorder.isActive)
+        #expect(hikeRecorder.sessionStartedAt == clock.now, "a recording of its own, from now")
+        #expect(hikeRecorder.stats.pointCount == 0)
+    }
+
+    /// A row carrying another device's draft opens the recording screen on
+    /// this phone's idle recorder — `MapSheet.openRecording()` asks this as
+    /// it does — and the screen is up for that row, not for the handoff.
+    @Test("the recording screen a draft's row opens begins afresh, not with a failed handoff's walk")
+    func aRowsRecordingScreenBeginsAfresh() async throws {
+        let hikeRecorder = makeRecorder()
+        let session = walkSession(asking: hikeRecorder)
+        let requests = HikeOpenRequests()
+        let sent = FeedReader(requests.links())
+        let entry = RecordingEntry(recorder: hikeRecorder, walkSession: session, openRequests: requests)
+        _ = try await failedHandoff(hikeRecorder, session: session, entry: entry, sent: sent)
+
+        hikeRecorder.letGoOfUnclaimedWalk()
+        entry.startOnRecordingScreen()
+        await settleDelegateHop(until: "the screen's Start to be asked for") { sent.received.count == 2 }
+
+        #expect(hikeRecorder.isActive)
+        #expect(hikeRecorder.sessionStartedAt == clock.now)
+        #expect(hikeRecorder.stats.pointCount == 0)
+    }
+
+    /// The suites above hand their session the recorder's hook themselves;
+    /// this holds the model, which joins the two, to handing over the same
+    /// one.
+    @Test("the app's model has a walk that starts let go of a failed handoff's walk")
+    func theModelLetsAFailedHandoffGoWhenAWalkStarts() async throws {
+        let hikeRecorder = makeRecorder()
+        let tiles = TileSandbox()
+        let model = OpenHikesModel(
+            container: container,
+            backgroundTracker: BackgroundTrailTracker(
+                container: container,
+                monitor: StubLocationMonitor(),
+                regionMonitor: FakeTrailRegionMonitor(),
+                defaults: try makeScratchDefaults()
+            ),
+            autoSaveController: AutoSaveController(store: tiles.store, drainInterval: nil),
+            hikeRecorder: hikeRecorder,
+            locationManager: LocationManager(),
+            weatherManager: WeatherManager(widgetPublisher: .inert),
+            significantLocations: SignificantLocationFeed(monitor: DormantLocationSource()),
+            defaults: try makeScratchDefaults()
+        )
+        let point = RecordingPoint(
+            latitude: 47.63,
+            longitude: 12.86,
+            timestamp: clock.now.addingTimeInterval(-60),
+            horizontalAccuracy: RecordingSeed.carriedAccuracyMeters
+        )
+        source.hasFullAccuracy = false
+        await hikeRecorder.start(carrying: RecordingSeed(startedAt: point.timestamp, points: [point]))
+        try #require(hikeRecorder.unclaimedSeed != nil, "precondition: kept for the retry")
+
+        model.walkSession.walkDidStart()
+
+        #expect(hikeRecorder.unclaimedSeed == nil)
+        withExtendedLifetime(tiles) { /* the model's tile store, until here */ }
     }
 }

@@ -113,6 +113,13 @@ final class TrailWalkSession {
     /// Assigned by ``OpenHikesModel/makeWalkSession(_:_:_:_:_:)``. Until it is,
     /// the draft alone answers, which is all a suite about the walk needs.
     @ObservationIgnored var hasActiveRecording: () -> Bool = { false }
+    /// Told whenever a walk is taken up — started by hand, confirmed from
+    /// matched fixes, or adopted at launch — so the recorder can let go of
+    /// the walk a failed *Record Instead* left for a retry, which would
+    /// otherwise clock a recording over this one: see
+    /// ``HikeRecorder/unclaimedSeed``. Assigned by ``OpenHikesModel``, which
+    /// joins the two, as it has the recorder say when a draft is saved.
+    @ObservationIgnored var walkDidStart: () -> Void = { /* nothing to tell */ }
     /// The reminder a paused walk can produce, when the app has one.
     ///
     /// The same instance the recorder holds, which is what makes "a recording
@@ -444,6 +451,7 @@ final class TrailWalkSession {
         // relaunch inherits is exactly the one a hiker forgets: the phone has
         // been in a pocket since.
         updateReminder(for: walk)
+        walkDidStart()
     }
 
     // MARK: Pause and resume
