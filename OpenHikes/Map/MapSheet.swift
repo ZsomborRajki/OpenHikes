@@ -841,9 +841,9 @@ private func presentImporter() {
 /// ``open(_:)`` and ``delete(_:among:)``.
 private func openRecording() {
     // Up for that row, so its Start is a recording of its own and not the
-    // retry of a *Record Instead* whose start failed on the screen the
-    // handoff opened — see ``HikeRecorder/unclaimedSeed``.
-    hikeRecorder.letGoOfUnclaimedWalk()
+    // retry of a *Record Instead* whose start failed — see
+    // ``RecordingEntry/recordingScreenOpenedForRow()``.
+    appModel.recordingEntry.recordingScreenOpenedForRow()
     let path = SheetRoute.openRecording(hike: hikeRecorder.currentHike, selectedHike: &selectedHike)
     highlight.move(to: nil)
     presentation.makeRoomForTheMap()

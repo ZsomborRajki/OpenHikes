@@ -389,8 +389,10 @@ extension WalkOrRecordTests {
     }
 
     /// A row carrying another device's draft opens the recording screen on
-    /// this phone's idle recorder — `MapSheet.openRecording()` asks this as
-    /// it does — and the screen is up for that row, not for the handoff.
+    /// this phone's idle recorder, and `MapSheet.openRecording()` tells the
+    /// entry so as it pushes it: the screen is up for that row, not for the
+    /// handoff. The push itself is the sheet's, a view no suite here reaches,
+    /// so this holds what the row's call does rather than that it is made.
     @Test("the recording screen a draft's row opens begins afresh, not with a failed handoff's walk")
     func aRowsRecordingScreenBeginsAfresh() async throws {
         let hikeRecorder = makeRecorder()
@@ -400,7 +402,7 @@ extension WalkOrRecordTests {
         let entry = RecordingEntry(recorder: hikeRecorder, walkSession: session, openRequests: requests)
         _ = try await failedHandoff(hikeRecorder, session: session, entry: entry, sent: sent)
 
-        hikeRecorder.letGoOfUnclaimedWalk()
+        entry.recordingScreenOpenedForRow()
         entry.startOnRecordingScreen()
         await settleDelegateHop(until: "the screen's Start to be asked for") { sent.received.count == 2 }
 

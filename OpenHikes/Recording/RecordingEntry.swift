@@ -69,6 +69,7 @@ final class RecordingEntry {
     private let endWalk: @MainActor () -> Bool
     private let takeOverWalk: @MainActor () async -> WalkTakeover
     private let unclaimedSeed: @MainActor () -> RecordingSeed?
+    private let letGoOfUnclaimedWalk: @MainActor () -> Void
     private let openRequests: HikeOpenRequests
 
     /// Whether the store refused the End that ``endWalkAndRecord()`` asked
@@ -92,6 +93,8 @@ final class RecordingEntry {
     ///   - unclaimedSeed: what a handoff whose start failed carried, for the
     ///     recording screen's Start to try it again — see
     ///     ``HikeRecorder/unclaimedSeed``.
+    ///   - letGoOfUnclaimedWalk: lets go of that, for a recording screen that
+    ///     is up for something else.
     ///   - openRequests: where the request for the screen is sent.
     init(
         isLive: @escaping @MainActor () -> Bool,
@@ -100,6 +103,7 @@ final class RecordingEntry {
         endWalk: @escaping @MainActor () -> Bool = { true },
         takeOverWalk: @escaping @MainActor () async -> WalkTakeover = { .ended(carrying: nil) },
         unclaimedSeed: @escaping @MainActor () -> RecordingSeed? = { nil },
+        letGoOfUnclaimedWalk: @escaping @MainActor () -> Void = { /* nothing kept */ },
         openRequests: HikeOpenRequests
     ) {
         self.isLive = isLive
@@ -108,6 +112,7 @@ final class RecordingEntry {
         self.endWalk = endWalk
         self.takeOverWalk = takeOverWalk
         self.unclaimedSeed = unclaimedSeed
+        self.letGoOfUnclaimedWalk = letGoOfUnclaimedWalk
         self.openRequests = openRequests
     }
 
@@ -143,6 +148,7 @@ final class RecordingEntry {
                 }
             },
             unclaimedSeed: { [weak recorder] in recorder?.unclaimedSeed },
+            letGoOfUnclaimedWalk: { [weak recorder] in recorder?.letGoOfUnclaimedWalk() },
             openRequests: openRequests
         )
     }
@@ -184,6 +190,15 @@ final class RecordingEntry {
             if !isLive() { await start(unclaimedSeed()) }
             openRequests.openRecording()
         }
+    }
+
+    /// A library row that is a recording's draft opens the recording screen
+    /// too, on this phone's idle recorder — `MapSheet` says so here as it
+    /// pushes it. The screen is then up for that row, not for a handoff
+    /// whose start failed, so its Start is a recording of its own: the walk
+    /// kept for that retry is let go of, as any other start lets it go.
+    func recordingScreenOpenedForRow() {
+        letGoOfUnclaimedWalk()
     }
 
     /// The hiker said yes to ending their walk to record: ends it as End
