@@ -32,7 +32,7 @@ nonisolated extension VectorTilePainter {
         // Mapnik keeps no room between a point and a name; the names along
         // lines keep theirs from everything, `occupied` included.
         var room = VectorTilePoints.Room(bounds: bounds, taken: places.placements.map(\.frame))
-        var fonts = LabelFonts(language: language)
+        var fonts = LabelFonts(language: language, palette: palette)
         let stations = VectorTilePoints.Stations(
             candidates.filter(\.look.isStation),
             unit: unit,
@@ -53,9 +53,9 @@ nonisolated extension VectorTilePainter {
         let oneWay = VectorTileArrows.lines(in: tile, source: source, target: target)
         let arrows = VectorTileArrows.Layout(oneWay, unit: unit, room: &room)
         let names = pointNames(main, among: placeCandidates, room: &room, fonts: &fonts)
-        stations.icons.draw(into: context, icons: points.icons)
-        icons.draw(into: context, icons: points.icons)
-        arrows.draw(into: context, unit: unit)
+        stations.icons.draw(into: context, icons: points.icons, palette: palette)
+        icons.draw(into: context, icons: points.icons, palette: palette)
+        arrows.draw(into: context, unit: unit, palette: palette)
         shields.draw(into: context, unit: unit)
         streets.draw(into: context)
         paintLateLabels(
@@ -128,7 +128,7 @@ nonisolated extension VectorTilePainter {
         let low = candidates.filter(\.look.lowPriority)
         let lowIcons = VectorTilePoints.Icons(low, unit: unit, room: &room)
         let lowNames = VectorTilePoints.Names(low, unit: unit, room: &room, fonts: &fonts)
-        lowIcons.draw(into: context, icons: points.icons)
+        lowIcons.draw(into: context, icons: points.icons, palette: palette)
         water.draw(into: context)
         numbers.draw(into: context)
         buildings.draw(into: context)
@@ -148,7 +148,8 @@ nonisolated extension VectorTilePainter {
             unit: unit,
             bounds: bounds,
             language: language,
-            occupied: occupied
+            occupied: occupied,
+            palette: palette
         )
     }
 
@@ -162,7 +163,8 @@ nonisolated extension VectorTilePainter {
             unit: unit,
             bounds: bounds,
             occupied: occupied,
-            language: language
+            language: language,
+            palette: palette
         )
     }
 

@@ -244,7 +244,10 @@ nonisolated extension VectorTileShields {
             var placedAt: [[String]: [CGPoint]] = [:]
             for line in lines {
                 let colors = line.road.colors
-                let rows = line.numbers.map { InkedText($0, font: font, color: colors.ink, unit: unit, haloWidth: 0) }
+                let palette = fonts.palette
+                let rows = line.numbers.map { number in
+                    InkedText(number, font: font, color: colors.ink, unit: unit, haloWidth: 0, palette: palette)
+                }
                 let size = CGSize(
                     width: (rows.map(\.width).max() ?? 0) + 2 * padding.width * unit,
                     height: rows.reduce(0) { $0 + $1.ascent + $1.descent } + 2 * padding.height * unit
@@ -271,7 +274,13 @@ nonisolated extension VectorTileShields {
                         else { continue }
                         room.take(frame)
                         placedAt[line.numbers, default: []].append(center)
-                        plates.append(Plate(frame: frame, rows: rows, fill: colors.fill, edge: colors.edge))
+                        // The plate is the road's own surface and casing.
+                        plates.append(Plate(
+                            frame: frame,
+                            rows: rows,
+                            fill: palette.color(colors.fill, as: .surface),
+                            edge: palette.color(colors.edge, as: .casing)
+                        ))
                         break
                     }
                 }

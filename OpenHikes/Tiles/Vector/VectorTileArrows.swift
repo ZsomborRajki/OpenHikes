@@ -345,7 +345,9 @@ nonisolated enum VectorTileArrows {
             }
         }
 
-        func draw(into context: CGContext, unit: CGFloat) {
+        /// Each arrow in `palette`'s color for it: an arrow is read as a
+        /// letter is, so it is inked as one.
+        func draw(into context: CGContext, unit: CGFloat, palette: VectorTilePalette = .carto) {
             for placement in placements {
                 let arrow = placement.arrow
                 let path = arrow.outline.path(unit: unit)
@@ -354,13 +356,13 @@ nonisolated enum VectorTileArrows {
                 context.rotate(by: placement.angle)
                 if arrow.haloRadius > 0 {
                     context.addPath(path)
-                    context.setStrokeColor(VectorTileArrows.halo)
+                    context.setStrokeColor(palette.color(VectorTileArrows.halo, as: .halo))
                     context.setLineWidth(2 * arrow.haloRadius * unit)
                     context.setLineJoin(.round)
                     context.strokePath()
                 }
                 context.addPath(path)
-                context.setFillColor(arrow.color)
+                context.setFillColor(palette.color(arrow.color, as: .text))
                 context.fillPath()
                 context.restoreGState()
             }

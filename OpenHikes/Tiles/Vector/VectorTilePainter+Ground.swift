@@ -71,7 +71,7 @@ nonisolated extension VectorTilePainter {
     /// The lines cut through a forest, over the ground and under the water.
     func paintCutlines() {
         for (feature, geometry) in features(in: VectorTileRasterizer.cutlinesLayer, type: .line) {
-            stroke(geometry.path(of: feature), VectorTileStyle.cutline, cap: .square)
+            stroke(geometry.path(of: feature), VectorTileStyle.cutline, cap: .square, as: .fill)
         }
     }
 
@@ -133,14 +133,15 @@ nonisolated extension VectorTilePainter {
         // The tunnels after the open water, as Carto orders them, so the
         // pale line covers where the open stretch beside one ends.
         for tunnel in tunnels {
-            strokePixels(tunnel.path, VectorTileStyle.waterTunnelFill, width: tunnel.outer)
+            strokePixels(tunnel.path, VectorTileStyle.waterTunnelFill, width: tunnel.outer, as: .fill)
             strokePixels(
                 tunnel.path,
                 VectorTileStyle.water,
                 width: tunnel.outer,
-                dash: VectorTileStyle.waterTunnelDash
+                dash: VectorTileStyle.waterTunnelDash,
+                as: .fill
             )
-            strokePixels(tunnel.path, VectorTileStyle.waterTunnelFill, width: tunnel.inner)
+            strokePixels(tunnel.path, VectorTileStyle.waterTunnelFill, width: tunnel.inner, as: .fill)
         }
         paintLakes()
     }
@@ -173,13 +174,14 @@ nonisolated extension VectorTilePainter {
         return path
     }
 
-    /// Each waterway's glow, or each waterway itself.
+    /// Each waterway's glow, or each waterway itself: in the water's own
+    /// fill, so a river's line is lost in its area on any palette.
     private func strokeWaterways(_ waterways: [(kind: String, path: CGPath)], glow: Bool) {
         for (kind, path) in waterways {
             if glow {
-                if let line = VectorTileStyle.waterGlow(kind: kind, z: z) { stroke(path, line) }
+                if let line = VectorTileStyle.waterGlow(kind: kind, z: z) { stroke(path, line, as: .halo) }
             } else if let width = VectorTileStyle.waterLineWidths[kind] {
-                stroke(path, VectorTileStyle.Line(color: VectorTileStyle.water, width: width))
+                stroke(path, VectorTileStyle.Line(color: VectorTileStyle.water, width: width), as: .fill)
             }
         }
     }
@@ -305,7 +307,7 @@ nonisolated extension VectorTilePainter {
             fill(geometry.path(of: feature), VectorTileStyle.breakwater.color)
         }
         for (feature, geometry) in features(in: VectorTileRasterizer.breakwatersLayer, type: .line) {
-            stroke(geometry.path(of: feature), VectorTileStyle.breakwater, cap: .butt)
+            stroke(geometry.path(of: feature), VectorTileStyle.breakwater, cap: .butt, as: .fill)
         }
         for (feature, geometry) in features(in: "landuse", type: .polygon) {
             switch feature.string("kind") {
@@ -316,7 +318,7 @@ nonisolated extension VectorTilePainter {
         }
         for (feature, geometry) in features(in: "roads", type: .line)
         where VectorTileStyle.isPier(kind: feature.string("kind"), detail: feature.string("kind_detail")) {
-            stroke(geometry.path(of: feature), VectorTileStyle.pier, cap: .square)
+            stroke(geometry.path(of: feature), VectorTileStyle.pier, cap: .square, as: .fill)
         }
         for (feature, geometry) in features(in: VectorTileRasterizer.damsLayer, type: .line) {
             strokeWithCenter(
@@ -371,8 +373,9 @@ nonisolated extension VectorTilePainter {
         let cliffs = features(in: VectorTileRasterizer.cliffsLayer, type: .line)
         for (feature, geometry) in cliffs {
             guard let teeth = VectorTilePatterns.teeth(kind: feature.string("kind"), z: z) else { continue }
+            let inked = teeth.colored(palette.color(teeth.color, as: .line))
             for line in geometry.lines(of: feature) {
-                VectorTilePatterns.draw(teeth, along: line, in: context, unit: unit)
+                VectorTilePatterns.draw(inked, along: line, in: context, unit: unit)
             }
         }
         if cliffs.isEmpty, z >= VectorTilePatterns.cliffZ {
@@ -386,7 +389,7 @@ nonisolated extension VectorTilePainter {
         guard z >= VectorTileStyle.ridgeZ else { return }
         for (feature, geometry) in features(in: VectorTileRasterizer.ridgesLayer, type: .line) {
             let kind = feature.string("kind")
-            let dots = points.icons.pattern(asset: VectorTilePatterns.ridge(kind: kind, z: z).asset, unit: unit)
+            let dots = palette.pattern(VectorTilePatterns.ridge(kind: kind, z: z).asset, unit: unit, from: points.icons)
             guard let dots else {
                 stroke(geometry.path(of: feature), VectorTileStyle.ridge(kind: kind), cap: .butt)
                 continue
@@ -416,7 +419,7 @@ nonisolated extension VectorTilePainter {
                 VectorTileStyle.Line(color: VectorTileStyle.treeCanopy, width: VectorTileStyle.treeWidth)
             )
         }
-        context.setFillColor(VectorTileStyle.treeCanopy)
+        context.setFillColor(palette.color(VectorTileStyle.treeCanopy, as: .line))
         for tree in trees {
             context.fillEllipse(in: CGRect(x: tree.x - crown / 2, y: tree.y - crown / 2, width: crown, height: crown))
         }
@@ -424,7 +427,7 @@ nonisolated extension VectorTilePainter {
         context.restoreGState()
         let trunk = VectorTileStyle.treeTrunkWidth.value(at: z) * unit
         guard trunk > 0 else { return }
-        context.setFillColor(VectorTileStyle.treeTrunk)
+        context.setFillColor(palette.color(VectorTileStyle.treeTrunk, as: .line))
         for tree in trees {
             context.fillEllipse(in: CGRect(x: tree.x - trunk / 2, y: tree.y - trunk / 2, width: trunk, height: trunk))
         }

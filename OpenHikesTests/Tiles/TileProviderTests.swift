@@ -31,12 +31,12 @@ struct TileProviderTests {
     func rasterComparisonCard() {
         let raster = TileProvider.openStreetMapRaster
         #expect(raster.vectorSource == nil)
-        #expect(TileProvider.vectorSources.keys.sorted() == [TileProvider.openStreetMap.id])
+        #expect(TileProvider.vectorSources[raster.id] == nil)
         #expect(raster.urlTemplate == TileProvider.openStreetMap.urlTemplate)
         #expect(raster.attribution.credits == [.openStreetMap])
         #expect(TileCache.providerID(forDiskName: "osm_raster_14_1_2_2x") == raster.id)
         #expect(TileCache.providerID(forDiskName: "osm_14_1_2_2x") == TileProvider.openStreetMap.id)
-        #expect(TileProvider.all.firstIndex(of: raster) == 3, "after the free maps, before the paid ones")
+        #expect(TileProvider.all.firstIndex(of: raster) == 4, "after the free maps, before the paid ones")
     }
 
     /// Every entry has to carry its attribution — it's displayed wherever the
@@ -222,7 +222,7 @@ struct TileProviderTests {
         #expect(apple.renderedSource == nil)
         let style = try #require(apple.systemStyle)
         #expect(apple.renderedBase == .system(style))
-        #expect(!apple.renderedBase.keepsChromeLight)
+        #expect(apple.renderedBase.chrome == .system)
         #expect(!TileProvider.rasterSources.contains(apple))
     }
 
@@ -243,23 +243,47 @@ struct TileProviderTests {
         #expect(provider.renderedSource != nil)
         #expect(provider.renderedSource?.providerID == provider.id)
         #expect(provider.renderedBase.tileSource == provider.renderedSource)
-        #expect(provider.renderedBase.keepsChromeLight)
+        #expect(provider.renderedBase.chrome != .system, "a tile map's controls never follow the phone")
     }
 
-    /// Its position is a product decision — the cheapest map sits directly
-    /// under the default rather than at the bottom of the list — and its id is
-    /// a storage contract, like every other one here.
+    /// The OpenHikes map in dark colors is the second choice, beside the map
+    /// it is the night's half of, and its id is a storage contract: the
+    /// stored choice, its tiles' keys and their files all carry it. A build
+    /// from before it existed reads the id as the default, the same map by
+    /// day.
+    @Test("OpenHikes Dark is the second choice, free and keyless, under a stable id")
+    func darkMapPlacement() {
+        let dark = TileProvider.openHikesDark
+        #expect(dark.id == "osm_dark")
+        #expect(TileProvider.all.firstIndex(of: dark) == 1)
+        #expect(!dark.requiresPaidAccess && dark.apiKeyPlistKey == nil)
+        #expect(!dark.supportsBulkDownload && dark.durableQuota == nil)
+        #expect(dark.attribution == TileProvider.openStreetMap.attribution)
+        #expect(dark.maximumZ == TileProvider.openStreetMap.maximumZ)
+        #expect(dark.vectorPalette == .dark)
+        #expect(TileProvider.provider(id: "osm_dark") == dark)
+        #expect(TileProvider.renderable(id: "osm_dark", entitlement: .notEntitled) == dark)
+        #expect(TileCache.providerID(forDiskName: "osm_dark_14_1_2") == dark.id)
+        // Its template is never asked, and could reach nobody's server but
+        // the app's own if it were.
+        #expect(dark.urlTemplate.hasPrefix(VectorTileArchives.server.absoluteString))
+        #expect(dark.urlTemplate != TileProvider.openStreetMap.urlTemplate)
+    }
+
+    /// Their position is a product decision — the cheapest map sits directly
+    /// under the app's own rather than at the bottom of the list — and its id
+    /// is a storage contract, like every other one here.
     ///
     /// The satellite map sits beside it as the other free Apple map, and a
     /// build from before it existed reads its id as the default, which is a
     /// working map rather than a blank one.
-    @Test("the system base maps are the second and third choices, under stable ids")
+    @Test("the system base maps follow the two OpenHikes maps, under stable ids")
     func systemBaseMapPlacement() {
         #expect(TileProvider.appleMaps.id == "apple_maps")
         #expect(TileProvider.appleSatellite.id == "apple_satellite")
-        #expect(TileProvider.all.count >= 3)
-        #expect(TileProvider.all[1].id == TileProvider.appleMaps.id)
-        #expect(TileProvider.all[2].id == TileProvider.appleSatellite.id)
+        #expect(TileProvider.all.count >= 4)
+        #expect(TileProvider.all[2].id == TileProvider.appleMaps.id)
+        #expect(TileProvider.all[3].id == TileProvider.appleSatellite.id)
         #expect(TileProvider.all.first?.id == TileProvider.default.id)
         #expect(TileProvider.provider(id: "apple_satellite") == .appleSatellite)
     }

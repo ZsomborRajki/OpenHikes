@@ -45953,6 +45953,65 @@
         }
       }
     },
+    "OpenHikes Dark" : {
+      "comment" : "The name of a map style on Map Modes: the OpenHikes map, drawn in dark colors",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes Dunkel"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes oscuro"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes sombre"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes scura"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes Donker"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes ciemna"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes întunecată"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes темная"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes темна"
+          }
+        }
+      }
+    },
     "OpenHikes doesn’t have Always location access, so this can’t run. Turn it on in Settings." : {
       "localizations" : {
         "de" : {
@@ -70330,6 +70389,64 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Карта OpenHikes показує викачану країну навіть без сигналу. Викачування відбувається через Wi-Fi."
+          }
+        }
+      }
+    },
+    "The OpenHikes map in dark colors. Countries you download are drawn on it too." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die OpenHikes-Karte in dunklen Farben. Heruntergeladene Länder werden auch auf ihr gezeichnet."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El mapa de OpenHikes en colores oscuros. Los países que descargues también se dibujan en él."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La carte OpenHikes en couleurs sombres. Les pays que vous téléchargez y sont dessinés aussi."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La mappa OpenHikes in colori scuri. Anche i paesi che scarichi vengono disegnati su questa mappa."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De OpenHikes-kaart in donkere kleuren. Landen die je downloadt, worden er ook op getekend."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mapa OpenHikes w ciemnych kolorach. Pobrane kraje też są na niej rysowane."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Harta OpenHikes în culori închise. Țările pe care le descărcați sunt desenate și pe ea."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Карта OpenHikes в темных цветах. Загруженные страны рисуются и на ней."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Карта OpenHikes у темних кольорах. Викачані країни малюються й на ній."
           }
         }
       }

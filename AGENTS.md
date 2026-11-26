@@ -894,6 +894,15 @@ is promoted, and stamps the version at build time: the tags, not
   are read out of Carto's style, never written by hand
   (`Scripts/carto-points.sh`). The archive's landcover is ESA WorldCover's,
   under CC BY 4.0, so the style credits it beside OpenStreetMap.
+- **OpenHikes Dark is the same drawing in other colors**
+  (`TileProvider.openHikesDark`, `osm_dark`). The style keeps Carto's colors,
+  and a color reaches the picture only through the tile's
+  `VectorTilePalette`, by what it is put down as, so a new draw site asks
+  the palette too. A color its table does not name
+  (`VectorTileDarkPalette.swift`) is worked out, so a rule or a Carto
+  release needs no entry there to be drawn. It is drawn from the OpenHikes
+  map's archives and downloaded countries, and files its pictures under its
+  own id.
 - **The extras fill in what the basemap leaves out**
   (`VectorTileSource.Extras`): a second archive that
   `Scripts/vector-extras.sh` builds from the planet, with its layers named as
@@ -911,9 +920,11 @@ is promoted, and stamps the version at build time: the tags, not
   connection falls back to nothing: the load fails and is tried again, rather
   than filing a raster tile among the drawn ones for a week. So does a server
   failing over a saved tile, whose copy stays the tile
-  (`VectorTileClient.Drawing.unavailable`).
+  (`VectorTileClient.Drawing.unavailable`). And so does every tile of a map
+  not drawn in Carto's colors, which those raster tiles are no stand-in for
+  (`TileProvider.fallsBackToRasterTiles`).
 - **openstreetmap.org stands beside it while the style is new.**
-  `TileProvider.openStreetMapRaster` (`osm_raster`), the fourth card on
+  `TileProvider.openStreetMapRaster` (`osm_raster`), the fifth card on
   *Map Modes*, draws the OSMF's raster tiles alone, so the two can be
   compared. It goes once the transition is over, and a choice stored for it
   then reads as the default.
@@ -980,6 +991,9 @@ Maps*. `OfflineCountries` is the one owner, on the main actor.
 - **An area is drawn before the network is asked.** `TileCache` asks the
   downloaded areas (`OfflineCountryArchives`) ahead of the network policy and
   the tile server, and files the picture in the cache as any tile.
+- **An area is every map's that is drawn from vector tiles**
+  (`OfflineCountries.areDrawn(on:)`): one download draws the OpenHikes map
+  and OpenHikes Dark, each in its own palette.
 - **A download is `.speculative`** (`TileNetworkPolicy`), in a background
   `URLSession`, and nothing on its path checks an entitlement. Trying again
   goes by what the server offers now (`OfflineCountries.retry`), because the

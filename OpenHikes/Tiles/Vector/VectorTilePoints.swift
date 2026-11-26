@@ -300,22 +300,29 @@ nonisolated enum VectorTilePoints {
             count += 1
         }
 
-        func draw(into context: CGContext, icons: any VectorTileIconDrawing) {
+        /// Each icon in `palette`'s color for it: the art is Carto's on
+        /// every map, and only what it is set in changes.
+        func draw(
+            into context: CGContext,
+            icons: any VectorTileIconDrawing,
+            palette: VectorTilePalette = .carto
+        ) {
             for (icon, frame) in placed {
+                let fill = icon.fill.map { palette.color($0, as: .icon) }
                 context.saveGState()
                 context.setAlpha(icon.opacity)
                 if let asset = icon.asset {
-                    if let image = icons.image(asset: asset, fill: icon.fill, size: frame.size) {
+                    if let image = icons.image(asset: asset, fill: fill, size: frame.size) {
                         // The picture's rows run up; the tile's down.
                         context.translateBy(x: frame.minX, y: frame.maxY)
                         context.scaleBy(x: 1, y: -1)
                         context.draw(image, in: CGRect(origin: .zero, size: frame.size))
                     }
                 } else {
-                    context.setFillColor(icon.fill ?? VectorTileStyle.color("#0000FF"))
+                    context.setFillColor(fill ?? palette.color(VectorTileStyle.color("#0000FF"), as: .icon))
                     context.fillEllipse(in: frame)
                     if let outline = icon.outline {
-                        context.setStrokeColor(outline.color)
+                        context.setStrokeColor(palette.color(outline.color, as: .line))
                         context.setLineWidth(outline.width * frame.width / max(icon.size.width, 1))
                         context.strokeEllipse(in: frame)
                     }
@@ -480,6 +487,7 @@ nonisolated private struct NameBlock {
 
     init(_ text: [String], style: VectorTilePointStyle.Text, unit: CGFloat, fonts: inout LabelFonts) {
         let font = fonts.font(size: style.size * unit, face: style.face)
+        let palette = fonts.palette
         let set = { (line: String) in
             InkedText(
                 line,
@@ -487,7 +495,8 @@ nonisolated private struct NameBlock {
                 color: style.color,
                 unit: unit,
                 halo: style.halo,
-                haloWidth: style.haloRadius
+                haloWidth: style.haloRadius,
+                palette: palette
             )
         }
         let width = style.wrapWidth * unit

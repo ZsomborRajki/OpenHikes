@@ -64,7 +64,9 @@ nonisolated extension VectorTilePainter {
             for road in surfaces {
                 var line = road.road.line(at: z)
                 if level == .tunnel { line.alpha *= VectorTileRasterizer.tunnelAlpha }
-                strokeWithCenter(road.outline, line)
+                // A way with a casing is a street, and its color a surface;
+                // a railway, a lift or a ferry is a line.
+                strokeWithCenter(road.outline, line, as: line.casing == nil ? .line : .surface)
             }
         }
     }
@@ -99,7 +101,7 @@ nonisolated extension VectorTilePainter {
         let fill = line.width.value(at: z)
         guard let casing = line.casing, edge > 0, fill > 0 else { return }
         let width = ZoomCurve([(z, fill + 2 * edge)])
-        stroke(path, VectorTileStyle.Line(color: casing, width: width), cap: cap)
+        stroke(path, VectorTileStyle.Line(color: casing, width: width), cap: cap, as: .casing)
     }
 
     /// Roads being built: the color of the road each is to be, with dashes
@@ -112,7 +114,8 @@ nonisolated extension VectorTilePainter {
                 service: feature.string("service")
             )
             else { continue }
-            strokeWithCenter(geometry.path(of: feature), line, cap: .butt)
+            // The line is the surface of the road it is to be.
+            strokeWithCenter(geometry.path(of: feature), line, cap: .butt, as: .surface)
         }
     }
 
@@ -162,7 +165,8 @@ nonisolated extension VectorTilePainter {
                     VectorTileStyle.pathBand,
                     width: path.look.bandWidth,
                     cap: level == .bridge ? .butt : .round,
-                    alpha: isCased ? 1 : VectorTileStyle.pathBandAlpha
+                    alpha: isCased ? 1 : VectorTileStyle.pathBandAlpha,
+                    as: .halo
                 )
             }
         }
@@ -180,20 +184,22 @@ nonisolated extension VectorTilePainter {
 
     /// A line of `width` pixels of a 256-pixel tile, its dashes in the same
     /// pixels: Carto's own units for a path, whose dashes do not widen with
-    /// it as a ``VectorTileStyle/Line``'s do.
+    /// it as a ``VectorTileStyle/Line``'s do. `role` is what the palette
+    /// takes `color` as.
     func strokePixels(
         _ path: CGPath,
         _ color: CGColor,
         width: CGFloat,
         dash: [CGFloat] = [],
         cap: CGLineCap = .butt,
-        alpha: CGFloat = 1
+        alpha: CGFloat = 1,
+        as role: VectorTilePalette.Role = .line
     ) {
         guard width > 0 else { return }
         context.saveGState()
         context.setAlpha(alpha)
         context.addPath(path)
-        context.setStrokeColor(color)
+        context.setStrokeColor(palette.color(color, as: role))
         context.setLineWidth(width * unit)
         context.setLineJoin(.round)
         context.setLineCap(cap)

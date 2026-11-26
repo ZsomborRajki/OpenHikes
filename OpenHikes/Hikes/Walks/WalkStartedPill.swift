@@ -42,12 +42,12 @@ struct WalkStartedPill: View {
     /// Landscape's side panel, which moves the badge — and so this — off the
     /// map's leading edge to beside the panel.
     let usesSidePanel: Bool
-    /// Whether the map under the pill keeps its chrome light —
-    /// ``MapBase/keepsChromeLight`` — as the caption under *Search this
-    /// area*, whose glass this matches, does from inside the map view.
-    /// Without it, dark mode drew white text and the bright accent on dark
-    /// glass over light tiles, under a badge drawn light.
-    let keepsLight: Bool
+    /// The appearance the map under the pill keeps its chrome in —
+    /// ``MapBase/chrome`` — as the caption under *Search this area*, whose
+    /// glass this matches, does from inside the map view. Without it, dark
+    /// mode drew white text and the bright accent on dark glass over light
+    /// tiles, under a badge drawn light.
+    let chrome: MapChrome
     let onOpen: (UUID) -> Void
 
     var body: some View {
@@ -105,7 +105,7 @@ struct WalkStartedPill: View {
         .glassSurface(.regular.interactive(), in: .rect(cornerRadius: Self.cornerRadius))
         // Around the glass as well as the contents, as the weather badge's.
         .transformEnvironment(\.colorScheme) { scheme in
-            if keepsLight { scheme = .light }
+            if let kept = chrome.colorScheme { scheme = kept }
         }
     }
 }

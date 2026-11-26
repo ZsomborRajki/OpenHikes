@@ -210,6 +210,11 @@ nonisolated enum VectorTilePatterns {
         let base: CGFloat
         let tip: CGFloat
         let height: CGFloat
+
+        /// The same teeth in `color`, as a palette has theirs.
+        func colored(_ color: CGColor) -> Self {
+            Self(color: color, spacing: spacing, base: base, tip: tip, height: height)
+        }
     }
 
     /// Carto draws a cliff from this zoom and an embankment from

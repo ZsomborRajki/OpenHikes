@@ -10,10 +10,10 @@
 //  did.
 //
 //  The drawing is the one ``VectorTileClient`` does for a tile off the
-//  server — the same rasterizer, heights and language, the archives' — so a
-//  tile drawn from a country is the tile the server's bytes would have drawn,
-//  and is kept current by the same rule when the language changes
-//  (``VectorTileArchives/language``).
+//  server — the same rasterizer, heights and language, the archives', and
+//  the provider's palette — so a tile drawn from a country is the tile the
+//  server's bytes would have drawn, and is kept current by the same rule when
+//  the language changes (``VectorTileArchives/language``).
 //
 //  An area's day hikes are here too, for the Community tab's search to read
 //  before it asks the tile server (``trailCells(named:)``).
@@ -317,7 +317,8 @@ nonisolated final class OfflineCountryDrawing: Sendable {
             from: found.dataTile,
             drawing: target,
             language: language,
-            height: { HikeFormat.elevation(Measurement(value: $0, unit: .meters)) }
+            height: { HikeFormat.elevation(Measurement(value: $0, unit: .meters)) },
+            palette: TileProvider.vectorPalette(forProviderID: named.providerID)
         )
     }
 }
