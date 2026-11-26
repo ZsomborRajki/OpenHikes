@@ -132,7 +132,7 @@ final class SelectedLine {
         /// The line, and the length stored beside it.
         case line(Line)
         /// No row: a hike deleted on another device that this one has not
-        /// merged yet.
+        /// merged yet, or one deleted here.
         case gone
         /// The fetch failed, which says nothing about the row.
         case failed
@@ -219,15 +219,26 @@ final class SelectedLine {
         /// The line itself, read off a hike holding edits its store has not
         /// had yet.
         case unsaved(Line)
+        /// A hike deleted here, which reads as a row the store no longer
+        /// holds.
+        case gone
 
         /// From the store when `hike`'s context has written every edit to
         /// it, and from `hike`, here, when it has not. The hike's own flag
         /// rather than its context's, for the reason
         /// ``HikePhotoSearchPlan/SourceRead`` gives: a pending write to any
         /// other row would send every read back to the main actor.
+        ///
+        /// Nothing for a hike that has left its store. A screen can still
+        /// hold one after *Delete Hike*, and a ``SelectedLine/refresh()``
+        /// asked for before the deletion starts its read after it. Its
+        /// context has gone, which sent it here, and reading its line off the
+        /// detached row trapped (see ``Hike/hasLeftItsStore``).
         @MainActor
         init(_ hike: Hike) {
-            if !hike.hasChanges, let container = hike.modelContext?.container {
+            if hike.hasLeftItsStore {
+                self = .gone
+            } else if !hike.hasChanges, let container = hike.modelContext?.container {
                 self = .saved(hike.persistentModelID, in: container)
             } else {
                 self = .unsaved(Line(route: hike.route, distanceMeters: hike.distanceMeters))
@@ -441,6 +452,8 @@ final class SelectedLine {
             }
         case let .unsaved(line):
             return .line(line)
+        case .gone:
+            return .gone
         }
     }
 

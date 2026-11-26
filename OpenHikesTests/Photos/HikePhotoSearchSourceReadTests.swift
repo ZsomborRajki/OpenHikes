@@ -65,6 +65,24 @@ struct HikePhotoSearchSourceReadTests {
         #expect(await PickedPhotoWork.standard.plan(from: read) == nil)
     }
 
+    /// A hike deleted here and still held, as its screen holds it for the
+    /// pass the pop draws, is named after the deletion. Its context has gone,
+    /// which once sent it to be read where it is, and reading its line off
+    /// the detached row trapped. See ``Hike/hasLeftItsStore``.
+    @Test("a hike deleted here reads as nothing")
+    func hikeDeletedHereReadsAsNothing() async throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context, route: PhotoDiscoveryFixture.route)
+        try context.save()
+        context.delete(hike)
+        try context.save()
+
+        let read = HikePhotoSearchPlan.SourceRead(hike)
+
+        #expect(try read.source(fetch: HikePhotoSearchPlan.SourceRead.fetchHike) == nil)
+        #expect(try await PhotoDiscoveryWork.standard.plan(for: read) == nil)
+    }
+
     /// A fetch that fails says nothing about the row, which is still there,
     /// so it is not read as one that has gone (#1442).
     @Test("a fetch that fails is told from a hike that has gone")

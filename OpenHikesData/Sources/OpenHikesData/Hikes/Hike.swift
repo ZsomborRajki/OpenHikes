@@ -657,6 +657,21 @@ public extension Hike {
     /// it. `HikeAttachmentTests` pins the behaviour this reads.
     var isAttached: Bool { !isDeleted && modelContext != nil }
 
+    /// Whether this hike was in a store and has left it: deleted, with the
+    /// save still to come, or detached by the save that deleted it.
+    ///
+    /// Not ``isAttached`` turned round. A hike never saved has no context
+    /// either, and holds every value it has in memory, so a read of it there
+    /// is the only read there is. A detached hike's identifier keeps the
+    /// store it came from, and a never-saved one's names none, which is how
+    /// the two are told apart. A reader that reads a hike holding edits the
+    /// store has not had where it is asks this first, because off a detached
+    /// row a line traps (see ``resolveDecodedColumns()``), and a hike that
+    /// has left its store has no line to read.
+    var hasLeftItsStore: Bool {
+        isDeleted || (modelContext == nil && persistentModelID.storeIdentifier != nil)
+    }
+
     /// Reads the columns SwiftData decodes on first read, other than the
     /// lines, so that a hike about to be deleted still answers them once the
     /// save has detached it: its photographs and its two trail breakdowns.
@@ -673,8 +688,9 @@ public extension Hike {
     ///
     /// The lines are left out. Decoding one on the main actor is the cost the
     /// app's screens avoid by reading the line off it, and a reader of a
-    /// deleted hike's line asks ``isAttached`` first, as
-    /// ``orderedPlaces`` does. `HikeDecodedColumnTests` holds this list to
+    /// deleted hike's line asks ``isAttached`` first, as ``orderedPlaces``
+    /// does, or ``hasLeftItsStore``, where it would read a hike with unsaved
+    /// edits in place. `HikeDecodedColumnTests` holds this list to
     /// the schema, so a new decoded column has to be added here or be a line.
     func resolveDecodedColumns() {
         _ = photos
