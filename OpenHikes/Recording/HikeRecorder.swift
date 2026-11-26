@@ -202,8 +202,10 @@ final class HikeRecorder: NSObject {
     /// The walk a handoff carried when its start failed before a session
     /// took it — see ``RecordingSeed``. Kept past the failure, which
     /// ``resetSession()`` does not touch, for the recording screen's Start to
-    /// try that handoff again; let go of by any session that starts and by
-    /// any other start asked for.
+    /// try that handoff again. Let go of by every other start asked for,
+    /// from any surface and whether or not it starts, by any session that
+    /// starts, and by ``letGoOfUnclaimedWalk()``: a walk starting, and the
+    /// recording screen opened for something else.
     @ObservationIgnored var unclaimedSeed: RecordingSeed?
     @ObservationIgnored var pendingResumeFlag = false
     /// Refuses live fixes taken before this recording, or its current leg,
@@ -440,6 +442,10 @@ extension HikeRecorder {
             resetSession()
         }
         guard phase == .idle else { return }
+        // Every start asked for, from any surface, lets a failed handoff's
+        // walk go: a retry hands it back in as the carried seed first, and
+        // anything else is a recording of its own — see ``unclaimedSeed``.
+        unclaimedSeed = nil
         startRequested = true
         phase = .waitingForFix
         switch source.authorization {

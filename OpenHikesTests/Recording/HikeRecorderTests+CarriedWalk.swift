@@ -271,6 +271,25 @@ extension HikeRecorderTests {
         #expect(hikeRecorder.sessionStartedAt == clock.now)
     }
 
+    /// Siri, Control Center and the watch start through the coordinator,
+    /// which asks for a recording of its own: it lets the walk go whether or
+    /// not it starts, or a retry once the storage recovered would carry a
+    /// walk two failures old.
+    @Test("a start from an intent lets an unclaimed walk go, even one that fails")
+    func anIntentStartLetsTheWalkGo() async throws {
+        struct Refused: Error {}
+        let hikeRecorder = makeRecorder(openJournalHandle: { _ in throw Refused() })
+        let seed = carriedWalk()
+        await hikeRecorder.start(carrying: seed)
+        try #require(hikeRecorder.unclaimedSeed == seed, "precondition: kept for the retry")
+        hikeRecorder.dismissFailure()
+
+        let coordinator = HikeIntentCoordinator(recorder: hikeRecorder, container: container)
+        await #expect(throws: HikeIntentFailure.self) { _ = try await coordinator.startRecording() }
+
+        #expect(hikeRecorder.unclaimedSeed == nil)
+    }
+
     @Test("with nothing to carry it is an ordinary start")
     func nothingToCarryIsAnOrdinaryStart() async {
         let hikeRecorder = makeRecorder()
