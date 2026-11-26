@@ -139,7 +139,11 @@ final class MapActivityCapsule {
     var controls: Controls? {
         switch activity {
         case .recording:
-            Controls(activity: .recording, offersStop: recorder.isStoppable, pause: Self.pause(for: recorder.phase))
+            Controls(
+                activity: .recording,
+                offersStop: recorder.isStoppable,
+                pause: Self.pause(for: recorder.phase, hasSession: recorder.sessionStartedAt != nil)
+            )
         case let .walk(hikeID):
             Controls(
                 activity: .walk(hikeID: hikeID),
@@ -151,9 +155,12 @@ final class MapActivityCapsule {
         }
     }
 
-    /// Pause while a recording takes fixes, Resume while it is paused.
-    nonisolated static func pause(for phase: HikeRecorder.Phase) -> PauseControl? {
+    /// Pause while a recording takes fixes, Resume while it is paused, and
+    /// neither while a Start still waits on the hiker's answer to a location
+    /// prompt, with no session to pause (`HikeRecorder+StartAnswer.swift`).
+    nonisolated static func pause(for phase: HikeRecorder.Phase, hasSession: Bool) -> PauseControl? {
         switch phase {
+        case .waitingForFix where !hasSession: nil
         case .waitingForFix, .recording: .pause
         case .paused: .resume
         case .idle, .recovering, .saving, .failed: nil

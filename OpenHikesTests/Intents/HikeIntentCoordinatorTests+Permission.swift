@@ -262,7 +262,8 @@ extension HikeIntentCoordinatorTests {
 
     /// A Pause has nothing to pause until the hiker allows the Start: taken
     /// here, the Allow would make the session and run it anyway, under a
-    /// Pause the hiker was told had landed.
+    /// Pause the hiker was told had landed. It is told what the recording
+    /// waits on, as a second Start is (#1683).
     @Test(
         "a Pause while the start's prompt is up is refused, and the Allow starts a recording that runs",
         .timeLimit(.minutes(1))
@@ -275,7 +276,7 @@ extension HikeIntentCoordinatorTests {
             self.source.authorizationRequests == 1
         }
 
-        await #expect(throws: HikeIntentFailure.noActiveRecording) {
+        await #expect(throws: HikeIntentFailure.needsLocationPermission) {
             _ = try await coordinator.pauseRecording()
         }
         #expect(recorder?.phase == .waitingForFix)

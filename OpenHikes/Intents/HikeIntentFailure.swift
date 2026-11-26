@@ -31,7 +31,9 @@ nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
     /// asked for again while another Start waits on that prompt; or a Start
     /// whose intent was cancelled before the prompt, or the precision sheet,
     /// was answered, and which was withdrawn with it. Nothing was started,
-    /// and the hiker is told why rather than told it began.
+    /// and the hiker is told why rather than told it began. A Pause asked
+    /// for while a Start waits on either is refused with it too: there is
+    /// no recording to pause until the hiker answers.
     ///
     /// The whole sentence is the description, for the reason
     /// ``walking(trail:)`` gives: the watch shows the description alone.

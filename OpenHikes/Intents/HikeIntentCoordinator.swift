@@ -190,13 +190,20 @@ extension HikeIntentCoordinator {
 
     func pauseRecording() async throws(HikeIntentFailure) -> LiveRecordingReport {
         await settleRecorder()
-        // A pause the app made is one the hiker can still ask for: it becomes
-        // theirs, and is no longer ended for them (`HikeRecorder+AutoPause.swift`).
         // A Start still waiting on the hiker's answer has nothing to pause
         // yet: the session the Allow makes would run under a Pause the hiker
-        // had been told landed.
-        guard !recorder.isAwaitingStartAnswer,
-              recorder.phase == .waitingForFix || recorder.phase == .recording || recorder.isAutoPaused else {
+        // had been told landed (#1683). It is told what the recording waits
+        // on, as a second Start is: the watch and the Live Activity still
+        // show that Start as the recording it is about to be, and "isn't
+        // recording" said beside it contradicts the screen it was tapped on.
+        // Granted and still without a session is only the journal being
+        // opened, a moment with nothing to wait on the hiker for.
+        if recorder.isAwaitingStartAnswer {
+            throw authorization.needsForeground ? .needsLocationPermission : .noActiveRecording
+        }
+        // A pause the app made is one the hiker can still ask for: it becomes
+        // theirs, and is no longer ended for them (`HikeRecorder+AutoPause.swift`).
+        guard recorder.phase == .waitingForFix || recorder.phase == .recording || recorder.isAutoPaused else {
             throw .noActiveRecording
         }
         recorder.pause()

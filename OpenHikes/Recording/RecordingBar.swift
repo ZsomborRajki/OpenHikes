@@ -95,12 +95,15 @@ struct RecordingClockAndDistance: View {
 }
 
 /// Pause while the recording takes fixes, Resume while it is paused, and
-/// nothing otherwise.
+/// nothing otherwise — nor while a Start still waits on the hiker's answer to
+/// a location prompt, with no session to pause (`HikeRecorder+StartAnswer.swift`).
 private struct RecordingPauseButton: View {
     let recorder: HikeRecorder
 
     var body: some View {
         switch recorder.phase {
+        case .waitingForFix where recorder.sessionStartedAt == nil:
+            EmptyView()
         case .waitingForFix, .recording:
             Button("Pause", systemImage: "pause.fill") { recorder.pause() }
         case .paused:
