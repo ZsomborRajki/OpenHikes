@@ -223,9 +223,10 @@ final class WalkOrRecordTests {
 
     /// The walk is in its trail's History and its ground is in the recording,
     /// and the library's totals count a walk for whatever part of its time
-    /// no recording's clock covers. So the recording's clock has to cover
-    /// the walk's to the instant — here with the recording stopped before a
-    /// fix of its own, which leaves the carried points as the whole of it.
+    /// no clock of a hike on its ground covers. So the recording's clock has
+    /// to cover the walk's to the instant — here with the recording stopped
+    /// before a fix of its own, which leaves the carried points as the whole
+    /// of it — and has to keep doing so once the trail is redrawn.
     @Test("the ground handed to a recording is counted once in the library, not once more as the walk")
     func aHandedOverWalkIsCountedOnce() async throws {
         let hikeRecorder = makeRecorder()
@@ -256,6 +257,15 @@ final class WalkOrRecordTests {
         let library = try await LibraryTotalsSweep.outings(from: container)
         #expect(library.outings.map(\.hikeID) == [recording.id])
         #expect(library.outings.allSatisfy { !$0.isWalk })
+
+        // Edit Route then keeps only the trail's far end, half a kilometre
+        // from anything the walk covered. The walk is along a line the trail
+        // no longer draws, so where it went is not known, and the recording
+        // that holds its ground still takes it out.
+        walked.replaceRoute(with: Array(walked.route[14...19]))
+        try context.save()
+        let trimmed = try await LibraryTotalsSweep.outings(from: container)
+        #expect(trimmed.outings.map(\.hikeID) == [recording.id])
     }
 
     /// A recorder that has been asked to start and is waiting on its

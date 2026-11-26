@@ -27,8 +27,9 @@
 //    for sits in the breaks, or — a pause that left no break — as a wait at
 //    the first point before setting off, so that the first point is stamped
 //    with the walk's start and the last with its last match, each to the
-//    instant. The library's totals leave a walk out for as long as a
-//    recording's clock covers it (`LibraryTotals`), and the walk that was
+//    instant. The library's totals leave a walk out for as long as the
+//    clock of a recording on its ground covers it, and these points lie on
+//    the very stretches it covered (`LibraryTotals`): the walk that was
 //    handed over is in its trail's History too.
 //  - **The trail's heights**, read off the profile between its plotted
 //    samples, where it has any.
