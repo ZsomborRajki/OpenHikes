@@ -15,7 +15,11 @@
 //  keeps the watch from starting a second one beside it, and a Stop from
 //  any surface ends it. Only a caller that confirms a start asks the
 //  difference, and a Pause, which has nothing to pause until the session
-//  exists: the session the Allow makes would run under it.
+//  exists: the session the Allow makes would run under it. So `pause()`
+//  refuses one, which marked a journal that did not exist yet and failed the
+//  Start with a storage error (#1683); the recording bar and the map's
+//  capsule offer no Pause until the session is made; and the intents tell
+//  Siri and the watch that the recording waits on location.
 //
 
 import Foundation

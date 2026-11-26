@@ -469,6 +469,11 @@ extension HikeRecorder {
             return
         }
         guard phase == .waitingForFix || phase == .recording else { return }
+        // A Start still waiting on the location prompt or the precision sheet
+        // has no journal to mark, and the session its answer makes would run
+        // under the Pause anyway: there is nothing to pause yet (#1683). See
+        // `HikeRecorder+StartAnswer.swift`.
+        guard !isAwaitingStartAnswer else { return }
         resetAutoPause()
         phase = .paused
         cancelLiveMatching(clearWindow: false)

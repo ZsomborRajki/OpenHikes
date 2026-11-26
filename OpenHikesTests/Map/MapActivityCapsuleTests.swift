@@ -46,13 +46,21 @@ struct MapActivityCapsuleTests {
 
     @Test("Pause while a recording takes fixes, Resume while it is paused, neither otherwise")
     func pauseControlFollowsThePhase() {
-        #expect(MapActivityCapsule.pause(for: .waitingForFix) == .pause)
-        #expect(MapActivityCapsule.pause(for: .recording) == .pause)
-        #expect(MapActivityCapsule.pause(for: .paused) == .resume)
-        #expect(MapActivityCapsule.pause(for: .idle) == nil)
-        #expect(MapActivityCapsule.pause(for: .recovering) == nil)
-        #expect(MapActivityCapsule.pause(for: .saving) == nil)
-        #expect(MapActivityCapsule.pause(for: .failed(.tooShort)) == nil)
+        #expect(MapActivityCapsule.pause(for: .waitingForFix, hasSession: true) == .pause)
+        #expect(MapActivityCapsule.pause(for: .recording, hasSession: true) == .pause)
+        #expect(MapActivityCapsule.pause(for: .paused, hasSession: true) == .resume)
+        #expect(MapActivityCapsule.pause(for: .idle, hasSession: false) == nil)
+        #expect(MapActivityCapsule.pause(for: .recovering, hasSession: false) == nil)
+        #expect(MapActivityCapsule.pause(for: .saving, hasSession: true) == nil)
+        #expect(MapActivityCapsule.pause(for: .failed(.tooShort), hasSession: true) == nil)
+    }
+
+    /// A Start still waiting on the location prompt or the precision sheet
+    /// reads as finding GPS, with no session behind it, and a Pause there
+    /// would have nothing to pause (#1683).
+    @Test("no Pause while a Start waits on the hiker's answer to a location prompt")
+    func noPauseBeforeTheSession() {
+        #expect(MapActivityCapsule.pause(for: .waitingForFix, hasSession: false) == nil)
     }
 
     private func activity(
