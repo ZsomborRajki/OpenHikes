@@ -53,4 +53,42 @@ extension MovementReminderPolicyTests {
         #expect(watch == afterBoth)
         #expect(watch.remindersSent == 2)
     }
+
+    /// A reading the caller kept from the watch while the banner was out, as
+    /// a recording keeps a paused walk's, let go of what was owed. The refund
+    /// gives the allowance back and lets go of it again where it fell among
+    /// the readings: one before it cannot bring the reminder back, and one
+    /// after it decides afresh.
+    @Test("a refund lets go of what was owed where a drop since the spend did")
+    func refundKeepsADropSinceTheSpend() throws {
+        let later = refundStart.addingTimeInterval(MovementReminderPolicy.quietFor + 60)
+
+        var droppedOnly = try spentWatch(earning: 600)
+        droppedOnly.watch.dropOwedReminder()
+        droppedOnly.watch.refund(droppedOnly.spending)
+        #expect(droppedOnly.watch.owedMeters == nil)
+        #expect(droppedOnly.watch.remindersSent == 0)
+
+        var readingBefore = try spentWatch(earning: 600)
+        _ = readingBefore.watch.observe(awayMeters: 1300, at: later)
+        readingBefore.watch.dropOwedReminder()
+        readingBefore.watch.refund(readingBefore.spending)
+        #expect(readingBefore.watch.owedMeters == nil)
+
+        var readingAfter = try spentWatch(earning: 600)
+        readingAfter.watch.dropOwedReminder()
+        _ = readingAfter.watch.observe(awayMeters: 1300, at: later)
+        readingAfter.watch.refund(readingAfter.spending)
+        let owed = readingAfter.watch.owedMeters
+        #expect(owed.map { $0.isApproximatelyEqual(to: 1300, absoluteTolerance: 0.001) } == true)
+        #expect(readingAfter.watch.remindersSent == 0)
+    }
+
+    /// A watch that earned a reminder `meters` from its anchor and spent it.
+    private func spentWatch(earning meters: Double) throws -> (watch: MovementWatch, spending: MovementWatch.Spending) {
+        var watch = MovementWatch()
+        _ = watch.observe(awayMeters: meters, at: refundStart)
+        let spent = watch.spend(at: refundStart)
+        return (watch, try #require(spent))
+    }
 }

@@ -38,9 +38,18 @@ nonisolated struct DuskWatch: Equatable {
     /// Records one estimate of when the walk will end, and answers whether
     /// the hiker should be told it ends after dusk.
     mutating func observed(finishAt: Date, civilDusk: Date?, now: Date) -> Bool {
-        guard !hasReported, let civilDusk, now < civilDusk, finishAt > civilDusk else { return false }
+        guard !hasReported, Self.endsAfterDusk(finishAt: finishAt, civilDusk: civilDusk, now: now) else {
+            return false
+        }
         hasReported = true
         return true
+    }
+
+    /// Whether an estimate is one worth saying, said or not: dusk is still
+    /// to come, and the walk ends after it.
+    static func endsAfterDusk(finishAt: Date, civilDusk: Date?, now: Date) -> Bool {
+        guard let civilDusk else { return false }
+        return now < civilDusk && finishAt > civilDusk
     }
 
     /// Lets this walk say it again, for a banner the notification centre

@@ -7,8 +7,10 @@
 //  overlapping attempts to one banner, so a refusal gives it back: the pause
 //  is left as a refused permission leaves it, with the reminder still owed
 //  and all of its allowance. What the hiker did while the banner was out
-//  still counts, and a refusal that lands after the pause was replaced
-//  leaves the new one alone.
+//  still counts, a reading a recording kept from a paused walk meanwhile
+//  still lets go of what the walk owed, the way back into the app still says
+//  what a refusal left owed, and a refusal that lands after the pause was
+//  replaced leaves the new one alone.
 //
 
 import Foundation
@@ -98,6 +100,54 @@ extension ResumeReminderAuthorizationTests {
         #expect(harness.notifier.postedKinds == [subject.kind])
         let body = harness.notifier.posted.first?.body ?? ""
         #expect(body.contains(MovementReminderWording.distance(2000)), "\(body)")
+    }
+
+    /// The app came to the front while the banner was on its way, and the
+    /// system then refused it. The check runs after that answer, and says
+    /// the reminder the refusal left owed.
+    @Test("coming back to the app while a refused banner is out says it", arguments: Subject.allCases)
+    func aForegroundCheckDuringARefusedPost(_ subject: Subject) async {
+        let harness = MovementReminderHarness.harness()
+        pause(subject, in: harness)
+        await harness.controller.settle()
+        harness.notifier.holdsThePost = true
+        observeStep(subject, meters: refusalLeg, after: refusalGap, in: harness)
+        guard await harness.notifier.awaitPost() else { return }
+
+        harness.controller.reconcileWithAuthorization(prompting: false)
+        harness.notifier.answerPost(taken: false)
+        await harness.controller.settle()
+
+        #expect(harness.notifier.refusedPosts == 1)
+        #expect(harness.notifier.postedKinds == [subject.kind])
+    }
+
+    /// A recording took over while the walk's refused banner was out, and
+    /// kept a fix back at the pause from the walk. What the walk owed was
+    /// worked out without that fix, so the refund gives the pause its
+    /// allowance and nothing stale to say once the recording is over.
+    @Test("a recording during a refused walk banner leaves nothing stale owed")
+    func aRecordingDuringARefusedWalkPost() async {
+        let harness = MovementReminderHarness.harness()
+        let recording = RecordingState()
+        harness.controller.hasActiveRecording = { recording.isActive }
+        pause(.walk, in: harness)
+        await harness.controller.settle()
+        harness.notifier.holdsThePost = true
+        observeStep(.walk, meters: refusalLeg, after: refusalGap, in: harness)
+        guard await harness.notifier.awaitPost() else { return }
+
+        recording.isActive = true
+        observeStep(.walk, meters: 0, after: refusalGap + 60, in: harness)
+        recording.isActive = false
+        harness.notifier.answerPost(taken: false)
+        await harness.controller.settle()
+        harness.controller.reconcileWithAuthorization(prompting: false)
+        await harness.controller.settle()
+        #expect(harness.notifier.posted.isEmpty)
+
+        await step(.walk, meters: refusalLeg, after: refusalGap * 2, in: harness)
+        #expect(harness.notifier.postedKinds == [.resumeWalk], "the next reading decides afresh")
     }
 
     /// The refusal arrives after the hiker resumed and paused again. It was
