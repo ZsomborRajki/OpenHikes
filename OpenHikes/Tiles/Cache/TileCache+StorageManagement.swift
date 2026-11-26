@@ -80,6 +80,32 @@ nonisolated extension TileCache {
         return total
     }
 
+    /// Which of `keys` have a file in the durable tier.
+    ///
+    /// What a resumed download asks before it skips a tile a previous run
+    /// claimed. A claim is a row in the store and the tile is a file beside
+    /// it, and the two can part: the durable directory is kept out of the
+    /// device backup, so a restored phone brings the claims back without the
+    /// files. A browsed copy is not counted, because it is not the coverage
+    /// the claim promised.
+    ///
+    /// Cancellable for the reason ``bytes(forKeys:)`` is: a whole download is
+    /// thousands of stats, and a cancelled run should stop asking.
+    @concurrent
+    func durableKeys(among keys: Set<String>) async throws(CancellationError) -> Set<String> {
+        assertOffMainThread(
+            "durableKeys(among:) stats one file per key — call it off the main thread"
+        )
+        var present: Set<String> = []
+        for (index, key) in keys.enumerated() {
+            if index.isMultiple(of: 32), Task.isCancelled { throw CancellationError() }
+            if FileManager.default.fileExists(atPath: filePaths(forKey: key).durable.path) {
+                present.insert(key)
+            }
+        }
+        return present
+    }
+
     /// Removes every cached tile (memory + ephemeral disk + durable disk).
     func removeAllTiles() {
         assertOffMainThread(

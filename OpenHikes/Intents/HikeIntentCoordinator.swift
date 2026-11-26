@@ -317,7 +317,8 @@ extension HikeIntentCoordinator {
             // sampled walk that is routinely true. This surface is the one
             // used when the hiker *cannot* look at the screen, so it is the
             // last place to state a stale match flatly.
-            isTrailNameStale: recorder.stats.isCurrentTrailStale
+            isTrailNameStale: recorder.stats.isCurrentTrailStale,
+            sessionID: recorder.sessionID
         )
     }
 

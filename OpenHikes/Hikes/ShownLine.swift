@@ -136,6 +136,38 @@ final class ShownLine {
         return landedRead === read && !read.isReplaced
     }
 
+    /// Waits until ``isSettled`` answers for every save of the hike's row
+    /// the store holds now: until the store watch has looked at the store
+    /// (``SelectedLineStoreWatch``), and any line it found has been compared
+    /// with the one handed out (``SelectedLine/refresh()``).
+    ///
+    /// For work about to write over the line. The hike can hold a line
+    /// another context saved before either has landed, while ``isSettled``
+    /// still says the line on screen is the hike's: the watch brings the
+    /// saved row into the hike before it asks for the comparison, and the
+    /// hikes list's query can bring it in before the watch has heard of the
+    /// save at all. So the watch is asked to look now, rather than waited on
+    /// only for a look it had already begun.
+    func settle() async {
+        followingWatch?.checkNow()
+        while true {
+            if let check = followingWatch?.check {
+                await check.value
+            } else if let comparison = watchedLines?.refreshing {
+                await comparison.value
+            } else {
+                return
+            }
+        }
+    }
+
+    /// The store watch that follows the hike for the reader the line's
+    /// watch is armed on.
+    private var followingWatch: SelectedLineStoreWatch? {
+        guard let watchedLines else { return nil }
+        return watchedLines === selection ? selectionWatch : own?.watch
+    }
+
     /// Shows `hike`'s line from here on and hands back the read in force,
     /// the one the screen builds its work from.
     ///

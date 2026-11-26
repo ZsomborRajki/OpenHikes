@@ -126,7 +126,7 @@ extension RouteEditStepsTests {
         await session.save(to: destination(for: hike, in: context))
         #expect(hike.route.count == Self.route.count * 2 - 1)
 
-        #expect(session.revert(in: destination(for: hike, in: context)))
+        #expect(await session.revert(in: destination(for: hike, in: context)))
 
         #expect(hike.route == Self.route)
         #expect(hike.routeEditData == nil, "a hike with nothing left to remember keeps no record")

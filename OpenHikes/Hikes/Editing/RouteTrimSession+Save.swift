@@ -26,6 +26,12 @@ extension RouteTrimSession {
         /// The hike's line as its screens hold it, or no line while a newer
         /// one is still being read — see ``ShownLine/isSettled``.
         let settledLine: () -> [RouteCoordinate]
+        /// Waits until ``settledLine`` answers for every save of the hike's
+        /// row this device has heard of: until then the hike can hold a line
+        /// another context saved while the line its screens hold still reads
+        /// as settled — see ``ShownLine/settle()``. Nothing to wait for by
+        /// default, as for a suite that hands in a line of its own.
+        var settle: () async -> Void = { /* nothing being brought in */ }
         /// The seam the commit goes through, as in ``RouteEditSave``.
         var save: (ModelContext) throws -> Void = { try $0.save() }
     }
@@ -43,6 +49,9 @@ extension RouteTrimSession {
         // After the line has caught up with the last answer given — see
         // ``editedLine()``.
         guard let edited = await editedLine(), let sources else { return false }
+        // And once any line another device saved is in — see
+        // ``Destination/settle``.
+        await destination.settle()
         guard destination.settledLine() == sources.current else {
             refusal = .lineChanged
             return false
@@ -64,11 +73,19 @@ extension RouteTrimSession {
         return land(outcome, in: destination)
     }
 
-    /// Puts the hike's original line back.
-    @discardableResult func revert(in destination: Destination) -> Bool {
+    /// Puts the hike's original line back over the line the screen showed,
+    /// once any line another device saved is in — see
+    /// ``Destination/settle``. One that came meanwhile is not the line the
+    /// hiker asked to put the original back over, and is refused as Save
+    /// refuses it, rather than reverted or found to have no original here.
+    @discardableResult func revert(in destination: Destination) async -> Bool {
         guard !isSaving else { return false }
+        isSaving = true
+        defer { isSaving = false }
+        let shown = destination.settledLine()
+        await destination.settle()
         let base = destination.settledLine()
-        guard base.count > 1 else {
+        guard base.count > 1, base == shown else {
             refusal = .lineChanged
             return false
         }
@@ -80,17 +97,43 @@ extension RouteTrimSession {
     /// ``RouteEditSave/markChecked(_:in:save:)``. Once the line has caught
     /// up with the last answer given, and only if that left nothing changed:
     /// an answer given on the way to it is the hiker's, and Save keeps it.
-    @discardableResult func confirmChecks(in destination: Destination) async -> Bool {
+    ///
+    /// The look is at the line and the record the screen showed when the
+    /// hiker tapped, and is refused, as Save refuses, when the hike no longer
+    /// holds both: an edit from the other device can land while this screen
+    /// is up and before it has reloaded, and its checks are ones nobody here
+    /// has seen. They stay owed, and the screen loads them.
+    ///
+    /// - Parameter shown: the ``sourcesRevision`` the button was drawn over.
+    ///   Taken there rather than here, because a reload already queued when
+    ///   the hiker tapped lands before this runs, and its checks would be
+    ///   the ones looked at. The record is held to by its bytes — see
+    ///   ``RouteEditSources/recordData``.
+    @discardableResult func confirmChecks(in destination: Destination, tappedOn shown: Int) async -> Bool {
         guard !isSaving else { return false }
         isSaving = true
         defer { isSaving = false }
         await settled()
-        guard let sources, !hasChanges,
-              let edit = RouteEditSave.markChecked(destination.hike, in: destination.context, save: destination.save)
+        await destination.settle()
+        guard let sources, !hasChanges else { return false }
+        guard sourcesRevision == shown,
+              destination.settledLine() == sources.current,
+              let record = sources.recordData, destination.hike.routeEditData == record
+        else {
+            refusal = .lineChanged
+            return false
+        }
+        guard let edit = RouteEditSave.markChecked(destination.hike, in: destination.context, save: destination.save)
         else { return false }
         // The hike's line has not moved, so nothing reloads this visit: it
         // takes the looks itself, on what it works from and on what it shows.
-        let looked = RouteEditSources(current: sources.current, saved: sources.saved, raw: sources.raw, edit: edit)
+        let looked = RouteEditSources(
+            current: sources.current,
+            saved: sources.saved,
+            raw: sources.raw,
+            edit: edit,
+            recordData: destination.hike.routeEditData
+        )
         adopt(looked)
         return true
     }
@@ -126,6 +169,21 @@ extension RouteTrimSession {
             with: route,
             distanceMeters: distance,
             through: health
+        )
+    }
+}
+
+extension RouteTrimSession.Destination {
+    /// Where *Edit Route* writes: `hike`, whose line its screens hold as
+    /// `line`. A line still being read, or one another context saved that is
+    /// still being brought in, is no line to write against.
+    init(hike: Hike, context: ModelContext, health: RouteEditWorkout.Health?, line: ShownLine) {
+        self.init(
+            hike: hike,
+            context: context,
+            health: health,
+            settledLine: { [line] in line.isSettled ? line.current?.route ?? [] : [] },
+            settle: { [line] in await line.settle() }
         )
     }
 }

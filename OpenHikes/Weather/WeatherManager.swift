@@ -765,7 +765,7 @@ final class WeatherManager {
     ///
     /// **One banner, even when several alerts are new.** The kind's identifier
     /// is its own, so a second post would replace the first rather than stack
-    /// under it — and the worst one is what `observed(_:)` returns first.
+    /// under it — and the worst one is what `observed(_:by:)` returns first.
     /// Three warnings over one ridge is a sheet to open, not three banners.
     ///
     /// A watch per subject, because an alert already announced over one ridge
@@ -791,6 +791,15 @@ final class WeatherManager {
     /// only the poll loop moves the badge, and the loop that asked is waiting
     /// on this call, so a badge that moved behind the prompt was moved by a
     /// loop started after that one was cancelled.
+    ///
+    /// **And taken back if the banner never went up.** Permission given is
+    /// not a banner shown: the system can still refuse the request. What this
+    /// pass marked is unmarked then, so the next poll that finds the warning
+    /// standing posts it. The mark still comes before the post, so an attempt
+    /// overlapping this one finds nothing to say while the post is out. Only
+    /// this pass's marks go, never the alerts by name: while the post was
+    /// out, other subjects can have evicted this watch, and a fresh one can
+    /// have said the same warning in a banner that went up.
     private func announceAlerts(
         in snapshot: WeatherSnapshot,
         for subject: WeatherSubject,
@@ -807,16 +816,20 @@ final class WeatherManager {
               !Task.isCancelled,
               let (reading, place) = standing(),
               let standingAlerts = reading.alerts else { return }
+        let pass = UUID()
         var watch = touchAlertWatch(for: place)
-        let worthSaying = watch.observed(standingAlerts)
+        let worthSaying = watch.observed(standingAlerts, by: pass)
         alertWatches[place.key] = watch
         guard let worst = worthSaying.first else { return }
-        await notifier.post(
+        let shown = await notifier.post(
             MovementReminderWording.severeWeather(
                 worst,
                 placeName: knownPlace(for: place)?.place.cityName ?? place.placeName ?? ""
             )
         )
+        if !shown {
+            alertWatches[place.key]?.retract(markedBy: pass)
+        }
     }
 
     /// `subject`'s alert watch, made the most recently used so the bound

@@ -58,6 +58,9 @@ enum LiveActivityHarness {
         /// is what the app uses, but posting it here would reach every other
         /// controller alive in the test host — and the host is a running app.
         let lifecycleCenter: NotificationCenter
+        /// The controller's waits for a floor to lift, ended by the test
+        /// rather than by time passing.
+        let waits: Waits
 
         /// Posts the app-lifecycle notification the controller's typed
         /// observer is built on.
@@ -83,6 +86,32 @@ enum LiveActivityHarness {
 
             init(_ date: Date) { self.date = date }
         }
+
+        /// The waits the controller asked for, each held until the test ends
+        /// them with ``endAll()`` — after moving ``Clock`` on, as the time
+        /// would have. A cancelled wait throws at once, as `Task.sleep` does.
+        final class Waits {
+            private(set) var requested: [TimeInterval] = []
+            private var pending: [UUID: CheckedContinuation<Void, Error>] = [:]
+
+            var isWaiting: Bool { !pending.isEmpty }
+
+            func wait(_ delay: TimeInterval) async throws {
+                requested.append(delay)
+                let id = UUID()
+                try await withTaskCancellationHandler {
+                    try await withCheckedThrowingContinuation { pending[id] = $0 }
+                } onCancel: {
+                    Task { @MainActor in self.pending.removeValue(forKey: id)?.resume(throwing: CancellationError()) }
+                }
+            }
+
+            func endAll() {
+                let ended = pending.values
+                pending.removeAll()
+                for wait in ended { wait.resume() }
+            }
+        }
     }
 
     static func harness(liveActivities: Bool = true) -> Harness {
@@ -90,18 +119,21 @@ enum LiveActivityHarness {
         let clock = Harness.Clock(start)
         let suite = defaults(liveActivities: liveActivities)
         let center = NotificationCenter()
+        let waits = Harness.Waits()
         let controller = HikeLiveActivityController(
             presenter: presenter,
             defaults: suite,
             clock: { MainActor.assumeIsolated { clock.date } },
-            lifecycleCenter: center
+            lifecycleCenter: center,
+            sleep: { try await waits.wait($0) }
         )
         return Harness(
             controller: controller,
             presenter: presenter,
             now: clock,
             defaults: suite,
-            lifecycleCenter: center
+            lifecycleCenter: center,
+            waits: waits
         )
     }
 

@@ -31,7 +31,10 @@ import UIKit
 /// ``authorize()`` is the exception, because for it the delay *is* the
 /// subject: the hiker can leave a permission prompt on screen for as long as
 /// they like, and what the app does with an answer that arrives after they
-/// resumed is the whole of what ``holdsThePrompt`` exists to test.
+/// resumed is the whole of what ``holdsThePrompt`` exists to test. ``post(_:)``
+/// is the other: a severe-weather pass marks its alerts said before it posts,
+/// and what a refusal that arrives late may take back is what
+/// ``holdsThePost`` exists to test.
 @MainActor
 final class StubMovementReminderNotifier: MovementReminderNotifying {
     /// What the hiker said to the permission prompt. Settable because
@@ -99,8 +102,55 @@ final class StubMovementReminderNotifier: MovementReminderNotifying {
         return isAuthorized
     }
 
-    func post(_ reminder: MovementReminder) {
-        posted.append(reminder)
+    /// Refuses the next this many posts, as a centre that throws from `add`
+    /// does. A refused post is not in ``posted``: nothing reached the screen.
+    var refusesPosts = 0
+    private(set) var refusedPosts = 0
+    /// Keeps the next post out until ``answerPost(taken:)``, as a centre
+    /// slow to answer `add` does, so a test can change what is true while
+    /// a banner is on its way. One post only, as ``holdsThePrompt`` is one
+    /// prompt: the next is answered at once, which is what lets a test say
+    /// something newer behind the held one.
+    var holdsThePost = false
+    private var pendingPost: CheckedContinuation<Bool, Never>?
+
+    /// Suspends only for a held post, so every other caller is answered in
+    /// the turn it asked, as a synchronous witness answered it.
+    func post(_ reminder: MovementReminder) async -> Bool {
+        let taken: Bool
+        if holdsThePost {
+            holdsThePost = false
+            taken = await withCheckedContinuation { pendingPost = $0 }
+        } else if refusesPosts > 0 {
+            refusesPosts -= 1
+            taken = false
+        } else {
+            taken = true
+        }
+        if taken {
+            posted.append(reminder)
+        } else {
+            refusedPosts += 1
+        }
+        return taken
+    }
+
+    /// Answers the post ``holdsThePost`` kept out: `true` as a centre that
+    /// took the request, `false` as one whose `add` threw.
+    func answerPost(taken: Bool) {
+        let continuation = pendingPost
+        pendingPost = nil
+        continuation?.resume(returning: taken)
+    }
+
+    /// Waits until the held post is out, for the reason ``awaitPrompt(sourceLocation:)``
+    /// waits for the prompt.
+    func awaitPost(sourceLocation: SourceLocation = #_sourceLocation) async -> Bool {
+        await settleDelegateHop(
+            until: "the held post to be sent",
+            sourceLocation: sourceLocation
+        ) { self.pendingPost != nil }
+        return pendingPost != nil
     }
 
     func withdraw(_ kind: MovementReminderKind) {

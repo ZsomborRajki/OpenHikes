@@ -66,15 +66,14 @@ struct CommunitySharePhotoViewer: View {
 
     @State private var currentID: UUID?
     @State private var didRestoreStart = false
+    /// The pages' positions and choices, kept across the passes a page turn
+    /// makes — see ``CommunitySharePhotoPages``.
+    @State private var pages = CommunitySharePhotoPages()
 
     var body: some View {
-        let currentIndex = currentID.flatMap { id in photos.firstIndex { $0.id == id } }
+        let currentIndex = pages.index(of: currentID, in: photos)
         let current = currentIndex.map { photos[$0] }
-        let choices = CommunitySharePhotoChoices(
-            photos: photos,
-            excluding: excluded,
-            files: files
-        )
+        let choices = pages.choices(for: photos, excluding: excluded, files: files)
         // The identifier goes on the pages and not on the overlay: SwiftUI
         // pushes a container's identifier down onto every descendant, and the
         // toggle below has a name of its own to answer to.
@@ -93,7 +92,7 @@ struct CommunitySharePhotoViewer: View {
                 // give.
                 guard !didRestoreStart else { return }
                 didRestoreStart = true
-                currentID = photos.contains { $0.id == startID } ? startID : photos.first?.id
+                currentID = pages.index(of: startID, in: photos) == nil ? photos.first?.id : startID
             }
     }
 
@@ -215,8 +214,7 @@ struct CommunitySharePhotoViewer: View {
     }
 
     private func step(by offset: Int) {
-        let index = currentID.flatMap { id in photos.firstIndex { $0.id == id } }
-        guard let target = destination(from: index, by: offset) else { return }
+        guard let target = destination(from: pages.index(of: currentID, in: photos), by: offset) else { return }
         withAnimation { currentID = photos[target].id }
     }
 }

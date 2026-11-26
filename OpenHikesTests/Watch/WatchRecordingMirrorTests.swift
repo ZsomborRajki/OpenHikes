@@ -32,8 +32,8 @@ final class WatchRecordingMirrorTests {
     private let clock = TestClock()
     private let directory = FileManager.default.temporaryDirectory
         .appendingPathComponent("watch-mirror-\(UUID().uuidString)", isDirectory: true)
-    // periphery:ignore - the strong reference that keeps the recorder alive for
-    // the length of the test; never read back.
+    /// The strong reference that keeps the recorder alive for the length of
+    /// the test, and how a test reaches it to answer for Core Location.
     private var recorder: HikeRecorder?
 
     init() throws {
@@ -124,6 +124,61 @@ final class WatchRecordingMirrorTests {
         // running hike at all until they walked a metre.
         #expect(published.readings.count == 2)
         #expect(published.readings.last?.state == .recording)
+    }
+
+    /// Stopped before its first fix and started again from the phone, both
+    /// between two ticks: each reading says recording, nothing walked and no
+    /// trail. The second is another recording with a clock of its own, and a
+    /// watch left with the first would count from the wrong start.
+    @Test("a new recording between two ticks that read the same is sent")
+    func aNewRecordingIsSentWhenItReadsTheSame() async throws {
+        let published = Published()
+        let coordinator = makeCoordinator()
+        let mirror = makeMirror(publishing: published, coordinator: coordinator)
+        _ = try await coordinator.startRecording()
+        await mirror.publishCurrentState()
+
+        _ = try await coordinator.stopRecording()
+        _ = try await coordinator.startRecording()
+        await mirror.publishCurrentState()
+        await mirror.publishCurrentState()
+
+        #expect(published.readings.map(\.state) == [.recording, .recording])
+        #expect(published.readings.map(\.distanceMeters) == [0, 0], "precondition: the two read the same")
+    }
+
+    /// Started while location permission is still being asked for: the
+    /// recorder reads as recording before it has made the session, with no
+    /// clock run. The reading once it has one shows the same, and is sent
+    /// because the watch's clock should count from when the recording began,
+    /// not from the tick that read the wait.
+    ///
+    /// Started in a task, because the coordinator reports a start only once
+    /// the prompt it put up is answered (#1655); held for the answer, it
+    /// would wait on a prompt this test answers only afterwards.
+    @Test(
+        "a reading from before the recording had its session is sent again once it has one",
+        .timeLimit(.minutes(1))
+    )
+    func aReadingFromBeforeTheSessionIsSentAgain() async throws {
+        source.authorization = .notDetermined
+        let published = Published()
+        let coordinator = makeCoordinator()
+        let mirror = makeMirror(publishing: published, coordinator: coordinator)
+        let hikeRecorder = try #require(recorder)
+        let starting = Task { try await coordinator.startRecording() }
+        await settleDelegateHop(until: "the start to put up the prompt") { self.source.authorizationRequests == 1 }
+        await mirror.publishCurrentState()
+        #expect(hikeRecorder.sessionID == nil, "precondition: the Start is waiting for permission")
+
+        source.authorization = .authorized
+        hikeRecorder.locationManagerDidChangeAuthorization(CLLocationManager())
+        _ = try await starting.value
+        await mirror.publishCurrentState()
+        await mirror.publishCurrentState()
+
+        #expect(published.readings.map(\.state) == [.recording, .recording])
+        #expect(published.readings.map(\.distanceMeters) == [0, 0], "precondition: the two read the same")
     }
 
     @Test("pausing is sent even though the figures did not move")
@@ -308,6 +363,57 @@ final class WatchRecordingMirrorTests {
 
     // MARK: - Harness
 
+    private func makeMirror(
+        publishing published: Published,
+        coordinator: HikeIntentCoordinator? = nil
+    ) -> WatchRecordingMirror {
+        WatchRecordingMirror(coordinator: coordinator ?? makeCoordinator()) { recording in
+            published.record(recording)
+        }
+    }
+
+    private func makeCoordinator() -> HikeIntentCoordinator {
+        let instance = HikeRecorder(
+            container: container,
+            source: source,
+            defaults: UserDefaults(suiteName: "watch-mirror-\(UUID().uuidString)") ?? .standard,
+            powerMonitor: PowerStateMonitor(read: { PowerState() }, observesNotifications: false),
+            journalDirectory: directory,
+            clock: clock.read,
+            journalFlushDelay: .zero,
+            automaticallyRecovers: false
+        )
+        recorder = instance
+        return HikeIntentCoordinator(
+            recorder: instance,
+            container: container,
+            calendar: Calendar(identifier: .gregorian),
+            clock: clock.read
+        )
+    }
+
+    /// Two fixes a minute and 200-odd metres apart, which is enough for the
+    /// distance accumulator to call it walking rather than standing still.
+    private func walk() {
+        source.deliver(fix(latitude: 47.6300))
+        clock.advance(by: 60)
+        source.deliver(fix(latitude: 47.6320))
+    }
+
+    private func fix(latitude: Double) -> CLLocation {
+        CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: 12.8600),
+            altitude: 600,
+            horizontalAccuracy: 5,
+            verticalAccuracy: 5,
+            timestamp: clock.read()
+        )
+    }
+}
+
+// MARK: - Test doubles
+
+extension WatchRecordingMirrorTests {
     /// A recorder read that waits, the first time, until it is released, as
     /// one does while the coordinator settles a recovery; every later read
     /// answers at once.
@@ -357,52 +463,5 @@ final class WatchRecordingMirrorTests {
         private(set) var readings: [WatchPhoneRecording] = []
 
         func record(_ recording: WatchPhoneRecording) { readings.append(recording) }
-    }
-
-    private func makeMirror(
-        publishing published: Published,
-        coordinator: HikeIntentCoordinator? = nil
-    ) -> WatchRecordingMirror {
-        WatchRecordingMirror(coordinator: coordinator ?? makeCoordinator()) { recording in
-            published.record(recording)
-        }
-    }
-
-    private func makeCoordinator() -> HikeIntentCoordinator {
-        let instance = HikeRecorder(
-            container: container,
-            source: source,
-            defaults: UserDefaults(suiteName: "watch-mirror-\(UUID().uuidString)") ?? .standard,
-            powerMonitor: PowerStateMonitor(read: { PowerState() }, observesNotifications: false),
-            journalDirectory: directory,
-            clock: clock.read,
-            journalFlushDelay: .zero,
-            automaticallyRecovers: false
-        )
-        recorder = instance
-        return HikeIntentCoordinator(
-            recorder: instance,
-            container: container,
-            calendar: Calendar(identifier: .gregorian),
-            clock: clock.read
-        )
-    }
-
-    /// Two fixes a minute and 200-odd metres apart, which is enough for the
-    /// distance accumulator to call it walking rather than standing still.
-    private func walk() {
-        source.deliver(fix(latitude: 47.6300))
-        clock.advance(by: 60)
-        source.deliver(fix(latitude: 47.6320))
-    }
-
-    private func fix(latitude: Double) -> CLLocation {
-        CLLocation(
-            coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: 12.8600),
-            altitude: 600,
-            horizontalAccuracy: 5,
-            verticalAccuracy: 5,
-            timestamp: clock.read()
-        )
     }
 }

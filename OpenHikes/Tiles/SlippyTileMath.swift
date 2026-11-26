@@ -11,7 +11,6 @@
 //  for a second copy of the `tan`/`log` to exist here.
 //
 
-import Algorithms
 import CoreLocation
 import Foundation
 import OpenHikesData
@@ -90,15 +89,10 @@ nonisolated struct TileBoundingBox: Sendable {
         // The enclosing arc is the complement of the widest gap between
         // neighbouring longitudes around the circle — including the gap that
         // runs through ±180°, which is the one an ordinary route falls in.
-        let longitudes = route.map(\.longitude).sorted()
-        var gapWest = longitudes[longitudes.count - 1]
-        var widestGap = longitudes[0] + 360 - longitudes[longitudes.count - 1]
-        for (west, east) in longitudes.adjacentPairs() where east - west > widestGap {
-            widestGap = east - west
-            gapWest = west
-        }
-        westLon = RouteGeometry.normalizedLongitude(gapWest + widestGap)
-        lonSpan = 360 - widestGap
+        // The widget's basemap measures its arc with the same one, in unit x.
+        guard let arc = CircularSpan(enclosing: route.map(\.longitude), period: 360) else { return nil }
+        westLon = RouteGeometry.normalizedLongitude(arc.start)
+        lonSpan = arc.length
     }
 
     /// The box a download recorded it was planned over — see

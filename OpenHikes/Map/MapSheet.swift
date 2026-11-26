@@ -837,7 +837,13 @@ private func presentImporter() {
     showImporter = true
 }
 
+/// The recording screen, for a library row that is a recording's draft — see
+/// ``open(_:)`` and ``delete(_:among:)``.
 private func openRecording() {
+    // Up for that row, so its Start is a recording of its own and not the
+    // retry of a *Record Instead* whose start failed — see
+    // ``RecordingEntry/recordingScreenOpenedForRow()``.
+    appModel.recordingEntry.recordingScreenOpenedForRow()
     let path = SheetRoute.openRecording(hike: hikeRecorder.currentHike, selectedHike: &selectedHike)
     highlight.move(to: nil)
     presentation.makeRoomForTheMap()

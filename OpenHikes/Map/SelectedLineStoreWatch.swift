@@ -162,6 +162,16 @@ final class SelectedLineStoreWatch {
         followed?.hike === hike
     }
 
+    /// Looks at the store now, for a caller about to act on the followed
+    /// hike's line. A save another context made can reach the hike through
+    /// the hikes list's query before its remote change has hopped here, and
+    /// a check started after that finds it in the store's history. One more
+    /// after a check in flight, which may have read the store before the
+    /// save; nothing while following nothing.
+    func checkNow() {
+        startCheck()
+    }
+
     private func observeIfNeeded() {
         guard observer == nil else { return }
         let admitted = filter

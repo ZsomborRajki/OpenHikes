@@ -52,11 +52,16 @@ struct RouteChecksCard: View {
 /// the same of a line that has.
 struct RouteLooksGoodButton: View {
     let session: RouteTrimSession
-    let confirm: () -> Void
+    /// Looks, at the sources the button was drawn over — see
+    /// ``RouteTrimSession/confirmChecks(in:tappedOn:)``.
+    let confirm: (Int) -> Void
 
     var body: some View {
         if session.isOwedALook, !session.hasChanges {
-            Button("Looks Good", systemImage: "checkmark", action: confirm)
+            // Read as the button is drawn, so the tap names the checks on
+            // screen and not sources that land between this frame and it.
+            let shown = session.sourcesRevision
+            Button("Looks Good", systemImage: "checkmark") { confirm(shown) }
                 .sectionActionButtonStyle()
                 .disabled(session.isSaving)
                 .accessibilityIdentifier("route-checks-confirm")

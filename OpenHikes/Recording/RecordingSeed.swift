@@ -21,11 +21,26 @@
 //  points are the record, and the live state is rebuilt from them rather than
 //  kept beside them.
 //
-//  A seed is one start's. A start refused for want of location lets go of it
-//  with the rest of the session, so a recording started later, from the
-//  recording screen, begins where the hiker stands then. The walk it came
-//  from was ended before the recording was asked for, into its trail's
-//  History when it had covered enough to be kept there.
+//  A seed is one start's, and one handoff's. The walk it came from was ended
+//  before the recording was asked for, into its trail's History only when it
+//  had covered enough to be kept there, so a start that fails before a
+//  session takes the seed (precise location refused, a journal that will not
+//  open) would leave the ground walked nowhere at all. The recorder keeps it
+//  then, as ``HikeRecorder/unclaimedSeed``, and the recording screen's Start,
+//  where that failure is explained, tries the handoff again with it. A retry
+//  is the handoff it repeats, so its first fix joins the carried line as the
+//  handoff's would have (`WalkRecordingSeed.swift`).
+//
+//  The walk is kept only until something happens that a recording clocked
+//  from its start would take in. Any other start, the map's button, Siri,
+//  Control Center or the watch, is a recording of its own, begins where the
+//  hiker stands, and lets the walk go whether or not it starts. So does any
+//  session that starts; a walk that starts, since a retry after it would
+//  clock the recording over that walk too, which the library then leaves
+//  out while its ground is in no recording; and the recording screen opened
+//  from a library row, which is up for that row's draft and not for the
+//  handoff. Nothing keeps it past this launch, as nothing keeps the
+//  off-trail question that led to it.
 //
 
 import Foundation
@@ -57,8 +72,17 @@ extension HikeRecorder {
             resetSession()
         }
         guard phase == .idle else { return }
+        // A retry hands the unclaimed walk back in here, before `start()`
+        // lets go of it as every start does.
         carriedSeed = seed.flatMap { carried in carried.points.isEmpty ? nil : carried }
         await start()
+    }
+
+    /// Lets go of the walk a failed handoff left for the recording screen's
+    /// Start — see ``unclaimedSeed``: a walk has started, or the screen is
+    /// up for something else, and a recording begun there is its own.
+    func letGoOfUnclaimedWalk() {
+        unclaimedSeed = nil
     }
 
     /// Takes the session just made on from the points it was started with,

@@ -32,6 +32,12 @@
 //  watch even when its reply failed, before unchanged readings are deduped
 //  again. A reply is not evidence that the watch received its state.
 //
+//  The dedupe compares which recording a reading is of, as well as what it
+//  shows. A recording stopped before its first fix and another started from
+//  the phone before the next tick read the same — recording, no distance, no
+//  trail — and without the session the watch kept counting the first one's
+//  clock.
+//
 //  The loop runs only while the watch app is **reachable**, which on iOS means
 //  it is in the foreground — in other words, only while somebody is looking at
 //  it. A paired watch in a pocket costs nothing, and an unpaired one costs
@@ -62,7 +68,7 @@ final class WatchRecordingMirror {
     /// The last reading sent, so an unchanged one is not sent again. A hiker
     /// standing still for ten minutes is the ordinary case, and it should cost
     /// nothing.
-    private var lastPublished: WatchPhoneRecording?
+    private var lastPublished: Reading?
 
     init(
         coordinator: HikeIntentCoordinator?,
@@ -110,7 +116,7 @@ final class WatchRecordingMirror {
 
     /// Reads the recorder and sends the result if it has moved.
     func publishCurrentState() async {
-        let reading = await currentState()
+        let reading = await currentReading()
         // A read can outlast its loop: the coordinator settles the recorder's
         // recovery first, and the watch can go out of range meanwhile. That
         // loop has ended and forgotten what it sent, and an answer it took as
@@ -120,10 +126,10 @@ final class WatchRecordingMirror {
         guard !Task.isCancelled else { return }
         // `updatedAt` moves on every read by construction, so the comparison
         // deliberately ignores it: what is being asked is whether anything a
-        // hiker would *see* has changed.
-        guard !reading.matchesFigures(of: lastPublished) else { return }
+        // hiker would *see* has changed, or whether it is another recording.
+        guard !reading.saysTheSame(as: lastPublished) else { return }
         lastPublished = reading
-        publish(reading)
+        publish(reading.recording)
     }
 
     /// Performs a command and answers with what happened.
@@ -163,7 +169,7 @@ final class WatchRecordingMirror {
                 """
             )
         }
-        let reading = await currentState()
+        let reading = await currentReading()
         // Do not count the reply as a delivered push: a successful Stop can
         // lose its reply while the watch retains a running reading. Forget
         // even an identical pre-command push, because Start and Stop can
@@ -171,7 +177,7 @@ final class WatchRecordingMirror {
         lastPublished = nil
         return WatchCommandOutcome(
             commandID: command.id,
-            recording: reading,
+            recording: reading.recording,
             refusal: refusal
         )
     }
@@ -184,21 +190,47 @@ final class WatchRecordingMirror {
     /// because from the watch's side "busy finishing" is a state in which
     /// there is no running hike to show — and the one place that sentence
     /// matters is the reply to a button, which carries it.
-    private func currentState() async -> WatchPhoneRecording {
-        if let readsState { return await readsState() }
-        guard let coordinator else { return .idle() }
+    private func currentReading() async -> Reading {
+        if let readsState { return Reading(recording: await readsState(), session: nil) }
+        guard let coordinator else { return Reading(recording: .idle(), session: nil) }
         do {
             let report = try await coordinator.currentRecording()
-            return WatchPhoneRecording(
-                state: report.isPaused ? .paused : .recording,
-                elapsedSeconds: report.elapsed,
-                distanceMeters: report.distance.converted(to: .meters).value,
-                trailName: report.trailName,
-                isTrailNameStale: report.isTrailNameStale
+            return Reading(
+                recording: WatchPhoneRecording(
+                    state: report.isPaused ? .paused : .recording,
+                    elapsedSeconds: report.elapsed,
+                    distanceMeters: report.distance.converted(to: .meters).value,
+                    trailName: report.trailName,
+                    isTrailNameStale: report.isTrailNameStale
+                ),
+                session: report.sessionID
             )
         } catch {
-            return .idle()
+            return Reading(recording: .idle(), session: nil)
         }
+    }
+}
+
+/// A reading, and the recording it is of.
+///
+/// The session stays on the phone: the watch draws the figures and runs the
+/// clock from them, and has no use for an identity it would only compare.
+private struct Reading {
+    let recording: WatchPhoneRecording
+    /// ``LiveRecordingReport/sessionID``. `nil` when nothing is recording,
+    /// and also while a Start still waits for location permission, the
+    /// precision prompt or its journal: the recorder reads as recording then,
+    /// with no clock run, but has no session yet. The first reading once it
+    /// has one is sent although it shows the same, and that is wanted: the
+    /// watch's clock then counts from when the recording began, rather than
+    /// from the tick that read the wait.
+    let session: UUID?
+
+    /// Whether this says the same as `other`: the same recording, showing the
+    /// same figures.
+    func saysTheSame(as other: Self?) -> Bool {
+        guard let other else { return false }
+        return session == other.session && recording.matchesFigures(of: other.recording)
     }
 }
 
@@ -210,9 +242,8 @@ private extension WatchPhoneRecording {
     /// would answer "no" to every comparison and the floor would publish on
     /// every tick. The clock is excluded for the same reason and can be —
     /// the watch runs it forward itself from ``clockAnchor``.
-    func matchesFigures(of other: WatchPhoneRecording?) -> Bool {
-        guard let other else { return false }
-        return state == other.state
+    func matchesFigures(of other: WatchPhoneRecording) -> Bool {
+        state == other.state
             && Int(distanceMeters) == Int(other.distanceMeters)
             && trailName == other.trailName
             && isTrailNameStale == other.isTrailNameStale

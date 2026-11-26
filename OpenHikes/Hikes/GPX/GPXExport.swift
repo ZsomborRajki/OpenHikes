@@ -109,6 +109,37 @@ nonisolated enum GPXExport {
         .precision(.fractionLength(7))
         .grouping(.never)
         .locale(Locale(identifier: "en_US_POSIX"))
+    /// Every `lon` in the file, track point, photograph and place alike.
+    ///
+    /// GPX 1.1's `longitudeType` runs from −180 inclusive to +180
+    /// **exclusive**, so the antimeridian has one spelling, `-180.0000000`,
+    /// and a schema-validating reader refuses the other. Two positions reach
+    /// it: a fix exactly on +180, and one a hair short of it that seven
+    /// places round up.
+    ///
+    /// **The style does the only rounding**, as it does for every latitude.
+    /// Rounding the `Double` by hand first moved the last place of ordinary
+    /// longitudes (`120.00000064999999` came out `120.0000007`): scaling by
+    /// 10⁷ can itself round onto a half, which `.rounded()` then breaks
+    /// another way than the style does. So nothing is rounded here. A
+    /// position outside the range is moved a whole turn, a subtraction that
+    /// is exact within a turn of it, and the one written value the range
+    /// forbids is respelled.
+    static func formattedLongitude(_ degrees: Double) -> String {
+        let inRange = switch degrees {
+        case 180...: degrees - 360
+        case ..<(-180): degrees + 360
+        default: degrees
+        }
+        let written = inRange.formatted(coordinateStyle)
+        return written == eastAntimeridian ? westAntimeridian : written
+    }
+
+    /// +180 as ``coordinateStyle`` writes it, which GPX 1.1 refuses, and the
+    /// same meridian as it accepts it.
+    private static let eastAntimeridian = 180.0.formatted(coordinateStyle)
+    private static let westAntimeridian = (-180.0).formatted(coordinateStyle)
+
     /// Centimetres. Barometric elevation carries fractions worth keeping, but
     /// not more than this.
     private static let elevationStyle = FloatingPointFormatStyle<Double>()
@@ -248,7 +279,7 @@ nonisolated private extension GPXExport {
     static func appendPhotographs(_ track: Track, to xml: inout String) {
         for photograph in track.photographs {
             let latitude = photograph.coordinate.latitude.formatted(coordinateStyle)
-            let longitude = photograph.coordinate.longitude.formatted(coordinateStyle)
+            let longitude = formattedLongitude(photograph.coordinate.longitude)
             xml += "  <wpt lat=\"\(latitude)\" lon=\"\(longitude)\">\n"
             // The same guard ``appendPoint(_:to:)`` applies and for the same
             // reason: `inf` and `nan` are not `xsd:decimal`, and a strict
@@ -298,7 +329,7 @@ nonisolated private extension GPXExport {
     static func appendPlaces(_ track: Track, to xml: inout String) {
         for place in track.places {
             let latitude = place.latitude.formatted(coordinateStyle)
-            let longitude = place.longitude.formatted(coordinateStyle)
+            let longitude = formattedLongitude(place.longitude)
             xml += "  <wpt lat=\"\(latitude)\" lon=\"\(longitude)\">\n"
             xml += "    <name>\(escaped(place.displayName))</name>\n"
             // `<desc>` rather than `<cmt>`: a comment is about the waypoint
@@ -364,7 +395,7 @@ nonisolated private extension GPXExport {
     /// pair of tags it saves is most of the file.
     static func appendPoint(_ point: RouteCoordinate, to xml: inout String) {
         let latitude = point.latitude.formatted(coordinateStyle)
-        let longitude = point.longitude.formatted(coordinateStyle)
+        let longitude = formattedLongitude(point.longitude)
         let attributes = "lat=\"\(latitude)\" lon=\"\(longitude)\""
         // A non-finite height is not a height, and writing one is worse than
         // dropping it: `inf` and `nan` are not `xsd:decimal`, so a strict
