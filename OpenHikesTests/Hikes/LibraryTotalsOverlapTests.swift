@@ -2,10 +2,11 @@
 //  LibraryTotalsOverlapTests.swift
 //  OpenHikesTests
 //
-//  How much of a followed walk the recordings' clocks take out, worked out
-//  once for the whole library (#1118) and held to the per-walk scan it
-//  replaced — the proportional-overlap policy of #696 — which is kept here
-//  as the oracle.
+//  How much of a followed walk the recordings' clocks take out, found for
+//  each walk through one index of the library's clocks (#1118) and held to
+//  the per-walk scan it replaced — the proportional-overlap policy of #696 —
+//  which is kept here as the oracle. None of these hikes or walks says where
+//  it lay, so every clock counts wherever it was (`LibraryTotalsSameGroundTests`).
 //
 //  Every time is a whole number of minutes from one reference date, so both
 //  sides subtract and add exactly, and the outings are compared with `==`
@@ -153,6 +154,35 @@ struct LibraryTotalsOverlapTests {
         let kept = outings.count(where: \.isWalk)
         #expect(kept > 0, "the library should keep some walks")
         #expect(kept < walks.count, "some walks should be wholly recorded")
+    }
+
+    /// The same over three months, with a few clocks that run for days and
+    /// one that runs through the middle month, as a GPX with a stray stamp
+    /// can: the search keeps a range holding such a clock as late as it
+    /// ends, and must still find every short clock beside it.
+    @Test("a library with clocks that run for days is the per-walk scan's too", arguments: [5, 1679])
+    func libraryWithLongClocksMatchesTheScan(seed: UInt64) {
+        var generator = SeededGenerator(seed: seed)
+        let month = 30 * 24 * 60
+        let short = (0..<300).map { _ in
+            let start = Int.random(in: -month..<(2 * month), using: &generator)
+            return Self.recording(start, start + Int.random(in: 0...300, using: &generator))
+        }
+        let long = (0..<4).map { _ in
+            let start = Int.random(in: -month..<(2 * month), using: &generator)
+            return Self.recording(start, start + Int.random(in: 2...6, using: &generator) * 24 * 60)
+        }
+        let hikes = [Self.savedTrail] + short + long + [Self.recording(0, month)]
+        let walks = (0..<300).map { _ in
+            let start = Int.random(in: -month..<(2 * month), using: &generator)
+            return Self.walk(start, start + Int.random(in: 0...600, using: &generator))
+        }
+
+        let outings = LibraryTotals.outings(hikes: hikes, walks: walks)
+
+        #expect(outings == Self.scanned(hikes: hikes, walks: walks), "seed \(seed)")
+        let keepsSome = outings.contains(where: \.isWalk)
+        #expect(keepsSome, "the library should keep some walks")
     }
 
     // MARK: - The scan it replaced
