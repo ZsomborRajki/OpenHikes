@@ -28,11 +28,15 @@ nonisolated enum CloudSyncOutcome: Equatable, Sendable {
     /// Something waiting will not fix.
     case failed(String)
     /// Mirroring finished setting itself up, and nothing failed. Not a sync:
-    /// no hike was imported or exported, and on a first launch the setup
+    /// nothing was imported or exported, and on a first launch the setup
     /// finishes before the first import has even begun, so it settles the row
-    /// without the "Last synced" time only a transfer earns.
+    /// without the "Last synced" time only a finished import or export earns.
+    /// An event of a kind this build does not know ends here too, since only
+    /// those two are known to sync.
     case setUpFinished
-    /// An import or an export finished, and nothing failed.
+    /// An import or an export finished, and nothing failed, whether or not it
+    /// had anything to carry: one that found nothing new still says this
+    /// device and iCloud agreed when it ended.
     case succeeded
     /// Something the network will fix on its own — see ``isTransient(_:)``.
     case transientFailure(String)
@@ -65,7 +69,11 @@ nonisolated enum CloudSyncOutcome: Equatable, Sendable {
             return
         }
         guard let error else {
-            self = type == .setup ? .setUpFinished : .succeeded
+            switch type {
+            case .import, .export: self = .succeeded
+            case .setup: self = .setUpFinished
+            @unknown default: self = .setUpFinished
+            }
             return
         }
         self = Self.isTransient(error)
