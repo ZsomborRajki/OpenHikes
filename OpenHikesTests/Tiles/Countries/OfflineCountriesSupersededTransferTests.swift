@@ -8,7 +8,10 @@
 //  still finish, fail or report progress after its replacement has begun:
 //  matched by the key alone, its events landed on the new download. They are
 //  matched by the task that sent them now, while a transfer picked up from
-//  an earlier launch, which this launch never started, is still taken.
+//  an earlier launch, which this launch never started, is still taken, and
+//  a launch picking up what was coming down leaves alone a download asked
+//  for again meanwhile. What the session's own callbacks take is
+//  `OfflineCountryTransfersTests`'.
 //
 //  Driven through the stub session, which hands each request a task
 //  identifier of its own and delivers any request's events on demand.
@@ -104,6 +107,48 @@ struct OfflineCountriesSupersededTransferTests {
             downloader.onEvent?(.wrote(OfflineCountryTransfer(key: key, task: 77), 60))
 
             #expect(countries.downloads["SI"]?.writtenBytes == 60)
+        }
+    }
+
+    /// The areas are listed before the session has said what it still has,
+    /// so the hiker can cancel one coming down and ask for it again
+    /// meanwhile, which lists the same entry anew. Taken over by the launch,
+    /// the new download lost the tasks it started, and with them what told
+    /// the cancelled transfers' events from its own.
+    @Test("a download cancelled and asked for again while the launch lists the session's tasks keeps its transfers")
+    func askedForAgainDuringRecovery() async throws {
+        try await OfflineCountryFixture.withDirectory { directory in
+            let store = OfflineCountryStore(directory: directory)
+            try store.prepare()
+            let country = OfflineCountryFixture.country(bytes: basemap)
+            try store.write(pending: [OfflineCountryStore.Pending(country: country, roles: [.basemap])])
+            let downloader = StubCountryDownloader()
+            downloader.holdsListing = true
+            let countries = OfflineCountries(
+                store: store,
+                server: StubCountryServer(nil),
+                downloader: downloader,
+                archives: OfflineCountryArchives(),
+                freeSpace: { 1 << 40 }
+            )
+
+            let launch = Task { await countries.start() }
+            await settleDelegateHop(until: "the launch waits on the session's tasks") {
+                !downloader.waitingForListing.isEmpty
+            }
+            #expect(countries.cancel("SI"))
+            countries.download(country)
+            let replacement = try #require(countries.downloads["SI"])
+            downloader.releaseListing()
+            await launch.value
+
+            #expect(countries.downloads["SI"] === replacement, "the launch took none of it over")
+            #expect(replacement.phase == .downloading)
+            let key = OfflineCountryDownloadKey(country: "SI", build: country.build, role: .basemap)
+            downloader.onEvent?(.wrote(OfflineCountryTransfer(key: key, task: 77), 60))
+            #expect(replacement.writtenBytes == 0, "another task's progress is not the new download's")
+            downloader.progress(.basemap, 30)
+            #expect(replacement.writtenBytes == 30)
         }
     }
 }

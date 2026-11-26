@@ -117,6 +117,10 @@ final class OfflineCountryDownload {
         transfers[role].map { $0 == task } ?? true
     }
 
+    /// Whether this launch started a transfer for any of its files, which
+    /// only this download knows the task of.
+    var hasStartedTransfers: Bool { !transfers.isEmpty }
+
     /// `bytes` of the file in `role` have come down so far.
     func wrote(_ bytes: Int64, of role: OfflineCountryManifest.Role) {
         written[role] = bytes

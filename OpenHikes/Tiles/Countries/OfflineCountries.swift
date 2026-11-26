@@ -709,7 +709,10 @@ extension OfflineCountries {
     /// are listed before the session has said what it still has, so the
     /// hiker can delete one meanwhile, or while an earlier entry is checked;
     /// each entry is read again first, and one no longer on the list is left
-    /// alone.
+    /// alone. So is one the hiker cancelled and asked for again meanwhile,
+    /// which the list names anew: that download is this launch's, and only
+    /// it knows the tasks it started, which tell its events from the
+    /// cancelled ones' (``OfflineCountryDownload/isCurrent(_:for:)``).
     ///
     /// An entry the index has already installed is taken off the list rather
     /// than picked up — see ``isAlreadyInstalled(_:running:)``.
@@ -717,7 +720,9 @@ extension OfflineCountries {
         guard !pending.isEmpty else { return }
         let running = await downloader?.running() ?? [:]
         for entry in pending {
-            guard store.pending().contains(entry) else { continue }
+            guard store.pending().contains(entry),
+                  downloads[entry.country.id]?.hasStartedTransfers != true
+            else { continue }
             if isAlreadyInstalled(entry, running: running) {
                 // Kept when the list refuses the write: the area is drawn
                 // either way, and the next launch asks again.

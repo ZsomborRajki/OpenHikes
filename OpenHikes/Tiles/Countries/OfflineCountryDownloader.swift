@@ -67,7 +67,7 @@ nonisolated struct OfflineCountryDownloadKey: Hashable, Sendable {
 nonisolated struct OfflineCountryTransfer: Hashable, Sendable {
     let key: OfflineCountryDownloadKey
     /// The session task's `taskIdentifier`, which a background session keeps
-    /// across a relaunch.
+    /// across a relaunch and gives no other task of its own.
     let task: Int
 }
 
@@ -155,6 +155,8 @@ final class BackgroundCountryDownloader: OfflineCountryDownloading {
     }
 
     func cancel(country: String) {
+        // First, so whatever any of its tasks says from now on is dropped.
+        callbacks.cancel(country: country)
         for (key, task) in started where key.country == country {
             task.cancel()
             started[key] = nil
@@ -197,15 +199,11 @@ final class BackgroundCountryDownloader: OfflineCountryDownloading {
 
         private struct State {
             var deliver: (@Sendable (OfflineCountryDownloadEvent) -> Void)?
-            /// The task this launch started for each file. A callback from
-            /// any other task for the same file is from one it replaced, and
-            /// touches nothing of the replacement's. A file with none here
-            /// was started by an earlier launch, whose tasks are taken as
-            /// they come.
-            var current: [OfflineCountryDownloadKey: Int] = [:]
-            var staging: [OfflineCountryDownloadKey: URL] = [:]
-            var lastProgress: [OfflineCountryDownloadKey: ContinuousClock.Instant] = [:]
-            var finished: Set<OfflineCountryDownloadKey> = []
+            /// Which task each file's callbacks are taken from. Each callback
+            /// asks it and records what it did under the one lock, so a start
+            /// or a cancel on the main actor comes wholly before or wholly
+            /// after it.
+            var transfers = OfflineCountryTransfers()
             var waiters: [CheckedContinuation<Void, Never>] = []
             /// The session said it was done before anything waited for it.
             var deliveredUnawaited = false
@@ -219,19 +217,30 @@ final class BackgroundCountryDownloader: OfflineCountryDownloading {
         }
 
         func stage(_ key: OfflineCountryDownloadKey, task: Int, at url: URL) {
-            state.withLock { state in
-                state.current[key] = task
-                state.staging[key] = url
-                state.lastProgress[key] = nil
-                state.finished.remove(key)
-            }
+            state.withLock { $0.transfers.start(OfflineCountryTransfer(key: key, task: task), stagingAt: url) }
         }
 
-        /// The transfer `task` is, when it is its file's current one.
-        private func transfer(of task: URLSessionTask) -> OfflineCountryTransfer? {
+        func cancel(country: String) {
+            state.withLock { $0.transfers.cancel(country: country) }
+        }
+
+        /// The transfer `task` is. ``OfflineCountryTransfers`` says whether
+        /// it is its file's.
+        private static func transfer(of task: URLSessionTask) -> OfflineCountryTransfer? {
             guard let key = task.taskDescription.flatMap(OfflineCountryDownloadKey.init) else { return nil }
-            let isCurrent = state.withLock { $0.current[key].map { $0 == task.taskIdentifier } ?? true }
-            return isCurrent ? OfflineCountryTransfer(key: key, task: task.taskIdentifier) : nil
+            return OfflineCountryTransfer(key: key, task: task.taskIdentifier)
+        }
+
+        /// Puts the file at `location` at `staged`, over any file there.
+        private static func move(_ location: URL, to staged: URL) throws {
+            try FileManager.default.createDirectory(
+                at: staged.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            if FileManager.default.fileExists(atPath: staged.path) {
+                try FileManager.default.removeItem(at: staged)
+            }
+            try FileManager.default.moveItem(at: location, to: staged)
         }
 
         func eventsDelivered() async {
@@ -256,14 +265,9 @@ final class BackgroundCountryDownloader: OfflineCountryDownloading {
             totalBytesWritten: Int64,
             totalBytesExpectedToWrite: Int64
         ) {
-            guard let transfer = transfer(of: downloadTask) else { return }
-            let key = transfer.key
+            guard let transfer = Self.transfer(of: downloadTask) else { return }
             let now = ContinuousClock.now
-            let due = state.withLock { state -> Bool in
-                if let last = state.lastProgress[key], now - last < Self.progressInterval { return false }
-                state.lastProgress[key] = now
-                return true
-            }
+            let due = state.withLock { $0.transfers.reports(transfer, at: now, every: Self.progressInterval) }
             if due { send(.wrote(transfer, totalBytesWritten)) }
         }
 
@@ -272,31 +276,27 @@ final class BackgroundCountryDownloader: OfflineCountryDownloading {
             downloadTask: URLSessionDownloadTask,
             didFinishDownloadingTo location: URL
         ) {
-            // A replaced task's file is not staged where its replacement's
-            // goes: the system deletes it when this returns.
-            guard let transfer = transfer(of: downloadTask) else { return }
+            guard let transfer = Self.transfer(of: downloadTask) else { return }
             let key = transfer.key
             let status = (downloadTask.response as? HTTPURLResponse)?.statusCode ?? 0
-            // A relaunch forgets what was staged where, and the model looks
-            // for the file under its own name there.
-            let staged = state.withLock { $0.staging[key] }
-                ?? OfflineCountryStore.applicationSupport().stagingDirectory.appending(path: key.fileName)
             guard Self.successRange.contains(status) else {
                 Self.logger.error("Country file \(key.taskDescription, privacy: .public): HTTP \(status)")
                 return
             }
-            // Now or never: the system deletes `location` once this returns.
+            // A relaunch forgets what was staged where, and the model looks
+            // for the file under its own name there.
+            let fallback = OfflineCountryStore.applicationSupport().stagingDirectory.appending(path: key.fileName)
+            // Now or never: the system deletes `location` once this returns,
+            // and that is all that becomes of a replaced task's file, or of
+            // a cancelled area's. Moved under the lock, so neither a
+            // replacement starting nor a cancel, after which the model
+            // deletes what was staged, falls between the question and the
+            // move: a rename within the app's container.
             do {
-                try FileManager.default.createDirectory(
-                    at: staged.deletingLastPathComponent(),
-                    withIntermediateDirectories: true
-                )
-                if FileManager.default.fileExists(atPath: staged.path) {
-                    try FileManager.default.removeItem(at: staged)
+                let staged = try state.withLock { state in
+                    try state.transfers.land(transfer, fallback: fallback) { try Self.move(location, to: $0) }
                 }
-                try FileManager.default.moveItem(at: location, to: staged)
-                state.withLock { _ = $0.finished.insert(key) }
-                send(.finished(transfer, staged))
+                if let staged { send(.finished(transfer, staged)) }
             } catch {
                 let reason = String(describing: error)
                 Self.logger.error("Country file \(key.taskDescription, privacy: .public): \(reason, privacy: .public)")
@@ -304,16 +304,11 @@ final class BackgroundCountryDownloader: OfflineCountryDownloading {
         }
 
         func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
-            // A replaced task's end clears nothing of its replacement's.
-            guard let transfer = transfer(of: task) else { return }
-            let key = transfer.key
-            let wasFinished = state.withLock { state in
-                state.current[key] = nil
-                state.lastProgress[key] = nil
-                state.staging[key] = nil
-                return state.finished.remove(key) != nil
-            }
-            guard !wasFinished else { return }
+            // A landed file's end has nothing more to say, and a replaced
+            // task's clears nothing of its replacement's.
+            guard let transfer = Self.transfer(of: task),
+                  state.withLock({ $0.transfers.end(transfer) }) == .stopped
+            else { return }
             let failure = error as? NSError
             let resumeData = failure?.userInfo[NSURLSessionDownloadTaskResumeData] as? Data
             send(.failed(transfer, resumeData: resumeData, cancelled: failure?.code == NSURLErrorCancelled))
