@@ -71,4 +71,41 @@ struct HikeAttachmentTests {
 
         #expect(hike.isAttached == false)
     }
+
+    /// What ``Hike/hasLeftItsStore`` reads to tell a deleted hike from one
+    /// never saved, which `isAttached` answers alike: the store its
+    /// identifier names, kept through the save that detaches it.
+    @Test("a hike deleted here has left its store, before the save and after it")
+    func deletedHikeHasLeftItsStore() throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        try context.save()
+        #expect(hike.hasLeftItsStore == false)
+
+        context.delete(hike)
+        #expect(hike.hasLeftItsStore)
+        try context.save()
+
+        #expect(hike.modelContext == nil)
+        #expect(hike.hasLeftItsStore)
+    }
+
+    /// A hike never saved holds its values in memory, so a reader still
+    /// reads it where it is, with no context or a context and no save.
+    @Test("a hike never saved has not left a store, with or without a context")
+    func neverSavedHikeHasNotLeftAStore() throws {
+        let context = try Fixture.modelContext()
+        let loose = Hike(title: "Nowhere", distanceMeters: 0, route: Fixture.ridgeRoute)
+        let inserted = Fixture.hike(in: context)
+        #expect(loose.hasLeftItsStore == false)
+        #expect(inserted.hasLeftItsStore == false)
+
+        let dropped = Fixture.hike(in: context, title: "Dropped")
+        context.delete(dropped)
+        try context.save()
+
+        #expect(dropped.modelContext == nil)
+        #expect(dropped.hasLeftItsStore == false, "it never reached the store")
+        #expect(dropped.route.count == Fixture.ridgeRoute.count, "and still holds its line in memory")
+    }
 }

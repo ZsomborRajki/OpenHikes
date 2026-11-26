@@ -677,8 +677,10 @@ is promoted, and stamps the version at build time: the tags, not
     the pop. A column SwiftData decodes traps when read off the detached row
     unless it was read since the hike's last save, so `HikeDeletion` reads
     them just before the delete (`Hike.resolveDecodedColumns()`, which
-    `HikeDecodedColumnTests` holds to the schema). The lines are left out,
-    and a reader of a deleted hike's line asks `isAttached` first.
+    `HikeDecodedColumnTests` holds to the schema). The lines are left out:
+    a reader of a hike's line asks `isAttached` first, or, where it reads a
+    hike with unsaved edits in place, `Hike.hasLeftItsStore` (`SelectedLine`,
+    `HikePhotoSearchPlan.SourceRead`).
 - **A route is written only through `Hike.replaceRoute(with:)`**, which keeps
   `Hike.durationSeconds` describing it. That column is the synced clock Siri,
   Spotlight and the widget's catalogue read instead of decoding every route at

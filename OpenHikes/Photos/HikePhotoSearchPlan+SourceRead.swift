@@ -44,6 +44,9 @@ nonisolated extension HikePhotoSearchPlan {
         /// The values themselves, read off a row with edits its store has not
         /// had yet.
         case unsaved(Source)
+        /// A hike deleted here, which reads as a row the store no longer
+        /// holds.
+        case gone
 
         /// Names `hike` for a read: from the store when its context has
         /// written every edit to it, and read here, on the spot, when it has
@@ -54,8 +57,13 @@ nonisolated extension HikePhotoSearchPlan {
         /// as well, and a walk once written is never edited again, so the
         /// hike's flag already answers for its walks. The context's would send
         /// a search back to the main actor for a pending edit to any other row.
+        ///
+        /// Nothing for a hike that has left its store, whose line would trap
+        /// if read off the detached row — see ``Hike/hasLeftItsStore``.
         init(_ hike: Hike) {
-            if !hike.hasChanges, let container = hike.modelContext?.container {
+            if hike.hasLeftItsStore {
+                self = .gone
+            } else if !hike.hasChanges, let container = hike.modelContext?.container {
                 self = .saved(hike.persistentModelID, in: container)
             } else {
                 self = .unsaved(hike.photoSearchSource)
@@ -66,8 +74,8 @@ nonisolated extension HikePhotoSearchPlan {
         /// into a context made here and dropped on return.
         ///
         /// `nil` for a saved row the store no longer holds, such as a hike
-        /// deleted on another device that this one has not merged yet, which
-        /// has nothing to search. A fetch that fails throws instead, because a
+        /// deleted on another device that this one has not merged yet, or
+        /// for one deleted here, which have nothing to search. A fetch that fails throws instead, because a
         /// failure says nothing about the row: Find Photos took one for a row
         /// that had gone, and gave up on a hike that was still there (#1442).
         func source(fetch: (ModelContext, PersistentIdentifier) throws -> Hike?) rethrows -> Source? {
@@ -77,6 +85,8 @@ nonisolated extension HikePhotoSearchPlan {
                 return hike.photoSearchSource
             case let .unsaved(source):
                 return source
+            case .gone:
+                return nil
             }
         }
 
