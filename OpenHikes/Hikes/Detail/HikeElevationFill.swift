@@ -3,15 +3,15 @@
 //  OpenHikes
 //
 //  Heights for a hike in the library that has none — a GPX exported without
-//  `<ele>`, a trail drawn or a route saved from OpenStreetMap before its
-//  hiker subscribed — read once from Stadia, for an OpenHikes Pro subscriber,
+//  `<ele>`, or a trail drawn or a route saved from OpenStreetMap while the
+//  heights were still OpenHikes Pro's — read once from the elevation squares
 //  and written onto the hike so it never has to ask again.
 //
 //  The same question the trail maker and a curated route ask, through the
-//  same source — ``StadiaElevationSource`` refuses anybody else before it
-//  forms a request — so it costs one billed call per hike, ever. Asked when
-//  the hike is opened rather than for the whole library at once: a library
-//  imported in bulk is a bill for routes nobody may look at.
+//  same source (``ElevationSquareLibrary``), so it costs a few squares per
+//  hike, ever. Asked when the hike is opened rather than for the whole
+//  library at once: a library imported in bulk would download the squares
+//  of routes nobody may look at.
 //
 //  ## Interpolated onto every point
 //
@@ -76,7 +76,7 @@ enum HikeElevationFill {
         route.count > 1 && !route.contains { $0.elevation?.isFinite == true }
     }
 
-    /// Whether `hike` is one the subscription would give heights to, along
+    /// Whether `hike` is one the squares would give heights to, along
     /// `route`, the line it has now as its screen read it off the main actor
     /// — see the file header. A walk still being recorded has no line yet.
     static func canFill(_ hike: Hike, along route: [RouteCoordinate]) -> Bool {
@@ -145,25 +145,22 @@ extension HikeElevationFill {
     /// The line is held by its ``ShownLine/revision``, which moves for each
     /// line that lands and is not the one before it, and for nothing else:
     /// a rename or another hike's save asks nothing again, and each request
-    /// is a billed call.
+    /// reads squares.
     struct Request: Equatable {
         /// The ``ShownLine/revision`` of the line on screen.
         let lineRevision: Int
-        /// Whether that line is one the subscription would give heights to.
+        /// Whether that line is one the squares would give heights to.
         /// False until it has landed.
         let isFillable: Bool
-        /// Whether the hiker is a subscriber.
-        let isEntitled: Bool
 
         /// The request for `hike`'s line as `line` has it on screen.
-        init(hike: Hike, line: ShownLine, isEntitled: Bool) {
+        init(hike: Hike, line: ShownLine) {
             lineRevision = line.revision
             isFillable = line.current.map { canFill(hike, along: $0.route) } ?? false
-            self.isEntitled = isEntitled
         }
 
         /// Whether there is anything to ask.
-        var asks: Bool { isEntitled && isFillable }
+        var asks: Bool { isFillable }
 
         /// Asks `source` for heights for the line on screen, and saves them
         /// onto `hike` — see ``HikeElevationFill/fill(_:along:from:in:save:)``.

@@ -108,8 +108,8 @@ nonisolated struct MergedCommunityTransport: CommunityTransporting {
     /// opened — see ``CuratedElevation``.
     ///
     /// Defaulted to the source that answers nothing rather than to the real
-    /// one, so a caller that has not thought about it cannot spend a billable
-    /// call or reach the network from a suite. The composition root opts in;
+    /// one, so a caller that has not thought about it cannot reach the tile
+    /// server from a suite. The composition root opts in;
     /// see ``OpenHikesModel/makeCommunityTransport()``.
     var elevation: any CuratedElevationSourcing = DormantElevationSource()
     /// Where a curated route's photographs come from, asked once when one is

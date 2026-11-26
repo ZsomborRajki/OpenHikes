@@ -11,8 +11,9 @@
 # trail maker routes over and a recording is matched against, under
 # `routing`, which Scripts/trail-cells.sh build-routing builds, and the day
 # hikes, the hiking-routes layer and the places, under `trails`, `routes` and
-# `places`, which its pack makes of a build; its upload-archive puts each in
-# the bucket. A manifest from before one of these lists has none of it, and
+# `places`, which its pack makes of a build, and the heights under
+# `elevation`, which its build-elevation builds from the Copernicus DEM; its
+# upload-archive puts each in the bucket. A manifest from before one of these lists has none of it, and
 # is written without it. That manifest is
 # OpenHikes/Tiles/Vector/VectorTileArchiveManifest.json: the app bundles it,
 # and this puts it on the server. *Refreshing the tile server* in OPERATIONS.md
@@ -32,7 +33,7 @@
 # or keeps it there, and raises `revision` above the server's, once however
 # many archives it names before the next publish: a basemap (`planet-…`) of
 # the schema of the one it replaces, extras (`extras-…`) or an archive of
-# squares (`routing-…`, `trails-…`, `routes-…` or `places-…`) of the
+# squares (`routing-…`, `trails-…`, `routes-…`, `places-…` or `elevation-…`) of the
 # generation of the ones they replace, unless --schema or --generation says
 # otherwise or the list already has the archive, which keeps its own. The
 # first archive of a list of squares names its generation with --generation,
@@ -69,7 +70,7 @@
 #   Scripts/vector-archives.sh basemap [<YYYYMMDD>]
 #   Scripts/vector-archives.sh use <name> [--schema <n> | --generation <n>]
 #                                 (<name> is planet-…, extras-…, routing-…,
-#                                 trails-…, routes-… or places-…)
+#                                 trails-…, routes-…, places-… or elevation-…)
 #   Scripts/vector-archives.sh check
 #   Scripts/vector-archives.sh publish
 #   Scripts/vector-archives.sh prune [--dry-run]
@@ -103,7 +104,7 @@ trap 'rm -rf "$SCRATCH"' EXIT
 # The lists of the archives of pre-built squares, in the order the manifest
 # is written in. Each came after the manifest did, so a manifest may lack any
 # of them, and is written without one it lacks.
-SQUARE_LISTS=(routing trails routes places)
+SQUARE_LISTS=(routing trails routes places elevation)
 
 is_square_list() {
   [[ " ${SQUARE_LISTS[*]} " == *" $1 "* ]]
@@ -292,9 +293,9 @@ use() {
   case "$name" in
     planet-*) list=basemaps key=schema zoom_key=maximumZoom ;;
     extras-*) list=extras key=generation zoom_key=minimumZoom ;;
-    routing-*|trails-*|routes-*|places-*) list="${name%%-*}" key=generation zoom_key=zoom ;;
+    routing-*|trails-*|routes-*|places-*|elevation-*) list="${name%%-*}" key=generation zoom_key=zoom ;;
     *) die "'$name' is neither a basemap (planet-…), extras (extras-…) nor an archive of squares \
-(routing-…, trails-…, routes-… or places-…)" ;;
+(routing-…, trails-…, routes-…, places-… or elevation-…)" ;;
   esac
   if [[ $# -eq 3 ]]; then
     [[ "$2" == "--$key" && "$3" =~ ^[1-9][0-9]*$ ]] || usage
@@ -434,7 +435,7 @@ prune() {
     # Its kind is what its name starts with, `routes-` and `routing-` apart.
     kind="${name%%-*}"
     case "$kind" in
-      planet|extras|routing|trails|routes|places)
+      planet|extras|routing|trails|routes|places|elevation)
         newest="$(awk -v prefix="$kind-" 'index($0, prefix) == 1' <<< "$live_names" | LC_ALL=C sort | tail -n 1)"
         ;;
       *) newest="" ;;

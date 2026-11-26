@@ -13396,70 +13396,6 @@
         }
       }
     },
-    "asked about %lld points and %lld came back" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld Punkte angefragt, %2$lld zurückbekommen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "asked about %1$lld points and %2$lld came back"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld puntos solicitados, %2$lld recibidos"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld points demandés, %2$lld reçus"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "richiesti %1$lld punti, ricevuti %2$lld"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "naar %1$lld punten gevraagd en %2$lld teruggekregen"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "zapytano o punkty: %1$lld, otrzymano: %2$lld"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "puncte cerute: %1$lld, primite: %2$lld"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "запрошено точек: %1$lld, получено: %2$lld"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "запитано точок: %1$lld, отримано: %2$lld"
-          }
-        }
-      }
-    },
     "Asking iCloud whether it’s available on this device." : {
       "localizations" : {
         "de" : {
@@ -17882,64 +17818,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Підйом"
-          }
-        }
-      }
-    },
-    "Climb, elevation profile and steepness colors from Stadia Maps, for trails you draw and routes with no elevation data." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aufstieg, Höhenprofil und Steigungsfarben von Stadia Maps, für Wege, die du zeichnest, und Routen ohne Höhendaten."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Desnivel positivo, perfil de altitud y colores de pendiente de Stadia Maps, para los senderos que dibujas y las rutas sin datos de altitud."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dénivelé positif, profil altimétrique et couleurs de pente de Stadia Maps, pour les sentiers que vous dessinez et les itinéraires sans données d’altitude."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dislivello, profilo altimetrico e colori della pendenza da Stadia Maps, per i sentieri che disegni e i percorsi senza dati altimetrici."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Stijging, hoogteprofiel en hellingskleuren van Stadia Maps, voor paden die je tekent en routes zonder hoogtegegevens."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Podejście, profil wysokości i kolory nachylenia ze Stadia Maps dla szlaków, które rysujesz, i tras bez danych o wysokości."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Urcarea, profilul altimetric și culorile pantei de la Stadia Maps, pentru traseele pe care le desenați și rutele fără date de altitudine."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Подъем, профиль высот и цвета крутизны от Stadia Maps для троп, которые вы рисуете, и маршрутов без данных о высоте."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Підйом, профіль висот і кольори крутизни від Stadia Maps для стежок, які ви малюєте, і маршрутів без даних про висоту."
           }
         }
       }
@@ -24743,176 +24621,60 @@
         }
       }
     },
-    "Elevation 🔒" : {
+    "Elevation Data" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Höhe 🔒"
+            "value" : "Höhendaten"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Altitud 🔒"
+            "value" : "Datos de altitud"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Altitude 🔒"
+            "value" : "Données d’altitude"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Altitudine 🔒"
+            "value" : "Dati altimetrici"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hoogte 🔒"
+            "value" : "Hoogtegegevens"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wysokość 🔒"
+            "value" : "Dane o wysokości"
           }
         },
         "ro" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Altitudine 🔒"
+            "value" : "Date de altitudine"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Высота 🔒"
+            "value" : "Данные о высоте"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Висота 🔒"
-          }
-        }
-      }
-    },
-    "Elevation colors for a trail you draw come with OpenHikes Pro." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Höhenfarben für einen von dir gezeichneten Weg gibt es mit OpenHikes Pro."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Los colores de altitud de un sendero que dibujes se incluyen con OpenHikes Pro."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Les couleurs d’altitude pour un sentier que vous dessinez sont incluses dans OpenHikes Pro."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "I colori dell’altitudine per un sentiero che disegni sono inclusi in OpenHikes Pro."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hoogtekleuren voor een pad dat je tekent, krijg je met OpenHikes Pro."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Kolory wysokości dla rysowanego szlaku są dostępne w OpenHikes Pro."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Culorile după altitudine pentru traseele pe care le desenați sunt incluse în OpenHikes Pro."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Цвета высоты для тропы, которую вы рисуете, входят в OpenHikes Pro."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Кольори за висотою для стежки, яку ви малюєте, доступні в OpenHikes Pro."
-          }
-        }
-      }
-    },
-    "Elevation for these routes comes with OpenHikes Pro." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Höhendaten für diese Routen gibt es mit OpenHikes Pro."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La altitud de estas rutas se incluye con OpenHikes Pro."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "L’altitude de ces itinéraires est incluse dans OpenHikes Pro."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "L’altitudine per questi percorsi è inclusa in OpenHikes Pro."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hoogtegegevens voor deze routes krijg je met OpenHikes Pro."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wysokość dla tych tras jest dostępna w OpenHikes Pro."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Altitudinea pentru aceste rute este inclusă în OpenHikes Pro."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Высота для этих маршрутов входит в OpenHikes Pro."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Висота для цих маршрутів доступна в OpenHikes Pro."
+            "value" : "Дані про висоту"
           }
         }
       }
@@ -25145,122 +24907,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Профіль висот"
-          }
-        }
-      }
-    },
-    "Elevation Where There Is None" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Höhendaten, wo keine vorhanden sind"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Altitud donde no la hay"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Altitude là où elle manque"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Altitudine dove manca"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hoogte waar die ontbreekt"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wysokość tam, gdzie jej brakuje"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Altitudine acolo unde lipsește"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Высота там, где ее нет"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Висота там, де її немає"
-          }
-        }
-      }
-    },
-    "Elevation, OpenHikes Pro" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Höhe, OpenHikes Pro"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Altitud, OpenHikes Pro"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Altitude, OpenHikes Pro"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Altitudine, OpenHikes Pro"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hoogte, OpenHikes Pro"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wysokość, OpenHikes Pro"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Altitudine, OpenHikes Pro"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Высота, OpenHikes Pro"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Висота, OpenHikes Pro"
           }
         }
       }
@@ -28393,64 +28039,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Найдальша точка"
-          }
-        }
-      }
-    },
-    "Get Elevation with OpenHikes Pro" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Höhendaten mit OpenHikes Pro"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Obtener la altitud con OpenHikes Pro"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Obtenir l’altitude avec OpenHikes Pro"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ottieni l’altitudine con OpenHikes Pro"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Krijg hoogte met OpenHikes Pro"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Uzyskaj dane o wysokości z OpenHikes Pro"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Obțineți altitudinea cu OpenHikes Pro"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Получить высоту с OpenHikes Pro"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Отримати висоту з OpenHikes Pro"
           }
         }
       }
@@ -40204,60 +39792,60 @@
         }
       }
     },
-    "No elevation data for this route" : {
+    "No elevation data is available for this version of the app." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keine Höhendaten für diese Route"
+            "value" : "Für diese Version der App sind keine Höhendaten verfügbar."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No hay datos de altitud para esta ruta"
+            "value" : "No hay datos de altitud disponibles para esta versión de la app."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aucune donnée d’altitude pour cet itinéraire"
+            "value" : "Aucune donnée d’altitude n’est disponible pour cette version de l’app."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nessun dato altimetrico per questo percorso"
+            "value" : "Nessun dato altimetrico è disponibile per questa versione dell’app."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen hoogtegegevens voor deze route"
+            "value" : "Voor deze versie van de app zijn geen hoogtegegevens beschikbaar."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Brak danych o wysokości dla tej trasy"
+            "value" : "Dla tej wersji aplikacji nie ma danych o wysokości."
           }
         },
         "ro" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nu există date de altitudine pentru această rută"
+            "value" : "Nu există date de altitudine pentru această versiune a aplicației."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Для этого маршрута нет данных о высоте"
+            "value" : "Для этой версии приложения нет данных о высоте."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Немає даних про висоту для цього маршруту"
+            "value" : "Для цієї версії застосунку немає даних про висоту."
           }
         }
       }
@@ -46878,64 +46466,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Відкриває пояснення, чому цей похід не можна поширити."
-          }
-        }
-      }
-    },
-    "Opens OpenHikes Pro." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Öffnet OpenHikes Pro."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abre OpenHikes Pro."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ouvre OpenHikes Pro."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Apre OpenHikes Pro."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Opent OpenHikes Pro."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Otwiera OpenHikes Pro."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Deschide OpenHikes Pro."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Открывает OpenHikes Pro."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Відкриває OpenHikes Pro."
           }
         }
       }
@@ -69465,176 +68995,60 @@
         }
       }
     },
-    "The elevation service answered %lld." : {
+    "The elevation for this route could not be downloaded." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Der Höhendienst antwortete mit %lld."
+            "value" : "Die Höhendaten für diese Route konnten nicht geladen werden."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "El servicio de altitud ha respondido con el código %lld."
+            "value" : "No se ha podido descargar la altitud de esta ruta."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Le service d’altitude a répondu avec le code %lld."
+            "value" : "L’altitude de cet itinéraire n’a pas pu être téléchargée."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Il servizio altimetrico ha risposto con il codice %lld."
+            "value" : "Non è stato possibile scaricare l’altitudine di questo percorso."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "De hoogtedienst antwoordde %lld."
+            "value" : "De hoogte voor deze route kon niet worden gedownload."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Usługa wysokości odpowiedziała kodem %lld."
+            "value" : "Nie udało się pobrać wysokości dla tej trasy."
           }
         },
         "ro" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Serviciul de altitudine a răspuns cu codul %lld."
+            "value" : "Altitudinea acestui traseu nu a putut fi descărcată."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Сервис высот ответил кодом %lld."
+            "value" : "Не удалось загрузить высоты для этого маршрута."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Сервіс висот відповів кодом %lld."
-          }
-        }
-      }
-    },
-    "The elevation service’s answer was unusable: %@." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Die Antwort des Höhendienstes war unbrauchbar: %@."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La respuesta del servicio de altitud no se puede usar: %@."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La réponse du service d’altitude était inutilisable : %@."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La risposta del servizio altimetrico non era utilizzabile: %@."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Het antwoord van de hoogtedienst was onbruikbaar: %@."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Odpowiedź usługi wysokości była bezużyteczna: %@."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Răspunsul serviciului de altitudine nu a putut fi folosit: %@."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ответ сервиса высот оказался непригодным: %@."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Відповідь сервісу висот виявилася непридатною: %@."
-          }
-        }
-      }
-    },
-    "the endpoint could not be formed" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "der Endpunkt konnte nicht gebildet werden"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "no se ha podido formar la URL del servicio"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "l’URL du service n’a pas pu être construite"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "impossibile costruire l’URL del servizio"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "het eindpunt kon niet worden gevormd"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "nie udało się utworzyć adresu żądania"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "adresa serviciului nu a putut fi construită"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "не удалось составить адрес запроса"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "не вдалося сформувати адресу запиту"
+            "value" : "Не вдалося завантажити висоти для цього маршруту."
           }
         }
       }
@@ -72365,64 +71779,6 @@
         }
       }
     },
-    "This build has no elevation key." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dieser Build hat keinen Schlüssel für Höhendaten."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Esta versión no tiene clave de altitud."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cette version ne contient pas de clé d’altitude."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Questa build non ha una chiave per l’altitudine."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Deze build heeft geen sleutel voor hoogtegegevens."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ta kompilacja nie ma klucza usługi wysokości."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Această versiune nu are o cheie pentru altitudine."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "В этой сборке нет ключа сервиса высот."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "У цій збірці немає ключа сервісу висот."
-          }
-        }
-      }
-    },
     "This came from a GPX file, which records where a photo was taken but not the photo itself. Its place is on the map." : {
       "localizations" : {
         "de" : {
@@ -74101,6 +73457,64 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Цей маршрут нанесли на карту учасники OpenStreetMap."
+          }
+        }
+      }
+    },
+    "This route is too long to read its elevation at once." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Route ist zu lang, um ihre Höhe auf einmal zu lesen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta ruta es demasiado larga para leer su altitud de una vez."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cet itinéraire est trop long pour lire son altitude en une seule fois."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo percorso è troppo lungo per leggerne l’altitudine in una volta."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze route is te lang om de hoogte in één keer te lezen."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ta trasa jest zbyt długa, by odczytać jej wysokość za jednym razem."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acest traseu este prea lung pentru a-i citi altitudinea dintr-odată."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Этот маршрут слишком длинный, чтобы считать его высоты за один раз."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цей маршрут задовгий, щоб зчитати його висоти за один раз."
           }
         }
       }

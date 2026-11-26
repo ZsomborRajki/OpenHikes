@@ -16,11 +16,6 @@
 //  ``TrailDraftShading`` for why it stays once it has appeared rather than
 //  following each answer.
 //
-//  Without OpenHikes Pro the line has no heights, so *Elevation* is locked
-//  here and a tap on it opens the paywall — the one screen that says what
-//  the subscription is for — rather than turning the shared setting to a
-//  colouring this drawing cannot have. See ``TrailDraftShading``.
-//
 //  *Hiking Routes* is not here: it is chosen on *Map Modes* alone — see
 //  ``HikingRoutesPicker``.
 //
@@ -34,40 +29,14 @@ import SwiftUI
 struct TrailDraftMapSection: View {
     let maker: TrailDraftController
 
-    @Environment(OpenHikesModel.self) private var appModel
-    @State private var showsPaywall = false
-
     var body: some View {
         if maker.draft.travelMode == .hiking, !maker.shading.offered.isEmpty {
             Section {
-                RouteColoringPicker(
-                    unlockElevation: maker.shading.isElevationUnlocked ? nil : { showsPaywall = true }
-                )
-                .accessibilityIdentifier("trail-draft-coloring")
+                RouteColoringPicker()
+                    .accessibilityIdentifier("trail-draft-coloring")
             } header: {
                 Text("On the Map")
             }
-            .sheet(isPresented: $showsPaywall) {
-                MapPaywallView(store: appModel.entitlement)
-            }
-        }
-    }
-}
-
-/// A purchase made with the maker open, from the paywall above or from a
-/// locked map on *Map Modes*: the heights this line was refused are asked
-/// for now, or *Elevation* would draw nothing.
-///
-/// On the maker's root rather than on the section, which is there only once
-/// the line has colours to offer, and a purchase made before that still owes
-/// the line its heights. A modifier, so what it reads stays out of
-/// ``TrailDraftView``'s body.
-struct TrailDraftElevationUnlock: ViewModifier {
-    let maker: TrailDraftController
-
-    func body(content: Content) -> some View {
-        content.onChange(of: maker.shading.isElevationUnlocked) { _, unlocked in
-            if unlocked { maker.elevationDidUnlock() }
         }
     }
 }

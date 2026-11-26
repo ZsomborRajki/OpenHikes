@@ -5768,6 +5768,66 @@ if expect_status 2 && expect_contains "$output" "unknown command 'deploy'" "the 
     pass
 fi
 
+# build-elevation files the Copernicus DEM's heights into the elevation
+# squares. Its source is a folder here rather than the public bucket: one tile
+# the tool writes laid out as Copernicus lays theirs out, whose height at a
+# post is a hundred metres plus its column, and the empty name of a 90 m tile
+# beside it with no 30 m one, which is land the 30 m model withholds.
+elevation_source="$cells_work/copernicus"
+mkdir -p "$elevation_source"
+run_script "trail-cells writes a tile laid out as Copernicus lays theirs out" \
+    "$trail_cells" copernicus-fixture "$elevation_source/Copernicus_DSM_COG_10_S90_00_E010_00_DEM.tif" \
+    --south -90 --west 10
+expect_status 0 && pass
+: > "$elevation_source/Copernicus_DSM_COG_30_S90_00_E011_00_DEM.tif"
+
+run_script "trail-cells copernicus-tile reads the tile post for post" \
+    "$trail_cells" copernicus-tile "$elevation_source/Copernicus_DSM_COG_10_S90_00_E010_00_DEM.tif" \
+    --post 0,0 --post 3599,359
+if expect_status 0 \
+    && expect_contains "$output" "3600 × 360 posts from -89.0°N 10.0°E" "the tile" \
+    && expect_contains "$output" $'0,0\t100.0' "the tile" \
+    && expect_contains "$output" $'3599,359\t459.0' "the tile"; then
+    pass
+fi
+
+elevation_out="$cells_work/elevation"
+run_script "trail-cells build-elevation files a degree it reads, and one withheld with no heights" \
+    "$trail_cells" build-elevation --out "$elevation_out" --area -90,10,-89,13 --name elevation-20000101-00 \
+    --source "$elevation_source" --coarser "$elevation_source" --jobs 2
+if expect_status 0 \
+    && expect_contains "$output" "Filed 1 degrees and 1 withheld into 128 squares" "the build" \
+    && expect_contains "$output" "Not marked complete" "the build" \
+    && [[ -f "$elevation_out/elevation-20000101-00.pmtiles" && -f "$elevation_out/archive-build.json" ]]; then
+    pass
+elif [[ "$status" == 0 ]]; then
+    fail "the build left no archive and record" "$(ls "$elevation_out")"
+fi
+
+elevation_archive="$elevation_out/elevation-20000101-00.pmtiles"
+run_script "trail-cells elevation-height reads a post, the plane between posts, withheld ground and sea" \
+    "$trail_cells" elevation-height "$elevation_archive" -89.5 10.5
+on_post="$output"
+run_script "" "$trail_cells" elevation-height "$elevation_archive" -89.5 10.501388888888889
+between="$output"
+run_script "" "$trail_cells" elevation-height "$elevation_archive" -89.5 11.5
+withheld="$output"
+run_script "trail-cells elevation-height reads a post, the plane between posts, withheld ground and sea" \
+    "$trail_cells" elevation-height "$elevation_archive" -89.5 12.5
+if expect_status 0 \
+    && expect_contains "$on_post" $'280.0 m\televation1_1436_1524' "a post" \
+    && expect_contains "$between" "280.5 m" "between two posts" \
+    && expect_contains "$withheld" "no height" "withheld ground" \
+    && expect_contains "$output" "0.0 m" "the sea"; then
+    pass
+fi
+
+run_script "trail-cells upload-archive refuses an elevation build that is not the whole world" \
+    "$trail_cells" upload-archive "$elevation_out"
+if expect_status 1 && expect_contains "$output" "is not the whole world" "the error"; then
+    pass
+fi
+
 # Scripts/vector-extras.sh builds the extras, and uploads them with the rest of
 # the bucket's life further down. The R2 keys are a fixture's, shared by every
 # script that signs for the bucket, so nothing here could sign for the real one.

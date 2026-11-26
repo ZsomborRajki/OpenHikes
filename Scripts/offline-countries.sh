@@ -131,7 +131,7 @@ usage() {
 # The app's files the tool is compiled with: the format, the reader and the
 # manifest, as they stand, which is why each imports nothing of the app's;
 # and the squares' grids and where each is in its archive, for the day hikes,
-# with the files they name (SquareArchive.swift names all four sets).
+# with the files they name (SquareArchive.swift names all five sets).
 tool_sources() {
     printf '%s\n' "$repository_root"/Scripts/lib/offline-countries/*.swift \
         "$repository_root/OpenHikes/General/PackedBytes.swift" \
@@ -143,6 +143,7 @@ tool_sources() {
         "$repository_root/OpenHikes/Community/Curated/Cells/TrailCellFile.swift" \
         "$repository_root/OpenHikes/Tiles/HikingRoutes/RouteSquareGrid.swift" \
         "$repository_root/OpenHikes/Hikes/Places/Squares/PlaceSquareGrid.swift" \
+        "$repository_root/OpenHikes/Hikes/Elevation/ElevationSquareGrid.swift" \
         "$repository_root/OpenHikes/Recording/Squares/RoutingGraphArchive.swift" \
         "$repository_root/OpenHikes/Recording/Squares/TrailGraphSquareGrid.swift" \
         "$repository_root/OpenHikes/Recording/Squares/TrailGraphSquareFile.swift" \

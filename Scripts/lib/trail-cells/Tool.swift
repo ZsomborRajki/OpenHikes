@@ -5,12 +5,15 @@
 //  The command-line tool behind `Scripts/trail-cells.sh`: it files an
 //  OpenStreetMap extract's hiking routes, places and trails into squares,
 //  packs each set into an archive for the tile server, and keeps or takes the
-//  copies in the public database that earlier builds of the app read.
+//  copies in the public database that earlier builds of the app read. It
+//  files the Copernicus DEM's heights into squares as well
+//  (`ElevationBuild.swift`).
 //
 //  It is compiled by that script, from the files in this directory and from
-//  eight of the app's own — each set's grid and file, the byte format they
-//  share and `CommunitySchema.swift`; the script's `tool_sources` names them
-//  — so what the tool writes and what the app reads are one source. The script is the front door: it finds osmium, the
+//  the app's own — each set's grid and file, the byte format they share,
+//  the heights' credit and `CommunitySchema.swift`; the script's
+//  `tool_sources` names them — so what the tool writes and what the app
+//  reads are one source. The script is the front door: it finds osmium, the
 //  container's name and the key; this takes them as options and decides
 //  nothing about the machine it is on.
 //
@@ -47,6 +50,18 @@ enum TrailCellsTool {
                Print the expressions osmium tags-filter finds them with, one a line.
       routing-tile <archive.pmtiles> <x> <y> [--json]
                Print what a tile of the trail maker's archive holds.
+      build-elevation --out <dir> [--area <south>,<west>,<north>,<east>] [--name <archive>]
+               [--source <url|dir>] [--coarser <url|dir>] [--jobs <n>]
+               File the Copernicus DEM's 30 m heights into the elevation squares,
+               <dir>/<archive>.pmtiles (default elevation-YYYYMMDD-HH, for the hour the build began),
+               the whole world unless --area names whole degrees, and read it back.
+      copernicus-tile <file.tif> [--post <row>,<column>]...
+               Print what a Copernicus DEM tile holds, read as build-elevation reads it.
+      elevation-height <archive.pmtiles> <latitude> <longitude>
+               Print the height at a point, read out of an elevation archive as the app reads it.
+      copernicus-fixture <out.tif> --south <degrees> --west <degrees>
+               Write a tile laid out as Copernicus lays theirs out, whose height at a post is a
+               hundred metres plus its column, for the script tests.
       pack     <build-dir> --out <dir> [--name <archive>]
                Pack a whole-world build of the day hikes', the hiking-routes layer's or the places'
                squares into one archive for the tile server, <dir>/<archive>.pmtiles (default
@@ -106,6 +121,20 @@ enum TrailCellsTool {
             RoutingGraphBuild.osmiumFilters.forEach { print($0) }
         case "routing-tile":
             try routingTile(&options)
+        case "build-elevation":
+            try await buildElevation(&options)
+        case "copernicus-tile":
+            try copernicusTile(&options)
+        case "elevation-height":
+            try elevationHeight(&options)
+        case "copernicus-fixture":
+            let path = try options.positional("a file to write")
+            guard let south = Int(try options.required("--south")), let west = Int(try options.required("--west")) else {
+                throw UsageError(description: "--south and --west take whole degrees.")
+            }
+            try options.finish()
+            try CopernicusTile.fixture(south: south, west: west) { _, column in Float(100 + column) }
+                .write(to: URL(fileURLWithPath: path))
         case "pack":
             try pack(&options)
         case "archive-tile":
@@ -375,6 +404,107 @@ private extension TrailCellsTool {
                 let points = relation.ways.reduce(0) { $0 + $1.points.count }
                 print("\(relation.id)\t\(relation.ways.count) ways\t\(points) points\t\(relation.tags["name"] ?? "")")
             }
+
+        case .elevation:
+            let square = try ElevationSquareFile(decoding: data)
+            let known = square.heights.filter { $0 != ElevationSquareFile.unknown }
+            let summary: [String: Any] = [
+                "rows": square.rows,
+                "columns": square.columns,
+                "lowest": known.min().map(Int.init) as Any,
+                "highest": known.max().map(Int.init) as Any,
+                "unknown": square.heights.count - known.count,
+                "northWest": square.height(at: 0) as Any,
+            ]
+            if asJSON {
+                let data = try JSONSerialization.data(withJSONObject: summary, options: [.sortedKeys])
+                print(String(decoding: data, as: UTF8.self))
+                return
+            }
+            print("\(square.rows) × \(square.columns) posts, \(square.heights.count - known.count) with no height, "
+                + "from \(known.min().map(String.init) ?? "-") to \(known.max().map(String.init) ?? "-") m")
+        }
+    }
+
+    static func buildElevation(_ options: inout Options) async throws {
+        let area = try options.value("--area").map { text -> (south: Int, west: Int, north: Int, east: Int) in
+            let parts = text.split(separator: ",").compactMap { Int($0) }
+            guard parts.count == 4, parts[0] < parts[2], parts[1] < parts[3],
+                  (-90...90).contains(parts[0]), (-90...90).contains(parts[2]),
+                  (-180...180).contains(parts[1]), (-180...180).contains(parts[3])
+            else {
+                throw UsageError(description: "--area takes four whole degrees, south,west,north,east.")
+            }
+            return (parts[0], parts[1], parts[2], parts[3])
+        }
+        let jobs = try options.value("--jobs").map { text -> Int in
+            guard let jobs = Int(text), jobs > 0 else { throw UsageError(description: "--jobs takes a count.") }
+            return jobs
+        }
+        let build = ElevationBuildOptions(
+            source: try options.value("--source") ?? ElevationBuild.defaultSource,
+            coarser: try options.value("--coarser") ?? ElevationBuild.defaultCoarser,
+            outputDirectory: URL(fileURLWithPath: try options.required("--out"), isDirectory: true),
+            name: try options.value("--name"),
+            area: area,
+            jobs: jobs ?? 16
+        )
+        try options.finish()
+        let summary = try await ElevationBuild.run(build)
+        let record = summary.record
+        print("Filed \(summary.degrees) degrees and \(summary.withheld) withheld into \(summary.squares) squares, "
+            + "\(summary.seaSquares) more at sea level left out, \(record.bytes) bytes in "
+            + "\(summary.archive.path).")
+        print(record.complete
+            ? "Marked complete: a square the archive does not hold is sea."
+            : "Not marked complete: upload-archive refuses it. Leave out --area for the whole world.")
+    }
+
+    static func elevationHeight(_ options: inout Options) throws {
+        let path = try options.positional("an archive")
+        let latitudeText = try options.positional("a latitude")
+        let longitudeText = try options.positional("a longitude")
+        try options.finish()
+        guard let latitude = Double(latitudeText), let longitude = Double(longitudeText),
+              let around = ElevationSquareGrid.posts(aroundLatitude: latitude, longitude: longitude)
+        else { throw UsageError(description: "'\(latitudeText) \(longitudeText)' is not a place on the Earth.") }
+        let reader = try TileArchiveReader(url: URL(fileURLWithPath: path))
+        var squares: [ElevationSquare: ElevationSquareFile?] = [:]
+        for post in around.posts {
+            let square = ElevationSquareGrid.place(of: post).square
+            guard squares[square] == nil else { continue }
+            let tile = SquareArchive.elevation.tile(named: ElevationSquareGrid.recordName(for: square))!
+            squares[square] = try reader.tile(z: tile.zoom, x: tile.x, y: tile.y).map(ElevationSquareFile.init(decoding:))
+        }
+        let height = around.height { post in
+            let place = ElevationSquareGrid.place(of: post)
+            // No tile is sea, at sea level.
+            guard let square = squares[place.square] ?? nil else { return 0 }
+            return square.height(at: place.index)
+        }
+        let names = Set(squares.keys).map(ElevationSquareGrid.recordName(for:)).sorted().joined(separator: " ")
+        print("\(height.map { String(format: "%.1f m", $0) } ?? "no height")\t\(names)")
+    }
+
+    static func copernicusTile(_ options: inout Options) throws {
+        let path = try options.positional("a tile")
+        var posts: [(row: Int, column: Int)] = []
+        while let text = try options.value("--post") {
+            let parts = text.split(separator: ",").compactMap { Int($0) }
+            guard parts.count == 2 else { throw UsageError(description: "--post takes a row and a column.") }
+            posts.append((parts[0], parts[1]))
+        }
+        try options.finish()
+        let tile = try CopernicusTile(file: Data(contentsOf: URL(fileURLWithPath: path)))
+        let finite = tile.heights.filter(\.isFinite)
+        print("\(tile.rows) × \(tile.columns) posts from \(tile.north)°N \(tile.west)°E, a step of "
+            + "\(tile.rowStep)° × \(tile.columnStep)°, from \(finite.min() ?? .nan) to \(finite.max() ?? .nan) m, "
+            + "\(tile.heights.count - finite.count) not a number")
+        for post in posts {
+            guard (0..<tile.rows).contains(post.row), (0..<tile.columns).contains(post.column) else {
+                throw UsageError(description: "post \(post.row),\(post.column) is outside the tile.")
+            }
+            print("\(post.row),\(post.column)\t\(tile.heights[post.row * tile.columns + post.column])")
         }
     }
 

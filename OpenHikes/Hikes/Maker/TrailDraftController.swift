@@ -241,8 +241,9 @@ final class TrailDraftController {
 
     /// - Parameters:
     ///   - elevationSource: where the line's heights come from, or `nil` for a
-    ///     launch that must not ask — a preview, or a suite, since every call
-    ///     is billed. See ``OpenHikesModel/makeTrailElevationSource()``.
+    ///     launch that must not ask — a preview, or a suite, since no suite
+    ///     reaches the tile server. See
+    ///     ``OpenHikesModel/makeTrailElevationSource()``.
     ///   - elevationPause: the debounce in front of that source, exposed for
     ///     the reason ``TrailDraftElevation``'s own parameter is.
     ///   - naming: what a tapped point is called, or `nil` for a launch that
@@ -252,8 +253,6 @@ final class TrailDraftController {
     ///   - graph: the trail graph the hiking legs are routed over, read again
     ///     from its cache to colour the line by difficulty. `nil` grades
     ///     nothing — see ``TrailDraftShading``.
-    ///   - elevationUnlocked: whether the hiker has OpenHikes Pro, which the
-    ///     line's heights need — see ``TrailDraftShading``.
     init(
         store: TrailDraftStore? = nil,
         router: (any TrailLegRouting)? = nil,
@@ -265,8 +264,7 @@ final class TrailDraftController {
         travelRouters: [TrailTravelMode: any TrailLegRouting] = [:],
         recents: TrailStopRecents? = nil,
         placeFilter: TrailPlaceFilter? = nil,
-        photos: TrailDraftPhotos? = nil,
-        elevationUnlocked: @escaping () -> Bool = { true }
+        photos: TrailDraftPhotos? = nil
     ) {
         self.store = store
         var providers = travelRouters
@@ -279,7 +277,7 @@ final class TrailDraftController {
         elevation = elevationPause.map { pause in
             TrailDraftElevation(draft: drawing, source: elevationSource, pause: pause)
         } ?? TrailDraftElevation(draft: drawing, source: elevationSource)
-        shading = TrailDraftShading(draft: drawing, provider: graph, elevationUnlocked: elevationUnlocked)
+        shading = TrailDraftShading(draft: drawing, provider: graph)
         geocoder = naming
         namer = TrailStopNamer(source: naming)
         self.recents = recents ?? TrailStopRecents(defaults: nil)
@@ -832,16 +830,6 @@ extension TrailDraftController {
     private func lineDidChange() {
         elevation.drawingDidChange()
         shading.drawingDidChange()
-    }
-
-    /// OpenHikes Pro arrived with the maker open — bought from the locked
-    /// *Elevation*, most likely. This line's heights were refused without it,
-    /// and nothing asks again until the line moves, so the line would turn to
-    /// *Elevation* with no heights to colour it by. Asks now. A line that
-    /// already has its heights is not asked about twice.
-    func elevationDidUnlock() {
-        guard elevation.samples == nil else { return }
-        elevation.drawingDidChange()
     }
 
     /// Drops the climb and the colours and stops asking for them.

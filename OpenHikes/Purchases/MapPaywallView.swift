@@ -2,10 +2,10 @@
 //  MapPaywallView.swift
 //  OpenHikes
 //
-//  The one screen that sells anything. Reached only from a locked control —
-//  a map card on *Map Modes*, or *Elevation* under the trail maker's *Color By* —
-//  never presented on its own: a hiking app that opens on a price is not the
-//  app this is trying to be.
+//  The one screen that sells anything. Reached only from a locked map card on
+//  *Map Modes* and from *OpenHikes Pro* under *About* — never presented on its
+//  own: a hiking app that opens on a price is not the app this is trying to
+//  be.
 //
 //  It is honest about what the money is for, because the honest answer is also
 //  the persuasive one: Stadia and Thunderforest charge OpenHikes per map view,
@@ -100,14 +100,6 @@ struct MapPaywallView: View {
             "arrow.down.circle.fill",
             "Offline Stadia Maps",
             "Save a route’s map to your phone for a hike with no signal."
-        ),
-        (
-            "chart.xyaxis.line",
-            "Elevation Where There Is None",
-            """
-                Climb, elevation profile and steepness colors from Stadia Maps, for trails you draw and \
-                routes with no elevation data.
-                """
         ),
         (
             "heart.fill",

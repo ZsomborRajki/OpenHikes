@@ -73,10 +73,6 @@ extension MapView.Coordinator {
             // that changed nothing here costs one comparison.
             _ = controller.draft.legs
             _ = self.trailDraftShades.coloring?.coloring
-            // Elevation is drawn as difficulty without OpenHikes Pro, so a
-            // purchase made from the maker repaints the line — see
-            // ``TrailDraftShading/drawnColoring(for:)``.
-            _ = controller.shading.isElevationUnlocked
         } onChange: { coordinator, map, model in
             coordinator.trackTrailDraftShading(model, on: map)
         }
@@ -103,8 +99,7 @@ extension MapView.Coordinator {
     /// What the overlay should be drawn from, or `nil` for no overlay.
     private func trailDraftShadesWanted() -> TrailDraftShadeLayer.Drawn? {
         guard let controller = trailDraftShades.controller,
-              let chosen = trailDraftShades.coloring?.coloring,
-              case let coloring = controller.shading.drawnColoring(for: chosen),
+              let coloring = trailDraftShades.coloring?.coloring,
               controller.isEditing,
               controller.draft.travelMode == .hiking,
               !controller.draft.isRouting,

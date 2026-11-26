@@ -720,9 +720,6 @@ private extension CommunityHikeView {
     /// ``HikeElevationPlaceholder``. The difference is what the hiker can do
     /// about it: that file is theirs, so *no elevation data in this file* tells
     /// them something true about a thing they chose to import.
-    ///
-    /// Without OpenHikes Pro, a curated route's missing chart is the card that
-    /// sells the heights instead — see ``ElevationProPrompt``.
     @ViewBuilder var elevationSection: some View {
         if let profile = chartProfile {
             VStack(alignment: .leading, spacing: 6) {
@@ -743,29 +740,21 @@ private extension CommunityHikeView {
                 .equatable()
                 // The credit for the heights, and only where it is owed. A
                 // published hike's profile came from the hiker who walked it;
-                // a curated route's came from Stadia, fetched when this screen
-                // opened, because OpenStreetMap carries none — see
-                // ``CuratedElevation``. Under the chart rather than beside the
+                // a curated route's came from the Copernicus DEM, read from the
+                // elevation squares when this screen opened, because
+                // OpenStreetMap carries none — see ``CuratedElevation`` and
+                // ``ElevationCredit``. Under the chart rather than beside the
                 // ODbL credit below, so the sentence sits with the thing it is
                 // about, and drawn only when a chart is: a credit for a chart
                 // nobody could draw credits nothing.
                 if listing.isCurated {
-                    Text("Elevation from \(TileAttribution.Credit.stadiaMaps.title).")
+                    Text("Elevation from \(ElevationCredit.sourceName).")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .accessibilityIdentifier("community-elevation-attribution")
                 }
             }
-        } else if listing.isCurated, session.prepared != nil {
-            // The one route here a subscription gives heights to — see
-            // ``ElevationProPrompt``. Drawn only for a hiker without one: a
-            // subscriber whose request failed gets no section, as before.
-            ElevationProPrompt(
-                tint: listing.tint,
-                message: "No elevation data for this route",
-                onUnlocked: fetchHeights
-            )
         }
     }
 
@@ -953,28 +942,6 @@ private extension CommunityHikeView {
             return
         } catch {
             session.phase = .failed(CommunityFailure(error))
-        }
-    }
-
-    /// Asks for the heights a subscription bought from this screen's
-    /// ``ElevationProPrompt``, and draws the chart from them — the request
-    /// the transport made on open and was refused, made again now that it
-    /// would not be. Onto the detail too, so *Save* keeps them.
-    func fetchHeights() {
-        guard case .loaded(let detail) = session.phase,
-              let source = OpenHikesModel.makeTrailElevationSource() else { return }
-        Task {
-            let filled = await source.filled(detail.route)
-            // The detail on screen *now*, not the one read before the wait:
-            // the contributions and the Commons photographs land on `phase`
-            // while the heights are out, and writing back the earlier copy
-            // would take them off the screen again.
-            guard filled != detail.route, case .loaded(var latest) = session.phase else { return }
-            latest.route = filled
-            session.phase = .loaded(latest)
-            session.prepared = await Self.prepare(latest)
-            // The first chart this route has had, so its dot goes up with it.
-            publishChartPosition()
         }
     }
 

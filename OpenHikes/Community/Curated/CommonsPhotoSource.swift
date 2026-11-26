@@ -107,9 +107,9 @@ nonisolated struct DormantCommonsPhotoSource: CommonsPhotoSourcing {
 
 /// Wikimedia Commons, through its public API.
 nonisolated struct WikimediaCommonsSource: CommonsPhotoSourcing {
-    /// The seam a suite replaces — the shape ``StadiaElevationSource`` takes,
-    /// and for the same reason: nothing here may reach the network from a
-    /// test.
+    /// The seam a suite replaces — the shape ``CuratedTrailSource/Transport``
+    /// takes, and for the same reason: nothing here may reach the network
+    /// from a test.
     typealias Transport = @Sendable (URLRequest) async throws -> (Data, Int)
     /// How a busy answer is waited out, replaced in a suite so the retry costs
     /// no wall-clock time.

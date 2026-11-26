@@ -95,7 +95,7 @@ final class HikeElevationRequestTests {
         let context = container.mainContext
         // What the placeholder's body and its `.task(id:)` do on each pass.
         func pass() -> HikeElevationFill.Request {
-            let request = HikeElevationFill.Request(hike: hike, line: shown, isEntitled: true)
+            let request = HikeElevationFill.Request(hike: hike, line: shown)
             task.update(request) { await request.fill(hike, shown: shown, from: source, in: context) }
             return request
         }

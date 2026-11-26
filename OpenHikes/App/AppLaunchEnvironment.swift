@@ -529,8 +529,8 @@ nonisolated enum AppLaunchEnvironment {
     /// the default a test gets for free.
     static let grantsPaidMaps = configuration.grantsPaidMaps
 
-    /// Whether the trail maker should ask Apple Maps for directions and
-    /// Stadia for heights, as a shipping launch does, rather than being
+    /// Whether the trail maker should ask Apple Maps for directions and the
+    /// elevation squares for heights, as a shipping launch does, rather than being
     /// handed the no-route answer and no climb every other test launch gets.
     ///
     /// For one caller: the App Store frame of a drawn trail, which is a
@@ -539,8 +539,8 @@ nonisolated enum AppLaunchEnvironment {
     /// the frame waits for *a* route and *a* climb and shoots whatever they
     /// are — so the reason the other launches are stubbed, that an assertion
     /// would be about Apple's map data rather than this app, does not reach
-    /// it. The billed half is one Stadia call per run, and only with the Pro
-    /// grant beside it, since ``StadiaElevationSource`` checks that too.
+    /// it. The climb comes from the elevation squares on the tile server
+    /// (``ElevationSquareLibrary``), a few squares a run.
     ///
     /// The hiking router is not part of this: it asks a volunteer-run
     /// Overpass server, and no launch under automation may.

@@ -832,9 +832,6 @@ struct ElevationPlaceholderView: View {
 
     let tint: Color
     let message: LocalizedStringKey
-    /// A second line in the tint, for a card that is also a button — see
-    /// ``ElevationProPrompt``.
-    var action: LocalizedStringKey?
 
     var body: some View {
         ZStack {
@@ -855,11 +852,6 @@ struct ElevationPlaceholderView: View {
                 Text(message)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                if let action {
-                    Text(action)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(tint)
-                }
             }
             .multilineTextAlignment(.center)
             .padding(.horizontal)
