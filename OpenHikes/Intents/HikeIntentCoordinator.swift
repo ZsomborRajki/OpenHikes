@@ -208,6 +208,11 @@ extension HikeIntentCoordinator {
         }
         recorder.pause()
         try throwIfRecorderFailed()
+        // Read back rather than assumed, as a Resume's is: `pause()` refuses
+        // a recording with no session to mark the Pause in, and one a Stop is
+        // ending, which both still read as taking fixes. A Pause it refused
+        // is not reported as one that landed.
+        guard recorder.phase == .paused else { throw .noActiveRecording }
         return liveReport()
     }
 
