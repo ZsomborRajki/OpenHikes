@@ -195,7 +195,10 @@ struct WeatherBadge: View {
             Text(snapshot.formattedTemperature())
                 .font(.headline)
         case .unavailable:
-            Image(systemName: "cloud.slash")
+            // "icloud.slash" is the slashed cloud SF Symbols has. The
+            // "cloud.slash" this asked for is not one of its names, so the
+            // capsule was drawn with nothing in it.
+            Image(systemName: "icloud.slash")
                 .font(.system(Self.heightDrivingTextStyle))
                 .accessibilityHidden(true)
         }
