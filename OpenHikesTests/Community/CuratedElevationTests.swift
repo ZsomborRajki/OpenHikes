@@ -199,22 +199,36 @@ struct CuratedElevationTests {
         #expect(!other.contains { $0.elevation != nil }, "a different line is left alone")
     }
 
-    /// A reading that is not a number — a point on ground whose heights are
-    /// withheld — is not a height, and joins its neighbours instead of
-    /// breaking the line in two.
-    @Test("interpolating passes over a reading that is not a number")
-    func interpolatingSkipsNonFiniteReadings() throws {
-        let route = Self.route(3)
+    /// A reading that is not a number is a point on ground whose heights are
+    /// withheld, and no grade is drawn towards it: the readings either side
+    /// keep their own points, and nothing between them and it gets a height
+    /// nobody measured.
+    @Test("interpolating draws nothing towards a reading that is not a number")
+    func interpolatingStopsAtNonFiniteReadings() {
+        let route = Self.route(5)
         let samples = RouteHeightSamples(
-            routePointCount: 3,
-            indexes: [0, 1, 2],
-            coordinates: route,
+            routePointCount: 5,
+            indexes: [0, 2, 4],
+            coordinates: [route[0], route[2], route[4]],
             heights: [600, .nan, 640]
         )
 
-        let middle = try #require(samples.interpolating(route)[1].elevation)
+        #expect(samples.interpolating(route).map(\.elevation) == [600, nil, nil, nil, 640])
+    }
 
-        #expect(middle.isApproximatelyEqual(to: 620, absoluteTolerance: 0.01))
+    /// And the answer a source gives over such ground is no answer: a line
+    /// that crosses it, or lies wholly on it, gets no profile rather than one
+    /// joined across ground nobody measured, and nothing for a caller to save.
+    @Test(
+        "a line over ground with no heights has no profile",
+        arguments: [[600, .nan, 640], [.nan, .nan, .nan]] as [[Double]]
+    )
+    func withheldGroundHasNoProfile(_ heights: [Double]) async {
+        let source = StubSource(heights: heights)
+
+        #expect(await source.samples(of: Self.route(3)) == nil)
+        #expect(await source.filled(Self.route(3)).allSatisfy { $0.elevation == nil })
+        #expect(source.asked == 2, "asked, and declined, each time")
     }
 
     /// The source a launch gets when it must not ask — a suite, or a UI test

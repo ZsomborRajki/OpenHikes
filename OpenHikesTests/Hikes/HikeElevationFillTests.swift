@@ -2,10 +2,10 @@
 //  HikeElevationFillTests.swift
 //  OpenHikesTests
 //
-//  A library hike with no heights, given a subscriber's heights once and
-//  keeping them — see `HikeElevationFill.swift`. The source is a stub: the
-//  real one is billed, and refuses anybody without the subscription before
-//  it forms a request, which `CuratedElevationTests` covers.
+//  A library hike with no heights, given the elevation squares' heights once
+//  and keeping them — see `HikeElevationFill.swift`. The source is a stub:
+//  the real one reads the tile server, which no suite reaches
+//  (`ElevationSquareLibraryTests` reads stub squares instead).
 //
 
 import CoreLocation
@@ -43,6 +43,15 @@ struct HikeElevationFillTests {
         @concurrent
         func heights(at coordinates: [CLLocationCoordinate2D]) async throws -> [Double] {
             throw CuratedElevationFailure.unreachable
+        }
+    }
+
+    /// Ground the squares have no heights for — land Copernicus withholds —
+    /// under every point asked about.
+    nonisolated private struct WithheldSource: CuratedElevationSourcing {
+        @concurrent
+        func heights(at coordinates: [CLLocationCoordinate2D]) async -> [Double] {
+            coordinates.map { _ in .nan }
         }
     }
 
@@ -107,6 +116,29 @@ struct HikeElevationFillTests {
         let (context, hike) = try Self.library(route: route)
 
         #expect(await HikeElevationFill.fill(hike, along: hike.route, from: RefusingSource(), in: context) == false)
+        #expect(hike.route == route)
+    }
+
+    /// An answer of no heights at all is no answer: written, it would replace
+    /// the line with itself and save the mirrored row, and the hike would
+    /// still need heights the next time it opened, so it would do so again.
+    @Test("a line over ground with no heights is left as it is, and nothing is saved")
+    func withheldGroundSavesNothing() async throws {
+        let route = Self.route(count: 10)
+        let (context, hike) = try Self.library(route: route)
+        let saver = ScriptedModelContextSaver(failedSaveNumbers: [])
+
+        let filled = await HikeElevationFill.fill(
+            hike,
+            along: route,
+            from: WithheldSource(),
+            in: context,
+            save: saver.save
+        )
+
+        #expect(!filled)
+        #expect(saver.saveCount == 0)
+        #expect(!context.hasChanges)
         #expect(hike.route == route)
     }
 

@@ -734,6 +734,24 @@ nonisolated protocol CommunityTransporting: Sendable {
         along route: [RouteCoordinate],
         downloadingInto directory: URL
     ) async throws -> [CommonsPhoto]
+
+    /// `route`, a curated listing's line as ``detail(for:downloadingInto:)``
+    /// handed it over, with the heights OpenStreetMap does not carry — or
+    /// `route` exactly as it came when there are none to add.
+    ///
+    /// Asked after the detail rather than inside it, so a route already on
+    /// the device opens at once. The heights are squares off the tile server,
+    /// and on a poor connection that request can run for its whole budget;
+    /// the line on the map and *Add to My Hikes* need none of it. The chart
+    /// joins them when the heights land, and a hike saved before then is
+    /// given them when it is next opened — see ``HikeElevationFill``.
+    ///
+    /// Only the conformance that knows there are two sources answers it —
+    /// see ``MergedCommunityTransport``. A published hike's heights are the
+    /// ones its author uploaded, and every other conformance has no curated
+    /// routes to answer about, which the default below says.
+    @concurrent
+    func filledHeights(of route: [RouteCoordinate], for listing: CommunityListing) async -> [RouteCoordinate]
 }
 
 // `nonisolated` for the reason ``MergedCommunityTransport``'s extensions spell
@@ -761,5 +779,11 @@ nonisolated extension CommunityTransporting {
         downloadingInto directory: URL
     ) async -> [CommonsPhoto] {
         []
+    }
+
+    /// No curated routes, so no heights to add to one. See the requirement.
+    @concurrent
+    func filledHeights(of route: [RouteCoordinate], for listing: CommunityListing) async -> [RouteCoordinate] {
+        route
     }
 }

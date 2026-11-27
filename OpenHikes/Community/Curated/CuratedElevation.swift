@@ -45,9 +45,11 @@
 //  no more, as a map tile does. Not the hiker's position and not their
 //  identity. The squares are kept on the device, as the trail squares are, so
 //  a second look at the same valley sends nothing. The heights themselves
-//  ride on the detail that is already in flight, are drawn, and go with the
-//  screen; a hiker who imports the hike keeps them the way they keep every
-//  other route point.
+//  are asked for once the route is on screen, never ahead of it, so a slow
+//  answer costs the chart its wait and nothing else; they are drawn and go
+//  with the screen, and a hiker who imports the hike keeps them the way they
+//  keep every other route point — see
+//  ``CommunityTransporting/filledHeights(of:for:)``.
 //
 //  ## Read at two hundred points, written on all of them
 //
@@ -90,7 +92,8 @@ nonisolated protocol CuratedElevationSourcing: Sendable {
     /// Throws rather than answering short: a caller cannot pair a partial
     /// answer with the points it asked about, and a profile drawn from the
     /// wrong pairing is worse than no profile. A point the source has no
-    /// height for is `nan`, in its place.
+    /// height for is `nan`, in its place, and a line with one has no profile
+    /// at all — see ``samples(of:)``.
     @concurrent
     func heights(at coordinates: [CLLocationCoordinate2D]) async throws -> [Double]
 }
@@ -273,9 +276,16 @@ nonisolated struct RouteHeightSamples: Equatable, Sendable {
     /// with none, so a snapped line — thousands of points and two hundred
     /// heights — would measure as nothing at all. A straight run between two
     /// readings is the grade those two readings give, which is as fine as the
-    /// answer gets. A non-finite reading is passed over — a height that is
-    /// not a number is not a height, and the chart's downsampling compares
-    /// them — so the readings either side of it are joined instead.
+    /// answer gets.
+    ///
+    /// **Never towards a reading that is not a number.** That is ground the
+    /// source has no height for — land Copernicus withholds — and a straight
+    /// run from the readings either side of it across that ground would be a
+    /// grade nobody measured, shown and saved as the model's. So such a
+    /// reading puts no height on its own point, and the points between it and
+    /// its neighbours keep none either. ``samples(of:)`` already declines a
+    /// line with one, so this is the guard for a caller that builds its own
+    /// samples.
     ///
     /// **Never across a pause** (#1032). A paused leg is not trail (see
     /// ``RouteBoundary``): a cable car rising a kilometre, joined straight to
@@ -291,8 +301,8 @@ nonisolated struct RouteHeightSamples: Equatable, Sendable {
     func interpolating(_ route: [RouteCoordinate]) -> [RouteCoordinate] {
         guard describes(route) else { return route }
         var filled = route
-        let readings = zip(indexes, heights).filter(\.1.isFinite)
-        for reading in readings {
+        let readings = Array(zip(indexes, heights))
+        for reading in readings where reading.1.isFinite {
             filled[reading.0].elevation = reading.1
         }
         let pausedLegs = route.trailRuns.pausedLegs
@@ -303,10 +313,15 @@ nonisolated struct RouteHeightSamples: Equatable, Sendable {
             let first = pausedLegs.partitioningIndex { $0 >= start.0 }
             let past = pausedLegs.partitioningIndex { $0 >= end.0 }
             if first < past {
-                for index in (start.0 + 1)..<(pausedLegs[first] + 1) { filled[index].elevation = start.1 }
-                for index in (pausedLegs[past - 1] + 1)..<end.0 { filled[index].elevation = end.1 }
+                if start.1.isFinite {
+                    for index in (start.0 + 1)..<(pausedLegs[first] + 1) { filled[index].elevation = start.1 }
+                }
+                if end.1.isFinite {
+                    for index in (pausedLegs[past - 1] + 1)..<end.0 { filled[index].elevation = end.1 }
+                }
                 continue
             }
+            guard start.1.isFinite, end.1.isFinite else { continue }
             // How far along the line each point between the two is, from the
             // first: `along[k]` is the distance to `route[start.0 + k]`.
             let along = route[start.0...end.0].adjacentPairs().reductions(0) { total, pair in
@@ -341,21 +356,37 @@ nonisolated extension CuratedElevationSourcing {
     /// trail maker's header is the same bargain: no figure rather than a wrong
     /// one.
     ///
-    /// One of the refusals is logged at `info` rather than `error`, and that
-    /// is about the second caller. A launch with no elevation archive to read
-    /// is a state this is *designed* to have, and the maker asks again every
-    /// time a drawing settles — so at `error` it would be the loudest thing in
-    /// the log, and the refusals worth reading would be buried under it.
+    /// **A line that crosses ground with no heights has no profile.** That is
+    /// land Copernicus withholds (see ``ElevationSquareLibrary``), and the
+    /// heights either side of it are not the heights across it: joined, they
+    /// would draw a grade nobody measured, and a library hike or a saved
+    /// trail would keep it as the model's. Nor is a profile with a hole in it
+    /// worth having, because the climb, the chart and the *Elevation* colours
+    /// would each stop and start at it. So one reading that is not a number
+    /// costs the whole answer, as a square that would not come does, and an
+    /// answer of nothing but those is never handed on to be saved as a fill.
+    ///
+    /// Two of the refusals are logged at `info` rather than `error`, and that
+    /// is about the second caller. A launch with no elevation archive to read,
+    /// and a line over withheld ground, are states this is *designed* to
+    /// have, and the maker asks again every time a drawing settles — so at
+    /// `error` they would be the loudest things in the log, and the refusals
+    /// worth reading would be buried under them.
     func samples(of route: [RouteCoordinate]) async -> RouteHeightSamples? {
         let indexes = CuratedElevationRequest.sampleIndexes(of: route)
         guard indexes.count > 1 else { return nil }
         let coordinates = indexes.map { route[$0] }
         do {
+            let heights = try await heights(at: coordinates.map(\.clCoordinate))
+            guard heights.count == coordinates.count, heights.allSatisfy(\.isFinite) else {
+                elevationLogger.info("No heights for a route: it crosses ground the elevation squares have none for.")
+                return nil
+            }
             return RouteHeightSamples(
                 routePointCount: route.count,
                 indexes: indexes,
                 coordinates: coordinates,
-                heights: try await heights(at: coordinates.map(\.clCoordinate))
+                heights: heights
             )
         } catch CuratedElevationFailure.uncovered {
             elevationLogger.info("No heights for a route: this launch reads no elevation squares.")

@@ -457,7 +457,8 @@ private extension TrailCellsTool {
             + "\(summary.archive.path).")
         print(record.complete
             ? "Marked complete: a square the archive does not hold is sea."
-            : "Not marked complete: upload-archive refuses it. Leave out --area for the whole world.")
+            : "Not marked complete: upload-archive refuses it. Leave out --area, --source and --coarser "
+                + "for the whole world, read from Copernicus' buckets.")
     }
 
     static func elevationHeight(_ options: inout Options) throws {

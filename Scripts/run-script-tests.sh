@@ -5828,6 +5828,25 @@ if expect_status 1 && expect_contains "$output" "is not the whole world" "the er
     pass
 fi
 
+# Nor is a build with no --area the whole world when its tiles come from a
+# directory: a folder vouches for nothing, and the degrees it leaves out would
+# read as sea level once uploaded. Only the public buckets, listed in full, are.
+elevation_folder_out="$cells_work/elevation-folder"
+run_script "trail-cells build-elevation marks a build from a folder partial, even without --area" \
+    "$trail_cells" build-elevation --out "$elevation_folder_out" --name elevation-20000101-01 \
+    --source "$elevation_source" --coarser "$elevation_source" --jobs 2
+if expect_status 0 \
+    && expect_contains "$output" "Filed 1 degrees and 1 withheld" "the build" \
+    && expect_contains "$output" "Not marked complete" "the build" \
+    && expect_contains "$(cat "$elevation_folder_out/archive-build.json")" '"complete" : false' "the record"; then
+    pass
+fi
+run_script "trail-cells upload-archive refuses an elevation build from a folder" \
+    "$trail_cells" upload-archive "$elevation_folder_out"
+if expect_status 1 && expect_contains "$output" "is not the whole world" "the error"; then
+    pass
+fi
+
 # Scripts/vector-extras.sh builds the extras, and uploads them with the rest of
 # the bucket's life further down. The R2 keys are a fixture's, shared by every
 # script that signs for the bucket, so nothing here could sign for the real one.
