@@ -10,8 +10,11 @@
 //  takes, and the two at zoom 15, which *Extra Detail* adds. And every
 //  download takes the Community tab's day hikes around it, the squares of
 //  the trails archive (``SquareArchive/trails``) out to a wide margin, so a
-//  search there is answered with no signal (``Role/trails``). It lives at
-//  `countries/manifest.json` on `tiles.openhikes.app`, beside the files, and
+//  search there is answered with no signal (``Role/trails``), and the
+//  heights of its ground, the squares of the elevation archive
+//  (``SquareArchive/elevation``), so a line there is given its climb with
+//  none (``Role/elevation``). It lives at `countries/manifest.json` on
+//  `tiles.openhikes.app`, beside the files, and
 //  `Scripts/offline-countries.sh` writes it.
 //
 //  The tool compiles this file as it stands, so it imports Foundation and
@@ -150,6 +153,14 @@ nonisolated struct OfflineCountryManifest: Codable, Equatable, Sendable {
         /// Added to builds already listed: a build that does not know the
         /// role leaves the file off the list it chooses a download from.
         case trails = "trails"
+        /// The heights' squares (``ElevationSquareGrid``) of the area and a
+        /// few kilometres round it, copied out of the elevation archive the
+        /// tile server lists. Every square it covers is a tile of it, one at
+        /// sea level included, so a square that is no tile of it is one it
+        /// says nothing about
+        /// (``OfflineCountryArchives/elevationSquares(_:)``). Added to
+        /// builds already listed, as the day hikes were.
+        case elevation = "elevation"
 
         var isDetail: Bool { self == .detail || self == .detailExtras }
     }
@@ -173,9 +184,9 @@ nonisolated extension OfflineCountryManifest.File {
     var fileName: String { path.split(separator: "/").last.map(String.init) ?? "" }
 
     /// Whether the name is one the tile server's route serves — an area's
-    /// code, then `-detail`, `-extras`, both or neither, or `-trails`, then
-    /// a build's eight digits — so that no name off the network can reach
-    /// outside the directory it is kept in.
+    /// code, then `-detail`, `-extras`, both or neither, or `-trails` or
+    /// `-elevation`, then a build's eight digits — so that no name off the
+    /// network can reach outside the directory it is kept in.
     var hasSafeName: Bool {
         guard fileName.hasSuffix(Self.fileExtension) else { return false }
         let stem = String(fileName.dropLast(Self.fileExtension.count))
@@ -183,7 +194,7 @@ nonisolated extension OfflineCountryManifest.File {
         guard parts.count >= 2 else { return false }
         let build = parts.removeLast()
         guard build.count == 8, build.allSatisfy({ $0.isASCII && $0.isNumber }) else { return false }
-        if parts.last == "trails" {
+        if parts.last == "trails" || parts.last == "elevation" {
             parts.removeLast()
         } else {
             if parts.last == "extras" { parts.removeLast() }

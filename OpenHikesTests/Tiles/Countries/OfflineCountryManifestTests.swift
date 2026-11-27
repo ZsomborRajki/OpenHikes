@@ -68,6 +68,10 @@ struct OfflineCountryManifestTests {
             ("countries/SI-detail-trails-20261117.pmtiles", false),
             ("countries/SI-trails-extras-20261117.pmtiles", false),
             ("countries/SI-TRAILS-20261117.pmtiles", false),
+            ("countries/SI-elevation-20261117.pmtiles", true),
+            ("countries/US-CO-elevation-20261117.pmtiles", true),
+            ("countries/SI-trails-elevation-20261117.pmtiles", false),
+            ("countries/SI-elevation-detail-20261117.pmtiles", false),
             ("countries/US-CO-20261117.pmtiles", true),
             ("countries/RU-MOW-detail-extras-20261117.pmtiles", true),
             ("countries/US-COLO-20261117.pmtiles", false),
@@ -114,19 +118,21 @@ struct OfflineCountryManifestTests {
         #expect(OfflineCountryFixture.manifest([country]).readableCountries.isEmpty)
     }
 
-    @Test("an area's download takes zoom 15 only with Extra Detail, and its day hikes either way")
+    @Test("an area's download takes zoom 15 only with Extra Detail, and its day hikes and heights either way")
     func detailFiles() {
         let country = OfflineCountryFixture.country(
             bytes: Data(count: 10),
             extras: Data(count: 1),
             detail: Data(count: 20),
             detailExtras: Data(count: 2),
-            trails: Data(count: 3)
+            trails: Data(count: 3),
+            elevation: Data(count: 4)
         )
-        #expect(country.files(withDetail: false).map(\.role) == [.basemap, .extras, .trails])
-        #expect(country.files(withDetail: true).map(\.role) == [.basemap, .extras, .detail, .detailExtras, .trails])
-        #expect(country.byteCount(withDetail: false) == 14)
-        #expect(country.byteCount(withDetail: true) == 36)
+        #expect(country.files(withDetail: false).map(\.role) == [.basemap, .extras, .trails, .elevation])
+        let everything: [OfflineCountryManifest.Role] = [.basemap, .extras, .detail, .detailExtras, .trails, .elevation]
+        #expect(country.files(withDetail: true).map(\.role) == everything)
+        #expect(country.byteCount(withDetail: false) == 18)
+        #expect(country.byteCount(withDetail: true) == 40)
     }
 
     @Test("a country listing a file under an unsafe name is left off whole")
@@ -217,6 +223,23 @@ struct OfflineCountryManifestTests {
         #expect(catalog.readableCountries.first?.files.map(\.role) == [.basemap, .trails])
         let kept = try JSONDecoder().decode(OfflineCountryManifest.self, from: json)
         #expect(kept.readableCountries.first?.files.last?.fileName == "SI-trails-20261117.pmtiles")
+    }
+
+    /// What every download takes beside its map since the heights were cut:
+    /// a file of its own, which this build keeps, and a build before it
+    /// leaves off its list.
+    @Test("an area's heights are a file of its own, which this build reads")
+    func elevationFile() throws {
+        let json = Self.listing(
+            files: """
+            , {"role": "elevation", "path": "countries/SI-elevation-20261117.pmtiles", "bytes": 5,
+            "sha256": "9f86d081", "minimumZoom": 12, "maximumZoom": 12}
+            """
+        )
+        let catalog = try OfflineCountryManifest.catalog(from: json)
+        #expect(catalog.readableCountries.first?.files.map(\.role) == [.basemap, .elevation])
+        let kept = try JSONDecoder().decode(OfflineCountryManifest.self, from: json)
+        #expect(kept.readableCountries.first?.files.last?.fileName == "SI-elevation-20261117.pmtiles")
     }
 
     /// The index and the cutting tool read the same areas as a list of what

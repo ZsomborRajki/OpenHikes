@@ -52,6 +52,7 @@ nonisolated struct OfflineCountryDownloadKey: Hashable, Sendable {
         case .detail: "detail-"
         case .detailExtras: "detail-extras-"
         case .trails: "trails-"
+        case .elevation: "elevation-"
         }
         return "\(country)-\(infix)\(build)" + OfflineCountryManifest.File.fileExtension
     }

@@ -6194,16 +6194,19 @@ mkdir -p "$publish_list"
 printf 'planet' > "$publish_build/planet.pmtiles"
 printf 'extras' > "$publish_build/extras.pmtiles"
 printf 'trails' > "$publish_build/trails.pmtiles"
+printf 'elevation' > "$publish_build/elevation.pmtiles"
 printf 'AT\n' > "$publish_list/done.txt"
 publish_settings="$(printf '%s\n' "planet $publish_build/planet.pmtiles, 6 bytes" \
     "extras $publish_build/extras.pmtiles, 6 bytes" "margin 3 km" \
-    "trails $publish_build/trails.pmtiles, 6 bytes" "trails margin 50 km" "bucket stub-account/stub-bucket")"
+    "trails $publish_build/trails.pmtiles, 6 bytes" "trails margin 50 km" \
+    "elevation $publish_build/elevation.pmtiles, 9 bytes" "elevation margin 5 km" \
+    "bucket stub-account/stub-bucket")"
 printf '%s\n' "$publish_settings" > "$publish_list/settings.txt"
 
 OPENHIKES_R2_ENV="$countries_work/r2.env" OPENHIKES_OFFLINE_COUNTRIES_BUILD="$publish_build" \
     run_script "offline-countries publish refuses to go on with another margin than the list was started with" \
     "$offline_countries" publish --planet "$publish_build/planet.pmtiles" --extras "$publish_build/extras.pmtiles" \
-    --trails "$publish_build/trails.pmtiles" --margin-km 5
+    --trails "$publish_build/trails.pmtiles" --elevation "$publish_build/elevation.pmtiles" --margin-km 5
 if expect_status 1 \
     && expect_contains "$output" "lists areas put up with other settings than these" "the error" \
     && expect_contains "$output" "margin 5 km" "the error" \
@@ -6216,7 +6219,7 @@ rm "$publish_list/settings.txt"
 OPENHIKES_R2_ENV="$countries_work/r2.env" OPENHIKES_OFFLINE_COUNTRIES_BUILD="$publish_build" \
     run_script "offline-countries publish refuses a list of areas with no settings beside it" \
     "$offline_countries" publish --planet "$publish_build/planet.pmtiles" --extras "$publish_build/extras.pmtiles" \
-    --trails "$publish_build/trails.pmtiles"
+    --trails "$publish_build/trails.pmtiles" --elevation "$publish_build/elevation.pmtiles"
 if expect_status 1 \
     && expect_contains "$output" "(none recorded)" "the error" \
     && expect_absent "$output" "areas to publish" "the output"; then
@@ -6229,7 +6232,7 @@ chmod +x "$stub_bin/swiftc"
 OPENHIKES_R2_ENV="$countries_work/r2.env" OPENHIKES_OFFLINE_COUNTRIES_BUILD="$publish_build" \
     run_script "offline-countries publish stops when it cannot list the areas" \
     "$offline_countries" publish --planet "$publish_build/planet.pmtiles" --extras "$publish_build/extras.pmtiles" \
-    --trails "$publish_build/trails.pmtiles"
+    --trails "$publish_build/trails.pmtiles" --elevation "$publish_build/elevation.pmtiles"
 rm "$stub_bin/swiftc"
 if expect_status 1 \
     && expect_contains "$output" "the tool did not compile" "the error" \
@@ -7114,8 +7117,8 @@ cat > "$STUB_BUCKET/countries/manifest.json" <<EOF
   "files": [{"role": "basemap", "path": "countries/US-CO-20261118.pmtiles", "bytes": 7,
     "sha256": "$country_sha256", "minimumZoom": 0, "maximumZoom": 15}]}]}
 EOF
-for key in SI-20261118 SI-detail-extras-20261117 SI-trails-20261117 SI-20261119 US-CO-20261118 \
-    US-CO-detail-20261117 AT-20261118; do
+for key in SI-20261118 SI-detail-extras-20261117 SI-trails-20261117 SI-elevation-20261117 SI-20261119 \
+    US-CO-20261118 US-CO-detail-20261117 AT-20261118; do
     printf 'archive' > "$STUB_BUCKET/countries/$key.pmtiles"
 done
 run_script "offline-countries prune deletes only the countries' archives of builds the manifest has moved past" \
@@ -7124,9 +7127,10 @@ if expect_status 0 \
     && expect_contains "$output" "deleted countries/SI-20261117.pmtiles" "the output" \
     && expect_contains "$output" "deleted countries/US-CO-detail-20261117.pmtiles" "the output" \
     && expect_contains "$output" "deleted countries/SI-trails-20261117.pmtiles" "the output" \
+    && expect_contains "$output" "deleted countries/SI-elevation-20261117.pmtiles" "the output" \
     && expect_contains "$output" "kept countries/SI-20261119.pmtiles (7 bytes): no later build of its area is listed" \
         "the output" \
-    && expect_contains "$output" "4 archives of builds the manifest has moved past, and 2 it does not list kept" \
+    && expect_contains "$output" "5 archives of builds the manifest has moved past, and 2 it does not list kept" \
         "the output"; then
     remaining="$(cd "$STUB_BUCKET/countries" && ls | LC_ALL=C sort | tr '\n' ' ')"
     if [[ "$remaining" != "AT-20261118.pmtiles SI-20261118.pmtiles SI-20261119.pmtiles US-CO-20261118.pmtiles manifest.json " ]]; then
@@ -7141,6 +7145,35 @@ run_script "offline-countries prune deletes nothing while the manifest lists an 
     "$offline_countries" prune
 if expect_status 1 \
     && expect_contains "$output" "lists countries/SI-20261118.pmtiles, which the bucket does not hold" "the error"; then
+    pass
+fi
+
+# A file over what R2 takes in one request (Antarctica's heights are 5.7 GB)
+# goes up in parts, naming its SHA-256 beside it as a single request does, and
+# the manifest that lists it is written after it. The limit is a few bytes
+# here, so a file of nine goes in parts.
+mkdir -p "$countries_work/large"
+printf 'elevation' > "$countries_work/large/SI-elevation-20261118.pmtiles"
+large_sha256="$(shasum -a 256 "$countries_work/large/SI-elevation-20261118.pmtiles" | cut -d ' ' -f 1)"
+cat > "$countries_work/large/manifest.json" <<EOF
+{"version": 1, "countries": [{"id": "SI", "build": "20261118", "schema": 4, "names": {},
+  "bounds": {"west": 13.3, "south": 45.4, "east": 16.6, "north": 46.9},
+  "outline": [[[13.3, 45.4], [16.6, 45.4], [16.6, 46.9], [13.3, 46.9], [13.3, 45.4]]],
+  "files": [{"role": "elevation", "path": "countries/SI-elevation-20261118.pmtiles", "bytes": 9,
+    "sha256": "$large_sha256", "minimumZoom": 12, "maximumZoom": 12}]}]}
+EOF
+OPENHIKES_R2_LARGEST_PUT_BYTES=4 \
+    run_script "offline-countries upload puts a file larger than one request takes up in parts, with its SHA-256" \
+    "$offline_countries" upload "$countries_work/large"
+if expect_status 0 \
+    && expect_contains "$calls" "-X POST -H x-amz-meta-sha256: $large_sha256" "the requests" \
+    && expect_contains "$calls" "?uploads" "the requests" \
+    && expect_absent "$calls" "-T $countries_work/large/SI-elevation-20261118.pmtiles https" "the requests" \
+    && expect_contains "$output" "uploaded countries/SI-elevation-20261118.pmtiles (9 bytes)" "the output" \
+    && expect_contains "$output" "wrote countries/manifest.json" "the output" \
+    && expect_contains "$(cat "$STUB_BUCKET/countries/SI-elevation-20261118.pmtiles")" "elevation" "the bucket" \
+    && expect_contains "$(cat "$STUB_BUCKET/countries/manifest.json")" '"role":"elevation"' "the manifest" \
+    && expect_contains "$(cat "$STUB_BUCKET/countries/manifest.json")" '"role":"basemap"' "the manifest"; then
     pass
 fi
 unset STUB_BUCKET STUB_PROTOMAPS STUB_SERVED_MANIFEST OPENHIKES_VECTOR_ARCHIVE_MANIFEST OPENHIKES_TILE_SERVER \

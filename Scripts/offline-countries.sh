@@ -5,18 +5,22 @@
 #
 # An area is every country Natural Earth outlines, except the few too big for
 # one download (Scripts/lib/offline-countries.json), which are cut by state or
-# province instead (Scripts/lib/offline-countries/Areas.swift). Each is five
+# province instead (Scripts/lib/offline-countries/Areas.swift). Each is six
 # PMTiles archives, cut along its outline grown by a margin: the Protomaps
 # basemap's tiles and the extras' (Scripts/vector-extras.sh) to zoom 14, which
 # every download takes, and both at zoom 15, which the app's Extra Detail adds;
-# and the Community tab's day hikes, the squares of the trails archive
+# the Community tab's day hikes, the squares of the trails archive
 # (Scripts/trail-cells.sh) out to a much wider margin, which every download
-# takes too (Scripts/lib/offline-countries/Trails.swift). They are read out of
+# takes too (Scripts/lib/offline-countries/Trails.swift); and the heights, the
+# squares of the elevation archive (Scripts/trail-cells.sh build-elevation)
+# out to a few kilometres, which every download takes as well
+# (Scripts/lib/offline-countries/Elevation.swift). They are read out of
 # local copies of the archives the app's manifest names first, where
-# Scripts/vector-archives.sh basemap and Scripts/vector-extras.sh build leave
-# them, or out of the R2 bucket `openhikes-tiles` with signed HTTP ranges
-# where there is none, and each is read back through the app's own reader and
-# held to the source before it is listed.
+# Scripts/vector-archives.sh basemap, Scripts/vector-extras.sh build and
+# Scripts/trail-cells.sh build-elevation leave them, or out of the R2 bucket
+# `openhikes-tiles` with signed HTTP ranges where there is none, and each is
+# read back through the app's own reader and held to the source before it is
+# listed.
 # `countries/manifest.json` lists them, with each file's size and SHA-256 and
 # the outline the map draws; the app reads it from tiles.openhikes.app.
 # *The offline countries* in AGENTS.md is what the app expects of them,
@@ -31,11 +35,15 @@
 #   Scripts/offline-countries.sh publish [--only AT,US] [--batch <n>] [--planet <file>]
 #                                        [--extras <file>] [--margin-km <km>]
 #                                        [--trails <file>] [--trails-margin-km <km>]
+#                                        [--elevation <file>] [--elevation-margin-km <km>]
 #   Scripts/offline-countries.sh build [--only AT,US] [--out <dir>] [--planet <file>]
 #                                      [--extras <file>] [--margin-km <km>]
 #                                      [--trails <file>] [--trails-margin-km <km>]
+#                                      [--elevation <file>] [--elevation-margin-km <km>]
 #   Scripts/offline-countries.sh trails [--only AT,US] [--out <dir>] [--trails <file>]
 #                                       [--trails-margin-km <km>]
+#   Scripts/offline-countries.sh elevation [--only AT,US] [--out <dir>] [--elevation <file>]
+#                                          [--elevation-margin-km <km>]
 #   Scripts/offline-countries.sh upload <dir> [--dry-run]
 #   Scripts/offline-countries.sh prune [--dry-run]
 #   Scripts/offline-countries.sh areas
@@ -62,7 +70,11 @@
 #             days. A 3 km margin by default. The day hikes are the first
 #             trails archive the app's manifest names, read from the bucket
 #             unless --trails names a copy, 50 km round the outline by
-#             default.
+#             default. The heights are the first elevation archive it
+#             names, read from the local copy build-elevation leaves under
+#             ~/Library/Caches/OpenHikes/elevation where there is a whole
+#             one and from the bucket where not, unless --elevation names
+#             another, 5 km round the outline by default.
 #   trails    Cut the day hikes of every area the server's manifest lists, or
 #             only those --only names, for the build it lists each at and
 #             along the outline it lists, into <dir> (default
@@ -70,6 +82,9 @@
 #             with the file added: what brings the squares to a build already
 #             up, which `upload <dir>` then puts beside it. Takes build's
 #             --trails and --trails-margin-km.
+#   elevation Cut the heights of the listed areas the same way, into <dir>
+#             (default .build/offline-countries/elevation). Takes build's
+#             --elevation and --elevation-margin-km.
 #   upload    Put <dir>'s files in the bucket under countries/, each with its
 #             SHA-256 beside it, skipping any already there with the same bytes
 #             and refusing one there with others, then merge its manifest into
@@ -78,7 +93,9 @@
 #             not hold has to be in the bucket already, with the same bytes.
 #             A file the server lists for the same build in a role <dir>'s
 #             manifest lacks stays listed: a role leaves an area's list only
-#             with a new build.
+#             with a new build. The server's tile route serves only the
+#             names it knows (~/Documents/OpenHikesTiles/worker.js), so a
+#             file of a new role needs the route first.
 #   prune     Delete every archive under countries/ of a build earlier than
 #             the one the server's manifest lists for its area, keeping any
 #             other the manifest does not list, since an upload puts its files
@@ -95,6 +112,11 @@
 #                     R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET), as for
 #                     Scripts/vector-extras.sh (Scripts/lib/r2.sh).
 #   OPENHIKES_OFFLINE_COUNTRIES_BUILD  Where the tool is compiled to.
+#   OPENHIKES_ELEVATION_CACHE  Where build-elevation left the world's heights
+#                     (default ~/Library/Caches/OpenHikes/elevation/world).
+#   OPENHIKES_R2_LARGEST_PUT_BYTES  The most bytes `upload` sends in one
+#                     request (default 5 GiB, R2's limit); a larger file goes
+#                     in parts.
 #
 set -euo pipefail
 
@@ -106,6 +128,10 @@ cache="$HOME/Library/Caches/OpenHikes/offline-countries"
 # leave their archives.
 archives_cache="${OPENHIKES_VECTOR_ARCHIVES_CACHE:-$HOME/Library/Caches/OpenHikes/vector-archives}"
 extras_cache="${OPENHIKES_VECTOR_EXTRAS_CACHE:-$HOME/Library/Caches/OpenHikes/vector-extras}"
+# Where Scripts/trail-cells.sh build-elevation is pointed for the world's
+# heights (its --out).
+elevation_cache="${OPENHIKES_ELEVATION_CACHE:-$HOME/Library/Caches/OpenHikes/elevation/world}"
+largest_put="${OPENHIKES_R2_LARGEST_PUT_BYTES:-$(( 5 * 1024 * 1024 * 1024 ))}"
 
 # shellcheck source=lib/r2.sh
 source "$repository_root/Scripts/lib/r2.sh"
@@ -130,8 +156,9 @@ usage() {
 
 # The app's files the tool is compiled with: the format, the reader and the
 # manifest, as they stand, which is why each imports nothing of the app's;
-# and the squares' grids and where each is in its archive, for the day hikes,
-# with the files they name (SquareArchive.swift names all five sets).
+# and the squares' grids and where each is in its archive, for the day hikes
+# and the heights, with the files they name (SquareArchive.swift names all
+# five sets).
 tool_sources() {
     printf '%s\n' "$repository_root"/Scripts/lib/offline-countries/*.swift \
         "$repository_root/OpenHikes/General/PackedBytes.swift" \
@@ -144,6 +171,7 @@ tool_sources() {
         "$repository_root/OpenHikes/Tiles/HikingRoutes/RouteSquareGrid.swift" \
         "$repository_root/OpenHikes/Hikes/Places/Squares/PlaceSquareGrid.swift" \
         "$repository_root/OpenHikes/Hikes/Elevation/ElevationSquareGrid.swift" \
+        "$repository_root/OpenHikes/Hikes/Elevation/ElevationSquareFile.swift" \
         "$repository_root/OpenHikes/Recording/Squares/RoutingGraphArchive.swift" \
         "$repository_root/OpenHikes/Recording/Squares/TrailGraphSquareGrid.swift" \
         "$repository_root/OpenHikes/Recording/Squares/TrailGraphSquareFile.swift" \
@@ -165,7 +193,7 @@ prepare_tool() {
         || die "the tool did not compile."
 }
 
-# The first of `list` (basemaps, extras or trails) the app's manifest names,
+# The first of `list` (basemaps, extras, trails or elevation) the app's manifest names,
 # which is what the app draws or reads from, read out of the app rather than
 # spelled here.
 archive_name() {
@@ -191,7 +219,7 @@ extras_generation() {
 # size is a download or a build cut short, which nothing should be cut from.
 archive_source() {
     local name="$1" directory size remote
-    for directory in "$archives_cache" "$extras_cache"; do
+    for directory in "$archives_cache" "$extras_cache" "$elevation_cache"; do
         [[ -f "$directory/$name.pmtiles" ]] || continue
         size="$(stat -f %z "$directory/$name.pmtiles")"
         remote="$(r2_list "$name.pmtiles" / | awk -F '\t' -v key="$name.pmtiles" '$1 == key { print $2 }')"
@@ -219,7 +247,7 @@ natural_earth_file() {
 
 build() {
     local out="$repository_root/.build/offline-countries/out" planet_file="" extras="" only="" margin=3
-    local trails_file="" trails_margin=50
+    local trails_file="" trails_margin=50 elevation_file="" elevation_margin=5
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --out) out="$2"; shift 2 ;;
@@ -229,6 +257,8 @@ build() {
             --margin-km) margin="$2"; shift 2 ;;
             --trails) trails_file="$2"; shift 2 ;;
             --trails-margin-km) trails_margin="$2"; shift 2 ;;
+            --elevation) elevation_file="$2"; shift 2 ;;
+            --elevation-margin-km) elevation_margin="$2"; shift 2 ;;
             *) usage ;;
         esac
     done
@@ -253,9 +283,11 @@ build() {
     r2_load_keys
     [[ -n "$planet_file" ]] || planet_file="$(archive_source "$basemap")"
     [[ -n "$extras" ]] || extras="$(archive_source "$extras_name")"
-    local trails_name
+    local trails_name elevation_name
     trails_name="$(archive_name trails)"
     [[ -n "$trails_file" ]] || trails_file="$(archive_source "$trails_name")"
+    elevation_name="$(archive_name elevation)"
+    [[ -n "$elevation_file" ]] || elevation_file="$(archive_source "$elevation_name")"
     # The manifest's first extras are of the generation it gives them,
     # whether they were found here or named, as `publish` names them, and an
     # archive's name is never given to another build. Any other extras are
@@ -264,13 +296,15 @@ build() {
     if [[ "${extras_file_name##*/}" == "$extras_name.pmtiles" ]]; then
         generation="$(extras_generation)"
     fi
-    echo "offline-countries: cutting build $build from $planet_file, $extras and $trails_file"
+    echo "offline-countries: cutting build $build from $planet_file, $extras, $trails_file and $elevation_file"
     prepare_tool
     local arguments=(build --planet "$planet_file" --extras "$extras" --build "$build"
         --outlines "$outline_file" --regions "$region_file"
         --countries "$repository_root/Scripts/lib/offline-countries.json"
         --out "$out" --margin-km "$margin"
         --trails "$trails_file" --trails-name "$trails_name" --trails-margin-km "$trails_margin"
+        --elevation "$elevation_file" --elevation-name "$elevation_name"
+        --elevation-margin-km "$elevation_margin"
         --server "https://tiles.openhikes.app/$basemap")
     [[ -z "$only" ]] || arguments+=(--only "$only")
     [[ -z "$generation" ]] || arguments+=(--extras-generation "$generation")
@@ -295,8 +329,8 @@ upload() {
         name="$(basename "$path")"
         if [[ ! -f "$dir/$name" ]]; then
             # A file of the build that is up already, beside one this cut
-            # adds to it (`trails`): the manifest goes on promising it, so it
-            # has to be the bucket's, byte for byte.
+            # adds to it (`trails`, `elevation`): the manifest goes on
+            # promising it, so it has to be the bucket's, byte for byte.
             head="$(r2_curl -I "$base/$path" | tr -d '\r')"
             status="$(printf '%s\n' "$head" | head -n 1 | awk '{print $2}')"
             [[ "$status" == 200 ]] || die "the manifest lists $name, which is neither in $dir nor in the bucket"
@@ -311,7 +345,6 @@ upload() {
         [[ "$local_size" == "$bytes" ]] || die "$name is $local_size bytes, and the manifest says $bytes"
         [[ "$(shasum -a 256 "$dir/$name" | cut -d ' ' -f 1)" == "$sha256" ]] \
             || die "$name is not the file the manifest describes"
-        (( local_size <= 5 * 1024 * 1024 * 1024 )) || die "$name is over the 5 GiB R2 takes in one request"
         head="$(r2_curl -I "$base/$path" | tr -d '\r')"
         status="$(printf '%s\n' "$head" | head -n 1 | awk '{print $2}')"
         case "$status" in
@@ -339,6 +372,14 @@ upload() {
         esac
         if [[ "$dry_run" == true ]]; then
             echo "offline-countries: would upload $path ($local_size bytes)"
+            continue
+        fi
+        if (( local_size > largest_put )); then
+            # Over the 5 GiB R2 takes in one request (Antarctica's heights):
+            # in parts, which completes only on a free key and is held to
+            # the parts' MD5s as it lands.
+            r2_put_parts "$dir/$name" "$path" 256 "" "$sha256" || die "could not upload $path"
+            echo "offline-countries: uploaded $path ($local_size bytes)"
             continue
         fi
         status="$(r2_put -H "If-None-Match: *" \
@@ -386,6 +427,7 @@ source_identity() {
 # `publish`: build and upload a batch at a time, as Usage says.
 publish() {
     local only="" batch_size=20 planet_file="" extras_file="" margin=3 trails_file="" trails_margin=50
+    local elevation_file="" elevation_margin=5
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --only) only="$2"; shift 2 ;;
@@ -395,27 +437,32 @@ publish() {
             --margin-km) margin="$2"; shift 2 ;;
             --trails) trails_file="$2"; shift 2 ;;
             --trails-margin-km) trails_margin="$2"; shift 2 ;;
+            --elevation) elevation_file="$2"; shift 2 ;;
+            --elevation-margin-km) elevation_margin="$2"; shift 2 ;;
             *) usage ;;
         esac
     done
     [[ "$batch_size" =~ ^[1-9][0-9]*$ ]] || usage
-    local basemap extras trails work
+    local basemap extras trails elevation work
     basemap="$(archive_name basemaps)"
     extras="$(archive_name extras)"
     trails="$(archive_name trails)"
+    elevation="$(archive_name elevation)"
     work="$build_dir/publish-$basemap-$extras"
     # The areas listed done are one build, so every batch of it is cut from
-    # the same three files along the same margins and goes to the same
+    # the same four files along the same margins and goes to the same
     # bucket. The first run of a list writes down what it was given, and a
     # run given anything else is refused rather than mixed into the build.
     r2_load_keys
     [[ -n "$planet_file" ]] || planet_file="$(archive_source "$basemap")"
     [[ -n "$extras_file" ]] || extras_file="$(archive_source "$extras")"
     [[ -n "$trails_file" ]] || trails_file="$(archive_source "$trails")"
+    [[ -n "$elevation_file" ]] || elevation_file="$(archive_source "$elevation")"
     local settings
-    settings="$(printf 'planet %s\nextras %s\nmargin %s km\ntrails %s\ntrails margin %s km\nbucket %s/%s' \
+    settings="$(printf 'planet %s\nextras %s\nmargin %s km\ntrails %s\ntrails margin %s km\nelevation %s\nelevation margin %s km\nbucket %s/%s' \
         "$(source_identity "$planet_file")" "$(source_identity "$extras_file")" "$margin" \
         "$(source_identity "$trails_file")" "$trails_margin" \
+        "$(source_identity "$elevation_file")" "$elevation_margin" \
         "$R2_ACCOUNT_ID" "$R2_BUCKET")"
     mkdir -p "$work"
     touch "$work/done.txt"
@@ -444,7 +491,8 @@ $(cat "$work/settings.txt" 2>/dev/null || echo "(none recorded)")"
         rm -rf "$work/batch"
         build --only "$(IFS=,; echo "${batch[*]}")" --out "$work/batch" \
             --planet "$planet_file" --extras "$extras_file" --margin-km "$margin" \
-            --trails "$trails_file" --trails-margin-km "$trails_margin"
+            --trails "$trails_file" --trails-margin-km "$trails_margin" \
+            --elevation "$elevation_file" --elevation-margin-km "$elevation_margin"
         upload "$work/batch"
         printf '%s\n' "${batch[@]}" >> "$work/done.txt"
         rm -rf "$work/batch"
@@ -480,8 +528,9 @@ prune() {
     # nothing lists that file again. A file of the listed build or a later
     # one, of an area not listed at all, or of a name no build gives is kept.
     # A file's area and build are read off its name,
-    # `countries/<area>[-detail][-extras]-<build>.pmtiles` or
-    # `countries/<area>-trails-<build>.pmtiles`.
+    # `countries/<area>[-detail][-extras]-<build>.pmtiles`,
+    # `countries/<area>-trails-<build>.pmtiles` or
+    # `countries/<area>-elevation-<build>.pmtiles`.
     local verdicts
     verdicts="$({ awk '{ print "listed\t" $0 }' <<< "$listed"; awk '{ print "object\t" $0 }' <<< "$objects"; } \
         | awk -F '\t' '
@@ -491,7 +540,7 @@ prune() {
             count = split(stem, parts, "-")
             if (count < 2 || parts[count] !~ /^[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]$/) return 0
             build = parts[count--]
-            if (count > 1 && parts[count] == "trails") count--
+            if (count > 1 && (parts[count] == "trails" || parts[count] == "elevation")) count--
             if (count > 1 && parts[count] == "extras") count--
             if (count > 1 && parts[count] == "detail") count--
             area = parts[1]
@@ -554,6 +603,36 @@ trails() {
     echo "offline-countries: built into $out; Scripts/offline-countries.sh upload $out puts them up"
 }
 
+# `elevation`: the heights of the areas the server lists, for the builds it
+# lists them at, as Usage says.
+elevation() {
+    local out="$repository_root/.build/offline-countries/elevation" only="" elevation_file="" elevation_margin=5
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --out) out="$2"; shift 2 ;;
+            --only) only="$2"; shift 2 ;;
+            --elevation) elevation_file="$2"; shift 2 ;;
+            --elevation-margin-km) elevation_margin="$2"; shift 2 ;;
+            *) usage ;;
+        esac
+    done
+    r2_load_keys
+    prepare_tool
+    local elevation_name status manifest="$build_dir/.server-manifest.json"
+    elevation_name="$(archive_name elevation)"
+    [[ -n "$elevation_file" ]] || elevation_file="$(archive_source "$elevation_name")"
+    mkdir -p "$build_dir"
+    status="$(r2_curl -o "$manifest" -w "%{http_code}" "$(r2_url countries/manifest.json)")"
+    [[ "$status" == 200 ]] || die "R2 answered $status for countries/manifest.json"
+    echo "offline-countries: cutting the heights of the listed areas from $elevation_file"
+    local arguments=(elevation --manifest "$manifest" --elevation "$elevation_file"
+        --elevation-name "$elevation_name" --elevation-margin-km "$elevation_margin"
+        --out "$out" --server "https://tiles.openhikes.app")
+    [[ -z "$only" ]] || arguments+=(--only "$only")
+    "$tool" "${arguments[@]}"
+    echo "offline-countries: built into $out; Scripts/offline-countries.sh upload $out puts them up"
+}
+
 areas() {
     prepare_tool
     "$tool" areas --countries "$repository_root/Scripts/lib/offline-countries.json" \
@@ -568,6 +647,7 @@ case "$command" in
     publish) publish "$@" ;;
     build) build "$@" ;;
     trails) trails "$@" ;;
+    elevation) elevation "$@" ;;
     areas) areas ;;
     upload) upload "$@" ;;
     prune) prune "$@" ;;

@@ -123,19 +123,22 @@ r2_encode() {
     printf '%s\n' "$encoded"
 }
 
-# `r2_put_parts <file> <key> <part MiB> [<ETag>]`: the file under the key, in
-# parts of that many MiB sent OPENHIKES_R2_PARALLEL (8) at a time, each held
-# to its own MD5 as it lands. With an ETag, the parts' own must come to it
-# before the upload is completed, or the upload is abandoned and nothing is
-# written. A key already holding that ETag is left as it is; one holding
+# `r2_put_parts <file> <key> <part MiB> [<ETag>] [<SHA-256>]`: the file under
+# the key, in parts of that many MiB sent OPENHIKES_R2_PARALLEL (8) at a time,
+# each held to its own MD5 as it lands. With an ETag, the parts' own must come
+# to it before the upload is completed, or the upload is abandoned and nothing
+# is written. With a SHA-256, the object carries it as `x-amz-meta-sha256`,
+# as Scripts/offline-countries.sh names the digest of what it puts up. A key already holding that ETag is left as it is; one holding
 # anything else is refused, since an archive is never replaced in place. The
 # upload is completed on condition that the key is still free
 # (`If-None-Match: *`), which R2 checks as the write commits, so of two
 # uploads to one key that both found it free, the second is refused rather
 # than written over the first.
 r2_put_parts() {
-    local file="$1" key="$2" part_mib="$3" expected="${4:-}"
+    local file="$1" key="$2" part_mib="$3" expected="${4:-}" sha256="${5:-}"
     local size part_bytes parts existing url created upload_id work etag combined body number status
+    local metadata=()
+    [[ -z "$sha256" ]] || metadata=(-H "x-amz-meta-sha256: $sha256")
     [[ -f "$file" ]] || r2_fail "no file at $file"
     size="$(stat -f %z "$file")"
     part_bytes=$(( part_mib * 1024 * 1024 ))
@@ -149,7 +152,8 @@ r2_put_parts() {
         return
     fi
     url="$(r2_url "$key")"
-    created="$(r2_curl -f -X POST "$url?uploads")" || r2_fail "R2 would not start an upload of $key"
+    created="$(r2_curl -f -X POST ${metadata[@]+"${metadata[@]}"} "$url?uploads")" \
+        || r2_fail "R2 would not start an upload of $key"
     upload_id="$(printf '%s\n' "$created" | sed -nE 's:.*<UploadId>([^<]+)</UploadId>.*:\1:p')"
     [[ -n "$upload_id" ]] || r2_fail "R2 started an upload of $key without naming it"
     url="$url?uploadId=$(r2_encode "$upload_id")"

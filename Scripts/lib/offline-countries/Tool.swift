@@ -5,11 +5,13 @@
 //  The countries the app downloads, cut out of the planet build the OpenHikes
 //  map draws: `Scripts/offline-countries.sh` is the way in and says how.
 //
-//    build      cut each country's basemap and extras, and with --trails its
-//               day hikes, read them back against the source, and write the
-//               manifest beside them
+//    build      cut each country's basemap and extras, with --trails its day
+//               hikes and with --elevation its heights, read them back
+//               against the source, and write the manifest beside them
 //    trails     cut the day hikes of the areas a manifest lists, for the
 //               builds it lists them at (Trails.swift)
+//    elevation  cut the heights of the areas a manifest lists, for the
+//               builds it lists them at (Elevation.swift)
 //    merge      put a build's manifest into the one the server has
 //    files      list a manifest's files and their sizes, for the upload
 //    inspect    print an archive's header
@@ -29,6 +31,7 @@ struct Tool {
             case "areas": try areas(Options(arguments))
             case "build": try await build(Options(arguments))
             case "trails": try await trails(Options(arguments))
+            case "elevation": try await elevation(Options(arguments))
             case "merge": try merge(Options(arguments))
             case "files": try files(Options(arguments))
             case "inspect": try inspect(Options(arguments))
@@ -108,6 +111,7 @@ extension Tool {
         let planet = try await Extractor(source: openSource(options.required("planet")))
         let extras = try await Extractor(source: openSource(options.required("extras")))
         let trails = try await trailsSource(options)
+        let elevation = try await elevationSource(options)
         guard Int(planet.header.maximumZoom) == detailZoom else {
             fail("the planet goes to zoom \(planet.header.maximumZoom), and the detail files are zoom \(detailZoom)")
         }
@@ -151,7 +155,7 @@ extension Tool {
                 Cut(
                     planet: planet, extras: extras, build: build, output: output,
                     margin: margin, server: server, metadata: metadata, extrasMetadata: extrasMetadata,
-                    extrasGeneration: extrasGeneration, trails: trails
+                    extrasGeneration: extrasGeneration, trails: trails, elevation: elevation
                 )
             )
             manifest.countries.removeAll { $0.id == country.id && $0.build == country.build }
@@ -173,6 +177,8 @@ extension Tool {
         let extrasGeneration: Int?
         /// Where the day hikes come from, or `nil` for an area without them.
         let trails: TrailsSource?
+        /// Where the heights come from, or `nil` for an area without them.
+        let elevation: ElevationSource?
     }
 
     /// The four map files of an area: which archive each is cut from, between
@@ -233,6 +239,12 @@ extension Tool {
             // root, where the trails archive is too.
             files.append(try await cutTrails(
                 id: choice.id, rings: rings, build: cut.build, from: trails, into: cut.output,
+                server: cut.server?.deletingLastPathComponent()
+            ))
+        }
+        if let elevation = cut.elevation {
+            files.append(try await cutElevation(
+                id: choice.id, rings: rings, build: cut.build, from: elevation, into: cut.output,
                 server: cut.server?.deletingLastPathComponent()
             ))
         }
@@ -318,6 +330,47 @@ extension Tool {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         try encoder.encode(manifest).write(to: url, options: .atomic)
+    }
+}
+
+// MARK: - A file added to builds already up
+
+extension Tool {
+    /// Cuts a file of `role` for every area `--manifest` lists, or those
+    /// `--only` names, along the outline it lists and for the build it lists
+    /// each at, into `--out` with a manifest of those areas, each with the
+    /// new file in place of any of its role it had: what `trails` and
+    /// `elevation` bring to builds already up, which `upload` then puts
+    /// beside them.
+    static func addToListed(
+        _ options: Options,
+        role: OfflineCountryManifest.Role,
+        cut: (OfflineCountryManifest.Country, [Ring], URL) async throws -> OfflineCountryManifest.File
+    ) async throws {
+        let listed = try JSONDecoder().decode(
+            OfflineCountryManifest.self,
+            from: Data(contentsOf: URL(fileURLWithPath: options.required("manifest")))
+        )
+        let output = URL(fileURLWithPath: options.required("out"), isDirectory: true)
+        var countries = listed.countries
+        if let only = options.optional("only") {
+            let wanted = Set(only.split(separator: ",").map(String.init))
+            countries = countries.filter { wanted.contains($0.id) || $0.group.map(wanted.contains) == true }
+        }
+        guard !countries.isEmpty else { fail("no areas to cut") }
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+        let manifestURL = output.appending(path: "manifest.json")
+        var manifest = OfflineCountryManifest(version: listed.version, countries: [])
+        for (index, listedCountry) in countries.enumerated() {
+            print("[\(index + 1)/\(countries.count)] \(listedCountry.id), build \(listedCountry.build)")
+            var country = listedCountry
+            let rings = country.outline.map { ring in ring.compactMap { $0.count >= 2 ? (lon: $0[0], lat: $0[1]) : nil } }
+            let file = try await cut(country, rings, output)
+            country.files.removeAll { $0.role == role }
+            country.files.append(file)
+            manifest.countries.append(country)
+            try write(manifest, to: manifestURL)
+        }
     }
 }
 
