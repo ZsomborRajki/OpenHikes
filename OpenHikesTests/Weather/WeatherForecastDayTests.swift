@@ -231,16 +231,16 @@ extension WeatherForecastDayTests {
         let thursday = try instant("2026-10-22T12:00:00Z")
 
         #expect(
-            WeatherDetailView.weekday(fridayInTokyo, isToday: false, in: tokyo)
-                == WeatherDetailView.weekday(friday, isToday: false, in: .gmt)
+            WeatherForecastClock.weekday(fridayInTokyo, isToday: false, in: tokyo)
+                == WeatherForecastClock.weekday(friday, isToday: false, in: .gmt)
         )
         #expect(
-            WeatherDetailView.spokenWeekday(fridayInTokyo, isToday: false, in: tokyo)
-                == WeatherDetailView.spokenWeekday(friday, isToday: false, in: .gmt)
+            WeatherForecastClock.spokenWeekday(fridayInTokyo, isToday: false, in: tokyo)
+                == WeatherForecastClock.spokenWeekday(friday, isToday: false, in: .gmt)
         )
         #expect(
-            WeatherDetailView.weekday(fridayInTokyo, isToday: false, in: try zone("Europe/Berlin"))
-                == WeatherDetailView.weekday(thursday, isToday: false, in: .gmt),
+            WeatherForecastClock.weekday(fridayInTokyo, isToday: false, in: try zone("Europe/Berlin"))
+                == WeatherForecastClock.weekday(thursday, isToday: false, in: .gmt),
             "the reader's zone, which is what the strip used to name it in"
         )
     }

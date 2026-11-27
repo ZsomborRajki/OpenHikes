@@ -89,14 +89,14 @@ extension AccessibilityUITests {
 
     /// The weather sheet, which the map's audit has only ever seen as a badge.
     ///
-    /// Seven identified regions — the conditions grid, the hourly strip, wind,
-    /// the reading's age, the unavailability row, the Apple Weather credit and
-    /// the legal link — none of which the map's sweep reaches, because the
-    /// badge is a button and the sheet is a presentation over it.
+    /// Its regions — the temperature at its head, Apple Weather's mark and
+    /// legal link, the hours, the days, the wind's compass and the tiles —
+    /// are none of them reached by the map's sweep, because the badge is a
+    /// button and the sheet is a presentation over it.
     ///
     /// #425 is why this is worth a case rather than an assumption: the wind
-    /// row was missing from that sheet and the functional suite had been red
-    /// on it, which is the shape of thing that goes unnoticed on a screen
+    /// was missing from that sheet and the functional suite had been red on
+    /// it, which is the shape of thing that goes unnoticed on a screen
     /// nothing sweeps.
     ///
     /// `--ui-test-weather` is what makes it reachable at all — the real
@@ -113,7 +113,7 @@ extension AccessibilityUITests {
                 .waitForExistence(timeout: UITestTimeout.existence),
             "the audit is worth nothing against a sheet that has not drawn yet"
         )
-        // The wind row is the last of the seven to arrive and the one #425 was
+        // The wind is below the hours and the days and the one #425 was
         // about, so it is what says the sheet is whole rather than opening.
         XCTAssertTrue(
             element("weather-detail-wind", in: app)

@@ -354,9 +354,10 @@ nonisolated final class OpenHikesUITests: XCTestCase {
     /// The sheet used to draw the same three facts the capsule does, so a
     /// hiker who tapped it to ask a question was shown the thing they tapped,
     /// larger. It now carries everything the one `.current` request already
-    /// answered with — and the wind row is the one to assert, because it is
-    /// the only one assembled by this app rather than handed to a formatter:
-    /// a speed, a compass point, and a gust only when there is one.
+    /// answered with — and the wind's panel is the one to assert, because it
+    /// is the only one assembled by this app rather than handed to a
+    /// formatter: a speed, a compass point, and a gust only when there is
+    /// one.
     ///
     /// The compass point rather than the speed, deliberately. The unit is
     /// regional and this runner's region is not a fact a test may depend on —
@@ -381,7 +382,7 @@ nonisolated final class OpenHikesUITests: XCTestCase {
         XCTAssertEqual(wind.label, "Wind")
         XCTAssertTrue(
             (wind.value as? String)?.contains("NW") ?? false,
-            "a wind row should say which way it is coming from"
+            "the wind should say which way it is coming from"
         )
 
         tapWhenReady(element("weather-detail-done", in: app))
@@ -418,10 +419,6 @@ nonisolated final class OpenHikesUITests: XCTestCase {
     /// the same reading in Fahrenheit.
     private static let stubbedWeatherCondition = "Partly Cloudy"
     private static let stubbedWeatherUnit = "degrees"
-    /// Enough swipes to reach the day strip from the top of the reading, with
-    /// room for the alert section that a fixture with a warning would add
-    /// above it.
-    private static let dayStripSwipes = 6
 }
 
 // MARK: - The week ahead
@@ -436,26 +433,16 @@ extension OpenHikesUITests {
     /// Ten days of `.daily` arrived on every fetch and nine were dropped, so
     /// the app could say what the weather is doing now and could not answer
     /// the question a hiker brings to a hiking app, which is which day this
-    /// week to walk. The strip is that data drawn.
+    /// week to walk. The days' panel is that data drawn.
     ///
-    /// **Scrolled to before it is waited on, not after.** The strip sits below
-    /// the readings deliberately — see ``daysSection(_:)`` — and `List` builds
-    /// rows lazily, so below the fold is absent from the element tree rather
-    /// than merely off screen: a `waitForExistence` there waits out its whole
-    /// timeout on a section that is drawn correctly. Swiping and re-asking is
-    /// the wait.
-    ///
-    /// **And swiped on the list rather than through ``scrollIntoView(_:in:
-    /// attempts:)``**, which asks ``scrollContainer(in:)`` for a container and
-    /// is handed the first `ScrollView` on the screen. On this sheet that is
-    /// the hourly strip, which scrolls *sideways*: swiping up on it moves
-    /// nothing, and the element goes stale as the strip re-renders. The
-    /// failure reads "Failed to swipe up weather-detail-hourly ScrollView",
-    /// which names the strip rather than the mistake.
+    /// **Scrolled to rather than assumed on screen.** The panel is the
+    /// second on the sheet and stands above the fold on the phone CI names,
+    /// but a warning's panel goes in above it and a shorter screen has less
+    /// room, and where the first row lands is not what this asserts.
     ///
     /// What the row says is the assertion. The horizon is covered by
     /// `WeatherDailyForecastTests`, where it is a number rather than a count
-    /// of what a collection view happens to be keeping in memory.
+    /// of what happens to be on screen.
     @MainActor
     func testTheWeatherSheetCarriesTheWeekAhead() {
         let app = launchApp(arguments: ["--ui-test-weather"])
@@ -467,17 +454,9 @@ extension OpenHikesUITests {
             "tapping the badge should open the reading it came from"
         )
 
-        let list = app.collectionViews.firstMatch
-        XCTAssertTrue(
-            list.waitForExistence(timeout: UITestTimeout.existence),
-            "the reading should be drawn in a list"
-        )
         let firstDay = element("weather-detail-day", in: app)
-        for _ in 0..<Self.dayStripSwipes where !isReachable(firstDay, in: app) {
-            list.swipeUp()
-        }
         XCTAssertTrue(
-            isReachable(firstDay, in: app),
+            scrollIntoView(firstDay, in: app),
             "the sheet should carry a daily forecast below the reading"
         )
         XCTAssertEqual(

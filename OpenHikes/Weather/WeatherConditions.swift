@@ -86,8 +86,53 @@ nonisolated enum WeatherUVCategory: String, Codable, Equatable, Sendable, CaseIt
 }
 
 nonisolated struct WeatherUVIndex: Equatable, Sendable {
+    /// Where the scale the sheet draws ends. The index has no top, but
+    /// eleven is where the World Health Organization's last band begins, and
+    /// everything above it is drawn at the end.
+    static let scaleTop = 11
+
     var value: Int
     var category: WeatherUVCategory
+
+    /// How far along that scale this index is, 0…1.
+    var scaleFraction: Double {
+        Double(min(max(value, 0), Self.scaleTop)) / Double(Self.scaleTop)
+    }
+}
+
+/// How the temperature it feels like stands to the temperature it is.
+///
+/// Apple Weather says which of wind and humidity is to blame. A reading
+/// carries both and cannot say which one moved the figure, so the sheet says
+/// only what it knows: which way the two differ.
+nonisolated enum WeatherFeel: Equatable, Sendable {
+    case colder
+    case similar
+    case warmer
+
+    /// A degree Celsius: closer than that, the two figures the hiker reads
+    /// are the same or one apart by rounding, and "similar" is the truth.
+    static let threshold = 1.0
+
+    init(apparent: Measurement<UnitTemperature>, actual: Measurement<UnitTemperature>) {
+        let difference = apparent.converted(to: .celsius).value - actual.converted(to: .celsius).value
+        if difference <= -Self.threshold {
+            self = .colder
+        } else if difference >= Self.threshold {
+            self = .warmer
+        } else {
+            self = .similar
+        }
+    }
+
+    /// What the tile says under its figure.
+    var caption: String {
+        switch self {
+        case .colder: String(localized: "Colder than the actual temperature.")
+        case .similar: String(localized: "Similar to the actual temperature.")
+        case .warmer: String(localized: "Warmer than the actual temperature.")
+        }
+    }
 }
 
 /// Everything in the reading that is not the symbol, the temperature or the
