@@ -262,6 +262,20 @@
 # capsule stands for what is `MapActivityCapsule`'s (`MapActivityCapsuleTests`),
 # and how a phase is said is `HikeRecorder+PhaseWording.swift`.
 #
+# The weather sheet was redrawn the way Apple draws weather, and went from
+# one file to a folder (`Weather/Detail/`): the panel and what the panels
+# share (`WeatherCard`), the head of the sheet (`WeatherHero`), the hours and
+# the days (`WeatherForecastCards`), the wind's compass (`WeatherWindCard`),
+# the sun's curve (`WeatherDaylightCard`), the tiles (`WeatherReadingTiles`)
+# and the warnings and the reading's age (`WeatherNotices`), all body code
+# and drawing. What they decide stays measured: the sky and its colors are
+# `WeatherSky`'s (`WeatherSkyTests`), the days' scale and its colors are
+# `WeatherTemperatureSpan`'s (`WeatherTemperatureSpanTests`), the curve is
+# `WeatherSunPath`'s (`WeatherSunPathTests`), the clock is
+# `WeatherForecastClock`'s (`WeatherForecastClockTests`), and the wind's
+# words, the chance of rain, the UV scale and "feels like" are
+# `WeatherReadingFormat`'s and `WeatherConditions`' (`WeatherPanelFiguresTests`).
+#
 # The UI suites still exist and still run locally:
 #
 #   Scripts/run-ui-tests.sh --all
@@ -346,9 +360,9 @@ OpenHikes/Settings/CloudSyncSection.swift
 OpenHikes/Settings/SettingsView.swift
 OpenHikes/Tiles/Offline/OfflineStorageAlerts.swift
 OpenHikes/Tiles/TileAttributionView.swift
-OpenHikes/Weather/WeatherAttributionBanner.swift
+OpenHikes/Weather/Detail/WeatherAttributionBanner.swift
 OpenHikes/Weather/WeatherBadge.swift
-OpenHikes/Weather/WeatherDetailSheet.swift
+OpenHikes/Weather/Detail/WeatherDetailSheet.swift
 OpenHikes/Hikes/Places/HikePlaceView.swift
 OpenHikes/Hikes/Places/HikePlaceEditor.swift
 OpenHikes/Hikes/Places/HikePlaceAdder.swift
@@ -386,3 +400,10 @@ OpenHikes/Recording/RecordingBar.swift
 OpenHikes/Map/ActivityCapsule/MapActivityCapsuleView.swift
 OpenHikes/Recording/RecordingStopAlerts.swift
 OpenHikes/Hikes/Detail/HikeDeleteRow.swift
+OpenHikes/Weather/Detail/WeatherCard.swift
+OpenHikes/Weather/Detail/WeatherHero.swift
+OpenHikes/Weather/Detail/WeatherForecastCards.swift
+OpenHikes/Weather/Detail/WeatherWindCard.swift
+OpenHikes/Weather/Detail/WeatherDaylightCard.swift
+OpenHikes/Weather/Detail/WeatherReadingTiles.swift
+OpenHikes/Weather/Detail/WeatherNotices.swift

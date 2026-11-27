@@ -137,11 +137,11 @@ private struct ForecastClock {
     let reader: TimeZone
 
     func hour(_ date: Date, _ locale: Locale = Self.british) -> String {
-        view.forecastHour(date, locale: locale, readerZone: reader)
+        view.forecastClock(locale: locale, readerZone: reader).hour(date)
     }
 
     func time(_ date: Date, _ locale: Locale = Self.british) -> String {
-        view.forecastTime(date, locale: locale, readerZone: reader)
+        view.forecastClock(locale: locale, readerZone: reader).time(date)
     }
 }
 

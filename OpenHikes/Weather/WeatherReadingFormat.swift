@@ -143,6 +143,94 @@ nonisolated enum WeatherReadingFormat {
 
     private static let compassSectorDegrees = 22.5
 
+    /// Speed, the way it came from, and the gust when there is one.
+    ///
+    /// One sentence rather than three, because wind is one fact: a speed with
+    /// no direction is half an answer, and a gust on a line of its own reads
+    /// as a separate wind. The gust is left out entirely when the provider
+    /// reports none — see ``WeatherWind/gust``. This is what the wind card
+    /// is called aloud.
+    static func wind(_ wind: WeatherWind) -> String {
+        let speed = windSpeed(wind.speed)
+        let described = windDirection(wind.direction).map { direction in
+            String(localized: "\(speed) \(direction)", comment: "A wind speed and its compass direction")
+        } ?? speed
+        guard let gust = wind.gust else { return described }
+        return String(
+            localized: "\(described), gusting \(windSpeed(gust))",
+            comment: "A wind speed and direction, followed by the gust speed"
+        )
+    }
+
+    /// A wind speed as its figure and its unit, for the compass, which sets
+    /// one over the other.
+    ///
+    /// Taken apart by the formatter that put them together, never by
+    /// splitting at a space: which side the unit is on, and what stands
+    /// between the two, is the locale's.
+    static func windSpeedParts(
+        _ measurement: Measurement<UnitSpeed>,
+        locale: Locale = .autoupdatingCurrent
+    ) -> (figure: String, unit: String) {
+        guard measurement.value.isFinite else { return ("\u{2014}", "") }
+        let formatted = measurement.formatted(
+            .measurement(
+                width: .abbreviated,
+                usage: .general,
+                numberFormatStyle: .number.precision(.fractionLength(0))
+            )
+            .locale(locale)
+            .attributed
+        )
+        var figure = ""
+        var unit = ""
+        for run in formatted.runs {
+            let text = String(formatted[run.range].characters)
+            switch run.measurement {
+            case .value: figure += text
+            case .unit: unit += text
+            default: break
+            }
+        }
+        return figure.isEmpty ? (String(formatted.characters), "") : (figure, unit)
+    }
+
+    /// The bearing the wind comes from, in whole degrees, beside its
+    /// compass point: "315° NW". `nil` where the bearing is not a number.
+    static func windBearing(
+        _ measurement: Measurement<UnitAngle>,
+        locale: Locale = .autoupdatingCurrent
+    ) -> String? {
+        guard let point = windDirection(measurement) else { return nil }
+        let degrees = measurement.converted(to: .degrees).formatted(
+            .measurement(
+                width: .narrow,
+                usage: .asProvided,
+                numberFormatStyle: .number.precision(.fractionLength(0))
+            )
+            .locale(locale)
+        )
+        return "\(degrees) \(point)"
+    }
+
+    /// Below this the chance of rain is not worth drawing: it rounds to
+    /// nothing, and a "0%" against every dry hour and every dry day is noise
+    /// where the point of both forecasts is to make the wet one visible.
+    ///
+    /// One threshold rather than two, because it is one editorial decision —
+    /// and two would be a pair of numbers that agree until somebody changes
+    /// the wrong one.
+    static let precipitationChanceFloor = 0.05
+
+    /// The chance of rain as the forecasts draw and speak it, or `nil` where
+    /// it is below ``precipitationChanceFloor`` and they say nothing.
+    static func precipitationChance(
+        _ chance: Double,
+        locale: Locale = .autoupdatingCurrent
+    ) -> String? {
+        chance >= precipitationChanceFloor ? percentage(chance, locale: locale) : nil
+    }
+
     /// North first, clockwise. Localized one by one rather than interpolated,
     /// because these are abbreviations rather than letters: a language whose
     /// word for north does not begin with N spells its own.

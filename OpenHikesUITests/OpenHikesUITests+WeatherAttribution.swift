@@ -5,9 +5,8 @@
 //  Apple Weather's credits are where someone opening the weather sheet sees
 //  them. App Review rejected 1.1 (7) under guideline 5.2.5 because the mark was
 //  at the bottom of a long list, below the fold. The assertion is that both
-//  the mark and the legal link can be tapped straight away: `List` builds rows
-//  lazily, so a row below the fold would not even exist yet, and a row that
-//  exists but is covered is not hittable.
+//  the mark and the legal link can be tapped straight away: an element below
+//  the fold, or one that is covered, is not hittable.
 //
 
 import XCTest
