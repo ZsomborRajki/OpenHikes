@@ -7,6 +7,11 @@
 //  wrong with that, and neither shows in a run that happens to be sunny: a
 //  symbol read as the wrong sky, and a sky too pale to read white text on.
 //
+//  The contrasts are measured on the colors as they are drawn: a panel is its
+//  fill laid over the sky, and the quieter text is white thinned over that,
+//  each mixed in sRGB as SwiftUI composites them. A text color held only as
+//  an opaque white would pass while the text drawn in it did not.
+//
 //  The symbol names here are WeatherKit's own, as it hands them over for a
 //  condition by day and by night.
 //
@@ -135,25 +140,42 @@ struct WeatherSkyTests {
         }
     }
 
-    /// White on a color, as WCAG measures it.
-    private static func contrastWithWhite(_ tint: WeatherTint) -> Double {
+    private static let white = WeatherTint(red: 1, green: 1, blue: 1)
+    /// What WCAG asks of small text: everything on the sheet below a
+    /// heading's size, the footnotes and the figures down the days among it.
+    private static let smallTextContrast = 4.5
+
+    /// A color's relative luminance, as WCAG measures it.
+    private static func luminance(_ tint: WeatherTint) -> Double {
         let linear = [tint.red, tint.green, tint.blue].map { channel in
             channel <= 0.04045 ? channel / 12.92 : pow((channel + 0.055) / 1.055, 2.4)
         }
-        let luminance = 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
-        return 1.05 / (luminance + 0.05)
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
     }
 
-    /// The temperature and the place are set straight on the backdrop in
-    /// large white type, so every color of every sky has to carry it: 3 to 1
-    /// is what WCAG asks of large text. A sky lightened to look more like
-    /// the snow or the fog it stands for fails here first.
-    @Test("every sky is dark enough for the white text set on it")
+    /// One color against another, as WCAG measures it.
+    private static func contrast(_ one: WeatherTint, _ other: WeatherTint) -> Double {
+        let lighter = max(luminance(one), luminance(other))
+        let darker = min(luminance(one), luminance(other))
+        return (lighter + 0.05) / (darker + 0.05)
+    }
+
+    private static func contrastWithWhite(_ tint: WeatherTint) -> Double {
+        contrast(white, tint)
+    }
+
+    /// The head of the sheet is set straight on the backdrop, and so are the
+    /// credits, the footnotes and the eyebrow over the place's name, all of
+    /// it in white and some of it small. Anything can scroll down to the
+    /// horizon, so every color of every sky has to carry small text. A sky
+    /// lightened to look more like the snow or the fog it stands for fails
+    /// here first.
+    @Test("every sky is dark enough for the small white text set on it")
     func everySkyCarriesWhiteText() throws {
         for sky in Self.everySky {
             for hex in [sky.backdrop.zenith, sky.backdrop.horizon] {
                 let tint = try #require(WeatherTint(hex: hex), "\(hex) is not a color")
-                #expect(Self.contrastWithWhite(tint) >= 3, "\(sky) at \(hex)")
+                #expect(Self.contrastWithWhite(tint) >= Self.smallTextContrast, "\(sky) at \(hex)")
             }
         }
     }
@@ -177,14 +199,42 @@ struct WeatherSkyTests {
     }
 
     /// The panels hold the sheet's small type: the rows, the captions, the
-    /// figures down the days. 4.5 to 1 is what WCAG asks of body text, and
-    /// the panel is drawn over every color the sky has, the palest included.
+    /// figures down the days. The panel is drawn over every color the sky
+    /// has, the palest included.
     @Test("every sky's panel carries small white text, wherever on the sky it is")
     func everyPanelCarriesWhiteText() throws {
         for sky in Self.everySky {
             for hex in [sky.backdrop.zenith, sky.backdrop.horizon] {
                 let panel = try Self.panel(of: sky, over: hex)
-                #expect(Self.contrastWithWhite(panel) >= 4.5, "\(sky) over \(hex)")
+                #expect(Self.contrastWithWhite(panel) >= Self.smallTextContrast, "\(sky) over \(hex)")
+            }
+        }
+    }
+
+    /// Most of a panel's small type is not white but white thinned: the
+    /// headings, the lows down the days, the values beside their labels, the
+    /// compass's letters. Measured as drawn, thinned over the panel over the
+    /// sky, because that is the color the eye gets.
+    @Test("every sky's panel carries its quieter text, wherever on the sky it is")
+    func everyPanelCarriesQuietText() throws {
+        for sky in Self.everySky {
+            for hex in [sky.backdrop.zenith, sky.backdrop.horizon] {
+                let panel = try Self.panel(of: sky, over: hex)
+                let text = panel.mixed(with: Self.white, by: WeatherSky.quietTextOpacity)
+                #expect(Self.contrast(text, panel) >= Self.smallTextContrast, "\(sky) over \(hex)")
+            }
+        }
+    }
+
+    /// The chance of rain is the smallest figure on the sheet, in a color of
+    /// its own, under each hour and each day.
+    @Test("every sky's panel carries the chance of rain, wherever on the sky it is")
+    func everyPanelCarriesTheChanceOfRain() throws {
+        let cyan = try #require(WeatherTint(hex: WeatherSky.rainChanceTint))
+        for sky in Self.everySky {
+            for hex in [sky.backdrop.zenith, sky.backdrop.horizon] {
+                let panel = try Self.panel(of: sky, over: hex)
+                #expect(Self.contrast(cyan, panel) >= Self.smallTextContrast, "\(sky) over \(hex)")
             }
         }
     }

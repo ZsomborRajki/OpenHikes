@@ -149,10 +149,11 @@ struct WeatherStandingCard: View {
         return items
     }
 
+    /// A footnote on the bare sky, and so in white — see
+    /// ``WeatherSky/quietTextOpacity``.
     private func note(_ text: LocalizedStringKey) -> some View {
         Text(text)
             .font(.footnote)
-            .foregroundStyle(.weatherDim)
             .padding(.horizontal, WeatherCardMetrics.padding)
     }
 }

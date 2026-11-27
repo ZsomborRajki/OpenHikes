@@ -132,6 +132,36 @@ struct WeatherHourlyForecastTests {
         )
     }
 
+    /// Nothing in ``WeatherManager`` expires, so a strip fetched at five to
+    /// the hour is still the newest five minutes past it. Trimmed only at
+    /// the fetch it would open on the hour that has gone, with the hour in
+    /// progress second, where nothing calls it *Now*.
+    @Test("an hour that has ended is dropped on the way to the screen")
+    func endedHourIsDroppedOnTheWayToTheScreen() throws {
+        let hour = WeatherHourlyPolicy.hourSeconds
+        let strip = hours(WeatherHourlyPolicy.horizon, from: capturedAt)
+        let fiveMinutesPast = capturedAt.addingTimeInterval(hour + 300)
+
+        let drawn = WeatherHourSummary.upcoming(in: strip, asOf: fiveMinutesPast)
+        #expect(drawn.count == strip.count - 1)
+        let first = try #require(drawn.first)
+        #expect(first == strip[1], "the strip opens on the hour in progress")
+        #expect(first.isInProgress(asOf: fiveMinutesPast), "which is the one the strip calls Now")
+        #expect(drawn.dropFirst().allSatisfy { !$0.isInProgress(asOf: fiveMinutesPast) }, "and no other")
+    }
+
+    /// An hour lasts until the next one starts, and not a second longer.
+    @Test("the hour in progress is kept until it ends")
+    func hourInProgressLastsUntilItEnds() {
+        let strip = hours(2, from: capturedAt)
+        let end = capturedAt.addingTimeInterval(WeatherHourlyPolicy.hourSeconds)
+        let lastEnd = end.addingTimeInterval(WeatherHourlyPolicy.hourSeconds)
+
+        #expect(WeatherHourSummary.upcoming(in: strip, asOf: end.addingTimeInterval(-1)).count == 2)
+        #expect(WeatherHourSummary.upcoming(in: strip, asOf: end) == [strip[1]])
+        #expect(WeatherHourSummary.upcoming(in: strip, asOf: lastEnd).isEmpty, "a strip of hours gone is empty")
+    }
+
     #if DEBUG
     /// The fixture is what UI automation and previews draw, and a strip that
     /// repeated itself would let a mis-indexed column look right.

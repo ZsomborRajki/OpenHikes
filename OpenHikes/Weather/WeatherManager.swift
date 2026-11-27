@@ -176,26 +176,28 @@ extension WeatherHourSummary {
     /// screen, because everything downstream of this stores what it is given:
     /// `.hourly` answers with days of data and all of it would otherwise be
     /// written to `UserDefaults` on every successful fetch.
+    ///
+    /// **The hour in progress is kept, and the hours already gone are not**
+    /// — ``WeatherHourSummary/upcoming(in:asOf:)`` is the rule, and the sheet
+    /// applies it a second time on the way to the screen, as it does the
+    /// days'. Mapped before it is trimmed for the reason the days' mapping
+    /// gives: one spelling of the rule, not two. Anchored to the reading's
+    /// own timestamp rather than to `Date.now` for the reason
+    /// ``WeatherSnapshot/capturedAt`` gives: a cached payload is not
+    /// necessarily a reading taken now.
     nonisolated static func summaries(
         from forecast: Forecast<HourWeather>,
         notBefore start: Date
     ) -> [Self] {
-        forecast
-            // WeatherKit's hourly forecast begins at the top of the current
-            // hour, so the hour in progress is included and the ones already
-            // gone are not. Anchored to the reading's own timestamp rather
-            // than to `Date.now` for the reason ``WeatherSnapshot/capturedAt``
-            // gives: a cached payload is not necessarily a reading taken now.
-            .filter { $0.date.addingTimeInterval(WeatherHourlyPolicy.hourSeconds) > start }
-            .prefix(WeatherHourlyPolicy.horizon)
-            .map { hour in
-                Self(
-                    date: hour.date,
-                    symbolName: hour.symbolName,
-                    temperature: hour.temperature,
-                    precipitationChance: hour.precipitationChance
-                )
-            }
+        let strip = forecast.map { hour in
+            Self(
+                date: hour.date,
+                symbolName: hour.symbolName,
+                temperature: hour.temperature,
+                precipitationChance: hour.precipitationChance
+            )
+        }
+        return Array(upcoming(in: strip, asOf: start).prefix(WeatherHourlyPolicy.horizon))
     }
 }
 

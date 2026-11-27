@@ -272,7 +272,9 @@
 # `WeatherSky`'s (`WeatherSkyTests`), the days' scale and its colors are
 # `WeatherTemperatureSpan`'s (`WeatherTemperatureSpanTests`), the curve is
 # `WeatherSunPath`'s (`WeatherSunPathTests`), the clock is
-# `WeatherForecastClock`'s (`WeatherForecastClockTests`), and the wind's
+# `WeatherForecastClock`'s (`WeatherForecastClockTests`), which day is today
+# is `WeatherToday`'s (`WeatherTodayTests`), which hours are still to come is
+# `WeatherHourSummary`'s (`WeatherHourlyForecastTests`), and the wind's
 # words, the chance of rain, the UV scale and "feels like" are
 # `WeatherReadingFormat`'s and `WeatherConditions`' (`WeatherPanelFiguresTests`).
 #

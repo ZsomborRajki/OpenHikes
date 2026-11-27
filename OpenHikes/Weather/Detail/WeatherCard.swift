@@ -34,7 +34,6 @@ enum WeatherCardMetrics {
     /// this, and a forecast stretched across it is a row of figures with a
     /// hand's width between each.
     static let readableWidth: CGFloat = 560
-    static let dimOpacity = 0.62
     static let ruleOpacity = 0.16
     static let ruleThickness: CGFloat = 0.5
 
@@ -44,15 +43,19 @@ enum WeatherCardMetrics {
 }
 
 extension ShapeStyle where Self == Color {
-    /// What the sheet draws its quieter text in: the headings, the values
-    /// beside their labels, the captions.
+    /// What the sheet draws its quieter text in on a panel: the headings,
+    /// the values beside their labels, the captions. **Never on the bare
+    /// sky**, where text is white — see ``WeatherSky/quietTextOpacity``.
     ///
     /// White, thinned, and spelled as that. The system's own `.secondary`
     /// is the obvious thing to ask for and was the wrong one here: over
     /// this sheet's sky, on iOS 27.2, text in it opened a saturated light
     /// blue and turned grey-white at the first scroll. Why was not run
     /// down. A color is drawn the same both times.
-    static var weatherDim: Color { .white.opacity(WeatherCardMetrics.dimOpacity) }
+    static var weatherDim: Color { .white.opacity(WeatherSky.quietTextOpacity) }
+
+    /// The chance of rain under a glyph — see ``WeatherSky/rainChanceTint``.
+    static var weatherRainChance: Color { Color(hex: WeatherSky.rainChanceTint) ?? .cyan }
 }
 
 /// The hairline between two rows of a panel, in a color of its own for the
@@ -243,7 +246,7 @@ struct WeatherGlyph: View {
                 .accessibilityHidden(true)
             Text(verbatim: WeatherReadingFormat.precipitationChance(precipitationChance) ?? " ")
                 .font(.caption2.weight(.bold))
-                .foregroundStyle(.cyan)
+                .foregroundStyle(.weatherRainChance)
                 .lineLimit(1)
                 .fixedSize()
         }

@@ -72,6 +72,30 @@ nonisolated enum WeatherHourlyPolicy {
     static let hourSeconds: TimeInterval = 3600
 }
 
+extension WeatherHourSummary {
+    /// The hours of `strip` that have not ended yet, as of `date`.
+    ///
+    /// **Applied on the way to the screen as well as on the way in**, for
+    /// the reason ``WeatherDaySummary/upcoming(in:asOf:calendar:)`` is:
+    /// nothing in ``WeatherManager`` expires, so a reading fetched at 10:55
+    /// can still be the newest at 11:05. Trimmed only at the fetch, its strip
+    /// opens on ten o'clock, an hour that has gone, and the hour in progress
+    /// is the second column, too far in to be called *Now*.
+    nonisolated static func upcoming(in strip: [Self], asOf date: Date) -> [Self] {
+        strip.filter { $0.date.addingTimeInterval(WeatherHourlyPolicy.hourSeconds) > date }
+    }
+
+    /// Whether this is the hour in progress as of `date`, which the strip
+    /// names *Now*.
+    ///
+    /// Asked only of an hour ``upcoming(in:asOf:)`` kept, which is what
+    /// makes a start alone enough: every hour kept is still to end, and the
+    /// only one of them already begun is the one `date` falls in.
+    nonisolated func isInProgress(asOf date: Date) -> Bool {
+        self.date <= date
+    }
+}
+
 #if DEBUG
 extension WeatherHourSummary {
     /// A filled strip, for previews and the `--ui-test-weather` fixture.

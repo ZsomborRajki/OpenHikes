@@ -3,18 +3,20 @@
 //  OpenHikes
 //
 //  Apple Weather's credits on the weather sheet: the mark and the legal link
-//  under the temperature, and the fuller wording at the sheet's foot.
+//  at its head, and the fuller wording at its foot.
 //
 //  The credits used to be only at the very bottom of ``WeatherDetailView``,
 //  under the hours, the readings, daylight and the days: on the screen, as
 //  WeatherKit's terms ask, but not where anybody opening the sheet would see
 //  them. App Review rejected 1.1 (7) under guideline 5.2.5 because it could
-//  not find the mark. So the mark leads the sheet, right under the reading
-//  it credits and above every panel, visible at either detent without
-//  scrolling, with the legal link on the same line.
-//  `testTheWeatherSheetOpensOnAppleWeathersCredits` holds it there. The
-//  fuller credit stays at the foot, where the wording and Apple's own link
-//  title have room.
+//  not find the mark. So the mark leads the sheet, above the temperature and
+//  every panel, with the legal link on the same line: the first thing in
+//  the sheet, so it is on screen without scrolling at either height and at
+//  every text size. Set under the temperature, which is set large, it was
+//  not: a half sheet at the largest text size opened with the mark below
+//  the screen. `testTheWeatherSheetOpensOnAppleWeathersCredits` holds it
+//  there, at that size and at both heights. The fuller credit stays at the
+//  foot, where the wording and Apple's own link title have room.
 //
 //  Both are drawn light on the sheet's sky at every hour, so both take
 //  Apple's mark for dark backgrounds: the sheet's own color scheme says so —
@@ -91,18 +93,18 @@ struct WeatherDataSource: View {
 
             Text("Weather data provided by \(AppleWeatherAttribution.serviceName)")
                 .font(.footnote)
-                .foregroundStyle(.weatherDim)
                 .accessibilityIdentifier("weather-attribution")
 
             // Apple's own wording where it has sent it, which is its whole
             // list of sources, paragraphs of it: set as the small print it
             // is, and still the link it always was. Until then, and for good
             // if it never comes, a title of ours that looks like a link.
+            // White like every word on the bare sky, small print included —
+            // see ``WeatherSky/quietTextOpacity``.
             Link(destination: marks?.legalPageURL ?? AppleWeatherAttribution.fallbackLegalPageURL) {
                 if let marks {
                     Text(marks.linkTitle)
                         .font(.caption2)
-                        .foregroundStyle(.weatherDim)
                         .multilineTextAlignment(.leading)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.top, Self.spacing)
