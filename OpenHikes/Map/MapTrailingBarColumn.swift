@@ -80,21 +80,34 @@ nonisolated struct TrailingBarColumn: Equatable, Sendable {
     ///
     /// `nil` before iOS 27.1, where the system keeps no such column and has
     /// no way to say where one is.
+    ///
+    /// The release is asked about here and the regions in a function of
+    /// their own, as *The Mac* in `AGENTS.md` asks of any symbol a runtime
+    /// may lack: a function can look up the types it uses as it is entered,
+    /// and the layout region is a type iOS 18 does not have.
     @MainActor
     static func current(in view: UIView, extent: CGFloat) -> Self? {
         #if canImport(SwiftUI, _version: 8.0.85)
         if #available(iOS 27.1, *) {
-            return Self(
-                bar: view.directionalEdgeInsets(
-                    for: .bar(onEdge: NSDirectionalRectEdge.trailing, extent: extent)
-                ),
-                safeArea: view.directionalEdgeInsets(for: .safeArea()),
-                extent: extent
-            )
+            return measured(in: view, extent: extent)
         }
         #endif
         return nil
     }
+
+    #if canImport(SwiftUI, _version: 8.0.85)
+    @available(iOS 27.1, *)
+    @MainActor
+    private static func measured(in view: UIView, extent: CGFloat) -> Self? {
+        Self(
+            bar: view.directionalEdgeInsets(
+                for: .bar(onEdge: NSDirectionalRectEdge.trailing, extent: extent)
+            ),
+            safeArea: view.directionalEdgeInsets(for: .safeArea()),
+            extent: extent
+        )
+    }
+    #endif
 }
 
 /// The pill's two places across the map, exactly one of them active.
