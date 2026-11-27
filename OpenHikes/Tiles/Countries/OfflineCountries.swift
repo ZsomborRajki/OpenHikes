@@ -17,16 +17,21 @@
 //  progress is an object of its own, so a progress tick re-runs its row and
 //  nothing above it. What the screens read is `OfflineCountries+Listing.swift`.
 //
-//  *Extra Detail* decides which files an area takes: to zoom 14 always, and
-//  zoom 15, with its buildings and most of its points, when it is on.
-//  Turning it on brings zoom 15 to every area already down; turning it off
-//  deletes it from them and keeps the areas (``reconcile()``). *Elevation
-//  Data* does the same for the heights' squares, and each area's record says
-//  whether it has them, which its row says too. A file the
-//  list names for a build already down that the area did not take is
-//  brought the same way, and ahead of any zoom 15 the area lacks: the day
-//  hikes' squares and the heights' squares, which builds already listed
-//  gained after many areas were down.
+//  *Extra Detail* and *Elevation Data* say what the hiker means to keep:
+//  zoom 15, with its buildings and most of its points, and the heights'
+//  squares. A download reads them as it starts. Neither changes an area
+//  already down, by the owner's decision: a switch that brought its files to
+//  every area as it was turned on started gigabytes nobody had asked for,
+//  and one that deleted them as it was turned off took them from areas the
+//  hiker meant to keep whole. An area's row offers what the switches ask for
+//  that it lacks, with what that costs, and what it holds that they no
+//  longer ask for, and only a tap on either brings or deletes anything
+//  (`OfflineCountries+Extras.swift`). Each area's record says which of the
+//  two it has.
+//
+//  One kind of file still comes unasked: what every download takes, where a
+//  build already listed gained it after an area was down, as the day hikes'
+//  squares were (``bringGainedFiles()``). It is no switch's, and megabytes.
 //
 //  A download is `.speculative`, as a bulk tile download is: it waits for
 //  Wi-Fi, and it is refused outright in Low Power Mode or while the device is
@@ -132,7 +137,8 @@ final class OfflineCountries {
     /// Whether the launch is still picking up what was coming down. Until it
     /// has, an area it is bringing has no row in ``downloads``, and bringing
     /// the areas to the list would ask for that file a second time, to the
-    /// same staging path, so ``reconcile()`` waits for the launch's own.
+    /// same staging path, so ``bringGainedFiles()`` waits for the launch's
+    /// own.
     @ObservationIgnored private var isRecovering = false
 
     nonisolated static let logger = Logger(subsystem: "OpenHikes", category: "OfflineCountries")
@@ -178,46 +184,37 @@ final class OfflineCountries {
     /// server, and the device's own lists are not ones it cannot read.
     var isAvailable: Bool { server != nil && holdings != .unreadable }
 
-    /// Brings every area down, and not coming down, to *Extra Detail*'s and
-    /// *Elevation Data*'s settings, and to the files the list now names for
-    /// its build. What a switch turned off goes, and the area stays. A
-    /// download under way is left to finish, and brought to them then. An
-    /// area the server has a newer build of is left for its update to bring
-    /// what a switch turned on: the server deletes a build it has moved
-    /// past, and asking for that build's files failed at every launch. So is
-    /// one with a file that would not open, for the hiker's *Try Again*,
-    /// which brings it after: here it would come down again unasked at every
-    /// launch, even where the device only refused a read for the moment.
-    /// Nothing is brought while the launch picks up what was coming down
-    /// (``isRecovering``); the launch brings the areas once it has.
-    private func reconcile() {
+    /// Brings to every area down, and not coming down, the files its build
+    /// has gained on the list that every download takes: its day hikes,
+    /// where it came down before its build listed them. Never what a switch
+    /// decides, which only the hiker's tap brings (``extend(_:)``). An area
+    /// the server has a newer build of is left for its update: the server
+    /// deletes a build it has moved past, and asking for that build's files
+    /// failed at every launch. So is one with a file that would not open,
+    /// for the hiker's *Try Again*, which brings these with it: here it
+    /// would come down again unasked at every launch, even where the device
+    /// only refused a read for the moment. Nothing is brought while the
+    /// launch picks up what was coming down (``isRecovering``); the launch
+    /// brings them once it has.
+    private func bringGainedFiles() {
         guard !isRecovering else { return }
         for record in installed.values where downloads[record.country.id] == nil {
-            let id = record.country.id
-            guard stripUnwanted(record), let kept = installed[id], update(for: id) == nil, !needsRepair(id)
-            else { continue }
-            // What a switch turned on, or a file its build gained since it
-            // came down: its day hikes, or its heights.
-            download(offeredBuild(of: kept) ?? kept.country)
+            guard !needsRepair(record.country.id), let listed = offeredBuild(of: record) else { continue }
+            let gained = Self.gained(by: listed, since: record)
+            if !gained.isEmpty { begin(listed, bringing: gained) }
         }
     }
 
-    /// Deletes from the area `record` is of what a switch turned off, and
-    /// keeps the rest. Answers whether it holds only what the switches ask
-    /// for now, on disk too.
-    private func stripUnwanted(_ record: Record) -> Bool {
-        let unwanted = record.files.filter { !wants($0.role) }
-        return unwanted.isEmpty || strip(unwanted, from: record)
-    }
-
-    /// Whether the switches ask for a file of `role`.
-    private func wants(_ role: OfflineCountryManifest.Role) -> Bool {
+    /// Whether the switches ask for a file of `role`, as one every download
+    /// takes always is.
+    func wants(_ role: OfflineCountryManifest.Role) -> Bool {
         (includesDetail || !role.isDetail) && (includesElevation || !role.isElevation)
     }
 
-    /// Deletes `files`, what a switch turned off, from the area `record` is
-    /// of, which keeps the rest. Answers whether the index on disk says so.
-    private func strip(_ files: [OfflineCountryManifest.File], from record: Record) -> Bool {
+    /// Deletes `files`, what a switch no longer asks for, from the area
+    /// `record` is of, which keeps the rest. Answers whether the index on
+    /// disk says so. Only ``trim(_:)`` calls it, for the hiker's tap.
+    @discardableResult func strip(_ files: [OfflineCountryManifest.File], from record: Record) -> Bool {
         let before = installed
         var stripped = record
         if files.contains(where: \.role.isDetail) { stripped.hasDetail = false }
@@ -233,8 +230,16 @@ final class OfflineCountries {
     /// The area `record` is of, as the list offers it now, where the list
     /// offers the same build: what it names may have grown since the area
     /// came down. `nil` where the list offers another build, or none.
-    private func offeredBuild(of record: Record) -> Country? {
+    func offeredBuild(of record: Record) -> Country? {
         offered.first { $0.id == record.country.id && $0.build == record.country.build }
+    }
+
+    /// The files `listed` names that every download takes and `record`, an
+    /// area down as the same build, does not hold: what the build gained on
+    /// the list since the area came down.
+    nonisolated static func gained(by listed: Country, since record: Record) -> [OfflineCountryManifest.File] {
+        let held = Set(record.files.map(\.fileName))
+        return listed.files.filter { !$0.role.isOptional && !held.contains($0.fileName) }
     }
 
     // MARK: - The list
@@ -260,7 +265,7 @@ final class OfflineCountries {
             offered = manifest.readableCountries
             listPhase = .loaded
             // A build already down may name a file it did not.
-            reconcile()
+            bringGainedFiles()
             await Self.cache(manifest, in: store)
         } catch {
             Self.logger.error("Country list: \(String(describing: error), privacy: .public)")
@@ -270,17 +275,27 @@ final class OfflineCountries {
 
     // MARK: - Downloads
 
-    /// Starts `country`, its update, or the zoom 15 it lacks. A refusal is
-    /// shown on its row. Nothing starts before the device's own lists are
+    /// Starts `country`, or its update, taking what *Extra Detail* and
+    /// *Elevation Data* say as it starts; of an area on the device as that
+    /// build, only what would not open (``filesToFetch(for:)``).
+    func download(_ country: Country) {
+        begin(country, bringing: filesToFetch(for: country))
+    }
+
+    /// Starts a download of `files`, some or all of `country`'s. A refusal
+    /// is shown on its row. Nothing starts before the device's own lists are
     /// read (``Holdings``), and no transfer before the list of downloads
     /// under way names it: a relaunch picks up only what that list names,
     /// and sweeps the staged files of the rest.
-    func download(_ country: Country) {
+    ///
+    /// Of an area already down as that build, `files` holds every file the
+    /// entry names that every download takes and the area lacks
+    /// (``gained(by:since:)``), whatever else it holds: the area's record
+    /// takes the entry once they land, and would name a file never brought.
+    func begin(_ country: Country, bringing files: [OfflineCountryManifest.File]) {
         guard let server, let downloader, holdings == .read,
-              downloads[country.id].map(\.hasFailed) ?? true
+              downloads[country.id].map(\.hasFailed) ?? true, !files.isEmpty
         else { return }
-        let files = filesToFetch(for: country)
-        guard !files.isEmpty else { return }
         let decision = networkDecision()
         let download = OfflineCountryDownload(
             country: country,
@@ -328,28 +343,18 @@ final class OfflineCountries {
         }
     }
 
-    /// What downloading `country` asks for: every file *Extra Detail* and
-    /// *Elevation Data* say, less those of the same build already down and
-    /// opened. One the map could not open is asked for again. Of an area
-    /// down without zoom 15, the rest comes first and zoom 15 after it
-    /// (``reconcile()``): in one download, a zoom 15 that failed would keep
-    /// its day hikes off the device even once they had landed, and turning
-    /// *Extra Detail* off, which stops a download of zoom 15 alone, would not
-    /// stop it. Of one down without its heights, the same holds for them:
-    /// the map's files, then the heights, then zoom 15.
+    /// What downloading `country` asks for. Of an area not on the device, or
+    /// on it as another build, every file *Extra Detail* and *Elevation
+    /// Data* say. Of one on it as that build, the files it holds that the
+    /// map could not open, and with them what its build has gained that
+    /// every download takes: what a switch decides comes to an area already
+    /// down by ``extend(_:)`` alone.
     func filesToFetch(for country: Country) -> [OfflineCountryManifest.File] {
-        let wanted = country.files(withDetail: includesDetail, withElevation: includesElevation)
-        guard let record = installed[country.id], record.country.build == country.build else { return wanted }
+        guard let record = installed[country.id], record.country.build == country.build else {
+            return country.files(withDetail: includesDetail, withElevation: includesElevation)
+        }
         let failed = unopenable[country.id] ?? []
-        let held = Set(record.files.filter { !failed.contains($0.role) }.map(\.fileName))
-        var owed = wanted.filter { !held.contains($0.fileName) }
-        if !record.hasDetail, owed.contains(where: { !$0.role.isDetail }) {
-            owed.removeAll { $0.role.isDetail }
-        }
-        if !record.hasElevation, owed.contains(where: { !$0.role.isElevation }) {
-            owed.removeAll { $0.role.isElevation }
-        }
-        return owed
+        return record.files.filter { failed.contains($0.role) } + Self.gained(by: country, since: record)
     }
 
     /// Stops `id`'s download and keeps nothing it brought. A launch that has
@@ -380,12 +385,6 @@ final class OfflineCountries {
         for staged in Set(files.map(store.stagedURL(for:))) {
             try? FileManager.default.removeItem(at: staged)
         }
-        // A switch turned off while it ran passed this area over, as
-        // ``reconcile()`` passes over any coming down: an update that also
-        // brought the heights left the old build's on the device. What the
-        // switch turned off goes now, and nothing is brought, since the
-        // hiker has just stopped a download.
-        if let record = installed[id] { _ = stripUnwanted(record) }
         return true
     }
 
@@ -491,7 +490,7 @@ final class OfflineCountries {
         // whether it opens; another build's are gone.
         forgetUnopenable(sameBuild ? download.files.map(\.role) : OfflineCountryManifest.Role.allCases, of: country.id)
         writePending { $0.removeAll { $0.country.id == country.id } }
-        reconcile()
+        bringGainedFiles()
     }
 
     /// Fails a download whose files could not be moved into place, or named
@@ -551,38 +550,34 @@ extension OfflineCountries {
 // MARK: - Extra Detail and Elevation Data
 
 extension OfflineCountries {
-    /// Turns *Extra Detail* on, which brings zoom 15 to every area already
-    /// down, or off, which deletes it from them and keeps the areas.
+    /// Turns *Extra Detail* on or off, for the downloads started from now
+    /// on. Nothing on the device changes, and nothing coming down stops:
+    /// each area's row offers the difference (``addition(to:)``,
+    /// ``removal(from:)``).
     func setIncludesDetail(_ isOn: Bool) {
         guard isOn != includesDetail else { return }
         includesDetail = isOn
         defaults?.set(isOn, forKey: SettingsKey.offlineCountriesDetail)
-        if !isOn {
-            // Bringing only zoom 15 to an area already down is no longer wanted.
-            for (id, download) in downloads where download.files.allSatisfy(\.role.isDetail) {
-                cancel(id)
-            }
-        }
-        reconcile()
     }
 
-    /// Turns *Elevation Data* on, which brings the heights to every area
-    /// already down, or off, which deletes them from them and keeps the
-    /// areas.
+    /// Turns *Elevation Data* on or off, on *Extra Detail*'s terms.
     func setIncludesElevation(_ isOn: Bool) {
         guard isOn != includesElevation else { return }
         includesElevation = isOn
         defaults?.set(isOn, forKey: SettingsKey.offlineCountriesElevation)
-        if !isOn {
-            // Bringing only the heights to an area already down is no
-            // longer wanted.
-            for (id, download) in downloads where download.files.allSatisfy(\.role.isElevation) {
-                cancel(id)
-            }
-        }
-        reconcile()
     }
 }
+
+#if DEBUG
+extension OfflineCountries {
+    /// Stands `records` in for the index, for a UI scenario's launch, which
+    /// keeps no archives and reads no index: an area on the device with no
+    /// file behind it. See ``SeededOfflineCountryServer``.
+    func seed(installed records: [Record]) {
+        installed = Dictionary(records.map { ($0.country.id, $0) }, uniquingKeysWith: { first, _ in first })
+    }
+}
+#endif
 
 // MARK: - The archives
 
@@ -669,7 +664,7 @@ extension OfflineCountries {
             await Self.sweep(store, keeping: Array(installed.values), pending: stillWaiting)
         }
         isRecovering = false
-        reconcile()
+        bringGainedFiles()
     }
 
     @concurrent

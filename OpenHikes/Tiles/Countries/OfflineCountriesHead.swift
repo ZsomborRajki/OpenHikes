@@ -18,6 +18,10 @@
 //  the mountains and many times one over ice, so a hiker short of space is
 //  told which to turn off. Each downloaded row says whether it has them.
 //
+//  Neither switch touches an area already down: flipping one changes what
+//  the downloads below it would take, and what each downloaded row offers to
+//  add or to delete (`OfflineCountries+Extras.swift`).
+//
 
 import SwiftUI
 

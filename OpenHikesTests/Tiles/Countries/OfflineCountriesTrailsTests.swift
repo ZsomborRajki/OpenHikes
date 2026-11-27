@@ -108,12 +108,11 @@ struct OfflineCountriesTrailsTests {
         }
     }
 
-    /// With *Extra Detail* on over an area down without its zoom 15. In one
-    /// download with zoom 15, a zoom 15 that failed would keep the day hikes
-    /// off the device once they had landed, and turning *Extra Detail* off,
-    /// which stops a download of zoom 15 alone, would leave both coming.
-    @Test("an area down without its zoom 15 brings its build's day hikes on their own, and then its zoom 15")
-    func dayHikesAheadOfDetail() async throws {
+    /// With *Extra Detail* on over an area down without its zoom 15: the day
+    /// hikes are every download's, and megabytes; the zoom 15 is the
+    /// switch's, and the hiker's to ask for.
+    @Test("an area down without its zoom 15 brings its build's day hikes unasked, and only offers its zoom 15")
+    func dayHikesWithoutDetail() async throws {
         let trails = Self.trails(Self.loop)
         let mapOnly = OfflineCountryFixture.country(bytes: basemap, detail: detail)
         let withTrails = OfflineCountryFixture.country(bytes: basemap, detail: detail, trails: trails)
@@ -130,16 +129,15 @@ struct OfflineCountriesTrailsTests {
             await harness.countries.retry("SI")
             #expect(harness.downloader.requests.map(\.key.role) == [.trails, .trails], "and so does a retry")
             try harness.land([.trails: trails])
-            await settleDelegateHop(until: "the day hikes are in, and zoom 15 is asked for") {
-                harness.countries.downloads["SI"]?.files.map(\.role) == [.detail]
+            await settleDelegateHop(until: "the day hikes are in") {
+                harness.countries.downloads["SI"] == nil
                     && !harness.archives.trailCells(named: [Self.ljubljana]).isEmpty
             }
             #expect(harness.store.installed().first?.country == withTrails)
-
-            harness.countries.setIncludesDetail(false)
-            #expect(harness.countries.downloads["SI"] == nil)
             #expect(harness.store.pending().isEmpty)
             #expect(harness.countries.installed["SI"]?.files.map(\.role) == [.basemap, .trails])
+            #expect(harness.downloader.requests.count == 2, "the zoom 15 is not asked for")
+            #expect(harness.countries.addition(to: "SI")?.files.map(\.role) == [.detail])
         }
     }
 

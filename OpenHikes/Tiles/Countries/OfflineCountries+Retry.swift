@@ -25,26 +25,52 @@ extension OfflineCountries {
     /// offers now, from nothing, where it has a newer one. The list is read
     /// first, or the read already out waited for; where it cannot be read,
     /// the one read last is gone by.
+    ///
+    /// Where the server has moved past a build that is on the device, the
+    /// failed try was adding to it or mending it, and can do neither now.
+    /// It is ended, and the area's row offers the update: a new build is
+    /// the hiker's to start, at the size its row shows.
     func retry(_ id: String) async {
         guard downloads[id]?.hasFailed == true else { return }
         await refreshList()
         // A second tap waited for the same read, and finds this one started.
         guard let failed = downloads[id], failed.hasFailed else { return }
         guard let current = offered.first(where: { $0.id == id }), current.build > failed.country.build else {
-            download(failed.country)
+            let files = filesToRetry(failed)
+            // Nothing of it is asked for any more: a switch was turned off
+            // since, and the row goes back to the area's own.
+            if files.isEmpty { cancel(id) } else { begin(failed.country, bringing: files) }
             return
         }
         // What came down of the old build is no part of the new one, and
         // the new one waits for it to go: kept, it would resume from it.
-        guard cancel(id) else { return }
+        guard cancel(id), installed[id]?.country.build != failed.country.build else { return }
         download(current)
+    }
+
+    /// What trying `failed` again asks for. Of an area not on the device as
+    /// its build, what a download of it takes now (``filesToFetch(for:)``),
+    /// so a switch turned off since the failure leaves its files out. Of
+    /// one that is, what the failed try asked for and no more: less what a
+    /// switch has turned off since, unless the area holds it, and of what
+    /// the area holds only what would not open.
+    private func filesToRetry(_ failed: OfflineCountryDownload) -> [OfflineCountryManifest.File] {
+        let country = failed.country
+        guard let record = installed[country.id], record.country.build == country.build else {
+            return filesToFetch(for: country)
+        }
+        let unopened = unopenable[country.id] ?? []
+        let held = Set(record.files.map(\.fileName))
+        return failed.files.filter { file in
+            held.contains(file.fileName) ? unopened.contains(file.role) : wants(file.role)
+        }
     }
 
     /// Downloads the area `id` as the list has it now, where the map does not
     /// draw it already: a dialog asked for it before the list last changed,
     /// and the build it was shown may be one the server has deleted. Of an
     /// area on the device whose basemap would not open, the same build
-    /// brings only what would not open.
+    /// brings only what would not open, whatever the switches say.
     func downloadListed(_ id: String) {
         guard !isDrawn(id), let country = listedCountry(id) else { return }
         download(country)

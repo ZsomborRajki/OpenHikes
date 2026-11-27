@@ -7,6 +7,13 @@
 //  that reads a download's progress, so a tick re-runs this row and nothing
 //  above it (*Render isolation, in practice*).
 //
+//  A downloaded area that *Extra Detail* and *Elevation Data* no longer
+//  describe carries the difference under its name, as an offer to add what
+//  it lacks or to delete what it holds, each with its size. The switches
+//  change nothing on the device, by the owner's decision, and a tap on an
+//  offer is all the asking there is: no alert stands between it and the
+//  download or the delete (`OfflineCountries+Extras.swift`).
+//
 
 import SwiftUI
 
@@ -29,35 +36,97 @@ struct OfflineCountryRow: View {
 
     var body: some View {
         let download = countries.downloads[country.id]
-        HStack(spacing: 12) {
-            Button(action: onSelect) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(namesCountry ? OfflineCountries.fullName(of: country) : OfflineCountries.name(of: country))
-                        .foregroundStyle(.primary)
-                    status(download)
-                        .font(.footnote)
-                        .foregroundStyle(download?.hasFailed == true || isDamaged(download) ? .red : .secondary)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                Button(action: onSelect) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(namesCountry ? OfflineCountries.fullName(of: country) : OfflineCountries.name(of: country))
+                            .foregroundStyle(.primary)
+                        status(download)
+                            .font(.footnote)
+                            .foregroundStyle(download?.hasFailed == true || isDamaged(download) ? .red : .secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(.rect)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(.rect)
+                .buttonStyle(.plain)
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+                .accessibilityIdentifier("offline-country-\(country.id)")
+                action(download)
             }
-            .buttonStyle(.plain)
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(isSelected ? .isSelected : [])
-            .accessibilityIdentifier("offline-country-\(country.id)")
-            action(download)
+            offers
         }
         .listRowBackground(background.map { Rectangle().fill($0) })
-        .swipeActions { removal(of: download) }
-        .contextMenu { removal(of: download) }
+        .swipeActions { deletion(of: download) }
+        .contextMenu { deletion(of: download) }
     }
+
+    /// What the switches at the head of the list ask of this area that it
+    /// does not match: its zoom 15 or its heights to add, or to delete.
+    /// Nothing while the area is coming down, when the row is the
+    /// download's.
+    @ViewBuilder private var offers: some View {
+        let addition = countries.addition(to: country.id)
+        let removal = countries.removal(from: country.id)
+        if addition != nil || removal != nil {
+            VStack(alignment: .leading, spacing: 0) {
+                if let addition {
+                    offer(addition.additionTitle, systemImage: "arrow.down.circle", identifier: "add", role: nil) {
+                        countries.extend(country.id)
+                    }
+                }
+                if let removal {
+                    offer(removal.removalTitle, systemImage: "minus.circle", identifier: "remove", role: .destructive) {
+                        countries.trim(country.id)
+                    }
+                }
+            }
+            // An offer's words stand in the middle of a tap target's
+            // height, so they are clear of the row's foot without all of
+            // the row's own margin under them.
+            .padding(.bottom, -Self.offerFootOverlap)
+        }
+    }
+
+    /// One offer: a line across the row, the whole of it the button. Its
+    /// glyph is drawn beside its words rather than as a `Label`'s, which a
+    /// list tints with the accent whatever the button's role.
+    private func offer(
+        _ title: String,
+        systemImage: String,
+        identifier: String,
+        role: ButtonRole?,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(role: role, action: action) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: systemImage)
+                    .accessibilityHidden(true)
+                Text(title)
+                    .multilineTextAlignment(.leading)
+            }
+            .font(.subheadline)
+            // Clear of the line above where the words run to a second line,
+            // which a tap target's height alone would not keep them.
+            .padding(.vertical, Self.offerLinePadding)
+            .frame(maxWidth: .infinity, minHeight: AccessibilityMetrics.minimumTapTarget, alignment: .leading)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.borderless)
+        .accessibilityIdentifier("offline-country-\(country.id)-\(identifier)")
+    }
+
+    /// How far the offers reach into the row's bottom margin.
+    private static let offerFootOverlap: CGFloat = 6
+    private static let offerLinePadding: CGFloat = 4
 
     /// What takes the row's area off the device: *Delete* for one that is
     /// downloaded, and for a download that stopped, the cancel its ring
     /// offered while it ran. Without the second a download that can never
     /// finish stayed on its row for good.
     @ViewBuilder
-    private func removal(of download: OfflineCountryDownload?) -> some View {
+    private func deletion(of download: OfflineCountryDownload?) -> some View {
         if download?.hasFailed == true {
             Button("Cancel Download", systemImage: "xmark", role: .destructive) {
                 countries.cancel(country.id)
@@ -92,8 +161,9 @@ struct OfflineCountryRow: View {
         } else if isDamaged(download) {
             Text(Self.message(for: .damaged))
         } else if let record = countries.installed[country.id] {
-            // Whether it has its heights, which *Elevation Data* decides
-            // and the size alone would not say.
+            // Whether it has its heights, which the size alone would not
+            // say, and which *Elevation Data* no longer says either: the
+            // switch is what the hiker means to keep, not what is here.
             if record.hasElevation {
                 Text("Downloaded with elevation · \(Self.bytes(record.byteCount))")
             } else {

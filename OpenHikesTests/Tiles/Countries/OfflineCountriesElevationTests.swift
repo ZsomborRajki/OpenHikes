@@ -4,10 +4,11 @@
 //
 //  An area's heights: the squares of the elevation archive over it, which a
 //  download takes beside its map, so a line there is given its heights with
-//  no signal. An area already down when its build gained them brings them,
-//  and only them, the next time the list is read; and of two areas that
-//  cover a square, the newer build's answers. *Elevation Data*, the switch
-//  that decides whether they come, is `OfflineCountriesElevationSwitchTests`.
+//  no signal. An area already down when its build gained them offers them
+//  the next time the list is read, and brings them, and only them, at the
+//  hiker's tap; and of two areas that cover a square, the newer build's
+//  answers. *Elevation Data*, the switch that says whether a download takes
+//  them, is `OfflineCountriesElevationSwitchTests`.
 //
 
 import CoreLocation
@@ -78,7 +79,7 @@ struct OfflineCountriesElevationTests {
         }
     }
 
-    @Test("an area down before its build listed its heights brings them, and only them, at the next read of the list")
+    @Test("an area down before its build listed its heights offers them at the next read of the list, for a tap")
     func gainedByABuildAlreadyDown() async throws {
         let elevation = Self.elevation(Self.level(295))
         let mapOnly = OfflineCountryFixture.country(bytes: basemap)
@@ -96,6 +97,9 @@ struct OfflineCountriesElevationTests {
             harness.server.serve(OfflineCountryFixture.manifest([withHeights]))
             await harness.countries.refreshList()
 
+            #expect(harness.downloader.requests.count == asked, "gigabytes, for some areas, and nobody asked")
+            #expect(harness.countries.addition(to: "SI")?.extras == .elevation)
+            harness.countries.extend("SI")
             #expect(harness.downloader.requests.dropFirst(asked).map(\.key.role) == [.elevation])
             #expect(harness.countries.isDrawn("SI"), "the map is drawn while they come")
             try harness.land([.elevation: elevation])

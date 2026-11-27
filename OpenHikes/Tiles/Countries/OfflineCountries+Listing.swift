@@ -88,7 +88,8 @@ extension OfflineCountries {
     }
 
     /// What downloading `country` costs, as *Extra Detail* and *Elevation
-    /// Data* stand: of an area on the device, only the files it would bring.
+    /// Data* stand: of an area on the device as that build, only the files
+    /// that would not open, which is all a download of it brings.
     func byteCount(of country: Country) -> Int64 {
         filesToFetch(for: country).reduce(0) { $0 + $1.byteCount }
     }
