@@ -337,11 +337,17 @@ extension Tool {
 
 extension Tool {
     /// Cuts a file of `role` for every area `--manifest` lists, or those
-    /// `--only` names, along the outline it lists and for the build it lists
-    /// each at, into `--out` with a manifest of those areas, each with the
-    /// new file in place of any of its role it had: what `trails` and
-    /// `elevation` bring to builds already up, which `upload` then puts
-    /// beside them.
+    /// `--only` names, for the build it lists each at, into `--out` with a
+    /// manifest of those areas, each with the new file in place of any of
+    /// its role it had: what `trails` and `elevation` bring to builds already
+    /// up, which `upload` then puts beside them.
+    ///
+    /// **Along the outline the area's map was cut along**, read again out of
+    /// the pinned Natural Earth files (`--countries`, `--outlines`,
+    /// `--regions`), never the one the list carries. That one is simplified
+    /// for the map to draw, and leaves out a ring too small to draw: Nihoa,
+    /// which Hawaii's map takes in, and whose heights a cut along the list's
+    /// outline left out.
     static func addToListed(
         _ options: Options,
         role: OfflineCountryManifest.Role,
@@ -351,6 +357,16 @@ extension Tool {
             OfflineCountryManifest.self,
             from: Data(contentsOf: URL(fileURLWithPath: options.required("manifest")))
         )
+        let plan = try JSONDecoder().decode(
+            AreaPlan.self,
+            from: Data(contentsOf: URL(fileURLWithPath: options.required("countries")))
+        )
+        let areas = try Areas.all(
+            plan: plan,
+            countries: Outlines.features(at: URL(fileURLWithPath: options.required("outlines"))),
+            regions: Outlines.features(at: URL(fileURLWithPath: options.required("regions")))
+        )
+        let outlines = Dictionary(areas.map { ($0.id, $0.rings) }, uniquingKeysWith: { first, _ in first })
         let output = URL(fileURLWithPath: options.required("out"), isDirectory: true)
         var countries = listed.countries
         if let only = options.optional("only") {
@@ -364,7 +380,9 @@ extension Tool {
         for (index, listedCountry) in countries.enumerated() {
             print("[\(index + 1)/\(countries.count)] \(listedCountry.id), build \(listedCountry.build)")
             var country = listedCountry
-            let rings = country.outline.map { ring in ring.compactMap { $0.count >= 2 ? (lon: $0[0], lat: $0[1]) : nil } }
+            guard let rings = outlines[country.id] else {
+                fail("\(country.id) is no area of the pinned outlines, so nothing says what its map was cut along")
+            }
             let file = try await cut(country, rings, output)
             country.files.removeAll { $0.role == role }
             country.files.append(file)

@@ -40,8 +40,9 @@ enum TrailSquares {
     /// cover's do.
     static let cover = SquareCover(perDegree: TrailCellGrid.cellsPerDegree)
 
-    /// Every square with its middle inside `rings`, every square a vertex of
-    /// them is in, and every square within `marginKilometers` of those.
+    /// Every square with its middle inside `rings`, every square an edge of
+    /// them passes through, and every square within `marginKilometers` of
+    /// those.
     static func squares(rings: [Ring], marginKilometers: Double) -> [TrailCell] {
         cover.squares(rings: rings, marginKilometers: marginKilometers).map { TrailCell(row: $0.row, column: $0.column) }
     }
@@ -189,12 +190,12 @@ extension Tool {
     }
 
     /// `trails --manifest <manifest.json> --trails <archive> --trails-name
-    /// <name> --out <dir>`: the day hikes of every area `manifest` lists, or
-    /// those `--only` names, cut along the outline it lists them with and
-    /// named for the build it lists them at, into `<dir>` with a manifest of
-    /// those areas, each with the file added in place of any it had. What
-    /// brings the squares to builds already up, which `upload` then puts
-    /// beside them.
+    /// <name> --out <dir>` with the outlines `build` takes: the day hikes of
+    /// every area `manifest` lists, or those `--only` names, cut along the
+    /// outline its map was cut along and named for the build it lists them
+    /// at, into `<dir>` with a manifest of those areas, each with the file
+    /// added in place of any it had. What brings the squares to builds
+    /// already up, which `upload` then puts beside them.
     static func trails(_ options: Options) async throws {
         guard let source = try await trailsSource(options) else { fail("trails needs --trails") }
         let server = options.optional("server").flatMap(URL.init(string:))

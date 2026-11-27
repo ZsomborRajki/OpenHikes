@@ -49,9 +49,9 @@ struct SquareCover {
         )
     }
 
-    /// Every square with its middle inside `rings`, every square a vertex of
-    /// them is in, and every square within `marginKilometers` of those, row
-    /// by row from the south.
+    /// Every square with its middle inside `rings`, every square an edge of
+    /// them passes through, and every square within `marginKilometers` of
+    /// those, row by row from the south.
     func squares(rings: [Ring], marginKilometers: Double) -> [Square] {
         let rows = grown(inside(rings), by: marginKilometers)
         return rows.keys.sorted().flatMap { row in
@@ -59,7 +59,8 @@ struct SquareCover {
         }
     }
 
-    /// The squares `rings` cover, as runs of columns along each row.
+    /// The squares `rings` cover, as runs of columns along each row: those
+    /// whose middles they hold, and those their edges pass through.
     func inside(_ rings: [Ring]) -> [Int: [ClosedRange<Int>]] {
         let perDegree = Double(self.perDegree)
         var runs: [Int: [ClosedRange<Int>]] = [:]
@@ -86,13 +87,62 @@ struct SquareCover {
                 if west <= east { runs[row, default: []].append(west...east) }
             }
         }
-        // Every vertex's own square, so a sliver no square's middle falls in
-        // is still there.
-        for vertex in rings.joined() {
-            let square = square(containingLatitude: vertex.lat, longitude: vertex.lon)
-            runs[square.row, default: []].append(square.column...square.column)
+        // Every square an edge passes through, its ends' included, so a
+        // sliver no square's middle falls in is still there: a long edge
+        // across a square whose middle lies outside, with neither end in it,
+        // took in no square between its ends, and a margin grown from those
+        // ends did not reach the middle of it (Svalbard's east coast in
+        // Norway's heights, at 80.1° N, 32.1° E).
+        for ring in rings where !ring.isEmpty {
+            for (index, end) in ring.enumerated() {
+                let start = ring[index == 0 ? ring.count - 1 : index - 1]
+                for square in squares(from: start, to: end) {
+                    runs[square.row, default: []].append(square.column...square.column)
+                }
+            }
         }
         return runs.mapValues(TileCoverage.merged)
+    }
+
+    /// The squares the straight edge from `start` to `end` passes through,
+    /// in degrees as the grid is laid out, from the square of one end to the
+    /// square of the other: a step across a square's side at a time, to
+    /// whichever side the edge reaches first.
+    func squares(from start: (lon: Double, lat: Double), to end: (lon: Double, lat: Double)) -> [Square] {
+        let perDegree = Double(self.perDegree)
+        let (x0, y0) = ((start.lon + 180) * perDegree, (start.lat + 90) * perDegree)
+        let (x1, y1) = ((end.lon + 180) * perDegree, (end.lat + 90) * perDegree)
+        guard x0.isFinite, y0.isFinite, x1.isFinite, y1.isFinite else { return [] }
+        var x = Int(x0.rounded(.down))
+        var y = Int(y0.rounded(.down))
+        let (lastX, lastY) = (Int(x1.rounded(.down)), Int(y1.rounded(.down)))
+        let (dx, dy) = (x1 - x0, y1 - y0)
+        let (stepX, stepY) = (dx > 0 ? 1 : -1, dy > 0 ? 1 : -1)
+        // How far along the edge, from 0 to 1, it next crosses a column's
+        // side and a row's, and how far it goes between two of each.
+        var nextX = dx == 0 ? Double.infinity : (Double(dx > 0 ? x + 1 : x) - x0) / dx
+        var nextY = dy == 0 ? Double.infinity : (Double(dy > 0 ? y + 1 : y) - y0) / dy
+        let (acrossX, acrossY) = (dx == 0 ? Double.infinity : 1 / abs(dx), dy == 0 ? Double.infinity : 1 / abs(dy))
+        var crossed = [square(atColumn: x, row: y)]
+        // One step a side crossed: as many as there are between the ends'
+        // squares, so the walk ends even where rounding puts it a side off.
+        for _ in 0..<(abs(lastX - x) + abs(lastY - y)) {
+            if nextX < nextY {
+                x += stepX
+                nextX += acrossX
+            } else {
+                y += stepY
+                nextY += acrossY
+            }
+            crossed.append(square(atColumn: x, row: y))
+        }
+        return crossed
+    }
+
+    /// The square at a column and row of the grid as the walk counts them,
+    /// on from either end of the columns round the antimeridian.
+    private func square(atColumn column: Int, row: Int) -> Square {
+        Square(row: min(rowCount - 1, max(0, row)), column: (column % columnCount + columnCount) % columnCount)
     }
 
     /// `rows` grown by `marginKilometers` each way: rows by the square's

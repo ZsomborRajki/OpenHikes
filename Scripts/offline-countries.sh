@@ -77,7 +77,9 @@
 #             another, 5 km round the outline by default.
 #   trails    Cut the day hikes of every area the server's manifest lists, or
 #             only those --only names, for the build it lists each at and
-#             along the outline it lists, into <dir> (default
+#             along the Natural Earth outline its map was cut along (the
+#             list's own is simplified, and leaves out small islands), into
+#             <dir> (default
 #             .build/offline-countries/trails) with a manifest of those areas
 #             with the file added: what brings the squares to a build already
 #             up, which `upload <dir>` then puts beside it. Takes build's
@@ -596,8 +598,14 @@ trails() {
     status="$(r2_curl -o "$manifest" -w "%{http_code}" "$(r2_url countries/manifest.json)")"
     [[ "$status" == 200 ]] || die "R2 answered $status for countries/manifest.json"
     echo "offline-countries: cutting the day hikes of the listed areas from $trails_file"
+    # The outlines the map was cut along, which the file is cut along too.
+    local outline_file region_file
+    outline_file="$(natural_earth_file "$outlines_url" "$outlines_sha256")"
+    region_file="$(natural_earth_file "$regions_url" "$regions_sha256")"
     local arguments=(trails --manifest "$manifest" --trails "$trails_file" --trails-name "$trails_name"
-        --trails-margin-km "$trails_margin" --out "$out" --server "https://tiles.openhikes.app")
+        --trails-margin-km "$trails_margin" --out "$out" --server "https://tiles.openhikes.app"
+        --countries "$repository_root/Scripts/lib/offline-countries.json"
+        --outlines "$outline_file" --regions "$region_file")
     [[ -z "$only" ]] || arguments+=(--only "$only")
     "$tool" "${arguments[@]}"
     echo "offline-countries: built into $out; Scripts/offline-countries.sh upload $out puts them up"
@@ -625,9 +633,15 @@ elevation() {
     status="$(r2_curl -o "$manifest" -w "%{http_code}" "$(r2_url countries/manifest.json)")"
     [[ "$status" == 200 ]] || die "R2 answered $status for countries/manifest.json"
     echo "offline-countries: cutting the heights of the listed areas from $elevation_file"
+    # The outlines the map was cut along, which the file is cut along too.
+    local outline_file region_file
+    outline_file="$(natural_earth_file "$outlines_url" "$outlines_sha256")"
+    region_file="$(natural_earth_file "$regions_url" "$regions_sha256")"
     local arguments=(elevation --manifest "$manifest" --elevation "$elevation_file"
         --elevation-name "$elevation_name" --elevation-margin-km "$elevation_margin"
-        --out "$out" --server "https://tiles.openhikes.app")
+        --out "$out" --server "https://tiles.openhikes.app"
+        --countries "$repository_root/Scripts/lib/offline-countries.json"
+        --outlines "$outline_file" --regions "$region_file")
     [[ -z "$only" ]] || arguments+=(--only "$only")
     "$tool" "${arguments[@]}"
     echo "offline-countries: built into $out; Scripts/offline-countries.sh upload $out puts them up"
