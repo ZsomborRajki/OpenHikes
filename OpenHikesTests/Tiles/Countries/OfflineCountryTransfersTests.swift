@@ -5,8 +5,9 @@
 //  Which session task a country file's callbacks are taken from, as the
 //  background session's callbacks ask it: the task this launch last started
 //  for the file, kept once it has ended; an earlier launch's task where this
-//  launch started none; and nothing of an area a cancel ended, until a task
-//  is started for it again. Held without a session.
+//  launch started none; and nothing of an area a cancel ended, or of a file
+//  one ended on its own, until a task is started for it again. Held without
+//  a session.
 //
 
 import Foundation
@@ -98,6 +99,27 @@ struct OfflineCountryTransfersTests {
         #expect(transfers.takes(transfer(basemap, 3)))
         #expect(!transfers.takes(transfer(basemap, 1)))
         #expect(!transfers.takes(transfer(extras, 9)), "only the file started again is taken")
+    }
+
+    /// A try made again for fewer files stops the files it no longer asks
+    /// for, and the rest of its area is still coming.
+    @Test("a cancel of one file refuses its tasks, an earlier launch's too, and leaves its area's others taken")
+    func cancelRefusesTheFileAlone() {
+        var transfers = OfflineCountryTransfers()
+        transfers.start(transfer(basemap, 1), stagingAt: staging)
+        transfers.start(transfer(extras, 2), stagingAt: staging)
+        transfers.cancel(extras)
+
+        #expect(!transfers.takes(transfer(extras, 2)))
+        #expect(land(transfer(extras, 2), in: &transfers) == nil, "nothing is staged for it")
+        #expect(end(transfer(extras, 2), in: &transfers) == .refused)
+        #expect(!transfers.takes(transfer(extras, 9)), "an earlier launch's task of the file")
+        #expect(transfers.takes(transfer(basemap, 1)), "its area's other file is still coming")
+        #expect(land(transfer(basemap, 1), in: &transfers) == staging)
+
+        transfers.start(transfer(extras, 3), stagingAt: staging)
+        #expect(transfers.takes(transfer(extras, 3)), "asked for again, it is taken")
+        #expect(!transfers.takes(transfer(extras, 2)))
     }
 
     @Test("an earlier launch's task is taken, and staged where the model looks for it")

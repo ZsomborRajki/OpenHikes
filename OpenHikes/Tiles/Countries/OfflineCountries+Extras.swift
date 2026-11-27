@@ -63,12 +63,13 @@ extension OfflineCountries {
     ///
     /// `nil` where it lacks none of it, and where it cannot be brought on
     /// its own: while a download of the area is under way or has failed,
-    /// whose row is that download's; while a file of it will not open, which
-    /// is mended first; and where the list does not offer the build that is
+    /// whose row is that download's, or the launch may yet pick one up for
+    /// it (``recovering``); while a file of it will not open, which is
+    /// mended first; and where the list does not offer the build that is
     /// down. A newer build is an update, which takes what the switches say
     /// as any download does, and the server deletes the build it moved past.
     func addition(to id: String) -> OfflineCountryOffer? {
-        guard let record = installed[id], downloads[id] == nil, !needsRepair(id),
+        guard let record = installed[id], isSettled(id), !needsRepair(id),
               let listed = offeredBuild(of: record)
         else { return nil }
         let held = Set(record.files.map(\.fileName))
@@ -82,10 +83,11 @@ extension OfflineCountries {
 
     /// What the area `id` holds that the switches no longer ask for, for its
     /// row to offer and ``trim(_:)`` to delete. `nil` where it holds none,
-    /// and while a download of the area is under way or has failed. Offered
-    /// whatever the list says, since deleting needs no server.
+    /// and while a download of the area is under way or has failed, or the
+    /// launch may yet pick one up for it. Offered whatever the list says,
+    /// since deleting needs no server.
     func removal(from id: String) -> OfflineCountryOffer? {
-        guard let record = installed[id], downloads[id] == nil else { return nil }
+        guard let record = installed[id], isSettled(id) else { return nil }
         let unasked = record.files.filter { !wants($0.role) }
         guard !unasked.isEmpty else { return nil }
         return OfflineCountryOffer(extras: Self.extras(of: unasked), files: unasked)
@@ -106,6 +108,17 @@ extension OfflineCountries {
     func trim(_ id: String) {
         guard let record = installed[id], let offer = removal(from: id) else { return }
         strip(offer.files, from: record)
+    }
+
+    /// Whether nothing is coming down for the area `id`, and nothing may
+    /// be: it has no download, and the launch is not still to pick one up
+    /// for it. Between a relaunch listing the areas and the session saying
+    /// what it is bringing, an area has no row for a download that is
+    /// running. Offered then, *Add* started a second transfer of the same
+    /// file, and *Remove* deleted from the build that is down what the
+    /// update picked up a moment later put back.
+    private func isSettled(_ id: String) -> Bool {
+        downloads[id] == nil && !recovering.contains(id)
     }
 
     nonisolated private static func extras(of files: [OfflineCountryManifest.File]) -> OfflineCountryExtras {

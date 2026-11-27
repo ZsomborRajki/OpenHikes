@@ -198,6 +198,49 @@ struct OfflineCountriesExtrasTests {
         }
     }
 
+    /// The heights failed while the zoom 15 was still coming, and the
+    /// hiker made the try again with *Extra Detail* off. The zoom 15 left
+    /// running came down in full, on no row and in no count of the room
+    /// left, for the next launch to sweep.
+    @Test("trying a failed addition again for less stops the transfer it no longer asks for, and what it staged goes")
+    func retryingForLessStopsTheRest() async throws {
+        try await OfflineCountryFixture.withDirectory { directory in
+            let extras15 = OfflineCountryFixture.archive(
+                [VectorTileAddress(z: 15, x: 17_704, y: 11_649): Data("extras15".utf8)],
+                maximumZoom: 15,
+                minimumZoom: 15
+            )
+            var listed = slovenia()
+            listed.files.append(OfflineCountryFixture.file(
+                .detailExtras,
+                name: "SI-detail-extras-\(listed.build).pmtiles",
+                bytes: extras15
+            ))
+            let harness = try await launch(in: directory, holding: [.basemap: basemap], offering: [listed])
+            harness.countries.extend("SI")
+            // One file of the zoom 15 is down, the other still coming.
+            try harness.downloader.land(.detailExtras, as: extras15)
+            let staged = try #require(
+                listed.files.first { $0.role == .detailExtras }.map { harness.store.stagedURL(for: $0) }
+            )
+            #expect(FileManager.default.fileExists(atPath: staged.path))
+            harness.downloader.fail(.elevation, resumeData: nil)
+
+            harness.countries.setIncludesDetail(false)
+            await harness.countries.retry("SI")
+
+            #expect(harness.countries.downloads["SI"]?.files.map(\.role) == [.elevation])
+            #expect(Set(harness.downloader.cancelledFiles.map(\.role)) == [.detail, .detailExtras])
+            #expect(harness.downloader.cancelled.isEmpty, "the heights are still asked for")
+            #expect(!FileManager.default.fileExists(atPath: staged.path), "what it staged is nobody's")
+            #expect(harness.store.pending().map(\.roles) == [[.elevation]])
+
+            try harness.downloader.land(.elevation, as: elevation)
+            await settleDelegateHop(until: "the heights are in") { harness.countries.downloads["SI"] == nil }
+            #expect(harness.countries.installed["SI"]?.files.map(\.role) == [.basemap, .elevation])
+        }
+    }
+
     /// Without this the row stayed failed for good: nothing was left for
     /// *Try Again* to ask for, and it asked for nothing.
     @Test("trying a failed addition again once its switch is off ends it, and leaves the area as it was")

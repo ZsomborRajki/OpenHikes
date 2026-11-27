@@ -187,10 +187,11 @@ struct OfflineCountriesRetryTests {
         }
     }
 
-    /// The background session cancels by area, not by file, so a try with
-    /// fewer files than the one it replaced leaves that one's other
-    /// transfers running.
-    @Test("a transfer the try that replaced a failed one does not ask for leaves it alone")
+    /// One file failing stops none of a download's others, so the zoom 15
+    /// was still coming when the try was made again without it. Left
+    /// running, it came down in full for nothing; stopped, what it still
+    /// says is no part of the try that replaced it.
+    @Test("a try made again for fewer files stops the transfer it no longer asks for, and takes nothing more from it")
     func strayTransfer() async throws {
         try await OfflineCountryFixture.withDirectory { directory in
             let country = OfflineCountryFixture.country(bytes: basemap, detail: detail)
@@ -198,8 +199,13 @@ struct OfflineCountriesRetryTests {
             setup.countries.download(country)
             setup.downloader.fail(.basemap, resumeData: nil)
             setup.countries.setIncludesDetail(false)
+            #expect(setup.downloader.cancelledFiles.isEmpty, "the switch stops nothing")
             await setup.countries.retry("SI")
             #expect(setup.countries.downloads["SI"]?.files.map(\.role) == [.basemap])
+            #expect(setup.downloader.cancelledFiles == [
+                OfflineCountryDownloadKey(country: "SI", build: country.build, role: .detail),
+            ])
+            #expect(setup.downloader.cancelled.isEmpty, "the area's other file is still asked for")
 
             setup.downloader.progress(.detail, Int64(detail.count))
             #expect(setup.countries.downloads["SI"]?.writtenBytes == 0)

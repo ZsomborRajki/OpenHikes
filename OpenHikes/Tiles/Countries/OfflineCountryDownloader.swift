@@ -97,6 +97,9 @@ protocol OfflineCountryDownloading: AnyObject {
         resumeData: Data?
     ) -> Int
     func cancel(country: String)
+    /// Stops the one file `key` names, and leaves its area's others
+    /// running: what a try made again for fewer files no longer asks for.
+    func cancel(_ key: OfflineCountryDownloadKey)
     /// The files still coming down, after a relaunch, with what each has
     /// written so far.
     func running() async -> [OfflineCountryDownloadKey: Int64]
@@ -158,7 +161,18 @@ final class BackgroundCountryDownloader: OfflineCountryDownloading {
     func cancel(country: String) {
         // First, so whatever any of its tasks says from now on is dropped.
         callbacks.cancel(country: country)
-        for (key, task) in started where key.country == country {
+        cancelTasks { $0.country == country }
+    }
+
+    func cancel(_ key: OfflineCountryDownloadKey) {
+        // First, as for an area.
+        callbacks.cancel(key)
+        cancelTasks { $0 == key }
+    }
+
+    /// Cancels the session's tasks for the files `isMeant` picks.
+    private func cancelTasks(for isMeant: @escaping @Sendable (OfflineCountryDownloadKey) -> Bool) {
+        for (key, task) in started where isMeant(key) {
             task.cancel()
             started[key] = nil
         }
@@ -168,7 +182,7 @@ final class BackgroundCountryDownloader: OfflineCountryDownloading {
             onMainActor { [self] in
                 let current = Set(started.values.map(\.taskIdentifier))
                 for task in tasks where !current.contains(task.taskIdentifier)
-                    && task.taskDescription.flatMap(OfflineCountryDownloadKey.init)?.country == country {
+                    && task.taskDescription.flatMap(OfflineCountryDownloadKey.init).map(isMeant) == true {
                     task.cancel()
                 }
             }
@@ -223,6 +237,10 @@ final class BackgroundCountryDownloader: OfflineCountryDownloading {
 
         func cancel(country: String) {
             state.withLock { $0.transfers.cancel(country: country) }
+        }
+
+        func cancel(_ key: OfflineCountryDownloadKey) {
+            state.withLock { $0.transfers.cancel(key) }
         }
 
         /// The transfer `task` is. ``OfflineCountryTransfers`` says whether

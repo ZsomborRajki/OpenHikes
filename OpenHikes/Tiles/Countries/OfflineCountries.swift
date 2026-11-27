@@ -109,6 +109,16 @@ final class OfflineCountries {
     /// Whether an area brings its heights too: *Elevation Data*.
     private(set) var includesElevation: Bool
     private(set) var holdings = Holdings.unread
+    /// The areas the launch may yet pick a download up for: those the list
+    /// of downloads under way named as it began, until
+    /// ``resumePending(_:)`` has reached each, or the hiker has cancelled
+    /// it. Such an area has no row in ``downloads``, though the session may
+    /// be bringing its files. So nothing is started for it, and its row
+    /// offers nothing: a second transfer of a file would write over the
+    /// first's, and what a tap deleted, the download picked up a moment
+    /// later would put back. Observed, so a row offers again once the
+    /// launch has passed its area.
+    private(set) var recovering: Set<String> = []
     /// The files of each downloaded area that the archives' last opening
     /// could not open, by area code: still the index's, and on no map.
     private(set) var unopenable: [String: Set<OfflineCountryManifest.Role>] = [:]
@@ -292,8 +302,11 @@ final class OfflineCountries {
     /// entry names that every download takes and the area lacks
     /// (``gained(by:since:)``), whatever else it holds: the area's record
     /// takes the entry once they land, and would name a file never brought.
+    ///
+    /// Nothing starts for an area the launch may yet pick a download up for
+    /// (``recovering``).
     func begin(_ country: Country, bringing files: [OfflineCountryManifest.File]) {
-        guard let server, let downloader, holdings == .read,
+        guard let server, let downloader, holdings == .read, !recovering.contains(country.id),
               downloads[country.id].map(\.hasFailed) ?? true, !files.isEmpty
         else { return }
         let decision = networkDecision()
@@ -304,7 +317,8 @@ final class OfflineCountries {
         )
         // Before any refusal, so that one keeps what an earlier try got down
         // and the next try asks only for the rest.
-        if let previous = downloads[country.id] { download.resume(from: previous) }
+        let previous = downloads[country.id]
+        if let previous { download.resume(from: previous) }
         downloads[country.id] = download
         if decision.reason == "low-power-mode" || decision.reason == "thermal" {
             download.set(.failed(.conserving))
@@ -327,6 +341,7 @@ final class OfflineCountries {
             download.set(.failed(.space))
             return
         }
+        if let previous { abandon(previous, besides: download) }
         // A file a transfer is still out for is left to it: a sibling's
         // failure is what this retries.
         for file in files where download.staged[file.role] == nil && !download.inFlight.contains(file.role) {
@@ -379,6 +394,8 @@ final class OfflineCountries {
         }
         guard downloads[id] != nil || !waiting.isEmpty else { return true }
         if mayBeListed, !writePending({ $0.removeAll { $0.country.id == id } }) { return false }
+        // Off the list, so the launch picks nothing up for it any more.
+        recovering.remove(id)
         let download = downloads.removeValue(forKey: id)
         downloader?.cancel(country: id)
         let files = (download?.files ?? []) + waiting.flatMap(\.files)
@@ -422,10 +439,11 @@ final class OfflineCountries {
 
     /// The download a transfer is for: of its area and build, asking for its
     /// file, and by that transfer. A try that replaced a failed one with
-    /// fewer files, once *Extra Detail* was turned off, leaves the earlier
-    /// try's other transfers running, and they are no part of it; nor is a
-    /// transfer a cancel ended, whose events can still arrive after the same
-    /// file was asked for again under the same key.
+    /// fewer files, once *Extra Detail* was turned off, stops the earlier
+    /// try's other transfers (``abandon(_:besides:)``), whose last events
+    /// can still arrive, and they are no part of it; nor is a transfer a
+    /// cancel ended, whose events can still arrive after the same file was
+    /// asked for again under the same key.
     private func download(for transfer: OfflineCountryTransfer) -> OfflineCountryDownload? {
         let key = transfer.key
         guard let download = downloads[key.country], download.country.build == key.build,
@@ -507,6 +525,29 @@ final class OfflineCountries {
 
     private static func key(_ country: Country, _ file: OfflineCountryManifest.File) -> OfflineCountryDownloadKey {
         OfflineCountryDownloadKey(country: country.id, build: country.build, role: file.role)
+    }
+}
+
+// MARK: - A try that asks for less
+
+extension OfflineCountries {
+    /// Stops what `previous`, the failed try `download` replaces, was
+    /// bringing that `download` does not ask for, and deletes what it had
+    /// staged of it: the zoom 15 of a try made again with *Extra Detail*
+    /// turned off, or the heights with *Elevation Data* off. One file
+    /// failing stops none of a download's others, so such a transfer was
+    /// still out, and left alone it ran on to the end, gigabytes on no row
+    /// and in no count of the room left, staged for the next launch's sweep.
+    ///
+    /// Called only once the list of downloads under way names `download`
+    /// alone, so what it stops is on no list: stopped while a list still
+    /// named it, a relaunch would bring it back as a download that failed.
+    private func abandon(_ previous: OfflineCountryDownload, besides download: OfflineCountryDownload) {
+        let kept = Set(download.files.map(\.fileName))
+        for file in previous.files where !kept.contains(file.fileName) {
+            downloader?.cancel(Self.key(previous.country, file))
+            try? FileManager.default.removeItem(at: store.stagedURL(for: file))
+        }
     }
 }
 
@@ -642,6 +683,9 @@ extension OfflineCountries {
         }
         holdings = .read
         isRecovering = true
+        // With the areas, in the one turn: no row is drawn for an area
+        // between its being listed and its being held for the launch.
+        recovering = Set(waiting.map(\.country.id))
         installed = Dictionary(records.map { ($0.country.id, $0) }, uniquingKeysWith: { first, _ in first })
         // Megabytes of outlines, so read off the main actor; and a list
         // fetched while it was read is newer.
@@ -657,6 +701,7 @@ extension OfflineCountries {
             if !records.isEmpty { archivesDidChange() }
         }
         await resumePending(waiting)
+        recovering = []
         // After the recovery, which may have installed what landed while the
         // app was away: swept against the records from before it, that would
         // go with everything nothing else owns.
@@ -728,6 +773,8 @@ extension OfflineCountries {
         guard !pending.isEmpty else { return }
         let running = await downloader?.running() ?? [:]
         for entry in pending {
+            // Reached: from here its area has its row, or is nobody's.
+            defer { recovering.remove(entry.country.id) }
             guard store.pending().contains(entry),
                   downloads[entry.country.id]?.hasStartedTransfers != true
             else { continue }

@@ -245,6 +245,8 @@ final class StubCountryDownloader: OfflineCountryDownloading {
     var onEvent: ((OfflineCountryDownloadEvent) -> Void)?
     private(set) var requests: [Request] = []
     private(set) var cancelled: [String] = []
+    /// The files stopped on their own, their areas' others left running.
+    private(set) var cancelledFiles: [OfflineCountryDownloadKey] = []
     /// What a relaunch finds still coming down.
     var stillRunning: [OfflineCountryDownloadKey: Int64] = [:]
     /// Whether ``running()`` keeps its caller waiting until
@@ -268,6 +270,10 @@ final class StubCountryDownloader: OfflineCountryDownloading {
 
     func cancel(country: String) {
         cancelled.append(country)
+    }
+
+    func cancel(_ key: OfflineCountryDownloadKey) {
+        cancelledFiles.append(key)
     }
 
     func running() async -> [OfflineCountryDownloadKey: Int64] {
