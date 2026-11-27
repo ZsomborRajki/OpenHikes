@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "revision": 12,
+  "revision": 13,
   "basemaps": [
     { "name": "planet-20261124", "schema": 4, "maximumZoom": 15 }
   ],
@@ -18,5 +18,8 @@
   ],
   "places": [
     { "name": "places-20261124-16", "generation": 1, "zoom": 9 }
+  ],
+  "elevation": [
+    { "name": "elevation-20261126-20", "generation": 1, "zoom": 12 }
   ]
 }

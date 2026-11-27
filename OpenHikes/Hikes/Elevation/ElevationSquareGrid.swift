@@ -26,8 +26,9 @@
 //  45 beside the poles. Around 14 by 9 km at 47°N, so a twenty-kilometre
 //  trail reads two to four of them and the whole of a valley's hikes a dozen.
 //  Packed (``ElevationSquareFile``) one is about 100 KB in the Alps, 30 KB on
-//  a plain and nothing at sea, which has no square at all. Measured on a
-//  random 30 of Copernicus' 26,450 tiles, the world comes to some 60 GB.
+//  a plain and nothing at sea, which has no square at all. The world, built
+//  on 2026-11-26, is 1,464,930 squares and 66.4 GB, 45 KB a square: 229,470
+//  more were sea level throughout and are not there.
 //
 //  Rows are counted from the North Pole and columns east from the
 //  antimeridian, as Copernicus' rows and columns run, so a degree tile is the
