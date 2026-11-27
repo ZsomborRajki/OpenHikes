@@ -81,6 +81,7 @@ extension Tool {
         guard archive.header.isClustered else { fail("the cut is not clustered") }
         try checkAreas()
         let squares = try await checkTrails(in: directory)
+        checkEdges()
         let heights = try await checkElevationCut(in: directory)
         print("""
         offline-countries: selftest passed (\(wanted.count) tiles cut, \(tiles.count) in the world, \
@@ -172,6 +173,20 @@ extension Tool {
             fail("the margin does not go round the pole")
         }
         return covered.count
+    }
+
+    /// An edge takes in every square it crosses: a sliver along 80°N, all of
+    /// it south of its row's middle line and its ends sixteen columns
+    /// apart, with no margin round it, still covers the squares between.
+    static func checkEdges() {
+        let sliver: Ring = [(10.0, 80.01), (12.0, 80.02), (10.0, 80.015)]
+        let covered = Set(ElevationSquares.squares(rings: [sliver], marginKilometers: 0))
+        for longitude in stride(from: 10.0, through: 12.0, by: 0.1) {
+            let square = ElevationSquares.square(
+                of: ElevationSquares.cover.square(containingLatitude: 80.01 + (longitude - 10) * 0.005, longitude: longitude)
+            )
+            guard covered.contains(square) else { fail("the cover leaves out \(square), which an edge crosses at \(longitude)° E") }
+        }
     }
 
     /// The heights: a made-up elevation archive with two squares of land

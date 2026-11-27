@@ -194,15 +194,20 @@ final class OfflineCountries {
         guard !isRecovering else { return }
         for record in installed.values where downloads[record.country.id] == nil {
             let id = record.country.id
-            let unwanted = record.files.filter { !wants($0.role) }
-            if !unwanted.isEmpty {
-                guard strip(unwanted, from: record) else { continue }
-            }
-            guard let kept = installed[id], update(for: id) == nil, !needsRepair(id) else { continue }
+            guard stripUnwanted(record), let kept = installed[id], update(for: id) == nil, !needsRepair(id)
+            else { continue }
             // What a switch turned on, or a file its build gained since it
             // came down: its day hikes, or its heights.
             download(offeredBuild(of: kept) ?? kept.country)
         }
+    }
+
+    /// Deletes from the area `record` is of what a switch turned off, and
+    /// keeps the rest. Answers whether it holds only what the switches ask
+    /// for now, on disk too.
+    private func stripUnwanted(_ record: Record) -> Bool {
+        let unwanted = record.files.filter { !wants($0.role) }
+        return unwanted.isEmpty || strip(unwanted, from: record)
     }
 
     /// Whether the switches ask for a file of `role`.
@@ -375,6 +380,12 @@ final class OfflineCountries {
         for staged in Set(files.map(store.stagedURL(for:))) {
             try? FileManager.default.removeItem(at: staged)
         }
+        // A switch turned off while it ran passed this area over, as
+        // ``reconcile()`` passes over any coming down: an update that also
+        // brought the heights left the old build's on the device. What the
+        // switch turned off goes now, and nothing is brought, since the
+        // hiker has just stopped a download.
+        if let record = installed[id] { _ = stripUnwanted(record) }
         return true
     }
 
