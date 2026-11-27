@@ -14,8 +14,8 @@
 //
 //  This is the third answer between "the real server" and "nothing", on the
 //  terms ``SeededCommunityTransport`` set: a launch gets one only by naming a
-//  scenario — `--ui-test-offline-countries=<seeded|showcase|refused>` — and
-//  the whole file is `#if DEBUG`, so no build a person could install
+//  scenario — `--ui-test-offline-countries=<seeded|downloaded|showcase|refused>`
+//  — and the whole file is `#if DEBUG`, so no build a person could install
 //  contains it.
 //
 //  ## What is faked, and what is not
@@ -46,6 +46,20 @@
 //  Thumsee trailhead Germany, and largest France. The digests are of the
 //  file names, not of any file.
 //
+//  ## An area on the device
+//
+//  What a downloaded area's row offers once *Extra Detail* no longer
+//  describes it, and the tap that deletes its zoom 15, are the hiker's only
+//  way to change an area already down (`OfflineCountries+Extras.swift`), and
+//  with nothing downloaded no suite and no audit had them on screen. So
+//  `downloaded` lists the ten and holds one of them, Slovenia, as down with
+//  its zoom 15 (``Scenario/downloads(from:)``). That one is faked beyond the
+//  list: its record stands in the model where the index's would, with no
+//  file behind it, and the launch keeps no archives, so nothing opens or
+//  draws it. What a suite can do with it is what needs no server, which is
+//  deleting; what it adds would be a download, and a suite stops before that
+//  as it does for any other.
+//
 //  ## The showcase
 //
 //  The App Store frame of *Offline Maps* is of the list a hiker gets: every
@@ -65,6 +79,9 @@ nonisolated struct SeededOfflineCountryServer: OfflineCountryServing {
     enum Scenario: String, CaseIterable {
         /// The ten areas in `OfflineCountriesSeed.json`.
         case seeded = "seeded"
+        /// The ten again, with one of them on the device: see
+        /// ``downloads(from:)``.
+        case downloaded = "downloaded"
         /// Every area the real server lists, from
         /// `OfflineCountriesShowcase.json`, for the App Store frame.
         case showcase = "showcase"
@@ -77,6 +94,23 @@ nonisolated struct SeededOfflineCountryServer: OfflineCountryServing {
         init?(argument: String?) {
             guard let argument, let named = Self(rawValue: argument) else { return nil }
             self = named
+        }
+
+        /// The area a launch of `downloaded` holds as down, by its code.
+        static let downloadedArea = "SI"
+
+        /// What a launch of this scenario holds as downloaded, of the areas
+        /// `manifest` lists: Slovenia with its zoom 15 for `downloaded`,
+        /// and nothing for any other.
+        func downloads(from manifest: OfflineCountryManifest) -> [OfflineCountryStore.Record] {
+            guard self == .downloaded else { return [] }
+            return manifest.readableCountries.filter { $0.id == Self.downloadedArea }.map { area in
+                OfflineCountryStore.Record(
+                    country: area,
+                    installedAt: Date(timeIntervalSinceReferenceDate: 0),
+                    hasDetail: true
+                )
+            }
         }
     }
 
@@ -94,9 +128,16 @@ nonisolated struct SeededOfflineCountryServer: OfflineCountryServing {
 
     @concurrent
     func manifest() async throws -> OfflineCountryManifest {
+        try listed()
+    }
+
+    /// The scenario's list, read where it is asked for: megabytes, for the
+    /// showcase, so off the main actor through ``manifest()``, and on it
+    /// only for the ten, as a launch that holds one of them does.
+    func listed() throws -> OfflineCountryManifest {
         let fixture: String
         switch scenario {
-        case .seeded: fixture = Self.fixtureName
+        case .seeded, .downloaded: fixture = Self.fixtureName
         case .showcase: fixture = Self.showcaseFixtureName
         case .refused: throw Failure.refused
         }

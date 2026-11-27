@@ -83,6 +83,7 @@ struct SeededOfflineCountryServerTests {
         }
 
         #expect(scenario(["--ui-test-offline-countries=seeded"]) == .seeded)
+        #expect(scenario(["--ui-test-offline-countries=downloaded"]) == .downloaded)
         #expect(scenario(["--ui-test-offline-countries=refused"]) == .refused)
         #expect(scenario(["--ui-test-offline-countries=showcase"]) == .showcase)
         #expect(scenario([]) == nil)
@@ -176,6 +177,46 @@ struct SeededOfflineCountryServerTests {
         seeded.download(germany)
         #expect(seeded.downloads.isEmpty)
         #expect(seeded.installed.isEmpty)
+    }
+
+    /// What `OfflineMapsUITests` taps through: a row with zoom 15 to delete
+    /// once *Extra Detail* is off, and to offer back once it is on again.
+    @Test("the downloaded scenario holds Slovenia with its zoom 15, and every other holds nothing")
+    func downloadedHoldsSlovenia() async throws {
+        for scenario in SeededOfflineCountryServer.Scenario.allCases where scenario != .refused {
+            let listed = try SeededOfflineCountryServer(scenario: scenario).listed()
+            #expect(scenario.downloads(from: listed).map(\.country.id) == (scenario == .downloaded ? ["SI"] : []))
+        }
+        let scenario = SeededOfflineCountryServer.Scenario.downloaded
+        let server = SeededOfflineCountryServer(scenario: scenario)
+        // A directory that is there, as the launch's is: deleting writes
+        // the index before it deletes anything.
+        try await OfflineCountryFixture.withDirectory { directory in
+            let countries = OfflineCountries(
+                store: OfflineCountryStore(directory: directory),
+                server: server,
+                downloader: nil,
+                archives: nil
+            )
+            countries.seed(installed: scenario.downloads(from: try server.listed()))
+            await countries.refreshList()
+
+            #expect(countries.isInstalled("SI"))
+            #expect(countries.installed["SI"]?.hasDetail == true)
+            #expect(countries.addition(to: "SI") == nil)
+            #expect(countries.removal(from: "SI") == nil)
+
+            countries.setIncludesDetail(false)
+            let whole = try #require(countries.installed["SI"]?.byteCount)
+            #expect(countries.removal(from: "SI")?.extras == .detail)
+            countries.trim("SI")
+            #expect(try #require(countries.installed["SI"]?.byteCount) < whole)
+
+            countries.setIncludesDetail(true)
+            #expect(countries.addition(to: "SI")?.extras == .detail)
+            countries.extend("SI")
+            #expect(countries.downloads.isEmpty, "a launch with no session downloads nothing")
+        }
     }
 
     @Test("a file's address reaches no server")
