@@ -503,10 +503,26 @@ jobs:
     if: needs.changes.outputs.code == 'true'
     runs-on: xcode-27
     timeout-minutes: 30
+    # The release's Xcode rather than this workflow's: `testflight.yml`
+    # archives with the newest one the image carries, so that code behind a
+    # gate on the SDK is compiled into what ships. This is the one job that
+    # runs that compiler and SDK before a release does.
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: ./.github/actions/verify-xcode
+
+      # Two pins in two files, which is one too many to trust: moved apart,
+      # this job would go on passing for an archive no release builds.
+      - name: Verify this is the Xcode a release is built with
+        run: |
+          release="$(sed -n 's/^  DEVELOPER_DIR: //p' .github/workflows/testflight.yml)"
+          if [[ "$release" != "$DEVELOPER_DIR" ]]; then
+            echo "::error::testflight.yml archives with '$release' and this job with '$DEVELOPER_DIR'. Move the two together."
+            exit 1
+          fi
 
       - name: Archive
         run: |
@@ -592,6 +608,20 @@ jobs:
           echo "  arches  $arches"
           if [[ "$arches" != *arm64* ]]; then
             echo "::error::The archived binary has no arm64 slice — this is not a device build."
+            status=1
+          fi
+          # And the code only a newer SDK compiles. `MapTrailingBarColumn.swift`
+          # asks UIKit where a bar goes behind a gate on the SDK, so an archive
+          # from an older Xcode builds, passes everything above, and ships a
+          # closed iPhone Duo its map without that layout. The binary imports
+          # the symbol only where the call was compiled in. Read into a
+          # variable first: a `grep -q` on the pipe closes it early, and under
+          # `pipefail` the writer's failure would read as a missing symbol.
+          imports="$(nm -u "$app/OpenHikes")"
+          if [[ "$imports" == *LayoutRegionV3bar6onEdge6extent* ]]; then
+            echo "  ok      the bar layout region is compiled in"
+          else
+            echo "::error::The archived app never asks UIKit for a bar's layout region: it was built with an SDK older than iOS 27.1, and the closed iPhone Duo's layout is compiled out (MapTrailingBarColumn.swift)."
             status=1
           fi
           # And what it should *not* have. The StoreKit configuration is the

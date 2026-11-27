@@ -99,9 +99,15 @@ concurrency:
 permissions:
   contents: read
 
-# The same toolchain as `ci.yml`, for the reasons argued there.
+# The newest Xcode the image carries, which is newer than the one `ci.yml`
+# tests with. An API newer than that one's SDK sits behind a gate on the SDK
+# (*CI* in `AGENTS.md`), so an archive from the older Xcode builds, uploads
+# and ships without it: the closed iPhone Duo's layout was compiled out of
+# every upload that way. `ci.yml`'s `archive` job builds with this same Xcode
+# and refuses to differ from it, so a release is never the first build to
+# compile what it ships.
 env:
-  DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+  DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
 
 jobs:
   upload:
