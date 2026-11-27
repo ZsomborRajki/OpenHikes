@@ -11,9 +11,10 @@
 //
 //  Copernicus publishes GLO-30 as one cloud-optimized GeoTIFF a degree, in
 //  a public bucket that needs no account (`copernicus-dem-30m` on AWS, in
-//  eu-central-1): 26,450 tiles, 549 GiB, listed here and downloaded each in
-//  turn. Nothing is kept: a tile is read, filed and let go. A whole world
-//  is about three hours at sixty megabytes a second, most of it the download.
+//  eu-central-1): 26,450 tiles, 589 GB, listed here and downloaded each in
+//  turn. Nothing is kept: a tile is read, filed and let go. The world took
+//  2 h 47 min on 2026-11-26 with 24 tiles at once, about 60 MB/s, most of it
+//  the download, and came to an archive of 66.4 GB.
 //
 //  A degree with no tile is sea, and so are its squares: the archive holds
 //  none there, which the app reads as sea level.

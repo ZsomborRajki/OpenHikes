@@ -132,6 +132,20 @@ has every option:
 4. `upload-archive <dir>` for all four, then `Scripts/vector-archives.sh
    use` with each name, `publish`, and commit the manifest.
 
+### Building the elevation squares
+
+The heights are no part of a refresh. They change only with a new release of
+the Copernicus DEM, or a new generation of `ElevationSquareFile`, and an
+archive of them stays listed until then (*The elevation squares* in
+`AGENTS.md`).
+
+1. `Scripts/trail-cells.sh build-elevation --out <dir>` reads every tile of
+   Copernicus' public bucket and writes the whole world. Its header has the
+   time and the size it measured.
+2. `upload-archive <dir>`, then `Scripts/vector-archives.sh use <name>`
+   (with `--generation 1` for the list's first archive), `publish`, and
+   commit the manifest.
+
 ### The public database's copies of the squares
 
 Builds v1.5-1 to v1.7-1 read the squares as `CuratedTrailCell` records, under
@@ -150,10 +164,12 @@ Checked 2026-11-24. The bucket holds every area of build `20261124`, cut from
 `trails-20261124-16` 50 km round it: 381 of them (234 countries, and the 51
 states, 13 provinces and 83 regions of the three split ones), 1,905 files and
 181.0 GB, of which the day hikes are 279 MB, and no other country file.
-Beside them it holds those two archives, the four sets of squares, and the
-manifest at revision 12, which names all six, and nothing else. The squares
+Beside them it holds those two archives, the five sets of squares, and the
+manifest at revision 13, which names all seven, and nothing else. The squares
 are `routing-20261124-16`, `trails-20261124-16`, `routes-20261124-16` and
-`places-20261124-16`, each the planet of 2026-11-24 16:00 UTC.
+`places-20261124-16`, each the planet of 2026-11-24 16:00 UTC, and the heights
+`elevation-20261126-20` (66.4 GB, added 2026-11-27 with revision 13), the
+Copernicus DEM as the AWS bucket held it on 2026-11-26.
 
 ## Simulators and the Mac
 

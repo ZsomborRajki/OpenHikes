@@ -148,8 +148,9 @@
 #             Scripts/lib/trail-cells/ElevationBuild.swift. --area limits it
 #             to whole degrees, south,west,north,east, which upload-archive
 #             then refuses. --jobs reads that many tiles at once (16).
-#             Measured on the world on 2026-11-26: 549 GiB read, an archive
-#             of some 60 GB, about three hours at 60 MB/s.
+#             Measured on the world on 2026-11-26: 589 GB read in 2 h 47 min
+#             with --jobs 24, about 60 MB/s, into an archive of 66.4 GB, which
+#             upload-archive then sent in 248 parts.
 #   upload-archive
 #             Put the archive build-routing, pack or build-elevation wrote in <dir> in the R2
 #             bucket openhikes-tiles under its own name, refusing one that is
