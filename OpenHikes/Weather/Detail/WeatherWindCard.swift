@@ -157,7 +157,9 @@ private struct WeatherCompass: View {
             context.draw(
                 Text(verbatim: letter)
                     .font(.system(size: Rose.letterSize, weight: .bold))
-                    .foregroundStyle(.white.opacity(Rose.majorOpacity)),
+                    // The panel's quieter text, which is held to a contrast
+                    // small type can be read at.
+                    .foregroundStyle(.weatherDim),
                 at: point(center, degrees: degrees, distance: radius * Rose.letterRadius)
             )
         }

@@ -30,16 +30,24 @@ struct WeatherHero: View {
     /// The trail or the searched place the hiker asked about, where the
     /// title names the town it is in instead.
     let eyebrow: String?
+    /// The forecast day in progress, whose high and low go under the sky:
+    /// the day the *Today* row below gives, so the two ranges are one. Not
+    /// the day the reading was taken, which after midnight is yesterday —
+    /// see ``WeatherToday``. `nil` with no day in progress, and then no
+    /// range is given.
+    let today: WeatherDaySummary?
 
     @ScaledMetric(relativeTo: .largeTitle) private var temperatureSize: CGFloat = 92
 
     var body: some View {
         VStack(spacing: Self.spacing) {
             if let eyebrow {
+                // White, as every word on the bare sky is: the panels'
+                // quieter text is too faint for small type out here — see
+                // ``WeatherSky/quietTextOpacity``.
                 Text(verbatim: eyebrow)
                     .font(.caption.weight(.semibold))
                     .textCase(.uppercase)
-                    .foregroundStyle(.weatherDim)
                     .lineLimit(1)
             }
             // `Text` rather than `placeName ?? "My Location"`, which types
@@ -58,7 +66,7 @@ struct WeatherHero: View {
             Text(snapshot.conditionDescription)
                 .font(.title3.weight(.medium))
                 .multilineTextAlignment(.center)
-            if let range = snapshot.daylight.flatMap(Self.range) {
+            if let range = today.map(Self.range) {
                 Text(range)
                     .font(.title3.weight(.medium))
             }
@@ -75,27 +83,23 @@ struct WeatherHero: View {
 
     private var spoken: String {
         let reading = "\(snapshot.spokenTemperature()), \(snapshot.conditionDescription)"
-        guard let range = snapshot.daylight.flatMap(Self.spokenRange) else { return reading }
+        guard let range = today.map(Self.spokenRange) else { return reading }
         return "\(reading), \(range)"
     }
 
-    /// The day's high and low as the line under the sky, or `nil` when the
-    /// forecast carried either one alone or neither: half a range under a
-    /// temperature reads as a second temperature.
-    private static func range(of daylight: WeatherDaylight) -> String? {
-        guard let high = daylight.highTemperature, let low = daylight.lowTemperature else { return nil }
-        let highest = WeatherReadingFormat.temperature(high, width: .narrow)
-        let lowest = WeatherReadingFormat.temperature(low, width: .narrow)
+    /// The day's high and low as the line under the sky.
+    private static func range(of day: WeatherDaySummary) -> String {
+        let highest = WeatherReadingFormat.temperature(day.highTemperature, width: .narrow)
+        let lowest = WeatherReadingFormat.temperature(day.lowTemperature, width: .narrow)
         return String(
             localized: "H:\(highest) L:\(lowest)",
             comment: "The day's high and low temperature under the current one, abbreviated as Apple Weather does"
         )
     }
 
-    private static func spokenRange(of daylight: WeatherDaylight) -> String? {
-        guard let high = daylight.highTemperature, let low = daylight.lowTemperature else { return nil }
-        let highest = WeatherReadingFormat.temperature(high, width: .wide)
-        let lowest = WeatherReadingFormat.temperature(low, width: .wide)
+    private static func spokenRange(of day: WeatherDaySummary) -> String {
+        let highest = WeatherReadingFormat.temperature(day.highTemperature, width: .wide)
+        let lowest = WeatherReadingFormat.temperature(day.lowTemperature, width: .wide)
         return String(localized: "High \(highest), low \(lowest)", comment: "A day's forecast range, spoken")
     }
 }
@@ -129,7 +133,6 @@ struct WeatherUnavailableNotice: View {
             .accessibilityIdentifier("weather-detail-unavailable")
             Text("OpenHikes couldn\u{2019}t reach Apple Weather. It will try again automatically.")
                 .font(.subheadline)
-                .foregroundStyle(.weatherDim)
         }
         .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity)

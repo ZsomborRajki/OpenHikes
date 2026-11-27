@@ -68,14 +68,14 @@ struct WeatherHourlyCard: View {
         .accessibilityValue(Self.spoken(hour))
     }
 
-    /// The hour's own time, or "Now" for the hour the strip opens on while
-    /// that hour is still running: "21" at twenty to ten is a time to work
-    /// out, and the first column is the one nobody should have to.
+    /// The hour's own time, or "Now" for the hour in progress, which the
+    /// strip opens on: "21" at twenty to ten is a time to work out, and the
+    /// first column is the one nobody should have to.
+    ///
+    /// Handed the hours still to come, so the hour in progress is the first
+    /// of them — see ``WeatherHourSummary/upcoming(in:asOf:)``.
     private func label(for hour: WeatherHourSummary) -> String {
-        let isNow = hour.id == hours.first?.id
-            && hour.date <= now
-            && now < hour.date.addingTimeInterval(WeatherHourlyPolicy.hourSeconds)
-        return isNow
+        hour.isInProgress(asOf: now)
             ? String(localized: "Now", comment: "The first column of the hourly forecast, in place of the hour")
             : clock.hour(hour.date)
     }
@@ -96,14 +96,17 @@ struct WeatherHourlyCard: View {
 
 /// The week ahead — see ``WeatherDaySummary``.
 ///
-/// Handed the days still to come: the caller trims the ones that have gone,
-/// because only it knows the moment the sheet is drawn at.
+/// Handed the days still to come and which of them is today: the caller
+/// works both out, because only it knows the moment the sheet is drawn at —
+/// see ``WeatherToday``.
 struct WeatherDailyCard: View {
     let days: [WeatherDaySummary]
-    let now: Date
+    /// The day in progress, which the card names *Today*.
+    let today: WeatherDaySummary?
+    /// The reading's temperature, marked on today's bar, or `nil` when the
+    /// reading was taken on another day.
+    let current: Measurement<UnitTemperature>?
     let timeZone: TimeZone
-    /// The temperature now, marked on today's bar.
-    let current: Measurement<UnitTemperature>
 
     var body: some View {
         if let span = WeatherTemperatureSpan(days: days) {
@@ -116,13 +119,14 @@ struct WeatherDailyCard: View {
                         if day.id != days.first?.id {
                             WeatherRule()
                         }
+                        let isToday = day.id == today?.id
                         WeatherDayRow(
                             day: day,
-                            isToday: day.isInProgress(asOf: now),
+                            isToday: isToday,
                             timeZone: timeZone,
                             span: span,
                             gradient: gradient,
-                            current: current
+                            current: isToday ? current : nil
                         )
                     }
                 }
@@ -152,7 +156,8 @@ private struct WeatherDayRow: View {
     let timeZone: TimeZone
     let span: WeatherTemperatureSpan
     let gradient: Gradient
-    let current: Measurement<UnitTemperature>
+    /// The temperature to mark on this day's bar, if any.
+    let current: Measurement<UnitTemperature>?
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -214,7 +219,7 @@ private struct WeatherDayRow: View {
             .frame(minWidth: Self.figureWidth, alignment: .trailing)
         WeatherRangeBar(
             extent: span.extent(from: day.lowTemperature, to: day.highTemperature),
-            marker: isToday ? span.fraction(of: current) : nil,
+            marker: current.map(span.fraction(of:)),
             gradient: gradient
         )
         Text(WeatherReadingFormat.temperature(day.highTemperature, width: .narrow))

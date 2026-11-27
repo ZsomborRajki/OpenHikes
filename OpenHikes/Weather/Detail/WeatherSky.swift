@@ -119,27 +119,28 @@ nonisolated extension WeatherSky {
 
     /// The colors of this sky, deeper overhead than at the horizon.
     ///
-    /// **Every one of them is dark enough for white text**, the lightest
-    /// included, and ``WeatherSkyTests`` holds each to that: the sheet draws
-    /// its temperature straight on the backdrop, with no card behind it.
-    /// That is why a snowy noon here is a slate blue, not the near-white a
-    /// snowy noon is.
+    /// **Every one of them is dark enough for small white text**, the
+    /// lightest included, and ``WeatherSkyTests`` holds each to that: the
+    /// sheet sets its head straight on the backdrop with no panel behind it,
+    /// and its credits and footnotes as well, and anything can scroll down
+    /// to the horizon. That is why a snowy noon here is a slate blue, not
+    /// the near-white a snowy noon is.
     var backdrop: Backdrop {
         switch (cover, isDaylight) {
-        case (.clear, true): Backdrop(zenith: "#1E5FAE", horizon: "#4A90D6")
-        case (.partlyCloudy, true): Backdrop(zenith: "#3A6EA8", horizon: "#6393C2")
-        case (.overcast, true): Backdrop(zenith: "#4D6278", horizon: "#7A8DA0")
-        case (.rain, true): Backdrop(zenith: "#3C4E63", horizon: "#63778C")
+        case (.clear, true): Backdrop(zenith: "#1E5FAE", horizon: "#3C77B1")
+        case (.partlyCloudy, true): Backdrop(zenith: "#3A6EA8", horizon: "#4F769C")
+        case (.overcast, true): Backdrop(zenith: "#4D6278", horizon: "#657585")
+        case (.rain, true): Backdrop(zenith: "#3C4E63", horizon: "#5D7186")
         case (.storm, true): Backdrop(zenith: "#3A435E", horizon: "#566078")
-        case (.snow, true): Backdrop(zenith: "#5E738C", horizon: "#7C92A9")
-        case (.fog, true): Backdrop(zenith: "#59636E", horizon: "#848D97")
+        case (.snow, true): Backdrop(zenith: "#53677E", horizon: "#637588")
+        case (.fog, true): Backdrop(zenith: "#59636E", horizon: "#6D747C")
         case (.clear, false): Backdrop(zenith: "#070B1E", horizon: "#232C55")
         case (.partlyCloudy, false): Backdrop(zenith: "#0E1428", horizon: "#2C3552")
         case (.overcast, false): Backdrop(zenith: "#161B26", horizon: "#353D4B")
         case (.rain, false): Backdrop(zenith: "#11161F", horizon: "#2D3541")
         case (.storm, false): Backdrop(zenith: "#0D0F18", horizon: "#2A2C3D")
-        case (.snow, false): Backdrop(zenith: "#1B2433", horizon: "#414C5E")
-        case (.fog, false): Backdrop(zenith: "#1C2026", horizon: "#40454D")
+        case (.snow, false): Backdrop(zenith: "#1B2433", horizon: "#3A4555")
+        case (.fog, false): Backdrop(zenith: "#1C2026", horizon: "#3A3F47")
         }
     }
 }
@@ -154,20 +155,39 @@ nonisolated extension WeatherSky {
         var opacity: Double
     }
 
-    private static let dayOpacity = 0.3
+    private static let dayOpacity = 0.34
     private static let nightOpacity = 0.08
     private static let dayPanel = Panel(tint: "#0D1A38", opacity: dayOpacity)
     private static let nightPanel = Panel(tint: "#FFFFFF", opacity: nightOpacity)
 
     /// The fill of the sheet's panels on this sky.
     ///
-    /// A panel has to stand apart from the sky and still carry small white
-    /// text, and the two halves of the day ask opposite things of it. A day
-    /// sky is bright, so its panels are a deep blue laid over it, which
-    /// darkens it. A night sky is nearly black already, and darkening it
-    /// would lose the panel in it, so a night's panels are lit instead.
+    /// A panel has to stand apart from the sky and still carry the sheet's
+    /// quieter text, and the two halves of the day ask opposite things of
+    /// it. A day sky is bright, so its panels are a deep blue laid over it,
+    /// which darkens it. A night sky is nearly black already, and darkening
+    /// it would lose the panel in it, so a night's panels are lit instead.
     /// ``WeatherSkyTests`` holds every sky to both.
     var panel: Panel {
         isDaylight ? Self.dayPanel : Self.nightPanel
     }
+}
+
+// MARK: - The text on it
+
+nonisolated extension WeatherSky {
+    /// How much of the white the sheet's quieter text keeps: the headings,
+    /// the values beside their labels, the captions.
+    ///
+    /// **On a panel only.** On the bare sky every word is white, footnotes
+    /// and credits included: thinned, small text there would need a sky
+    /// dark enough to turn a noon into a dusk. ``WeatherSkyTests`` holds the
+    /// quieter text to every sky's panel, and the white to every sky.
+    static let quietTextOpacity = 0.75
+
+    /// The chance of rain under a glyph, as `#RRGGBB`: a cyan of its own
+    /// rather than the system's, which is a shade too deep for the small
+    /// bold figure on a day's panel. Held to every panel by
+    /// ``WeatherSkyTests``.
+    static let rainChanceTint = "#80DAFF"
 }

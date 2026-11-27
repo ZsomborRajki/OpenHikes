@@ -12,8 +12,9 @@
 //
 //  ## Drawn the way Apple draws weather
 //
-//  A sky behind everything (``WeatherSky``), the temperature set large at the
-//  head with no panel behind it, then translucent panels: the hours as a
+//  A sky behind everything (``WeatherSky``), Apple Weather's credit at the
+//  top (``WeatherAttributionBanner``), the temperature set large under it
+//  with no panel behind it, then translucent panels: the hours as a
 //  strip, the days as bars on one scale, the wind on a compass, the day's
 //  light as the sun's curve, and a tile for each remaining measurement. It
 //  is the layout of Apple's own Weather, which is the one a hiker has already
@@ -119,15 +120,17 @@ private struct WeatherDetailSheetModifier: ViewModifier {
 }
 
 struct WeatherDetailView: View {
-    /// How far the sheet has to scroll before its title moves into the bar:
-    /// about where the place's name leaves the top of the sheet.
-    private static let titleFold: CGFloat = 56
     private static let titleFade = 0.2
     private static let bottomPadding: CGFloat = 24
 
     let weather: WeatherManager
 
     @Environment(\.locale) private var locale
+    /// How far the sheet has to scroll before its title moves into the bar:
+    /// about where the place's name, under Apple Weather's credits, leaves
+    /// the top of the sheet. Scaled with the place's name, which is what
+    /// moves it further down at a larger text size.
+    @ScaledMetric(relativeTo: .title) private var titleFold: CGFloat = 112
 
     /// `nil` until WeatherKit answers, and for good if it never does. The
     /// wording and the fallback link do not wait on it — see
@@ -148,8 +151,8 @@ struct WeatherDetailView: View {
             }
             .background { WeatherSkyBackdrop(sky: sky) }
             .environment(\.weatherSky, sky)
-            .onScrollGeometryChange(for: Bool.self) { geometry in
-                geometry.contentOffset.y + geometry.contentInsets.top > Self.titleFold
+            .onScrollGeometryChange(for: Bool.self) { [titleFold] geometry in
+                geometry.contentOffset.y + geometry.contentInsets.top > titleFold
             } action: { _, isPast in
                 titleIsInBar = isPast
             }
@@ -260,15 +263,15 @@ struct WeatherDetailView: View {
 
 /// A reading, panel by panel.
 ///
-/// The order is the sheet's argument. The temperature and Apple's credit
-/// for it; then a warning, if one stands, **above everything the weather is
-/// merely doing**: that is a meteorological agency telling the hiker to
-/// reconsider the walk, and it costs nothing in the ordinary case, because
-/// it draws only for an alert that actually stands. Then the panels in the
-/// order of how far ahead they look and how soon a hiker acts on them: the
-/// next hours, the days, how it feels and the sun's strength, the wind, the
-/// light that is left, and the measurements that are context. Last, what
-/// is known about the reading itself.
+/// The order is the sheet's argument. Apple's credit for the reading, then
+/// the temperature; then a warning, if one stands, **above everything the
+/// weather is merely doing**: that is a meteorological agency telling the
+/// hiker to reconsider the walk, and it costs nothing in the ordinary case,
+/// because it draws only for an alert that actually stands. Then the panels
+/// in the order of how far ahead they look and how soon a hiker acts on
+/// them: the next hours, the days, how it feels and the sun's strength, the
+/// wind, the light that is left, and the measurements that are context.
+/// Last, what is known about the reading itself.
 private struct WeatherReading: View {
     let snapshot: WeatherSnapshot
     let placeName: String?
@@ -278,25 +281,35 @@ private struct WeatherReading: View {
 
     var body: some View {
         let now = Date.now
-        WeatherHero(snapshot: snapshot, placeName: placeName, eyebrow: eyebrow)
-        // Straight under the reading it credits, where a hiker — and App
-        // Review — sees it the moment the sheet opens. See
-        // ``WeatherAttributionBanner``.
+        let calendar = WeatherForecastDay.calendar(in: clock.zone)
+        let days = upcomingDays(asOf: now, calendar: calendar)
+        let today = WeatherToday(week: days, asOf: now, readingTakenAt: snapshot.capturedAt, calendar: calendar)
+        let hours = WeatherHourSummary.upcoming(in: snapshot.hourly, asOf: now)
+        // First of all, above the head, where a hiker — and App Review —
+        // sees it the moment the sheet opens, at either height and at any
+        // text size. Under the head, the half sheet a hiker had dragged down
+        // to reopened at that height with the mark below the screen once the
+        // text was large. See ``WeatherAttributionBanner``.
         WeatherAttributionBanner(marks: marks)
+        WeatherHero(snapshot: snapshot, placeName: placeName, eyebrow: eyebrow, today: today?.day)
         if case .active(let alerts) = snapshot.alerts {
             WeatherAlertsCard(alerts: WeatherAlertSummary.worstFirst(alerts))
         }
         // No card for an empty strip: a reading restored from a blob written
-        // before the hours existed, and a provider with no hourly data for
-        // the point, both arrive here as `[]`.
-        if !snapshot.hourly.isEmpty {
-            WeatherHourlyCard(hours: snapshot.hourly, now: now, clock: clock)
+        // before the hours existed, a provider with no hourly data for the
+        // point, and a reading whose hours have all gone by now all arrive
+        // here as `[]`.
+        if !hours.isEmpty {
+            WeatherHourlyCard(hours: hours, now: now, clock: clock)
         }
         WeatherDailyCard(
-            days: upcomingDays(asOf: now),
-            now: now,
-            timeZone: clock.zone,
-            current: snapshot.temperature
+            days: days,
+            today: today?.day,
+            // The reading's temperature only on the day it was taken: one
+            // from 23:50 is still the newest at ten past midnight, and
+            // yesterday's evening is not where today stands.
+            current: today?.holdsReading == true ? snapshot.temperature : nil,
+            timeZone: clock.zone
         )
         WeatherExposureTiles(temperature: snapshot.temperature, conditions: snapshot.conditions)
         WeatherWindCard(wind: snapshot.conditions.wind)
@@ -318,14 +331,10 @@ private struct WeatherReading: View {
     ///
     /// Counted in the forecast's own zone where the geocoder has said what
     /// it is, because each day starts at midnight *there* — see
-    /// ``WeatherPlaceNaming``. Which row is today needs no zone, and is
-    /// right even before that answer lands.
-    private func upcomingDays(asOf now: Date) -> [WeatherDaySummary] {
-        WeatherDaySummary.upcoming(
-            in: snapshot.days,
-            asOf: now,
-            calendar: WeatherForecastDay.calendar(in: clock.zone)
-        )
+    /// ``WeatherPlaceNaming``. Which row is today needs the zone only for
+    /// the last day's end, and is right even before that answer lands.
+    private func upcomingDays(asOf now: Date, calendar: Calendar) -> [WeatherDaySummary] {
+        WeatherDaySummary.upcoming(in: snapshot.days, asOf: now, calendar: calendar)
     }
 }
 
