@@ -43,6 +43,12 @@ extension MapView.Coordinator {
         let bottomInset: CGFloat
         let panelInset: CGFloat
         let systemCredit: CGFloat
+
+        #if os(iOS)
+        /// The column the pill stands in beyond the safe area, where the
+        /// system keeps one — see `MapTrailingBarColumn.swift`.
+        var trailingColumn: TrailingBarColumn?
+        #endif
     }
 
     /// Where the sheet's top is assumed to be until it says otherwise: the
@@ -76,24 +82,34 @@ extension MapView.Coordinator {
 
     /// Reapplies the button position only when the map's own geometry has
     /// changed (first layout, rotation, a resized window, a safe-area change,
-    /// the side panel arriving or leaving) — everything else `topY`-driven is
-    /// already handled reactively by `observeSheetMetrics`.
+    /// the side panel arriving or leaving, an iPhone Duo folding) — everything
+    /// else `topY`-driven is already handled reactively by
+    /// `observeSheetMetrics`.
     ///
     /// Asked from two places, because the geometry reaches the map from two:
     /// its size and safe area from UIKit, through ``MapLayoutObserver``, and
     /// the panel's inset from SwiftUI, through `MapView.update(_:_:)`. Either
     /// can land first in a rotation, and each is measured against what the
     /// other last left.
+    ///
+    /// The pill's place across the map is settled here too, ahead of its
+    /// height, which the column it stands in has a say in.
     func applySheetTopIfGeometryChanged(on mapView: MKMapView) {
-        let geometry = RowGeometry(
+        var geometry = RowGeometry(
             height: mapView.bounds.height,
             topInset: mapView.safeAreaInsets.top,
             bottomInset: mapView.safeAreaInsets.bottom,
             panelInset: sidePanelInset,
             systemCredit: systemCreditClearance
         )
+        #if os(iOS)
+        geometry.trailingColumn = TrailingBarColumn.current(in: mapView, extent: MapGlassPill.controlSize)
+        #endif
         guard geometry != lastAppliedGeometry else { return }
         lastAppliedGeometry = geometry
+        #if os(iOS)
+        trackingPillPlacement?.stand(in: geometry.trailingColumn)
+        #endif
         applySheetTop(on: mapView)
     }
 
@@ -115,7 +131,9 @@ extension MapView.Coordinator {
     ///
     /// Everything on this row takes the same constant and the same opacity,
     /// which is the reason the pill is a UIKit subview at all — see
-    /// ``MapPhotoControlsView``.
+    /// ``MapPhotoControlsView``. The one exception is the tracking pill in
+    /// the column a closed iPhone Duo keeps for it, which has a limit of its
+    /// own under the row's — see ``trailingColumnLimit``.
     ///
     /// Two constraints rather than three. The camera pill has no driven
     /// constant of its own: it is constrained a fixed gap above the credit
@@ -126,7 +144,7 @@ extension MapView.Coordinator {
         let wanted = sheetTop(in: mapView) - Self.trackingButtonSpacing
         let limit = trackingButtonLimit(in: mapView)
         let controls = max(wanted, limit)
-        trackingBottomConstraint?.constant = controls
+        trackingBottomConstraint?.constant = max(controls, trailingColumnLimit)
         attributionBottomConstraint?.constant = controls
         applyControlAlpha(
             encroachment: limit - wanted,
@@ -203,6 +221,27 @@ extension MapView.Coordinator {
         mapView.safeAreaInsets.top
             + trackingButtonHeight
             + Self.trackingButtonSpacing
+    }
+
+    /// The highest the pill may stand in the column the system keeps beyond
+    /// the safe area, as the Y of its bottom edge, and nothing where there is
+    /// no such column — see `MapTrailingBarColumn.swift`.
+    ///
+    /// A limit of the pill's own, under the row's. A closed iPhone Duo stands
+    /// its status bar up at the top of that column and leaves the map no top
+    /// inset, so the row's limit lets the pill climb to the status items: at
+    /// the middle detent the 2D button standing on it came to rest 3 points
+    /// under them. So the pill stops where that button, up or not, stands
+    /// clear of the column's top, which on that display is 9 points short of
+    /// where the row stops, and 7 points above the sheet. The credit line
+    /// across the map has nothing over it and keeps the row's limit.
+    private var trailingColumnLimit: CGFloat {
+        #if os(iOS)
+        guard let column = trackingPillPlacement?.column else { return 0 }
+        return column.topInset + MapView.flattenButtonReach + trackingButtonHeight
+        #else
+        0
+        #endif
     }
 
     /// How far the sheet travels between the button being fully visible and

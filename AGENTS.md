@@ -142,10 +142,11 @@ build`, `iOS Release build`, `Unsigned iOS archive`, `Thread sanitizer` and
   and a memberwise init hidden by a `private` stored property.
 - **An API newer than CI's SDK needs a compile-time gate as well as
   `#available`.** `reorderable()` and `reorderContainer(for:)`, the app's only
-  iOS 27.0 APIs, sit behind `#if compiler(>=6.4)` for CodeQL. The one iOS 27.1
-  API, `toolbarVerticalBehavior(_:)`, sits behind
-  `#if canImport(SwiftUI, _version: 8.0.85)`: CI's Xcode 27.0 is Swift 6.4 too,
-  and only the SDK's SwiftUI version (8.0.84 there) tells it apart.
+  iOS 27.0 APIs, sit behind `#if compiler(>=6.4)` for CodeQL. The two iOS 27.1
+  APIs, `toolbarVerticalBehavior(_:)` and UIKit's `bar(onEdge:extent:)` layout
+  region, sit behind `#if canImport(SwiftUI, _version: 8.0.85)`: CI's Xcode
+  27.0 is Swift 6.4 too, and only the SDK's SwiftUI version (8.0.84 there)
+  tells it apart.
 - **The coverage floor.** `OpenHikes.app` line coverage must stay at or above
   76% (`COVERAGE_FLOOR`), and the floor is never lowered. The measurement
   leaves out the files in `Scripts/coverage-exclusions.txt`, which are
@@ -201,6 +202,11 @@ either: the second run waits silently on the first run's build lock.
   folds the only booted iPhone Duo, which on a shared machine can be another
   session's. Its runtime, its poses and how XCTest sees it are *The iPhone
   Duo* in `OPERATIONS.md`.
+- **A closed Duo keeps a column beyond the safe area, down its trailing
+  edge**, under the status bar it stands up there. The map's pill stands in
+  it, as the one in Maps does (`TrailingBarColumn`). A control that joins it
+  there is constrained to the pill, as the 2D button is, never to the safe
+  area.
 
 ### The iPad
 
