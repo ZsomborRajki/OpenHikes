@@ -22,6 +22,12 @@
             "value" : "Annuler"
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Poništi"
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -79,6 +85,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OK"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gotovo"
           }
         },
         "it" : {
@@ -140,6 +152,12 @@
             "value" : "Randonnée"
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tura"
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -193,6 +211,12 @@
           }
         },
         "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes"
+          }
+        },
+        "hr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes"
@@ -257,6 +281,12 @@
             "value" : "OpenHikes a besoin de votre position avant de pouvoir enregistrer une randonnée."
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes treba vašu lokaciju prije nego što može snimiti turu."
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -314,6 +344,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mettre la randonnée en pause"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pauziraj turu"
           }
         },
         "it" : {
@@ -374,6 +410,12 @@
             "value" : "En pause"
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pauzirano"
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -430,6 +472,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "En pause, %@"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pauzirano, %@"
           }
         },
         "it" : {
@@ -491,6 +539,12 @@
             "value" : "Met en pause la randonnée en cours d’enregistrement, depuis son panneau sur l’écran verrouillé."
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pauzira turu koja se snima, s ploče na zaključanom zaslonu."
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -549,6 +603,12 @@
             "value" : "Enregistrement"
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Snimanje"
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -605,6 +665,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Enregistrement, %@"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Snimanje, %@"
           }
         },
         "it" : {
@@ -666,6 +732,12 @@
             "value" : "Reprendre la randonnée"
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nastavi turu"
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -723,6 +795,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Reprend la randonnée en pause, depuis son panneau sur l’écran verrouillé."
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nastavlja pauziranu turu, s ploče na zaključanom zaslonu."
           }
         },
         "it" : {
@@ -784,6 +862,12 @@
             "value" : "Affiche un sentier de votre choix, le sentier sélectionné ou une randonnée en cours d’enregistrement."
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prikazuje stazu koju odaberete, vašu odabranu stazu ili turu koja se trenutačno snima."
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -842,6 +926,12 @@
             "value" : "Démarrez un enregistrement ou consultez celui en cours."
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pokrenite snimanje ili pogledajte ono u tijeku."
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -898,6 +988,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Touchez pour enregistrer une randonnée"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dodirnite za snimanje ture"
           }
         },
         "it" : {
@@ -959,6 +1055,12 @@
             "value" : "Activer/désactiver l’enregistrement"
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uključi/isključi snimanje ture"
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1016,6 +1118,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sentier"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Staza"
           }
         },
         "it" : {

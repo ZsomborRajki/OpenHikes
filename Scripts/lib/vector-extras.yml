@@ -63,6 +63,9 @@ definitions:
   - &name_nl
     key: 'name:nl'
     tag_value: 'name:nl'
+  - &name_hr
+    key: 'name:hr'
+    tag_value: 'name:hr'
   # An area's size, in the square pixels of the whole world drawn as one
   # 256-pixel tile: times 4 to the power of a zoom, its size at that zoom,
   # which Carto calls `way_pixels`. Web Mercator's, as Carto's is. Measured
@@ -347,6 +350,9 @@ layers:
     - key: 'name:nl'
       tag_value: 'name:nl'
       min_zoom: *edge_name_zoom
+    - key: 'name:hr'
+      tag_value: 'name:hr'
+      min_zoom: *edge_name_zoom
 
 # What the basemap drops of an area Carto fills with symbols by it: a wood's
 # leaves, a wetland's kind, a beach's surface, a cemetery's religion. The
@@ -469,6 +475,7 @@ layers:
     - *name_uk
     - *name_ro
     - *name_nl
+    - *name_hr
 
 # Each point keeps the id Planetiler gives it, the OpenStreetMap element's
 # times ten plus 1 for a node, 2 for a way and 3 for a relation, by which the
@@ -512,6 +519,7 @@ layers:
     - *name_uk
     - *name_ro
     - *name_nl
+    - *name_hr
 
   # The names of areas — forests, parks, nature reserves, national parks,
   # islands, meadows, schools — at a point inside each, with its size, which
@@ -572,6 +580,7 @@ layers:
     - *name_uk
     - *name_ro
     - *name_nl
+    - *name_hr
   - source: osm
     geometry: polygon_point_on_surface
     min_zoom: *named_area_zoom
@@ -637,6 +646,7 @@ layers:
     - *name_uk
     - *name_ro
     - *name_nl
+    - *name_hr
   - source: osm
     geometry: polygon_point_on_surface
     min_zoom: *named_area_zoom
@@ -804,6 +814,7 @@ layers:
     - *name_uk
     - *name_ro
     - *name_nl
+    - *name_hr
   - source: osm
     geometry: polygon_point_on_surface
     min_zoom: *named_area_zoom
@@ -951,6 +962,7 @@ layers:
     - *name_uk
     - *name_ro
     - *name_nl
+    - *name_hr
 
   - source: osm
     geometry: point
@@ -992,6 +1004,7 @@ layers:
     - *name_uk
     - *name_ro
     - *name_nl
+    - *name_hr
   - source: osm
     geometry: polygon_point_on_surface
     min_zoom: 15
@@ -1018,6 +1031,7 @@ layers:
     - *name_uk
     - *name_ro
     - *name_nl
+    - *name_hr
   - source: osm
     geometry: polygon_point_on_surface
     min_zoom: 15
@@ -1059,6 +1073,7 @@ layers:
     - *name_uk
     - *name_ro
     - *name_nl
+    - *name_hr
   - source: osm
     geometry: polygon_point_on_surface
     min_zoom: 15
@@ -1100,6 +1115,7 @@ layers:
     - *name_uk
     - *name_ro
     - *name_nl
+    - *name_hr
 
   # The stops Carto draws from zoom 12: a railway station, from 13 a halt and
   # from 14 a tram stop. The basemap keeps a station from zoom 15 and without
@@ -1127,6 +1143,7 @@ layers:
     - *name_uk
     - *name_ro
     - *name_nl
+    - *name_hr
   - source: osm
     geometry: polygon_point_on_surface
     min_zoom: 12
@@ -1180,6 +1197,7 @@ layers:
     - *name_uk
     - *name_ro
     - *name_nl
+    - *name_hr
   - source: osm
     geometry: polygon_point_on_surface
     min_zoom: 13
@@ -1215,6 +1233,7 @@ layers:
     - *name_uk
     - *name_ro
     - *name_nl
+    - *name_hr
   - source: osm
     geometry: polygon_point_on_surface
     min_zoom: 13
@@ -1245,6 +1264,7 @@ layers:
     - *name_uk
     - *name_ro
     - *name_nl
+    - *name_hr
   - source: osm
     geometry: polygon_point_on_surface
     min_zoom: 15
@@ -1290,6 +1310,7 @@ layers:
     - *name_uk
     - *name_ro
     - *name_nl
+    - *name_hr
   - source: osm
     geometry: point
     min_zoom: 14
@@ -1310,6 +1331,7 @@ layers:
     - *name_uk
     - *name_ro
     - *name_nl
+    - *name_hr
 
   # A pass marked on a road or a path rather than as a saddle, and a ford,
   # neither of which the basemap has a kind for.
@@ -1337,6 +1359,7 @@ layers:
     - *name_uk
     - *name_ro
     - *name_nl
+    - *name_hr
   - source: osm
     geometry: point
     min_zoom: 15
@@ -1737,6 +1760,7 @@ layers:
     - *name_uk
     - *name_ro
     - *name_nl
+    - *name_hr
 
 # Cliffs, which Carto draws from zoom 13, and embankments, from 15: a line
 # with teeth down the side that falls away, which is the right of the way's
@@ -1897,3 +1921,4 @@ layers:
     - *name_uk
     - *name_ro
     - *name_nl
+    - *name_hr

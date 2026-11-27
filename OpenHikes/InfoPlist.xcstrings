@@ -34,6 +34,12 @@
             "value" : "Fichier GPX"
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GPX datoteka"
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -98,6 +104,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes utilise l’appareil photo pour que vous puissiez photographier une randonnée en cours. Les photos sont conservées avec cette randonnée et placées au point du sentier que vous aviez sélectionné."
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes koristi kameru kako biste mogli fotografirati turu dok ste na njoj. Fotografije se čuvaju uz tu turu i pričvršćuju na točku staze koju ste odabrali."
           }
         },
         "it" : {
@@ -166,6 +178,12 @@
             "value" : "OpenHikes se connecte à Santé pour enregistrer vos randonnées terminées comme entraînements, avec leur distance et leur itinéraire, lorsque vous activez « Enregistrer les randonnées dans Santé ». OpenHikes ne lit rien dans Santé sur votre iPhone."
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes se povezuje sa Zdravljem kako bi vaše završene ture spremio kao treninge, uključujući udaljenost i rutu, kad uključite “Spremaj ture u Zdravlje”. OpenHikes ne čita ništa iz Zdravlja na vašem iPhoneu."
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -230,6 +248,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes enregistre vos randonnées terminées dans Santé comme entraînements de randonnée, avec leur distance et leur itinéraire, lorsque vous activez « Enregistrer les randonnées dans Santé ». OpenHikes ne lit rien dans Santé sur votre iPhone."
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes sprema vaše završene ture u Zdravlje kao treninge planinarenja, s udaljenošću i rutom, kad uključite “Spremaj ture u Zdravlje”. OpenHikes ne čita ništa iz Zdravlja na vašem iPhoneu."
           }
         },
         "it" : {
@@ -298,6 +322,12 @@
             "value" : "OpenHikes utilise l’accès « Toujours » à la position, seulement si vous activez « Suivi du sentier en arrière-plan » dans les réglages de l’app, pour que votre widget de l’écran d’accueil et votre Activité en direct continuent d’afficher votre progression sur le sentier lorsque l’app n’est pas ouverte."
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes koristi lokaciju “Uvijek”, samo kad uključite “Praćenje staze u pozadini” u Postavkama, kako bi widget na početnom zaslonu i Aktivnost uživo prikazivali vaš napredak duž staze dok aplikacija nije otvorena."
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -362,6 +392,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes utilise votre position pour indiquer où vous êtes sur la carte, pour enregistrer les randonnées que vous choisissez de démarrer et, avec les alertes d’intersection activées, pour indiquer la direction à prendre à chaque intersection du sentier que vous suivez."
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes koristi vašu lokaciju kako bi prikazao gdje ste na karti, snimao ture koje sami pokrenete i, s uključenim upozorenjima na raskrižjima, govorio kojim smjerom ići na svakom raskrižju staze koju pratite."
           }
         },
         "it" : {
@@ -430,6 +466,12 @@
             "value" : "OpenHikes utilise les capteurs de mouvement pour améliorer l’altitude enregistrée, reconstituer le sentier parcouru pendant les interruptions du GPS et mettre un enregistrement en pause lorsque vous vous arrêtez."
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes koristi senzore pokreta kako bi poboljšao snimljenu visinu, odredio prijeđeni put ondje gdje GPS nema signala i pauzirao snimanje kad stanete."
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -494,6 +536,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Activez « Enregistrer aussi dans Photos » pour conserver une copie de chaque photo de randonnée dans votre photothèque, avec la date et le lieu de la prise de vue."
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uključite “Spremi i u Foto” kako biste kopiju svake fotografije s ture čuvali u medijateci, s oznakom kada je i gdje snimljena."
           }
         },
         "it" : {
@@ -562,6 +610,12 @@
             "value" : "OpenHikes parcourt votre photothèque à la recherche des photos prises pendant une randonnée, afin de placer chacune au point du sentier où vous vous trouviez. Seules les photos prises pendant cette randonnée sont lues."
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes pretražuje vašu medijateku tražeći slike koje ste snimili na turi kako bi svaku mogao pričvrstiti na točku staze na kojoj ste stajali. Čita samo fotografije snimljene tijekom te ture."
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -626,6 +680,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes a besoin de votre position exacte pour enregistrer le sentier que vous parcourez."
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes treba vašu preciznu lokaciju kako bi snimio stazu kojom prolazite."
           }
         },
         "it" : {

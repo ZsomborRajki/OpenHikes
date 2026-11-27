@@ -37,6 +37,12 @@
             "value" : "%1$@ · encore %2$@"
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · još %2$@"
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -93,6 +99,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ parcourus"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prepješačeno: %@"
           }
         },
         "it" : {
@@ -153,6 +165,12 @@
             "value" : "%@ de long"
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duljina: %@"
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -209,6 +227,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ pour cent effectués"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dovršeno %@ posto"
           }
         },
         "it" : {
@@ -269,6 +293,12 @@
             "value" : "%@ pour cent parcourus"
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prijeđeno %@ posto"
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -325,6 +355,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "il reste %@"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preostalo: %@"
           }
         },
         "it" : {
@@ -389,6 +425,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@%2$@ · encore %3$@"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@%2$@ · još %3$@"
           }
         },
         "it" : {
@@ -510,6 +552,30 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld pts"
+                }
+              }
+            }
+          }
+        },
+        "hr" : {
+          "variations" : {
+            "plural" : {
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld toč."
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld toč."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld toč."
                 }
               }
             }
@@ -693,6 +759,12 @@
             "value" : "Dénivelé +"
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uspon"
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -749,6 +821,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Vitesse moyenne"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prosječna brzina"
           }
         },
         "it" : {
@@ -810,6 +888,12 @@
             "value" : "Annuler"
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Poništi"
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -868,6 +952,12 @@
             "value" : "Effectué"
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dovršeno"
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -924,6 +1014,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Distance"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Udaljenost"
           }
         },
         "it" : {
@@ -985,6 +1081,12 @@
             "value" : "OK"
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gotovo"
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1041,6 +1143,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Écoulé"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proteklo"
           }
         },
         "it" : {
@@ -1101,6 +1209,12 @@
             "value" : "Altitude"
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Visina"
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1157,6 +1271,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Terminé"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Završeno"
           }
         },
         "it" : {
@@ -1218,6 +1338,12 @@
             "value" : "Randonnée"
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tura"
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1274,6 +1400,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Enregistrement de randonnée"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Snimanje ture"
           }
         },
         "it" : {
@@ -1334,6 +1466,12 @@
             "value" : "Parcouru"
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prepješačeno"
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1390,6 +1528,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Longueur"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duljina"
           }
         },
         "it" : {
@@ -1450,6 +1594,12 @@
             "value" : "Hors sentier"
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Izvan staze"
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1503,6 +1653,12 @@
           }
         },
         "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes"
+          }
+        },
+        "hr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes"
@@ -1566,6 +1722,12 @@
             "value" : "OpenHikes n’a pas pu effectuer cette action."
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes to nije mogao učiniti."
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1625,6 +1787,12 @@
             "value" : "OpenHikes a besoin de votre position avant de pouvoir enregistrer une randonnée."
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes treba vašu lokaciju prije nego što može snimiti turu."
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1681,6 +1849,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pause"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pauziraj"
           }
         },
         "it" : {
@@ -1742,6 +1916,12 @@
             "value" : "Mettre la randonnée en pause"
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pauziraj turu"
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1800,6 +1980,12 @@
             "value" : "En pause"
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pauzirano"
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1856,6 +2042,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "En pause · "
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pauzirano · "
           }
         },
         "it" : {
@@ -1917,6 +2109,12 @@
             "value" : "Met en pause la randonnée en cours d’enregistrement, depuis son panneau sur l’écran verrouillé."
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pauzira turu koja se snima, s ploče na zaključanom zaslonu."
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1974,6 +2172,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Enregistrement"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Snimanje"
           }
         },
         "it" : {
@@ -2034,6 +2238,12 @@
             "value" : "Enregistrement en cours"
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Snimanje ture"
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2090,6 +2300,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Enregistrement en pause"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Snimanje pauzirano"
           }
         },
         "it" : {
@@ -2150,6 +2366,12 @@
             "value" : "Restant"
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preostalo"
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2206,6 +2428,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Reprendre"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nastavi"
           }
         },
         "it" : {
@@ -2267,6 +2495,12 @@
             "value" : "Reprendre la randonnée"
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nastavi turu"
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2324,6 +2558,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Reprend la randonnée en pause, depuis son panneau sur l’écran verrouillé."
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nastavlja pauziranu turu, s ploče na zaključanom zaslonu."
           }
         },
         "it" : {
@@ -2384,6 +2624,12 @@
             "value" : "Choisissez un sentier"
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Odaberite stazu"
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2440,6 +2686,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Choisissez un sentier dans OpenHikes"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Odaberite stazu u OpenHikesu"
           }
         },
         "it" : {
@@ -2501,6 +2753,12 @@
             "value" : "Affiche un sentier de votre choix, le sentier sélectionné ou une randonnée en cours d’enregistrement."
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prikazuje stazu koju odaberete, vašu odabranu stazu ili turu koja se trenutačno snima."
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2557,6 +2815,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Affiche votre sentier sélectionné ou une randonnée en cours d’enregistrement."
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prikazuje vašu odabranu stazu ili turu koja se trenutačno snima."
           }
         },
         "it" : {
@@ -2617,6 +2881,12 @@
             "value" : "Démarrer une randonnée"
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Započni turu"
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2673,6 +2943,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Démarrez ou arrêtez l’enregistrement d’une randonnée."
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pokrenite ili zaustavite snimanje ture."
           }
         },
         "it" : {
@@ -2733,6 +3009,12 @@
             "value" : "Arrêter"
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zaustavi"
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2789,6 +3071,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Arrêter la randonnée"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zaustavi turu"
           }
         },
         "it" : {
@@ -2849,6 +3137,12 @@
             "value" : "Cette randonnée n’est plus en cours d’enregistrement."
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ta se tura više ne snima."
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -2905,6 +3199,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Temps restant"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preostalo vrijeme"
           }
         },
         "it" : {
@@ -2966,6 +3266,12 @@
             "value" : "Activer/désactiver l’enregistrement"
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uključi/isključi snimanje ture"
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3022,6 +3328,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Points de trace"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Točke traga"
           }
         },
         "it" : {
@@ -3082,6 +3394,12 @@
             "value" : "Sentier"
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Staza"
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3140,6 +3458,12 @@
             "value" : "Longueur du sentier"
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duljina staze"
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3196,6 +3520,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Activez « Position exacte » dans Réglages pour continuer."
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uključite “Precizna lokacija” u Postavkama kako biste nastavili."
           }
         },
         "it" : {
@@ -3261,6 +3591,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ parcourus"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prijeđeno %@"
           }
         },
         "it" : {
